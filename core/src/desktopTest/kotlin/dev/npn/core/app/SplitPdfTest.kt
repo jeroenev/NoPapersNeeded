@@ -4,7 +4,9 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.FieldKeyCount
 import dev.npn.core.db.isLive
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.FieldType
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.PdfFixtures
@@ -19,6 +21,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
 import kotlin.test.Test
+import kotlin.test.assertFailsWith
 
 class SplitPdfTest {
     @Test
@@ -60,6 +63,38 @@ class SplitPdfTest {
                         .observeTrashed()
                         .first()
                 trashed.map { it.doc.docId } shouldBe listOf(imported.docId)
+            } finally {
+                rig.close()
+            }
+        }
+
+    /**
+     * A field retyped since a value was set keeps the value, as the retype promises; the split
+     * carries it onto the parts as the original holds it rather than failing over it.
+     */
+    @Test
+    fun aValueThatNoLongerFitsItsFieldsTypeIsCarriedAsItIs() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                val docId = rig.importDocument(PdfFixtures.embeddedTextPdf("retyped"), "invoice", "acme")
+                rig.session.fieldRegistry.fields
+                    .first { it.isNotEmpty() }
+                val due = FieldDef("due", "Due", FieldType.TEXT, showByDefault = true, aiEnabled = false, position = 9)
+                rig.session.fieldRegistry.upsert(due)
+                rig.session.meta.setField(docId, "due", "soon")
+                rig.session.fieldRegistry.upsert(due.copy(type = FieldType.DATE))
+                // An edit is still checked against the type; only the split's copy carries such a value.
+                assertFailsWith<IllegalArgumentException> {
+                    rig.session.meta.applyEdits(listOf(docId), fields = mapOf("due" to "later"))
+                }
+
+                val done = rig.splitInTwo(docId).shouldBeInstanceOf<SplitOutcome.Done>()
+
+                for (partId in done.partDocIds) {
+                    rig.metadataOf(partId).second["due"] shouldBe "soon"
+                    rig.metadataOf(partId).second[FieldKeys.CORRESPONDENT] shouldBe "acme"
+                }
             } finally {
                 rig.close()
             }

@@ -89,9 +89,11 @@ internal class MaintenanceFacadeImpl(
     }
 
     /**
-     * Carry tags and single-value properties of the split source onto the parts it made, [partIds].
+     * Carry tags and single-value properties of the split source onto the parts it made, [partIds],
+     * as the source holds them: a value that no longer fits its field's type is carried as it is
+     * ([MetadataWriterImpl.copyAsStored]), not a reason to fail the split.
      *
-     * One [MetadataWriter.applyEdits] for every part rather than a setter per tag and per property:
+     * One edit ([MetadataWriter.applyEdits]) for every part rather than a setter per tag and per property:
      * the setters each re-run the storage path rules, so a source with several tags would rename
      * every part once per tag before it settled. Parts are brand-new files, so those intermediate
      * names are churn no replica needs to see.
@@ -114,6 +116,6 @@ internal class MaintenanceFacadeImpl(
                 .fieldsForDocs(listOf(docId))
                 .filter { it.fieldKey !in FieldKeys.NOT_INHERITED_ON_SPLIT }
                 .associate<_, String, String?> { it.fieldKey to it.fieldValue }
-        writer.applyEdits(partIds, addTags = tags, fields = fields)
+        writer.copyAsStored(partIds, addTags = tags, fields = fields)
     }
 }

@@ -130,6 +130,25 @@ class MetadataWriterImpl(
         addTags: List<String>,
         fields: Map<String, String?>,
         fillOnly: Boolean,
+    ) = edit(docIds, addTags, fields, fillOnly, asStored = false)
+
+    /**
+     * [applyEdits] for metadata carried from another document as it holds it (a split's parts): a
+     * value that no longer fits its field's type, left by a retype, is kept as its text rather than
+     * refused. Only that copy writes such a value; every other write is checked against the type.
+     */
+    internal suspend fun copyAsStored(
+        docIds: List<String>,
+        addTags: List<String>,
+        fields: Map<String, String?>,
+    ) = edit(docIds, addTags, fields, fillOnly = false, asStored = true)
+
+    private suspend fun edit(
+        docIds: List<String>,
+        addTags: List<String>,
+        fields: Map<String, String?>,
+        fillOnly: Boolean,
+        asStored: Boolean,
     ) {
         if (docIds.isEmpty()) return
         val tags =
@@ -143,7 +162,7 @@ class MetadataWriterImpl(
         // What each document gets is decided under the lock, against the state the commit lands on.
         var edits: List<DocEdit> = emptyList()
         coordinator.commitBuilt { state ->
-            val values = keyed.map { (key, value) -> key to canonical(state, key, value) }
+            val values = keyed.map { (key, value) -> key to canonical(state, key, value, asStored) }
             edits =
                 ids.map { docId -> if (fillOnly) state.lackedBy(docId, tags, values) else DocEdit(docId, tags, values) }
             edits.flatMap { it.ops() }
@@ -209,20 +228,25 @@ class MetadataWriterImpl(
     /**
      * The canonical stored form of [raw] for field [key], per the live registry: an unregistered
      * key is TEXT. Runs under the coordinator mutex so the type it validates against is the one
-     * the write is folded with.
+     * the write is folded with. A value that does not fit the type is refused, or kept as its
+     * trimmed text [asStored] ([copyAsStored]).
      */
     private fun canonical(
         state: FoldedState,
         key: String,
         raw: String?,
+        asStored: Boolean = false,
     ): String? {
         val type = state.effectiveFieldType(key)
         return when (val parsed = FieldValues.canonicalize(type, raw)) {
-            is FieldParse.Ok -> parsed.canonical
+            is FieldParse.Ok -> {
+                parsed.canonical
+            }
 
-            is FieldParse.Invalid -> throw IllegalArgumentException(
-                "'${parsed.raw}' is not a valid ${type.wire} for field '$key'",
-            )
+            is FieldParse.Invalid -> {
+                if (asStored) return parsed.raw
+                throw IllegalArgumentException("'${parsed.raw}' is not a valid ${type.wire} for field '$key'")
+            }
         }
     }
 
