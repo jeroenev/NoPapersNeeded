@@ -120,10 +120,11 @@ class AiEditReviewViewModel(
     }
 
     /**
-     * Leave without writing anything, discarding the run. This is the only way a reviewed run is
-     * thrown away, so it is deliberately the same button the interactive flow uses to skip a
-     * batch — there is no later batch here to carry the suggestions into. A discard that fails
-     * says so and stays on Review, since the run is still queued.
+     * Leave without writing anything more, discarding the run. This is the only way a reviewed run
+     * is thrown away, so it is deliberately the same button the interactive flow uses to skip a
+     * batch — there is no later batch here to carry the suggestions into. Done reports what an
+     * earlier Apply that partly failed wrote, since that stands. A discard that fails says so and
+     * stays on Review, since the run is still queued.
      */
     override fun leaveReview() {
         val opened = review ?: return
@@ -132,7 +133,7 @@ class AiEditReviewViewModel(
             viewModelScope.launch {
                 reporting(Res.string.ai_edit_review_discard_failed) {
                     opened.discard()
-                    _phase.value = QueuedReviewPhase.Done(ApplyResult(0, 0, moreRemain = false))
+                    _phase.value = QueuedReviewPhase.Done(opened.landedSoFar())
                 }
             }
     }

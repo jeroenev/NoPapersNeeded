@@ -85,7 +85,8 @@ and discussion; sharpen them here when they drift.
   suggestion that landed again.
   Apply is owned by `ReviewApply` (core.app), one per reviewed batch, shared by
   the interactive and the queued Edit Run. It also carries what earlier attempts
-  of the batch wrote, so the Done that ends a run of retries counts all of it.
+  of the batch wrote, so the Done that ends a run of retries counts all of it,
+  as does the Done of skipping or discarding the rest after a partial Apply.
   Automatic enrichment writes at a different grain and does not go through it:
   it writes ONE unattended document and, on failure, re-asks the model, so it
   commits the whole edit — tags and fields — in a single `applyEdits`, so a

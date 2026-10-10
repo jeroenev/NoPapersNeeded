@@ -299,6 +299,26 @@ class AiEditApplicationTest : MainDispatcherTest() {
             model.ui.value.phase shouldBe EditPhase.Done(ApplyResult(0, 0, moreRemain = true))
         }
 
+    /**
+     * Skipping the rest of a batch after an Apply that partly landed: the tag stands, so Done says
+     * so rather than that no document was changed.
+     */
+    @Test
+    fun leavingTheReviewAfterAPartlyFailedApplyReportsWhatLanded() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = reviewingTheRealRun(session)
+            session.meta.failApplyEditsForDocs = setOf("a")
+            model.apply()
+            advanceUntilIdle()
+
+            model.leaveReview()
+            advanceUntilIdle()
+
+            session.meta.addedTags shouldContainExactly listOf(listOf("a") to "invoice")
+            model.ui.value.phase shouldBe EditPhase.Done(ApplyResult(applied = 1, docsChanged = 1, moreRemain = false))
+        }
+
     /** Leaving the review when asking whether more remain fails ends in Done with no next batch, and says why. */
     @Test
     fun leavingTheReviewWhenTheNextBatchCheckFailsIsDoneAndSaysSo() =

@@ -228,6 +228,12 @@ interface AiEditRun {
         key: ScopeKey,
         docs: List<ReviewDoc>,
     ): ApplyOutcome
+
+    /**
+     * What [apply] wrote of the current batch so far, across its attempts: what Done reports when
+     * the user skips the rest of the batch. [ApplyResult.moreRemain] is false; [moreRemain] says.
+     */
+    fun landedSoFar(): ApplyResult
 }
 
 /** The [AiEditRun] over a library's facets. */
@@ -348,6 +354,8 @@ class AiEditRunImpl(
             onDocWritten = { docId -> _processed.update { it + docId } },
             moreRemain = { moreRemain(key) },
         )
+
+    override fun landedSoFar(): ApplyResult = reviewApply.landedSoFar()
 
     // Taken as a one-shot snapshot rather than a live flow: a run continues (and finishes with a
     // correct moreRemain) while the caller's preview subscription is gone.

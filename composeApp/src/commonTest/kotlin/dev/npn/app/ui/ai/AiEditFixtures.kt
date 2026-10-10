@@ -5,6 +5,7 @@ import dev.npn.app.FakeSettingsRepository
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.app.AiEditRun
 import dev.npn.core.app.ApplyOutcome
+import dev.npn.core.app.ApplyResult
 import dev.npn.core.app.BatchResult
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.EditProgress
@@ -33,8 +34,8 @@ internal val seededAiFieldKeys: List<String> =
 /**
  * A scripted [AiEditRun]. Whatever the key, its scope is [documents] minus what it has [processed];
  * a batch reports [progress], waits for [gate] when one is set, answers [batch] and marks that
- * batch's rows processed; an apply answers [outcome], or throws [applyFailure]. It records every
- * key, request and applied batch.
+ * batch's rows processed; an apply answers [outcome], or throws [applyFailure]; what landed so far
+ * is [landed]. It records every key, request and applied batch.
  */
 internal class FakeAiEditRun : AiEditRun {
     val documents = MutableStateFlow<List<DocListItem>>(emptyList())
@@ -56,6 +57,9 @@ internal class FakeAiEditRun : AiEditRun {
 
     /** Thrown by [apply] when set, as a failure before any write landed would be. */
     var applyFailure: Throwable? = null
+
+    /** What [landedSoFar] answers. */
+    var landed: ApplyResult = ApplyResult(0, 0, moreRemain = false)
 
     /** What [moreRemain] answers. */
     var moreLeft: Boolean = false
@@ -111,6 +115,8 @@ internal class FakeAiEditRun : AiEditRun {
         applyFailure?.let { throw it }
         return outcome
     }
+
+    override fun landedSoFar(): ApplyResult = landed
 }
 
 /**

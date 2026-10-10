@@ -127,7 +127,7 @@ internal class ReviewApply(
         landed += written.landed
         if (written.failedDocs.isEmpty()) {
             val more = runCatchingCancellable { moreRemain() }
-            val result = ApplyResult(landed.count, landed.changedDocs.size, more.getOrDefault(false))
+            val result = landedSoFar().copy(moreRemain = more.getOrDefault(false))
             return ApplyOutcome.Done(result, followUpFailure = more.exceptionOrNull())
         }
         return ApplyOutcome.Retry(
@@ -136,6 +136,13 @@ internal class ReviewApply(
             total = docs.size,
         )
     }
+
+    /**
+     * What every attempt of this batch wrote so far: its suggestions and the distinct documents they
+     * changed. What a Done reports also when the user leaves the rest of the batch, since those
+     * writes stand. [ApplyResult.moreRemain] is false; only the caller can say otherwise.
+     */
+    fun landedSoFar(): ApplyResult = ApplyResult(landed.count, landed.changedDocs.size, moreRemain = false)
 
     /** One document's selected items: binary, unlike the Review's tri-state chips. */
     private class SelectedEdit(

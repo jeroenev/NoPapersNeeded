@@ -142,6 +142,18 @@ class ReviewApplyTest {
             meta.batchedEdits.map { it.docId to it.fields } shouldContainExactly listOf("a" to mapOf("k" to "v"))
         }
 
+    /** Leaving the rest of a batch after a partly failed Apply still reports what landed. */
+    @Test
+    fun `what landed so far is reported before the batch is done`() =
+        runTest {
+            apply.landedSoFar() shouldBe ApplyResult(applied = 0, docsChanged = 0, moreRemain = false)
+            meta.failApplyEditsForDocs = setOf("a")
+
+            apply(reviewed("a", add = listOf("t"), fields = mapOf("k" to "v"))).shouldBeInstanceOf<ApplyOutcome.Retry>()
+
+            apply.landedSoFar() shouldBe ApplyResult(applied = 1, docsChanged = 1, moreRemain = false)
+        }
+
     /**
      * Asking whether more documents remain comes after the writes; when it fails, the writes still
      * stand, so the batch is done, with no next batch offered and the failure beside the counts.

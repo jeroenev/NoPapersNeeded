@@ -21,6 +21,7 @@ import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import dev.npn.app.FakeLibrarySession
 import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.core.app.ApplyOutcome
+import dev.npn.core.app.ApplyResult
 import dev.npn.core.app.EditRunReview
 import dev.npn.core.app.ReviewChip
 import dev.npn.core.app.ReviewDoc
@@ -85,6 +86,8 @@ class AiEditReviewScreenTest {
         override suspend fun apply(reviewed: List<ReviewDoc>): ApplyOutcome = ApplyOutcome.NothingSelected
 
         override suspend fun discard() = Unit
+
+        override fun landedSoFar() = ApplyResult(0, 0, moreRemain = false)
     }
 
     private fun scene(

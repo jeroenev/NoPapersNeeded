@@ -60,6 +60,8 @@ private class ScriptedReview(
     override val failures: Int = 0,
     private val outcome: ApplyOutcome = ApplyOutcome.Done(ApplyResult(2, 1, moreRemain = false)),
     private val discardFailure: Throwable? = null,
+    /** What [landedSoFar] answers. */
+    private val landed: ApplyResult = ApplyResult(0, 0, moreRemain = false),
 ) : EditRunReview {
     val applied = mutableListOf<List<ReviewDoc>>()
     var discarded = false
@@ -77,6 +79,8 @@ private class ScriptedReview(
         discardFailure?.let { throw it }
         discarded = true
     }
+
+    override fun landedSoFar(): ApplyResult = landed
 }
 
 private fun sessionWith(review: EditRunReview) =
@@ -253,6 +257,34 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             model.phase.value shouldBe before
+        }
+
+    /**
+     * Discarding the run after an Apply that partly landed: those writes stand, so Done reports them
+     * rather than that no document was changed.
+     */
+    @Test
+    fun discardingAfterAPartlyFailedApplyReportsWhatLanded() =
+        runTest(dispatcher) {
+            val landed = ApplyResult(applied = 1, docsChanged = 1, moreRemain = false)
+            val titleOwed = reviewDoc("a", tagSelected = false)
+            val review =
+                ScriptedReview(
+                    docs = listOf(reviewDoc("a")),
+                    outcome = ApplyOutcome.Retry(listOf(titleOwed), failedDocs = 1, total = 1),
+                    landed = landed,
+                )
+            val model = AiEditReviewViewModel(sessionWith(review), "job")
+            collecting(model.phase)
+            advanceUntilIdle()
+            model.apply()
+            advanceUntilIdle()
+
+            model.leaveReview()
+            advanceUntilIdle()
+
+            review.discarded shouldBe true
+            model.phase.value shouldBe QueuedReviewPhase.Done(landed)
         }
 
     @Test

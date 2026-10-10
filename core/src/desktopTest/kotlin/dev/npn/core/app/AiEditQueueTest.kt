@@ -595,6 +595,28 @@ class AiEditQueueReviewTest {
         }
 
     /**
+     * Discarding a run after an Apply that partly landed leaves those writes standing, so the Done
+     * it ends in reports them rather than "no documents were changed".
+     */
+    @Test
+    fun `a run discarded after a partly failed apply reports what landed`() =
+        runTest {
+            withQueue { rig ->
+                rig.ai.edit = suggestion(tag = "invoice", title = "Bill")
+                val jobId = rig.suggestAll(rig.enqueue("a"))
+                rig.meta.failApplyEditsForDocs = setOf("a")
+                val review = rig.queue.openEditRun(jobId).shouldNotBeNull()
+                review.landedSoFar() shouldBe ApplyResult(applied = 0, docsChanged = 0, moreRemain = false)
+                review.apply(review.docs).shouldBeInstanceOf<ApplyOutcome.Retry>()
+
+                review.discard()
+
+                review.landedSoFar() shouldBe ApplyResult(applied = 1, docsChanged = 1, moreRemain = false)
+                rig.job(jobId) shouldBe null
+            }
+        }
+
+    /**
      * Whether a tag is new is judged when the run opens: since it was suggested, the library may
      * have dropped a tag it had or gained one the model invented, in its own spelling.
      */

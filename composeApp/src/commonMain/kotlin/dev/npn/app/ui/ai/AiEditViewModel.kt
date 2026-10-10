@@ -711,9 +711,10 @@ class AiEditViewModel(
     }
 
     /**
-     * Leave Review without writing anything: jump straight to Done with zero counts and the
-     * correct moreRemain (reviewed docs are already processed, so they are excluded). When that
-     * cannot be found out, the failure is reported and no next batch is offered.
+     * Leave Review without writing anything more: jump straight to Done with what earlier Apply
+     * attempts of the batch wrote (none, unless one partly failed) and the correct moreRemain
+     * (reviewed docs are already processed, so they are excluded). When that cannot be found out,
+     * the failure is reported and no next batch is offered.
      */
     override fun leaveReview() {
         if (_ui.value.phase !is EditPhase.Review) return
@@ -722,7 +723,7 @@ class AiEditViewModel(
             viewModelScope.launch {
                 var more = false
                 reporting(Res.string.ai_edit_more_remain_failed) { more = edit.moreRemain(_ui.value.scopeKey()) }
-                _ui.update { it.copy(phase = EditPhase.Done(ApplyResult(0, 0, more))) }
+                _ui.update { it.copy(phase = EditPhase.Done(edit.landedSoFar().copy(moreRemain = more))) }
             }
     }
 

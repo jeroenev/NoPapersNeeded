@@ -58,8 +58,14 @@ interface EditRunReview {
      */
     suspend fun apply(reviewed: List<ReviewDoc>): ApplyOutcome
 
-    /** Leave the review without writing anything, dropping the run from the queue. */
+    /** Leave the review without writing anything more, dropping the run from the queue. */
     suspend fun discard()
+
+    /**
+     * What [apply] wrote so far, across its attempts: what Done reports when the user discards the
+     * rest of the run, since those writes stand.
+     */
+    fun landedSoFar(): ApplyResult
 }
 
 internal class QueuedEditReview(
@@ -77,6 +83,8 @@ internal class QueuedEditReview(
     }
 
     override suspend fun discard() = onFinished()
+
+    override fun landedSoFar(): ApplyResult = reviewApply.landedSoFar()
 }
 
 /** Handing bulk AI edits to the background, and picking their results back up. */
