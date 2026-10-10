@@ -321,7 +321,7 @@ class MetadataWriterImpl(
         val hashed = trashOps.hashCandidates(docId, listing)
         coordinator.changeLifecycle(docId) { doc ->
             if (doc == null || !doc.trashed || !byTrash(doc)) return@changeLifecycle null
-            val target = doc.trashedOrigPath ?: doc.relPath
+            val target = restorePath(doc)
             // The file lives in trash under a hash-suffixed name; the entry that holds its bytes goes
             // back to the target, or beside it when the target is taken. Another document may hold the
             // target since the trash gave it up, so even with no copy left the row goes beside that
@@ -345,6 +345,15 @@ class MetadataWriterImpl(
             )
         }
     }
+
+    /**
+     * Where [doc] goes back to: the path it was trashed from, else its row's, while that is a document
+     * path. One that is not (under `.npn/`, as a missing row's placeholder is, or one a peer's trash
+     * event named) is no place for a document, and it comes back in the inbox instead.
+     */
+    private fun restorePath(doc: DocumentEntity): String =
+        (doc.trashedOrigPath ?: doc.relPath).takeIf { DocumentPaths.isDocumentPath(it) }
+            ?: "${NpnPaths.DEFAULT_INBOX}/${doc.fileName}"
 
     /**
      * Whether a restore must leave [path] alone: a file is there, or a live row names it. A live row

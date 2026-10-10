@@ -209,7 +209,8 @@ live in `buildSrc`. Hot Reload via `mise hot`.
     tie to such a document stays, however old its mtime: another device's trash whose
     event has not arrived, or a document a crash left there with no event (Empty trash,
     which works by document, does not reach it either).
-    Restore records its final destination: the path the document was trashed from, or
+    Restore records its final destination: the path the document was trashed from (the
+    inbox, under its file name, when that is no document path, such as one under `.npn/`), or
     a `(restored)` name beside it when a file is there now or another live row names it
     (as for an import: a row whose file went outside the app names its path until a
     rescan finds it missing). PDFs without

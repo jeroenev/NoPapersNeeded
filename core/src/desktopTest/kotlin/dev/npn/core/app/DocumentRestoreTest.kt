@@ -2,19 +2,25 @@ package dev.npn.core.app
 
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
+import dev.npn.core.journal.ContentAddressedJournalWriter
+import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
+import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.SystemProperty
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldStartWith
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import java.nio.file.Files
 import kotlin.test.Test
 
 /**
@@ -213,6 +219,74 @@ class DocumentRestoreTest {
                 .deleted
                 .shouldBeTrue()
             assertVisible(second)
+        }
+
+    /**
+     * A trash another device published says the document came from a journal bucket. No build
+     * writes that, but a peer's event is read as it is: the restore puts the document in the inbox,
+     * where a document can be, and the journal still reads.
+     */
+    @Test
+    fun aRestoreNeverFollowsATrashedPathIntoTheLibrarysOwnFolder() =
+        withRig {
+            val bytes = PdfFixtures.embeddedTextPdf("alpha")
+            rig.writePdf("a.pdf", bytes)
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+            val bucketPath = JournalPaths.objectPath("ab" + "0".repeat(62))
+            // That device moved the file into the trash, and the move synced with its event.
+            val trashed = rig.libRoot.resolve(NpnPaths.trashPath("a.pdf", id))
+            Files.createDirectories(trashed.parent)
+            Files.move(rig.libRoot.resolve("a.pdf"), trashed)
+            ContentAddressedJournalWriter(rig.fs, "other-installation", HlcWatermarkAllocator(rig.clock))
+                .commit(listOf(PendingOp.docTrash(id, bucketPath)))
+            rig.session.rescan()
+            rig.db
+                .documentDao()
+                .getByDocId(id)
+                .shouldNotBeNull()
+                .trashedOrigPath shouldBe bucketPath
+
+            rig.session.docLifecycle.restoreDoc(id)
+
+            rig.exists(bucketPath).shouldBeFalse()
+            rig.exists("inbox/a.pdf").shouldBeTrue()
+            rig.session.rescan()
+            rig.db
+                .documentDao()
+                .getByDocId(id)
+                .shouldNotBeNull()
+                .relPath shouldBe "inbox/a.pdf"
+            assertVisible(id)
+        }
+
+    /**
+     * A document whose file another one replaced waits under `.npn/missing/`; trashed from there and
+     * restored, it comes back in the inbox, not at that placeholder.
+     */
+    @Test
+    fun aDocumentTrashedWhileMissingIsRestoredToTheInbox() =
+        withRig {
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("bravo"))
+            rig.session.rescan()
+            rig.db
+                .documentDao()
+                .getByDocId(id)
+                .shouldNotBeNull()
+                .relPath shouldStartWith "${NpnPaths.NPN_DIR}/"
+
+            rig.session.docLifecycle.trashDoc(id)
+            rig.session.docLifecycle.restoreDoc(id)
+
+            rig.db
+                .documentDao()
+                .getByDocId(id)
+                .shouldNotBeNull()
+                .relPath shouldBe "inbox/a.pdf"
+            journalOps().filter { NpnPaths.NPN_DIR in it && SystemProperty.STORAGE_PATH.wire in it }.shouldBeEmpty()
         }
 
     /** Trash [id], then delete it for good from the trash, as the user does. */
