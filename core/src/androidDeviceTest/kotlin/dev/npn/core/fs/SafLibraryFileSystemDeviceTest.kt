@@ -2,6 +2,7 @@ package dev.npn.core.fs
 
 import android.net.Uri
 import android.provider.DocumentsContract
+import android.provider.DocumentsContract.Document
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -84,6 +85,44 @@ class SafLibraryFileSystemDeviceTest {
             assertNull(TestDocumentsProvider.idForName("sub (1)"))
         }
 
+    /**
+     * Another app renames `.npn` away and makes a new one, and the provider keeps the renamed one's
+     * id, as cloud providers do. A publish acknowledged since is at its canonical path in the tree a
+     * fresh filesystem lists, not in the renamed one; the write whose staging copy went there fails,
+     * and the next one stages afresh.
+     */
+    @Test
+    fun aPublishAfterTheLibraryFolderWasRenamedAwayIsInTheTreeAsItIsNow() =
+        runBlocking {
+            publish("first".encodeToByteArray(), "first")
+            TestDocumentsProvider.renameExternally(NpnPaths.NPN_DIR, ".npn-backup")
+            TestDocumentsProvider.addFile(name = NpnPaths.NPN_DIR, bytes = byteArrayOf(), mime = Document.MIME_TYPE_DIR)
+
+            val second = "second".encodeToByteArray()
+            try {
+                publish(second, "second")
+            } catch (_: VerifiedPublicationFailedException) {
+                publish(second, "second-again")
+            }
+
+            assertArrayEquals(second, SafLibraryFileSystem(context, treeUri).readBytes("$BUCKET/second.jsonl"))
+        }
+
+    /** Stage [bytes] under [nonce] in [BUCKET] and publish them as `<content>.jsonl`, as the journal does. */
+    private suspend fun publish(
+        bytes: ByteArray,
+        nonce: String,
+    ) {
+        val staging = "$BUCKET/$nonce.part"
+        fs.writeBytesOnce(staging, bytes)
+        TestDocumentsProvider.awaitWrite("$nonce.part")
+        fs.publishVerifiedObjectOnce(
+            staging,
+            "$BUCKET/${bytes.decodeToString()}.jsonl",
+            bytes.inputStream().sha256Hex(),
+        )
+    }
+
     @Test
     fun interruptedImportRemovesPartialDestination() =
         runBlocking {
@@ -132,4 +171,8 @@ class SafLibraryFileSystemDeviceTest {
         expected: Class<T>,
         block: suspend () -> Unit,
     ): T = assertThrows(expected) { runBlocking { block() } }
+
+    private companion object {
+        const val BUCKET = "${NpnPaths.JOURNAL_DIR}/objects-v2-ab"
+    }
 }

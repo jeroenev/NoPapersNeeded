@@ -190,6 +190,14 @@ class TestDocumentsProvider : DocumentsProvider() {
             mime: String = "application/pdf",
         ): String = synchronized(lock) { addNode(parentId, name, mime, bytes).id }
 
+        /** Rename the document called [name] as another app would; like a cloud provider's, its id stays. */
+        fun renameExternally(
+            name: String,
+            newName: String,
+        ) {
+            synchronized(lock) { nodes.values.first { it.name == name }.name = newName }
+        }
+
         fun idForName(name: String): String? = synchronized(lock) { nodes.values.firstOrNull { it.name == name }?.id }
 
         fun bytesForName(name: String): ByteArray? =

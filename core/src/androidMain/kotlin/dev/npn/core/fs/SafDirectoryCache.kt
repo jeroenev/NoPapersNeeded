@@ -26,6 +26,11 @@ internal data class Entry(
  * Only DIRECTORY levels are memoized, and only positive lookups. A missing path is never
  * remembered, so a file or folder that arrives via sync is always seen.
  *
+ * A cached docId can lie two ways: its directory was deleted (perhaps recreated) outside the app,
+ * which a listing shows ([resolveDir]), or renamed, at a provider whose ids survive a rename (cloud
+ * providers; ExternalStorageProvider's are path-derived), whose listing still looks fine. Only
+ * [forgetRenamed] sees the second, for a caller that needs the path the tree has now.
+ *
  * Split out of [SafLibraryFileSystem] because the interesting part is not SAF: it is deciding when
  * a negative result is real and when it is a cached docId lying (see [resolveDir]), and doing so
  * without handing back the ancestor re-listing the cache exists to remove.
@@ -33,6 +38,8 @@ internal data class Entry(
 internal class SafDirectoryCache(
     private val rootDocId: String,
     private val listChildren: (parentDocId: String) -> List<Entry>,
+    /** The display name the provider gives a document now, or null when it cannot say. */
+    private val nameOf: (docId: String) -> String?,
 ) {
     private val dirDocIds = ConcurrentHashMap<String, String>()
 
@@ -75,6 +82,22 @@ internal class SafDirectoryCache(
             return
         }
         dirDocIds.keys.removeAll { it == dirPath || it.startsWith("$dirPath/") }
+    }
+
+    /**
+     * Forget [dirSegments]'s cached chain from its first level whose directory is now called
+     * something else: renamed away with its id kept, it would go on serving the old path. One
+     * single-document query per cached level and no listing, however big the directories. A name
+     * the provider cannot say is no evidence of a rename.
+     */
+    fun forgetRenamed(dirSegments: List<String>) {
+        val levels = dirSegments.indices.map { dirSegments.subList(0, it + 1).joinToString("/") }
+        val renamed =
+            dirSegments.indices.firstOrNull { index ->
+                val name = dirDocIds[levels[index]]?.let(nameOf)
+                name != null && name != dirSegments[index]
+            } ?: return
+        invalidateSubtree(levels[renamed])
     }
 
     /**

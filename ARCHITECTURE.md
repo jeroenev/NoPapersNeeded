@@ -293,7 +293,8 @@ live in `buildSrc`. Hot Reload via `mise hot`.
   published without replacement: a hard link, or where the filesystem has none (Android's shared
   storage, exFAT) an exclusive rename (`renameat2(RENAME_NOREPLACE)` on Linux and Android,
   `MoveFileExW` without `MOVEFILE_REPLACE_EXISTING` on Windows), or on SAF a rename that is checked
-  by name and hash afterwards. A filesystem with neither primitive throws
+  by name and hash afterwards, in a bucket whose directories carry exactly their names (a cloud
+  provider keeps a directory's id when another app renames it away). A filesystem with neither primitive throws
   `VerifiedPublicationUnavailableException`, and the library refuses to open with its own message
   (`OpenFailureReason.UNSUPPORTED_STORAGE`) rather than writing anything.
 - **Device identity.** `device.id` (in `device.db`) names what this device writes under its own

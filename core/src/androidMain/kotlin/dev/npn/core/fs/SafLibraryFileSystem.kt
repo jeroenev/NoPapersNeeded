@@ -53,10 +53,13 @@ class SafLibraryFileSystem(
     /**
      * Path-to-docId memoization for directories; see [SafDirectoryCache]. SAF has no path lookup,
      * so without this every operation re-lists all of its ancestors. Our own destructive
-     * operations ([delete], [move]) invalidate the affected subtree eagerly; staleness caused from
-     * outside the app is detected and recovered inside the cache.
+     * operations ([delete], [move]) invalidate the affected subtree eagerly; a directory deleted
+     * outside the app is detected and recovered inside the cache. One renamed away outside it is
+     * checked for where the tree's current path matters: before a listing under a path (how a
+     * reconcile reads the journal) and before a publish, acknowledged only at its canonical path.
      */
-    private val dirCache = SafDirectoryCache(treeDocId) { queryChildren(it) }
+    private val dirCache =
+        SafDirectoryCache(treeDocId, { queryChildren(it) }) { DocumentFile.fromSingleUri(context, docUri(it))?.name }
 
     private fun childrenUri(parentDocId: String): Uri =
         DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentDocId)
@@ -183,6 +186,7 @@ class SafLibraryFileSystem(
     override suspend fun listAllUnder(relPath: String): List<FileMeta> =
         withContext(Dispatchers.IO) {
             val norm = NpnPaths.normalize(relPath)
+            dirCache.forgetRenamed(splitSegments(norm))
             val root = resolveEntry(norm)
             if (root == null || !root.isDir) emptyList() else listAllFrom(root.docId, norm)
         }
@@ -308,6 +312,9 @@ class SafLibraryFileSystem(
             "Object staging must be in the canonical bucket"
         }
         val canonicalName = canonicalSegments.last()
+        // The bucket's cached chain must still carry its names, or the object would be checked,
+        // and acknowledged, in a directory renamed away (at a provider whose ids survive that).
+        dirCache.forgetRenamed(canonicalSegments.dropLast(1))
 
         // A canonical object already present means the content was published earlier (content
         // addressed: same hash ⇒ same bytes). Verify its bytes and drop our staging copy.
