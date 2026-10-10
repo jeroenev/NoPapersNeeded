@@ -1,12 +1,21 @@
 package dev.npn.core.app
 
+import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.test.Test
 
 class StoragePathRuleIntegrationTest {
@@ -116,4 +125,75 @@ class StoragePathRuleIntegrationTest {
                 rig.close()
             }
         }
+
+    /**
+     * Two title changes in a row, the first one's storage-path follow-up held while it looks for a
+     * free target: the second one's follow-up waits for it, then reads the latest title, so the
+     * document ends at the path that title gives rather than the one the older title gave.
+     */
+    @Test
+    fun aFollowUpHeldBehindAnotherLeavesThePathOfTheLatestTitle() =
+        runTest {
+            val held = HeldExists("by-title/Old.pdf")
+            val rule = StoragePathRule("by-title/{title}.pdf", enabled = true)
+            val rig = AppSessionRig.create(backgroundScope, storagePath = rule, files = held::over)
+            try {
+                val imported =
+                    rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("content"), "scan.pdf")
+                        as ImportOutcome.Imported
+                val first = async { rig.session.meta.setField(imported.docId, FieldKeys.TITLE, "Old") }
+                held.reached.await()
+                val second = async { rig.session.meta.setField(imported.docId, FieldKeys.TITLE, "New") }
+                val secondFinishedFirst = held.finishesWithin(second, QUIET_MILLIS)
+                held.release()
+                first.await()
+                second.await()
+
+                val doc = rig.db.documentDao().getByDocId(imported.docId)!!
+                doc.relPath shouldBe "by-title/New.pdf"
+                rig.exists("by-title/New.pdf") shouldBe true
+                rig.exists("by-title/Old.pdf") shouldBe false
+                secondFinishedFirst shouldBe false
+            } finally {
+                held.release()
+                rig.close()
+            }
+        }
+
+    /**
+     * A library filesystem whose first [LibraryFileSystem.exists] check of [path] says so on [reached],
+     * then waits for [release]. [realTime] runs [finishesWithin]'s wait on the wall clock.
+     */
+    private class HeldExists(
+        private val path: String,
+        private val realTime: CoroutineDispatcher = Dispatchers.Default,
+    ) {
+        val reached = CompletableDeferred<Unit>()
+        private val gate = CompletableDeferred<Unit>()
+        private val armed = AtomicBoolean(true)
+
+        fun release() = gate.complete(Unit)
+
+        /** Whether [job] finishes within [millis] of real time, not the test's virtual time. */
+        suspend fun finishesWithin(
+            job: Job,
+            millis: Long,
+        ): Boolean = withContext(realTime) { withTimeoutOrNull(millis) { job.join() } != null }
+
+        fun over(fs: LibraryFileSystem): LibraryFileSystem =
+            object : LibraryFileSystem by fs {
+                override suspend fun exists(relPath: String): Boolean {
+                    if (relPath == path && armed.getAndSet(false)) {
+                        reached.complete(Unit)
+                        gate.await()
+                    }
+                    return fs.exists(relPath)
+                }
+            }
+    }
+
+    private companion object {
+        /** How long a follow-up that does not wait gets to finish. */
+        const val QUIET_MILLIS = 1_000L
+    }
 }

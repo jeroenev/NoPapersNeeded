@@ -167,7 +167,9 @@ live in `buildSrc`. Hot Reload via `mise hot`.
     held `writer` is private, so the coordinator is the only reachable write path
     (enforced at the type level, not by convention).
     Explicit PDF renames/moves and storage-path rules also write the `storagePath`
-    system property, keyed by document hash, before moving bytes. HLC LWW chooses
+    system property, keyed by document hash, before moving bytes. The rule's follow-ups to
+    metadata writes run one at a time (`StoragePathRuleApplicator`), each reading after its
+    write committed, so the path follows the latest metadata. HLC LWW chooses
     the intended location across devices; `DocumentPathReconciler` materializes it
     on metadata refresh or rescan. The cached `relPath` remains the actual available
     location, not an unfulfilled intent. Trash/delete suspend path reconciliation. A
