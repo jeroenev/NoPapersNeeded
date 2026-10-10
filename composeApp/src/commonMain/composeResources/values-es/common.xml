@@ -103,6 +103,7 @@
     <string name="common_folder_not_on_device">Esta carpeta no está en el almacenamiento del dispositivo. Elige una carpeta en el almacenamiento interno o en una tarjeta SD, o activa la opción Storage Access Framework en Avanzado para usar carpetas de otras aplicaciones.</string>
     <string name="common_folder_access_not_kept_library">Android no permitió que la aplicación conservara el acceso a esa carpeta, así que no se abrió como biblioteca. Vuelve a elegirla o elige otra carpeta.</string>
     <string name="common_folder_access_not_kept_watched">Android no permitió que la aplicación conservara el acceso a esa carpeta, así que la carpeta vigilada no cambió. Vuelve a elegirla o elige otra carpeta.</string>
+    <string name="common_folder_in_library_watched">Esa carpeta está dentro de la biblioteca, así que sus PDF ya forman parte de ella y la carpeta vigilada no cambió. Elige una carpeta fuera de la biblioteca.</string>
     <string name="common_settings_advanced">Avanzado</string>
     <string name="common_settings_use_saf">Usar Storage Access Framework</string>
     <string name="common_settings_use_saf_help">Modo heredado: abre las carpetas mediante el selector de documentos de Android en lugar de directamente en el almacenamiento del dispositivo. Es más lento, no avisa de los cambios y los archivos añadidos por herramientas de sincronización pueden pasar desapercibidos. Se aplica la próxima vez que elijas una carpeta.</string>

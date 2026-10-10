@@ -9,6 +9,7 @@ import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.warn
 import dev.npn.core.watch.WatchedFolder
 import dev.npn.core.watch.WatchedFolderImporter
+import dev.npn.core.watch.liesInLibrary
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -86,7 +87,7 @@ class DefaultAppEnvironment(
                 .collectLatest { (session, location) ->
                     if (session == null || location == null) return@collectLatest
                     val folder = watchedFolder(location) ?: return@collectLatest
-                    val importer = buildImporter(session, folder)
+                    val importer = buildImporter(session, folder, location)
                     runningImporter.value = RunningImporter(session, location, importer)
                     try {
                         coroutineScope { importer.start(this) }
@@ -97,22 +98,33 @@ class DefaultAppEnvironment(
         }
     }
 
+    /**
+     * An importer of the folder at [location] into [session]. The library it sweeps into is the saved
+     * one: a session is open only once its location is saved.
+     */
     private fun buildImporter(
         session: LibrarySession,
         folder: WatchedFolder,
+        location: String,
     ) = WatchedFolderImporter(
         ingest = session.ingest,
         folder = folder,
         deleteAfterImport = { settings.settings.first().watchedFolderDeleteAfterImport },
         log = log,
         sweepLock = watchedFolderSweeps,
+        inLibrary = {
+            settings.settings
+                .first()
+                .libraryLocation
+                ?.let { liesInLibrary(location, it) } == true
+        },
     )
 
     override suspend fun scanWatchedFolder(): Int {
         val location = settings.settings.first().watchedFolder ?: return 0
         val session = _session.value ?: return 0
         val running = runningImporter.value?.takeIf { it.session === session && it.location == location }
-        val importer = running?.importer ?: buildImporter(session, watchedFolder(location) ?: return 0)
+        val importer = running?.importer ?: buildImporter(session, watchedFolder(location) ?: return 0, location)
         return importer.scanOnce().imported
     }
 

@@ -104,6 +104,7 @@
     <string name="common_folder_not_on_device">Deze map staat niet op de opslag van dit apparaat. Kies een map op de interne opslag of een SD-kaart, of zet de optie Storage Access Framework onder Geavanceerd aan om mappen van andere apps te gebruiken.</string>
     <string name="common_folder_access_not_kept_library">Android liet de app de toegang tot die map niet behouden, dus is die niet als bibliotheek geopend. Kies hem opnieuw of kies een andere map.</string>
     <string name="common_folder_access_not_kept_watched">Android liet de app de toegang tot die map niet behouden, dus is de bewaakte map niet gewijzigd. Kies hem opnieuw of kies een andere map.</string>
+    <string name="common_folder_in_library_watched">Die map ligt in de bibliotheek, dus de pdf-bestanden erin horen er al bij en de bewaakte map is niet gewijzigd. Kies een map buiten de bibliotheek.</string>
     <string name="common_settings_advanced">Geavanceerd</string>
     <string name="common_settings_use_saf">Storage Access Framework gebruiken</string>
     <string name="common_settings_use_saf_help">Oude modus: mappen openen via de documentkiezer van Android in plaats van rechtstreeks op de opslag van het apparaat. Trager, zonder wijzigingsmeldingen, en bestanden die synchronisatieprogramma\'s toevoegen kunnen onopgemerkt blijven. Geldt vanaf de volgende keer dat je een map kiest.</string>

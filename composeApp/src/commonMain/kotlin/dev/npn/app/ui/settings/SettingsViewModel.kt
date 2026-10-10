@@ -27,6 +27,7 @@ import dev.npn.core.pathrules.StoragePathError
 import dev.npn.core.pathrules.StoragePathExpansion
 import dev.npn.core.pathrules.StoragePathTemplate
 import dev.npn.core.util.runCatchingCancellable
+import dev.npn.core.watch.liesInLibrary
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
@@ -41,6 +42,7 @@ import kotlinx.coroutines.withContext
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_folder_access_not_kept_library
 import no_papers_needed.composeapp.generated.resources.common_folder_access_not_kept_watched
+import no_papers_needed.composeapp.generated.resources.common_folder_in_library_watched
 import no_papers_needed.composeapp.generated.resources.common_folder_not_on_device
 import no_papers_needed.composeapp.generated.resources.common_save_field_failed
 import no_papers_needed.composeapp.generated.resources.common_save_setting_failed
@@ -175,7 +177,7 @@ interface SettingsActions {
 
     /**
      * A folder was picked to watch: its location replaces the watched folder, while a folder whose
-     * access Android would not keep leaves the one before and says so.
+     * access Android would not keep, or one in the library, leaves the one before and says so.
      */
     fun watchedFolderPicked(pick: FolderPick)
 }
@@ -199,6 +201,8 @@ class SettingsViewModel(
      * reading off — is testable without an endpoint; production always uses [AiSelfTest.run].
      */
     private val selfTest: suspend (AiConfig) -> AiSelfTestReport = AiSelfTest::run,
+    /** Whether a folder lies in the library; see [liesInLibrary]. */
+    private val inLibrary: suspend (folder: String, library: String) -> Boolean = ::liesInLibrary,
 ) : MessagesViewModel(),
     SettingsActions {
     private val content = session.content
@@ -366,7 +370,7 @@ class SettingsViewModel(
 
     override fun watchedFolderPicked(pick: FolderPick) {
         when (pick) {
-            is FolderPick.Location -> edit { it.copy(watchedFolder = pick.value) }
+            is FolderPick.Location -> watch(pick.value)
 
             FolderPick.AccessNotKept -> message(uiText(Res.string.common_folder_access_not_kept_watched))
 
@@ -374,6 +378,17 @@ class SettingsViewModel(
             FolderPick.Unusable -> Unit
         }
     }
+
+    /** Watch the folder at [location], unless it lies in the library: its files are the library's already. */
+    private fun watch(location: String) =
+        launchReporting(Res.string.common_save_setting_failed) {
+            val library = settings.settings.first().libraryLocation
+            if (library != null && inLibrary(location, library)) {
+                message(uiText(Res.string.common_folder_in_library_watched))
+            } else {
+                settings.edit { it.copy(watchedFolder = location) }
+            }
+        }
 
     override fun setUntaggedOnlyMode() =
         launchReporting(Res.string.common_settings_review_workflow_failed) {

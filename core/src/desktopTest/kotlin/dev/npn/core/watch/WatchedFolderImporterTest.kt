@@ -171,6 +171,51 @@ class WatchedFolderImporterTest {
         }
 
     /**
+     * A watched folder inside the library holds the library's own files, which the rescan indexes. A
+     * sweep there imports nothing and deletes nothing: with delete-after-import on, a file found to be
+     * a document's would be deleted as its duplicate, and it is that document's only copy.
+     */
+    @Test
+    fun aWatchedFolderInsideTheLibraryIsNeverSwept() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                val scans = rig.libRoot.resolve("scans")
+                rig.writePdf("scans/scan.pdf", PdfFixtures.embeddedTextPdf("a scan the library holds"))
+                Files.setLastModifiedTime(
+                    scans.resolve("scan.pdf"),
+                    FileTime.fromMillis(System.currentTimeMillis() - 60_000),
+                )
+                rig.session.rescan()
+                val id = rig.docId("scans/scan.pdf")
+                rig.writePdf("scans/new.pdf", PdfFixtures.embeddedTextPdf("a scan the rescan has not seen"))
+                Files.setLastModifiedTime(
+                    scans.resolve("new.pdf"),
+                    FileTime.fromMillis(System.currentTimeMillis() - 60_000),
+                )
+
+                val importer =
+                    WatchedFolderImporter(
+                        rig.session,
+                        JvmWatchedFolder(scans),
+                        deleteAfterImport = { true },
+                        inLibrary = { liesInLibrary(scans.toString(), rig.libRoot.toString()) },
+                    )
+
+                importer.scanOnce() shouldBe ImportTally()
+                Files.exists(scans.resolve("scan.pdf")) shouldBe true
+                Files.exists(scans.resolve("new.pdf")) shouldBe true
+                rig.db
+                    .documentDao()
+                    .getByDocId(id)
+                    ?.relPath shouldBe "scans/scan.pdf"
+                rig.exists("inbox/new.pdf") shouldBe false
+            } finally {
+                rig.close()
+            }
+        }
+
+    /**
      * The scanner writes its next scan under the same name after the first was imported and before
      * the cleanup ran. That file was never imported: it stays, for the next sweep to import.
      */

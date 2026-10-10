@@ -32,6 +32,7 @@ import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_folder_access_not_kept_library
 import no_papers_needed.composeapp.generated.resources.common_folder_access_not_kept_watched
+import no_papers_needed.composeapp.generated.resources.common_folder_in_library_watched
 import no_papers_needed.composeapp.generated.resources.common_save_setting_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_review_workflow_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_not_a_date
@@ -46,7 +47,9 @@ class SettingsViewModelTest : MainDispatcherTest() {
         settings: FakeSettingsRepository = FakeSettingsRepository(),
         session: FakeLibrarySession = FakeLibrarySession(),
         selfTest: suspend (AiConfig) -> AiSelfTestReport = { error("no self-test expected") },
-    ) = SettingsViewModel(settings, session, selfTest)
+    ) = SettingsViewModel(settings, session, selfTest) { folder, library ->
+        folder == library || folder.startsWith("$library/")
+    }
 
     @Test
     fun clearingTheThumbnailCacheSaysWhatItCleared() =
@@ -85,6 +88,30 @@ class SettingsViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
             settings.settingsFlow.value?.watchedFolder shouldBe TREE
             messages shouldContainExactly listOf(uiText(Res.string.common_folder_access_not_kept_watched))
+        }
+
+    /** A folder in the library holds the library's own files: watching it is refused, and said so. */
+    @Test
+    fun aWatchedFolderInTheLibraryLeavesTheOneBeforeAndSaysSo() =
+        runTest(dispatcher) {
+            val settings =
+                FakeSettingsRepository().apply {
+                    updateSettings { it.copy(libraryLocation = "/home/lib", watchedFolder = "/inbox") }
+                }
+            val model = vm(settings = settings)
+            val messages = collecting(model.messages.map { it.text })
+
+            model.watchedFolderPicked(FolderPick.Location("/home/lib/scans"))
+            advanceUntilIdle()
+            model.watchedFolderPicked(FolderPick.Location("/home/lib"))
+            advanceUntilIdle()
+            settings.settingsFlow.value?.watchedFolder shouldBe "/inbox"
+            messages shouldContainExactly List(2) { uiText(Res.string.common_folder_in_library_watched) }
+
+            model.watchedFolderPicked(FolderPick.Location("/home/scans"))
+            advanceUntilIdle()
+            settings.settingsFlow.value?.watchedFolder shouldBe "/home/scans"
+            messages.size shouldBe 2
         }
 
     @Test

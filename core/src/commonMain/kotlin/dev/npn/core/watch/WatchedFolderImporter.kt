@@ -39,6 +39,11 @@ import kotlin.time.TimeSource
  * Sweeps never overlap: every one runs under [sweepLock], which also guards the memory above. A
  * host running several importers over one folder (the continuous one plus an on-demand sweep)
  * passes them all the same lock, so the same file is never imported twice at once.
+ *
+ * A folder [inLibrary] (the library folder, or one inside it; see [liesInLibrary]) is never swept:
+ * its files are the library's own, which the rescan indexes, and one the import found to be a
+ * document's would be deleted as that document's duplicate. Asked before every sweep, as the folder
+ * or the library may be moved meanwhile.
  */
 class WatchedFolderImporter(
     private val ingest: IngestFacade,
@@ -49,12 +54,25 @@ class WatchedFolderImporter(
     private val clock: EpochClock = SystemEpochClock,
     private val minQuietMillis: Long = DEFAULT_MIN_QUIET_MS,
     private val maxAttempts: Int = DEFAULT_MAX_ATTEMPTS,
+    private val inLibrary: suspend () -> Boolean = { false },
 ) {
     private val completed = HashSet<String>()
     private val attempts = HashMap<String, Int>()
 
-    /** One sweep: list, import what is new and stable, optionally delete consumed sources. */
-    suspend fun scanOnce(): ImportTally = sweepLock.withLock { sweep() }
+    /** Whether the last sweep found the folder in the library, so that is logged once, not every poll. */
+    private var skippedInLibrary = false
+
+    /**
+     * One sweep: list, import what is new and stable, optionally delete consumed sources; nothing
+     * for a folder [inLibrary].
+     */
+    suspend fun scanOnce(): ImportTally =
+        sweepLock.withLock {
+            val skip = inLibrary()
+            if (skip && !skippedInLibrary) log.warn("The watched folder is in the library; it is not swept")
+            skippedInLibrary = skip
+            if (skip) ImportTally() else sweep()
+        }
 
     private suspend fun sweep(): ImportTally {
         var tally = ImportTally()

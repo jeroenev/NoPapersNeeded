@@ -105,6 +105,7 @@
     <string name="common_folder_not_on_device">This folder is not on device storage. Choose a folder on internal storage or an SD card, or turn on the Storage Access Framework option under Advanced to use folders from other apps.</string>
     <string name="common_folder_access_not_kept_library">Android would not let the app keep its access to that folder, so it was not opened as the library. Choose it again or choose another folder.</string>
     <string name="common_folder_access_not_kept_watched">Android would not let the app keep its access to that folder, so the watched folder was not changed. Choose it again or choose another folder.</string>
+    <string name="common_folder_in_library_watched">That folder is inside the library, so its PDFs are already part of it and the watched folder was not changed. Choose a folder outside the library.</string>
     <string name="common_settings_advanced">Advanced</string>
     <string name="common_settings_use_saf">Use Storage Access Framework</string>
     <string name="common_settings_use_saf_help">Legacy mode: open folders through Android\'s document picker instead of directly on device storage. Slower, without change notifications, and files added by sync tools may go unnoticed. Applies the next time you choose a folder.</string>
