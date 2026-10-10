@@ -64,22 +64,22 @@ internal fun LibraryLocationChooser(
     val pickLibrary =
         rememberLibraryFolderPicker(
             useSaf = useSaf,
-            onPicked = {
+            onPick = {
                 refusal = null
                 onPick(it)
             },
             onUnusable = { refusal = Res.string.common_folder_not_on_device },
-            onAccessNotKept = { refusal = Res.string.common_folder_access_not_kept_library },
+            onTemporaryAccess = { refusal = Res.string.common_folder_access_not_kept_library },
         )
     val pickParent =
         rememberLibraryFolderPicker(
             useSaf = false,
-            onPicked = {
+            onPick = {
                 refusal = null
                 onPickParent(it)
             },
             onUnusable = { refusal = Res.string.common_folder_not_on_device },
-            onAccessNotKept = { refusal = Res.string.common_folder_access_not_kept_library },
+            onTemporaryAccess = { refusal = Res.string.common_folder_access_not_kept_library },
         )
     Column(
         modifier = modifier,

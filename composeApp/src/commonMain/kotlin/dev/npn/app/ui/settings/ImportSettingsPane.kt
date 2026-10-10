@@ -77,7 +77,7 @@ internal fun ImportSettingsPane(
             watchedFolder = state.settings.snapshot.watchedFolder,
             useSaf = state.settings.snapshot.useSafStorage,
             deleteAfterImport = state.settings.snapshot.watchedFolderDeleteAfterImport,
-            onPicked = actions::watchedFolderPicked,
+            onPick = actions::watchedFolderPicked,
             onStopWatching = { actions.edit { it.copy(watchedFolder = null) } },
             onSetDeleteAfterImport = { on -> actions.edit { it.copy(watchedFolderDeleteAfterImport = on) } },
         )
@@ -108,7 +108,7 @@ private fun WatchedFolderSettings(
     watchedFolder: String?,
     useSaf: Boolean,
     deleteAfterImport: Boolean,
-    onPicked: (FolderPick) -> Unit,
+    onPick: (FolderPick) -> Unit,
     onStopWatching: () -> Unit,
     onSetDeleteAfterImport: (Boolean) -> Unit,
 ) {
@@ -117,7 +117,7 @@ private fun WatchedFolderSettings(
         rememberDirectoryPickerLauncher { dir ->
             if (dir == null) return@rememberDirectoryPickerLauncher
             val preferSaf = useSaf || !storage.usable
-            onPicked(watchedFolderPick(preferSaf, directUsable = storage.usable) { persistDirectoryAccess(dir, it) })
+            onPick(watchedFolderPick(preferSaf, directUsable = storage.usable) { persistDirectoryAccess(dir, it) })
         }
     HelpText(stringResource(Res.string.common_settings_watched_folder_help))
     Text(
