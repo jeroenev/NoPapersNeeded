@@ -28,6 +28,7 @@ import io.kotest.matchers.collections.shouldNotContainAnyOf
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
@@ -326,9 +327,12 @@ class IndexUpgradeTest {
 
 /**
  * A library filesystem whose rescan listing says so on [reached], then waits until [release]: a
- * rescan still listing and hashing the library. [finishesWithin] waits on the wall clock.
+ * rescan still listing and hashing the library. [realTime] runs [finishesWithin]'s wait on the wall
+ * clock.
  */
-private class HeldListing {
+private class HeldListing(
+    private val realTime: CoroutineDispatcher = Dispatchers.Default,
+) {
     val reached = CompletableDeferred<Unit>()
     private val gate = CompletableDeferred<Unit>()
 
@@ -338,7 +342,7 @@ private class HeldListing {
     suspend fun finishesWithin(
         job: Job,
         millis: Long,
-    ): Boolean = withContext(Dispatchers.Default) { withTimeoutOrNull(millis) { job.join() } != null }
+    ): Boolean = withContext(realTime) { withTimeoutOrNull(millis) { job.join() } != null }
 
     fun over(fs: LibraryFileSystem): LibraryFileSystem =
         object : LibraryFileSystem by fs {

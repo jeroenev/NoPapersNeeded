@@ -1,5 +1,8 @@
 package dev.npn.core.watch
 
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+
 /**
  * Whether the folder at [folder] is the library at [library], or a folder inside it. Both are
  * location strings as the settings keep them: a path, or on Android a SAF tree uri. A watched folder
@@ -13,4 +16,6 @@ package dev.npn.core.watch
 expect suspend fun liesInLibrary(
     folder: String,
     library: String,
+    /** Where the filesystem is asked. */
+    io: CoroutineDispatcher = Dispatchers.IO,
 ): Boolean

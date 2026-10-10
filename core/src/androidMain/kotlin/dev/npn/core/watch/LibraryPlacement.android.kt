@@ -5,7 +5,7 @@ import android.os.Environment
 import android.provider.DocumentsContract
 import dev.npn.core.app.LibraryLocations
 import dev.npn.core.fs.ExternalStorageTreePaths
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import java.nio.file.Paths
 
@@ -21,8 +21,9 @@ import java.nio.file.Paths
 actual suspend fun liesInLibrary(
     folder: String,
     library: String,
+    io: CoroutineDispatcher,
 ): Boolean =
-    withContext(Dispatchers.IO) {
+    withContext(io) {
         runCatching {
             val folderTree = TreeDocument.of(folder)
             val libraryTree = TreeDocument.of(library)

@@ -1,6 +1,6 @@
 package dev.npn.core.watch
 
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import java.nio.file.Paths
 
@@ -8,7 +8,8 @@ import java.nio.file.Paths
 actual suspend fun liesInLibrary(
     folder: String,
     library: String,
+    io: CoroutineDispatcher,
 ): Boolean =
-    withContext(Dispatchers.IO) {
+    withContext(io) {
         runCatching { pathLiesIn(Paths.get(folder), Paths.get(library)) }.getOrDefault(false)
     }
