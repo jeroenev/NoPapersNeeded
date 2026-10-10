@@ -66,6 +66,24 @@ class SafLibraryFileSystemDeviceTest {
             assertNull(TestDocumentsProvider.idForName("target (1).pdf"))
         }
 
+    /**
+     * A sync tool creates the directory a write needs between the listing and the create, and the
+     * provider names ours "sub (1)": the write goes into the exact-name one, where a fresh filesystem
+     * finds it, and no "sub (1)" is left.
+     */
+    @Test
+    fun aDirectoryCreatedUnderAClashIsTheOneWithTheExactName() =
+        runBlocking {
+            TestDocumentsProvider.raceOnCreateName = "sub"
+            val bytes = "ours".encodeToByteArray()
+
+            fs.writeBytesOnce("sub/a.bin", bytes)
+
+            TestDocumentsProvider.awaitWrite("a.bin")
+            assertArrayEquals(bytes, SafLibraryFileSystem(context, treeUri).readBytes("sub/a.bin"))
+            assertNull(TestDocumentsProvider.idForName("sub (1)"))
+        }
+
     @Test
     fun interruptedImportRemovesPartialDestination() =
         runBlocking {

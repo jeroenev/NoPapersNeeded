@@ -28,7 +28,8 @@ import kotlin.uuid.Uuid
  * operation would otherwise re-list all of its ancestors.
  *
  * Write-once discipline: nothing here ever appends or overwrites. [writeBytesOnce] pre-checks
- * existence and guards against SAF's silent rename dedup (e.g. "file (1).pdf").
+ * existence and guards against SAF's silent rename dedup (e.g. "file (1).pdf"), for the
+ * directories it creates as for the file.
  */
 class SafLibraryFileSystem(
     private val context: Context,
@@ -127,7 +128,8 @@ class SafLibraryFileSystem(
      *
      * Unlike the read paths this does not retry past a stale cache entry: creating under a docId
      * whose directory was deleted outside the app fails loudly here, which is the right outcome for
-     * a write-once filesystem — better a clear error than a file quietly landing somewhere else.
+     * a write-once filesystem — better a clear error than a file quietly landing somewhere else. For
+     * the same reason a level maps only to a directory with exactly its name ([createExact]).
      */
     private fun createDirPath(
         dirSegments: List<String>,
@@ -153,14 +155,11 @@ class SafLibraryFileSystem(
                     }
 
                     else -> {
-                        val created =
-                            DocumentsContract.createDocument(
-                                resolver,
-                                docUri(parentId),
-                                DocumentsContract.Document.MIME_TYPE_DIR,
-                                seg,
-                            ) ?: throw IOException("Failed to create directory '$seg' in: $relForError")
-                        DocumentsContract.getDocumentId(created)
+                        // A clash (a sync tool made it meanwhile) leaves the directory of that name to use.
+                        createExact(parentId, seg, DocumentsContract.Document.MIME_TYPE_DIR, relForError)
+                            ?.let(DocumentsContract::getDocumentId)
+                            ?: queryChildren(parentId).firstOrNull { it.name == seg && it.isDir }?.docId
+                            ?: throw IOException("Could not create directory '$seg' under its own name: $relForError")
                     }
                 }
             dirCache.remember(key, parentId)
@@ -467,7 +466,9 @@ class SafLibraryFileSystem(
         verify: Boolean = false,
         openInput: () -> InputStream,
     ): Uri {
-        val createdUri = createExact(parentId, name, mime, relForError)
+        val createdUri =
+            createExact(parentId, name, mime, relForError)
+                ?: error("Target already exists (SAF renamed the new file): $relForError")
         try {
             val read = if (verify) MessageDigest.getInstance("SHA-256") else null
             streamInto(createdUri, relForError) {
@@ -497,24 +498,23 @@ class SafLibraryFileSystem(
     }
 
     /**
-     * Create an empty file named exactly [name] in [parentId]. A provider may settle a clash by
-     * naming the file "name (1).ext" instead of failing, which would break write-once: that file is
-     * deleted again, and the call fails as if [name] already existed.
+     * Create an empty document (a file, or a directory by [mime]) named exactly [name] in [parentId],
+     * or return null when [name] was taken. A provider may settle a clash by naming the new one
+     * "name (1).ext" instead of failing, which would break write-once and leave the path naming
+     * something else: that one is deleted again, as it was just made and is empty.
      */
     private fun createExact(
         parentId: String,
         name: String,
         mime: String,
         relForError: String,
-    ): Uri {
+    ): Uri? {
         val created =
             DocumentsContract.createDocument(resolver, docUri(parentId), mime, name)
-                ?: throw IOException("Failed to create file: $relForError")
-        misnamed(created, name)?.let { actual ->
-            deleteQuietly(created)
-            error("Target already exists (SAF renamed to '$actual'): $relForError")
-        }
-        return created
+                ?: throw IOException("Failed to create: $relForError")
+        if (misnamed(created, name) == null) return created
+        deleteQuietly(created)
+        return null
     }
 
     /**
