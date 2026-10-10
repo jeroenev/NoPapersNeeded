@@ -268,43 +268,59 @@ class MetadataWriterImpl(
         coordinator.commitAndApply(listOf(PendingOp.tagStyle(t, color, icon)))
     }
 
-    override suspend fun trashDoc(docId: String): Boolean =
-        coordinator.changeLifecycle(docId) { doc ->
-            if (doc == null || doc.trashed || doc.deleted) return@changeLifecycle null
-            val origPath = doc.relPath
-            // Only the document's own file goes into the trash, known by a stat while it is unchanged.
-            // Another app may have written over it since the last rescan; that file stays where it is
-            // for the next rescan to index, and the trash is recorded as for a document whose file is
-            // gone.
-            val trashPath = if (fs.holdsDocument(doc)) trashOps.trashTarget(origPath, docId) else null
-            LifecycleChange(
-                // The event carries origPath for a restore on another device.
-                ops = listOf(PendingOp.docTrash(docId, origPath)),
-                move = { trashPath?.let { fs.move(origPath, it) } },
-                optimisticWrite = {
-                    documentDao.upsert(doc.copy(trashed = true, trashedOrigPath = origPath, missing = false))
-                },
-                undoMove = { trashPath?.let { fs.move(it, origPath) } },
-            )
-        }
+    override suspend fun trashDoc(docId: String): TrashReceipt? {
+        var trashedAt: Long? = null
+        val trashed =
+            coordinator.changeLifecycle(docId) { doc ->
+                if (doc == null || doc.trashed || doc.deleted) return@changeLifecycle null
+                val origPath = doc.relPath
+                // Only the document's own file goes into the trash, known by a stat while it is
+                // unchanged. Another app may have written over it since the last rescan; that file
+                // stays where it is for the next rescan to index, and the trash is recorded as for a
+                // document whose file is gone.
+                val trashPath = if (fs.holdsDocument(doc)) trashOps.trashTarget(origPath, docId) else null
+                LifecycleChange(
+                    // The event carries origPath for a restore on another device.
+                    ops = listOf(PendingOp.docTrash(docId, origPath)),
+                    move = { trashPath?.let { fs.move(origPath, it) } },
+                    optimisticWrite = {
+                        documentDao.upsert(doc.copy(trashed = true, trashedOrigPath = origPath, missing = false))
+                    },
+                    undoMove = { trashPath?.let { fs.move(it, origPath) } },
+                    // The time the fold gives this trash, which a later one replaces: the Undo's check.
+                    standing = { trashedAt = documentDao.getByDocId(docId)?.trashedAt },
+                )
+            }
+        return if (trashed) TrashReceipt(docId, trashedAt) else null
+    }
 
     override suspend fun restoreDoc(docId: String) = restore(docId, listing = null)
 
-    override suspend fun restoreDocs(docIds: List<String>): Int = forEachListed(docIds, "Restoring", ::restore)
+    override suspend fun restoreDocs(docIds: List<String>): Int =
+        forEachListed(docIds, "Restoring") { docId, listing -> restore(docId, listing) }
+
+    override suspend fun undoTrash(trashes: List<TrashReceipt>): Int {
+        val trashedAt = trashes.associate { it.docId to it.trashedAt }
+        return forEachListed(trashedAt.keys.toList(), "Restoring") { docId, listing ->
+            restore(docId, listing) { it.trashedAt == trashedAt[docId] }
+        }
+    }
 
     /**
      * Restore [docId] from the trash as [listing] (from [TrashOps.listTrash]) found it, or as listed
-     * now without one.
+     * now without one, while [byTrash] says the trash that holds it, as its row has it, is the one to
+     * restore from (an Undo's; any, otherwise).
      */
     private suspend fun restore(
         docId: String,
         listing: List<FileMeta>?,
+        byTrash: (DocumentEntity) -> Boolean = { true },
     ) {
         // Hashed before the lock, which every write, import and rescan waits on; under it, those
         // entries are checked by a stat, and only one whose stat changed since is hashed again.
         val hashed = trashOps.hashCandidates(docId, listing)
         coordinator.changeLifecycle(docId) { doc ->
-            if (doc == null || !doc.trashed) return@changeLifecycle null
+            if (doc == null || !doc.trashed || !byTrash(doc)) return@changeLifecycle null
             val target = doc.trashedOrigPath ?: doc.relPath
             // The file lives in trash under a hash-suffixed name; the entry that holds its bytes goes
             // back to the target, or beside it when the target is taken. Another document may hold the

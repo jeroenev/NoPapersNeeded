@@ -6,6 +6,7 @@ import dev.npn.core.model.FieldType
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldNotContain
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -186,7 +187,9 @@ class FieldRegistryTest {
                 registry.fields.first { it.isNotEmpty() }
                 registry.upsert(def("amount", type = FieldType.DECIMAL))
                 rig.session.meta.setField(id, "amount", "12.5")
-                rig.session.docLifecycle.trashDoc(id) shouldBe true
+                rig.session.docLifecycle
+                    .trashDoc(id)
+                    .shouldNotBeNull()
 
                 val (second, secondDb) = rig.secondSession(backgroundScope)
                 try {

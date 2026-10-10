@@ -195,7 +195,12 @@ live in `buildSrc`. Hot Reload via `mise hot`.
     nothing). A file it cannot remove leaves the document deleted and is reported
     (`PermanentDeleteOutcome.FILE_LEFT`). Restoring or emptying the whole trash
     (`DocLifecycle.restoreDocs`, `deleteDocsPermanently`) lists it once for all its
-    documents. The trash auto-purge (after a watch-triggered rescan) lists the trash
+    documents. The library's Undo of a trash (`DocLifecycle.undoTrash`, handed the
+    `TrashReceipt`s `trashDoc` returned) restores a document only while that trash holds
+    it: a receipt carries the trash time its row had once the trash stood (`trashedAt`,
+    the winning doc-trash's), and a document trashed again since, here or on another
+    device, has another and stays in the trash. The Trash screen's restore is
+    unconditional. The trash auto-purge (after a watch-triggered rescan) lists the trash
     before the writer lock and deletes an entry under it, in batches, once every
     document its name's hash prefix ties it to was trashed, or deleted for good, longer
     ago than the retention by the journal and the rows as they stand there: a restore

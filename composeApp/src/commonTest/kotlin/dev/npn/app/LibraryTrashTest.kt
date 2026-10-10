@@ -252,13 +252,41 @@ class LibraryTrashTest : MainDispatcherTest() {
         }
 
     @Test
-    fun undoTrashRestoresGivenIds() =
+    fun undoTrashRestoresGivenTrashes() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val model = vm(session = session)
-            model.undoTrash(listOf("d1", "d2"))
+            model.undoTrash(listOf("d1", "d2").mapNotNull { session.docLifecycle.trashDoc(it) })
             advanceUntilIdle()
             session.docLifecycle.restoredDocs shouldContainExactly listOf("d1", "d2")
+        }
+
+    /**
+     * The Undo takes back the trashes this action made, not the documents: one restored and trashed
+     * again since, here or on another device, stays in the trash.
+     */
+    @Test
+    fun theUndoLeavesADocumentTrashedAgainSince() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = vm(session = session)
+            val messages = mutableListOf<UiMessage>()
+            backgroundScope.launch { model.messages.collect { messages += it } }
+            model.startSelection("d1")
+            model.toggleSelection("d2")
+            runCurrent()
+            model.bulkTrash()
+            advanceUntilIdle()
+
+            session.docLifecycle.trashAgain("d1")
+            messages
+                .single()
+                .action
+                ?.onPerform
+                ?.invoke()
+            advanceUntilIdle()
+
+            session.docLifecycle.restoredDocs shouldContainExactly listOf("d2")
         }
 
     @Test
@@ -267,7 +295,7 @@ class LibraryTrashTest : MainDispatcherTest() {
             val session = FakeLibrarySession().apply { docLifecycle.failRestore = { error("path taken") } }
             val model = vm(session = session)
             val messages = collectMessages(model)
-            model.undoTrash(listOf("d1", "d2"))
+            model.undoTrash(listOf("d1", "d2").mapNotNull { session.docLifecycle.trashDoc(it) })
             advanceUntilIdle()
             messages shouldContainExactly listOf(uiText(Res.plurals.common_restore_documents_failed, 2, 2, 2))
         }

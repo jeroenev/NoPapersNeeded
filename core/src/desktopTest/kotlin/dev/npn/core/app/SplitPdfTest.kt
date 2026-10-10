@@ -12,6 +12,7 @@ import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.flow.first
@@ -164,7 +165,9 @@ class SplitPdfTest {
                 val receiptBytes = PdfFixtures.embeddedTextPdf("receipt")
                 val receipt = rig.importDocument(receiptBytes, "receipt", "beta")
                 val before = rig.metadataOf(receipt)
-                rig.session.docLifecycle.trashDoc(receipt) shouldBe true
+                rig.session.docLifecycle
+                    .trashDoc(receipt)
+                    .shouldNotBeNull()
                 val source = rig.importDocument(PdfFixtures.embeddedTextPdf("contract"), "invoice", "acme")
                 hook.firstPart = receiptBytes
 
@@ -217,7 +220,11 @@ class SplitPdfTest {
             val rig = AppSessionRig.create(backgroundScope, pdfEngine = hook::over)
             try {
                 val source = rig.importDocument(PdfFixtures.embeddedTextPdf("contract"), "invoice", "acme")
-                hook.beforePart = { rig.session.docLifecycle.trashDoc(source) shouldBe true }
+                hook.beforePart = {
+                    rig.session.docLifecycle
+                        .trashDoc(source)
+                        .shouldNotBeNull()
+                }
 
                 val done = rig.splitInTwo(source).shouldBeInstanceOf<SplitOutcome.Done>()
 

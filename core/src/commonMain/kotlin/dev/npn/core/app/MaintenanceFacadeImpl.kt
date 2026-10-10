@@ -73,7 +73,7 @@ internal class MaintenanceFacadeImpl(
             // other bytes (the PDF writer stamps each file's /ID with the time).
             runCatchingCancellable {
                 copyMetadataToParts(docId, made)
-                // False for an original trashed or deleted meanwhile: it is out of the library, as
+                // Null for an original trashed or deleted meanwhile: it is out of the library, as
                 // the split wants it, so the split is done.
                 writer.trashDoc(docId)
             }.getOrElse {

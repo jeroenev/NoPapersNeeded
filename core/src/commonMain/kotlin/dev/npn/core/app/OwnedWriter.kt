@@ -67,11 +67,13 @@ internal class OwnedWriter(
         icon: String?,
     ) = owned { writer.setTagStyle(tag, color, icon) }
 
-    override suspend fun trashDoc(docId: String): Boolean = owned { writer.trashDoc(docId) }
+    override suspend fun trashDoc(docId: String): TrashReceipt? = owned { writer.trashDoc(docId) }
 
     override suspend fun restoreDoc(docId: String) = owned { writer.restoreDoc(docId) }
 
     override suspend fun restoreDocs(docIds: List<String>): Int = owned { writer.restoreDocs(docIds) }
+
+    override suspend fun undoTrash(trashes: List<TrashReceipt>): Int = owned { writer.undoTrash(trashes) }
 
     override suspend fun deleteDocPermanently(docId: String): PermanentDeleteOutcome =
         owned { writer.deleteDocPermanently(docId) }

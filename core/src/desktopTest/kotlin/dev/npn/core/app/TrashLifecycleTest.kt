@@ -25,6 +25,7 @@ import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
@@ -85,15 +86,85 @@ class TrashLifecycleTest {
                 val id = rig.docId("a.pdf")
                 rig.session.docLifecycle
                     .trashDoc(id)
-                    .shouldBeTrue()
+                    .shouldNotBeNull()
                 val objects = rig.journalObjectCount()
 
                 rig.session.docLifecycle
                     .trashDoc(id)
-                    .shouldBeFalse()
+                    .shouldBeNull()
 
                 rig.journalObjectCount() shouldBe objects
                 trashEntries(rig.fs) shouldHaveSize 1
+            } finally {
+                rig.close()
+            }
+        }
+
+    /**
+     * An Undo restores only what its trash did: the document restored and trashed again since (here,
+     * or as well on another device) stays in the trash, with nothing written, and the later trash's
+     * own Undo restores it.
+     */
+    @Test
+    fun anUndoLeavesADocumentTrashedAgainSinceInTheTrash() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+                rig.session.rescan()
+                val id = rig.docId("a.pdf")
+                val lifecycle = rig.session.docLifecycle
+                val first = lifecycle.trashDoc(id).shouldNotBeNull()
+                lifecycle.restoreDoc(id)
+                val second = lifecycle.trashDoc(id).shouldNotBeNull()
+                second.trashedAt shouldBe
+                    rig.db
+                        .documentDao()
+                        .getByDocId(id)
+                        ?.trashedAt
+                val objects = rig.journalObjectCount()
+
+                lifecycle.undoTrash(listOf(first)) shouldBe 0
+
+                rig.journalObjectCount() shouldBe objects
+                rig.db
+                    .documentDao()
+                    .getByDocId(id)!!
+                    .trashed
+                    .shouldBeTrue()
+                rig.exists("a.pdf").shouldBeFalse()
+
+                lifecycle.undoTrash(listOf(second)) shouldBe 0
+
+                rig.db
+                    .documentDao()
+                    .getByDocId(id)!!
+                    .trashed
+                    .shouldBeFalse()
+                rig.exists("a.pdf").shouldBeTrue()
+            } finally {
+                rig.close()
+            }
+        }
+
+    /** The Undo of a trash already restored, here or elsewhere, finds nothing to do. */
+    @Test
+    fun anUndoOfADocumentRestoredSinceWritesNothing() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+                rig.session.rescan()
+                val id = rig.docId("a.pdf")
+                val lifecycle = rig.session.docLifecycle
+                val trash = lifecycle.trashDoc(id).shouldNotBeNull()
+                lifecycle.restoreDoc(id)
+                val objects = rig.journalObjectCount()
+
+                lifecycle.undoTrash(listOf(trash)) shouldBe 0
+
+                rig.journalObjectCount() shouldBe objects
+                rig.exists("a.pdf").shouldBeTrue()
             } finally {
                 rig.close()
             }

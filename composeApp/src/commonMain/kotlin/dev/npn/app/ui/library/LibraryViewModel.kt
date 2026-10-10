@@ -26,6 +26,7 @@ import dev.npn.core.app.ScanProgressUi
 import dev.npn.core.app.SettingsRepository
 import dev.npn.core.app.SortField
 import dev.npn.core.app.TagInfo
+import dev.npn.core.app.TrashReceipt
 import dev.npn.core.app.ViewType
 import dev.npn.core.app.importAll
 import dev.npn.core.fs.ExternalSource
@@ -437,10 +438,10 @@ class LibraryViewModel(
 
     /**
      * Move the current selection to the trash, one document at a time so a single failure does not
-     * abort the rest. The documents it moved are reported with an Undo action that restores exactly
-     * those; one already trashed or deleted elsewhere is dropped without a word, as restoring it
-     * would undo that; a failed one stays selected for retry, if the user still has it selected. See
-     * [runOnSelection] for the per-doc failure contract this mirrors.
+     * abort the rest. The documents it moved are reported with an Undo action that takes back
+     * exactly those trashes ([undoTrash]); one already trashed or deleted elsewhere is dropped
+     * without a word, as restoring it would undo that; a failed one stays selected for retry, if the
+     * user still has it selected. See [runOnSelection] for the per-doc failure contract this mirrors.
      */
     fun bulkTrash() {
         val ids = _ui.value.selected.toList()
@@ -448,7 +449,7 @@ class LibraryViewModel(
         trashing =
             viewModelScope.launch {
                 val outcomes = ids.associateWith { runCatchingCancellable { docLifecycle.trashDoc(it) } }
-                val trashed = outcomes.filterValues { it.getOrNull() == true }.keys.toList()
+                val trashed = outcomes.values.mapNotNull { it.getOrNull() }
                 val failed = outcomes.filterValues { it.isFailure }.keys
                 deselect(ids - failed)
                 if (failed.isNotEmpty()) {
@@ -463,13 +464,16 @@ class LibraryViewModel(
             }
     }
 
-    /** Restore [ids] previously moved to the trash (the Undo action of the trash message). */
-    fun undoTrash(ids: List<String>) {
-        if (ids.isEmpty()) return
+    /**
+     * Undo [trashes] (the Undo action of the trash message): restore each document while that trash
+     * still holds it, not one trashed again since, here or on another device.
+     */
+    fun undoTrash(trashes: List<TrashReceipt>) {
+        if (trashes.isEmpty()) return
         viewModelScope.launch {
-            val failed = runCatchingCancellable { docLifecycle.restoreDocs(ids) }.getOrElse { ids.size }
+            val failed = runCatchingCancellable { docLifecycle.undoTrash(trashes) }.getOrElse { trashes.size }
             if (failed > 0) {
-                message(uiText(Res.plurals.common_restore_documents_failed, ids.size, failed, ids.size))
+                message(uiText(Res.plurals.common_restore_documents_failed, trashes.size, failed, trashes.size))
             }
         }
     }

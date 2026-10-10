@@ -84,13 +84,15 @@ private class SyncedSettings {
  * A change to one document's lifecycle as [JournalCoordinator.changeLifecycle] carries it out under
  * the writer lock: [move] its file (nothing, for a change that moves none), [optimisticWrite] its
  * row as the change leaves it, then publish [ops]. [undoMove] puts the file back when nothing was
- * published.
+ * published. [standing] runs once the change stands and is projected, still under the lock, for a
+ * caller that reads what it left before anything else can change it.
  */
 class LifecycleChange(
     val ops: List<PendingOp>,
     val optimisticWrite: suspend () -> Unit,
     val move: suspend () -> Unit = {},
     val undoMove: suspend () -> Unit = {},
+    val standing: suspend () -> Unit = {},
 ) {
     init {
         require(ops.isNotEmpty()) { "A lifecycle change publishes at least one event" }
@@ -536,6 +538,8 @@ class JournalCoordinator internal constructor(
                     }
                 }
                 projectStanding(current, checkNotNull(published), preserveLifecycleDocs = docs)
+                // The change stands: a failure to read what it left is no failure of the change.
+                log.runLogged("Reading what the lifecycle change of $docId left") { change.standing() }
             }
             true
         }

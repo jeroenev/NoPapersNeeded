@@ -4,6 +4,7 @@ import dev.npn.core.app.DocLifecycle
 import dev.npn.core.app.PermanentDeleteOutcome
 import dev.npn.core.app.PermanentDeleteTally
 import dev.npn.core.app.TagAdmin
+import dev.npn.core.app.TrashReceipt
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.CompletableDeferred
 
@@ -83,12 +84,22 @@ class FakeDocLifecycle : DocLifecycle {
     /** deleteDocPermanently deletes these, but their files cannot be removed. */
     var filesLeftDocIds: Set<String> = emptySet()
 
-    override suspend fun trashDoc(docId: String): Boolean {
+    /** The trash time each document trashed here has now, as a receipt reports it. */
+    private val trashTimes = HashMap<String, Long>()
+    private var lastTrashTime = 0L
+
+    override suspend fun trashDoc(docId: String): TrashReceipt? {
         trashGate?.await()
         if (docId in failTrashDocIds) error("trash failed for $docId")
-        if (docId in goneDocIds) return false
+        if (docId in goneDocIds) return null
         trashedDocs += docId
-        return true
+        trashTimes[docId] = ++lastTrashTime
+        return TrashReceipt(docId, lastTrashTime)
+    }
+
+    /** [docId] restored and trashed again since, as by another device: its earlier trash's Undo leaves it. */
+    fun trashAgain(docId: String) {
+        trashTimes[docId] = ++lastTrashTime
     }
 
     override suspend fun restoreDoc(docId: String) {
@@ -98,6 +109,9 @@ class FakeDocLifecycle : DocLifecycle {
 
     override suspend fun restoreDocs(docIds: List<String>): Int =
         docIds.count { runCatchingCancellable { restoreDoc(it) }.isFailure }
+
+    override suspend fun undoTrash(trashes: List<TrashReceipt>): Int =
+        restoreDocs(trashes.filter { trashTimes[it.docId] == it.trashedAt }.map { it.docId })
 
     override suspend fun deleteDocPermanently(docId: String): PermanentDeleteOutcome {
         deletedDocs += docId

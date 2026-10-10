@@ -99,11 +99,11 @@ interface TagAdmin {
 /** A document's existence and location: trash lifecycle plus file rename/move. */
 interface DocLifecycle {
     /**
-     * Move the document's own file to `.npn/trash` and record a doc-trash event. Returns whether it
-     * trashed the document: false, with nothing written, for one already trashed or deleted (here or
-     * by another device) or unknown, which a caller's Undo must leave alone.
+     * Move the document's own file to `.npn/trash` and record a doc-trash event. Returns what it did,
+     * for a caller's Undo to hand to [undoTrash]: null, with nothing written, for one already trashed
+     * or deleted (here or by another device) or unknown, which an Undo must leave alone.
      */
-    suspend fun trashDoc(docId: String): Boolean
+    suspend fun trashDoc(docId: String): TrashReceipt?
 
     suspend fun restoreDoc(docId: String)
 
@@ -112,6 +112,14 @@ interface DocLifecycle {
      * One that fails does not stop the others; returns how many failed, each in the session log.
      */
     suspend fun restoreDocs(docIds: List<String>): Int
+
+    /**
+     * Undo [trashes]: [restoreDocs] each of their documents while that very trash holds it. One
+     * trashed again since, here or on another device, stays in the trash with nothing written, as
+     * one restored or deleted since does; neither is a failure. Returns how many failed, as
+     * [restoreDocs] does.
+     */
+    suspend fun undoTrash(trashes: List<TrashReceipt>): Int
 
     /**
      * Delete a document in the trash for good: a doc-delete tombstone, then its bytes. A document
@@ -136,6 +144,17 @@ interface DocLifecycle {
         newDirRelPath: String,
     )
 }
+
+/**
+ * A trash [DocLifecycle.trashDoc] made: [docId] went to the trash, and its row's trash time
+ * ([dev.npn.core.db.DocumentEntity.trashedAt], the winning trash's) was [trashedAt] once it stood. A
+ * later trash, here or on another device, gives the row another, which is how an Undo tells them
+ * apart.
+ */
+data class TrashReceipt(
+    val docId: String,
+    val trashedAt: Long?,
+)
 
 /** What [DocLifecycle.deleteDocPermanently] did. */
 enum class PermanentDeleteOutcome {
