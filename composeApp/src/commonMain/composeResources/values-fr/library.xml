@@ -48,7 +48,15 @@
         <item quantity="other">Mettre %1$d documents à la corbeille ?</item>
     </plurals>
 
-    <string name="library_scan_progress">%1$s (%2$d/%3$d)</string>
+    <string name="library_scan_listing">Recherche des fichiers…</string>
+
+    <string name="library_scan_hashing">Lecture des fichiers (%1$d sur %2$d)…</string>
+
+    <string name="library_scan_reconciling">Rapprochement des fichiers et des documents…</string>
+
+    <string name="library_scan_folding">Mise à jour de la bibliothèque…</string>
+
+    <string name="library_scan_done">Analyse terminée</string>
     <string name="library_path_conflict">Impossible de déplacer %1$s vers %2$s. Le fichier actuel est conservé. Résolvez le conflit à la destination ou choisissez un autre emplacement ; NPN réessaiera lors de la prochaine analyse.</string>
     <plurals name="library_conflict_file_count">
         <item quantity="one">%1$d fichier en conflit.</item>

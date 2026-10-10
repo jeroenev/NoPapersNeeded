@@ -86,7 +86,12 @@
     <string name="common_trash_no_missing_files">No faltan archivos</string>
     <string name="common_trash_missing_from">Falta en: %1$s</string>
     <string name="common_trash_no_relink_candidates">No se encontraron candidatos para revincular. Vuelve a analizar cuando el archivo regrese.</string>
-    <string name="common_trash_match_reason">Coincidencia (%1$s)</string>
+    <string name="common_trash_possible_match">Posible coincidencia</string>
+    <string name="common_trash_signal_replaced_in_place">Misma ubicación</string>
+    <string name="common_trash_signal_same_name">Mismo nombre</string>
+    <string name="common_trash_signal_similar_name">Nombre similar</string>
+    <string name="common_trash_signal_same_size">Mismo tamaño</string>
+    <string name="common_trash_signal_same_folder">Misma carpeta</string>
     <string name="common_trash_relink">Revincular</string>
     <string name="common_tags_rename_failed">No se pudo renombrar la etiqueta: %1$s</string>
     <string name="common_tags_merge_failed">No se pudieron combinar las etiquetas: %1$s</string>

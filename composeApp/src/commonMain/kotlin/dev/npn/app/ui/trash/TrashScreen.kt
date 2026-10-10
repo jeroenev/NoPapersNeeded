@@ -1,9 +1,11 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 
 package dev.npn.app.ui.trash
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -46,9 +48,11 @@ import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.SnackbarMessages
+import dev.npn.app.ui.common.StatusBadge
 import dev.npn.app.ui.common.TopBarAction
 import dev.npn.app.ui.common.TopBarActions
 import dev.npn.app.ui.common.enumNameSaver
+import dev.npn.app.ui.common.resolve
 import dev.npn.core.app.Doc
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.DocListItem
@@ -67,13 +71,13 @@ import no_papers_needed.composeapp.generated.resources.common_trash_duplicates_t
 import no_papers_needed.composeapp.generated.resources.common_trash_empty
 import no_papers_needed.composeapp.generated.resources.common_trash_extra_copy
 import no_papers_needed.composeapp.generated.resources.common_trash_maintenance_title
-import no_papers_needed.composeapp.generated.resources.common_trash_match_reason
 import no_papers_needed.composeapp.generated.resources.common_trash_missing_from
 import no_papers_needed.composeapp.generated.resources.common_trash_missing_tab
 import no_papers_needed.composeapp.generated.resources.common_trash_no_duplicates
 import no_papers_needed.composeapp.generated.resources.common_trash_no_duplicates_subtitle
 import no_papers_needed.composeapp.generated.resources.common_trash_no_missing_files
 import no_papers_needed.composeapp.generated.resources.common_trash_no_relink_candidates
+import no_papers_needed.composeapp.generated.resources.common_trash_possible_match
 import no_papers_needed.composeapp.generated.resources.common_trash_relink
 import no_papers_needed.composeapp.generated.resources.common_trash_remove_extra
 import no_papers_needed.composeapp.generated.resources.common_trash_restore
@@ -444,11 +448,7 @@ private fun MissingList(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
-                                Text(
-                                    stringResource(Res.string.common_trash_match_reason, c.reason),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    modifier = Modifier.weight(1f),
-                                )
+                                RelinkEvidence(c, Modifier.weight(1f))
                                 TextButton(onClick = { onRelink(c.oldDocId, c.newDocId) }) {
                                     Text(stringResource(Res.string.common_trash_relink))
                                 }
@@ -456,6 +456,29 @@ private fun MissingList(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/** Why [candidate] may be the missing document's file: a badge per reason. */
+@Composable
+private fun RelinkEvidence(
+    candidate: RelinkCandidate,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(stringResource(Res.string.common_trash_possible_match), style = MaterialTheme.typography.bodySmall)
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            candidate.signalLabels().forEach { label ->
+                StatusBadge(
+                    label = label.resolve(),
+                    background = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
             }
         }
     }

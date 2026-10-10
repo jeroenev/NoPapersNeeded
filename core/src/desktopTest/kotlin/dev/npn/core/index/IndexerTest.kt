@@ -185,8 +185,8 @@ class IndexerTest {
                 .missing
                 .shouldBeTrue()
             report.relinkCandidates
-                .any { it.oldDocId == oldId && it.newDocId == newId && it.reason == "path-match" }
-                .shouldBeTrue()
+                .filter { it.oldDocId == oldId && it.newDocId == newId }
+                .map { it.signals } shouldContainExactly listOf(setOf(RelinkSignal.REPLACED_IN_PLACE))
 
             // Apply relink: metadata carries to new doc, old doc superseded (deleted). The coordinator
             // must have its live folded state seeded (production seeds it in openSession) so the

@@ -86,7 +86,12 @@
     <string name="common_trash_no_missing_files">Keine fehlenden Dateien</string>
     <string name="common_trash_missing_from">Fehlt in: %1$s</string>
     <string name="common_trash_no_relink_candidates">Keine passenden Dateien gefunden. Scanne erneut, sobald die Datei wieder da ist.</string>
-    <string name="common_trash_match_reason">Übereinstimmung (%1$s)</string>
+    <string name="common_trash_possible_match">Mögliche Übereinstimmung</string>
+    <string name="common_trash_signal_replaced_in_place">Gleicher Speicherort</string>
+    <string name="common_trash_signal_same_name">Gleicher Name</string>
+    <string name="common_trash_signal_similar_name">Ähnlicher Name</string>
+    <string name="common_trash_signal_same_size">Gleiche Größe</string>
+    <string name="common_trash_signal_same_folder">Gleicher Ordner</string>
     <string name="common_trash_relink">Neu verknüpfen</string>
     <string name="common_tags_rename_failed">Der Tag konnte nicht umbenannt werden: %1$s</string>
     <string name="common_tags_merge_failed">Die Tags konnten nicht zusammengeführt werden: %1$s</string>

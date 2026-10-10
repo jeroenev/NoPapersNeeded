@@ -1,6 +1,7 @@
 package dev.npn.core.app
 
 import dev.npn.core.fs.ExternalSource
+import dev.npn.core.index.IndexProgress
 import dev.npn.core.index.ScanReport
 import kotlinx.coroutines.flow.Flow
 
@@ -33,8 +34,9 @@ interface IngestFacade {
     ): ImportOutcome
 }
 
+/** Where a rescan is: its [phase], and while hashing, how many of [total] files are [done]. */
 data class ScanProgressUi(
-    val phase: String,
+    val phase: IndexProgress.Phase,
     val done: Int,
     val total: Int,
 )

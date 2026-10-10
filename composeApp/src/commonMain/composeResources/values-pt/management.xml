@@ -86,7 +86,12 @@
     <string name="common_trash_no_missing_files">Nenhum arquivo ausente</string>
     <string name="common_trash_missing_from">Ausente em: %1$s</string>
     <string name="common_trash_no_relink_candidates">Nenhum candidato para revincular. Faça uma nova verificação quando o arquivo voltar.</string>
-    <string name="common_trash_match_reason">Correspondência (%1$s)</string>
+    <string name="common_trash_possible_match">Possível correspondência</string>
+    <string name="common_trash_signal_replaced_in_place">Mesmo local</string>
+    <string name="common_trash_signal_same_name">Mesmo nome</string>
+    <string name="common_trash_signal_similar_name">Nome parecido</string>
+    <string name="common_trash_signal_same_size">Mesmo tamanho</string>
+    <string name="common_trash_signal_same_folder">Mesma pasta</string>
     <string name="common_trash_relink">Revincular</string>
     <string name="common_tags_rename_failed">Não foi possível renomear a etiqueta: %1$s</string>
     <string name="common_tags_merge_failed">Não foi possível mesclar as etiquetas: %1$s</string>

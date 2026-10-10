@@ -13,8 +13,7 @@ import dev.npn.core.fs.NpnPaths
 internal object RelinkPairing {
     const val MAX_CANDIDATES_PER_DOC = 3
 
-    /** The reason of a file replaced in place: same path, other bytes. */
-    const val PATH_MATCH = "path-match"
+    /** The score of a file replaced in place ([RelinkSignal.REPLACED_IN_PLACE]). */
     const val SCORE_PATH_MATCH = 100
     private const val SCORE_NAME = 50
     private const val SCORE_SIZE = 40
@@ -84,21 +83,21 @@ internal object RelinkPairing {
         val sameDir = gone.dir == found.dir
         val signals =
             listOf(
-                Signal("name", SCORE_NAME, sameName),
-                Signal("fuzzy-name", SCORE_SIMILAR_NAME, similarName),
-                Signal("size", SCORE_SIZE, sameSize),
-                Signal("dir", SCORE_DIR, sameDir),
+                Signal(RelinkSignal.SAME_NAME, SCORE_NAME, sameName),
+                Signal(RelinkSignal.SIMILAR_NAME, SCORE_SIMILAR_NAME, similarName),
+                Signal(RelinkSignal.SAME_SIZE, SCORE_SIZE, sameSize),
+                Signal(RelinkSignal.SAME_FOLDER, SCORE_DIR, sameDir),
             ).filter { it.present }
         return RelinkCandidate(
             oldDocId = gone.docId,
             newDocId = found.docId,
-            reason = signals.joinToString("+") { it.reason },
+            signals = signals.mapTo(LinkedHashSet()) { it.signal },
             score = signals.sumOf { it.score },
         )
     }
 
     private class Signal(
-        val reason: String,
+        val signal: RelinkSignal,
         val score: Int,
         val present: Boolean,
     )

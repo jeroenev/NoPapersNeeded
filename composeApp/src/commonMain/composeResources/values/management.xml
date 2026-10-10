@@ -87,7 +87,12 @@
     <string name="common_trash_no_missing_files">No missing files</string>
     <string name="common_trash_missing_from">Missing from: %1$s</string>
     <string name="common_trash_no_relink_candidates">No relink candidates found. Rescan after the file returns.</string>
-    <string name="common_trash_match_reason">Match (%1$s)</string>
+    <string name="common_trash_possible_match">Possible match</string>
+    <string name="common_trash_signal_replaced_in_place">Same location</string>
+    <string name="common_trash_signal_same_name">Same name</string>
+    <string name="common_trash_signal_similar_name">Similar name</string>
+    <string name="common_trash_signal_same_size">Same size</string>
+    <string name="common_trash_signal_same_folder">Same folder</string>
     <string name="common_trash_relink">Relink</string>
     <string name="common_tags_rename_failed">Could not rename the tag: %1$s</string>
     <string name="common_tags_merge_failed">Could not merge the tags: %1$s</string>

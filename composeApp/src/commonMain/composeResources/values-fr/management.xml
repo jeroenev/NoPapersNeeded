@@ -86,7 +86,12 @@
     <string name="common_trash_no_missing_files">Aucun fichier manquant</string>
     <string name="common_trash_missing_from">Absent de : %1$s</string>
     <string name="common_trash_no_relink_candidates">Aucun fichier correspondant trouvé. Relancez une analyse quand le fichier sera revenu.</string>
-    <string name="common_trash_match_reason">Correspondance (%1$s)</string>
+    <string name="common_trash_possible_match">Correspondance possible</string>
+    <string name="common_trash_signal_replaced_in_place">Même emplacement</string>
+    <string name="common_trash_signal_same_name">Même nom</string>
+    <string name="common_trash_signal_similar_name">Nom similaire</string>
+    <string name="common_trash_signal_same_size">Même taille</string>
+    <string name="common_trash_signal_same_folder">Même dossier</string>
     <string name="common_trash_relink">Relier</string>
     <string name="common_tags_rename_failed">Impossible de renommer l’étiquette : %1$s</string>
     <string name="common_tags_merge_failed">Impossible de fusionner les étiquettes : %1$s</string>

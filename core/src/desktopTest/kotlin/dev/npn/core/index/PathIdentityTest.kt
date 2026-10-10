@@ -378,7 +378,7 @@ class PathIdentityTest {
                 .shouldBeTrue()
             report.relinkCandidates
                 .filter {
-                    it.reason == RelinkPairing.PATH_MATCH
+                    RelinkSignal.REPLACED_IN_PLACE in it.signals
                 }.map { it.oldDocId to it.newDocId } shouldContainExactly
                 listOf(replaced to now)
         }

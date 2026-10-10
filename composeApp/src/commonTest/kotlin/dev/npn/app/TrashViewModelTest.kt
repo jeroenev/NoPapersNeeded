@@ -3,6 +3,7 @@ package dev.npn.app
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.trash.TrashViewModel
 import dev.npn.core.index.RelinkCandidate
+import dev.npn.core.index.RelinkSignal
 import dev.npn.core.testing.doc
 import dev.npn.core.testing.listItem
 import io.kotest.matchers.collections.shouldContainExactly
@@ -35,7 +36,7 @@ class TrashViewModelTest : MainDispatcherTest() {
     fun relinkCandidatesExtractedFromReport() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
-            val candidate = RelinkCandidate("old", "new", "name+size", 10)
+            val candidate = RelinkCandidate("old", "new", setOf(RelinkSignal.SAME_NAME, RelinkSignal.SAME_SIZE), 10)
             session.ingest.lastScanReportFlow.value = emptyScanReport().copy(relinkCandidates = listOf(candidate))
             val model = vm(session)
             collecting(model.state)

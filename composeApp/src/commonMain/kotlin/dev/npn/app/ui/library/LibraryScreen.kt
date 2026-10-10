@@ -99,6 +99,7 @@ import dev.npn.app.ui.common.TopBarAction
 import dev.npn.app.ui.common.TopBarActions
 import dev.npn.app.ui.common.VerticalScrollbar
 import dev.npn.app.ui.common.isLandscape
+import dev.npn.app.ui.common.resolve
 import dev.npn.app.ui.queue.QueueCounts
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.DocListItem
@@ -145,7 +146,6 @@ import no_papers_needed.composeapp.generated.resources.library_remove_tag
 import no_papers_needed.composeapp.generated.resources.library_results_summary
 import no_papers_needed.composeapp.generated.resources.library_review
 import no_papers_needed.composeapp.generated.resources.library_scan_document
-import no_papers_needed.composeapp.generated.resources.library_scan_progress
 import no_papers_needed.composeapp.generated.resources.library_selected_count
 import no_papers_needed.composeapp.generated.resources.library_sort
 import no_papers_needed.composeapp.generated.resources.library_sort_added
@@ -853,15 +853,7 @@ private fun Banners(
 private fun ScanProgressBanner(scanProgress: ScanProgressUi) {
     Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Column(Modifier.padding(12.dp)) {
-            Text(
-                stringResource(
-                    Res.string.library_scan_progress,
-                    scanProgress.phase,
-                    scanProgress.done,
-                    scanProgress.total,
-                ),
-                style = MaterialTheme.typography.bodyMedium,
-            )
+            Text(scanProgress.bannerText().resolve(), style = MaterialTheme.typography.bodyMedium)
             val fraction =
                 if (scanProgress.total > 0) scanProgress.done.toFloat() / scanProgress.total else 0f
             LinearProgressIndicator(

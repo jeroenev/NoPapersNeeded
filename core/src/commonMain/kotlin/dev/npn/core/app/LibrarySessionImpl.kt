@@ -98,7 +98,7 @@ class LibrarySessionImpl private constructor(
 
     override val scanProgress: Flow<ScanProgressUi?> =
         indexer.scanState.map { p ->
-            p?.let { ScanProgressUi(it.phase.name, it.hashed, it.total) }
+            p?.let { ScanProgressUi(it.phase, it.hashed, it.total) }
         }
 
     private var started = false

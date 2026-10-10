@@ -63,11 +63,11 @@ class RelinkPairingTest {
                 existing = emptyList(),
             )
 
-        candidates.map { it.newDocId to it.reason } shouldContainExactly
+        candidates.map { it.newDocId to it.signals } shouldContainExactly
             listOf(
-                "same-name-and-size" to "name+size",
-                "same-name-elsewhere" to "name",
-                "same-size-only" to "size",
+                "same-name-and-size" to setOf(RelinkSignal.SAME_NAME, RelinkSignal.SAME_SIZE),
+                "same-name-elsewhere" to setOf(RelinkSignal.SAME_NAME),
+                "same-size-only" to setOf(RelinkSignal.SAME_SIZE),
             )
     }
 
@@ -86,7 +86,7 @@ class RelinkPairingTest {
     @Test
     fun aPairAlreadyProposedIsNotRepeated() {
         val gone = missing("old", "a/invoice.pdf", size = 10)
-        val pathMatch = RelinkCandidate("old", "new", reason = "path-match", score = 100)
+        val pathMatch = RelinkCandidate("old", "new", setOf(RelinkSignal.REPLACED_IN_PLACE), score = 100)
 
         RelinkPairing
             .pair(listOf(gone), mapOf("new" to found("a/invoice.pdf", 10)), existing = listOf(pathMatch))
@@ -110,8 +110,8 @@ class RelinkPairingTest {
                 val report = rig.rescan()
 
                 val newId = checkNotNull(rig.db.documentDao().rowAtPath("archive/invoice.pdf")).docId
-                report.relinkCandidates.map { Triple(it.oldDocId, it.newDocId, it.reason) } shouldContainExactly
-                    listOf(Triple(oldId, newId, "name"))
+                report.relinkCandidates.map { Triple(it.oldDocId, it.newDocId, it.signals) } shouldContainExactly
+                    listOf(Triple(oldId, newId, setOf(RelinkSignal.SAME_NAME)))
             } finally {
                 rig.close()
             }

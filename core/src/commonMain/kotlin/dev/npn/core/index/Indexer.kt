@@ -368,7 +368,7 @@ class Indexer(
                     RelinkCandidate(
                         replaced.docId,
                         hash,
-                        reason = RelinkPairing.PATH_MATCH,
+                        signals = setOf(RelinkSignal.REPLACED_IN_PLACE),
                         score = RelinkPairing.SCORE_PATH_MATCH,
                     ),
                 )

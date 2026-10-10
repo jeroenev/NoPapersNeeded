@@ -18,17 +18,34 @@ data class PathConflict(
  * indexer's heuristics. Not auto-applied: the UI presents these and the user confirms via
  * [RelinkService.applyRelink].
  *
- * [reason] is a short machine tag: `path-match` (a file replaced in place), or the evidence
- * joined by `+` in this order: `name` or `fuzzy-name`, `size`, `dir`. `dir` never stands alone, so
- * reasons read like `name+size+dir`, `size` or `fuzzy-name+dir`. [score] is a rough confidence
- * (higher is stronger); ordering only, not a probability.
+ * [signals] are why the new file looks like the missing document's: [RelinkSignal.REPLACED_IN_PLACE]
+ * alone, or some of the others, never [RelinkSignal.SAME_FOLDER] alone. [score] is a rough
+ * confidence (higher is stronger); ordering only, not a probability.
  */
 data class RelinkCandidate(
     val oldDocId: String,
     val newDocId: String,
-    val reason: String,
+    val signals: Set<RelinkSignal>,
     val score: Int,
 )
+
+/** One reason a new file may be a missing document's, for the user to weigh before a relink. */
+enum class RelinkSignal {
+    /** The file took the document's place: the same path, holding other bytes. */
+    REPLACED_IN_PLACE,
+
+    /** The same file name, case aside. */
+    SAME_NAME,
+
+    /** A file name close to the document's ([NameSimilarity]). */
+    SIMILAR_NAME,
+
+    /** The same size in bytes. */
+    SAME_SIZE,
+
+    /** The same folder: never evidence on its own, since a folder rewritten in place shares one. */
+    SAME_FOLDER,
+}
 
 /**
  * A document whose journal state says trashed/deleted but whose own bytes are in the library at
