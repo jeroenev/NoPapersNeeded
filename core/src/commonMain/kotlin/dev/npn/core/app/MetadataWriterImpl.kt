@@ -382,8 +382,7 @@ class MetadataWriterImpl(
     /**
      * Whether the file at the path of [doc], its row before the deletion, holds its bytes, keyed by
      * the stat it had, for [stillHolds]. A file another live row names with the size and mtime that
-     * row stored is that document's, and is not read; nor is [doc]'s own while it was live and
-     * unchanged.
+     * row stored is that document's, and is not read.
      */
     private suspend fun fileAt(doc: DocumentEntity): Map<FileMeta, Boolean> {
         val meta = fs.stat(doc.relPath) ?: return emptyMap()
