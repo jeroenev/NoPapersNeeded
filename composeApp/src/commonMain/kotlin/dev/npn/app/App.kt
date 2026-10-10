@@ -15,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -44,7 +45,9 @@ import dev.npn.app.ui.common.testTagsAsResourceIds
 import dev.npn.app.ui.detail.BrowseContext
 import dev.npn.app.ui.detail.DocDetailScreen
 import dev.npn.app.ui.detail.DocumentDraftHost
+import dev.npn.app.ui.detail.DocumentDrafts
 import dev.npn.app.ui.detail.WithDraftResumeBanner
+import dev.npn.app.ui.detail.rememberDocumentDrafts
 import dev.npn.app.ui.library.LibraryFilterHandoff
 import dev.npn.app.ui.library.LibraryScreen
 import dev.npn.app.ui.nav.AiDestination
@@ -67,6 +70,7 @@ import dev.npn.app.ui.update.WithUpdateBanner
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.SettingsRepository
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.receiveAsFlow
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_app_name
@@ -80,15 +84,45 @@ import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun App(env: AppEnvironment) {
-    LocaleProvider(env.settings) {
-        NpnTheme {
-            ProvideWindowWidthClass {
-                Surface(Modifier.fillMaxSize().testTagsAsResourceIds(), color = MaterialTheme.colorScheme.background) {
-                    AppRoot(env)
-                }
-            }
-        }
-    }
+    AppRoot(env)
+}
+
+/**
+ * What the open library's UI keeps when the app's language changes: its unsaved [drafts], where its
+ * navigation stands ([nav]), and the order the detail screen walks ([browse]).
+ */
+@Stable
+internal class LibraryUi(
+    val drafts: DocumentDrafts,
+    val nav: NavHostController,
+) {
+    val browse = BrowseContext()
+}
+
+/**
+ * [content] in the app's language ([LocaleProvider]), handed the open library's [LibraryUi], or
+ * null while no library is open. A change of language rebuilds everything below [LocaleProvider],
+ * so what must outlive it is remembered here, above it, for as long as [session] is open.
+ */
+@Composable
+internal fun LocalizedApp(
+    settings: SettingsRepository,
+    session: LibrarySession?,
+    scope: CoroutineScope,
+    content: @Composable (LibraryUi?) -> Unit,
+) {
+    val library = session?.let { rememberLibraryUi(it, scope) }
+    LocaleProvider(settings) { content(library) }
+}
+
+@Composable
+private fun rememberLibraryUi(
+    session: LibrarySession,
+    scope: CoroutineScope,
+): LibraryUi {
+    val drafts = rememberDocumentDrafts(session, scope)
+    val nav = rememberNavController()
+    return remember(drafts, nav) { LibraryUi(drafts, nav) }
 }
 
 @Composable
@@ -99,56 +133,78 @@ private fun AppRoot(
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val useSaf by vm.useSafStorage.collectAsStateWithLifecycle()
-    val snackbar = remember { SnackbarHostState() }
-    SnackbarMessages(vm.messages, snackbar)
-    // Files dropped on the desktop window import into whichever library is open, from any screen.
-    LaunchedEffect(vm) { DesktopBridge.droppedFiles.receiveAsFlow().collect { vm.importFiles(it) } }
-    // Without a library there are no screens to title the window; the app's name, in its language.
-    if (state !is AppState.Open) PublishWindowTitle(stringResource(Res.string.common_app_name))
+    LocalizedApp(env.settings, (state as? AppState.Open)?.session, env.appScope) { library ->
+        AppSurface {
+            val snackbar = remember { SnackbarHostState() }
+            SnackbarMessages(vm.messages, snackbar)
+            // Files dropped on the desktop window import into whichever library is open, from any screen.
+            LaunchedEffect(vm) { DesktopBridge.droppedFiles.receiveAsFlow().collect { vm.importFiles(it) } }
+            // Without a library there are no screens to title the window; the app's name, in its language.
+            if (state !is AppState.Open) PublishWindowTitle(stringResource(Res.string.common_app_name))
 
-    Box(modifier.fillMaxSize()) {
-        when (val current = state) {
-            AppState.Restoring, AppState.Opening -> {
-                LoadingScreen()
-            }
+            Box(modifier.fillMaxSize()) {
+                when (val current = state) {
+                    AppState.Restoring, AppState.Opening -> {
+                        LoadingScreen()
+                    }
 
-            is AppState.NoLibrary -> {
-                OnboardingScreen(
-                    failure = current.failure,
-                    useSaf = useSaf,
-                    onUseSafChange = vm::setUseSafStorage,
-                    onOpen = vm::open,
-                    onCreate = vm::createLibrary,
-                    onUseRecommendedFolder = vm::useRecommended,
-                )
-            }
+                    is AppState.NoLibrary -> {
+                        OnboardingScreen(
+                            failure = current.failure,
+                            useSaf = useSaf,
+                            onUseSafChange = vm::setUseSafStorage,
+                            onOpen = vm::open,
+                            onCreate = vm::createLibrary,
+                            onUseRecommendedFolder = vm::useRecommended,
+                        )
+                    }
 
-            is AppState.RestoreFailed -> {
-                RestoreFailedScreen(
-                    failure = current.failure,
-                    useSaf = useSaf,
-                    onUseSafChange = vm::setUseSafStorage,
-                    onRetry = vm::retry,
-                    onOpen = vm::open,
-                )
-            }
+                    is AppState.RestoreFailed -> {
+                        RestoreFailedScreen(
+                            failure = current.failure,
+                            useSaf = useSaf,
+                            onUseSafChange = vm::setUseSafStorage,
+                            onRetry = vm::retry,
+                            onOpen = vm::open,
+                        )
+                    }
 
-            is AppState.Open -> {
-                val aiConfigured by vm.aiConfigured.collectAsStateWithLifecycle()
-                DocumentDraftHost(current.session, env.appScope) {
-                    MainNav(
-                        env = env,
-                        session = current.session,
-                        aiConfigured = aiConfigured,
-                        snackbar = snackbar,
-                        onOpenLibrary = vm::open,
-                    )
+                    is AppState.Open -> {
+                        val aiConfigured by vm.aiConfigured.collectAsStateWithLifecycle()
+                        // Never null here: LocalizedApp remembers it for the session this state opened.
+                        if (library != null) {
+                            DocumentDraftHost(library.drafts) {
+                                MainNav(
+                                    env = env,
+                                    session = current.session,
+                                    library = library,
+                                    aiConfigured = aiConfigured,
+                                    snackbar = snackbar,
+                                    onOpenLibrary = vm::open,
+                                )
+                            }
+                        }
+                        // A switch to another library that failed lands back in this one; say why.
+                        current.failure?.let { OpenFailedDialog(it, onDismiss = vm::dismissFailure) }
+                    }
                 }
-                // A switch to another library that failed lands back in this one; say why.
-                current.failure?.let { OpenFailedDialog(it, onDismiss = vm::dismissFailure) }
+                SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
             }
         }
-        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
+    }
+}
+
+/** The app's theme, window-width class and background around [content]. */
+@Composable
+private fun AppSurface(content: @Composable () -> Unit) {
+    NpnTheme {
+        ProvideWindowWidthClass {
+            Surface(
+                Modifier.fillMaxSize().testTagsAsResourceIds(),
+                color = MaterialTheme.colorScheme.background,
+                content = content,
+            )
+        }
     }
 }
 
@@ -171,17 +227,16 @@ private fun OpenFailedDialog(
 private fun MainNav(
     env: AppEnvironment,
     session: LibrarySession,
+    /** The library's navigation and the browse order the detail screen pages through. */
+    library: LibraryUi,
     aiConfigured: Boolean,
     /** The shell's own snackbar, for what is reported outside any one screen. */
     snackbar: SnackbarHostState,
     onOpenLibrary: (location: String) -> Unit,
 ) {
-    val nav = rememberNavController()
+    val nav = library.nav
     // Ordered doc list for prev/next-document paging in the detail screen; populated on open.
-    val browse =
-        remember {
-            BrowseContext()
-        }
+    val browse = library.browse
     // Outstanding background work, for the shell's queue badge. Read here rather than in a screen
     // because the badge is the only standing sign that the app is still busy — or, once a
     // background AI edit finishes, that it is waiting on the user — and on compact layouts the

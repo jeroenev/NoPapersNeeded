@@ -28,21 +28,31 @@ import no_papers_needed.composeapp.generated.resources.ux_drafts_count
 import no_papers_needed.composeapp.generated.resources.ux_resume_draft
 import org.jetbrains.compose.resources.stringResource
 
+/**
+ * The open library's drafts, kept for as long as [session] is open, and through Android's process
+ * death in their saved form. Remembered above the app's [dev.npn.app.ui.common.LocaleProvider]
+ * (`LocalizedApp`): a change of language rebuilds everything below it, and must not lose an edit.
+ */
 @Composable
-internal fun DocumentDraftHost(
+internal fun rememberDocumentDrafts(
     session: LibrarySession,
     scope: CoroutineScope,
+): DocumentDrafts =
+    rememberSaveable(
+        session,
+        saver =
+            Saver(
+                save = { it.serialize() },
+                restore = { DocumentDrafts(session.meta, scope, it) },
+            ),
+    ) { DocumentDrafts(session.meta, scope) }
+
+/** Makes [store] the drafts every document editor in [content] works on. */
+@Composable
+internal fun DocumentDraftHost(
+    store: DocumentDrafts,
     content: @Composable () -> Unit,
 ) {
-    val store =
-        rememberSaveable(
-            session,
-            saver =
-                Saver(
-                    save = { it.serialize() },
-                    restore = { DocumentDrafts(session.meta, scope, it) },
-                ),
-        ) { DocumentDrafts(session.meta, scope) }
     CompositionLocalProvider(LocalDocumentDrafts provides store, content = content)
 }
 
