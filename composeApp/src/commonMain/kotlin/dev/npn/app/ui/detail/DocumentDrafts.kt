@@ -144,12 +144,28 @@ internal class DocumentDrafts(
                 }.mapValues { it.value.copy(saving = false) },
         )
 
+    /** Each document's save in flight, from [save] until it lands ([settle]) or does not. */
+    private val inFlight = HashMap<String, InFlightSave>()
+
+    /** A save in flight: the values it [writes], by key. */
+    private class InFlightSave(
+        val writes: Map<String, String?>,
+    ) {
+        /** Its keys the user has put back to the stored value since: no change if it does not land. */
+        val reverted = HashSet<String>()
+    }
+
     /**
      * Record an edit to one field. [persisted] is what the library already holds: an edit that
      * lands back on it — typing and undoing, or picking the value that was already there — leaves
      * no draft behind. That keeps the save bar and the resume banner reporting real changes only,
      * and stops a save from publishing a journal event that changes nothing (the journal is
      * append-only and syncs to every device, so no-op events are not free). A null [value] clears.
+     *
+     * While a save of this field runs, the library is about to hold what that save writes instead,
+     * so an edit is no change only when it is none either way. Any other stays, for [settle] to keep
+     * when it differs from what the save wrote: going back to the stored value while the save writes
+     * another is an edit like any other once the save lands.
      *
      * [refused] says the editor refused [value], as typed: it blocks the save until a valid edit
      * replaces it. A refused entry is no value, so it is an edit even where it reads like a stored
@@ -164,9 +180,13 @@ internal class DocumentDrafts(
         type: FieldType = FieldType.TEXT,
         refused: Boolean = false,
     ) {
-        val unchanged =
-            value.normalized() == persisted.normalized() &&
-                (!refused || FieldValues.canonicalize(type, persisted) is FieldParse.Invalid)
+        fun isNoChangeFrom(stored: String?) =
+            value.normalized() == stored.normalized() &&
+                (!refused || FieldValues.canonicalize(type, stored) is FieldParse.Invalid)
+        val asStored = isNoChangeFrom(persisted)
+        val saving = inFlight[docId]?.takeIf { key in it.writes }
+        saving?.reverted?.let { if (asStored) it += key else it -= key }
+        val unchanged = asStored && (saving == null || isNoChangeFrom(saving.writes[key]))
         edit(docId) { draft ->
             if (unchanged) {
                 draft.copy(fields = draft.fields - key, types = draft.types - key, refused = draft.refused - key)
@@ -232,6 +252,7 @@ internal class DocumentDrafts(
         docId: String,
         written: Map<String, String?>,
     ) {
+        inFlight.remove(docId)
         mutate { all ->
             val latest = all.getValue(docId)
             val unwritten =
@@ -243,6 +264,23 @@ internal class DocumentDrafts(
         }
     }
 
+    /**
+     * [draft] once its save ended without landing: the library still holds what it held, so a field
+     * put back to that while the save ran is no edit after all.
+     */
+    private fun unlanded(
+        docId: String,
+        draft: DocumentDraft,
+    ): DocumentDraft {
+        val reverted = inFlight.remove(docId)?.reverted.orEmpty()
+        return draft.copy(
+            fields = draft.fields - reverted,
+            types = draft.types - reverted,
+            refused = draft.refused - reverted,
+            saving = false,
+        )
+    }
+
     fun save(
         docId: String,
         reviewed: Boolean? = null,
@@ -251,6 +289,7 @@ internal class DocumentDrafts(
         val captured = drafts.value[docId] ?: DocumentDraft()
         if (captured.saving || !captured.writable) return
         edit(docId) { it.copy(saving = true) }
+        inFlight[docId] = InFlightSave(captured.fields)
         scope.launch {
             // [scope] is the app scope, which is not the main thread; the writer is main-safe either
             // way. State mutation, by contrast, is main-thread-only by construction (the plain
@@ -268,13 +307,13 @@ internal class DocumentDrafts(
                 } finally {
                     // Cancelled: clear the saving flag even while cancelling, so the draft is not stuck.
                     if (!finished) {
-                        withContext(NonCancellable + Dispatchers.Main) { edit(docId) { it.copy(saving = false) } }
+                        withContext(NonCancellable + Dispatchers.Main) { edit(docId) { unlanded(docId, it) } }
                     }
                 }
             outcome.onFailure { error ->
                 withContext(Dispatchers.Main) {
                     mutate { all ->
-                        all + (docId to all.getValue(docId).copy(saving = false, error = error.reason()))
+                        all + (docId to unlanded(docId, all.getValue(docId)).copy(error = error.reason()))
                     }
                 }
                 return@launch

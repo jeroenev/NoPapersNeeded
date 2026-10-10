@@ -153,32 +153,37 @@ class DocumentDraftsTest : MainDispatcherTest() {
             )
         }
 
+    /** A writer whose field edits wait for [finish] once they have [started], then land in [fake]. */
+    private class GatedWriter(
+        val fake: FakeMetadataWriter = FakeMetadataWriter(),
+    ) : MetadataWriter by fake {
+        val started = CompletableDeferred<Unit>()
+        val finish = CompletableDeferred<Unit>()
+
+        override suspend fun applyEdits(
+            docIds: List<String>,
+            addTags: List<String>,
+            fields: Map<String, String?>,
+            fillOnly: Boolean,
+        ) {
+            started.complete(Unit)
+            finish.await()
+            fake.applyEdits(docIds, addTags, fields, fillOnly)
+        }
+    }
+
     @Test
     fun editsMadeDuringSaveRemainUnsavedAndRepeatedSaveIsIgnored() =
         runTest(dispatcher) {
-            val started = CompletableDeferred<Unit>()
-            val finish = CompletableDeferred<Unit>()
-            val fake = FakeMetadataWriter()
-            val writer =
-                object : MetadataWriter by fake {
-                    override suspend fun applyEdits(
-                        docIds: List<String>,
-                        addTags: List<String>,
-                        fields: Map<String, String?>,
-                        fillOnly: Boolean,
-                    ) {
-                        started.complete(Unit)
-                        finish.await()
-                        fake.applyEdits(docIds, addTags, fields, fillOnly)
-                    }
-                }
+            val writer = GatedWriter()
+            val fake = writer.fake
             val store = DocumentDrafts(writer, this)
             store.field("one", FieldKeys.TITLE, "First", persisted = null)
             store.save("one")
-            started.await()
+            writer.started.await()
             store.field("one", FieldKeys.TITLE, "Second", persisted = null)
             store.save("one")
-            finish.complete(Unit)
+            writer.finish.complete(Unit)
             advanceUntilIdle()
             assertEquals(1, fake.batchedEdits.size)
             assertEquals("First", fake.batchedEdits.single().fields[FieldKeys.TITLE])
@@ -188,6 +193,74 @@ class DocumentDraftsTest : MainDispatcherTest() {
                     .getValue("one")
                     .fields[FieldKeys.TITLE],
             )
+        }
+
+    /**
+     * An edit made while a save runs is judged against what that save writes: going back to the
+     * stored value, while the save writes another, is an edit of its own once the save lands.
+     */
+    @Test
+    fun goingBackToTheStoredValueWhileASaveRunsStaysUnsaved() =
+        runTest(dispatcher) {
+            val writer = GatedWriter()
+            val store = DocumentDrafts(writer, this)
+            store.field("one", FieldKeys.TITLE, "B", persisted = "A")
+            store.save("one")
+            writer.started.await()
+
+            store.field("one", FieldKeys.TITLE, "A", persisted = "A")
+            // Until the save lands, the editor shows what the user typed last.
+            store.state.getValue("one").fields shouldBe mapOf(FieldKeys.TITLE to "A")
+            writer.finish.complete(Unit)
+            advanceUntilIdle()
+
+            writer.fake.batchedEdits
+                .single()
+                .fields shouldBe mapOf(FieldKeys.TITLE to "B")
+            val draft = store.state.getValue("one")
+            draft.fields shouldBe mapOf(FieldKeys.TITLE to "A")
+            assertTrue(draft.dirty)
+        }
+
+    /** Typing on and back to what a running save writes shows that value until the save settles it. */
+    @Test
+    fun goingBackToTheValueASaveWritesIsSettledByThatSave() =
+        runTest(dispatcher) {
+            val writer = GatedWriter()
+            val store = DocumentDrafts(writer, this)
+            store.field("one", FieldKeys.TITLE, "B", persisted = "A")
+            store.save("one")
+            writer.started.await()
+
+            store.field("one", FieldKeys.TITLE, "Bx", persisted = "A")
+            store.field("one", FieldKeys.TITLE, "B", persisted = "A")
+            store.state.getValue("one").fields shouldBe mapOf(FieldKeys.TITLE to "B")
+            writer.finish.complete(Unit)
+            runCurrent()
+
+            val draft = store.state.getValue("one")
+            assertFalse(draft.dirty)
+            assertTrue(draft.saved)
+        }
+
+    /** A save that fails leaves no draft of a field put back to its stored value while it ran. */
+    @Test
+    fun aFailedSaveKeepsNoEditBackToTheStoredValue() =
+        runTest(dispatcher) {
+            val writer = GatedWriter(FakeMetadataWriter().apply { failBatchOps = { error("offline") } })
+            val store = DocumentDrafts(writer, this)
+            store.field("one", FieldKeys.TITLE, "B", persisted = "A")
+            store.field("one", FieldKeys.NOTES, "Call back", persisted = null)
+            store.save("one")
+            writer.started.await()
+
+            store.field("one", FieldKeys.TITLE, "A", persisted = "A")
+            writer.finish.complete(Unit)
+            advanceUntilIdle()
+
+            val draft = store.state.getValue("one")
+            draft.fields shouldBe mapOf(FieldKeys.NOTES to "Call back")
+            assertNotNull(draft.error)
         }
 
     /**
