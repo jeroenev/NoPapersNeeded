@@ -96,8 +96,10 @@ internal val ReviewDoc.hasSuggestions: Boolean
  *   would re-run the storage path rules and rename the file once per field, and one transaction
  *   over every document would let one rejected document lose all the others' writes.
  *
- * A failure is recorded, never rolled back: the Retry holds only the failed documents, with every
- * item that did land deselected, so a retry never writes a `(doc, tag)` or `(doc, field)` twice.
+ * A failure is recorded, never rolled back: the Retry holds only the failed documents, without the
+ * items that did land, and whatever a later attempt selects, an item that landed is not written
+ * again, so the batch never writes a `(doc, tag)` or `(doc, field)` twice (a second tag add would be
+ * another OR-set dot, a second field write a newer value over a remote edit).
  *
  * Stateful, one per batch: it carries what earlier partial-failure attempts wrote, so the Done that
  * finally comes counts all of them, suggestions and the distinct documents they changed alike.
@@ -105,16 +107,14 @@ internal val ReviewDoc.hasSuggestions: Boolean
 internal class ReviewApply(
     private val meta: MetadataWriter,
 ) {
-    /** Suggestions written across earlier partial-failure attempts of this batch. */
-    private var appliedSoFar = 0
-
-    /** Documents changed across every attempt of this batch so far. */
-    private val changedSoFar = mutableSetOf<String>()
+    /** What every attempt of this batch wrote so far. */
+    private val landed = Landed()
 
     /**
-     * Write the selected items of [docs]. [onDocWritten] fires with each document's id as a write
-     * covering it lands; [moreRemain] is asked only once everything landed, for [ApplyResult.moreRemain].
-     * The writes stand when it fails: the Done offers no more and carries the failure.
+     * Write the selected items of [docs], less what an earlier attempt already wrote. [onDocWritten]
+     * fires with each document's id as a write covering it lands; [moreRemain] is asked only once
+     * everything landed, for [ApplyResult.moreRemain]. The writes stand when it fails: the Done
+     * offers no more and carries the failure.
      */
     suspend fun apply(
         docs: List<ReviewDoc>,
@@ -124,15 +124,14 @@ internal class ReviewApply(
         val edits = docs.map { it.selectedEdit() }
         if (edits.all { it.isEmpty }) return ApplyOutcome.NothingSelected
         val written = write(edits, onDocWritten)
-        changedSoFar += written.changedDocs
+        landed += written.landed
         if (written.failedDocs.isEmpty()) {
             val more = runCatchingCancellable { moreRemain() }
-            val result = ApplyResult(written.count + appliedSoFar, changedSoFar.size, more.getOrDefault(false))
+            val result = ApplyResult(landed.count, landed.changedDocs.size, more.getOrDefault(false))
             return ApplyOutcome.Done(result, followUpFailure = more.exceptionOrNull())
         }
-        appliedSoFar += written.count
         return ApplyOutcome.Retry(
-            remaining = docs.filter { it.docId in written.failedDocs }.map { it.withoutWritten(written) },
+            remaining = docs.filter { it.docId in written.failedDocs }.map { it.withoutLanded() },
             failedDocs = written.failedDocs.size,
             total = docs.size,
         )
@@ -148,15 +147,26 @@ internal class ReviewApply(
         val isEmpty: Boolean get() = addTags.isEmpty() && removeTags.isEmpty() && fields.isEmpty()
     }
 
-    /** What one write pass landed, per `(docId, tag or field key)`, and which documents failed. */
-    private class Written {
+    /** What landed, per `(docId, tag or field key)`. */
+    private class Landed {
         val adds = mutableSetOf<Pair<String, String>>()
         val removals = mutableSetOf<Pair<String, String>>()
         val fields = mutableSetOf<Pair<String, String>>()
-        val failedDocs = mutableSetOf<String>()
 
         val count: Int get() = adds.size + removals.size + fields.size
         val changedDocs: Set<String> get() = (adds + removals + fields).mapTo(HashSet()) { it.first }
+
+        operator fun plusAssign(other: Landed) {
+            adds += other.adds
+            removals += other.removals
+            fields += other.fields
+        }
+    }
+
+    /** What one write pass landed, and which documents failed. */
+    private class Written {
+        val landed = Landed()
+        val failedDocs = mutableSetOf<String>()
     }
 
     private suspend fun write(
@@ -165,15 +175,15 @@ internal class ReviewApply(
     ): Written {
         val written = Written()
         for ((tag, docIds) in edits.byTag { it.addTags }) {
-            writeTag(written.adds, written, docIds, tag, onDocWritten) { meta.addTag(docIds, tag) }
+            writeTag(written.landed.adds, written, docIds, tag, onDocWritten) { meta.addTag(docIds, tag) }
         }
         for ((tag, docIds) in edits.byTag { it.removeTags }) {
-            writeTag(written.removals, written, docIds, tag, onDocWritten) { meta.removeTag(docIds, tag) }
+            writeTag(written.landed.removals, written, docIds, tag, onDocWritten) { meta.removeTag(docIds, tag) }
         }
         for (edit in edits.filter { it.fields.isNotEmpty() }) {
             val landed = runCatchingCancellable { meta.applyEdits(listOf(edit.docId), fields = edit.fields) }.isSuccess
             if (landed) {
-                edit.fields.keys.forEach { written.fields += edit.docId to it }
+                edit.fields.keys.forEach { written.landed.fields += edit.docId to it }
                 onDocWritten(edit.docId)
             } else {
                 written.failedDocs += edit.docId
@@ -204,29 +214,26 @@ internal class ReviewApply(
     private fun List<SelectedEdit>.byTag(tags: (SelectedEdit) -> List<String>): Map<String, List<String>> =
         flatMap { edit -> tags(edit).map { it to edit.docId } }.groupBy({ it.first }, { it.second })
 
+    /** This row's selected items that no attempt of the batch has written yet. */
     private fun ReviewDoc.selectedEdit(): SelectedEdit =
         SelectedEdit(
             docId = docId,
-            addTags = chips.filter { it.selected }.map { it.tag },
-            removeTags = removals.filter { it.selected }.map { it.tag },
-            fields = fields.filter { it.selected }.associate { it.key to it.value },
+            addTags = chips.filter { it.selected && (docId to it.tag) !in landed.adds }.map { it.tag },
+            removeTags = removals.filter { it.selected && (docId to it.tag) !in landed.removals }.map { it.tag },
+            fields =
+                fields
+                    .filter { it.selected && (docId to it.key) !in landed.fields }
+                    .associate { it.key to it.value },
         )
 
     /**
-     * The same row with every item [written] confirms deselected, so retrying this document
-     * re-writes only what is still owed. Items are deselected rather than dropped: a written
-     * suggestion is still part of what the user was shown and reads as "already done".
+     * The same row without the items that landed, so a retry offers only what is still owed: an item
+     * left in it, even deselected, would be ticked again by selecting the recommended items or all.
      */
-    private fun ReviewDoc.withoutWritten(written: Written): ReviewDoc =
+    private fun ReviewDoc.withoutLanded(): ReviewDoc =
         copy(
-            chips = chips.map { it.deselectIf((docId to it.tag) in written.adds) },
-            removals = removals.map { it.deselectIf((docId to it.tag) in written.removals) },
-            fields = fields.map { it.deselectIf((docId to it.key) in written.fields) },
+            chips = chips.filterNot { (docId to it.tag) in landed.adds },
+            removals = removals.filterNot { (docId to it.tag) in landed.removals },
+            fields = fields.filterNot { (docId to it.key) in landed.fields },
         )
-
-    private fun ReviewChip.deselectIf(written: Boolean): ReviewChip =
-        if (selected && written) copy(selected = false) else this
-
-    private fun ReviewField.deselectIf(written: Boolean): ReviewField =
-        if (selected && written) copy(selected = false) else this
 }

@@ -51,7 +51,7 @@ interface EditRunReview {
 
     /**
      * Write the selected suggestions of [reviewed]. Identical semantics to [AiEditRun.apply] —
-     * per-tag transactions, failures as an [ApplyOutcome.Retry] with succeeded items deselected —
+     * per-tag transactions, failures as an [ApplyOutcome.Retry] without the succeeded items —
      * except that a queued run has no scope left to continue into, so [ApplyResult.moreRemain] is
      * always false. A fully applied run is finished, and is dropped from the queue; when dropping it
      * fails, the writes stand, the run stays queued and the Done carries the failure.

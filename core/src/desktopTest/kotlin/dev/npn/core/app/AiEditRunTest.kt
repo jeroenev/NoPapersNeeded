@@ -18,6 +18,7 @@ import dev.npn.core.testing.FakeTagRepository
 import dev.npn.core.testing.doc
 import dev.npn.core.testing.edit
 import dev.npn.core.testing.listItem
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldHaveSize
@@ -444,10 +445,10 @@ class AiEditRunApplyTest {
         }
 
     @Test
-    fun retryDeselectsAlreadySucceededItemsOnFailedDocs() =
+    fun retryDropsAlreadySucceededItemsOnFailedDocs() =
         runTest {
-            // Doc a: the "bad" tag call fails (a shares it with nothing), the title write succeeds.
-            // The retained row must keep the failed chip selected but deselect the written field.
+            // Doc a: the "bad" tag call fails (a shares it with nothing), the field write succeeds.
+            // The retained row must keep the failed chip selected and no longer offer the written field.
             val h = Harness()
             h.documents.documents.value = listOf(listItem("a"))
             h.ai.edit =
@@ -462,7 +463,7 @@ class AiEditRunApplyTest {
 
             val remaining = retry.remaining.single()
             remaining.chips.single().selected shouldBe true
-            remaining.fields.single().selected shouldBe false
+            remaining.fields.shouldBeEmpty()
         }
 
     @Test

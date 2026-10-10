@@ -2,14 +2,21 @@
 
 package dev.npn.app.ui.ai
 
+import dev.npn.app.FakeLibrarySession
+import dev.npn.app.FakeSettingsRepository
 import dev.npn.app.MainDispatcherTest
 import dev.npn.app.collecting
 import dev.npn.app.failure
 import dev.npn.app.ui.common.uiText
+import dev.npn.core.ai.FieldSuggestion
+import dev.npn.core.ai.TagSuggestion
+import dev.npn.core.app.AiEditRunImpl
 import dev.npn.core.app.ApplyOutcome
 import dev.npn.core.app.ApplyResult
 import dev.npn.core.app.ReviewDoc
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.testing.edit
+import dev.npn.core.testing.listItem
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
@@ -48,6 +55,37 @@ class AiEditApplicationTest : MainDispatcherTest() {
         ui.value.phase
             .shouldBeInstanceOf<EditPhase.Review>()
             .docs
+
+    /**
+     * A page in Review over the real run, for document a: the model suggests the library's tag
+     * "invoice" and a correspondent, both recommended; [session]'s writer records the writes.
+     */
+    private fun TestScope.reviewingTheRealRun(session: FakeLibrarySession): AiEditViewModel {
+        session.documents.documents.value = listOf(listItem("a"))
+        session.tags.tagNames = listOf("invoice")
+        session.aiSuggest.edit =
+            edit(
+                addTags = listOf(TagSuggestion("invoice", isNew = false)),
+                metadata = FieldSuggestion(mapOf(FieldKeys.CORRESPONDENT to "Acme")),
+            )
+        val run =
+            AiEditRunImpl(
+                session.documents,
+                session.meta,
+                session.content,
+                session.aiSuggest,
+                session.fieldRegistry,
+                session.tags,
+            )
+        val model = AiEditViewModel(session, FakeSettingsRepository(), edit = run)
+        model.setTask(EditTask.CUSTOM)
+        model.setBackground(false)
+        collecting(model.ui)
+        advanceUntilIdle()
+        model.start()
+        advanceUntilIdle()
+        return model
+    }
 
     @Test
     fun toggleChipFlipsAddAndRemovalSelection() =
@@ -130,6 +168,35 @@ class AiEditApplicationTest : MainDispatcherTest() {
                 .chips
                 .all { it.selected } shouldBe true
             model.ui.value.phase shouldBe EditPhase.Done(ApplyResult(applied = 2, docsChanged = 1, moreRemain = true))
+        }
+
+    /**
+     * The tag landed and the correspondent failed: Select recommended on the Retry cannot pick the
+     * tag again, so the second Apply writes only the correspondent and Done counts the tag once.
+     */
+    @Test
+    fun selectingRecommendedOnARetryNeverSendsWhatLanded() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = reviewingTheRealRun(session)
+            session.meta.failApplyEditsForDocs = setOf("a")
+            model.apply()
+            advanceUntilIdle()
+            model
+                .reviewDocs()
+                .single()
+                .chips
+                .shouldBeEmpty()
+
+            session.meta.failApplyEditsForDocs = emptySet()
+            model.selectRecommended()
+            model.apply()
+            advanceUntilIdle()
+
+            session.meta.addedTags shouldContainExactly listOf(listOf("a") to "invoice")
+            session.meta.batchedEdits.map { it.docId to it.fields } shouldContainExactly
+                listOf("a" to mapOf(FieldKeys.CORRESPONDENT to "Acme"))
+            model.ui.value.phase shouldBe EditPhase.Done(ApplyResult(applied = 2, docsChanged = 1, moreRemain = false))
         }
 
     @Test

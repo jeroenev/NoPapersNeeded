@@ -4,6 +4,7 @@ package dev.npn.core.app
 
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.testing.FakeMetadataWriter
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.shouldBe
@@ -95,12 +96,50 @@ class ReviewApplyTest {
             retry.failedDocs shouldBe 1
             val remaining = retry.remaining.single()
             remaining.chips.single().selected shouldBe true
-            // The field landed, so the retry must not write it again.
-            remaining.fields.single().selected shouldBe false
+            // The field landed, so the retry no longer offers it.
+            remaining.fields.shouldBeEmpty()
 
             meta.failAddTagForDocs = emptySet()
             // a changed on the first attempt and b on both: two documents, not just the last attempt's one.
             apply(remaining) shouldBe ApplyOutcome.Done(ApplyResult(applied = 3, docsChanged = 2, moreRemain = false))
+        }
+
+    /**
+     * A tag that landed beside a field that failed is not in the retry, so selecting what the policy
+     * recommends again cannot send it twice (another OR-set dot), and Done counts it once.
+     */
+    @Test
+    fun `a suggestion that landed is not offered again by the retry`() =
+        runTest {
+            meta.failApplyEditsForDocs = setOf("a")
+
+            val retry =
+                apply(reviewed("a", add = listOf("t"), fields = mapOf("k" to "v")))
+                    .shouldBeInstanceOf<ApplyOutcome.Retry>()
+
+            val remaining = retry.remaining.single()
+            remaining.chips.shouldBeEmpty()
+            remaining.fields.single().selected shouldBe true
+
+            meta.failApplyEditsForDocs = emptySet()
+            apply(remaining.recommended()) shouldBe
+                ApplyOutcome.Done(ApplyResult(applied = 2, docsChanged = 1, moreRemain = false))
+            meta.addedTags shouldContainExactly listOf(listOf("a") to "t")
+        }
+
+    /** Whatever a caller hands back later, a suggestion the batch already wrote is not sent again. */
+    @Test
+    fun `a suggestion that landed is never written again by the batch`() =
+        runTest {
+            meta.failApplyEditsForDocs = setOf("a")
+            val original = reviewed("a", add = listOf("t"), fields = mapOf("k" to "v"))
+            apply(original).shouldBeInstanceOf<ApplyOutcome.Retry>()
+
+            meta.failApplyEditsForDocs = emptySet()
+            apply(original) shouldBe ApplyOutcome.Done(ApplyResult(applied = 2, docsChanged = 1, moreRemain = false))
+
+            meta.addedTags shouldContainExactly listOf(listOf("a") to "t")
+            meta.batchedEdits.map { it.docId to it.fields } shouldContainExactly listOf("a" to mapOf("k" to "v"))
         }
 
     /**

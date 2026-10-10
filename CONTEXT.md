@@ -80,8 +80,9 @@ and discussion; sharpen them here when they drift.
   grouped per distinct tag and are all-or-nothing per tag; field writes are one
   `applyEdits` per document, because a setter per field re-runs the storage path
   rules and renames the file once per field. Partial failure yields a Retry
-  outcome: a rebuilt Review containing only failed documents, with
-  already-succeeded items deselected so retry never re-writes.
+  outcome: a rebuilt Review containing only failed documents, without the
+  already-succeeded items; whatever a retry selects, the batch never writes a
+  suggestion that landed again.
   Apply is owned by `ReviewApply` (core.app), one per reviewed batch, shared by
   the interactive and the queued Edit Run. It also carries what earlier attempts
   of the batch wrote, so the Done that ends a run of retries counts all of it.

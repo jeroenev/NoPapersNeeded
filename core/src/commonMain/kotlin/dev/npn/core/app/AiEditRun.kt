@@ -150,9 +150,9 @@ sealed interface ApplyOutcome {
     ) : ApplyOutcome
 
     /**
-     * Some writes failed: [failedDocs] of [total] documents are retained in [remaining] with only
-     * their actually-unapplied selections still selected, so a retry never re-writes a (doc, tag)
-     * or (doc, field) that already succeeded.
+     * Some writes failed: [failedDocs] of [total] documents are retained in [remaining], without the
+     * suggestions that landed, and with selected exactly what is still owed. The batch never writes a
+     * (doc, tag) or (doc, field) that already succeeded again, whatever a retry selects.
      */
     data class Retry(
         val remaining: List<ReviewDoc>,
@@ -173,9 +173,10 @@ sealed interface ApplyOutcome {
  *   results keep the original batch order. Cancellation propagates (nothing is written).
  * - Review pre-selection is [ReviewDoc.recommended], applied by [ReviewProjector].
  * - [apply] hands the batch to its [ReviewApply] (per-tag transactions, one `applyEdits` per
- *   document, failures as an [ApplyOutcome.Retry] with succeeded items deselected, and the count of
- *   what earlier attempts of the batch wrote); the run adds whether the scope has documents left,
- *   and a failure to find out is the Done's [ApplyOutcome.Done.followUpFailure].
+ *   document, failures as an [ApplyOutcome.Retry] without the succeeded items, which the batch never
+ *   writes again, and the count of what earlier attempts of the batch wrote); the run adds whether
+ *   the scope has documents left, and a failure to find out is the Done's
+ *   [ApplyOutcome.Done.followUpFailure].
  *
  * [processed] marks every reviewed document (including no-suggestion ones) at review time, not on
  * apply, so deselecting or skipping a document never sends it back through the model. A run handed
