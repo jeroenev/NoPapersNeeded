@@ -45,8 +45,9 @@ data class DocumentSection(
 )
 
 /**
- * Library-wide values offered as completions while editing: tags, each text field's existing
- * values, and the unregistered keys other documents carry (offered when defining a new field).
+ * Library-wide values offered as completions while editing: tags, the existing values of each text
+ * field whose documents share them (none for a per-document field such as the title), and the
+ * unregistered keys other documents carry (offered when defining a new field).
  */
 @Immutable
 data class VocabularyState(

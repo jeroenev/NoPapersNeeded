@@ -8,7 +8,7 @@ import dev.npn.app.ui.common.aiConfigured
 import dev.npn.app.ui.common.colorsByName
 import dev.npn.app.ui.common.queryTerms
 import dev.npn.app.ui.common.reasonText
-import dev.npn.app.ui.common.textFieldValues
+import dev.npn.app.ui.common.reusableFieldValues
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.library.effectiveReviewed
 import dev.npn.core.ai.AiEditRequest
@@ -219,10 +219,10 @@ class DocDetailViewModel(
         fieldRegistry.fields
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
-    /** Existing values of every TEXT field, for autocomplete. */
+    /** Other documents' values the editors offer for reuse; a per-document field offers none. */
     private val fieldValues: StateFlow<Map<String, List<String>>> =
         fieldRegistry
-            .textFieldValues()
+            .reusableFieldValues()
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyMap())
 
     private val tagColors: StateFlow<Map<String, String?>> =

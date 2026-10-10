@@ -22,6 +22,7 @@ import dev.npn.core.ocr.OcrEngineRef
 import dev.npn.core.ocr.OcrState
 import dev.npn.core.testing.doc
 import dev.npn.core.testing.listItem
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.maps.shouldContainExactly
@@ -356,15 +357,48 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             state.document.reviewed shouldBe true
             state.document.reviewMode shouldBe ReviewMode.INBOX_WORKFLOW
             state.document.fieldDefs.map { it.key } shouldContainExactly FieldKeys.seedDefinitions().map { it.key }
-            // Only TEXT fields get a vocabulary; the date and prose fields have nothing useful to offer.
+            // Only TEXT fields get a vocabulary, and not the title, whose value is each document's own;
+            // the date and prose fields have nothing useful to offer.
             state.vocabulary.fieldValues shouldBe
                 mapOf(
-                    FieldKeys.TITLE to emptyList(),
                     FieldKeys.CORRESPONDENT to listOf("ACME"),
                     FieldKeys.DOC_TYPE to listOf("invoice"),
                 )
             state.vocabulary.orphanKeys shouldContainExactly listOf("amount")
             state.vocabulary.allTagNames shouldContainExactly listOf("finance")
+        }
+
+    @Test
+    fun aPerDocumentFieldOffersNoOtherDocumentsValues() =
+        runTest(dispatcher) {
+            val subject =
+                FieldDef(
+                    "subject",
+                    "Subject",
+                    FieldType.TEXT,
+                    showByDefault = true,
+                    aiEnabled = false,
+                    position = 5,
+                    perDocument = true,
+                )
+            val session =
+                FakeLibrarySession().apply {
+                    fieldRegistry.defs.value = fieldRegistry.defs.value + subject
+                    fieldRegistry.values.value =
+                        mapOf(
+                            FieldKeys.TITLE to listOf("Electricity invoice January", "Water bill March"),
+                            FieldKeys.CORRESPONDENT to listOf("ACME", "City water"),
+                            "subject" to listOf("Meter reading"),
+                        )
+                }
+            val model = vm(session = session)
+            advanceUntilIdle()
+
+            val values = model.metadata.value.vocabulary.fieldValues
+            // Each document's title is its own: two titled documents offer neither title to a third.
+            values[FieldKeys.TITLE].orEmpty().shouldBeEmpty()
+            values["subject"].orEmpty().shouldBeEmpty()
+            values[FieldKeys.CORRESPONDENT].orEmpty() shouldContainExactly listOf("ACME", "City water")
         }
 
     @Test
