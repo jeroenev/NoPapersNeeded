@@ -14,7 +14,11 @@ name: Release
 # the draft job for that check) to the steps that call `gh`, the signing key to the one Gradle run
 # that signs the APK. Every other step, including the downloaded tools the packaging runs
 # (appimagetool, flatpak-builder), runs without them. Actions are pinned to a commit, with the
-# release they came from in a comment.
+# release they came from in a comment. The build jobs restore no Gradle cache (`cache-disabled`):
+# the other workflows save theirs on main with actions that are not pinned, and Gradle re-verifies
+# neither the distribution nor the jars a restored home holds, so the signing step and every
+# package build would run whatever those wrote. The wrapper instead downloads Gradle and checks its
+# distributionSha256Sum.
 on:
   push:
     tags: ["v*"]
@@ -84,8 +88,7 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
         with:
-          cache-provider: basic
-          cache-read-only: true
+          cache-disabled: true
 
       # First, before any downloaded tool has run, and the only step that sees the signing key: the
       # keystore is decoded here and deleted when the step ends. The run leaves nothing holding the
@@ -161,8 +164,7 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
         with:
-          cache-provider: basic
-          cache-read-only: true
+          cache-disabled: true
 
       # packageMsi/packageExe go straight to installers; createDistributable also leaves the app
       # image in build/compose/binaries/main/app for the Tesseract check below.

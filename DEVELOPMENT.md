@@ -345,8 +345,9 @@ The APK is signed with the release key, read from the environment:
 from the repository secrets `NPN_KEYSTORE_BASE64` (the keystore, base64-encoded),
 `NPN_KEYSTORE_PASSWORD` and `NPN_KEY_ALIAS`. Only the step that builds the APK sees them, before
 any downloaded tool runs: it decodes the keystore, runs Gradle with no daemon to outlive it, and
-deletes the keystore when it ends. `GH_TOKEN` is likewise set only on the steps that call `gh`, and
-every action is pinned to a commit. The keystore is never committed. Keep a
+deletes the keystore when it ends. `GH_TOKEN` is likewise set only on the steps that call `gh`,
+every action is pinned to a commit, and the build jobs restore no Gradle cache, since the other
+workflows write theirs with unpinned actions. The keystore is never committed. Keep a
 backup: Android only installs an update signed with the same key, so losing it means
 users have to uninstall and reinstall. The committed `npn-debug.keystore` is for debug
 builds only.
