@@ -74,6 +74,8 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   tagged commit changes only `npn.version`, and `release.yml` builds it without waiting for CI.
   Its draft job builds nothing unless CI passed on the tagged commit, or the tag only bumps
   `npn.version` on top of a `main` commit CI passed on (`.github/scripts/check-release-commit.sh`).
+  Both count only a `push` or `workflow_dispatch` run as CI on a commit: a `pull_request` run
+  tested the pull request merged into its base branch, not the commit itself.
 - Version: `npn.version` in `gradle.properties` is the only version; everything else derives
   from it (`buildSrc` `NpnVersion`, generated `dev.npn.app.BuildInfo`). Never hardcode a version
   or bump it by hand: `mise release <version>` bumps, commits and tags together, and

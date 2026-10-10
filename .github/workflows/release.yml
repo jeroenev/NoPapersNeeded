@@ -7,7 +7,8 @@ name: Release
 # on the main commit it bumps, and the tagged commit changes only npn.version. The draft job holds
 # every tag to that before anything is built (.github/scripts/check-release-commit.sh): CI passed on
 # the tagged commit itself, or it changes only the npn.version line on top of a main commit CI
-# passed on.
+# passed on. CI passed on a commit when a push or manual ci.yml run on it succeeded; a pull_request
+# run tested the pull request merged into its base branch, not the commit itself.
 #
 # Secrets are scoped to the steps that need them: GH_TOKEN (contents: write, plus actions: read in
 # the draft job for that check) to the steps that call `gh`, the signing key to the one Gradle run

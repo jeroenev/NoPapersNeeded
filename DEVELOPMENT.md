@@ -325,13 +325,15 @@ mise release 1.2.0
 
 That bumps `npn.version`, commits `[main] Release 1.2.0`, tags `v1.2.0` and pushes both.
 It refuses unless `main` matches `origin/main` and the CI workflow has passed on that commit,
-which it asks `gh` (the GitHub CLI, logged in). The tag goes on the bump commit, which changes
+which it asks `gh` (the GitHub CLI, logged in). Only a run on a push or a manual run
+(`gh workflow run ci.yml --ref main`) counts: a pull request's run tested the pull request merged
+into its base branch, not the commit itself. The tag goes on the bump commit, which changes
 only `npn.version`: CI runs on it as on any push to `main`, but the release workflow neither
 waits for that run nor reruns the tests.
 The tag starts `.github/workflows/release.yml`. Before it builds anything, it refuses a tag that
 does not match `npn.version`, and a tagged commit CI has not passed on unless it changes only the
 `npn.version` line on top of a `main` commit CI passed on
-(`.github/scripts/check-release-commit.sh`). It then builds the signed APK, AppImage (with its
+(`.github/scripts/check-release-commit.sh`, which counts runs the same way). It then builds the signed APK, AppImage (with its
 `.zsync`), `.deb`, `.rpm`, `.flatpak`, Linux tarball, `.msi` and `.exe` into a draft release,
 adds `SHA256SUMS` and publishes it. If a build job fails the draft stays
 unpublished: fix the problem, delete the draft and the tag, and release the next patch

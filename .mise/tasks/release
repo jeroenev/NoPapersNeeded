@@ -35,14 +35,20 @@ git fetch --quiet --tags origin main
 
 # ...and only once CI has passed on it. The tag goes on the bump commit made below, which changes
 # only npn.version; release.yml builds it without rerunning the tests or waiting for CI on it, once
-# .github/scripts/check-release-commit.sh has checked both of those again.
+# .github/scripts/check-release-commit.sh has checked both of those again. Only a push or manual run
+# tested the commit itself: a pull_request run tested it merged into its base branch.
 command -v gh >/dev/null || die "needs the GitHub CLI (gh) to check CI on main"
 head=$(git rev-parse --short HEAD)
-runs=$(gh run list --workflow ci.yml --commit "$(git rev-parse HEAD)" --json status,conclusion \
-    --jq '.[] | "\(.status) \(.conclusion)"')
-if ! grep -qx "completed success" <<<"$runs"; then
-    [ -n "$runs" ] || die "CI has not run on $head (a docs-only commit skips it); start it with: gh workflow run ci.yml --ref main"
-    ! grep -qv "^completed" <<<"$runs" || die "CI is still running on $head; wait for it with: gh run watch"
+runs=$(gh run list --workflow ci.yml --commit "$(git rev-parse HEAD)" --json event,status,conclusion \
+    --jq '.[] | "\(.event) \(.status) \(.conclusion)"')
+own=$(sed -nE 's/^(push|workflow_dispatch) //p' <<<"$runs")
+if ! grep -qx "completed success" <<<"$own"; then
+    if [ -z "$own" ]; then
+        [ -z "$runs" ] ||
+            die "CI has not run on $head itself, only in a pull request, which tests it merged into its base branch; start it with: gh workflow run ci.yml --ref main"
+        die "CI has not run on $head (a docs-only commit skips it); start it with: gh workflow run ci.yml --ref main"
+    fi
+    ! grep -qv "^completed" <<<"$own" || die "CI is still running on $head; wait for it with: gh run watch"
     die "CI did not pass on $head; fix main first"
 fi
 
