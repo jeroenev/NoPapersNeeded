@@ -15,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.NonRestartableComposable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -83,6 +84,7 @@ import no_papers_needed.composeapp.generated.resources.library_trash
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
+@NonRestartableComposable
 fun App(env: AppEnvironment) {
     AppRoot(env)
 }

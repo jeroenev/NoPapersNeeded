@@ -13,7 +13,6 @@ import java.nio.channels.FileChannel
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
-import java.nio.file.attribute.FileAttribute
 import java.nio.file.attribute.PosixFilePermissions
 import java.util.Properties
 import kotlin.uuid.Uuid
@@ -113,9 +112,12 @@ class SettingsRepositoryImpl internal constructor(
         val dir = file.absoluteFile.parentFile.toPath()
         Files.createDirectories(dir)
         // Owner-only from the start: the file holds the AI endpoint's key.
-        val attributes: Array<FileAttribute<*>> =
-            if (isWindows) emptyArray() else arrayOf(PosixFilePermissions.asFileAttribute(OWNER_ONLY_PERMISSIONS))
-        val tmp = Files.createTempFile(dir, file.name, TEMP_SUFFIX, *attributes)
+        val tmp =
+            if (isWindows) {
+                Files.createTempFile(dir, file.name, TEMP_SUFFIX)
+            } else {
+                Files.createTempFile(dir, file.name, TEMP_SUFFIX, OWNER_ONLY)
+            }
         try {
             openForWrite(tmp.toFile()).use { props.store(it, "no-papers-needed settings") }
             // On disk before it replaces the old file, so a crash just after the move finds it whole.
@@ -146,6 +148,7 @@ class SettingsRepositoryImpl internal constructor(
 
     companion object {
         private val OWNER_ONLY_PERMISSIONS = PosixFilePermissions.fromString("rw-------")
+        private val OWNER_ONLY = PosixFilePermissions.asFileAttribute(OWNER_ONLY_PERMISSIONS)
         private const val TEMP_SUFFIX = ".tmp"
 
         fun defaultFile(): File {
