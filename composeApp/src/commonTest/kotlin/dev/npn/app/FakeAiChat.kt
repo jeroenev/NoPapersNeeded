@@ -4,6 +4,7 @@ import dev.npn.core.ai.AiChat
 import dev.npn.core.ai.AiChatEvent
 import dev.npn.core.ai.AiChatHistoryItem
 import dev.npn.core.ai.AiChatSession
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
@@ -11,8 +12,9 @@ import kotlinx.coroutines.flow.flow
  * Chat fake: [askScripts] are event lists consumed in order (last one repeats); each backs one
  * [ask] flow. [askResponses] is a convenience: a plain answer string is turned into a `TextDelta`
  * + `Done` script. Failure injection via [failAsk] (throws when the returned flow is collected)
- * and [failAskAfter] (throws mid-stream), call recording via [asked]. [askDelayMillis] delays each
- * emitted event so tests can observe intermediate streaming state and cancellation.
+ * and [failAskAfter] (throws mid-stream), call recording via [asked] and [cleared]. [askDelayMillis]
+ * delays each emitted event so tests can observe intermediate streaming state and cancellation;
+ * [clearGate] holds a clear the same way.
  */
 class FakeAiChat : AiChat {
     var configuredValue: Boolean = true
@@ -47,7 +49,16 @@ class FakeAiChat : AiChat {
         savedChatSessions = savedChatSessions.filterNot { it.id == sessionId }
     }
 
-    override suspend fun clearChatSession(sessionId: String) = Unit
+    /** Session ids [clearChatSession] cleared, in order. */
+    val cleared = mutableListOf<String>()
+
+    /** When set, [clearChatSession] waits for it before it clears, as a slow store would. */
+    var clearGate: CompletableDeferred<Unit>? = null
+
+    override suspend fun clearChatSession(sessionId: String) {
+        clearGate?.await()
+        cleared += sessionId
+    }
 
     override suspend fun chatTranscriptFor(sessionId: String): List<AiChatHistoryItem> =
         chatTranscripts[sessionId].orEmpty()

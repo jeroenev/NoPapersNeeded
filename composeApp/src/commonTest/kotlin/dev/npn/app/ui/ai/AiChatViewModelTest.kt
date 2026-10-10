@@ -15,6 +15,7 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceTimeBy
@@ -350,6 +351,39 @@ class AiChatViewModelTest : MainDispatcherTest() {
 
             model.ui.value.transcript.items shouldBe emptyList()
             session.aiChat.asked shouldBe emptyList()
+        }
+
+    /**
+     * Clear deletes the stored history in the background. A question sent before that is done waits
+     * for it: asked earlier, the turn would load the cleared history, send it to the model and store
+     * it back with the new exchange.
+     */
+    @Test
+    fun aQuestionSentRightAfterClearWaitsForTheClear() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession().apply { aiChat.askResponses = listOf("old answer", "new answer") }
+            val model = vm(session)
+            collecting(model.ui)
+            advanceUntilIdle()
+            model.send("old question")
+            advanceUntilIdle()
+            val sessionId = model.ui.value.currentSessionId
+            val gate = CompletableDeferred<Unit>()
+            session.aiChat.clearGate = gate
+
+            model.clear()
+            model.send("q")
+            advanceUntilIdle()
+
+            session.aiChat.asked.map { it.second } shouldContainExactly listOf("old question")
+            model.ui.value.busy shouldBe true
+
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            session.aiChat.cleared shouldContainExactly listOf(sessionId)
+            session.aiChat.asked.map { it.second } shouldContainExactly listOf("old question", "q")
+            model.ui.value.busy shouldBe false
         }
 
     @Test

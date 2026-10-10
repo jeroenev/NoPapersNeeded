@@ -62,6 +62,9 @@ class AiChatViewModel(
 
     private var job: Job? = null
 
+    /** The latest [clear]'s deletion of the stored history, which a question sent after it waits for. */
+    private var clearing: Job? = null
+
     init {
         // Follows Settings, so configuring AI there (or turning it off) applies to an open chat.
         viewModelScope.launch {
@@ -101,7 +104,11 @@ class AiChatViewModel(
             }
     }
 
-    /** Send [question]; ignored when blank or while a request is in flight. */
+    /**
+     * Send [question]; ignored when blank or while a request is in flight. Sent right after [clear],
+     * it is asked only once the clear has deleted the stored history: a turn loads that history and
+     * stores it back with its answer, so one asked earlier would bring the cleared conversation back.
+     */
     fun send(question: String) {
         val trimmed = question.trim()
         if (trimmed.isEmpty() || _ui.value.busy) return
@@ -123,8 +130,10 @@ class AiChatViewModel(
             )
         }
 
+        val cleared = clearing
         job =
             viewModelScope.launch {
+                cleared?.join()
                 runCatchingCancellable { collectAnswer(sessionId, trimmed) }
                     .onFailure { e ->
                         finishStreaming()
@@ -142,7 +151,10 @@ class AiChatViewModel(
         _ui.update { it.copy(busy = false) }
     }
 
-    /** Reset the conversation to an empty transcript. */
+    /**
+     * Reset the conversation to an empty transcript and delete its stored history in the background.
+     * Clears run one after another, so the latest one finishing means every one has.
+     */
     fun clear() {
         job?.cancel()
         job = null
@@ -157,9 +169,12 @@ class AiChatViewModel(
             )
         }
         _ui.value.currentSessionId?.let { sessionId ->
-            launchReporting(Res.string.ai_chat_clear_failed) {
-                ai.clearChatSession(sessionId)
-            }
+            val previous = clearing
+            clearing =
+                viewModelScope.launch {
+                    previous?.join()
+                    reporting(Res.string.ai_chat_clear_failed) { ai.clearChatSession(sessionId) }
+                }
         }
     }
 
