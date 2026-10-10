@@ -29,11 +29,12 @@ import kotlin.time.TimeSource
  *
  * Handled files are remembered in memory by (id, size, mtime) so repeated polls do not re-stage
  * and re-hash the same bytes; a fresh importer (e.g. a background worker run) simply relies on
- * the session's hash dedup instead. A file listed with no mtime (a provider may report 0) is not
- * remembered, as its size alone would also cover a file written under its name since: each sweep
- * imports it again, a duplicate, until it is gone. Files modified less than [minQuietMillis] ago
- * are skipped — a scanner may still be writing them — and picked up by a later sweep. Failures are
- * retried up to [maxAttempts] times; a cancelled import is not a failure and costs no attempt.
+ * the session's hash dedup instead. With delete-after-import on, a file listed with no mtime (a
+ * provider may report 0) is not remembered, as its size alone would also cover a file written under
+ * its name since: one kept because it no longer held the imported bytes is imported at the next
+ * sweep. Files modified less than [minQuietMillis] ago are skipped — a scanner may still be writing
+ * them — and picked up by a later sweep. Failures are retried up to [maxAttempts] times; a
+ * cancelled import is not a failure and costs no attempt.
  *
  * Sweeps never overlap: every one runs under [sweepLock], which also guards the memory above. A
  * host running several importers over one folder (the continuous one plus an on-demand sweep)
@@ -99,16 +100,17 @@ class WatchedFolderImporter(
 
     /**
      * Remember [file] as handled, and delete it when asked to while it holds [docId]'s bytes. A file
-     * listed with no mtime is not remembered: its key would also cover a file of the same size
-     * written under its name since.
+     * listed with no mtime that was to be deleted is not remembered: its key would also cover a file
+     * of the same size written under its name since, which the delete kept for the next sweep.
      */
     private suspend fun consume(
         file: WatchedFolderFile,
         key: String,
         docId: String,
     ) {
-        if (file.mtimeMillis != 0L) completed.add(key)
-        if (deleteAfterImport()) {
+        val delete = deleteAfterImport()
+        if (file.mtimeMillis != 0L || !delete) completed.add(key)
+        if (delete) {
             log.runLogged("Deleting ${file.name} from the watched folder after import") { folder.delete(file, docId) }
         }
     }

@@ -244,6 +244,36 @@ class WatchedFolderImporterTest {
             }
         }
 
+    /**
+     * A provider that reports no mtime, with delete-after-import off: the source stays in the folder,
+     * and the importer imports it once, as one with an mtime, rather than again at every sweep.
+     */
+    @Test
+    fun withNoMtimeASourceThatStaysIsImportedOnce() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                stagePdf("scan.pdf", PdfFixtures.embeddedTextPdf("stays"))
+                var imports = 0
+                val counting =
+                    object : IngestFacade by rig.session {
+                        override suspend fun importPdf(
+                            source: ExternalSource,
+                            suggestedName: String,
+                        ): ImportOutcome = rig.session.importPdf(source, suggestedName).also { imports++ }
+                    }
+                val importer = WatchedFolderImporter(counting, NoMtime(JvmWatchedFolder(watchDir)), { false })
+
+                importer.scanOnce().imported shouldBe 1
+                importer.scanOnce() shouldBe ImportTally()
+
+                imports shouldBe 1
+                Files.exists(watchDir.resolve("scan.pdf")) shouldBe true
+            } finally {
+                rig.close()
+            }
+        }
+
     /** [folder] as a provider that reports no mtime lists it. */
     private class NoMtime(
         private val folder: WatchedFolder,
