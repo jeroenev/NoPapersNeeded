@@ -18,7 +18,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -34,6 +33,7 @@ import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.NumericField
 import dev.npn.app.ui.common.SettingsSection
 import dev.npn.app.ui.common.SwitchRow
+import dev.npn.app.ui.common.TypedTextField
 import dev.npn.app.ui.common.resolve
 import dev.npn.core.ai.AiCheck
 import dev.npn.core.ai.AiCheckOutcome
@@ -102,7 +102,8 @@ private val CheckIconSize = 20.dp
  *
  * Collapsed to just the enable switch until AI is turned on: the only progressive disclosure in
  * settings that is worth its click, because none of the configuration below means anything with
- * the feature off. Every change persists immediately; there is no explicit save.
+ * the feature off. Every change persists without an explicit save; what is typed into the endpoint
+ * fields once typing pauses or the field is left ([SettingsActions.type]).
  */
 @Composable
 internal fun AiSettingsPane(
@@ -147,21 +148,24 @@ private fun AiEndpointSettings(
         AiBaseUrlField(
             provider = state.snapshot.aiProvider,
             baseUrl = state.snapshot.aiBaseUrl,
-            onSetBaseUrl = { url -> actions.edit { it.copy(aiBaseUrl = url) } },
+            onSetBaseUrl = { url -> actions.type(TextSetting.AI_BASE_URL, url) },
+            onDone = { actions.doneTyping(TextSetting.AI_BASE_URL) },
         )
     }
     if (state.snapshot.aiProvider != AiProvider.OLLAMA) {
         AiApiKeyField(
             provider = state.snapshot.aiProvider,
             apiKey = state.snapshot.aiApiKey,
-            onSetApiKey = { key -> actions.edit { it.copy(aiApiKey = key) } },
+            onSetApiKey = { key -> actions.type(TextSetting.AI_API_KEY, key) },
+            onDone = { actions.doneTyping(TextSetting.AI_API_KEY) },
         )
     }
     AiModelField(
         provider = state.snapshot.aiProvider,
         model = state.snapshot.aiModel,
         models = models,
-        onSetModel = { model -> actions.edit { it.copy(aiModel = model) } },
+        onSetModel = { model -> actions.type(TextSetting.AI_MODEL, model) },
+        onDone = { actions.doneTyping(TextSetting.AI_MODEL) },
         onLoadModels = actions::loadAiModels,
     )
 }
@@ -308,11 +312,13 @@ private fun AiBaseUrlField(
     provider: AiProvider,
     baseUrl: String,
     onSetBaseUrl: (String) -> Unit,
+    onDone: () -> Unit,
 ) {
-    OutlinedTextField(
+    TypedTextField(
         value = baseUrl,
         onValueChange = onSetBaseUrl,
-        label = { Text(text = stringResource(Res.string.common_settings_server_url)) },
+        onDone = onDone,
+        label = stringResource(Res.string.common_settings_server_url),
         supportingText = {
             Text(
                 text =
@@ -335,8 +341,6 @@ private fun AiBaseUrlField(
                     },
             )
         },
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth(),
     )
 }
 
@@ -345,11 +349,13 @@ private fun AiApiKeyField(
     provider: AiProvider,
     apiKey: String,
     onSetApiKey: (String) -> Unit,
+    onDone: () -> Unit,
 ) {
-    OutlinedTextField(
+    TypedTextField(
         value = apiKey,
         onValueChange = onSetApiKey,
-        label = { Text(text = stringResource(Res.string.common_settings_api_key)) },
+        onDone = onDone,
+        label = stringResource(Res.string.common_settings_api_key),
         visualTransformation = PasswordVisualTransformation(),
         supportingText = {
             Text(
@@ -361,15 +367,14 @@ private fun AiApiKeyField(
                     },
             )
         },
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth(),
     )
 }
 
 /**
  * Model id with a dropdown fed by the provider's live model list ([AiModelListState]); loading
  * starts on demand via the trailing arrow so no request fires before the user asks for it.
- * Typing a model id manually always works; a fetch failure is only surfaced as a hint.
+ * Typing a model id manually always works; a fetch failure is only surfaced as a hint. A model picked
+ * from the list is saved at once.
  */
 @Composable
 private fun AiModelField(
@@ -377,14 +382,16 @@ private fun AiModelField(
     model: String,
     models: AiModelListState,
     onSetModel: (String) -> Unit,
+    onDone: () -> Unit,
     onLoadModels: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Column {
-        OutlinedTextField(
+        TypedTextField(
             value = model,
             onValueChange = onSetModel,
-            label = { Text(text = stringResource(Res.string.common_settings_model)) },
+            onDone = onDone,
+            label = stringResource(Res.string.common_settings_model),
             trailingIcon = {
                 IconButton(onClick = {
                     onLoadModels()
@@ -397,8 +404,6 @@ private fun AiModelField(
                 }
             },
             supportingText = { AiModelSupportingText(provider, models) },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
         )
         DropdownMenu(
             expanded = expanded && (models.loading || models.models.isNotEmpty()),
@@ -416,6 +421,7 @@ private fun AiModelField(
                     text = { Text(text = id) },
                     onClick = {
                         onSetModel(id)
+                        onDone()
                         expanded = false
                     },
                 )

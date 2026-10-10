@@ -110,6 +110,13 @@ class SettingsSearchCoverageTest {
 
         override fun setTrashRetentionDays(days: Int) = Unit
 
+        override fun type(
+            setting: TextSetting,
+            value: String,
+        ) = Unit
+
+        override fun doneTyping(setting: TextSetting) = Unit
+
         override fun setAiProvider(provider: AiProvider) = Unit
 
         override fun loadAiModels() = Unit

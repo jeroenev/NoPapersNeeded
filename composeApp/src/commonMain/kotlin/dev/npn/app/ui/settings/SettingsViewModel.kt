@@ -30,11 +30,13 @@ import dev.npn.core.pathrules.StoragePathTemplate
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.watch.liesInLibrary
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
@@ -55,9 +57,9 @@ import no_papers_needed.composeapp.generated.resources.common_settings_thumbnail
 private const val DEFAULT_STORAGE_PATH_TEMPLATE = "{doc_date:yyyy}/{title}.pdf"
 
 /**
- * What the settings screen shows: this device's settings as saved ([snapshot]; the defaults until
- * they load), and the library's own settings, synced through its journal, where an unsaved edit
- * shows first.
+ * What the settings screen shows: this device's settings ([snapshot]; the defaults until they load)
+ * and the library's own settings, synced through its journal. In both, an unsaved edit of a setting
+ * typed into a field shows first.
  */
 data class SettingsUiState(
     val snapshot: SettingsSnapshot = SettingsSnapshot(installationId = ""),
@@ -90,6 +92,18 @@ data class AiModelListState(
     val models: List<String> = emptyList(),
     val error: UiText? = null,
 )
+
+/**
+ * The device settings typed into a text field ([SettingsActions.type]). Saving one writes the whole
+ * settings file, so what is typed waits as a draft until typing pauses.
+ */
+enum class TextSetting(
+    internal val with: (SettingsSnapshot, String) -> SettingsSnapshot,
+) {
+    AI_BASE_URL({ snapshot, value -> snapshot.copy(aiBaseUrl = value) }),
+    AI_API_KEY({ snapshot, value -> snapshot.copy(aiApiKey = value) }),
+    AI_MODEL({ snapshot, value -> snapshot.copy(aiModel = value) }),
+}
 
 /** Choice offered by the 1->2 (UNTAGGED_ONLY -> INBOX_WORKFLOW) migration prompt. */
 enum class ReviewMigration { MARK_ALL, MARK_TAGGED, MARK_NONE }
@@ -127,8 +141,22 @@ interface SettingsActions {
     fun setTrashRetentionDays(days: Int)
 
     /**
+     * Type [value] into the field of a device [setting]. It shows at once, and is saved once typing
+     * pauses, when [doneTyping] says the field lost focus, or when the screen is left: a save writes
+     * the whole settings file, too slow to sit between one key and the next.
+     */
+    fun type(
+        setting: TextSetting,
+        value: String,
+    )
+
+    /** The field of [setting] lost focus: save what was typed in it now. */
+    fun doneTyping(setting: TextSetting)
+
+    /**
      * Switch provider and drop what belonged to the previous endpoint: the model list, and the base
-     * URL, which the settings screen hides for fixed-URL providers so nobody could clear it there.
+     * URL, typed or saved, which the settings screen hides for fixed-URL providers so nobody could
+     * clear it there.
      */
     fun setAiProvider(provider: AiProvider)
 
@@ -223,9 +251,23 @@ class SettingsViewModel(
             reporting(Res.string.common_save_setting_failed) { trashRetention.setTrashRetentionDays(days) }
         }
 
-    val state: StateFlow<SettingsUiState> =
+    private val typedText: Map<TextSetting, TypedSetting<String>> =
+        TextSetting.entries.associateWith { setting ->
+            TypedSetting(viewModelScope) { value ->
+                reporting(Res.string.common_save_setting_failed) { settings.edit { setting.with(it, value) } }
+            }
+        }
+
+    /** This device's settings with what is typed and not saved yet in place of the saved values. */
+    private val typedSettings: Flow<SettingsSnapshot> =
         combine(
             settings.settings,
+            combine(typedText.map { (setting, typed) -> typed.draft.map { setting to it } }) { it.toList() },
+        ) { snapshot, drafts -> snapshot.withTyped(drafts) }
+
+    val state: StateFlow<SettingsUiState> =
+        combine(
+            typedSettings,
             storagePath.storagePath,
             typedTemplate.draft,
             trashRetention.trashRetentionDays,
@@ -314,19 +356,31 @@ class SettingsViewModel(
 
     override fun setTrashRetentionDays(days: Int) = typedRetention.type(days)
 
+    override fun type(
+        setting: TextSetting,
+        value: String,
+    ) = typedText.getValue(setting).type(value)
+
+    override fun doneTyping(setting: TextSetting) = typedText.getValue(setting).flush()
+
     override fun setAiProvider(provider: AiProvider) =
         launchReporting(Res.string.common_save_setting_failed) {
             aiModelsJob?.cancel()
             _aiModels.value = AiModelListState()
+            if (settings.settings.first().aiProvider != provider) typedText.getValue(TextSetting.AI_BASE_URL).discard()
             settings.edit { if (it.aiProvider == provider) it else it.copy(aiProvider = provider, aiBaseUrl = "") }
         }
+
+    /** The settings as the screen shows them, typed values included, for a request made from it. */
+    private suspend fun shownSettings(): SettingsSnapshot =
+        settings.settings.first().withTyped(typedText.map { (setting, typed) -> setting to typed.draft.value })
 
     override fun loadAiModels() {
         aiModelsJob?.cancel()
         aiModelsJob =
             viewModelScope.launch {
                 _aiModels.value = AiModelListState(loading = true)
-                val config = settings.settings.first().toAiConfig()
+                val config = shownSettings().toAiConfig()
                 _aiModels.value =
                     runCatchingCancellable { AiModelCatalog.listModels(config) }.fold(
                         onSuccess = { AiModelListState(models = it) },
@@ -340,7 +394,7 @@ class SettingsViewModel(
         aiSelfTestJob =
             viewModelScope.launch {
                 _aiSelfTest.value = AiSelfTestState(running = true)
-                val config = settings.settings.first().toAiConfig()
+                val config = shownSettings().toAiConfig()
                 val report = selfTest(config)
                 val turnedOff = report.provesAiOcrCannotWork && config.ocrAuto && turnOffAiOcr()
                 _aiSelfTest.value = AiSelfTestState(report = report, aiOcrTurnedOff = turnedOff)
@@ -423,6 +477,10 @@ class SettingsViewModel(
             )
     }
 }
+
+/** This snapshot with each typed value of [drafts] in place of the saved one. */
+private fun SettingsSnapshot.withTyped(drafts: List<Pair<TextSetting, String?>>): SettingsSnapshot =
+    drafts.fold(this) { snapshot, (setting, typed) -> typed?.let { setting.with(snapshot, it) } ?: snapshot }
 
 internal data class StoragePathEvaluation(
     val preview: String?,

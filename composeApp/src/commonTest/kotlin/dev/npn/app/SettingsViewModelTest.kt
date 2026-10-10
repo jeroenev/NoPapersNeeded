@@ -5,6 +5,7 @@ import dev.npn.app.platform.FolderPick
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.settings.ReviewMigration
 import dev.npn.app.ui.settings.SettingsViewModel
+import dev.npn.app.ui.settings.TextSetting
 import dev.npn.app.ui.settings.evaluateStoragePath
 import dev.npn.app.ui.settings.text
 import dev.npn.core.ai.AiCheck
@@ -453,6 +454,85 @@ class SettingsViewModelTest : MainDispatcherTest() {
             settings.settingsFlow.value?.aiReasoningEdit shouldBe AiReasoningLevel.MEDIUM
             settings.settingsFlow.value?.aiMaxTagsPerDoc shouldBe 5
             settings.settingsFlow.value?.aiMaxNewTagsPerDoc shouldBe 3
+        }
+
+    /**
+     * Each save of a device setting writes the whole settings file: what is typed into an endpoint
+     * field shows at once, and only the last value is saved, once typing pauses.
+     */
+    @Test
+    fun anEndpointFieldIsSavedOnceTypingPauses() =
+        runTest(dispatcher) {
+            val settings = FakeSettingsRepository()
+            val model = vm(settings = settings)
+            collecting(model.state)
+            val writes = collecting(settings.settingsFlow.map { it?.aiBaseUrl })
+            for (typed in listOf("http://192", "http://192.168.1.20:11434")) {
+                model.type(TextSetting.AI_BASE_URL, typed)
+                runCurrent()
+                model.state.value.snapshot.aiBaseUrl shouldBe typed
+            }
+            settings.settingsFlow.value?.aiBaseUrl shouldBe ""
+
+            advanceUntilIdle()
+
+            writes shouldContainExactly listOf("", "http://192.168.1.20:11434")
+            model.state.value.snapshot.aiBaseUrl shouldBe "http://192.168.1.20:11434"
+        }
+
+    /** Leaving a field, or the screen, saves what was typed in it at once. */
+    @Test
+    fun anEndpointFieldIsSavedWhenLeft() =
+        runTest(dispatcher) {
+            val settings = FakeSettingsRepository()
+            val model = vm(settings = settings)
+            val store = ViewModelStore().apply { put("settings", model) }
+
+            model.type(TextSetting.AI_MODEL, "qwen3:8b")
+            model.doneTyping(TextSetting.AI_MODEL)
+            runCurrent()
+            settings.settingsFlow.value?.aiModel shouldBe "qwen3:8b"
+
+            model.type(TextSetting.AI_API_KEY, "sk-secret")
+            runCurrent()
+            store.clear()
+            advanceUntilIdle()
+            settings.settingsFlow.value?.aiApiKey shouldBe "sk-secret"
+        }
+
+    /** The model list and the self-test ask the endpoint the screen shows, typed values included. */
+    @Test
+    fun aRequestFromTheScreenUsesWhatIsTyped() =
+        runTest(dispatcher) {
+            var asked: AiConfig? = null
+            val model =
+                vm(settings = aiSettings()) { config ->
+                    asked = config
+                    report(AiCheckStatus.PASSED)
+                }
+            model.type(TextSetting.AI_MODEL, "llama3.3")
+            model.runAiSelfTest()
+            runCurrent()
+
+            asked?.model shouldBe "llama3.3"
+        }
+
+    /** A base URL typed for one provider is not saved for the next. */
+    @Test
+    fun switchingProviderDropsATypedBaseUrl() =
+        runTest(dispatcher) {
+            val settings = FakeSettingsRepository()
+            val model = vm(settings = settings)
+            collecting(model.state)
+            model.setAiProvider(AiProvider.CUSTOM)
+            advanceUntilIdle()
+
+            model.type(TextSetting.AI_BASE_URL, "http://192.168.1.20:11434")
+            model.setAiProvider(AiProvider.OLLAMA)
+            advanceUntilIdle()
+
+            settings.settingsFlow.value?.aiBaseUrl shouldBe ""
+            model.state.value.snapshot.aiBaseUrl shouldBe ""
         }
 
     @Test
