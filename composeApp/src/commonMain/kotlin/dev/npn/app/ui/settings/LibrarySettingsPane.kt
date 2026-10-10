@@ -110,12 +110,13 @@ internal fun LibrarySettingsPane(
 }
 
 /**
- * Toggle plus template for automatic path organisation. The toggle is gated on the template
- * parsing cleanly, so an invalid template can never be armed; the preview renders the template
- * against a sample document so the effect is visible before it applies to real files.
+ * Toggle plus template for automatic path organisation. Switching the rule on is gated on the
+ * template parsing cleanly, so an invalid template can never be armed; switching it off never is,
+ * so a rule whose template was edited into an invalid one can still be stopped. The preview renders
+ * the template against a sample document so the effect is visible before it applies to real files.
  */
 @Composable
-private fun StoragePathRuleEditor(
+internal fun StoragePathRuleEditor(
     template: String,
     enabled: Boolean,
     /** The library's field types: a date pattern is valid on any field the registry calls a date. */
@@ -128,7 +129,7 @@ private fun StoragePathRuleEditor(
         label = stringResource(Res.string.common_settings_storage_organize_paths),
         help = stringResource(Res.string.common_settings_storage_organize_help),
         checked = enabled,
-        enabled = evaluation.error == null,
+        enabled = enabled || evaluation.error == null,
         onCheckedChange = onEnabledChange,
     )
     OutlinedTextField(
