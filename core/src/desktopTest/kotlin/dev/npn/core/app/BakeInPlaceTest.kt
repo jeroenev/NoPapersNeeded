@@ -107,6 +107,55 @@ class BakeInPlaceTest {
             }
         }
 
+    /** What a baked document inherited is its own: a clear clears it and a removal removes it, for good. */
+    @Test
+    fun whatABakedDocumentInheritedCanBeCleared() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                val (_, after) = bakeFiled(rig)
+
+                rig.session.meta.setField(after, FieldKeys.TITLE, null)
+                rig.session.meta.removeTag(listOf(after), "filed")
+
+                val cleared = mapOf(FieldKeys.CORRESPONDENT to "Aquafin")
+                fieldsOf(rig, after) shouldBe cleared
+                rig.db
+                    .tagDao()
+                    .tagsForDocument(after)
+                    .shouldBeEmpty()
+                rig.session.rescan()
+                fieldsOf(rig, after) shouldBe cleared
+                rig.db
+                    .tagDao()
+                    .tagsForDocument(after)
+                    .shouldBeEmpty()
+            } finally {
+                rig.close()
+            }
+        }
+
+    /** A document baked twice shows the title it was given between the bakes, not the first one. */
+    @Test
+    fun aDocumentBakedTwiceShowsItsLatestTitle() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                val (_, middle) = bakeFiled(rig)
+                rig.session.meta.setField(middle, FieldKeys.TITLE, "Sewer bill")
+
+                rig.session.content.bakeInPlace(middle) shouldBe BakeOutcome.Baked
+
+                val last = rig.docId("a.pdf")
+                val latest = FILED + (FieldKeys.TITLE to "Sewer bill")
+                fieldsOf(rig, last) shouldBe latest
+                rig.session.rescan()
+                fieldsOf(rig, last) shouldBe latest
+            } finally {
+                rig.close()
+            }
+        }
+
     /**
      * A baked document's original bytes are an earlier version of it, which no journal event makes
      * live again: importing them adds no file and journals nothing, and finds the baked document.

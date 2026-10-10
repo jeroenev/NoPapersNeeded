@@ -515,8 +515,8 @@ class Indexer(
                     else -> {}
                 }
             }
-            // A document projects with its relink predecessors' metadata, whichever event touched
-            // it, so they are in scope as in a full fold.
+            // A document's relink predecessors, whose metadata it shows, are projected with it
+            // whichever event touched it, as a full fold projects them.
             for (doc in documents.toList()) {
                 val current = state.resolveDocId(doc)
                 documents += current
@@ -558,11 +558,13 @@ class Indexer(
      *
      * Design notes (step 6):
      * - Tags: every tag with a known style gets a [TagEntity] upsert; every doc's document_tags is
-     *   replaced with its effective tag set. Tags appearing only in adds (no explicit style) are
-     *   upserted with null style so tag-management counts see them.
-     * - Fields: every doc's document_fields is replaced with its effective field map (own values
-     *   over inherited predecessor values); the well-known five are additionally cached on the
-     *   doc row. reviewed/ocrEngineOverride come from the system props.
+     *   replaced with its tag set, its relink predecessors' included ([FoldedState.inheritedTags]).
+     *   Tags appearing only in adds (no explicit style) are upserted with null style so
+     *   tag-management counts see them.
+     * - Fields: every doc's document_fields is replaced with its field map, which reads its own and
+     *   its relink predecessors' values as one ([FoldedState.inheritedFields]); the well-known five
+     *   are additionally cached on the doc row. reviewed/ocrEngineOverride come from the system
+     *   props, read the same way.
      * - Trash and delete: the trashed and deleted flags, trashedOrigPath and trashedAt come from the
      *   fold's lifecycle state. Resurrection, on a full rescan only: when the journal says trashed
      *   or deleted but the document's own bytes are back at its current or original path, the file
@@ -598,11 +600,10 @@ class Indexer(
         // with the fold at negligible cost and needs no per-op scoping.
         fieldDefDao.replaceAll(state.effectiveFieldDefs())
         val changes = ProjectionChanges()
-        val predecessors = predecessors(state, journalDocs)
         val work = documentPaths.work()
         work.state = state
 
-        val pass = FoldPass(state, scope, predecessors, preloaded, changes, work)
+        val pass = FoldPass(state, scope, preloaded, changes, work)
         for (doc in journalDocs) {
             val row = preloaded.rows[doc] ?: continue
             pass.project(doc, row)
@@ -676,7 +677,7 @@ class Indexer(
         styledTags: Set<String>,
     ) {
         val allTags = LinkedHashSet<String>()
-        for (doc in journalDocs) allTags.addAll(state.effectiveTags(doc))
+        for (doc in journalDocs) allTags.addAll(state.inheritedTags(doc))
         allTags.addAll(styledTags)
         val existingTagRows = tagDao.all().associateBy { it.name }
         val changed =
@@ -685,23 +686,6 @@ class Indexer(
                 TagEntity(name = tag, color = style?.color, icon = style?.icon).takeIf { existingTagRows[tag] != it }
             }
         if (changed.isNotEmpty()) tagDao.upsertAll(changed)
-    }
-
-    /**
-     * Per resolved relink target, the older ids among [journalDocs] that relinked onto it, so their
-     * metadata carries over. Those older documents are superseded: [FoldPass.lifecycle] keeps them
-     * deleted.
-     */
-    private fun predecessors(
-        state: FoldedState,
-        journalDocs: Set<String>,
-    ): Map<String, List<String>> {
-        val predecessors = HashMap<String, MutableList<String>>() // target -> old docs resolving here
-        for (doc in journalDocs) {
-            val resolved = state.resolveDocId(doc)
-            if (resolved != doc) predecessors.getOrPut(resolved) { ArrayList() }.add(doc)
-        }
-        return predecessors
     }
 
     /** The trash/delete lifecycle for a doc, after applying the file-resurrection preference. */
@@ -716,13 +700,12 @@ class Indexer(
 
     /**
      * One [applyFold] pass over its documents: what it projects them from (the folded [state], the
-     * [preloaded] rows, the relink [predecessors]) and where it leaves what it projected: [changes]
-     * for the database, [work] for the path work after the transaction, [resurrected] for the caller.
+     * [preloaded] rows) and where it leaves what it projected: [changes] for the database, [work] for
+     * the path work after the transaction, [resurrected] for the caller.
      */
     private inner class FoldPass(
         private val state: FoldedState,
         private val scope: FoldScope,
-        private val predecessors: Map<String, List<String>>,
         private val preloaded: PreloadedRows,
         private val changes: ProjectionChanges,
         private val work: DocumentPathReconciler.PathWork,
@@ -741,11 +724,8 @@ class Indexer(
             doc: String,
             row: DocumentEntity,
         ) {
-            // Predecessors (older ids that relinked onto this doc): their metadata carries over.
-            val preds = predecessors[doc].orEmpty()
-
-            val effTags = tags(doc, preds)
-            val fields = fields(doc, preds)
+            val effTags = tags(doc)
+            val fields = fields(doc)
             val lifecycle = lifecycle(doc, row)
 
             // Diffed: skip the upsert when the effective row equals what is stored, so a fold
@@ -754,14 +734,14 @@ class Indexer(
                 row.copy(
                     relPath = lifecycle.relPath,
                     fileName = lifecycle.fileName,
-                    reviewed = inheritedProp(doc, preds, SystemProperty.REVIEWED) == "true",
+                    reviewed = state.inheritedProp(doc, SystemProperty.REVIEWED) == "true",
                     // Read cache of the well-known field rows; see DocumentEntity.correspondent.
                     correspondent = fields[FieldKeys.CORRESPONDENT],
                     docType = fields[FieldKeys.DOC_TYPE],
                     docDate = fields[FieldKeys.DOC_DATE],
                     title = fields[FieldKeys.TITLE],
                     notes = fields[FieldKeys.NOTES],
-                    ocrEngineOverride = inheritedProp(doc, preds, SystemProperty.OCR_ENGINE),
+                    ocrEngineOverride = state.inheritedProp(doc, SystemProperty.OCR_ENGINE),
                     trashed = lifecycle.trashed,
                     trashedOrigPath = if (lifecycle.trashed) lifecycle.origPath else null,
                     trashedAt = if (lifecycle.trashed) state.trashedAtMillis(doc) ?: row.trashedAt else null,
@@ -783,43 +763,25 @@ class Indexer(
             if (documentPaths.pending(state, projectedRow)) work.searchable[doc] = ftsRow
         }
 
-        /** A system property's effective value for a doc: its own, else a predecessor's. */
-        private fun inheritedProp(
-            doc: String,
-            preds: List<String>,
-            key: SystemProperty,
-        ): String? = state.effectiveProp(doc, key) ?: preds.firstNotNullOfOrNull { state.effectiveProp(it, key) }
-
         /**
-         * Effective tags for a doc plus every predecessor's effective tags, sorted. Diffed against
-         * the preloaded rows: a rewrite goes to [changes] only when the set actually changed, so an
-         * unrelated edit does not invalidate `document_tags` observers for every doc.
+         * A doc's tags, its predecessors' included, sorted. Diffed against the preloaded rows: a
+         * rewrite goes to [changes] only when the set actually changed, so an unrelated edit does not
+         * invalidate `document_tags` observers for every doc.
          */
-        private fun tags(
-            doc: String,
-            preds: List<String>,
-        ): List<String> {
-            val tagSet = LinkedHashSet<String>()
-            tagSet.addAll(state.effectiveTags(doc))
-            for (p in preds) tagSet.addAll(state.effectiveTags(p))
-            val effTags = tagSet.toList().sorted()
+        private fun tags(doc: String): List<String> {
+            val effTags = state.inheritedTags(doc).sorted()
             if (preloaded.tags[doc].orEmpty() != effTags) changes.tags[doc] = effTags
             return effTags
         }
 
         /**
-         * Every field value for a doc: own value wins; inherit predecessor keys this doc doesn't set.
+         * Every field value for a doc, its predecessors' writes included ([FoldedState.inheritedFields]).
          * Rows carry the numeric shadow for the registry's NUMBER/DECIMAL fields. Diffed like tags so
          * an unrelated edit does not rewrite this doc's field rows. Returns the effective map, which
          * also feeds the cached well-known columns and the FTS row.
          */
-        private fun fields(
-            doc: String,
-            preds: List<String>,
-        ): Map<String, String> {
-            val effFields = LinkedHashMap<String, String>()
-            for (p in preds) effFields.putAll(state.effectiveFields(p))
-            effFields.putAll(state.effectiveFields(doc)) // own values override inherited ones
+        private fun fields(doc: String): Map<String, String> {
+            val effFields = state.inheritedFields(doc)
             val rows =
                 effFields.map { (key, value) ->
                     val numValue = FieldValues.numeric(state.effectiveFieldType(key), value)

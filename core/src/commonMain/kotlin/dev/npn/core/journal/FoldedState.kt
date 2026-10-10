@@ -18,6 +18,9 @@ import dev.npn.core.model.SystemProperty
  * - Props are last-writer-wins by HLC. Trash/restore is LWW, and so is delete/undelete; an
  *   undelete also takes the document out of the trash, and a delete that wins hides the document
  *   whatever its trash state. Relinks resolve to the highest-HLC winner per old doc.
+ * - The effective views read one id's own events. The inherited ones read a relink target's
+ *   together with its predecessors': one register per field or property, LWW across all of them
+ *   (a clear included), and one OR-set of tags.
  *
  * Instances are mutable accumulators; [copy]-style snapshotting is not needed because folding
  * is deterministic regardless of the order events were applied.
@@ -263,8 +266,36 @@ class FoldedState {
      * read in the registry type's canonical form ([FieldValues.normalized]), so a number an older
      * build stored as `007` folds to `7`.
      */
-    fun effectiveFields(doc: String): Map<String, String> {
-        val byKey = fields[doc] ?: return emptyMap()
+    fun effectiveFields(doc: String): Map<String, String> = fields[doc]?.let(::nonNullFields).orEmpty()
+
+    // ---- a document with what it inherited: its own registers and its predecessors' as one ----
+
+    /**
+     * [doc]'s fields as [effectiveFields] reads them, over its own registers and its
+     * [predecessorsOf]'s as one set: per key, the latest write among them wins, a clear included.
+     * A value cleared on [doc] stays cleared, and a chain shows its newest value however its ids sort.
+     */
+    fun inheritedFields(doc: String): Map<String, String> {
+        val predecessors = predecessorsOf(doc)
+        if (predecessors.isEmpty()) return effectiveFields(doc)
+        val winners = HashMap<String, PropVal>()
+        for (id in listOf(doc) + predecessors) {
+            fields[id]?.forEach { (key, value) -> winners.putIfNewerHlc(key, value.hlc) { value } }
+        }
+        return nonNullFields(winners)
+    }
+
+    /** [doc]'s value of [key] over its own register and its [predecessorsOf]'s, as [inheritedFields]. */
+    fun inheritedProp(
+        doc: String,
+        key: SystemProperty,
+    ): String? = (listOf(doc) + predecessorsOf(doc)).mapNotNull { props[it]?.get(key) }.maxByOrNull { it.hlc }?.value
+
+    /** [doc]'s tags with its [predecessorsOf]'s: their live adds are one OR-set ([tagRemovalOps]). */
+    fun inheritedTags(doc: String): Set<String> =
+        predecessorsOf(doc).fold(effectiveTags(doc)) { tags, predecessor -> tags + effectiveTags(predecessor) }
+
+    private fun nonNullFields(byKey: Map<String, PropVal>): Map<String, String> {
         val out = LinkedHashMap<String, String>()
         for (key in byKey.keys.sorted()) {
             byKey[key]?.value?.let { out[key] = FieldValues.normalized(effectiveFieldType(key), it) }
@@ -400,8 +431,10 @@ class FoldedState {
 
     /**
      * Build the OR-set `tag-remove` [PendingOp]s for [tag] over [docIds] from THIS state's live
-     * dots: for each doc, list the dots currently observed for `(doc, tag)` and emit a remove
-     * carrying them, skipping docs that do not hold the tag (empty dots).
+     * dots: for each doc, list the dots currently observed for `(doc, tag)`, its [predecessorsOf]'s
+     * included as [inheritedTags] reads them (a tombstone names dots, whichever document it is
+     * addressed to), and emit a remove carrying them, skipping docs that do not hold the tag (empty
+     * dots). A dot is listed once however many of [docIds] share it.
      *
      * This is the ONLY way to construct a `tag-remove` op ([PendingOp.tagRemove] is `internal`),
      * so a correct removal can only be built against a live [FoldedState] read under the
@@ -411,11 +444,13 @@ class FoldedState {
     fun tagRemovalOps(
         docIds: Collection<String>,
         tag: String,
-    ): List<PendingOp> =
-        docIds.mapNotNull { docId ->
-            val dots = liveTagDots(docId, tag)
+    ): List<PendingOp> {
+        val listed = HashSet<Dot>()
+        return docIds.mapNotNull { docId ->
+            val dots = (listOf(docId) + predecessorsOf(docId)).flatMap { liveTagDots(it, tag) }.filter(listed::add)
             if (dots.isEmpty()) null else PendingOp.tagRemove(docId, tag, dots)
         }
+    }
 
     /**
      * The ops that bring [doc] back once its file is in the library again at [relPath]: a

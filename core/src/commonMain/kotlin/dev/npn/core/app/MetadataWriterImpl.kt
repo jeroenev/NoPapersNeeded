@@ -114,7 +114,8 @@ class MetadataWriterImpl(
         val changed =
             coordinator.commitBuilt { state ->
                 val v = canonical(state, k, value)
-                ids.filter { state.effectiveFields(it)[k] != v }.map { PendingOp.fieldSet(it, k, v) }
+                // Against what the document shows, inherited values included: clearing one is a write.
+                ids.filter { state.inheritedFields(it)[k] != v }.map { PendingOp.fieldSet(it, k, v) }
             }
         if (!changed) return
         ids.forEach { docId ->

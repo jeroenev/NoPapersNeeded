@@ -208,7 +208,12 @@ live in `buildSrc`. Hot Reload via `mise hot`.
    `document_fields` (one row per document × key, canonical string plus a numeric
    shadow for NUMBER/DECIMAL) and definitions in `field_defs`; the five typed
    columns on `documents` are written from the same map as a read cache for list
-   queries. One FTS `fields` column indexes every value. FTS5 finds a row only by MATCH or
+   queries. A relink target (a bake's result) shows its predecessors' metadata as its own
+   (`FoldedState.inheritedFields`, `inheritedProp`, `inheritedTags`): per field or property the
+   latest write among them wins, a clear included, and their tags are one OR-set, so an edit, a
+   clear or a tag removal on it reaches what it inherited, and an incremental fold projects it
+   with its predecessors as a rescan does. One FTS `fields` column indexes every value. FTS5
+   finds a row only by MATCH or
    rowid, so a document's FTS row is reached through `fts_keys`; the fold writes its metadata
    columns and `OcrPipeline` its extracted text, and neither rewrites the other's. Every fold
    writes in one transaction (`Indexer.projection`, which a commit's journal bookkeeping joins), so

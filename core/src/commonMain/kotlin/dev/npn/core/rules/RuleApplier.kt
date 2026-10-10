@@ -71,9 +71,10 @@ class RuleApplier(
         val changed =
             coordinator.commitBuilt { state ->
                 // Matching reads the folded state, not the projection, so a rule on a field sees
-                // the value the journal holds even before the index has caught up.
-                val fields = state.effectiveFields(doc.docId)
-                val tags = state.effectiveTags(doc.docId)
+                // the value the journal holds even before the index has caught up, inherited
+                // through a relink or not.
+                val fields = state.inheritedFields(doc.docId)
+                val tags = state.inheritedTags(doc.docId)
                 val matched = matchRules(compiled, content, fields, doc.fileName)
                 buildList {
                     // Write when the effective value DIFFERS (not only when empty): idempotent, so a
