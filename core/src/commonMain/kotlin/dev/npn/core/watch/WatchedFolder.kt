@@ -14,7 +14,17 @@ data class WatchedFolderFile(
     val size: Long,
     val mtimeMillis: Long,
     val source: ExternalSource,
-)
+) {
+    /**
+     * Whether the file under this one's [id], now [size] bytes and last modified at [mtimeMillis], is
+     * still the file listed: the same size and mtime, the proof a rescan takes. A provider that
+     * reported no mtime (0) for the listing is judged by the size alone.
+     */
+    fun unchangedAt(
+        size: Long,
+        mtimeMillis: Long,
+    ): Boolean = size == this.size && (this.mtimeMillis == 0L || mtimeMillis == this.mtimeMillis)
+}
 
 /**
  * A folder outside the library that is polled/watched for PDFs to auto-import (e.g. the output
@@ -24,7 +34,12 @@ interface WatchedFolder {
     /** Non-recursive listing of the PDF files currently in the folder. Empty when unreachable. */
     suspend fun listPdfs(): List<WatchedFolderFile>
 
-    /** Remove [file] from the watched folder (only used when delete-after-import is on). */
+    /**
+     * Remove [file] from the watched folder (only used when delete-after-import is on), only while
+     * it is still the file listed and imported ([WatchedFolderFile.unchangedAt]): a file written
+     * under its name since was never imported, and is left for the next sweep. Returns whether it
+     * deleted the file.
+     */
     suspend fun delete(file: WatchedFolderFile): Boolean
 
     /**

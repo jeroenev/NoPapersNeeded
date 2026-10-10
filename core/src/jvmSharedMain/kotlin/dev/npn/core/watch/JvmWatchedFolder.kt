@@ -50,8 +50,12 @@ class JvmWatchedFolder(
 
     override suspend fun delete(file: WatchedFolderFile): Boolean =
         withContext(Dispatchers.IO) {
-            // Paths.get, not Path.of: the latter is Java 11 and only reached Android at API 34.
-            runCatching { Files.deleteIfExists(Paths.get(file.id)) }.getOrDefault(false)
+            runCatching {
+                // Paths.get, not Path.of: the latter is Java 11 and only reached Android at API 34.
+                val path = Paths.get(file.id)
+                file.unchangedAt(Files.size(path), Files.getLastModifiedTime(path).toMillis()) &&
+                    Files.deleteIfExists(path)
+            }.getOrDefault(false)
         }
 
     override fun changes(): Flow<Unit> = watchDirs(dir, recursive = false, kinds = NEW_OR_REWRITTEN).map { }

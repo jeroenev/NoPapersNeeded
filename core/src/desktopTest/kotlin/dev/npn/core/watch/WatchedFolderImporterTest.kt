@@ -1,9 +1,12 @@
 package dev.npn.core.watch
 
 import dev.npn.core.app.AppSessionRig
+import dev.npn.core.app.ImportOutcome
 import dev.npn.core.app.ImportTally
+import dev.npn.core.app.IngestFacade
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySort
+import dev.npn.core.fs.ExternalSource
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.ocr.OcrState
 import dev.npn.core.pdf.PdfFixtures
@@ -164,6 +167,56 @@ class WatchedFolderImporterTest {
                 rig.close()
             }
         }
+
+    /**
+     * The scanner writes its next scan under the same name after the first was imported and before
+     * the cleanup ran. That file was never imported: it stays, for the next sweep to import.
+     */
+    @Test
+    fun deleteAfterImportLeavesAFileWrittenUnderTheSourcesNameSince() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                stagePdf("scan.pdf", PdfFixtures.embeddedTextPdf("first scan"))
+                val next = PdfFixtures.embeddedTextPdf("the next scan, under the same name")
+                val rewriting =
+                    object : IngestFacade by rig.session {
+                        override suspend fun importPdf(
+                            source: ExternalSource,
+                            suggestedName: String,
+                        ): ImportOutcome =
+                            rig.session.importPdf(source, suggestedName).also {
+                                val scan = watchDir.resolve("scan.pdf")
+                                Files.write(scan, next)
+                                Files.setLastModifiedTime(scan, FileTime.fromMillis(System.currentTimeMillis() - 1_000))
+                            }
+                    }
+
+                val scan = WatchedFolderImporter(rewriting, JvmWatchedFolder(watchDir), { true }).scanOnce()
+
+                scan.imported shouldBe 1
+                Files.readAllBytes(watchDir.resolve("scan.pdf")) shouldBe next
+            } finally {
+                rig.close()
+            }
+        }
+
+    /**
+     * A source is still the file listed while its size and mtime are; where the provider reported no
+     * mtime for the listing (SAF may not), the size alone decides.
+     */
+    @Test
+    fun aSourceIsTheFileListedWhileItsSizeAndMtimeAreUnchanged() {
+        val listed = WatchedFolderFile("scan.pdf", "scan.pdf", 10, 5_000, ExternalSource(watchDir.resolve("scan.pdf")))
+
+        listed.unchangedAt(size = 10, mtimeMillis = 5_000) shouldBe true
+        listed.unchangedAt(size = 11, mtimeMillis = 5_000) shouldBe false
+        listed.unchangedAt(size = 10, mtimeMillis = 6_000) shouldBe false
+        listed.unchangedAt(size = 10, mtimeMillis = 0) shouldBe false
+        val noMtime = listed.copy(mtimeMillis = 0)
+        noMtime.unchangedAt(size = 10, mtimeMillis = 6_000) shouldBe true
+        noMtime.unchangedAt(size = 11, mtimeMillis = 0) shouldBe false
+    }
 
     @Test
     fun skipsFilesStillBeingWritten() =

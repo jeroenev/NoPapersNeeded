@@ -43,7 +43,9 @@ class SafWatchedFolder(
     override suspend fun delete(file: WatchedFolderFile): Boolean =
         withContext(Dispatchers.IO) {
             runCatching {
-                DocumentFile.fromSingleUri(appContext, Uri.parse(file.id))?.delete() ?: false
+                // A provider that reports no mtime (lastModified 0) is judged by the size alone.
+                val doc = DocumentFile.fromSingleUri(appContext, Uri.parse(file.id)) ?: return@runCatching false
+                file.unchangedAt(doc.length(), doc.lastModified()) && doc.delete()
             }.getOrDefault(false)
         }
 
