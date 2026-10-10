@@ -184,11 +184,11 @@ class LibrarySessionImpl private constructor(
     /**
      * Internal auto-purge, run after watch-triggered rescans; not part of any public facet.
      *
-     * A document's row decides when it has one: it also covers a trash in progress, whose PDF is
-     * moved before the event is committed. The journal covers documents with no row, which is every
-     * trashed one on a device whose index was just built; their PDFs keep an old mtime too. It keeps
-     * every other document it knows as not in the trash: a crash between a trash's move and its event
-     * leaves the PDF in the trash with no record of the trash, and it may be the only copy.
+     * An entry goes once every document it may hold was trashed, or deleted for good, more than
+     * [olderThanDays] ago ([TrashOps.purgeOlderThan]); an entry no such document owns stays. A
+     * document's row decides when it has one: it also covers a trash in progress, whose PDF is moved
+     * before the event is committed. The journal covers documents with no row, which is every
+     * trashed or deleted one on a device whose index was just built; their PDFs keep an old mtime too.
      */
     internal suspend fun purgeTrash(olderThanDays: Int) {
         val cutoff = deps.clock.nowMillis() - olderThanDays.toLong() * MILLIS_PER_DAY

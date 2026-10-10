@@ -7,6 +7,7 @@ import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.TrashOps
 import dev.npn.core.fs.VerifiedPublicationFailedException
+import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.index.IndexRig
 import dev.npn.core.index.MetadataAccumulator
 import dev.npn.core.index.MutableClock
@@ -456,7 +457,13 @@ class TrashLifecycleTest {
         Files.createDirectories(rig.libRoot.resolve("${NpnPaths.JOURNAL_DIR}/objects-v9-00"))
         assertFailsWith<IllegalStateException> { rig.session.rescan() }
     }
+}
 
+/**
+ * The trash auto-purge deletes an entry once the retention has passed since its document was trashed,
+ * or deleted for good, and keeps an entry it cannot tie to such a document.
+ */
+class TrashPurgeTest {
     @Test
     fun autoPurgeCountsRetentionFromTheTrashNotFromTheFile() =
         runTest {
@@ -524,9 +531,9 @@ class TrashLifecycleTest {
 
     /**
      * A crash between a trash's file move and its journal event leaves the PDF in the trash with no
-     * record of the trash. A device with no row for it (it joined since, or rebuilt its index) still
-     * knows the document from the journal, as not trashed: the purge keeps its bytes, however old
-     * their mtime.
+     * record of the trash. A device with no row for it (it joined since, or rebuilt its index) knows
+     * nothing of a document that was never edited, as an import journals nothing: nothing says the
+     * entry was trashed long ago, and the purge keeps its bytes, however old their mtime.
      */
     @Test
     fun aDeviceWithNoRowKeepsTheFileOfATrashTheJournalNeverRecorded() =
@@ -539,7 +546,6 @@ class TrashLifecycleTest {
                 Files.setLastModifiedTime(rig.libRoot.resolve("old.pdf"), FileTime.fromMillis(now - 90 * DAY))
                 rig.session.rescan()
                 val id = rig.docId("old.pdf")
-                rig.session.meta.addTag(listOf(id), "kept")
                 rig.fs.move("old.pdf", NpnPaths.trashPath("old.pdf", id))
 
                 val (second, secondDb) = rig.secondSession(backgroundScope, clock = MutableClock(now + 1))
@@ -556,6 +562,75 @@ class TrashLifecycleTest {
                 rig.close()
             }
         }
+
+    /**
+     * A sync tool delivers another device's trash move of a document this device never knew before
+     * that trash's journal object: an entry with an old mtime that neither a row nor the journal ties
+     * to a trashed document. The purge keeps it.
+     */
+    @Test
+    fun aTrashEntryThatArrivedBeforeItsTrashIsKept() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                val now = 400 * DAY
+                rig.clock.now = now
+                val bytes = PdfFixtures.embeddedTextPdf("trashed on another device")
+                val entry = NpnPaths.trashPath("elsewhere.pdf", sha256Bytes(bytes))
+                rig.writePdf(entry, bytes)
+                Files.setLastModifiedTime(rig.libRoot.resolve(entry), FileTime.fromMillis(now - 90 * DAY))
+                rig.session.rescan()
+
+                rig.session.purgeTrash(olderThanDays = 30)
+
+                rig.exists(entry).shouldBeTrue()
+            } finally {
+                rig.close()
+            }
+        }
+
+    /**
+     * A delete for good whose file the provider refused to remove leaves it in the trash, its document
+     * deleted. The purge counts the retention from the delete, and then removes the file.
+     */
+    @Test
+    fun aFileADeleteForGoodLeftGoesWhenItsRetentionEnds() =
+        runTest {
+            var refusing = true
+            val rig =
+                AppSessionRig.create(backgroundScope, files = { fs ->
+                    object : LibraryFileSystem by fs {
+                        override suspend fun delete(relPath: String) {
+                            if (refusing && relPath.startsWith("${NpnPaths.TRASH_DIR}/")) throw IOException("Refused")
+                            fs.delete(relPath)
+                        }
+                    }
+                })
+            try {
+                val now = 400 * DAY
+                rig.clock.now = now - 10 * DAY
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("deleted for good, its file left"))
+                rig.session.rescan()
+                val id = rig.docId("a.pdf")
+                rig.session.docLifecycle.trashDoc(id)
+                rig.clock.now = now
+                rig.session.docLifecycle.deleteDocPermanently(id) shouldBe PermanentDeleteOutcome.FILE_LEFT
+                refusing = false
+
+                rig.clock.now = now + 25 * DAY
+                rig.session.purgeTrash(olderThanDays = 30)
+                trashEntries(rig.fs) shouldHaveSize 1
+
+                rig.clock.now = now + 31 * DAY
+                rig.session.purgeTrash(olderThanDays = 30)
+                trashEntries(rig.fs).shouldBeEmpty()
+            } finally {
+                rig.close()
+            }
+        }
+
+    private suspend fun trashEntries(fs: LibraryFileSystem) =
+        fs.listAllUnder(NpnPaths.TRASH_DIR).filter { !it.isDirectory }
 
     private companion object {
         const val DAY = 24L * 60L * 60L * 1000L

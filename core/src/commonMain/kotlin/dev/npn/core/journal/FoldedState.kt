@@ -333,14 +333,21 @@ class FoldedState {
         return if (t.trashed) t.hlc.physicalMillis else null
     }
 
+    /** Wall time of the winning doc-delete's HLC, while the document is deleted. */
+    fun deletedAtMillis(doc: String): Long? = if (isDeleted(doc)) deleted[doc]?.physicalMillis else null
+
     /**
-     * Every document an event names that is neither deleted nor superseded by a relink, mapped to
-     * [trashedAtMillis]: when it was trashed, or null while it is not in the trash.
+     * For the trash purge, every document an event names that is deleted, or else not superseded by a
+     * relink, mapped to when it was deleted for good ([deletedAtMillis]), else trashed
+     * ([trashedAtMillis]), or to null while it is neither.
      */
     fun trashTimes(): Map<String, Long?> {
         val named =
-            docsWithMetadata() + trash.keys + undeleted.keys + relinks.values.flatMap { it.map(RelinkClaim::newDoc) }
-        return named.filter { !isDeleted(it) && resolveDocId(it) == it }.associateWith(::trashedAtMillis)
+            docsWithMetadata() + trash.keys + deleted.keys + undeleted.keys +
+                relinks.values.flatMap { it.map(RelinkClaim::newDoc) }
+        return named
+            .filter { isDeleted(it) || resolveDocId(it) == it }
+            .associateWith { deletedAtMillis(it) ?: trashedAtMillis(it) }
     }
 
     /**

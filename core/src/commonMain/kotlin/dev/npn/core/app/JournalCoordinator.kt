@@ -221,9 +221,9 @@ class JournalCoordinator internal constructor(
     }
 
     /**
-     * Every document the journal knows that is neither deleted nor superseded, mapped to when it was
-     * trashed, or to null while it is not in the trash ([FoldedState.trashTimes]). Read from the live
-     * fold, which the rescan before a trash purge has built.
+     * Every document the journal knows that is deleted, or else not superseded, mapped to when it was
+     * deleted for good or trashed, or to null while it is neither ([FoldedState.trashTimes]). Read from
+     * the live fold, which the rescan before a trash purge has built.
      */
     suspend fun journalTrashTimes(): Map<String, Long?> = locked { foldedState().trashTimes() }
 

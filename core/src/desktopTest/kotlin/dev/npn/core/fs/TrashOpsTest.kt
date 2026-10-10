@@ -111,7 +111,7 @@ class TrashOpsTest {
             Files.setLastModifiedTime(odd, FileTime.fromMillis(1000))
 
             trash.listTrash().map { it.relPath } shouldBe listOf(oldTrash)
-            trash.purgeOlderThan(cutoffMillis = 500_000)
+            trash.purgeOlderThan(cutoffMillis = 500_000, documents = mapOf("0000000000000000" to 1_000L))
             fs.exists(oldTrash).shouldBeFalse()
             Files.exists(odd).shouldBeTrue()
         }
@@ -129,21 +129,20 @@ class TrashOpsTest {
             fs.readBytes("inbox/doc.pdf").decodeToString() shouldBe "new"
         }
 
+    /** An entry goes once its document was trashed (or deleted for good) before the cutoff, and not before. */
     @Test
     fun purgeOlderThanRemovesOldEntries() =
         runTest {
-            fs.writeBytesOnce("x/old.pdf", "old".encodeToByteArray())
-            val oldTrash = trash.moveToTrash("x/old.pdf", "0000000000000000")
-            // Force an old mtime.
-            val oldPath = root.resolve(oldTrash)
-            Files.setLastModifiedTime(oldPath, FileTime.fromMillis(1000))
+            val old = trashWithMtime("x/old.pdf", "0000000000000000", mtime = 1_000)
+            val recent = trashWithMtime("y/recent.pdf", "1111111111111111", mtime = 1_000)
 
-            fs.writeBytesOnce("y/new.pdf", "new".encodeToByteArray())
-            trash.moveToTrash("y/new.pdf", "1111111111111111")
+            trash.purgeOlderThan(
+                cutoffMillis = 500_000,
+                documents = mapOf("0000000000000000" to 1_000L, "1111111111111111" to 900_000L),
+            )
 
-            trash.purgeOlderThan(cutoffMillis = 500_000)
-            trash.listTrash() shouldHaveSize 1
-            fs.exists(oldTrash).shouldBeFalse()
+            trash.listTrash().map { it.relPath } shouldBe listOf(recent)
+            fs.exists(old).shouldBeFalse()
         }
 
     @Test
@@ -173,16 +172,24 @@ class TrashOpsTest {
             fs.exists(moving).shouldBeTrue()
         }
 
+    /**
+     * An entry no document owns, however old its mtime, is kept: nothing says when it was trashed. It
+     * may be another device's trash whose event has not arrived, or a document a crash stranded here.
+     */
     @Test
-    fun purgeFallsBackToMtimeForAnEntryWithNoDocument() =
+    fun purgeKeepsAnEntryWithNoDocument() =
         runTest {
             val orphan = trashWithMtime("x/orphan.pdf", "dddddddd44444444", mtime = 1_000)
-            val unrelated = trashWithMtime("x/unrelated.pdf", "eeeeeeee55555555", mtime = 1_000)
+            val stray = root.resolve(NpnPaths.TRASH_DIR).resolve("stray.pdf")
+            Files.write(stray, "stray".encodeToByteArray())
+            Files.setLastModifiedTime(stray, FileTime.fromMillis(1_000))
+            val owned = trashWithMtime("x/owned.pdf", "eeeeeeee55555555", mtime = 1_000)
 
-            trash.purgeOlderThan(cutoffMillis = 500_000, documents = mapOf("eeeeeeee55555555" to 900_000L))
+            trash.purgeOlderThan(cutoffMillis = 500_000, documents = mapOf("eeeeeeee55555555" to 100_000L))
 
-            fs.exists(orphan).shouldBeFalse()
-            fs.exists(unrelated).shouldBeTrue()
+            fs.exists(orphan).shouldBeTrue()
+            Files.exists(stray).shouldBeTrue()
+            fs.exists(owned).shouldBeFalse()
         }
 
     /**

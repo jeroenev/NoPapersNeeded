@@ -124,22 +124,25 @@ class TrashOps(
     }
 
     /**
-     * Permanently delete trash entries trashed strictly before [cutoffMillis].
+     * Permanently delete the trash entries whose documents were trashed, or deleted for good,
+     * strictly before [cutoffMillis].
      *
-     * [documents] maps each document that is neither deleted nor superseded to the time it was
-     * trashed, or to null while it is not in trash. An entry belongs to the documents whose id starts
-     * with the hash prefix in its name ([NpnPaths.trashHashPrefix]), all of them, so a prefix two
-     * documents share only keeps it longer and its bytes need no hashing:
-     * - a trashed document: its trash time decides. The entry's mtime cannot, because a move into
-     *   trash keeps the PDF's own mtime, so a document imported long ago would go the moment it
-     *   was trashed.
-     * - a document not in trash yet: kept. Trashing moves the PDF before it commits the event, and a
-     *   crash in between leaves the PDF here with no event.
-     * - no document: the mtime decides, as nothing better is known.
+     * [documents] maps each document known to be trashed or deleted to when that happened, and may
+     * map others to null. An entry belongs to the documents whose id starts with the hash prefix in
+     * its name ([NpnPaths.trashHashPrefix]), all of them, so a prefix two documents share only keeps
+     * it longer and its bytes need no hashing:
+     * - a trashed or deleted document: when that happened decides. The entry's mtime cannot, because
+     *   a move into trash keeps the PDF's own mtime, so a document imported long ago would go the
+     *   moment it was trashed.
+     * - a document in neither: kept. Trashing moves the PDF before it commits the event, and a crash
+     *   in between leaves the PDF here with no event.
+     * - no document: kept, as nothing says when it was trashed. An import journals nothing, so
+     *   another device's trash of a document never edited is unknown until its event arrives, which
+     *   may come after the file; and a crash may have left a document's only copy here.
      */
     suspend fun purgeOlderThan(
         cutoffMillis: Long,
-        documents: Map<String, Long?> = emptyMap(),
+        documents: Map<String, Long?>,
     ) {
         val byPrefix =
             documents.entries.groupBy(
@@ -147,14 +150,8 @@ class TrashOps(
                 valueTransform = { it.value },
             )
         for (meta in listTrash()) {
-            val owners = NpnPaths.trashHashPrefix(meta.name)?.let(byPrefix::get)
-            val trashedAt =
-                when {
-                    owners == null -> meta.mtimeMillis
-                    null in owners -> continue
-                    else -> owners.maxOf { checkNotNull(it) }
-                }
-            if (trashedAt < cutoffMillis) fs.delete(meta.relPath)
+            val owners = NpnPaths.trashHashPrefix(meta.name)?.let(byPrefix::get).orEmpty()
+            if (owners.isNotEmpty() && owners.all { it != null && it < cutoffMillis }) fs.delete(meta.relPath)
         }
     }
 

@@ -192,7 +192,12 @@ live in `buildSrc`. Hot Reload via `mise hot`.
     nothing). A file it cannot remove leaves the document deleted and is reported
     (`PermanentDeleteOutcome.FILE_LEFT`). Restoring or emptying the whole trash
     (`DocLifecycle.restoreDocs`, `deleteDocsPermanently`) lists it once for all its
-    documents.
+    documents. The trash auto-purge (after a watch-triggered rescan) deletes an entry
+    once every document its name's hash prefix ties it to was trashed, or deleted for
+    good, longer ago than the retention (`TrashOps.purgeOlderThan`). An entry it cannot
+    tie to such a document stays, however old its mtime: another device's trash whose
+    event has not arrived, or a document a crash left there with no event (Empty trash,
+    which works by document, does not reach it either).
     Restore records its final destination: the path the document was trashed from, or
     a `(restored)` name beside it when a file is there now or another live row names it
     (as for an import: a row whose file went outside the app names its path until a
