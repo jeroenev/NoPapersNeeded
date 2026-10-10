@@ -23,6 +23,7 @@ import dev.npn.core.pathrules.StoragePathRuleApplicator
 import dev.npn.core.pathrules.pathTaken
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
+import dev.npn.core.util.runLogged
 import dev.npn.core.util.warn
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -40,6 +41,10 @@ import kotlinx.coroutines.flow.map
  * same step as their journal write ([JournalCoordinator.changeLifecycle]): no rescan or storage-path
  * move lands in between, and a refused commit moves nothing (a trash entry with no doc-trash event
  * would be invisible).
+ *
+ * What a write sets off once it is published (the storage-path rule, the auto-match rules) runs per
+ * document through [followUp]: the write landed whatever they do, so their failure is logged, never
+ * thrown.
  */
 class MetadataWriterImpl(
     private val coordinator: JournalCoordinator,
@@ -62,7 +67,7 @@ class MetadataWriterImpl(
         val t = tag.trim()
         if (t.isEmpty() || docIds.isEmpty()) return
         coordinator.commitAndApply(docIds.map { PendingOp.tagAdd(it, t) })
-        docIds.forEach { pathRuleApplicator.applyFor(it) }
+        followUp(docIds)
     }
 
     override suspend fun removeTag(
@@ -72,7 +77,7 @@ class MetadataWriterImpl(
         val t = tag.trim()
         if (t.isEmpty() || docIds.isEmpty()) return
         coordinator.commitBuilt { state -> state.tagRemovalOps(docIds, t) }
-        docIds.forEach { pathRuleApplicator.applyFor(it) }
+        followUp(docIds)
     }
 
     override suspend fun setReviewed(
@@ -117,11 +122,7 @@ class MetadataWriterImpl(
                 // Against what the document shows, inherited values included: clearing one is a write.
                 ids.filter { state.inheritedFields(it)[k] != v }.map { PendingOp.fieldSet(it, k, v) }
             }
-        if (!changed) return
-        ids.forEach { docId ->
-            if (k == FieldKeys.TITLE) applyAutoMatch(docId)
-            pathRuleApplicator.applyFor(docId)
-        }
+        if (changed) followUp(ids, autoMatch = k == FieldKeys.TITLE)
     }
 
     override suspend fun applyEdits(
@@ -147,11 +148,28 @@ class MetadataWriterImpl(
         }
         // The same follow-ups the individual setters do, but once per document for the whole edit
         // instead of once per value. Auto-match only reacts to a new title, matching setField.
-        ids.forEach { docId ->
-            if (keyed.any { it.first == FieldKeys.TITLE }) applyAutoMatch(docId)
-            pathRuleApplicator.applyFor(docId)
+        followUp(ids, autoMatch = keyed.any { it.first == FieldKeys.TITLE })
+    }
+
+    /**
+     * What a write to [docIds] sets off once it is published: the auto-match rules when [autoMatch]
+     * (a new title), then the storage-path rule, for each document. The write landed whatever they
+     * do, so a failure is logged for its document and the others carry on; thrown, it would have a
+     * caller take the write for one that did not land, and send it again.
+     */
+    private suspend fun followUp(
+        docIds: Collection<String>,
+        autoMatch: Boolean = false,
+    ) {
+        for (docId in docIds) {
+            if (autoMatch) log.runLogged("Auto-matching $docId after a write") { applyAutoMatch(docId) }
+            log.runLogged("Applying the storage-path rule to $docId") { pathRuleApplicator.applyFor(docId) }
         }
     }
+
+    /** The documents tagged [tag] now, for a [followUp]; failing to list them is logged as its failure is. */
+    private suspend fun taggedNow(tag: String): List<String> =
+        log.runLogged("Listing the documents tagged $tag after a write") { tagDao.docIdsWithTag(tag) }.orEmpty()
 
     /**
      * The canonical stored form of [raw] for field [key], per the live registry: an unregistered
@@ -181,7 +199,7 @@ class MetadataWriterImpl(
         val t = to.trim()
         if (f.isEmpty() || t.isEmpty() || f == t) return
         coordinator.commitAndApply(listOf(PendingOp.tagRename(f, t)))
-        tagDao.docIdsWithTag(t).forEach { pathRuleApplicator.applyFor(it) }
+        followUp(taggedNow(t))
     }
 
     override suspend fun mergeTag(
@@ -192,7 +210,7 @@ class MetadataWriterImpl(
         val t = to.trim()
         if (f.isEmpty() || t.isEmpty() || f == t) return
         coordinator.commitAndApply(listOf(PendingOp.tagMerge(f, t)))
-        tagDao.docIdsWithTag(t).forEach { pathRuleApplicator.applyFor(it) }
+        followUp(taggedNow(t))
     }
 
     override suspend fun deleteTag(name: String) {
@@ -202,7 +220,7 @@ class MetadataWriterImpl(
         // No dedicated journal op by design: remove the tag from every doc currently holding it,
         // listing all observed dots (OR-set delete-everywhere).
         coordinator.commitBuilt { state -> state.tagRemovalOps(state.taggedDocs(), t) }
-        affected.forEach { pathRuleApplicator.applyFor(it) }
+        followUp(affected)
     }
 
     override suspend fun setTagStyle(
@@ -453,8 +471,7 @@ class MetadataWriterImpl(
         require(DocumentPaths.isDocumentPath(target)) { "Invalid document path: $target" }
         check(!fs.exists(target)) { "Target already exists: $target" }
         coordinator.commitAndApply(listOf(PendingOp.propSet(docId, SystemProperty.STORAGE_PATH, target)))
-        applyAutoMatch(docId)
-        pathRuleApplicator.applyFor(docId)
+        followUp(listOf(docId), autoMatch = true)
     }
 
     /** Trim a system-property input, coercing null/blank to null (clears the property). */

@@ -1,6 +1,7 @@
 package dev.npn.core.app
 
 import dev.npn.core.db.ProjectionStatus
+import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.index.MetadataWriteBlocked
@@ -29,6 +30,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import java.io.IOException
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
@@ -640,6 +642,47 @@ class MetadataWriterTest {
                         .first()
                 tagsOf(items, id) shouldNotContain "removed-by-rewrite"
                 tagsOf(items, id) shouldContain "replacement"
+            } finally {
+                rig.close()
+            }
+        }
+
+    /**
+     * Once the tag is published the write landed: the storage-path rule's move after it failing is
+     * logged, not thrown, so no caller takes the edit for one that did not land and sends it again.
+     */
+    @Test
+    fun aFollowUpThatFailsAfterTheWriteLandedDoesNotFailTheWrite() =
+        runTest {
+            var existsFails = false
+            val rig =
+                AppSessionRig.create(
+                    backgroundScope,
+                    storagePath = StoragePathRule("{tags}/{title}.pdf", enabled = true),
+                    files = { fs ->
+                        object : LibraryFileSystem by fs {
+                            override suspend fun exists(relPath: String): Boolean {
+                                if (existsFails) throw IOException("directory query failed")
+                                return fs.exists(relPath)
+                            }
+                        }
+                    },
+                )
+            try {
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+                rig.session.rescan()
+                val id = rig.docId("a.pdf")
+                val before = rig.journalObjectCount()
+                existsFails = true
+
+                rig.session.meta.addTag(listOf(id), "invoice")
+
+                existsFails = false
+                rig.session.documents
+                    .observeDoc(id)
+                    .first()!!
+                    .tags shouldBe listOf("invoice")
+                rig.journalObjectCount() shouldBe before + 1
             } finally {
                 rig.close()
             }

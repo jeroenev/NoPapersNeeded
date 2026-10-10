@@ -4,6 +4,10 @@ package dev.npn.core.app
  * Per-document (and bulk) metadata edits. Everything here is a journal-backed write to one or
  * more documents' own metadata; vocabulary-level tag operations live on [TagAdmin] and a
  * document's existence/location on [DocLifecycle].
+ *
+ * A write that returns normally has landed. One that throws was not published, unless projecting it
+ * onto the index failed after it was. What a write sets off afterwards (the storage-path rule, the
+ * auto-match rules) never fails it: such a failure is in the session log.
  */
 interface MetadataWriter {
     suspend fun addTag(
