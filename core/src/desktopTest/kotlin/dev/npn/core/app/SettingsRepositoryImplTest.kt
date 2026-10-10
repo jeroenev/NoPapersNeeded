@@ -7,7 +7,9 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import java.io.FileOutputStream
 import java.io.IOException
+import java.io.OutputStream
 import java.nio.file.Files
 import java.nio.file.attribute.PosixFilePermission
 import kotlin.test.Test
@@ -79,6 +81,42 @@ class SettingsRepositoryImplTest {
                 directory.toFile().deleteRecursively()
             }
         }
+
+    /**
+     * A write cut short (a full disk) must not cost the settings already saved: the file keeps them
+     * whole until a complete new one takes its place.
+     */
+    @Test
+    fun aWriteCutShortKeepsTheSavedSettings() =
+        runTest {
+            val directory = Files.createTempDirectory("npn-settings-test")
+            try {
+                val file = directory.resolve("settings.properties").toFile()
+                SettingsRepositoryImpl(file).edit { it.copy(aiModel = "model", aiApiKey = "secret") }
+                val saved = SettingsRepositoryImpl(file).settings.first()
+                val diskFull =
+                    SettingsRepositoryImpl(file) { target -> FailingAfter(FileOutputStream(target), bytes = 16) }
+
+                assertFailsWith<IOException> { diskFull.edit { it.copy(aiModel = "other") } }
+
+                SettingsRepositoryImpl(file).settings.first() shouldBe saved
+            } finally {
+                directory.toFile().deleteRecursively()
+            }
+        }
+
+    /** Writes [bytes] bytes through to [out], then fails as a full disk does. */
+    private class FailingAfter(
+        private val out: OutputStream,
+        private var bytes: Int,
+    ) : OutputStream() {
+        override fun write(b: Int) {
+            if (bytes-- <= 0) throw IOException("No space left on device")
+            out.write(b)
+        }
+
+        override fun close() = out.close()
+    }
 
     @Test
     fun aiProviderAndReasoningPersist() =

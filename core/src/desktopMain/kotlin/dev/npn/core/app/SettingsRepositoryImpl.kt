@@ -7,8 +7,13 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.nio.file.FileAlreadyExistsException
+import java.io.FileOutputStream
+import java.io.OutputStream
+import java.nio.channels.FileChannel
 import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.nio.file.StandardOpenOption
+import java.nio.file.attribute.FileAttribute
 import java.nio.file.attribute.PosixFilePermissions
 import java.util.Properties
 import kotlin.uuid.Uuid
@@ -25,9 +30,13 @@ import kotlin.uuid.Uuid
  * All key mapping, defaults and clamping live in the shared [SettingsCodec]; this class only owns
  * the storage primitive (the properties file, its owner-only permissions, and the persist mutex).
  */
-class SettingsRepositoryImpl(
-    private val file: File = defaultFile(),
+class SettingsRepositoryImpl internal constructor(
+    private val file: File,
+    /** Opens the stream a write goes to: a file's own stream, but a test hands one that fails partway. */
+    private val openForWrite: (File) -> OutputStream,
 ) : SettingsRepository {
+    constructor(file: File = defaultFile()) : this(file, { FileOutputStream(it) })
+
     private val props = Properties()
     private val isWindows =
         System.getProperty("os.name")?.startsWith("Windows", ignoreCase = true) ?: false
@@ -95,17 +104,26 @@ class SettingsRepositoryImpl(
             storeProperties()
         }
 
+    /**
+     * Writes the properties to a new owner-only file beside [file], then moves it over [file] in one
+     * step. A write cut short (a full disk, a crash) leaves the saved settings whole; writing [file]
+     * in place would have truncated them first.
+     */
     private fun storeProperties() {
-        file.parentFile?.mkdirs()
-        if (!isWindows) {
-            try {
-                Files.createFile(file.toPath(), PosixFilePermissions.asFileAttribute(OWNER_ONLY_PERMISSIONS))
-            } catch (_: FileAlreadyExistsException) {
-                // Existing files are tightened below before they are opened for writing.
-            }
-            restrictFilePermissions()
+        val dir = file.absoluteFile.parentFile.toPath()
+        Files.createDirectories(dir)
+        // Owner-only from the start: the file holds the AI endpoint's key.
+        val attributes: Array<FileAttribute<*>> =
+            if (isWindows) emptyArray() else arrayOf(PosixFilePermissions.asFileAttribute(OWNER_ONLY_PERMISSIONS))
+        val tmp = Files.createTempFile(dir, file.name, TEMP_SUFFIX, *attributes)
+        try {
+            openForWrite(tmp.toFile()).use { props.store(it, "no-papers-needed settings") }
+            // On disk before it replaces the old file, so a crash just after the move finds it whole.
+            FileChannel.open(tmp, StandardOpenOption.WRITE).use { it.force(true) }
+            Files.move(tmp, file.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+        } finally {
+            Files.deleteIfExists(tmp)
         }
-        file.outputStream().use { props.store(it, "no-papers-needed settings") }
     }
 
     private fun restrictFilePermissions() {
@@ -128,6 +146,7 @@ class SettingsRepositoryImpl(
 
     companion object {
         private val OWNER_ONLY_PERMISSIONS = PosixFilePermissions.fromString("rw-------")
+        private const val TEMP_SUFFIX = ".tmp"
 
         fun defaultFile(): File {
             val configHome = PlatformDirs.configHome()
