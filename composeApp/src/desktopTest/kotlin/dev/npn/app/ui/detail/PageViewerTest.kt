@@ -174,7 +174,9 @@ class PageViewerTest {
 
     /** A blank page with A4's proportions, as the renderer hands it over. */
     private fun a4Page(): ByteArray {
-        val surface = org.jetbrains.skia.Surface.makeRasterN32Premul(A4_WIDTH, A4_HEIGHT)
+        val surface =
+            org.jetbrains.skia.Surface
+                .makeRasterN32Premul(A4_WIDTH, A4_HEIGHT)
         surface.canvas.clear(WHITE)
         return checkNotNull(surface.makeImageSnapshot().encodeToData(EncodedImageFormat.PNG)).bytes
     }
