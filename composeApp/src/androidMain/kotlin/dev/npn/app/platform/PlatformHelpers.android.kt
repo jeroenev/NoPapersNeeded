@@ -19,6 +19,8 @@ import io.github.vinceglb.filekit.context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.nio.file.Files
+import kotlin.time.Duration.Companion.days
 
 /** Folder name of the recommended library under shared storage's `Documents/`. */
 private const val DEFAULT_LIBRARY_DIR = "NoPapersNeeded"
@@ -137,7 +139,7 @@ actual suspend fun sharePdfBytes(
     val context = FileKit.context.applicationContext
     val file =
         withContext(Dispatchers.IO) {
-            shareFile(File(context.cacheDir, "share").apply { mkdirs() }, fileName).apply { writeBytes(bytes) }
+            writeShareCopy(File(context.cacheDir, "share"), fileName, bytes, System.currentTimeMillis())
         }
     val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
     val share =
@@ -147,6 +149,32 @@ actual suspend fun sharePdfBytes(
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
     context.startActivity(Intent.createChooser(share, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+}
+
+/**
+ * How long a shared copy is kept: the app it went to may read it any time after the share sheet
+ * closes, and the system may clear the cache before then anyway.
+ */
+private val SHARED_COPY_LIFETIME = 1.days
+
+/**
+ * Writes [bytes] as the copy shared as [fileName], in a new directory of its own under [shareDir]:
+ * its URI is derived from its path, so a later share, even of a document with the same name, never
+ * writes to a file an earlier one handed out. The file keeps the name the receiving app shows. Every
+ * copy (or entry of the share directory) older than [SHARED_COPY_LIFETIME] at [nowMillis] is
+ * deleted first.
+ */
+internal fun writeShareCopy(
+    shareDir: File,
+    fileName: String,
+    bytes: ByteArray,
+    nowMillis: Long,
+): File {
+    shareDir.mkdirs()
+    val expired = nowMillis - SHARED_COPY_LIFETIME.inWholeMilliseconds
+    shareDir.listFiles()?.filter { it.lastModified() < expired }?.forEach { it.deleteRecursively() }
+    val dir = Files.createTempDirectory(shareDir.toPath(), null).toFile()
+    return shareFile(dir, fileName).apply { writeBytes(bytes) }
 }
 
 /**
