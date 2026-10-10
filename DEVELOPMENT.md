@@ -291,7 +291,9 @@ why the repository is named `NoPapersNeeded`. To submit to Flathub, run `mise fl
 `flathub.json` limiting the build to x86_64. Its `x-checker-data` lets Flathub's bot open an
 update pull request for every later release, so the task is only needed again when the
 manifest itself changes. Flathub also wants screenshots in the metainfo before it accepts
-the app.
+the app. Flathub installs `app/` with the modes the tarball stores, so the tarball keeps the
+staged files' modes (Gradle archives store fixed ones by default), and `packageLinuxTarball`
+fails if the launcher or any other executable lost its execute bit.
 
 ### Updates
 

@@ -324,12 +324,14 @@ val renderMetainfo =
 
 val flatpakDesktopEntry = desktopEntry("flatpakDesktopEntry", npnAppName, npnFlatpakId)
 
+val linuxBundleStage = layout.buildDirectory.dir("linux-bundle/stage")
+
 val stageLinuxBundle =
     tasks.register<Sync>("stageLinuxBundle") {
         group = "compose desktop"
         description = "Stages the app image with its desktop entry, metainfo and icon."
         dependsOn("createDistributable")
-        into(layout.buildDirectory.dir("linux-bundle/stage"))
+        into(linuxBundleStage)
         // jlink leaves the runtime's legal notices read-only, so the copy cannot overwrite them.
         doFirst { (this as Sync).destinationDir.deleteRecursively() }
         from(distributableAppImage) { into("app") }
@@ -344,6 +346,12 @@ val stageLinuxBundle =
         }
     }
 
+// Reads the archive back for the check below.
+interface InjectedArchives {
+    @get:Inject
+    val archives: ArchiveOperations
+}
+
 tasks.register<Tar>("packageLinuxTarball") {
     group = "compose desktop"
     description = "Builds the Linux .tar.gz that Flathub builds the Flatpak from."
@@ -353,4 +361,16 @@ tasks.register<Tar>("packageLinuxTarball") {
     destinationDirectory.set(layout.buildDirectory.dir("linux-bundle"))
     isPreserveFileTimestamps = false
     isReproducibleFileOrder = true
+    // Flathub copies app/ with the modes this archive stores, so a launcher or JDK helper stored
+    // without its execute bit is an app that cannot start (or start Tesseract). Gradle's archives
+    // store fixed modes (0644 for every file) unless told to keep the staged ones; the check below
+    // fails the task if an executable lost its bit anyway.
+    useFileSystemPermissions()
+
+    val archives = objects.newInstance<InjectedArchives>().archives
+    val archive = destinationDirectory.file(archiveFileName)
+    val stage = linuxBundleStage
+    val into = linuxBundleName
+    val launcher = "app/bin/$npnAppName"
+    doLast { ArchiveModes.requireExecutablesKept(archives.tarTree(archive), stage.get().asFile, into, launcher) }
 }
