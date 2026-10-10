@@ -175,10 +175,22 @@ object FieldKeys {
     ): Boolean = a.equals(b, ignoreCase = true)
 
     /**
-     * The registry definitions a fresh library starts with. Positions follow list order. Their hints
-     * are what an editor shows under the field and what a model is told about it, so they are
-     * written to read well to both.
+     * The hints the seeded definitions start with, by key: what a model is told about each field, so
+     * written to read well to it, in English. An editor shows the app's own translation of one while
+     * the definition still holds it, and a hint the library changed since as it was written.
      */
+    val SEED_HINTS: Map<String, String> =
+        mapOf(
+            TITLE to
+                "What the document is, in a few words (e.g. Electricity invoice January 2024), not its " +
+                "file name. Keep company names, reference numbers and other proper nouns as printed",
+            CORRESPONDENT to
+                "The other party: the company, institution or person that sent or issued the document, " +
+                "never the archive's owner",
+            DOC_DATE to "The date the document was issued (invoice, letter or issue date), not when it was scanned",
+        )
+
+    /** The registry definitions a fresh library starts with. Positions follow list order. */
     fun seedDefinitions(labels: (String) -> String = { it }): List<FieldDef> =
         listOf(
             FieldDef(
@@ -188,9 +200,7 @@ object FieldKeys {
                 showByDefault = true,
                 aiEnabled = true,
                 position = 0,
-                hint =
-                    "What the document is, in a few words (e.g. Electricity invoice January 2024), not its " +
-                        "file name. Keep company names, reference numbers and other proper nouns as printed",
+                hint = SEED_HINTS[TITLE],
                 perDocument = true,
             ),
             FieldDef(
@@ -200,9 +210,7 @@ object FieldKeys {
                 showByDefault = true,
                 aiEnabled = true,
                 position = 1,
-                hint =
-                    "The other party: the company, institution or person that sent or issued the document, " +
-                        "never the archive's owner",
+                hint = SEED_HINTS[CORRESPONDENT],
             ),
             FieldDef(DOC_TYPE, labels(DOC_TYPE), FieldType.TEXT, showByDefault = true, aiEnabled = true, position = 2),
             FieldDef(
@@ -212,7 +220,7 @@ object FieldKeys {
                 showByDefault = true,
                 aiEnabled = true,
                 position = 3,
-                hint = "The date the document was issued (invoice, letter or issue date), not when it was scanned",
+                hint = SEED_HINTS[DOC_DATE],
             ),
             // Not AI-enabled on purpose: automatic enrichment must not start generating prose into
             // the user's notes on every OCR completion, which is exactly today's behaviour.

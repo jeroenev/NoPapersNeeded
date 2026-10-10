@@ -79,6 +79,9 @@
     <string name="detail_field_key_taken">Ein Feld mit diesem Schlüssel gibt es bereits</string>
     <string name="detail_field_ai_enabled">Von der KI ausfüllen lassen</string>
     <string name="detail_field_type_locked">Der Typ eines integrierten Felds kann nicht geändert werden</string>
+    <string name="detail_field_seed_hint_title">Was das Dokument ist, in wenigen Worten (z. B. Stromrechnung Januar 2024). Übernimm Firmennamen, Referenznummern und andere Eigennamen so, wie sie gedruckt sind. Das ist nicht der Dateiname: Zum Ändern des Dateinamens nutze „Datei umbenennen“.</string>
+    <string name="detail_field_seed_hint_correspondent">Die Gegenseite: das Unternehmen, die Einrichtung oder die Person, die das Dokument gesendet oder ausgestellt hat, nie der Inhaber des Archivs.</string>
+    <string name="detail_field_seed_hint_doc_date">Das Datum, an dem das Dokument ausgestellt wurde (Rechnungs-, Brief- oder Ausstellungsdatum), nicht wann es gescannt wurde.</string>
     <string name="detail_text_queued">Die Textextraktion für dieses Dokument steht in der Warteschlange.</string>
     <string name="detail_text_failed">Die Textextraktion für dieses Dokument ist fehlgeschlagen.</string>
     <string name="detail_text_not_extracted">Aus diesem Dokument wurde noch kein Text extrahiert.</string>

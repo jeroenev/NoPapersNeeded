@@ -81,6 +81,9 @@
     <string name="detail_field_key_taken">A field with this key already exists</string>
     <string name="detail_field_ai_enabled">Let AI fill this in</string>
     <string name="detail_field_type_locked">The type of a built-in field cannot be changed</string>
+    <string name="detail_field_seed_hint_title">What the document is, in a few words (e.g. Electricity invoice January 2024). Keep company names, reference numbers and other proper nouns as printed. This is not the file name: use "Rename file" to change that.</string>
+    <string name="detail_field_seed_hint_correspondent">The other party: the company, institution or person that sent or issued the document, never the archive’s owner.</string>
+    <string name="detail_field_seed_hint_doc_date">The date the document was issued (invoice, letter or issue date), not when it was scanned.</string>
     <string name="detail_text_queued">Text extraction is queued for this document.</string>
     <string name="detail_text_failed">Text extraction failed for this document.</string>
     <string name="detail_text_not_extracted">No text has been extracted from this document yet.</string>

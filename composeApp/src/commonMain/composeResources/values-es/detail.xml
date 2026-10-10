@@ -79,6 +79,9 @@
     <string name="detail_field_key_taken">Ya existe un campo con esta clave</string>
     <string name="detail_field_ai_enabled">Dejar que la IA lo rellene</string>
     <string name="detail_field_type_locked">No se puede cambiar el tipo de un campo integrado</string>
+    <string name="detail_field_seed_hint_title">Qué es el documento, en pocas palabras (p. ej. Factura de electricidad enero 2024). Mantén los nombres de empresas, números de referencia y otros nombres propios tal como aparecen impresos. No es el nombre del archivo: usa "Renombrar archivo" para cambiarlo.</string>
+    <string name="detail_field_seed_hint_correspondent">La otra parte: la empresa, institución o persona que envió o emitió el documento, nunca quien guarda estos documentos.</string>
+    <string name="detail_field_seed_hint_doc_date">La fecha en que se emitió el documento (fecha de factura, de carta o de emisión), no cuándo se escaneó.</string>
     <string name="detail_text_queued">La extracción de texto está en cola para este documento.</string>
     <string name="detail_text_failed">Falló la extracción de texto de este documento.</string>
     <string name="detail_text_not_extracted">Todavía no se ha extraído texto de este documento.</string>

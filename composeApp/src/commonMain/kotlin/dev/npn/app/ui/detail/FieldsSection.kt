@@ -92,7 +92,9 @@ internal fun FieldsSection(
                     onCommit = { actions.commitField(def.key, it) },
                     onRemove = { actions.removeField(def.key) }.takeIf { !def.showByDefault },
                 )
-                if (def.key == FieldKeys.TITLE) {
+                // One hint per field: the title's seeded one also says how the file is renamed, so
+                // this note stands in only for a title without a hint.
+                if (def.key == FieldKeys.TITLE && def.hint == null) {
                     HelpText(stringResource(Res.string.detail_title_hint))
                 }
             }

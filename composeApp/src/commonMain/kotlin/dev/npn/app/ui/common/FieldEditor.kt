@@ -50,6 +50,8 @@ fun rememberFieldLocale(): FieldLocale {
  * places allowed to switch exhaustively on [FieldType] (the other is [FieldValues]); everything
  * else in the UI hands a field here and lets the type decide.
  *
+ * Its supporting text is the field's hint ([hintText]), a seeded one in the app's language.
+ *
  * [value] is what the document holds (or the draft overlay shows): canonical when it fits the
  * type, or, when [refused], an entry this editor refused, as typed. [onCommit] receives every
  * keystroke or pick as the editor reads it: the canonical value, or an entry the type refuses
@@ -70,21 +72,22 @@ fun FieldEditor(
     locale: FieldLocale = rememberFieldLocale(),
 ) {
     val commitText: (String) -> Unit = { onCommit(FieldValues.canonicalize(def.type, it)) }
+    val hint = def.hintText()?.resolve()
     when (def.type) {
         FieldType.TEXT -> {
-            TextValueField(def.label, value.orEmpty(), suggestions, def.hint, placeholder, modifier, commitText)
+            TextValueField(def.label, value.orEmpty(), suggestions, hint, placeholder, modifier, commitText)
         }
 
         FieldType.LONG_TEXT -> {
-            LongTextField(def.label, value.orEmpty(), def.hint, modifier, commitText)
+            LongTextField(def.label, value.orEmpty(), hint, modifier, commitText)
         }
 
         FieldType.NUMBER, FieldType.DECIMAL -> {
-            NumberField(def, value.orEmpty(), refused, locale, onCommit, modifier)
+            NumberField(def, value.orEmpty(), hint, refused, locale, onCommit, modifier)
         }
 
         FieldType.DATE -> {
-            DateField(def, value.orEmpty(), modifier, commitText)
+            DateField(def, value.orEmpty(), hint, modifier, commitText)
         }
     }
 }
@@ -197,6 +200,7 @@ private fun LongTextField(
 private fun NumberField(
     def: FieldDef,
     value: String,
+    hint: String?,
     refused: Boolean,
     locale: FieldLocale,
     onCommit: (FieldParse) -> Unit,
@@ -207,7 +211,7 @@ private fun NumberField(
         label = def.label,
         onInput = onCommit,
         modifier = modifier,
-        hint = def.hint,
+        hint = hint,
     )
 }
 
@@ -216,6 +220,7 @@ private fun NumberField(
 private fun DateField(
     def: FieldDef,
     value: String,
+    hint: String?,
     modifier: Modifier,
     onCommit: (String) -> Unit,
 ) {
@@ -232,7 +237,7 @@ private fun DateField(
             placeholder = stringResource(Res.string.detail_iso_date_template),
             // Same rule the save bar enforces, so the field and the bar never disagree.
             isError = invalid,
-            supportingText = if (invalid) stringResource(Res.string.common_field_invalid_date) else def.hint,
+            supportingText = if (invalid) stringResource(Res.string.common_field_invalid_date) else hint,
             modifier = Modifier.weight(1f),
             onCommit = onCommit,
         )

@@ -79,6 +79,9 @@
     <string name="detail_field_key_taken">Un champ avec cette clé existe déjà</string>
     <string name="detail_field_ai_enabled">Laisser l’IA le remplir</string>
     <string name="detail_field_type_locked">Le type d’un champ intégré ne peut pas être modifié</string>
+    <string name="detail_field_seed_hint_title">Ce qu’est le document, en quelques mots (p. ex. Facture d’électricité janvier 2024). Recopiez les noms d’entreprise, numéros de référence et autres noms propres tels qu’ils sont imprimés. Ce n’est pas le nom du fichier : utilisez « Renommer le fichier » pour le changer.</string>
+    <string name="detail_field_seed_hint_correspondent">L’autre partie : l’entreprise, l’organisme ou la personne qui a envoyé ou émis le document, jamais le propriétaire des archives.</string>
+    <string name="detail_field_seed_hint_doc_date">La date à laquelle le document a été émis (date de facture, de lettre ou d’émission), pas celle de sa numérisation.</string>
     <string name="detail_text_queued">L’extraction du texte est en file d’attente pour ce document.</string>
     <string name="detail_text_failed">L’extraction du texte a échoué pour ce document.</string>
     <string name="detail_text_not_extracted">Aucun texte n’a encore été extrait de ce document.</string>

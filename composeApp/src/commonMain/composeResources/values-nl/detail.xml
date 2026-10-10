@@ -79,6 +79,9 @@
     <string name="detail_field_key_taken">Er bestaat al een veld met deze sleutel</string>
     <string name="detail_field_ai_enabled">Laat AI dit invullen</string>
     <string name="detail_field_type_locked">Het type van een ingebouwd veld kan niet worden gewijzigd</string>
+    <string name="detail_field_seed_hint_title">Wat het document is, in een paar woorden (bv. Elektriciteitsfactuur januari 2024). Neem bedrijfsnamen, referentienummers en andere eigennamen over zoals ze gedrukt staan. Dit is niet de bestandsnaam: gebruik "Bestand hernoemen" om die te wijzigen.</string>
+    <string name="detail_field_seed_hint_correspondent">De andere partij: het bedrijf, de instelling of de persoon die het document heeft verstuurd of uitgegeven, nooit de eigenaar van het archief.</string>
+    <string name="detail_field_seed_hint_doc_date">De datum waarop het document is uitgegeven (factuur-, brief- of uitgiftedatum), niet wanneer het is gescand.</string>
     <string name="detail_text_queued">Tekstextractie voor dit document staat in de wachtrij.</string>
     <string name="detail_text_failed">Tekstextractie voor dit document is mislukt.</string>
     <string name="detail_text_not_extracted">Er is nog geen tekst uit dit document geëxtraheerd.</string>
