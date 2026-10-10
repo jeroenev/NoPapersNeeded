@@ -100,13 +100,16 @@ internal val ReviewDoc.hasSuggestions: Boolean
  * item that did land deselected, so a retry never writes a `(doc, tag)` or `(doc, field)` twice.
  *
  * Stateful, one per batch: it carries what earlier partial-failure attempts wrote, so the Done that
- * finally comes counts all of them.
+ * finally comes counts all of them, suggestions and the distinct documents they changed alike.
  */
 internal class ReviewApply(
     private val meta: MetadataWriter,
 ) {
     /** Suggestions written across earlier partial-failure attempts of this batch. */
     private var appliedSoFar = 0
+
+    /** Documents changed across every attempt of this batch so far. */
+    private val changedSoFar = mutableSetOf<String>()
 
     /**
      * Write the selected items of [docs]. [onDocWritten] fires with each document's id as a write
@@ -121,9 +124,10 @@ internal class ReviewApply(
         val edits = docs.map { it.selectedEdit() }
         if (edits.all { it.isEmpty }) return ApplyOutcome.NothingSelected
         val written = write(edits, onDocWritten)
+        changedSoFar += written.changedDocs
         if (written.failedDocs.isEmpty()) {
             val more = runCatchingCancellable { moreRemain() }
-            val result = ApplyResult(written.count + appliedSoFar, written.changedDocs, more.getOrDefault(false))
+            val result = ApplyResult(written.count + appliedSoFar, changedSoFar.size, more.getOrDefault(false))
             return ApplyOutcome.Done(result, followUpFailure = more.exceptionOrNull())
         }
         appliedSoFar += written.count
@@ -152,7 +156,7 @@ internal class ReviewApply(
         val failedDocs = mutableSetOf<String>()
 
         val count: Int get() = adds.size + removals.size + fields.size
-        val changedDocs: Int get() = (adds + removals + fields).map { it.first }.toSet().size
+        val changedDocs: Set<String> get() = (adds + removals + fields).mapTo(HashSet()) { it.first }
     }
 
     private suspend fun write(

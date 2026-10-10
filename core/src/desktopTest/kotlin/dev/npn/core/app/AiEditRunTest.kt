@@ -432,13 +432,15 @@ class AiEditRunApplyTest {
                 .single()
                 .selected shouldBe true
 
-            // Retry succeeding: only (a, t1) is written; Done carries the earlier (b, t2) count.
+            // Retry succeeding: only (a, t1) is written; Done carries the earlier (b, t2) count, and
+            // counts b among the documents changed.
             h.meta.failAddTagForDocs = emptySet()
             h.meta.addedTags.clear()
             val done = h.run.apply(key(), retry.remaining).shouldBeInstanceOf<ApplyOutcome.Done>()
 
             h.meta.addedTags shouldContainExactly listOf(listOf("a") to "t1")
             done.result.applied shouldBe 2
+            done.result.docsChanged shouldBe 2
         }
 
     @Test

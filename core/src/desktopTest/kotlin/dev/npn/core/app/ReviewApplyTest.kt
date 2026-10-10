@@ -99,7 +99,8 @@ class ReviewApplyTest {
             remaining.fields.single().selected shouldBe false
 
             meta.failAddTagForDocs = emptySet()
-            apply(remaining) shouldBe ApplyOutcome.Done(ApplyResult(applied = 3, docsChanged = 1, moreRemain = false))
+            // a changed on the first attempt and b on both: two documents, not just the last attempt's one.
+            apply(remaining) shouldBe ApplyOutcome.Done(ApplyResult(applied = 3, docsChanged = 2, moreRemain = false))
         }
 
     /**
