@@ -339,9 +339,11 @@ private fun PageSlide(
     var renderAttempt by remember(page) { mutableStateOf(0) }
 
     // Gesture detectors below are captured once by pointerInput and never refreshed, so they must
-    // read the live transform through this State rather than the captured parameter (otherwise a
-    // second double-tap sees the stale zoom=1 and re-zooms instead of resetting).
+    // read the live transform and viewer size through these States rather than the captured
+    // parameters (otherwise a second double-tap sees the stale zoom=1 and re-zooms instead of
+    // resetting, and a drag after a resize or rotation clamps against the old size).
     val liveTransform = rememberUpdatedState(transform)
+    val liveContainer = rememberUpdatedState(container)
 
     LaunchedEffect(page, bucket, isCurrent, renderAttempt) {
         // Show any cached bitmap immediately (even at a coarser bucket) to avoid a spinner flash.
@@ -367,7 +369,7 @@ private fun PageSlide(
 
     val gestures =
         if (isCurrent) {
-            Modifier.pageGestures(page, container, cache, liveTransform, onTransformChange)
+            Modifier.pageGestures(page, liveContainer, cache, liveTransform, onTransformChange)
         } else {
             Modifier
         }
@@ -423,11 +425,12 @@ private fun PageSlide(
 /**
  * Touch/mouse gestures for the current page: double-tap toggle zoom, multitouch pinch, and
  * drag-to-pan (only while zoomed, so at 1x drags fall through to the pager for swipe paging). All
- * read [liveTransform] rather than a captured value so they reflect the latest zoom/offset.
+ * read [liveTransform] and [liveContainer] rather than captured values so they reflect the latest
+ * zoom/offset and the viewer's size now, after a resize, a rotation or a pane drag.
  */
 private fun Modifier.pageGestures(
     page: Int,
-    container: Size,
+    liveContainer: State<Size>,
     cache: PageBitmapCache,
     liveTransform: State<ViewerTransform>,
     onTransformChange: (ViewerTransform) -> Unit,
@@ -436,6 +439,7 @@ private fun Modifier.pageGestures(
         .pointerInput(page) {
             detectTapGestures(
                 onDoubleTap = { tap ->
+                    val container = liveContainer.value
                     onTransformChange(
                         liveTransform.value.toggleZoom(tap, cache.fittedSizeFor(page, container), container),
                     )
@@ -443,6 +447,7 @@ private fun Modifier.pageGestures(
             )
         }.pointerInput(page) {
             detectPinchTransform { centroid, gestureZoom ->
+                val container = liveContainer.value
                 onTransformChange(
                     liveTransform.value.applyGesture(
                         zoomChange = gestureZoom,
@@ -455,6 +460,7 @@ private fun Modifier.pageGestures(
             }
         }.pointerInput(page) {
             detectDragWhenZoomed(isZoomed = { liveTransform.value.isZoomed }) { pan ->
+                val container = liveContainer.value
                 val t = liveTransform.value
                 onTransformChange(
                     t.copy(
