@@ -77,9 +77,10 @@ object IntentImport {
         if (uris.isEmpty()) return ImportTally()
 
         val resolver = context.contentResolver
-        val (pdfUris, imageBytes) = partitionUris(resolver, uris)
+        val (pdfUris, imageBytes, unreadableImages) = partitionUris(resolver, uris)
 
-        var tally = ImportTally()
+        // An image that cannot be read is left out of the PDF the others make: it failed to import.
+        var tally = ImportTally(failed = unreadableImages)
 
         // An import reports what went wrong with the file as an outcome; it throws only when
         // the session closed under it, which still counts against this file.
@@ -98,16 +99,25 @@ object IntentImport {
         return tally
     }
 
+    /** What [partitionUris] made of the shared URIs. */
+    private data class SharedItems(
+        val pdfUris: List<Uri>,
+        val imageBytes: List<ByteArray>,
+        val unreadableImages: Int,
+    )
+
     /**
      * Classify [uris] into PDF URIs (imported one per file) and image byte payloads (merged into a
-     * single PDF). Classification is by MIME type, falling back to the display-name extension.
+     * single PDF), counting the images that could not be read. Classification is by MIME type,
+     * falling back to the display-name extension.
      */
     private suspend fun partitionUris(
         resolver: ContentResolver,
         uris: List<Uri>,
-    ): Pair<List<Uri>, List<ByteArray>> {
+    ): SharedItems {
         val pdfUris = mutableListOf<Uri>()
         val imageBytes = mutableListOf<ByteArray>()
+        var unreadableImages = 0
 
         for (uri in uris) {
             val type = resolver.getType(uri) ?: guessTypeFromName(resolver, uri)
@@ -117,7 +127,8 @@ object IntentImport {
                 }
 
                 type?.startsWith(MIME_IMAGE_PREFIX) == true -> {
-                    readBytes(resolver, uri)?.let { imageBytes.add(it) }
+                    val bytes = readBytes(resolver, uri)
+                    if (bytes != null) imageBytes.add(bytes) else unreadableImages++
                 }
 
                 // Unknown type: try by extension.
@@ -129,7 +140,7 @@ object IntentImport {
             }
         }
 
-        return pdfUris to imageBytes
+        return SharedItems(pdfUris, imageBytes, unreadableImages)
     }
 
     private suspend fun readBytes(
