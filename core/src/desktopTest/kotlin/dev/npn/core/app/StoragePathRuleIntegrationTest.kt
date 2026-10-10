@@ -13,6 +13,7 @@ import dev.npn.core.model.SystemProperty
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
@@ -188,7 +189,8 @@ class StoragePathRuleIntegrationTest {
                 rig.storagePathEvents() shouldContainExactly listOf(id to "organized/scan.pdf")
                 rig.db
                     .documentDao()
-                    .getByDocId(id)!!
+                    .getByDocId(id)
+                    .shouldNotBeNull()
                     .relPath shouldBe "scan.pdf"
             } finally {
                 rig.close()
@@ -212,7 +214,8 @@ class StoragePathRuleIntegrationTest {
                 rig.journalObjectCount() shouldBe objects
                 rig.db
                     .documentDao()
-                    .getByDocId(id)!!
+                    .getByDocId(id)
+                    .shouldNotBeNull()
                     .relPath shouldBe "scan.pdf"
                 rig.exists("scan.pdf") shouldBe true
             } finally {
