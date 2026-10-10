@@ -29,6 +29,8 @@ import dev.npn.core.app.SplitFailure
 import dev.npn.core.app.SplitOutcome
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.ocr.OcrEngineRef
+import dev.npn.core.ocr.OcrState
 import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -139,6 +141,13 @@ data class AiMetadataState(
     val suggestion: FieldSuggestion = FieldSuggestion.EMPTY,
 )
 
+/** Which OCR text a document has indexed: its OCR state, and the engine and writer of that text. */
+private data class IndexedOcr(
+    val state: OcrState,
+    val engine: OcrEngineRef?,
+    val source: String?,
+)
+
 /**
  * View model for a single document. The document row and its tags come from the session's
  * reactive [dev.npn.core.app.DocumentRepository.observeDoc] flow so external edits (journal
@@ -230,24 +239,31 @@ class DocDetailViewModel(
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     /**
-     * Extracted OCR/embedded text for this doc, reloaded when the doc's OCR state changes (so it
-     * appears once background OCR completes). Null until loaded or when there is no text.
+     * What decides the indexed OCR text: the OCR state, and which stored version is indexed. Picking
+     * another version keeps the state (a DONE document stays DONE) and changes only the engine, or
+     * only the source when both versions come from one engine.
+     */
+    private val indexedOcr: Flow<IndexedOcr?> =
+        doc
+            .map { item -> item?.doc?.let { IndexedOcr(it.ocrState, it.ocrEngine, it.ocrSource) } }
+            .distinctUntilChanged()
+
+    /**
+     * Extracted OCR/embedded text for this doc, reloaded whenever [indexedOcr] changes: once
+     * background OCR completes, and when another stored version is picked. Null until loaded or
+     * when there is no text.
      */
     private val ocrText: StateFlow<String?> =
-        doc
-            .map { it?.doc?.ocrState }
-            .distinctUntilChanged()
+        indexedOcr
             .map { content.extractedText(docId) }
             .stateIn(viewModelScope, WhileSubscribedTimeout, null)
 
     /**
-     * Stored OCR versions of this doc (best-ranked first), reloaded whenever the indexed OCR
-     * state or engine changes so the picker reflects freshly-adopted sidecars and re-selections.
+     * Stored OCR versions of this doc (best-ranked first), reloaded whenever [indexedOcr] changes
+     * so the picker reflects freshly-adopted sidecars and re-selections.
      */
     private val ocrVersions: StateFlow<List<OcrVersion>> =
-        doc
-            .map { it?.doc?.ocrState to it?.doc?.ocrEngine }
-            .distinctUntilChanged()
+        indexedOcr
             .map {
                 runCatchingCancellable { ocr.ocrVersions(docId) }
                     .onFailure(::reportOcrDetailsFailure)

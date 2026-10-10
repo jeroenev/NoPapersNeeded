@@ -49,6 +49,7 @@ internal fun DocumentEntity.toDoc(fields: Map<String, String> = emptyMap()): Doc
         missing = missing,
         ocrState = OcrState.fromColumn(ocrState),
         ocrEngine = OcrEngineRef.ofColumn(ocrEngine),
+        ocrSource = ocrSource,
         ocrEngineOverride = OcrEngineRef.ofColumn(ocrEngineOverride),
     )
 

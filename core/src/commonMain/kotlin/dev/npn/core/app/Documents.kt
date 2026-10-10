@@ -34,6 +34,12 @@ data class Doc(
     val ocrState: OcrState,
     /** Engine of the OCR sidecar currently indexed for search; null until first indexing. */
     val ocrEngine: OcrEngineRef?,
+    /**
+     * Writer key of the OCR sidecar currently indexed for search: [ocrEngine] alone cannot tell two
+     * versions from the same engine apart. Null until first indexing, and on rows indexed before
+     * the key was recorded.
+     */
+    val ocrSource: String?,
     /** User-pinned engine, or null for automatic best-engine selection. */
     val ocrEngineOverride: OcrEngineRef?,
 ) {

@@ -19,6 +19,7 @@ class DocumentMappingTest {
         ocrState: String = OcrState.NONE.column,
         ocrEngine: String? = null,
         ocrEngineOverride: String? = null,
+        ocrSource: String? = null,
     ) = DocumentEntity(
         docId = "a".repeat(64),
         relPath = "bank/statement.pdf",
@@ -40,11 +41,12 @@ class DocumentMappingTest {
         ocrState = ocrState,
         ocrEngine = ocrEngine,
         ocrEngineOverride = ocrEngineOverride,
+        ocrSource = ocrSource,
     )
 
     @Test
     fun carriesEveryExposedColumn() {
-        val doc = entity(title = "July statement").toDoc()
+        val doc = entity(title = "July statement", ocrSource = "device-a.mlkit").toDoc()
 
         doc shouldBe
             Doc(
@@ -69,6 +71,7 @@ class DocumentMappingTest {
                 missing = true,
                 ocrState = OcrState.NONE,
                 ocrEngine = null,
+                ocrSource = "device-a.mlkit",
                 ocrEngineOverride = null,
             )
     }

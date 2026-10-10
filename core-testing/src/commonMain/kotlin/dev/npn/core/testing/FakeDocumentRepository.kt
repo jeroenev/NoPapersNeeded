@@ -7,6 +7,7 @@ import dev.npn.core.app.DocumentRepository
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySort
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.ocr.OcrEngineRef
 import dev.npn.core.ocr.OcrState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,6 +29,8 @@ fun doc(
     notes: String? = null,
     trashed: Boolean = false,
     ocrState: OcrState = OcrState.NONE,
+    ocrEngine: OcrEngineRef? = null,
+    ocrSource: String? = null,
 ): Doc =
     Doc(
         docId = docId,
@@ -50,7 +53,8 @@ fun doc(
         trashedOrigPath = null,
         missing = false,
         ocrState = ocrState,
-        ocrEngine = null,
+        ocrEngine = ocrEngine,
+        ocrSource = ocrSource,
         ocrEngineOverride = null,
     )
 

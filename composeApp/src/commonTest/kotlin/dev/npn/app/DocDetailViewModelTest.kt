@@ -18,6 +18,7 @@ import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.ocr.OcrEngineRef
 import dev.npn.core.ocr.OcrState
 import dev.npn.core.testing.doc
 import dev.npn.core.testing.listItem
@@ -279,6 +280,57 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             session.documents.singleDoc.value = DocListItem(doc("doc-1", ocrState = OcrState.DONE), emptyList())
             advanceUntilIdle()
             model.metadata.value.document.ocrVersions shouldContainExactly fresh
+        }
+
+    /**
+     * Picking another stored OCR version keeps the state (ADOPTED stays ADOPTED) but indexes other
+     * text: the Text tab shows the version now selected.
+     */
+    @Test
+    fun ocrTextFollowsTheSelectedEngine() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply {
+                    content.extractedTextValue = "Tesseract text"
+                    documents.singleDoc.value =
+                        listItem(doc("doc-1", ocrState = OcrState.ADOPTED, ocrEngine = OcrEngineRef.of("tesseract")))
+                }
+            val model = vm(session = session)
+            advanceUntilIdle()
+            model.metadata.value.document.ocrText shouldBe "Tesseract text"
+
+            session.content.extractedTextValue = "ML Kit text"
+            session.documents.singleDoc.value =
+                listItem(doc("doc-1", ocrState = OcrState.ADOPTED, ocrEngine = OcrEngineRef.of("mlkit")))
+            advanceUntilIdle()
+
+            model.metadata.value.document.ocrText shouldBe "ML Kit text"
+        }
+
+    /** Two versions from one engine (another device's, a re-run) differ only by who wrote them. */
+    @Test
+    fun ocrTextAndVersionsFollowTheSelectedSourceOfOneEngine() =
+        runTest(dispatcher) {
+            val tesseract = OcrEngineRef.of("tesseract")
+
+            fun readBy(source: String) =
+                listItem(doc("doc-1", ocrState = OcrState.DONE, ocrEngine = tesseract, ocrSource = source))
+            val session =
+                FakeLibrarySession().apply {
+                    content.extractedTextValue = "Text read on this desktop"
+                    documents.singleDoc.value = readBy("desk.tesseract")
+                }
+            val model = vm(session = session)
+            advanceUntilIdle()
+
+            val versions = listOf(OcrVersion("tesseract", "laptop", "eng", 0L, active = true))
+            session.ocr.ocrVersionsList = versions
+            session.content.extractedTextValue = "Text read on the laptop"
+            session.documents.singleDoc.value = readBy("laptop.tesseract")
+            advanceUntilIdle()
+
+            model.metadata.value.document.ocrText shouldBe "Text read on the laptop"
+            model.metadata.value.document.ocrVersions shouldContainExactly versions
         }
 
     @Test
