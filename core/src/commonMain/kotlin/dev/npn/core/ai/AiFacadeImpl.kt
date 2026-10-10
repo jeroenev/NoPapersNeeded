@@ -188,6 +188,8 @@ class AiFacadeImpl(
             vocabulary = vocabulary,
             maxTags = maxTags,
             maxNewTags = maxNew,
+            tags = request.tags,
+            tagRemovals = request.tagRemovals,
         )
     }
 

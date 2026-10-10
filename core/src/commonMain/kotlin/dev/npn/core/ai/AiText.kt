@@ -54,11 +54,15 @@ internal object AiText {
 
     /**
      * Parse a combined edit suggestion object out of a model [response] (first JSON object wins):
-     *  - **add_tags** (alias "tags"): classified/capped via [classifyTags];
+     *  - **add_tags** (alias "tags"): classified/capped via [classifyTags], only when the request
+     *    asked for additions ([tags]);
      *  - **remove_tags**: filtered to tags actually on the document, canonicalized to their current
-     *    spelling;
+     *    spelling, only when the request asked for removals ([tagRemovals]);
      *  - **fields**: one entry per requested [AiFieldSpec], read from the nested `"fields"` object
      *    (or the top level, for models that flatten it) and validated by [parseFieldSuggestion].
+     *
+     * The prompt states what was asked; this is where it holds, since a review preselects what a
+     * suggestion carries and the unattended pass writes it.
      */
     fun parseEditSuggestion(
         response: String,
@@ -68,21 +72,31 @@ internal object AiText {
         vocabulary: List<String>,
         maxTags: Int,
         maxNewTags: Int,
+        tags: Boolean,
+        tagRemovals: Boolean,
     ): AiEditSuggestion {
         val obj = firstJsonObject(response) ?: return AiEditSuggestion.EMPTY
         val addTags =
-            classifyTags(
-                obj.stringArrayAt("add_tags").ifEmpty { obj.stringArrayAt("tags") },
-                currentTags,
-                vocabulary,
-                perDocMax = maxTags,
-                maxNew = maxNewTags,
-            )
+            if (!tags) {
+                emptyList()
+            } else {
+                classifyTags(
+                    obj.stringArrayAt("add_tags").ifEmpty { obj.stringArrayAt("tags") },
+                    currentTags,
+                    vocabulary,
+                    perDocMax = maxTags,
+                    maxNew = maxNewTags,
+                )
+            }
         val removeTags =
-            obj
-                .stringArrayAt("remove_tags")
-                .mapNotNull { raw -> currentTags.firstOrNull { it.equals(raw, ignoreCase = true) } }
-                .distinct()
+            if (!tagRemovals) {
+                emptyList()
+            } else {
+                obj
+                    .stringArrayAt("remove_tags")
+                    .mapNotNull { raw -> currentTags.firstOrNull { it.equals(raw, ignoreCase = true) } }
+                    .distinct()
+            }
         return AiEditSuggestion(
             addTags = addTags,
             removeTags = removeTags,

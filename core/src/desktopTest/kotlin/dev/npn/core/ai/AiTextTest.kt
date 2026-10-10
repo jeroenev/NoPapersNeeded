@@ -241,6 +241,8 @@ class ParseEditSuggestionTest {
         fields: List<AiFieldSpec> = emptyList(),
         maxTags: Int = 8,
         maxNewTags: Int = 5,
+        tags: Boolean = true,
+        tagRemovals: Boolean = true,
     ) = AiText.parseEditSuggestion(
         response,
         currentFields,
@@ -249,6 +251,8 @@ class ParseEditSuggestionTest {
         vocabulary,
         maxTags,
         maxNewTags,
+        tags = tags,
+        tagRemovals = tagRemovals,
     )
 
     @Test
@@ -280,6 +284,28 @@ class ParseEditSuggestionTest {
                     FieldKeys.DOC_DATE to "2024-01-15",
                 ),
             )
+    }
+
+    /** A run that asked for no tag changes gets none, whatever the model answers: only its fields. */
+    @Test
+    fun tagChangesTheRequestDidNotAskForAreDropped() {
+        val response = """{"add_tags": ["invoice"], "remove_tags": ["utility"], "fields": {"title": "Invoice Jan"}}"""
+
+        val fieldsOnly =
+            parse(
+                response,
+                currentTags = listOf("utility"),
+                vocabulary = listOf("invoice"),
+                fields = listOf(spec(FieldKeys.TITLE)),
+                tags = false,
+                tagRemovals = false,
+            )
+        val additionsOnly =
+            parse(response, currentTags = listOf("utility"), vocabulary = listOf("invoice"), tagRemovals = false)
+
+        fieldsOnly shouldBe AiEditSuggestion(metadata = FieldSuggestion(mapOf(FieldKeys.TITLE to "Invoice Jan")))
+        additionsOnly.addTags shouldContainExactly listOf(TagSuggestion("invoice", isNew = false))
+        additionsOnly.removeTags shouldBe emptyList()
     }
 
     @Test
