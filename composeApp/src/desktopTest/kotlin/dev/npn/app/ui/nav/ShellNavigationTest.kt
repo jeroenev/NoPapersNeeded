@@ -4,20 +4,24 @@ package dev.npn.app.ui.nav
 
 import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.ImageComposeScene
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import dev.npn.app.ui.detail.onUiThread
+import io.kotest.assertions.withClue
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 
@@ -89,6 +93,30 @@ class ShellNavigationTest {
             screens() shouldBe listOf("Library", "Trash")
         }
 
+    /** However AI edit is left through the shell, its viewmodel goes, and with it a batch it ran. */
+    @Test
+    fun leavingAiEditThroughTheShellClearsIt() =
+        shell {
+            val ways: List<Pair<String, () -> Unit>> =
+                listOf(
+                    "Library" to { nav.navigateTopLevel(TopLevelDestination.LIBRARY) },
+                    "Tags" to { nav.navigateTopLevel(TopLevelDestination.TAGS) },
+                    "Queue" to { nav.navigateTopLevel(TopLevelDestination.QUEUE) },
+                    "the assistant" to { nav.navigateAi(Route.AiChat, restoreState = true) },
+                    "AI edit afresh" to { nav.navigateAi(Route.AiEdit) },
+                )
+            for ((way, leave) in ways) {
+                nav.navigateAi(Route.AiEdit)
+                settle()
+                val probe = probes.last()
+                leave()
+                settle()
+                withClue(way) { probe.cleared shouldBe true }
+            }
+            screens() shouldBe listOf("Library", "AiEdit")
+            probes.last().cleared shouldBe false
+        }
+
     private fun shell(block: Shell.() -> Unit) =
         onUiThread {
             val shell = Shell()
@@ -103,6 +131,7 @@ class ShellNavigationTest {
     /** The app's navigation host with stand-ins for its screens, in a window of its own. */
     private class Shell {
         lateinit var nav: NavHostController
+        val probes = mutableListOf<Probe>()
         private var time = 0L
         private val viewModels =
             object : ViewModelStoreOwner {
@@ -128,7 +157,11 @@ class ShellNavigationTest {
                         composable<Route.Queue> { Text("Queue") }
                         composable<Route.Settings> { Text("Settings") }
                         composable<Route.AiChat> { Text("AiChat") }
-                        composable<Route.AiEdit> { Text("AiEdit") }
+                        composable<Route.AiEdit> {
+                            val probe = viewModel { Probe() }
+                            remember(probe) { probes += probe }
+                            Text("AiEdit")
+                        }
                     }
                 }
             }
@@ -147,6 +180,15 @@ class ShellNavigationTest {
             }
 
         fun close() = scene.close()
+    }
+
+    /** A screen's viewmodel, which says whether it was cleared. */
+    private class Probe : ViewModel() {
+        var cleared = false
+
+        override fun onCleared() {
+            cleared = true
+        }
     }
 
     private companion object {

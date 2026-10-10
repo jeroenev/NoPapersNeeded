@@ -1,5 +1,6 @@
 package dev.npn.app.ui.nav
 
+import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 
 /**
@@ -10,6 +11,7 @@ import androidx.navigation.NavHostController
  * is whatever was on top, which would cover the library again.
  */
 internal fun NavHostController.navigateTopLevel(dest: TopLevelDestination) {
+    dropAiEdit()
     val route: Route =
         when (dest) {
             TopLevelDestination.LIBRARY -> Route.Library
@@ -30,9 +32,21 @@ internal fun NavHostController.navigateAi(
     route: Route,
     restoreState: Boolean = false,
 ) {
+    dropAiEdit()
     navigate(route) {
         popUpTo(Route.Library) { saveState = true }
         launchSingleTop = true
         this.restoreState = restoreState
+    }
+}
+
+/**
+ * Pop AI edit, when it is the screen shown, without saving it. It always opens afresh, so a saved
+ * copy would never come back, and would keep its viewmodel, and a batch that viewmodel was running,
+ * alive until the library closes.
+ */
+private fun NavHostController.dropAiEdit() {
+    if (currentBackStackEntry?.destination?.hasRoute<Route.AiEdit>() == true) {
+        popBackStack<Route.AiEdit>(inclusive = true, saveState = false)
     }
 }
