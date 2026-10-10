@@ -61,11 +61,12 @@ data class OcrConfig(
  * @param onTextIndexed called whenever text is indexed for a document — including when an existing
  *  sidecar is merely adopted or re-selected, and so on every index rebuild. For work that is local,
  *  deterministic and free to repeat (the auto-match rules).
- * @param onOcrProduced called only when *this device just produced* a new sidecar, i.e. the text is
- *  new here rather than re-indexed. Narrower than [onTextIndexed] on purpose: after a destructive
- *  index rebuild every document is re-queued and re-adopts its stored sidecar, which would otherwise
- *  look like a library's worth of new documents to work that costs a paid request each (automatic
- *  AI enrichment).
+ * @param onOcrProduced called only when *this device produced* a new sidecar for the run it settles,
+ *  i.e. the text is new here rather than re-indexed: by the pass that published it, or by the next
+ *  pass of its run when that one was cut short first. Narrower than [onTextIndexed] on purpose:
+ *  after a destructive index rebuild every document is re-queued and re-adopts its stored sidecar,
+ *  which would otherwise look like a library's worth of new documents to work that costs a paid
+ *  request each (automatic AI enrichment).
  * @param onStaleFile called when a document's file no longer hashes to its docId: it was replaced
  *  or is still being written. Nothing is published for it; a rescan sorts out what the file now is.
  */
@@ -190,10 +191,11 @@ class OcrPipeline(
         }
         // A failed run still leaves the best stored version searchable meanwhile.
         indexAndMarkSelected(docId, desired, sidecar)
-        // Only a sidecar this call published counts as new text. Being queued is not enough: a
-        // rebuilt index re-queues every document, and those runs land here and adopt what is
-        // already stored.
-        val hookError = notifyTextIndexed(docId, sidecar, ocrProduced = own == OwnOcr.Published)
+        // Only a sidecar published for this run counts as new text: by this call, or by an earlier
+        // pass of the run cut short before it got here. Being queued is not enough: a rebuilt index
+        // re-queues documents, and those runs land here and adopt what is already stored.
+        val produced = own == OwnOcr.Published || publishedFor(entry, stored)
+        val hookError = notifyTextIndexed(docId, sidecar, ocrProduced = produced)
         // The queue row is decided here, once, after the hooks, so an observer watching the queue
         // empty out (the Android maintenance job) cannot see this document finish before the
         // follow-up work they schedule has been recorded.
@@ -447,8 +449,10 @@ class OcrPipeline(
         // done here, and the only hook that can run is onTextIndexed, which reconcile re-fires on
         // every rescan. Nothing is permanently lost by dropping it.
         notifyTextIndexed(doc.docId, sidecar, ocrProduced = false)
-        // Adopted text does not settle a run still owed here; processDoc does, once it is due.
-        if (ocrQueueDao.getByDocId(doc.docId)?.isOwedHere() != true) ocrQueueDao.delete(doc.docId)
+        // Adopted text does not settle a run still owed here, nor one whose sidecar a pass cut short
+        // already published; processDoc does, once it is due, and hands that text on as produced.
+        val row = ocrQueueDao.getByDocId(doc.docId)
+        if (row?.isOwedHere() != true && !publishedFor(row, stored)) ocrQueueDao.delete(doc.docId)
     }
 
     /**
@@ -459,6 +463,24 @@ class OcrPipeline(
      */
     private fun OcrQueueEntity.isOwedHere(): Boolean =
         queueState != QueueState.DONE && (rerun || aiRequested || attempts > 0)
+
+    /**
+     * Whether [stored] holds a sidecar this device published for the run [row] still owes: one
+     * written at or after the row's stamp, which only a pass of that run writes, by a pass cut short
+     * before it settled the row (the app closed, the drain was stopped). Its text is new here all the
+     * same. A sidecar older than the stamp answered an earlier run, as the stored ones do for the runs
+     * a rebuilt index queues, so it does not count.
+     */
+    private suspend fun publishedFor(
+        row: OcrQueueEntity?,
+        stored: List<OcrVersions.Version>,
+    ): Boolean {
+        if (row == null || row.queueState == QueueState.DONE) return false
+        return stored.any { version ->
+            version.deviceId == deviceId &&
+                versions.read(row.docId, version.writerKey)?.let { it.createdAt >= row.updatedAt } == true
+        }
+    }
 
     /**
      * True when running this device's engine for [doc] would produce a better version than anything

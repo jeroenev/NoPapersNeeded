@@ -4,9 +4,11 @@ import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.QueueState
 import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.work.QueueDrainer
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
@@ -93,7 +95,9 @@ class OcrPipelineHookTest {
     fun adoptingAnExistingSidecarFiresOnlyTheIndexedHook() =
         runTest {
             val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
-            rig.pipeline("devA", FakeOcrEngine(isAvailable = true, name = "mlkit")).processDoc(docId)
+            rig
+                .pipeline("devA", FakeOcrEngine(isAvailable = true, name = "mlkit"), clock = { 1_000 })
+                .processDoc(docId)
 
             val rebuilt = rig.openSecondIndex()
             try {
@@ -103,8 +107,9 @@ class OcrPipelineHookTest {
                         .getByDocId(docId)!!
                         .copy(ocrState = OcrState.NONE.column),
                 )
-                // The queue is this device's and outlives the index; re-queued as a rebuild's rescan would.
-                rig.deviceDb.ocrQueueDao().upsert(OcrQueueEntity(docId, QueueState.PENDING.column, updatedAt = 1))
+                // The queue is this device's and outlives the index; re-queued as a rebuild's rescan
+                // would, after the sidecar was written.
+                rig.deviceDb.ocrQueueDao().upsert(OcrQueueEntity(docId, QueueState.PENDING.column, updatedAt = 2_000))
                 val indexed = mutableListOf<String>()
                 val produced = mutableListOf<String>()
                 val pipeline =
@@ -120,6 +125,89 @@ class OcrPipelineHookTest {
 
                 indexed shouldContainExactly listOf(docId)
                 produced.shouldBeEmpty()
+            } finally {
+                rebuilt.close()
+            }
+        }
+
+    /**
+     * A pass cut short after it published its sidecar (the session closed while the rules ran)
+     * leaves its run owed. The pass that settles it finds the text this device wrote for that run
+     * and hands it on as produced, once: nothing else would ever offer it to enrichment.
+     */
+    @Test
+    fun aPassCutShortAfterPublishingHandsItsTextOnWhenItsRunSettles() =
+        runTest {
+            val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
+            var closing = true
+            val produced = mutableListOf<String>()
+            val pipeline =
+                rig.pipeline(
+                    "devA",
+                    FakeOcrEngine(isAvailable = true, name = "mlkit"),
+                    onTextIndexed = { _, _ ->
+                        if (closing) {
+                            closing = false
+                            throw CancellationException("session closed")
+                        }
+                    },
+                    onOcrProduced = { id -> produced += id },
+                )
+
+            shouldThrow<CancellationException> { pipeline.processDoc(docId) }
+            produced.shouldBeEmpty()
+            rig.deviceDb
+                .ocrQueueDao()
+                .getByDocId(docId)
+                ?.state shouldBe QueueState.PENDING.column
+
+            pipeline.processNext() shouldBe true
+            pipeline.processNext() shouldBe false
+            produced shouldContainExactly listOf(docId)
+        }
+
+    /**
+     * The same cut-short pass, then a rebuilt index: the run is this device's and outlives the
+     * index, so the reconcile that adopts the sidecar leaves it owed rather than dropping it, and the
+     * drain hands the text on. A run that settled before the rebuild is dropped as before.
+     */
+    @Test
+    fun aRebuiltIndexKeepsTheRunOfAPassCutShortAfterPublishing() =
+        runTest {
+            val cutShort = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
+            val settled = rig.stageDoc("other.pdf", PdfFixtures.imageOnlyPdf(pages = 2))
+            val engine = FakeOcrEngine(isAvailable = true, name = "mlkit")
+            rig.pipeline("devA", engine).processDoc(settled)
+            val closing =
+                rig.pipeline(
+                    "devA",
+                    engine,
+                    onTextIndexed = { _, _ -> throw CancellationException("session closed") },
+                )
+            shouldThrow<CancellationException> { closing.processDoc(cutShort) }
+
+            val rebuilt = rig.openSecondIndex()
+            try {
+                for (docId in listOf(cutShort, settled)) {
+                    rebuilt.documentDao().upsert(
+                        rig.db
+                            .documentDao()
+                            .getByDocId(docId)!!
+                            .copy(ocrState = OcrState.NONE.column),
+                    )
+                }
+                val produced = mutableListOf<String>()
+                val pipeline = rig.pipeline("devA", engine, rebuilt, onOcrProduced = { id -> produced += id })
+
+                pipeline.reconcileSidecars()
+                while (pipeline.processNext()) {
+                    // Each call settles one owed run.
+                }
+
+                produced shouldContainExactly listOf(cutShort)
+                rig.deviceDb
+                    .ocrQueueDao()
+                    .getByDocId(settled) shouldBe null
             } finally {
                 rebuilt.close()
             }

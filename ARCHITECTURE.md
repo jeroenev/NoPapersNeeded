@@ -419,5 +419,6 @@ live in `buildSrc`. Hot Reload via `mise hot`.
   replica's sidecar, or runs the model here only as unattended work (policy plus threshold).
 - Follow-up work after OCR → `OcrPipeline.onTextIndexed` fires whenever text is indexed,
   including on every index rebuild, so hang free/idempotent work there (auto-match rules).
-  `OcrPipeline.onOcrProduced` fires only when this device just wrote a sidecar; anything
+  `OcrPipeline.onOcrProduced` fires only for a sidecar this device wrote for the run it settles
+  (also when the pass that wrote it was cut short before its hooks ran); anything
   that costs money or is externally visible belongs there (automatic AI enrichment).
