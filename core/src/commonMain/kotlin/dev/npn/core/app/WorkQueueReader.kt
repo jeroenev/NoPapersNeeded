@@ -41,13 +41,20 @@ internal class WorkQueueReader(
     editJobDao: AiEditJobDao,
     ocrInFlight: Flow<String?>,
     editInFlight: Flow<String?>,
+    /**
+     * Emits whenever the index's documents table changes. A row's title and whether it shows at all
+     * come from its document, which a trash, a delete or a new title changes with no queue row
+     * changing.
+     */
+    documentsChanged: Flow<*>,
 ) {
     val queue: Flow<List<QueuedWork>> =
         combine(
             ocrQueueDao.observeOutstanding(),
             enrichQueueDao.observeQueue(),
             ocrInFlight,
-        ) { ocr, enrich, inFlight -> join(ocr, enrich, inFlight) }
+            documentsChanged,
+        ) { ocr, enrich, inFlight, _ -> join(ocr, enrich, inFlight) }
 
     val editRuns: Flow<List<QueuedEditRun>> =
         combine(

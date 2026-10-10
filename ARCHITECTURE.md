@@ -373,7 +373,8 @@ live in `buildSrc`. Hot Reload via `mise hot`.
   row exactly as it found it — including its attempt count, which is why cancellation
   is rethrown rather than recorded as a failure.
 - Showing background work to the user → `WorkQueueReader` joins the queue tables to
-  document names behind `WorkFacade.queue`, and derives whole-run progress behind
+  document names behind `WorkFacade.queue`, again whenever the index's documents table changes (a
+  trash or a new title changes no queue row), and derives whole-run progress behind
   `WorkFacade.editRuns`; a new queue table joins the same read there so the
   processing queue view keeps showing everything the app still owes.
 - A new starting point for a bulk AI edit → an `EditTask` constant plus its `preset` in

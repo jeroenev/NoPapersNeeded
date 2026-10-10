@@ -378,5 +378,6 @@ internal fun buildWork(
                 deps.deviceDb.aiEditJobDao(),
                 ocr.inFlight,
                 edits.queue.inFlight,
+                deps.db.invalidationTracker.createFlow("documents"),
             ),
     )
