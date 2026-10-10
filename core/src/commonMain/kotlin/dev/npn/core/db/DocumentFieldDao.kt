@@ -51,10 +51,6 @@ interface DocumentFieldDao {
         limit: Int,
     ): List<String>
 
-    /** Document ids carrying a value for [key]. */
-    @Query("SELECT docId FROM document_fields WHERE fieldKey = :key")
-    suspend fun docIdsWithKey(key: String): List<String>
-
     /** Distinct field keys with counts limited to documents the AI search tools can reach. */
     @Query(
         "SELECT f.fieldKey, COUNT(*) AS count FROM document_fields f " +

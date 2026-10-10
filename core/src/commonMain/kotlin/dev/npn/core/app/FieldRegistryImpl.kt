@@ -72,14 +72,20 @@ class FieldRegistryImpl internal constructor(
         key: String,
         clearValues: Boolean,
     ) = owned {
-        val affected = if (clearValues) fieldDao.docIdsWithKey(key) else emptyList()
         coordinator.commitBuilt { state ->
             val ops = ArrayList<PendingOp>()
             if (state.effectiveFieldDef(key) != null) ops += PendingOp.fieldDefRemove(key)
-            affected.forEach { ops += PendingOp.fieldSet(it, key, null) }
+            if (clearValues) state.docsCarrying(key).forEach { ops += PendingOp.fieldSet(it, key, null) }
             ops
         }
     }
+
+    /**
+     * Every document that shows a value for [key] in this state, by its current id: the journal's
+     * own list, so a trashed document or one this device has no row for is among them.
+     */
+    private fun FoldedState.docsCarrying(key: String): List<String> =
+        docsWithMetadata().map(::resolveDocId).distinct().filter { key in inheritedFields(it) }
 
     override suspend fun reorder(keys: List<String>) =
         owned {

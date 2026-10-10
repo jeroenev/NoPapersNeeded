@@ -5,6 +5,7 @@ import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -162,6 +163,47 @@ class FieldRegistryTest {
                 rig.journalObjectCount() shouldBe before + 1
                 registry.fields.first { defs -> defs.none { it.key == "amount" } }
                 registry.distinctValues("amount").first { it.isEmpty() }
+                registry.orphanKeys().first() shouldBe emptyList()
+            } finally {
+                rig.close()
+            }
+        }
+
+    /**
+     * A device with no row for a trashed document (it joined since, or rebuilt its index) removes a
+     * field with its values: the clear reaches that document from the journal, so its value does not
+     * come back as an orphan once the document is restored.
+     */
+    @Test
+    fun removeWithClearValuesClearsADocumentThisDeviceHasNoRowFor() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+                rig.session.rescan()
+                val id = rig.docId("a.pdf")
+                val registry = rig.session.fieldRegistry
+                registry.fields.first { it.isNotEmpty() }
+                registry.upsert(def("amount", type = FieldType.DECIMAL))
+                rig.session.meta.setField(id, "amount", "12.5")
+                rig.session.docLifecycle.trashDoc(id) shouldBe true
+
+                val (second, secondDb) = rig.secondSession(backgroundScope)
+                try {
+                    secondDb.documentDao().getByDocId(id) shouldBe null
+                    second.fieldRegistry.remove("amount", clearValues = true)
+                } finally {
+                    second.close()
+                    secondDb.close()
+                }
+
+                rig.session.rescan()
+                rig.session.docLifecycle.restoreDoc(id)
+                rig.session.rescan()
+                rig.db
+                    .documentFieldDao()
+                    .fieldsForDocs(listOf(id))
+                    .map { it.fieldKey } shouldNotContain "amount"
                 registry.orphanKeys().first() shouldBe emptyList()
             } finally {
                 rig.close()

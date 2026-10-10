@@ -37,8 +37,9 @@ interface FieldRegistry {
     suspend fun upsert(def: FieldDef)
 
     /**
-     * Remove a definition. With [clearValues], also clear the field on every document carrying it,
-     * in the same transaction. Without it the values stay as orphans.
+     * Remove a definition. With [clearValues], also clear the field on every document the journal
+     * has carrying it, trashed ones and ones without an index row included, in the same transaction.
+     * Without it the values stay as orphans.
      */
     suspend fun remove(
         key: String,
