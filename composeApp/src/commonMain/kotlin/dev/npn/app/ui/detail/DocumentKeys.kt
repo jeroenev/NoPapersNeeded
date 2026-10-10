@@ -15,7 +15,8 @@ import dev.npn.app.ui.common.previewKeyShortcuts
 /**
  * The page viewer: arrows / PageUp-PageDown page, Home/End jump to the first/last page, and +/-/0
  * zoom in/out/reset. Paging is delegated to [onPage] (which animates the pager); zoom mutates
- * [transform] via [onTransform], anchored at the container center.
+ * [transform] via [onTransform], anchored at the container center. Ctrl+arrows pass on to
+ * [docPagingKeys].
  *
  * The detail screen gives the viewer focus on entry, so these work before anything is clicked.
  */
@@ -36,8 +37,10 @@ internal fun Modifier.viewerKeys(
         fun zoomBy(delta: Float) = { onTransform(zoomAtCenter(transform(), delta, containerSize(), fittedSize())) }
         val resetZoom = { onTransform(ViewerTransform()) }
         when (event.key) {
-            Key.DirectionLeft, Key.PageUp -> toPage(page - 1)
-            Key.DirectionRight, Key.PageDown -> toPage(page + 1)
+            Key.DirectionLeft -> toPage(page - 1).takeUnless { event.isCtrlPressed }
+            Key.DirectionRight -> toPage(page + 1).takeUnless { event.isCtrlPressed }
+            Key.PageUp -> toPage(page - 1)
+            Key.PageDown -> toPage(page + 1)
             Key.MoveHome -> toPage(0)
             Key.MoveEnd -> toPage(pageCount - 1)
             Key.Plus, Key.Equals -> zoomBy(ZOOM_STEP)
@@ -81,7 +84,10 @@ internal fun Modifier.findKeys(onFind: () -> Unit): Modifier =
         }
     }
 
-/** Left/Right move the divider between the page preview and the metadata tabs. */
+/**
+ * Left/Right move the divider between the page preview and the metadata tabs; Ctrl+Left/Right pass
+ * on to [docPagingKeys].
+ */
 internal fun Modifier.paneResizeKeys(
     onShrink: () -> Unit,
     onGrow: () -> Unit,
@@ -91,5 +97,5 @@ internal fun Modifier.paneResizeKeys(
             Key.DirectionLeft -> onShrink
             Key.DirectionRight -> onGrow
             else -> null
-        }
+        }?.takeUnless { event.isCtrlPressed }
     }
