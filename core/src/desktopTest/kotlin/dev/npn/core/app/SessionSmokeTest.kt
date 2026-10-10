@@ -1,7 +1,9 @@
 package dev.npn.core.app
 
+import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.FsEvent
 import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.fs.NpnPaths
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
@@ -163,10 +165,15 @@ class SessionSmokeTest {
             val reported = CompletableDeferred<Throwable?>()
             val log =
                 NpnLog { _, message, error ->
-                    if (message == "Reading the trash retention failed") reported.complete(error)
+                    if (message == "Trash auto-purge failed") reported.complete(error)
                 }
             val rig =
-                AppSessionRig.create(backgroundScope, log = log, trashRetentionDays = { error("settings unreadable") })
+                AppSessionRig.create(backgroundScope, log = log) { fs ->
+                    object : LibraryFileSystem by fs {
+                        override suspend fun listAllUnder(relPath: String): List<FileMeta> =
+                            if (relPath == NpnPaths.TRASH_DIR) error("trash unreadable") else fs.listAllUnder(relPath)
+                    }
+                }
             try {
                 rig.session.start()
 

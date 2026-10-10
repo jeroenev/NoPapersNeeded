@@ -108,6 +108,8 @@ class SettingsSearchCoverageTest {
 
         override fun setStoragePathEnabled(enabled: Boolean) = Unit
 
+        override fun setTrashRetentionDays(days: Int) = Unit
+
         override fun setAiProvider(provider: AiProvider) = Unit
 
         override fun loadAiModels() = Unit

@@ -1,5 +1,6 @@
 package dev.npn.app
 
+import androidx.lifecycle.ViewModelStore
 import dev.npn.app.platform.FolderPick
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.settings.ReviewMigration
@@ -136,7 +137,6 @@ class SettingsViewModelTest : MainDispatcherTest() {
                             libraryLocation = "/home/lib",
                             appLanguage = "nl",
                             ocrLanguage = "nld",
-                            trashRetentionDays = 14,
                             defaultViewType = ViewType.GRID,
                             landscapeListColumns = true,
                             aiEnabled = true,
@@ -154,6 +154,7 @@ class SettingsViewModelTest : MainDispatcherTest() {
             val session = FakeLibrarySession()
             session.storagePath.storagePathFlow.value =
                 StoragePathSetting("{doc_date:yyyy}/{title}.pdf", enabled = true)
+            session.trashRetention.days.value = 14
             val model = vm(settings = settings, session = session)
             collecting(model.state)
             advanceUntilIdle()
@@ -162,7 +163,7 @@ class SettingsViewModelTest : MainDispatcherTest() {
             s.libraryLocation shouldBe "/home/lib"
             s.appLanguage shouldBe "nl"
             s.ocrLanguage shouldBe "nld"
-            s.trashRetentionDays shouldBe 14
+            state.trashRetentionDays shouldBe 14
             s.defaultViewType shouldBe ViewType.GRID
             s.landscapeListColumns shouldBe true
             state.storagePathTemplate shouldBe "{doc_date:yyyy}/{title}.pdf"
@@ -252,14 +253,12 @@ class SettingsViewModelTest : MainDispatcherTest() {
             val settings = FakeSettingsRepository()
             val model = vm(settings = settings)
             model.edit { it.copy(ocrLanguage = "deu") }
-            model.edit { it.copy(trashRetentionDays = 60) }
             model.edit { it.copy(defaultViewType = ViewType.GRID) }
             model.edit { it.copy(landscapeListColumns = true) }
             model.edit { it.copy(appLanguage = "nl") }
             advanceUntilIdle()
             val s = settings.settingsFlow.value
             s?.ocrLanguage shouldBe "deu"
-            s?.trashRetentionDays shouldBe 60
             s?.defaultViewType shouldBe ViewType.GRID
             s?.landscapeListColumns shouldBe true
             s?.appLanguage shouldBe "nl"
@@ -357,6 +356,61 @@ class SettingsViewModelTest : MainDispatcherTest() {
                     ),
                 )
             session.storagePath.storagePathFlow.value.enabled shouldBe false
+        }
+
+    /**
+     * The retention is the library's, and each saved value a journal event: the field commits every
+     * number typed, the screen follows each at once, and only the last is saved, once typing pauses.
+     */
+    @Test
+    fun aTrashRetentionIsSavedToTheLibraryOnceTypingPauses() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = vm(session = session)
+            collecting(model.state)
+            for (typed in listOf(1, 14)) {
+                model.setTrashRetentionDays(typed)
+                runCurrent()
+                model.state.value.trashRetentionDays shouldBe typed
+            }
+            session.trashRetention.writes shouldBe emptyList()
+
+            advanceUntilIdle()
+
+            session.trashRetention.writes shouldContainExactly listOf(14)
+            model.state.value.trashRetentionDays shouldBe 14
+        }
+
+    /** A retention typed just before the screen is left is saved all the same. */
+    @Test
+    fun aTrashRetentionTypedBeforeLeavingIsSaved() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = vm(session = session)
+            val store = ViewModelStore().apply { put("settings", model) }
+
+            model.setTrashRetentionDays(7)
+            runCurrent()
+            store.clear()
+            advanceUntilIdle()
+
+            session.trashRetention.writes shouldContainExactly listOf(7)
+        }
+
+    /** A retention whose save failed stays on screen as typed, and the failure is said. */
+    @Test
+    fun aTrashRetentionWhoseSaveFailsStaysAsTyped() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession().apply { trashRetention.fail = { error("writes blocked") } }
+            val model = vm(session = session)
+            collecting(model.state)
+            val messages = collecting(model.messages.map { it.text })
+
+            model.setTrashRetentionDays(7)
+            advanceUntilIdle()
+
+            model.state.value.trashRetentionDays shouldBe 7
+            messages shouldContainExactly listOf(failure(Res.string.common_save_setting_failed, "writes blocked"))
         }
 
     @Test

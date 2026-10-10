@@ -160,7 +160,7 @@ live in `buildSrc`. Hot Reload via `mise hot`.
    enabled, AI enrichment) write metadata.
 2. **Journal is source of truth for metadata**: every change (tags, field values,
     field definitions, system properties, library settings — review mode, storage-path
-    rule, auto-match rules, saved views — trash, relink) is an immutable,
+    rule, auto-match rules, saved views, trash retention — trash, relink) is an immutable,
     content-addressed JSONL transaction written by
     `JournalCoordinator`. You cannot write to the journal directly: the underlying
     `ContentAddressedJournalWriter` is `internal` to `core` and the coordinator's
@@ -209,7 +209,9 @@ live in `buildSrc`. Hot Reload via `mise hot`.
     document its name's hash prefix ties it to was trashed, or deleted for good, longer
     ago than the retention by the journal and the rows as they stand there: a restore
     and a trash again in between reuse the entry's name (`TrashOps.purgeOlderThan`,
-    `LibrarySessionImpl.purgeTrash`). An entry it cannot
+    `LibrarySessionImpl.purgeTrash`). The retention is the library's
+    (`TrashRetentionFacade`, a synced setting), since the purge deletes from the trash every
+    device shares; one this build cannot read purges nothing. An entry it cannot
     tie to such a document stays, however old its mtime: another device's trash whose
     event has not arrived, or a document a crash left there with no event (Empty trash,
     which works by document, does not reach it either).

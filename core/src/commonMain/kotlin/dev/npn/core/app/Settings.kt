@@ -22,7 +22,6 @@ data class SettingsSnapshot(
      * the app language. Only the desktop engine reads it: MLKit's Latin recogniser takes none.
      */
     val ocrLanguage: String? = null,
-    val trashRetentionDays: Int = TrashSettings.DEFAULT_TRASH_RETENTION_DAYS,
     val defaultViewType: ViewType = ViewType.GRID,
     val librarySort: LibrarySort = LibrarySort(),
     val gridColumnWidth: Int = GridSizing.DEFAULT_COLUMN_WIDTH,
@@ -80,8 +79,9 @@ fun SettingsSnapshot.toAiConfig(systemLanguage: String? = null): AiConfig =
 /**
  * Device-local, app-global settings (never per library, never synced through the journal — the
  * API key, watched-folder path and UI preferences are meaningless on another device). How a library
- * behaves is not here: its storage-path rule and auto-match rules are library settings in its
- * journal ([StoragePathFacade], [AutoMatchRuleRepository]), which every device reads the same.
+ * behaves is not here: its storage-path rule, auto-match rules and trash retention are library
+ * settings in its journal ([StoragePathFacade], [AutoMatchRuleRepository], [TrashRetentionFacade]),
+ * which every device reads the same.
  *
  * The seam is deliberately narrow: one [settings] snapshot flow to read and one [edit] mutation
  * to write, so the interface is not the storage schema: a new setting is one field on
@@ -113,12 +113,14 @@ interface SettingsRepository {
 
 /**
  * The library behaviour older builds kept as device settings, shared by every library the device
- * opened: the storage-path rule and the auto-match rules blob ([dev.npn.core.rules.AutoMatchRuleJson]).
+ * opened: the storage-path rule, the auto-match rules blob ([dev.npn.core.rules.AutoMatchRuleJson])
+ * and the trash retention in days (null when this device never stored one).
  */
 data class LegacyLibrarySettings(
     val storagePathTemplate: String? = null,
     val storagePathEnabled: Boolean = false,
     val autoMatchRulesJson: String? = null,
+    val trashRetentionDays: Int? = null,
 )
 
 /**
@@ -199,7 +201,6 @@ object SettingsCodec {
                 libraryLocation = reader.string(SettingsKeys.LIBRARY_LOCATION),
                 appLanguage = reader.string(SettingsKeys.APP_LANGUAGE),
                 ocrLanguage = reader.string(SettingsKeys.OCR_LANGUAGES) ?: legacyOcrLanguage(reader),
-                trashRetentionDays = reader.int(SettingsKeys.TRASH_RETENTION_DAYS) ?: DEFAULTS.trashRetentionDays,
                 defaultViewType = enumOr(reader.string(SettingsKeys.DEFAULT_VIEW_TYPE), DEFAULTS.defaultViewType),
                 librarySort =
                     LibrarySort(
@@ -254,7 +255,6 @@ object SettingsCodec {
         writer.putOptional(SettingsKeys.APP_LANGUAGE, s.appLanguage)
         writer.putOptional(SettingsKeys.OCR_LANGUAGES, s.ocrLanguage)
         writer.remove(SettingsKeys.LEGACY_OCR_LANGUAGE)
-        writer.putInt(SettingsKeys.TRASH_RETENTION_DAYS, s.trashRetentionDays)
         writer.putString(SettingsKeys.DEFAULT_VIEW_TYPE, s.defaultViewType.name)
         writer.putString(SettingsKeys.LIBRARY_SORT_FIELD, s.librarySort.field.wire)
         writer.putBoolean(SettingsKeys.LIBRARY_SORT_ASCENDING, s.librarySort.ascending)
@@ -288,6 +288,7 @@ object SettingsCodec {
             storagePathTemplate = reader.string(SettingsKeys.STORAGE_PATH_TEMPLATE),
             storagePathEnabled = reader.boolean(SettingsKeys.STORAGE_PATH_ENABLED) ?: false,
             autoMatchRulesJson = reader.string(SettingsKeys.AUTO_MATCH_RULES_JSON),
+            trashRetentionDays = reader.int(SettingsKeys.TRASH_RETENTION_DAYS),
         )
 
     /**
@@ -322,7 +323,6 @@ internal object SettingsKeys {
     /** Superseded by [OCR_LANGUAGES]; only read to migrate it. */
     const val LEGACY_OCR_LANGUAGE = "ocrLanguage"
     const val OCR_LANGUAGES = "ocrLanguages"
-    const val TRASH_RETENTION_DAYS = "trashRetentionDays"
     const val DEFAULT_VIEW_TYPE = "defaultViewType"
     const val LIBRARY_SORT_FIELD = "librarySortField"
     const val LIBRARY_SORT_ASCENDING = "librarySortAscending"
@@ -337,6 +337,8 @@ internal object SettingsKeys {
     const val STORAGE_PATH_TEMPLATE = "storagePathTemplate"
     const val STORAGE_PATH_ENABLED = "storagePathEnabled"
     const val AUTO_MATCH_RULES_JSON = "autoMatchRulesJson"
+    const val TRASH_RETENTION_DAYS = "trashRetentionDays"
+
     const val AI_ENABLED = "aiEnabled"
     const val AI_PROVIDER = "aiProvider"
     const val AI_BASE_URL = "aiBaseUrl"
@@ -411,6 +413,9 @@ object AiTagging {
 object TrashSettings {
     /** Days a trashed document is kept before an automatic purge removes it. */
     const val DEFAULT_TRASH_RETENTION_DAYS = 30
+
+    /** The retentions a library may set: 0 purges at the next chance, four digits at most. */
+    val RETENTION_RANGE = 0..9999
 }
 
 /** Bounds for the user-adjustable grid cell width (dp). */

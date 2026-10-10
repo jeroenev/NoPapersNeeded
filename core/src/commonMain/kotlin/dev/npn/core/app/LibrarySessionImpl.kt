@@ -83,6 +83,8 @@ class LibrarySessionImpl private constructor(
     override val fieldRegistry: FieldRegistry = library.fieldRegistry
     override val content: DocContentFacade = library.content
     override val reviewConfig: ReviewConfigFacade = library.reviewConfig
+    private val retention = JournalTrashRetention(coordinator) { owned(it) }
+    override val trashRetention: TrashRetentionFacade get() = retention
 
     // The facet properties only narrow the type a consumer sees: the session is the ingest facet,
     // [OwnedWriter] backs all three write facets, and [AiFacadeImpl] both AI facets.
@@ -318,10 +320,16 @@ class LibrarySessionImpl private constructor(
     private suspend fun doWatchTriggeredRescan() {
         rescan()
         queues.kickAll()
-        // Respect the configured retention at call time.
-        val days =
-            log.runLogged("Reading the trash retention") { deps.settings.trashRetentionDays() }
-                ?: TrashSettings.DEFAULT_TRASH_RETENTION_DAYS
+        purgeExpiredTrash()
+    }
+
+    /** [purgeTrash] by the library's retention as it stands now; one this build cannot read purges nothing. */
+    internal suspend fun purgeExpiredTrash() {
+        val days = retention.current()
+        if (days == null) {
+            log.warn("The library's trash retention is not one this build reads; the trash is kept")
+            return
+        }
         log.runLogged("Trash auto-purge") { purgeTrash(days) }
     }
 

@@ -34,7 +34,7 @@ class DefaultAppEnvironmentTest {
             libraryRoot = Path.of(location),
             dirs = AppDirs(dbDir = data, thumbsDir = "$data/thumbs", tmpDir = "$data/tmp"),
             scope = scope,
-            settings = SessionSettings(ocrLanguage = { "eng" }, trashRetentionDays = { 30 }),
+            settings = SessionSettings(ocrLanguage = { "eng" }),
             installationId = "test-installation",
         ).also { built += location to it }
     }

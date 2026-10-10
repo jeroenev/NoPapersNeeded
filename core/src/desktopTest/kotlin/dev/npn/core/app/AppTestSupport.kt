@@ -123,7 +123,8 @@ class AppSessionRig private constructor(
             /** The library's storage-path rule, written to its journal once the session is open. */
             storagePath: StoragePathRule? = null,
             log: NpnLog = JvmLog(),
-            trashRetentionDays: suspend () -> Int = { 30 },
+            /** How long this device kept trashed documents, if it ever stored a retention. */
+            deviceTrashRetentionDays: Int? = null,
             legacyLibrarySettings: suspend () -> LegacyLibrarySettings = { LegacyLibrarySettings() },
             aiConfig: suspend () -> AiConfig = { AiConfig.DISABLED },
             /** The PDF engine the session uses, over the real one. */
@@ -142,8 +143,9 @@ class AppSessionRig private constructor(
                     settings =
                         SessionSettings(
                             ocrLanguage = { "eng" },
-                            trashRetentionDays = trashRetentionDays,
-                            legacyLibrarySettings = legacyLibrarySettings,
+                            legacyLibrarySettings = {
+                                legacyLibrarySettings().copy(trashRetentionDays = deviceTrashRetentionDays)
+                            },
                             aiConfig = aiConfig,
                         ),
                     clock = clock,
@@ -181,6 +183,8 @@ class AppSessionRig private constructor(
         clock: MutableClock = MutableClock(50_000L, autoTick = true),
         aiConfig: suspend () -> AiConfig = { AiConfig.DISABLED },
         legacyLibrarySettings: suspend () -> LegacyLibrarySettings = { LegacyLibrarySettings() },
+        /** How long this device kept trashed documents, if it ever stored a retention. */
+        deviceTrashRetentionDays: Int? = null,
     ): Pair<LibrarySessionImpl, NpnDatabase> {
         val deps =
             jvmSessionDeps(
@@ -190,8 +194,9 @@ class AppSessionRig private constructor(
                 settings =
                     SessionSettings(
                         ocrLanguage = { "eng" },
-                        trashRetentionDays = { 30 },
-                        legacyLibrarySettings = legacyLibrarySettings,
+                        legacyLibrarySettings = {
+                            legacyLibrarySettings().copy(trashRetentionDays = deviceTrashRetentionDays)
+                        },
                         aiConfig = aiConfig,
                     ),
                 clock = clock,
@@ -223,7 +228,7 @@ suspend fun openSession(
             libraryRoot = library,
             dirs = AppDirs(dbDir = data.path, thumbsDir = "$data/thumbs", tmpDir = "$data/tmp"),
             scope = scope,
-            settings = SessionSettings(ocrLanguage = { "eng" }, trashRetentionDays = { 30 }, aiConfig = aiConfig),
+            settings = SessionSettings(ocrLanguage = { "eng" }, aiConfig = aiConfig),
             // Far behind the files' real mtimes, so a just-written PDF counts as settled.
             clock = MutableClock(autoTick = true),
             installationId = installationId,

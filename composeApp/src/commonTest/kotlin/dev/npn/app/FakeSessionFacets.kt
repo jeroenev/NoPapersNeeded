@@ -18,6 +18,8 @@ import dev.npn.core.app.ScanProgressUi
 import dev.npn.core.app.SplitOutcome
 import dev.npn.core.app.StoragePathFacade
 import dev.npn.core.app.StoragePathSetting
+import dev.npn.core.app.TrashRetentionFacade
+import dev.npn.core.app.TrashSettings
 import dev.npn.core.app.WorkFacade
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.index.ScanReport
@@ -171,6 +173,23 @@ class FakeStoragePathFacade : StoragePathFacade {
 
     override suspend fun setStoragePathEnabled(enabled: Boolean) {
         storagePathFlow.update { it.copy(enabled = enabled) }
+    }
+}
+
+/** The library's trash retention. [writes] records every retention saved. */
+class FakeTrashRetention : TrashRetentionFacade {
+    val days = MutableStateFlow(TrashSettings.DEFAULT_TRASH_RETENTION_DAYS)
+    override val trashRetentionDays: Flow<Int> get() = days
+
+    val writes = mutableListOf<Int>()
+
+    /** If set, [setTrashRetentionDays] throws this. */
+    var fail: (() -> Nothing)? = null
+
+    override suspend fun setTrashRetentionDays(days: Int) {
+        fail?.invoke()
+        writes += days
+        this.days.value = days
     }
 }
 

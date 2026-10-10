@@ -1,6 +1,8 @@
 package dev.npn.core.app
 
 import dev.npn.core.db.AutoMatchRuleEntity
+import dev.npn.core.fs.NpnPaths
+import dev.npn.core.index.MutableClock
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.PendingOp
@@ -15,12 +17,14 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import java.io.File
 import java.nio.file.Files
+import java.nio.file.attribute.FileTime
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 
 /**
- * The storage-path rule and the auto-match rules are library data in the journal: every device
- * reads the same, a device's old settings are adopted once, and the rules table is only a cache.
+ * The storage-path rule, the auto-match rules and the trash retention are library data in the
+ * journal: every device reads the same, a device's old settings are adopted once, and the rules
+ * table is only a cache.
  */
 class LibrarySettingsTest {
     @Test
@@ -129,6 +133,114 @@ class LibrarySettingsTest {
                     second.close()
                     secondDb.close()
                 }
+            } finally {
+                rig.close()
+            }
+        }
+
+    /**
+     * The purge deletes entries in the library's own trash, which sync carries to every device, so a
+     * device that kept its trash for no time at all must not purge what the library still keeps.
+     */
+    @Test
+    fun aDeviceWithAShorterRetentionKeepsTheLibrarysTrash() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope, deviceTrashRetentionDays = 30)
+            try {
+                rig.clock.now = 400 * DAY
+                rig.writePdf("bill.pdf", PdfFixtures.embeddedTextPdf("electricity bill"))
+                Files.setLastModifiedTime(rig.libRoot.resolve("bill.pdf"), FileTime.fromMillis(300 * DAY))
+                rig.session.rescan()
+                val id = rig.docId("bill.pdf")
+                rig.session.docLifecycle.trashDoc(id)
+
+                val (second, secondDb) =
+                    rig.secondSession(
+                        backgroundScope,
+                        clock = MutableClock(400 * DAY + HOUR),
+                        deviceTrashRetentionDays = 0,
+                    )
+                try {
+                    second.rescan()
+                    second.purgeExpiredTrash()
+                } finally {
+                    second.close()
+                    secondDb.close()
+                }
+
+                rig.fs.sha256(NpnPaths.trashPath("bill.pdf", id)) shouldBe id
+            } finally {
+                rig.close()
+            }
+        }
+
+    @Test
+    fun twoDevicesWithDifferentRetentionsConvergeOnOneValue() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            val (second, secondDb) = rig.secondSession(backgroundScope)
+            try {
+                rig.session.trashRetention.setTrashRetentionDays(7)
+                second.trashRetention.setTrashRetentionDays(14)
+
+                rig.session.rescan()
+                second.rescan()
+
+                rig.session.trashRetention.trashRetentionDays
+                    .first() shouldBe 14
+                second.trashRetention.trashRetentionDays
+                    .first() shouldBe 14
+            } finally {
+                second.close()
+                secondDb.close()
+                rig.close()
+            }
+        }
+
+    /** The first device to open the library brings its retention; no device's replaces it later. */
+    @Test
+    fun aDevicesRetentionIsAdoptedOnce() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope, deviceTrashRetentionDays = 7)
+            try {
+                rig.session.trashRetention.trashRetentionDays
+                    .first() shouldBe 7
+                rig.session.trashRetention.setTrashRetentionDays(20)
+                val objects = rig.journalObjectCount()
+
+                val (second, secondDb) = rig.secondSession(backgroundScope, deviceTrashRetentionDays = 3)
+                try {
+                    second.trashRetention.trashRetentionDays.first() shouldBe 20
+                } finally {
+                    second.close()
+                    secondDb.close()
+                }
+                rig.journalObjectCount() shouldBe objects
+            } finally {
+                rig.close()
+            }
+        }
+
+    /** A retention a newer build wrote, which this one cannot read, purges nothing. */
+    @Test
+    fun aRetentionThisBuildCannotReadKeepsTheTrash() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.clock.now = 400 * DAY
+                rig.writePdf("bill.pdf", PdfFixtures.embeddedTextPdf("electricity bill"))
+                Files.setLastModifiedTime(rig.libRoot.resolve("bill.pdf"), FileTime.fromMillis(300 * DAY))
+                rig.session.rescan()
+                val id = rig.docId("bill.pdf")
+                rig.session.docLifecycle.trashDoc(id)
+                ContentAddressedJournalWriter(rig.fs, "newer-installation", HlcWatermarkAllocator(rig.clock))
+                    .commit(listOf(PendingOp.settingSet(LibrarySettingKeys.TRASH_RETENTION_DAYS, "forever")))
+                rig.session.rescan()
+
+                rig.clock.now = 800 * DAY
+                rig.session.purgeExpiredTrash()
+
+                rig.fs.sha256(NpnPaths.trashPath("bill.pdf", id)) shouldBe id
             } finally {
                 rig.close()
             }
@@ -253,6 +365,11 @@ class LibrarySettingsTest {
         pattern = "invoice",
         tags = listOf("t"),
     )
+
+    private companion object {
+        const val HOUR = 60L * 60L * 1000L
+        const val DAY = 24 * HOUR
+    }
 
     private fun junkRow() =
         AutoMatchRuleEntity(

@@ -17,6 +17,7 @@ import dev.npn.core.app.AiTagging
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.SettingsRepository
 import dev.npn.core.app.SettingsSnapshot
+import dev.npn.core.app.TrashSettings
 import dev.npn.core.app.toAiConfig
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
@@ -29,8 +30,6 @@ import dev.npn.core.pathrules.StoragePathTemplate
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.watch.liesInLibrary
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -38,7 +37,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_folder_access_not_kept_library
 import no_papers_needed.composeapp.generated.resources.common_folder_access_not_kept_watched
@@ -56,18 +54,16 @@ import no_papers_needed.composeapp.generated.resources.common_settings_thumbnail
 
 private const val DEFAULT_STORAGE_PATH_TEMPLATE = "{doc_date:yyyy}/{title}.pdf"
 
-/** How long typing in the storage-path template must pause before the template is saved. */
-private const val TEMPLATE_SAVE_DELAY_MS = 800L
-
 /**
  * What the settings screen shows: this device's settings as saved ([snapshot]; the defaults until
- * they load), and the library's storage-path rule, whose template shows an unsaved edit first.
+ * they load), and the library's own settings, synced through its journal, where an unsaved edit
+ * shows first.
  */
 data class SettingsUiState(
     val snapshot: SettingsSnapshot = SettingsSnapshot(installationId = ""),
-    /** The library's template, synced through its journal; an unsaved edit shows here first. */
     val storagePathTemplate: String = DEFAULT_STORAGE_PATH_TEMPLATE,
     val storagePathEnabled: Boolean = false,
+    val trashRetentionDays: Int = TrashSettings.DEFAULT_TRASH_RETENTION_DAYS,
 ) {
     /** Whether the endpoint is complete enough to call — what gates the self-test button. */
     val aiConfigured: Boolean get() = snapshot.toAiConfig().configured
@@ -123,6 +119,12 @@ interface SettingsActions {
      * otherwise says why the rule stays off.
      */
     fun setStoragePathEnabled(enabled: Boolean)
+
+    /**
+     * Edit how many days the library's trash keeps a document. Saved as the template is: once
+     * typing pauses, or when the screen is left, as each saved value is a journal event.
+     */
+    fun setTrashRetentionDays(days: Int)
 
     /**
      * Switch provider and drop what belonged to the previous endpoint: the model list, and the base
@@ -185,9 +187,9 @@ interface SettingsActions {
 /**
  * Settings screen view model. Device settings go through the one [SettingsRepository.edit]
  * mutation, so a pane edits a field with `edit { it.copy(field = value) }` and there is no
- * per-setting forwarder to keep in sync. The library's own settings (review mode, storage path) are
- * written through the session; they, and the device settings that need surrounding logic (provider
- * switch clears the stale model list), keep their own methods.
+ * per-setting forwarder to keep in sync. The library's own settings (review mode, storage path,
+ * trash retention) are written through the session; they, and the device settings that need
+ * surrounding logic (provider switch clears the stale model list), keep their own methods.
  *
  * Extends [MessagesViewModel] so a failed write (properties-file I/O, SAF errors) surfaces as a
  * "Could not update …" snackbar instead of being silently swallowed — every write is routed
@@ -208,19 +210,32 @@ class SettingsViewModel(
     private val content = session.content
     private val reviewConfig = session.reviewConfig
     private val storagePath = session.storagePath
+    private val trashRetention = session.trashRetention
     private val fieldRegistry = session.fieldRegistry
 
-    /** The template as typed and not saved yet, or null when the screen shows the saved one. */
-    private val templateDraft = MutableStateFlow<String?>(null)
+    private val typedTemplate =
+        TypedSetting<String>(viewModelScope) { template ->
+            reporting(Res.string.common_save_setting_failed) { storagePath.setStoragePathTemplate(template) }
+        }
 
-    private var templateSave: Job? = null
+    private val typedRetention =
+        TypedSetting<Int>(viewModelScope) { days ->
+            reporting(Res.string.common_save_setting_failed) { trashRetention.setTrashRetentionDays(days) }
+        }
 
     val state: StateFlow<SettingsUiState> =
-        combine(settings.settings, storagePath.storagePath, templateDraft) { snapshot, path, draft ->
+        combine(
+            settings.settings,
+            storagePath.storagePath,
+            typedTemplate.draft,
+            trashRetention.trashRetentionDays,
+            typedRetention.draft,
+        ) { snapshot, path, template, days, typedDays ->
             SettingsUiState(
                 snapshot = snapshot,
-                storagePathTemplate = draft ?: path.template ?: DEFAULT_STORAGE_PATH_TEMPLATE,
+                storagePathTemplate = template ?: path.template ?: DEFAULT_STORAGE_PATH_TEMPLATE,
                 storagePathEnabled = path.enabled,
+                trashRetentionDays = typedDays ?: days,
             )
         }.stateIn(viewModelScope, WhileSubscribedTimeout, SettingsUiState())
 
@@ -272,25 +287,7 @@ class SettingsViewModel(
     override fun edit(transform: (SettingsSnapshot) -> SettingsSnapshot) =
         launchReporting(Res.string.common_save_setting_failed) { settings.edit(transform) }
 
-    override fun setStoragePathTemplate(template: String) {
-        templateDraft.value = template
-        templateSave?.cancel()
-        templateSave =
-            viewModelScope.launch {
-                try {
-                    delay(TEMPLATE_SAVE_DELAY_MS)
-                } finally {
-                    // Not when a later keystroke replaced it; otherwise even when the pause was cut short.
-                    if (templateDraft.value == template) withContext(NonCancellable) { saveTemplate(template) }
-                }
-            }
-    }
-
-    /** Save [template]; the screen shows it as a draft until it has landed, failed saves included. */
-    private suspend fun saveTemplate(template: String) {
-        val saved = reporting(Res.string.common_save_setting_failed) { storagePath.setStoragePathTemplate(template) }
-        if (saved) templateDraft.compareAndSet(template, null)
-    }
+    override fun setStoragePathTemplate(template: String) = typedTemplate.type(template)
 
     override fun setStoragePathEnabled(enabled: Boolean) =
         launchReporting(Res.string.common_save_setting_failed) {
@@ -299,7 +296,9 @@ class SettingsViewModel(
                 // pause, or the default a library without a template is shown. Read here rather than
                 // off `state`, which can be stale when nothing is collecting it.
                 val template =
-                    templateDraft.value ?: storagePath.storagePath.first().template ?: DEFAULT_STORAGE_PATH_TEMPLATE
+                    typedTemplate.draft.value
+                        ?: storagePath.storagePath.first().template
+                        ?: DEFAULT_STORAGE_PATH_TEMPLATE
                 val types = fieldRegistry.current().associate { it.key to it.type }
                 val expansion = StoragePathTemplate.expand(template, validationContext(types))
                 if (expansion is StoragePathExpansion.Invalid) {
@@ -308,10 +307,12 @@ class SettingsViewModel(
                 }
                 storagePath.setStoragePathTemplate(template)
                 // Saved: a draft of it, left by a failed save or still waiting for its pause, is done.
-                templateDraft.compareAndSet(template, null)
+                typedTemplate.saved(template)
             }
             storagePath.setStoragePathEnabled(enabled)
         }
+
+    override fun setTrashRetentionDays(days: Int) = typedRetention.type(days)
 
     override fun setAiProvider(provider: AiProvider) =
         launchReporting(Res.string.common_save_setting_failed) {

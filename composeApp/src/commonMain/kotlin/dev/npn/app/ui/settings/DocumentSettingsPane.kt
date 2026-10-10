@@ -13,6 +13,7 @@ import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.NumericField
 import dev.npn.app.ui.common.SettingsSection
 import dev.npn.app.ui.common.SwitchRow
+import dev.npn.core.app.TrashSettings
 import dev.npn.core.model.ReviewMode
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_cancel
@@ -29,8 +30,7 @@ import no_papers_needed.composeapp.generated.resources.common_settings_trash
 import no_papers_needed.composeapp.generated.resources.common_settings_trash_retention_days
 import org.jetbrains.compose.resources.stringResource
 
-/** Accepted range for the trash-retention field (0 = purge immediately; capped at four digits). */
-private val TRASH_RETENTION_RANGE = 0..9999
+/** Digits the trash-retention field takes: [TrashSettings.RETENTION_RANGE] has four at most. */
 private const val TRASH_RETENTION_MAX_DIGITS = 4
 
 /**
@@ -62,12 +62,13 @@ internal fun DocumentSettingsPane(
 
     SettingsSection(title = stringResource(Res.string.common_settings_trash)) {
         NumericField(
-            value = state.settings.snapshot.trashRetentionDays,
-            onValueChange = { days -> actions.edit { it.copy(trashRetentionDays = days) } },
-            range = TRASH_RETENTION_RANGE,
+            value = state.settings.trashRetentionDays,
+            onValueChange = actions::setTrashRetentionDays,
+            range = TrashSettings.RETENTION_RANGE,
             label = stringResource(Res.string.common_settings_trash_retention_days),
             maxDigits = TRASH_RETENTION_MAX_DIGITS,
         )
+        HelpText(stringResource(Res.string.common_settings_syncs_across_devices))
     }
 }
 

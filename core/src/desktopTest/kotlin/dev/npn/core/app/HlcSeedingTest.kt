@@ -90,7 +90,7 @@ class HlcSeedingTest {
                         thumbnailStore = FakeThumbStore(File(rig.dbDir, "thumbs-reopen")),
                         renderParallelism = 1,
                         scope = backgroundScope,
-                        settings = SessionSettings(ocrLanguage = { "eng" }, trashRetentionDays = { 30 }),
+                        settings = SessionSettings(ocrLanguage = { "eng" }),
                         log = NpnLog.None,
                         clock = MutableClock(1L, autoTick = true),
                     )

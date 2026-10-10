@@ -271,4 +271,25 @@ class SettingsRepositoryImplTest {
                 directory.toFile().deleteRecursively()
             }
         }
+
+    /**
+     * The trash retention moved into each library's journal: the device's stored value is read only
+     * for a library to adopt, and stays stored through later writes for every library opened after.
+     */
+    @Test
+    fun aStoredTrashRetentionIsKeptForLibrariesToAdopt() =
+        runTest {
+            val directory = Files.createTempDirectory("npn-settings-test")
+            try {
+                val file = directory.resolve("settings.properties").toFile()
+                SettingsRepositoryImpl(file).legacyLibrarySettings().trashRetentionDays shouldBe null
+
+                file.writeText("trashRetentionDays=7\n")
+                SettingsRepositoryImpl(file).edit { it.copy(appLanguage = "fr") }
+
+                SettingsRepositoryImpl(file).legacyLibrarySettings().trashRetentionDays shouldBe 7
+            } finally {
+                directory.toFile().deleteRecursively()
+            }
+        }
 }

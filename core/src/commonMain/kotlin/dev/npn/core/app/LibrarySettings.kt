@@ -5,6 +5,7 @@ import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.rules.AutoMatchRuleJson
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 
 /** The library's storage-path rule as its journal holds it: a template, armed or not. */
 data class StoragePathSetting(
@@ -29,6 +30,19 @@ interface StoragePathFacade {
     suspend fun setStoragePathEnabled(enabled: Boolean)
 }
 
+/**
+ * How long the trash keeps a document before the automatic purge deletes it. Library data, synced
+ * through the journal: the purge deletes entries in the library's own trash, which sync carries to
+ * every device, so a retention of one device's would decide for all of them.
+ */
+interface TrashRetentionFacade {
+    /** Days a trashed document is kept; [TrashSettings.DEFAULT_TRASH_RETENTION_DAYS] until set. */
+    val trashRetentionDays: Flow<Int>
+
+    /** Keep trashed documents for [days], one of [TrashSettings.RETENTION_RANGE]. */
+    suspend fun setTrashRetentionDays(days: Int)
+}
+
 /** Setting keys of the library behaviour that lives in its journal. */
 internal object LibrarySettingKeys {
     const val STORAGE_PATH_TEMPLATE = "storagePathTemplate"
@@ -36,6 +50,9 @@ internal object LibrarySettingKeys {
 
     /** The whole rule list as one [AutoMatchRuleJson] value; the rules table caches it. */
     const val AUTO_MATCH_RULES = "autoMatchRules"
+
+    /** Days the trash keeps a document, as a decimal number. */
+    const val TRASH_RETENTION_DAYS = "trashRetentionDays"
 }
 
 /** [StoragePathFacade] over the journal's settings; writes run through [owned]. */
@@ -62,23 +79,56 @@ internal class JournalStoragePath(
     override suspend fun setStoragePathEnabled(enabled: Boolean) =
         set(LibrarySettingKeys.STORAGE_PATH_ENABLED, enabled.toString())
 
-    /** Write [value] under [key] unless it already holds it, so an unchanged value adds no event. */
     private suspend fun set(
         key: String,
         value: String?,
-    ) = owned {
-        coordinator.commitBuilt { state ->
-            if (state.effectiveSetting(key) == value) emptyList() else listOf(PendingOp.settingSet(key, value))
+    ) = owned { coordinator.putSetting(key, value) }
+}
+
+/** [TrashRetentionFacade] over the journal's settings; writes run through [owned]. */
+internal class JournalTrashRetention(
+    private val coordinator: JournalCoordinator,
+    private val owned: suspend (suspend () -> Unit) -> Unit,
+) : TrashRetentionFacade {
+    override val trashRetentionDays: Flow<Int> =
+        coordinator.settingFlow(LibrarySettingKeys.TRASH_RETENTION_DAYS).map {
+            retentionDays(it) ?: TrashSettings.DEFAULT_TRASH_RETENTION_DAYS
         }
+
+    /**
+     * The retention as of now, for the purge; null when the journal holds a value this build cannot
+     * read (a newer build's), which keeps every entry rather than guess at a shorter retention.
+     */
+    fun current(): Int? = retentionDays(coordinator.setting(LibrarySettingKeys.TRASH_RETENTION_DAYS))
+
+    override suspend fun setTrashRetentionDays(days: Int) {
+        require(days in TrashSettings.RETENTION_RANGE) { "A retention of $days days is out of range" }
+        owned { coordinator.putSetting(LibrarySettingKeys.TRASH_RETENTION_DAYS, days.toString()) }
     }
+
+    private fun retentionDays(stored: String?): Int? =
+        if (stored == null) {
+            TrashSettings.DEFAULT_TRASH_RETENTION_DAYS
+        } else {
+            stored.toIntOrNull()?.takeIf { it in TrashSettings.RETENTION_RANGE }
+        }
+}
+
+/** Write [value] under [key] unless the journal already holds it, so an unchanged value adds no event. */
+private suspend fun JournalCoordinator.putSetting(
+    key: String,
+    value: String?,
+) = commitBuilt { state ->
+    if (state.effectiveSetting(key) == value) emptyList() else listOf(PendingOp.settingSet(key, value))
 }
 
 /**
  * The journal settings these device settings stand for, as [JournalCoordinator.adoptSettings]
- * groups, minus the defaults. The storage-path template and its switch are one setting, so they are
- * one group: a device with no template has no rule to adopt, whatever its switch says, and one with
- * a template adopts its switch too, off included. A rules blob this build cannot read is carried
- * over as it is, for the newer build that wrote it.
+ * groups. The storage-path template and its switch are one setting, so they are one group: a device
+ * with no template has no rule to adopt, whatever its switch says, and one with a template adopts
+ * its switch too, off included. A rules blob this build cannot read is carried over as it is, for
+ * the newer build that wrote it. A stored trash retention is adopted as stored, the default
+ * included, so the library keeps its trash as long as the first device to open it did.
  */
 internal fun LegacyLibrarySettings.journalSettings(): List<Map<String, String>> =
     listOfNotNull(
@@ -89,6 +139,9 @@ internal fun LegacyLibrarySettings.journalSettings(): List<Map<String, String>> 
             )
         },
         autoMatchRulesJson?.takeIf(::holdsRules)?.let { mapOf(LibrarySettingKeys.AUTO_MATCH_RULES to it) },
+        trashRetentionDays?.let { days ->
+            mapOf(LibrarySettingKeys.TRASH_RETENTION_DAYS to days.coerceIn(TrashSettings.RETENTION_RANGE).toString())
+        },
     )
 
 private fun holdsRules(json: String): Boolean =
