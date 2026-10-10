@@ -1,12 +1,15 @@
 package dev.npn.core.app
 
+import dev.npn.core.db.searchDocIds
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.util.RecordingLog
 import dev.npn.core.xmp.BakeRefusedException
 import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
@@ -48,6 +51,57 @@ class BakeInPlaceTest {
                     .documentDao()
                     .getByDocId(before)
                     ?.deleted shouldBe true
+            } finally {
+                rig.close()
+            }
+        }
+
+    /**
+     * An edit to a baked document projects it with what it inherited, as a rescan does: marking it
+     * reviewed keeps its title, correspondent and tag in the index and in search.
+     */
+    @Test
+    fun anEditToABakedDocumentKeepsWhatItInherited() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                val (before, after) = bakeFiled(rig)
+
+                rig.session.meta.setReviewed(listOf(after), true)
+
+                fieldsOf(rig, after) shouldBe FILED
+                rig.db
+                    .tagDao()
+                    .tagsForDocument(after) shouldContainExactly listOf("filed")
+                rig.db.ftsDao().searchDocIds("water") shouldContain after
+                // Projected with it, the original stays superseded, as a rescan leaves it.
+                val superseded = rig.db.documentDao().getByDocId(before)
+                superseded?.deleted shouldBe true
+                rig.session.rescan()
+                rig.db.documentDao().getByDocId(before) shouldBe superseded
+            } finally {
+                rig.close()
+            }
+        }
+
+    /** The storage-path rule after an edit to a baked document files it by what it inherited. */
+    @Test
+    fun anEditToABakedDocumentFilesItByWhatItInherited() =
+        runTest {
+            val rule = StoragePathRule("{correspondent}/{title}.pdf", enabled = true)
+            val rig = AppSessionRig.create(backgroundScope, storagePath = rule)
+            try {
+                val filed = "Aquafin/Water bill.pdf"
+                val (_, after) = bakeFiled(rig)
+                rig.docId(filed) shouldBe after
+
+                rig.session.meta.addTag(listOf(after), "x")
+
+                rig.db
+                    .documentDao()
+                    .getByDocId(after)
+                    ?.relPath shouldBe filed
+                rig.docId(filed) shouldBe after
             } finally {
                 rig.close()
             }
@@ -229,6 +283,28 @@ class BakeInPlaceTest {
             }
         }
 
+    /**
+     * Give the document at `a.pdf` the [FILED] fields and the tag `filed`, then bake it where they
+     * filed it; returns its id before the bake and after.
+     */
+    private suspend fun bakeFiled(rig: AppSessionRig): Pair<String, String> {
+        rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+        rig.session.rescan()
+        val before = rig.docId("a.pdf")
+        rig.session.meta.applyEdits(listOf(before), addTags = listOf("filed"), fields = FILED)
+        val path = checkNotNull(rig.db.documentDao().getByDocId(before)).relPath
+        rig.session.content.bakeInPlace(before) shouldBe BakeOutcome.Baked
+        return before to rig.docId(path)
+    }
+
+    private suspend fun fieldsOf(
+        rig: AppSessionRig,
+        docId: String,
+    ) = rig.db
+        .documentFieldDao()
+        .fieldsForDocs(listOf(docId))
+        .associate { it.fieldKey to it.fieldValue }
+
     /** Bake the document [original] makes at `a.pdf`; returns its id before the bake and after. */
     private suspend fun baked(
         rig: AppSessionRig,
@@ -288,5 +364,9 @@ class BakeInPlaceTest {
             fs.delete(path)
             fs.writeBytesOnce(path, bytes)
         }
+    }
+
+    private companion object {
+        val FILED = mapOf(FieldKeys.TITLE to "Water bill", FieldKeys.CORRESPONDENT to "Aquafin")
     }
 }

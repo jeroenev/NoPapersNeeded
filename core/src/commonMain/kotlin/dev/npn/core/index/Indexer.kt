@@ -515,7 +515,13 @@ class Indexer(
                     else -> {}
                 }
             }
-            documents.toList().forEach { documents += state.resolveDocId(it) }
+            // A document projects with its relink predecessors' metadata, whichever event touched
+            // it, so they are in scope as in a full fold.
+            for (doc in documents.toList()) {
+                val current = state.resolveDocId(doc)
+                documents += current
+                documents += state.predecessorsOf(current)
+            }
             return projection { applyFold(state, FoldScope.Events(documents, styledTags, preserveLifecycleDocs)) }
         } finally {
             _scanState.value = null

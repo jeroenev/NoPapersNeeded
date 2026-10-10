@@ -167,6 +167,18 @@ class PropsTrashRelinkTest {
     }
 
     @Test
+    fun predecessors_are_every_id_resolving_onto_a_document() {
+        val state = JournalFolder.fold(listOf(relink(1, doc, doc2, 10, "d1")))
+        assertEquals(listOf(doc), state.predecessorsOf(doc2))
+
+        state.apply(relink(2, doc2, doc3, 20, "d1"))
+
+        assertEquals(listOf(doc, doc2), state.predecessorsOf(doc3))
+        assertEquals(emptyList(), state.predecessorsOf(doc2))
+        assertEquals(emptyList(), state.predecessorsOf(doc))
+    }
+
+    @Test
     fun concurrent_relink_deterministic_winner() {
         // two devices relink same old doc to different targets
         val rA = relink(1, doc, doc2, 10, "aaa")

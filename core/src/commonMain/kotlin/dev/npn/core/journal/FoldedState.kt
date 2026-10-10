@@ -72,6 +72,9 @@ class FoldedState {
     // --- relinks: oldDoc -> all claims; winner is highest hlc ---
     private val relinks = HashMap<String, ArrayList<RelinkClaim>>()
 
+    // [predecessorsOf] for every target, derived on demand and cached until the next relink applies.
+    private var predecessorsCache: Map<String, List<String>>? = null
+
     data class RelinkClaim(
         val newDoc: String,
         val hlc: Hlc,
@@ -159,6 +162,7 @@ class FoldedState {
             is JournalOp.Relink -> {
                 val doc = event.doc ?: return
                 relinks.getOrPut(doc) { ArrayList() }.add(RelinkClaim(op.newDoc, event.hlc))
+                predecessorsCache = null
             }
 
             is JournalOp.TagRename -> {
@@ -320,6 +324,23 @@ class FoldedState {
             current = relinks[current]?.maxByOrNull { it.hlc }?.newDoc ?: break
         }
         return current
+    }
+
+    /**
+     * Every older id whose relink chain [resolveDocId]s onto [doc], in id order: a->b->c gives c
+     * both a and b. Empty for a document nothing resolves onto, which includes every superseded one.
+     */
+    fun predecessorsOf(doc: String): List<String> =
+        (predecessorsCache ?: reversedRelinks().also { predecessorsCache = it })[doc].orEmpty()
+
+    private fun reversedRelinks(): Map<String, List<String>> {
+        val reverse = HashMap<String, MutableList<String>>()
+        for (old in relinks.keys) {
+            val target = resolveDocId(old)
+            if (target != old) reverse.getOrPut(target) { ArrayList() }.add(old)
+        }
+        reverse.values.forEach { it.sort() }
+        return reverse
     }
 
     /** Effective style for a tag, or null if none set. */
