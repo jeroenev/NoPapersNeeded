@@ -142,6 +142,101 @@ class LibraryTrashTest : MainDispatcherTest() {
             messages shouldContainExactly listOf(uiText(Res.plurals.library_moved_to_trash, 1, 1))
         }
 
+    /**
+     * The selection stays usable while a bulk trash runs: what the user selects meanwhile is theirs,
+     * and the trash, once done, takes only its own documents out of it.
+     */
+    @Test
+    fun aBulkTrashLeavesASelectionMadeWhileItRan() =
+        runTest(dispatcher) {
+            val gate = CompletableDeferred<Unit>()
+            val session = FakeLibrarySession().apply { docLifecycle.trashGate = gate }
+            val model = vm(session = session)
+            model.startSelection("d1")
+            runCurrent()
+            model.bulkTrash()
+            runCurrent()
+
+            model.clearSelection()
+            model.startSelection("d2")
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            session.docLifecycle.trashedDocs shouldContainExactly listOf("d1")
+            model.ui.value.selected shouldBe setOf("d2")
+            model.ui.value.selectionMode shouldBe true
+        }
+
+    /** A document that failed comes back into the selection only while the user still has it selected. */
+    @Test
+    fun aFailedBulkTrashKeepsOnlyWhatIsStillSelected() =
+        runTest(dispatcher) {
+            val gate = CompletableDeferred<Unit>()
+            val session =
+                FakeLibrarySession().apply {
+                    docLifecycle.trashGate = gate
+                    docLifecycle.failTrashDocIds = setOf("d1", "d2")
+                }
+            val model = vm(session = session)
+            model.startSelection("d1")
+            model.toggleSelection("d2")
+            runCurrent()
+            model.bulkTrash()
+            runCurrent()
+
+            model.toggleSelection("d1")
+            model.toggleSelection("d3")
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            model.ui.value.selected shouldBe setOf("d2", "d3")
+        }
+
+    /** A selection dismissed while a bulk trash ran stays dismissed, even when the trash failed. */
+    @Test
+    fun aSelectionClearedWhileABulkTrashRanStaysCleared() =
+        runTest(dispatcher) {
+            val gate = CompletableDeferred<Unit>()
+            val session =
+                FakeLibrarySession().apply {
+                    docLifecycle.trashGate = gate
+                    docLifecycle.failTrashDocIds = setOf("d1")
+                }
+            val model = vm(session = session)
+            model.startSelection("d1")
+            runCurrent()
+            model.bulkTrash()
+            runCurrent()
+
+            model.clearSelection()
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            model.ui.value.selected shouldBe emptySet()
+            model.ui.value.selectionMode shouldBe false
+        }
+
+    /** A batched bulk action, too, takes only its own documents out of the selection. */
+    @Test
+    fun aBulkTagLeavesASelectionMadeWhileItRan() =
+        runTest(dispatcher) {
+            val gate = CompletableDeferred<Unit>()
+            val session = FakeLibrarySession().apply { meta.addTagGate = gate }
+            val model = vm(session = session)
+            model.startSelection("d1")
+            runCurrent()
+            model.bulkAddTag("finance")
+            runCurrent()
+
+            model.toggleSelection("d2")
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            session.meta.addedTags shouldContainExactly listOf(listOf("d1") to "finance")
+            model.ui.value.selected shouldBe setOf("d2")
+            model.ui.value.selectionMode shouldBe true
+        }
+
     @Test
     fun bulkTrashNoSuccessOffersNoUndo() =
         runTest(dispatcher) {

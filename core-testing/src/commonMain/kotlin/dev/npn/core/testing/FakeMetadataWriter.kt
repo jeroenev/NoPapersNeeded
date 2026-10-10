@@ -1,6 +1,7 @@
 package dev.npn.core.testing
 
 import dev.npn.core.app.MetadataWriter
+import kotlinx.coroutines.CompletableDeferred
 
 /**
  * One [MetadataWriter.applyEdits] call: the tags it added and the field values it set, and whether
@@ -52,10 +53,14 @@ class FakeMetadataWriter(
     /** If set, setField throws. */
     var failSetField: (() -> Nothing)? = null
 
+    /** If set, addTag waits for it first. */
+    var addTagGate: CompletableDeferred<Unit>? = null
+
     override suspend fun addTag(
         docIds: List<String>,
         tag: String,
     ) {
+        addTagGate?.await()
         failBatchOps?.invoke()
         if (docIds.any { it in failAddTagForDocs }) error("addTag failed for $docIds")
         addedTags += docIds to tag

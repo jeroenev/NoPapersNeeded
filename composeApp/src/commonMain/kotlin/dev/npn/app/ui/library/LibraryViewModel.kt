@@ -439,8 +439,8 @@ class LibraryViewModel(
      * Move the current selection to the trash, one document at a time so a single failure does not
      * abort the rest. The documents it moved are reported with an Undo action that restores exactly
      * those; one already trashed or deleted elsewhere is dropped without a word, as restoring it
-     * would undo that; the failed ids stay selected for retry. See [runOnSelection] for the per-doc
-     * failure contract this mirrors.
+     * would undo that; a failed one stays selected for retry, if the user still has it selected. See
+     * [runOnSelection] for the per-doc failure contract this mirrors.
      */
     fun bulkTrash() {
         val ids = _ui.value.selected.toList()
@@ -450,10 +450,8 @@ class LibraryViewModel(
                 val outcomes = ids.associateWith { runCatchingCancellable { docLifecycle.trashDoc(it) } }
                 val trashed = outcomes.filterValues { it.getOrNull() == true }.keys.toList()
                 val failed = outcomes.filterValues { it.isFailure }.keys
-                if (failed.isEmpty()) {
-                    clearSelection()
-                } else {
-                    _ui.update { it.copy(selected = failed, selectionMode = true) }
+                deselect(ids - failed)
+                if (failed.isNotEmpty()) {
                     message(uiText(Res.plurals.library_trash_failed, ids.size, failed.size, ids.size))
                 }
                 if (trashed.isNotEmpty()) {
@@ -480,8 +478,8 @@ class LibraryViewModel(
      * Run a bulk op over the current selection.
      *
      * [block] receives all selected ids as one batched call. On failure, surface [failed] for the
-     * selection's size and keep the whole selection so the user can retry. On success the selection
-     * is cleared.
+     * selection's size and leave the selection as it is, so the user can retry. On success the
+     * documents it covered leave the selection.
      */
     private fun runOnSelection(
         failed: PluralStringResource,
@@ -491,10 +489,22 @@ class LibraryViewModel(
         if (ids.isEmpty()) return
         viewModelScope.launch {
             if (runCatchingCancellable { block(ids) }.isSuccess) {
-                clearSelection()
+                deselect(ids)
             } else {
                 message(uiText(failed, ids.size, ids.size))
             }
+        }
+    }
+
+    /**
+     * Take [done], the documents a finished bulk action handled, out of the selection as it is now.
+     * The selection stays usable while the action runs, so whatever the user selected or deselected
+     * meanwhile stands; selection mode ends once nothing is left selected.
+     */
+    private fun deselect(done: Collection<String>) {
+        _ui.update { state ->
+            val remaining = state.selected - done.toSet()
+            state.copy(selected = remaining, selectionMode = remaining.isNotEmpty())
         }
     }
 
