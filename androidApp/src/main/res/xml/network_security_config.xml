@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Plain HTTP is allowed because the AI endpoint is the user's own: Ollama serves
+    http://localhost:11434 by default, and a server on the home network rarely has a certificate.
+    A domain-config names hosts, not address ranges, so the LAN cannot be singled out and the
+    allowance is app-wide. Every address the app itself contacts uses https: the built-in AI
+    providers and the update check (Ktor refuses a redirect from https to http).
+-->
+<network-security-config xmlns:tools="http://schemas.android.com/tools">
+    <base-config
+        cleartextTrafficPermitted="true"
+        tools:ignore="InsecureBaseConfiguration" />
+</network-security-config>
