@@ -6,6 +6,7 @@ import androidx.room3.OnConflictStrategy
 import androidx.room3.Query
 import androidx.room3.Transaction
 import androidx.room3.Upsert
+import dev.npn.core.journal.EventCopies
 
 class MetadataIdentityCollision(
     message: String,
@@ -26,15 +27,35 @@ private fun validateActor(
     }
 }
 
-private fun validateIdentity(
-    existing: MetadataEventEntity?,
-    incoming: MetadataEventEntity,
+/** What recording a source's events changed in the event table ([MetadataProjectionDao.ingest]). */
+data class IngestedEvents(
+    /** The events new to the table: the ones no fold has seen yet. */
+    val inserted: List<MetadataEventEntity>,
+    /**
+     * Whether a stored event now holds a richer copy of itself ([EventCopies]). A fold that has the
+     * poorer copy takes the richer one in only by folding again in full.
+     */
+    val enriched: Boolean,
 ) {
-    if (existing != null && existing.canonicalJson != incoming.canonicalJson) {
-        throw MetadataIdentityCollision(
+    companion object {
+        val NONE = IngestedEvents(emptyList(), enriched = false)
+    }
+}
+
+/**
+ * The canonical JSON the table keeps for the identity of [incoming], which it holds as [stored]: the
+ * same, or of two copies where one lacks only keys of the other (a build that does not know them
+ * encoded the event again), the richer. Any other difference is a collision.
+ */
+private fun keptCopy(
+    stored: MetadataEventEntity,
+    incoming: MetadataEventEntity,
+): String {
+    if (stored.canonicalJson == incoming.canonicalJson) return stored.canonicalJson
+    return EventCopies.richer(stored.canonicalJson, incoming.canonicalJson)
+        ?: throw MetadataIdentityCollision(
             "Event identity ${incoming.deviceId}:${incoming.sequence} has conflicting content",
         )
-    }
 }
 
 private fun validateHlc(
@@ -93,6 +114,16 @@ interface MetadataProjectionDao {
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertEvent(event: MetadataEventEntity): Long
+
+    /** Keep [canonicalJson], a richer copy of the stored event, in its place ([insertNewEvents]). */
+    @Query(
+        "UPDATE metadata_events SET canonicalJson = :canonicalJson WHERE deviceId = :deviceId AND sequence = :sequence",
+    )
+    suspend fun replaceCanonicalJson(
+        deviceId: String,
+        sequence: Long,
+        canonicalJson: String,
+    )
 
     @Query("SELECT * FROM metadata_sources WHERE path = :path")
     suspend fun source(path: String): MetadataSourceEntity?
@@ -215,8 +246,8 @@ interface MetadataProjectionDao {
 
     /**
      * Record [source] as applied with [events], with the [transactionActor] of a v2 object and,
-     * for a snapshot, the hashes it [supersedes]. Returns the events new to the table, which are
-     * the ones a fold has not seen yet; empty when the source was already applied unchanged.
+     * for a snapshot, the hashes it [supersedes]. Returns what it changed in the event table: nothing
+     * when the source was already applied unchanged.
      * Idempotent: two overlapping snapshots each record their own (path, hash) rows and share event
      * identities harmlessly.
      */
@@ -226,36 +257,45 @@ interface MetadataProjectionDao {
         events: List<MetadataEventEntity>,
         transactionActor: MetadataTransactionActorEntity? = null,
         supersedes: List<String> = emptyList(),
-    ): List<MetadataEventEntity> {
+    ): IngestedEvents {
         val existing = source(source.path)
-        if (existing?.fingerprint == source.fingerprint && existing.status == SourceStatus.APPLIED) return emptyList()
+        if (existing?.fingerprint == source.fingerprint && existing.status == SourceStatus.APPLIED) {
+            return IngestedEvents.NONE
+        }
         if (transactionActor != null) {
             validateActor(actor(transactionActor.actorId), transactionActor)
             insertActor(transactionActor)
         }
-        val inserted = insertNewEvents(events)
+        val ingested = insertNewEvents(events)
         replaceSourceEvents(source.path, events)
         if (source.kind == SourceKind.SNAPSHOT) {
             deleteSupersededBy(source.path)
             insertSuperseded(supersedes.map { MetadataSupersededEntity(source.path, it) })
         }
         upsertSource(source.copy(status = SourceStatus.APPLIED))
-        return inserted
+        return ingested
     }
 
     /**
      * Insert those of [events] the table does not hold yet, after checking that none collides with
-     * an event it does hold. Returns the ones inserted.
+     * an event it does hold, and keep the richer copy of one it holds ([keptCopy]).
      */
     @Transaction
-    suspend fun insertNewEvents(events: List<MetadataEventEntity>): List<MetadataEventEntity> {
+    suspend fun insertNewEvents(events: List<MetadataEventEntity>): IngestedEvents {
         val inserted = ArrayList<MetadataEventEntity>()
+        var enriched = false
         for (incoming in events) {
-            validateIdentity(event(incoming.deviceId, incoming.sequence), incoming)
+            val stored = event(incoming.deviceId, incoming.sequence)
+            val kept = stored?.let { keptCopy(it, incoming) }
             validateHlc(eventAtHlc(incoming.hlcPhysical, incoming.hlcCounter, incoming.hlcDevice), incoming)
-            if (insertEvent(incoming) != IGNORED) inserted += incoming
+            if (stored == null) {
+                if (insertEvent(incoming) != IGNORED) inserted += incoming
+            } else if (kept != stored.canonicalJson) {
+                replaceCanonicalJson(incoming.deviceId, incoming.sequence, incoming.canonicalJson)
+                enriched = true
+            }
         }
-        return inserted
+        return IngestedEvents(inserted, enriched)
     }
 
     /**

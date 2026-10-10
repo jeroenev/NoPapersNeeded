@@ -293,7 +293,11 @@ live in `buildSrc`. Hot Reload via `mise hot`.
   build does not know breaks less, but lasts only in the object that holds it: that build drops it
   from every event it writes again, compaction included, which re-encodes the events it carries
   from its own index. A build from before `perDocument` that compacts the library takes the flag
-  off every field definition it carries.
+  off every field definition it carries. Such a copy is still the same event: two copies of one
+  event identity where one lacks only keys of the other are one event, and the index keeps the
+  richer, whichever it read first (`EventCopies`; a fold that had the poorer one folds again in
+  full). Any other difference is a collision that blocks writes. An index rebuilt once the original
+  object is gone has only the poorer copy.
 - **Publication.** An object is staged under a `.part` name in its bucket, hash-checked, then
   published without replacement: a hard link, or where the filesystem has none (Android's shared
   storage, exFAT) an exclusive rename (`renameat2(RENAME_NOREPLACE)` on Linux and Android,

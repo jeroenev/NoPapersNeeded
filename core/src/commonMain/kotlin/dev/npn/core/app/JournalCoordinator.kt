@@ -292,19 +292,29 @@ class JournalCoordinator internal constructor(
                 val current = foldedState()
                 val staged = accumulator.readObject(relPath)
                 var events: List<JournalEvent> = emptyList()
+                var refold = false
                 if (staged != null) {
                     indexer.projection {
-                        events = accumulator.ingestObject(staged)
-                        if (events.isEmpty()) return@projection
+                        val recorded = accumulator.ingestObject(staged)
+                        events = recorded.events
+                        refold = recorded.refold
+                        if (refold || events.isEmpty()) return@projection
                         events.forEach(current::apply)
                         observeSourceHlc(current.maxHlc)
                         indexer.refreshEvents(current, events)
                     }
                 }
-                syncedSettings.update(current, events)
-                // The projection now matches the enlarged source set; record that so the next open
-                // can reuse it instead of refolding.
-                accumulator.markReady(current.maxHlc)
+                if (refold) {
+                    // The object holds a richer copy of an event the live fold has: only a full
+                    // refold takes it in, owed until it is done.
+                    dropFold()
+                    recoverDurableProjection()
+                } else {
+                    syncedSettings.update(current, events)
+                    // The projection now matches the enlarged source set; record that so the next
+                    // open can reuse it instead of refolding.
+                    accumulator.markReady(current.maxHlc)
+                }
             }
         }
 

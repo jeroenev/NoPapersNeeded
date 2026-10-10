@@ -126,8 +126,18 @@ class MetadataAccumulator(
         return stage(meta, path)
     }
 
-    /** Record the object [staged] read. Returns the newly-unseen events (empty on a no-op). */
-    suspend fun ingestObject(staged: StagedSource): List<JournalEvent> = record(staged)
+    /**
+     * What recording one source did: [events] are the ones no fold has seen yet (none on a no-op),
+     * and [refold] says a stored event now holds a richer copy of itself, which a fold takes in only
+     * by folding again in full ([dev.npn.core.db.IngestedEvents.enriched]).
+     */
+    class RecordedSource internal constructor(
+        val events: List<JournalEvent>,
+        val refold: Boolean,
+    )
+
+    /** Record the object [staged] read. */
+    suspend fun ingestObject(staged: StagedSource): RecordedSource = record(staged)
 
     /**
      * Read the source [meta] describes, classified as [path], unless it was applied before and is
@@ -166,10 +176,9 @@ class MetadataAccumulator(
 
     /**
      * Record [staged]: its events when it read as valid, else why not, failing the pass. A source
-     * applied before that no longer reads as valid fails without being recorded. Returns the events
-     * no fold has seen yet.
+     * applied before that no longer reads as valid fails without being recorded.
      */
-    private suspend fun record(staged: StagedSource): List<JournalEvent> =
+    private suspend fun record(staged: StagedSource): RecordedSource =
         when (val result = staged.read) {
             is JournalSourceRead.Accepted -> {
                 val source =
@@ -188,7 +197,8 @@ class MetadataAccumulator(
                         ?.takeIf { staged.kind == SourceKind.OBJECT }
                         ?.let { MetadataTransactionActorEntity(it.event.dev, staged.contentHash) }
                 val supersedes = result.manifest?.supersedes.orEmpty()
-                unseen(result.events, dao.ingest(source, result.events.map { it.toEventEntity() }, actor, supersedes))
+                val ingested = dao.ingest(source, result.events.map { it.toEventEntity() }, actor, supersedes)
+                RecordedSource(unseen(result.events, ingested.inserted), ingested.enriched)
             }
 
             is JournalSourceRead.Retryable -> {
@@ -257,12 +267,13 @@ class MetadataAccumulator(
     suspend fun reconcile(currentState: FoldedState? = null): MetadataReconciliation {
         val pass = runReconcilePass()
 
-        // A shrunken event graph, a wiped projection, a re-ingested (mutated) existing source, or
-        // a first load with no prior state all force a full refold. Only when every read this pass
-        // purely ADDED events onto an intact prior state is incremental projection sound.
+        // A shrunken event graph, a wiped projection, a re-ingested (mutated) existing source, a
+        // richer copy of a stored event, or a first load with no prior state all force a full
+        // refold. Only when every read this pass purely ADDED events onto an intact prior state is
+        // incremental projection sound.
         val incremental =
             currentState != null && !pass.projectionCleared &&
-                !pass.ingest.reingestedExisting && !pass.sourceRemoved
+                !pass.ingest.refold && !pass.sourceRemoved
 
         val state =
             when {
@@ -400,11 +411,12 @@ class MetadataAccumulator(
         var read = 0
         val newEvents = ArrayList<JournalEvent>()
 
-        // True if any source that was already APPLIED got re-ingested (mutated in place). Such a
-        // rewrite can drop events (MetadataProjectionDao.replaceSourceEvents), so the in-memory state
-        // may no longer be a strict superset -> the caller must fully refold rather than apply new
-        // events.
-        var reingestedExisting = false
+        // True if any source that was already APPLIED got re-ingested (mutated in place), which can
+        // drop events (MetadataProjectionDao.replaceSourceEvents), or a source replaced a stored
+        // event with a richer copy of it, which the in-memory state folded as it was. Either way
+        // that state plus this pass's new events is not the store -> the caller must fully refold
+        // rather than apply new events.
+        var refold = false
     }
 
     private suspend fun ingestFiles(files: Collection<FileMeta>): IngestBatch {
@@ -427,10 +439,10 @@ class MetadataAccumulator(
             fail("Unsupported metadata object store version ${path.version}")
         }
         val staged = stage(meta, path) ?: return
-        val unseen = record(staged)
+        val recorded = record(staged)
         batch.read++
-        batch.newEvents.addAll(unseen)
-        if (staged.previouslyApplied) batch.reingestedExisting = true
+        batch.newEvents.addAll(recorded.events)
+        if (staged.previouslyApplied || recorded.refold) batch.refold = true
     }
 
     /**

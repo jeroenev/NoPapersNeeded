@@ -88,7 +88,8 @@ sealed class JournalOp {
      *
      * `perDocument` is written only when true. Builds from before it ignore the key and drop it from
      * every definition they write again: a label edit there, or a compaction there, which re-encodes
-     * the events it carries from its own index.
+     * the events it carries from its own index. Such a re-encoded copy is the same event, and the
+     * index keeps the copy with the flag ([EventCopies]).
      */
     data class FieldDefSet(
         val key: String,
