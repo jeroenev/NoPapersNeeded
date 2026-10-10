@@ -212,17 +212,11 @@ class JournalCoordinator internal constructor(
     }
 
     /**
-     * When each document with a trash history was trashed, per the journal ingested so far: null
-     * once restored, absent once deleted. Folds only the lifecycle events, not the whole journal.
+     * Every document the journal knows that is neither deleted nor superseded, mapped to when it was
+     * trashed, or to null while it is not in the trash ([FoldedState.trashTimes]). Read from the live
+     * fold, which the rescan before a trash purge has built.
      */
-    suspend fun journalTrashTimes(): Map<String, Long?> =
-        accumulator
-            .loadStateOf(
-                JournalOp.DocTrash.WIRE,
-                JournalOp.DocRestore.WIRE,
-                JournalOp.DocDelete.WIRE,
-                JournalOp.DocUndelete.WIRE,
-            ).trashTimes()
+    suspend fun journalTrashTimes(): Map<String, Long?> = locked { foldedState().trashTimes() }
 
     /**
      * Write the well-known field definitions once per library, and bring a library seeded at an

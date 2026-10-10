@@ -299,10 +299,14 @@ class FoldedState {
     }
 
     /**
-     * Every document with a trash history that is not deleted, mapped to [trashedAtMillis]: when
-     * it was trashed, or null once it was restored.
+     * Every document an event names that is neither deleted nor superseded by a relink, mapped to
+     * [trashedAtMillis]: when it was trashed, or null while it is not in the trash.
      */
-    fun trashTimes(): Map<String, Long?> = trash.keys.filterNot(::isDeleted).associateWith(::trashedAtMillis)
+    fun trashTimes(): Map<String, Long?> {
+        val named =
+            docsWithMetadata() + trash.keys + undeleted.keys + relinks.values.flatMap { it.map(RelinkClaim::newDoc) }
+        return named.filter { !isDeleted(it) && resolveDocId(it) == it }.associateWith(::trashedAtMillis)
+    }
 
     /**
      * Resolve the effective (current) document id by following the relink chain from [doc].

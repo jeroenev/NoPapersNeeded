@@ -126,14 +126,15 @@ class TrashOps(
     /**
      * Permanently delete trash entries trashed strictly before [cutoffMillis].
      *
-     * [documents] maps each live document id to the time it was trashed, or to null while it is
-     * not in trash. An entry belongs to the documents whose id starts with the hash prefix in its
-     * name ([NpnPaths.trashHashPrefix]), all of them, so a prefix two documents share only keeps it
-     * longer and its bytes need no hashing:
+     * [documents] maps each document that is neither deleted nor superseded to the time it was
+     * trashed, or to null while it is not in trash. An entry belongs to the documents whose id starts
+     * with the hash prefix in its name ([NpnPaths.trashHashPrefix]), all of them, so a prefix two
+     * documents share only keeps it longer and its bytes need no hashing:
      * - a trashed document: its trash time decides. The entry's mtime cannot, because a move into
      *   trash keeps the PDF's own mtime, so a document imported long ago would go the moment it
      *   was trashed.
-     * - a document not in trash yet: kept. Trashing moves the PDF before it commits the event.
+     * - a document not in trash yet: kept. Trashing moves the PDF before it commits the event, and a
+     *   crash in between leaves the PDF here with no event.
      * - no document: the mtime decides, as nothing better is known.
      */
     suspend fun purgeOlderThan(

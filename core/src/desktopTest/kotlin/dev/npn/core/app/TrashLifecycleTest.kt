@@ -522,6 +522,41 @@ class TrashLifecycleTest {
             }
         }
 
+    /**
+     * A crash between a trash's file move and its journal event leaves the PDF in the trash with no
+     * record of the trash. A device with no row for it (it joined since, or rebuilt its index) still
+     * knows the document from the journal, as not trashed: the purge keeps its bytes, however old
+     * their mtime.
+     */
+    @Test
+    fun aDeviceWithNoRowKeepsTheFileOfATrashTheJournalNeverRecorded() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                val now = 400 * DAY
+                rig.clock.now = now
+                rig.writePdf("old.pdf", PdfFixtures.embeddedTextPdf("stranded"))
+                Files.setLastModifiedTime(rig.libRoot.resolve("old.pdf"), FileTime.fromMillis(now - 90 * DAY))
+                rig.session.rescan()
+                val id = rig.docId("old.pdf")
+                rig.session.meta.addTag(listOf(id), "kept")
+                rig.fs.move("old.pdf", NpnPaths.trashPath("old.pdf", id))
+
+                val (second, secondDb) = rig.secondSession(backgroundScope, clock = MutableClock(now + 1))
+                try {
+                    second.rescan()
+                    second.purgeTrash(olderThanDays = 30)
+                } finally {
+                    second.close()
+                    secondDb.close()
+                }
+
+                rig.fs.sha256(NpnPaths.trashPath("old.pdf", id)) shouldBe id
+            } finally {
+                rig.close()
+            }
+        }
+
     private companion object {
         const val DAY = 24L * 60L * 60L * 1000L
     }
