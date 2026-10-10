@@ -5,6 +5,7 @@ import dev.npn.core.journal.PendingOp
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
+import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
 import java.nio.file.attribute.FileTime
@@ -51,7 +52,8 @@ class TempFileSweepTest {
                     file("inbox/.npn-tmp-123456.part"),
                     file("inbox/" + NpnPaths.Temp.moveName(NONCE)),
                     file(NpnPaths.Temp.relocationPath("archive/b.pdf", NONCE)),
-                    file(NpnPaths.Temp.bakePath("docs/a.pdf")),
+                    // A bake whose move into place copied the baked bytes and left the source.
+                    file(NpnPaths.Temp.bakePath("docs/a.pdf"), content = "bytes of docs/a.pdf"),
                     file(NpnPaths.Temp.importPath(NONCE)),
                     file("${NpnPaths.TMP_DIR}/.npn-tmp-42.part"),
                     file("${NpnPaths.OCR_DIR}/.npn-tmp-7.part"),
@@ -86,6 +88,23 @@ class TempFileSweepTest {
             (fresh + recovery + orphanBake + lookalike).all(rig::exists).shouldBeTrue()
             // The recovery file is the document, so the rescan indexes it like any PDF.
             documentPaths() shouldContainExactlyInAnyOrder listOf(recovery)
+        }
+
+    /**
+     * A bake interrupted between deleting the original and moving the baked bytes into place leaves
+     * its temporary file as the document's only copy. A file that took the document's path since (a
+     * sync putting another PDF there) does not make it a leftover; only one holding its bytes does.
+     */
+    @Test
+    fun aBakeTempIsKeptWhenAnotherFileTookItsDocumentsPath() =
+        runTest {
+            rig.clock.now = now
+            file("docs/a.pdf", content = "another file's bytes")
+            val bake = file(NpnPaths.Temp.bakePath("docs/a.pdf"), content = "baked document bytes")
+
+            rig.coordinator().rescan()
+
+            rig.fs.readBytes(bake).decodeToString() shouldBe "baked document bytes"
         }
 
     @Test
