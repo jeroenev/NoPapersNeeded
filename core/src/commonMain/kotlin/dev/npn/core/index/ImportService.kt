@@ -475,10 +475,16 @@ class ImportService(
 
     private fun freshTmpPath(): String = NpnPaths.Temp.importPath(Uuid.random().toString())
 
+    /**
+     * Delete the staging file, best effort: one left behind is never indexed (it lives under
+     * `.npn/`), and a rescan sweeps it away once it is old (TempFileSweep). Neither cancellable nor
+     * failing, so a caller cancelled while the import placed its file still gets the result, and
+     * records it (a split, to take the part back) before it sees the cancellation.
+     */
     private suspend fun cleanup(tmpPath: String) {
-        // Best effort: a staging file left behind is never indexed (it lives under `.npn/`), and a
-        // rescan sweeps it away once it is old (TempFileSweep).
-        if (fs.exists(tmpPath)) runCatchingCancellable { fs.delete(tmpPath) }
+        withContext(NonCancellable) {
+            runCatchingCancellable { if (fs.exists(tmpPath)) fs.delete(tmpPath) }
+        }
     }
 
     private suspend fun chooseImportTarget(

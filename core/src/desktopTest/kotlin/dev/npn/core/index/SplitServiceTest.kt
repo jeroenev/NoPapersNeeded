@@ -3,16 +3,21 @@ package dev.npn.core.index
 import dev.npn.core.app.SplitFailure
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.documentEntity
+import dev.npn.core.db.fieldTypes
 import dev.npn.core.db.isLive
+import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.pdf.PdfBoxEngine
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -192,6 +197,76 @@ class SplitServiceTest {
 
             assertFailsWith<CancellationException> { split.split(original.docId, listOf(0..0, 1..1)) }
 
+            libraryPdfs() shouldBe listOf("contract.pdf")
+        }
+
+    /**
+     * A split over the rig's library whose filesystem cancels [job] right after it places a file
+     * whose name ends with [partName]: the split's caller going away while that part is imported.
+     */
+    private fun cancellingOnPlacement(
+        partName: String,
+        job: () -> Job,
+    ): SplitService {
+        val fs =
+            object : LibraryFileSystem by rig.fs {
+                override suspend fun move(
+                    fromRelPath: String,
+                    toRelPath: String,
+                ) {
+                    rig.fs.move(fromRelPath, toRelPath)
+                    if (toRelPath.endsWith(partName)) job().cancel()
+                }
+            }
+        val imports =
+            ImportService(
+                fs,
+                rig.db,
+                rig.deviceDb.ocrQueueDao(),
+                rig.clock,
+                fieldTypes = { rig.db.fieldDefDao().fieldTypes() },
+            )
+        return SplitService(fs, PdfBoxEngine(), imports, rig.db.documentDao())
+    }
+
+    /** A part placed while the split was cancelled is handed back to it, so its rollback takes that part too. */
+    @Test
+    fun aSplitCancelledWhileAPartIsPlacedTakesThatPartBack() =
+        runTest {
+            val original = stageOriginal()
+            lateinit var job: Job
+            val split = cancellingOnPlacement("(part 1).pdf") { job }
+
+            job = launch { split.split(original.docId, listOf(0..0, 1..1)) }
+            job.join()
+
+            libraryPdfs() shouldBe listOf("contract.pdf")
+            rig.db
+                .documentDao()
+                .getAllLive()
+                .map { it.docId } shouldBe listOf(original.docId)
+            rig.deviceDb
+                .ocrQueueDao()
+                .observeQueue()
+                .first()
+                .shouldBeEmpty()
+        }
+
+    /** Cancelled while its last part is placed, the split still returns every part, for its caller to take back. */
+    @Test
+    fun aSplitCancelledWhileItsLastPartIsPlacedReturnsThatPart() =
+        runTest {
+            val original = stageOriginal()
+            lateinit var job: Job
+            val split = cancellingOnPlacement("(part 2).pdf") { job }
+            var result: SplitService.Result? = null
+
+            job = launch { result = split.split(original.docId, listOf(0..0, 1..1)) }
+            job.join()
+
+            val parts = result.shouldBeInstanceOf<SplitService.Result.Done>().parts
+            parts shouldHaveSize 2
+            split.rollBack(parts)
             libraryPdfs() shouldBe listOf("contract.pdf")
         }
 }
