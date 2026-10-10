@@ -30,7 +30,7 @@ class WatchedFolderSweepTest {
             id = "scan.pdf",
             name = "scan.pdf",
             size = 10,
-            mtimeMillis = 0,
+            mtimeMillis = 1_000,
             source = ExternalSource(Path.of("scan.pdf")),
         )
 
@@ -45,7 +45,10 @@ class WatchedFolderSweepTest {
             return files.toList()
         }
 
-        override suspend fun delete(file: WatchedFolderFile) = true
+        override suspend fun delete(
+            file: WatchedFolderFile,
+            docId: String,
+        ) = true
 
         override fun changes(): Flow<Unit> = events
     }

@@ -17,13 +17,26 @@ data class WatchedFolderFile(
 ) {
     /**
      * Whether the file under this one's [id], now [size] bytes and last modified at [mtimeMillis], is
-     * still the file listed: the same size and mtime, the proof a rescan takes. A provider that
-     * reported no mtime (0) for the listing is judged by the size alone.
+     * still the file listed: the same size and mtime, the proof a rescan takes. Nothing proves it
+     * when the provider reported no mtime (0) for the listing.
      */
     fun unchangedAt(
         size: Long,
         mtimeMillis: Long,
-    ): Boolean = size == this.size && (this.mtimeMillis == 0L || mtimeMillis == this.mtimeMillis)
+    ): Boolean = this.mtimeMillis != 0L && size == this.size && mtimeMillis == this.mtimeMillis
+
+    /**
+     * Whether the file under this one's [id], now [size] bytes and last modified at [mtimeMillis],
+     * still holds the bytes imported as [docId]: while it is [unchangedAt] the listing, or, when the
+     * listing had no mtime, while its bytes [hash] to [docId], as a file written under its name since
+     * can have the same size.
+     */
+    fun stillHolds(
+        docId: String,
+        size: Long,
+        mtimeMillis: Long,
+        hash: () -> String,
+    ): Boolean = if (this.mtimeMillis == 0L) hash() == docId else unchangedAt(size, mtimeMillis)
 }
 
 /**
@@ -36,11 +49,14 @@ interface WatchedFolder {
 
     /**
      * Remove [file] from the watched folder (only used when delete-after-import is on), only while
-     * it is still the file listed and imported ([WatchedFolderFile.unchangedAt]): a file written
-     * under its name since was never imported, and is left for the next sweep. Returns whether it
-     * deleted the file.
+     * it still holds the bytes imported as [docId], or found in the library as it
+     * ([WatchedFolderFile.stillHolds]): a file written under its name since was never imported, and
+     * is left for the next sweep. Returns whether it deleted the file.
      */
-    suspend fun delete(file: WatchedFolderFile): Boolean
+    suspend fun delete(
+        file: WatchedFolderFile,
+        docId: String,
+    ): Boolean
 
     /**
      * Coarse change notifications, best effort. Platforms without file events (android SAF)

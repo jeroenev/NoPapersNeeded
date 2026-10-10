@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 import dev.npn.core.fs.ExternalSource
+import dev.npn.core.fs.sha256Hex
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
@@ -40,12 +41,21 @@ class SafWatchedFolder(
             }.getOrDefault(emptyList())
         }
 
-    override suspend fun delete(file: WatchedFolderFile): Boolean =
+    override suspend fun delete(
+        file: WatchedFolderFile,
+        docId: String,
+    ): Boolean =
         withContext(Dispatchers.IO) {
             runCatching {
-                // A provider that reports no mtime (lastModified 0) is judged by the size alone.
-                val doc = DocumentFile.fromSingleUri(appContext, Uri.parse(file.id)) ?: return@runCatching false
-                file.unchangedAt(doc.length(), doc.lastModified()) && doc.delete()
+                val uri = Uri.parse(file.id)
+                val doc = DocumentFile.fromSingleUri(appContext, uri) ?: return@runCatching false
+                // A provider that reports no mtime (lastModified 0) has the file read and hashed.
+                val holds =
+                    file.stillHolds(docId, doc.length(), doc.lastModified()) {
+                        val input = checkNotNull(appContext.contentResolver.openInputStream(uri)) { "Cannot open $uri" }
+                        input.use { it.sha256Hex() }
+                    }
+                holds && doc.delete()
             }.getOrDefault(false)
         }
 

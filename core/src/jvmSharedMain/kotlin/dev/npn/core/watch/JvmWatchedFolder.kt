@@ -1,6 +1,7 @@
 package dev.npn.core.watch
 
 import dev.npn.core.fs.externalSourceOfPath
+import dev.npn.core.fs.sha256Hex
 import dev.npn.core.fs.watchDirs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -48,13 +49,19 @@ class JvmWatchedFolder(
             }.getOrDefault(emptyList())
         }
 
-    override suspend fun delete(file: WatchedFolderFile): Boolean =
+    override suspend fun delete(
+        file: WatchedFolderFile,
+        docId: String,
+    ): Boolean =
         withContext(Dispatchers.IO) {
             runCatching {
                 // Paths.get, not Path.of: the latter is Java 11 and only reached Android at API 34.
                 val path = Paths.get(file.id)
-                file.unchangedAt(Files.size(path), Files.getLastModifiedTime(path).toMillis()) &&
-                    Files.deleteIfExists(path)
+                val holds =
+                    file.stillHolds(docId, Files.size(path), Files.getLastModifiedTime(path).toMillis()) {
+                        Files.newInputStream(path).use { it.sha256Hex() }
+                    }
+                holds && Files.deleteIfExists(path)
             }.getOrDefault(false)
         }
 

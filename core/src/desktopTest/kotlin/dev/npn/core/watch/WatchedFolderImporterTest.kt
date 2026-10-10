@@ -202,8 +202,58 @@ class WatchedFolderImporterTest {
         }
 
     /**
+     * A provider that reports no mtime (SAF's lastModified can be 0): the scanner writes its next scan
+     * under the same name, of the same size, after the first was imported. Only bytes the import put
+     * in the library go: that file stays, and the same importer imports it next, while a source that
+     * still holds what was imported is deleted.
+     */
+    @Test
+    fun withNoMtimeASourceGoesOnlyWhileItHoldsTheImportedBytes() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                val first = PdfFixtures.embeddedTextPdf("scan one")
+                val next = PdfFixtures.embeddedTextPdf("scan two")
+                next.size shouldBe first.size
+                stagePdf("scan.pdf", first)
+                stagePdf("other.pdf", PdfFixtures.embeddedTextPdf("left as it was"))
+                var rewritten = false
+                val rewriting =
+                    object : IngestFacade by rig.session {
+                        override suspend fun importPdf(
+                            source: ExternalSource,
+                            suggestedName: String,
+                        ): ImportOutcome =
+                            rig.session.importPdf(source, suggestedName).also {
+                                if (suggestedName == "scan.pdf" && !rewritten) {
+                                    rewritten = true
+                                    Files.write(watchDir.resolve("scan.pdf"), next)
+                                }
+                            }
+                    }
+                val importer = WatchedFolderImporter(rewriting, NoMtime(JvmWatchedFolder(watchDir)), { true })
+
+                importer.scanOnce().imported shouldBe 2
+
+                Files.readAllBytes(watchDir.resolve("scan.pdf")) shouldBe next
+                Files.exists(watchDir.resolve("other.pdf")) shouldBe false
+                importer.scanOnce().imported shouldBe 1
+                Files.exists(watchDir.resolve("scan.pdf")) shouldBe false
+            } finally {
+                rig.close()
+            }
+        }
+
+    /** [folder] as a provider that reports no mtime lists it. */
+    private class NoMtime(
+        private val folder: WatchedFolder,
+    ) : WatchedFolder by folder {
+        override suspend fun listPdfs(): List<WatchedFolderFile> = folder.listPdfs().map { it.copy(mtimeMillis = 0) }
+    }
+
+    /**
      * A source is still the file listed while its size and mtime are; where the provider reported no
-     * mtime for the listing (SAF may not), the size alone decides.
+     * mtime for the listing (SAF may not), nothing proves it.
      */
     @Test
     fun aSourceIsTheFileListedWhileItsSizeAndMtimeAreUnchanged() {
@@ -214,8 +264,8 @@ class WatchedFolderImporterTest {
         listed.unchangedAt(size = 10, mtimeMillis = 6_000) shouldBe false
         listed.unchangedAt(size = 10, mtimeMillis = 0) shouldBe false
         val noMtime = listed.copy(mtimeMillis = 0)
-        noMtime.unchangedAt(size = 10, mtimeMillis = 6_000) shouldBe true
-        noMtime.unchangedAt(size = 11, mtimeMillis = 0) shouldBe false
+        noMtime.unchangedAt(size = 10, mtimeMillis = 6_000) shouldBe false
+        noMtime.unchangedAt(size = 10, mtimeMillis = 0) shouldBe false
     }
 
     @Test
