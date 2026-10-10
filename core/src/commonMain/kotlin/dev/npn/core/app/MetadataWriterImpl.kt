@@ -341,13 +341,14 @@ class MetadataWriterImpl(
         // the document's bytes go: its copies in the trash, or else its file. A trashed or missing
         // document gave its path up, so the file there may be another one now. Each is hashed before
         // the lock, as a whole file read under it would hold up every other write, and goes under it
-        // only while unchanged since and while the document is still deleted: an import of its bytes
-        // can have brought it back meanwhile, with that very file.
+        // only while unchanged since and while the journal still has the document deleted: an import
+        // of its bytes can have brought it back meanwhile, with that very file. Its row cannot say:
+        // a rescan meanwhile shows a file still in place again without that being a return.
         log.runLogged("Deleting the file of $docId") {
             val hashed = trashOps.hashCandidates(docId, listing)
             val file = fileAt(doc)
-            coordinator.serialized { _ ->
-                if (documentDao.getByDocId(docId)?.deleted == false) return@serialized
+            coordinator.serialized { journal ->
+                if (!journal.isDeleted(docId)) return@serialized
                 val own =
                     trashOps.confirmedCopiesOf(docId, hashed).ifEmpty {
                         listOfNotNull(doc.relPath.takeIf { stillHolds(it, docId, file) })

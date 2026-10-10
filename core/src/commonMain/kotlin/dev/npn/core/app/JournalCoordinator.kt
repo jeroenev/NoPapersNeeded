@@ -456,7 +456,8 @@ class JournalCoordinator internal constructor(
      * against other imports and against every rescan, whose listing and row writes it would
      * otherwise interleave with. [block] reads and writes the journal through the [ImportJournal] it
      * is handed, under the same lock: an import reads the relinks and records a returning
-     * document's return in the step that made its row live. It must not call another member here,
+     * document's return in the step that made its row live, and a delete for good removes the bytes
+     * only while the journal still has the document deleted. It must not call another member here,
      * as the lock is not reentrant.
      */
     suspend fun <T> serialized(block: suspend (ImportJournal) -> T): T = locked { block(lockedJournal) }
@@ -465,6 +466,8 @@ class JournalCoordinator internal constructor(
     private val lockedJournal =
         object : ImportJournal {
             override suspend fun successorOf(docId: String): String = foldedState().resolveDocId(docId)
+
+            override suspend fun isDeleted(docId: String): Boolean = foldedState().isDeleted(docId)
 
             override suspend fun restoreReturned(
                 docId: String,

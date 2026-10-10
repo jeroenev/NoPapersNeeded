@@ -920,6 +920,36 @@ class PermanentDeleteTest {
         }
 
     /**
+     * A rescan between the deletion and the removal of the file finds the document's bytes still at
+     * its path and shows it again for now, writing nothing to the journal so soon after the delete.
+     * That is no return: the file still goes, and the document stays deleted.
+     */
+    @Test
+    fun aRescanBeforeTheFileWentDoesNotKeepIt() =
+        runTest {
+            val rescanning = BeforeTrashListing()
+            val rig = AppSessionRig.create(backgroundScope, files = rescanning::over)
+            try {
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("deleted, its file still in place"))
+                val id = trashedInPlace(rig, "a.pdf")
+                rescanning.next = { rig.session.rescan() }
+
+                rig.session.docLifecycle.deleteDocPermanently(id)
+
+                rig.exists("a.pdf").shouldBeFalse()
+                rig.session.rescan()
+                rig.db
+                    .documentDao()
+                    .getByDocId(id)
+                    .shouldNotBeNull()
+                    .deleted
+                    .shouldBeTrue()
+            } finally {
+                rig.close()
+            }
+        }
+
+    /**
      * An import took the old path of a document being deleted for good, after the deletion and before
      * the deletion read the file there. That file is the import's, as its row says, and is not read
      * for the deleted document's bytes.

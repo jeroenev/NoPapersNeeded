@@ -64,11 +64,19 @@ class SupersededImportException :
 
 /**
  * The journal as an import's step reads and writes it, under the writer lock that step holds
- * ([ImportService]). Its calls take no lock of their own, so they are for that step alone.
+ * ([ImportService]), as does a delete for good's removal of the bytes. Its calls take no lock of
+ * their own, so they are for that step alone.
  */
 interface ImportJournal {
     /** The document [docId]'s bytes became, its relink chain followed to the end; [docId] when none superseded it. */
     suspend fun successorOf(docId: String): String
+
+    /**
+     * Whether the journal has [docId] deleted: its latest delete is newer than any undelete. An
+     * import that brings it back writes one ([restoreReturned]); a rescan showing its file again
+     * soon after the delete writes none, and leaves it deleted.
+     */
+    suspend fun isDeleted(docId: String): Boolean
 
     /**
      * Record that [docId]'s bytes are in the library again, at [relPath], when the journal still has
@@ -85,6 +93,8 @@ interface ImportJournal {
         val NONE: ImportJournal =
             object : ImportJournal {
                 override suspend fun successorOf(docId: String): String = docId
+
+                override suspend fun isDeleted(docId: String): Boolean = false
 
                 override suspend fun restoreReturned(
                     docId: String,

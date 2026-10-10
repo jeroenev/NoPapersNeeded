@@ -43,6 +43,8 @@ class ImportTakeBackTest {
                             object : ImportJournal {
                                 override suspend fun successorOf(docId: String): String = docId
 
+                                override suspend fun isDeleted(docId: String): Boolean = false
+
                                 override suspend fun restoreReturned(
                                     docId: String,
                                     relPath: String,
