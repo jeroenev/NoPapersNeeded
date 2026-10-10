@@ -35,6 +35,7 @@ class DocumentRestoreTest {
             }
         }
 
+    /** Neither deleted nor trashed once imported again, and still so after an edit and a rescan. */
     @Test
     fun aReImportedDeletedDocumentStaysVisibleAfterAnEdit() =
         withRig {
@@ -42,7 +43,7 @@ class DocumentRestoreTest {
             rig.writePdf("a.pdf", bytes)
             rig.session.rescan()
             val id = rig.docId("a.pdf")
-            rig.session.docLifecycle.deleteDocPermanently(id)
+            deleteForGood(id)
 
             rig.session.ingest
                 .importPdfBytes(bytes, "a.pdf")
@@ -60,24 +61,6 @@ class DocumentRestoreTest {
             assertVisible(id)
         }
 
-    @Test
-    fun aReImportedDocumentDeletedFromTheTrashIsNeitherDeletedNorTrashed() =
-        withRig {
-            val bytes = PdfFixtures.embeddedTextPdf("alpha")
-            rig.writePdf("a.pdf", bytes)
-            rig.session.rescan()
-            val id = rig.docId("a.pdf")
-            rig.session.docLifecycle.trashDoc(id)
-            rig.session.docLifecycle.deleteDocPermanently(id)
-
-            rig.session.ingest
-                .importPdfBytes(bytes, "a.pdf")
-                .shouldBeInstanceOf<ImportOutcome.Imported>()
-            rig.session.meta.setField(id, FieldKeys.TITLE, "Back again")
-
-            assertVisible(id)
-        }
-
     /** Delete and restore are last-writer-wins: a delete after the restore hides it again. */
     @Test
     fun aDeleteNewerThanTheRestoreWins() =
@@ -86,12 +69,12 @@ class DocumentRestoreTest {
             rig.writePdf("a.pdf", bytes)
             rig.session.rescan()
             val id = rig.docId("a.pdf")
-            rig.session.docLifecycle.deleteDocPermanently(id)
+            deleteForGood(id)
             rig.session.ingest
                 .importPdfBytes(bytes, "a.pdf")
                 .shouldBeInstanceOf<ImportOutcome.Imported>()
 
-            rig.session.docLifecycle.deleteDocPermanently(id)
+            deleteForGood(id)
             rig.session.rescan()
 
             rig.db
@@ -113,7 +96,7 @@ class DocumentRestoreTest {
             rig.writePdf("a.pdf", bytes)
             rig.session.rescan()
             val id = rig.docId("a.pdf")
-            rig.session.docLifecycle.deleteDocPermanently(id)
+            deleteForGood(id)
 
             rig.clock.advance(2 * DAY)
             rig.writePdf("a.pdf", bytes)
@@ -151,7 +134,7 @@ class DocumentRestoreTest {
             rig.writePdf("a.pdf", bytes)
             rig.session.rescan()
             val id = rig.docId("a.pdf")
-            rig.session.docLifecycle.deleteDocPermanently(id)
+            deleteForGood(id)
             val objects = rig.journalObjectCount()
 
             rig.writePdf("a.pdf", bytes)
@@ -213,8 +196,7 @@ class DocumentRestoreTest {
         withRig {
             val first = importScan("first")
             rig.session.meta.setField(first, FieldKeys.TITLE, "First scan")
-            rig.session.docLifecycle.trashDoc(first)
-            rig.session.docLifecycle.deleteDocPermanently(first)
+            deleteForGood(first)
 
             rig.clock.advance(2 * DAY)
             val second = importScan("second")
@@ -232,6 +214,12 @@ class DocumentRestoreTest {
                 .shouldBeTrue()
             assertVisible(second)
         }
+
+    /** Trash [id], then delete it for good from the trash, as the user does. */
+    private suspend fun deleteForGood(id: String) {
+        rig.session.docLifecycle.trashDoc(id)
+        rig.session.docLifecycle.deleteDocPermanently(id)
+    }
 
     /** Import a scan of [text] as `scan.pdf`, the name every scan gets; returns its document id. */
     private suspend fun importScan(text: String): String {

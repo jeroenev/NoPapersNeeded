@@ -28,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -96,6 +97,10 @@ private sealed interface TrashConfirm {
     data object EmptyTrash : TrashConfirm
 }
 
+/** Whether this confirmation is for a document no longer among [trashed]. */
+private fun TrashConfirm.leftTheTrash(trashed: List<DocListItem>): Boolean =
+    this is TrashConfirm.DeleteForever && trashed.none { it.doc.docId == docId }
+
 @Composable
 private fun trashTabLabel(tab: TrashTab): String = stringResource(tab.labelResource)
 
@@ -127,7 +132,11 @@ fun TrashScreen(session: LibrarySession) {
         onSelectTab = { tab = it },
         onConfirm = { confirm = it },
     )
-    confirm?.let {
+    // A document that left the trash meanwhile (restored here or on another device) is not there to
+    // delete any more: its confirmation closes rather than stay open to be confirmed.
+    val stale = confirm?.leftTheTrash(state.trashed) == true
+    LaunchedEffect(stale) { if (stale) confirm = null }
+    confirm?.takeUnless { stale }?.let {
         TrashConfirmDialog(
             confirm = it,
             trashedCount = state.trashed.size,

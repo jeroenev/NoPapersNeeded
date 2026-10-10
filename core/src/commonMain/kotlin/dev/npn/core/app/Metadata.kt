@@ -103,9 +103,17 @@ interface DocLifecycle {
      */
     suspend fun restoreDocs(docIds: List<String>): Int
 
-    suspend fun deleteDocPermanently(docId: String) // deletes file + doc-delete tombstone
+    /**
+     * Delete a document in the trash for good: a doc-delete tombstone, then its bytes. A document
+     * not in the trash (restored here or on another device, brought back by an import, or unknown)
+     * is left alone, with nothing written.
+     */
+    suspend fun deleteDocPermanently(docId: String)
 
-    /** [deleteDocPermanently] each of [docIds], over one listing of the trash, as [restoreDocs] restores. */
+    /**
+     * [deleteDocPermanently] each of [docIds], over one listing of the trash, as [restoreDocs] restores.
+     * One no longer in the trash is left alone and is not a failure.
+     */
     suspend fun deleteDocsPermanently(docIds: List<String>): Int
 
     suspend fun renameFile(

@@ -316,7 +316,8 @@ class MetadataWriterImpl(
 
     /**
      * Delete [docId] for good, its copies in the trash as [listing] (from [TrashOps.listTrash]) found
-     * them, or as listed after the deletion without one.
+     * them, or as listed after the deletion without one. Only while it is in the trash: one restored
+     * since (here, on another device, or by an import) is left alone.
      */
     private suspend fun deleteForGood(
         docId: String,
@@ -326,7 +327,7 @@ class MetadataWriterImpl(
         // Tombstone first, bytes second: a refused commit must leave the file where it was. The
         // optimistic row write keeps it hidden (deleted flag) after any rescan.
         coordinator.changeLifecycle(docId) { doc ->
-            if (doc == null) return@changeLifecycle null
+            if (doc == null || !doc.trashed) return@changeLifecycle null
             deleted = doc
             LifecycleChange(
                 ops = listOf(PendingOp.docDelete(docId)),

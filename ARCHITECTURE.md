@@ -180,10 +180,11 @@ live in `buildSrc`. Hot Reload via `mise hot`.
     between: a restore lists and hashes the trash entries before it takes the lock, and
     under it checks them by a stat, hashing again only one whose stat changed (it lists
     the trash there only when no copy it found is left, or it found none: a copy can
-    reach the trash after the listing); a delete for good deletes
-    the bytes after its tombstone is published, hashed before the lock and deleted under
-    it only while unchanged and while the document is still deleted (an import may have
-    brought it back meanwhile). Restoring or emptying the whole trash
+    reach the trash after the listing); a delete for good acts on a document in the trash
+    only (one restored meanwhile, here, on another device or by an import, is left alone),
+    and deletes the bytes after its tombstone is published, hashed before the lock and
+    deleted under it only while unchanged and while the document is still deleted (an
+    import may have brought it back meanwhile). Restoring or emptying the whole trash
     (`DocLifecycle.restoreDocs`, `deleteDocsPermanently`) lists it once for all its
     documents.
     Restore records its final destination: the path the document was trashed from, or

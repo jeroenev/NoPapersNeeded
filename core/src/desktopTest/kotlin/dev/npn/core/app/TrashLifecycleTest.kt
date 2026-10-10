@@ -130,9 +130,11 @@ class TrashLifecycleTest {
                 rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
                 rig.session.rescan()
                 val id = rig.fs.sha256("a.pdf")
+                rig.session.docLifecycle.trashDoc(id)
 
                 rig.session.docLifecycle.deleteDocPermanently(id)
                 rig.exists("a.pdf").shouldBeFalse()
+                trashEntries(rig.fs).shouldBeEmpty()
                 rig.db
                     .documentDao()
                     .getByDocId(id)!!
@@ -235,11 +237,12 @@ class TrashLifecycleTest {
                 rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
                 rig.session.rescan()
                 val id = rig.docId("a.pdf")
+                rig.session.docLifecycle.trashDoc(id)
                 blockMetadataWrites(rig)
 
                 assertFailsWith<IllegalStateException> { rig.session.docLifecycle.deleteDocPermanently(id) }
 
-                rig.exists("a.pdf").shouldBeTrue()
+                trashEntries(rig.fs) shouldHaveSize 1
                 rig.db
                     .documentDao()
                     .getByDocId(id)
@@ -332,33 +335,9 @@ class TrashLifecycleTest {
                 .shouldBeTrue()
         }
 
+    /** A delete whose commit fails leaves the document in the trash, file and row, for a retry. */
     @Test
     fun aDeleteWhoseCommitFailsLeavesTheFileAndTheRowAsTheyWere() =
-        withLifecycle { lifecycle ->
-            val rig = lifecycle.rig
-            rig.writePdf("a.pdf", "alpha")
-            lifecycle.coordinator.rescan()
-            val id = rig.fs.sha256("a.pdf")
-            val before = rig.db.documentDao().getByDocId(id)
-
-            lifecycle.failures = 1
-            assertFailsWith<VerifiedPublicationFailedException> { lifecycle.writer.deleteDocPermanently(id) }
-
-            rig.exists("a.pdf").shouldBeTrue()
-            rig.db.documentDao().getByDocId(id) shouldBe before
-
-            lifecycle.writer.deleteDocPermanently(id)
-            rig.exists("a.pdf").shouldBeFalse()
-            rig.db
-                .documentDao()
-                .getByDocId(id)
-                .shouldNotBeNull()
-                .deleted
-                .shouldBeTrue()
-        }
-
-    @Test
-    fun aDeleteFromTheTrashWhoseCommitFailsLeavesItInTheTrash() =
         withLifecycle { lifecycle ->
             val rig = lifecycle.rig
             rig.writePdf("a.pdf", "alpha")
@@ -372,6 +351,15 @@ class TrashLifecycleTest {
 
             trashEntries(rig.fs) shouldHaveSize 1
             rig.db.documentDao().getByDocId(id) shouldBe before
+
+            lifecycle.writer.deleteDocPermanently(id)
+            trashEntries(rig.fs).shouldBeEmpty()
+            rig.db
+                .documentDao()
+                .getByDocId(id)
+                .shouldNotBeNull()
+                .deleted
+                .shouldBeTrue()
         }
 
     /**
@@ -772,6 +760,36 @@ class BulkTrashTest {
         }
 
     /**
+     * Emptying the trash, one of its documents is restored after the trash was listed, before its
+     * turn came: that document is no longer the trash's, and stays as the restore left it. Leaving it
+     * is no failure.
+     */
+    @Test
+    fun aDocumentRestoredWhileTheTrashIsEmptiedIsLeftAlone() =
+        runTest {
+            val docs = trashed()
+            val (first, second) = docs.keys.take(2)
+            files.afterNextListing = { writer.restoreDoc(second) }
+
+            writer.deleteDocsPermanently(listOf(first, second)) shouldBe 0
+
+            rig.fs.sha256(docs.getValue(second)) shouldBe second
+            rig.db
+                .documentDao()
+                .getByDocId(second)
+                .shouldNotBeNull()
+                .isLive
+                .shouldBeTrue()
+            rig.db
+                .documentDao()
+                .getByDocId(first)
+                .shouldNotBeNull()
+                .deleted
+                .shouldBeTrue()
+            rig.exists(docs.getValue(first)).shouldBeFalse()
+        }
+
+    /**
      * A document's copy reaches the trash after the restore listed it, before the restore took the
      * lock, as a sync delivering another device's trash move does: the restore still finds it there
      * and brings the document back with its bytes, rather than without a file.
@@ -837,6 +855,37 @@ class BulkTrashTest {
 /** Deleting a document for good removes its own bytes and nothing else. */
 class PermanentDeleteTest {
     /**
+     * A document restored since its "Delete forever" was asked for is not the trash's any more: the
+     * delete leaves it live, with its file, and journals nothing.
+     */
+    @Test
+    fun deletingForGoodADocumentRestoredSinceLeavesItAndItsFile() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("restored before the delete"))
+                rig.session.rescan()
+                val id = rig.docId("a.pdf")
+                rig.session.docLifecycle.trashDoc(id)
+                rig.session.docLifecycle.restoreDoc(id)
+                val objects = rig.journalObjectCount()
+
+                rig.session.docLifecycle.deleteDocPermanently(id)
+
+                rig.fs.sha256("a.pdf") shouldBe id
+                rig.journalObjectCount() shouldBe objects
+                rig.db
+                    .documentDao()
+                    .getByDocId(id)
+                    .shouldNotBeNull()
+                    .isLive
+                    .shouldBeTrue()
+            } finally {
+                rig.close()
+            }
+        }
+
+    /**
      * An import of the document's bytes brings it back, in its own file, after its deletion was
      * committed and before that file was deleted. The file is the document's again, and stays.
      */
@@ -848,8 +897,7 @@ class PermanentDeleteTest {
             try {
                 val bytes = PdfFixtures.embeddedTextPdf("deleted, and imported again")
                 rig.writePdf("a.pdf", bytes)
-                rig.session.rescan()
-                val id = rig.docId("a.pdf")
+                val id = trashedInPlace(rig, "a.pdf")
                 rig.session.work.drainOcr()
                 var imported: ImportOutcome? = null
                 importing.next = { imported = rig.session.ingest.importPdfBytes(bytes, "a.pdf") }
@@ -963,6 +1011,26 @@ class PermanentDeleteTest {
                 rig.close()
             }
         }
+
+    /**
+     * Index [path] and trash its document with its file left where it was, as another device's trash
+     * stands here when its journal object arrives before its file move; returns the document's id.
+     */
+    private suspend fun trashedInPlace(
+        rig: AppSessionRig,
+        path: String,
+    ): String {
+        rig.session.rescan()
+        val id = rig.docId(path)
+        rig.session.docLifecycle.trashDoc(id)
+        val entry =
+            rig.fs
+                .listAllUnder(NpnPaths.TRASH_DIR)
+                .single { !it.isDirectory }
+                .relPath
+        rig.fs.move(entry, path)
+        return id
+    }
 }
 
 /** Trashing a document moves its own file into the trash, and no other file. */
