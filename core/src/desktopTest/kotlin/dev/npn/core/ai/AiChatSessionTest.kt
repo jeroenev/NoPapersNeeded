@@ -123,6 +123,41 @@ class AiChatSessionTest {
                 listOf(null, null, "Electricity bills")
         }
 
+    /**
+     * A session its own first question titled "New chat" keeps that title: only a title the
+     * conversation could not have produced reads as an old build's placeholder.
+     */
+    @Test
+    fun aSessionAskedInWithATitleLikeAPlaceholderKeepsIt() =
+        runTest {
+            RoomChatSessionStore(chats).save(
+                listOf(
+                    AiChatSession("a", "New chat", 2L),
+                    AiChatSession("b", "Assistant chat", 1L),
+                    AiChatSession("c", "New chat", 0L),
+                ),
+            )
+            val history = RoomChatHistoryProvider(chats)
+            history.store(
+                "a",
+                listOf(
+                    Message.User("New chat", RequestMetaInfo.Empty),
+                    Message.Assistant("answer", ResponseMetaInfo.Empty),
+                ),
+            )
+            history.store(
+                "b",
+                listOf(
+                    Message.User("Assistant chat", RequestMetaInfo.Empty),
+                    Message.Assistant("answer", ResponseMetaInfo.Empty),
+                ),
+            )
+            history.store("c", listOf(Message.Assistant("answer", ResponseMetaInfo.Empty)))
+
+            AiFacadeImpl(db, chats) { AiConfig() }.chatSessions().map { it.title } shouldContainExactly
+                listOf("New chat", "Assistant chat", null)
+        }
+
     @Test
     fun aNewSessionLeavesNothingBehindUntilItIsUsed() =
         runTest {

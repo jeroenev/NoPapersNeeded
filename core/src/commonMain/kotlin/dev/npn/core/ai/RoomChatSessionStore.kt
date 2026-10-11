@@ -40,13 +40,20 @@ internal class RoomChatSessionStore(
      * as untitled, so the UI names them in the user's language. Those builds also stored a session
      * as soon as it was created, so a placeholder without a conversation was never asked in, and
      * reads as absent.
+     *
+     * A session asked "New chat" is titled exactly like a placeholder, and keeps its title: only a
+     * title its own first question could not have produced is one.
      */
-    private suspend fun AiChatSession.fromPlaceholder(): AiChatSession? =
-        when {
-            title !in LEGACY_PLACEHOLDER_TITLES -> this
-            conversations.has(id) -> copy(title = null)
-            else -> null
-        }
+    private suspend fun AiChatSession.fromPlaceholder(): AiChatSession? {
+        if (title !in LEGACY_PLACEHOLDER_TITLES) return this
+        val firstQuestion =
+            KoogChatHistoryMapper
+                .map(conversations.load(id))
+                .filterIsInstance<AiChatHistoryItem.UserTurn>()
+                .firstOrNull()
+        if (firstQuestion != null && AiChatSession.titleFrom(firstQuestion.text) == title) return this
+        return if (conversations.has(id)) copy(title = null) else null
+    }
 
     private companion object {
         const val KEY = "${RoomChatHistoryProvider.KEY_PREFIX}session-metadata"
