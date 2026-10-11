@@ -87,9 +87,10 @@ class SafLibraryFileSystemDeviceTest {
 
     /**
      * Another app renames `.npn` away and makes a new one, and the provider keeps the renamed one's
-     * id, as cloud providers do. A publish acknowledged since is at its canonical path in the tree a
-     * fresh filesystem lists, not in the renamed one; the write whose staging copy went there fails,
-     * and the next one stages afresh.
+     * id, as cloud providers do. A publish after that resolves its chain afresh — through the tree
+     * as it is now — and lands at its canonical path there, not in the renamed one. The staging
+     * copy's parent chain is what is re-resolved; a publish that fails and is retried onto the new
+     * tree is covered by aPublicationWhoseRenameLandedBeforeFailureCanBeRetriedWithoutReplacingItsBytes.
      */
     @Test
     fun aPublishAfterTheLibraryFolderWasRenamedAwayIsInTheTreeAsItIsNow() =
@@ -98,14 +99,12 @@ class SafLibraryFileSystemDeviceTest {
             TestDocumentsProvider.renameExternally(NpnPaths.NPN_DIR, ".npn-backup")
             TestDocumentsProvider.addFile(name = NpnPaths.NPN_DIR, bytes = byteArrayOf(), mime = Document.MIME_TYPE_DIR)
 
-            val second = "second".encodeToByteArray()
-            try {
-                publish(second, "second")
-            } catch (_: VerifiedPublicationFailedException) {
-                publish(second, "second-again")
-            }
+            publish("second".encodeToByteArray(), "second")
 
-            assertArrayEquals(second, SafLibraryFileSystem(context, treeUri).readBytes("$BUCKET/second.jsonl"))
+            assertArrayEquals(
+                "second".encodeToByteArray(),
+                SafLibraryFileSystem(context, treeUri).readBytes("$BUCKET/second.jsonl"),
+            )
         }
 
     /** A cached bucket moved elsewhere under the same name must not receive subsequent writes. */
@@ -279,6 +278,8 @@ class SafLibraryFileSystemDeviceTest {
 
             assertArrayEquals(bytes, fs.readBytes("source.pdf"))
             assertNull(TestDocumentsProvider.idForName("destination.pdf"))
+            // The partial copy went with the failure: no `.npn-move-*.part` is left in the target.
+            assertTrue(fs.listAllUnder("folder").isEmpty())
         }
 
     private fun documentUri(documentId: String): Uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, documentId)
