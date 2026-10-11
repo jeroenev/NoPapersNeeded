@@ -107,7 +107,8 @@ internal class ExternalDocumentMoves(
         docId: String,
         path: String,
         state: FoldedState,
-    ): String = NpnJson.Persisted.encodeToString(Baseline(path, state.propVersion(docId, SystemProperty.STORAGE_PATH)))
+    ): String =
+        NpnJson.Persisted.encodeToString(Baseline(path, state.inheritedPropVersion(docId, SystemProperty.STORAGE_PATH)))
 
     private fun key(docId: String): String = "observed-document-path:$docId"
 }

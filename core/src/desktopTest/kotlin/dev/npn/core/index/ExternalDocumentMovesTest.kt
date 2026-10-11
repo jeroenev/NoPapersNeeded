@@ -2,6 +2,7 @@ package dev.npn.core.index
 
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.SystemProperty
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -127,6 +128,46 @@ class ExternalDocumentMovesTest {
                     .getByDocId(hash)!!
                     .relPath shouldBe "remote.pdf"
                 rig.accumulator.loadState().propVersion(hash, SystemProperty.STORAGE_PATH) shouldBe remoteVersion
+            } finally {
+                rig.close()
+            }
+        }
+
+    @Test
+    fun unappliedPredecessorRenameWinsOverObservedDisplacement() =
+        runTest {
+            val rig = IndexRig.create()
+            try {
+                rig.writePdf("original.pdf", "original document")
+                rig.writePdf("replacement.pdf", "replacement document")
+                val original = rig.fs.sha256("original.pdf")
+                val replacement = rig.fs.sha256("replacement.pdf")
+                val coordinator = rig.coordinator(rig.writer("local"))
+                coordinator.rescan()
+                coordinator.commitAndRescan(listOf(PendingOp.relink(original, replacement)))
+                coordinator.commitAndApply(
+                    listOf(PendingOp.propSet(original, SystemProperty.STORAGE_PATH, "applied.pdf")),
+                )
+                rig.moveFile("applied.pdf", "displaced.pdf")
+                rig.clock.advance(100)
+                rig
+                    .writer(
+                        "remote",
+                    ).commit(listOf(PendingOp.propSet(original, SystemProperty.STORAGE_PATH, "remote.pdf")))
+                coordinator.reconcileMetadata()
+                val remoteVersion = rig.accumulator.loadState().propVersion(original, SystemProperty.STORAGE_PATH)
+
+                coordinator.rescan()
+
+                rig.db
+                    .documentDao()
+                    .getByDocId(replacement)
+                    .shouldNotBeNull()
+                    .relPath shouldBe "remote.pdf"
+                val state = rig.accumulator.loadState()
+                state.inheritedProp(replacement, SystemProperty.STORAGE_PATH) shouldBe "remote.pdf"
+                state.propVersion(original, SystemProperty.STORAGE_PATH) shouldBe remoteVersion
+                state.propVersion(replacement, SystemProperty.STORAGE_PATH) shouldBe null
             } finally {
                 rig.close()
             }

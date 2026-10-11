@@ -289,7 +289,18 @@ class FoldedState {
     fun inheritedProp(
         doc: String,
         key: SystemProperty,
-    ): String? = (listOf(doc) + predecessorsOf(doc)).mapNotNull { props[it]?.get(key) }.maxByOrNull { it.hlc }?.value
+    ): String? = inheritedRegister(doc, key)?.value
+
+    /** Winning inherited version, explicit clears included, for device-local observation baselines. */
+    fun inheritedPropVersion(
+        doc: String,
+        key: SystemProperty,
+    ): Hlc? = inheritedRegister(doc, key)?.hlc
+
+    private fun inheritedRegister(
+        doc: String,
+        key: SystemProperty,
+    ): PropVal? = (listOf(doc) + predecessorsOf(doc)).mapNotNull { props[it]?.get(key) }.maxByOrNull { it.hlc }
 
     /** [doc]'s tags with its [predecessorsOf]'s: their live adds are one OR-set ([tagRemovalOps]). */
     fun inheritedTags(doc: String): Set<String> =
