@@ -5,7 +5,6 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.OcrQueueDao
 import dev.npn.core.db.OcrQueueEntity
-import dev.npn.core.db.QueueState
 import dev.npn.core.db.isLive
 import dev.npn.core.db.missingSentinel
 import dev.npn.core.fs.ExternalSource
@@ -270,14 +269,14 @@ class ImportService(
     /**
      * What [place] did: its [result], whether it [moved] the imported file into the library (or found
      * the bytes back at the document's own path), and, for a document it brought back, the row and
-     * OCR queue entry it had before ([queuedOcr]: whether [place] queued it), for [takeBack].
+     * OCR queue entries before and after its enqueue, for [takeBack].
      */
     private class Placement(
         val result: ImportResult,
         val moved: Boolean = false,
         val previous: DocumentEntity? = null,
         val previousQueue: OcrQueueEntity? = null,
-        val queuedOcr: Boolean = false,
+        val queued: OcrQueueEntity? = null,
     )
 
     private suspend fun place(
@@ -335,17 +334,16 @@ class ImportService(
         val row = existing?.backAt(target, meta) ?: newDocument(hash, target, meta, now)
         // A returning document whose text is indexed already has nothing for OCR to redo.
         val queueOcr = OcrState.fromColumn(row.ocrState) !in INDEXED
-        val previousQueue = existing?.let { ocrQueueDao.getByDocId(hash) }
         // No live row names the target ([uniqueTargetPath]); a hidden row naming it gives it up.
         documentDao.upsert(if (queueOcr) row.copy(ocrState = OcrState.PENDING.column) else row)
-        if (queueOcr) ocrQueueDao.upsert(OcrQueueEntity(hash, state = QueueState.PENDING.column, updatedAt = now))
+        val enqueued = if (queueOcr) ocrQueueDao.enqueueForImport(hash, now) else null
         if (existing != null && existing.fileName != row.fileName) indexFileName(row)
         return Placement(
             ImportResult.Imported(hash, target, broughtBack = existing != null),
             moved = moved,
             previous = existing,
-            previousQueue = previousQueue,
-            queuedOcr = queueOcr,
+            previousQueue = enqueued?.first,
+            queued = enqueued?.second,
         )
     }
 
@@ -444,7 +442,7 @@ class ImportService(
                 }
             }
         documentDao.upsert(row.onFreePath())
-        if (placed.queuedOcr) placed.previousQueue?.let { ocrQueueDao.upsert(it) } ?: ocrQueueDao.deleteRow(docId)
+        placed.queued?.let { ocrQueueDao.undoEnqueue(it, placed.previousQueue) }
         if (row.fileName != NpnPaths.fileName(placedAt)) indexFileName(row)
     }
 

@@ -24,4 +24,10 @@ class RelinkService(
         oldDocId: String,
         newDocId: String,
     ): ScanReport = coordinator.commitAndRescan(listOf(PendingOp.relink(oldDocId, newDocId)))
+
+    /** A bake's bytes stand once its relink is published, even if the disposable index fails. */
+    internal suspend fun applyBakeRelink(
+        oldDocId: String,
+        newDocId: String,
+    ) = coordinator.commitAndRescanStanding(listOf(PendingOp.relink(oldDocId, newDocId)))
 }

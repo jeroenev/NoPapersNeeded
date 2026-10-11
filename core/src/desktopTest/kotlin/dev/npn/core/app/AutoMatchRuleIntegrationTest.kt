@@ -191,6 +191,66 @@ class AutoMatchRuleIntegrationTest {
         }
 
     @Test
+    fun aRuleOnACustomFieldRunsAfterSingleBulkAndBatchedFieldWrites() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.session.start()
+                val names = listOf("single", "bulk-a", "bulk-b", "edit", "fill")
+                for (name in names) rig.writePdf("$name.pdf", PdfFixtures.embeddedTextPdf(name))
+                rig.session.rescan()
+                rig.session.ocr.ocrStatus
+                    .first { it.pending == 0 && !it.running }
+                val ids = names.associateWith { rig.docId("$it.pdf") }
+                rig.session.fieldRegistry.upsert(
+                    FieldDef(
+                        "account",
+                        "Account",
+                        FieldType.TEXT,
+                        showByDefault = false,
+                        aiEnabled = false,
+                        position = 9,
+                    ),
+                )
+                rig.session.rules.save(
+                    AutoMatchRule(
+                        id = "",
+                        name = "Account rule",
+                        field = RuleField.Field("account"),
+                        algorithm = MatchAlgorithm.EXACT,
+                        pattern = "ACME",
+                        tags = listOf("matched"),
+                    ),
+                )
+                // Saved before these writes, so saving's existing-document pass cannot mask a missing trigger.
+                for (id in ids.values) rig.db.tagDao().tagsForDocument(id) shouldBe emptyList()
+
+                rig.session.meta.setField(ids.getValue("single"), "account", "ACME")
+                rig.session.meta.setField(listOf(ids.getValue("bulk-a"), ids.getValue("bulk-b")), "account", "ACME")
+                rig.session.meta.applyEdits(
+                    listOf(ids.getValue("edit")),
+                    addTags = emptyList(),
+                    fields = mapOf("account" to "ACME"),
+                )
+                rig.session.meta.applyEdits(
+                    listOf(ids.getValue("fill")),
+                    addTags = emptyList(),
+                    fields = mapOf("account" to "ACME"),
+                    fillOnly = true,
+                )
+
+                for (id in ids.values) rig.db.tagDao().tagsForDocument(id) shouldContain "matched"
+                // A tag-only write does not reapply a rule's tag after the user removed it.
+                val single = ids.getValue("single")
+                rig.session.meta.removeTag(listOf(single), "matched")
+                rig.session.meta.addTag(listOf(single), "manual")
+                rig.db.tagDao().tagsForDocument(single) shouldBe listOf("manual")
+            } finally {
+                rig.close()
+            }
+        }
+
+    @Test
     fun legacyRuleJsonDecodesNamedColumnsIntoSets() {
         val legacy =
             """[{"id":"r1","name":"Old","field":"TITLE","algorithm":"EXACT","pattern":"x",""" +

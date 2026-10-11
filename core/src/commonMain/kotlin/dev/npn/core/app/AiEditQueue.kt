@@ -201,7 +201,7 @@ class AiEditQueue(
         request: AiEditRequest,
     ) {
         val now = clock.nowMillis()
-        dao.upsertJob(
+        dao.insertRun(
             AiEditJobEntity(
                 jobId = jobId,
                 requestJson = json.encodeToString(request),
@@ -209,9 +209,7 @@ class AiEditQueue(
                 updatedAt = now,
                 nextAttemptAt = now,
             ),
-        )
-        // Duplicates would each cost a model call and show up twice in the Review.
-        dao.upsertDocs(
+            // Duplicates would each cost a model call and show up twice in the Review.
             docIds.distinct().mapIndexed { index, docId ->
                 AiEditJobDocEntity(jobId = jobId, docId = docId, position = index)
             },

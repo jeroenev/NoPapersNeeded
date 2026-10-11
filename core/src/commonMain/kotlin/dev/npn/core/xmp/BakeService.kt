@@ -10,6 +10,7 @@ import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
+import kotlin.uuid.Uuid
 
 /** The PDF cannot carry baked metadata, or the rewrite did not verify; the library file is untouched. */
 class BakeRefusedException(
@@ -84,6 +85,10 @@ class BakeService(
      * place without their relink. A failed swap is undone ([restoreOriginal]) and rethrown: the
      * document keeps its hash, so no relink is owed.
      *
+     * [emitRelink] must throw only when no relink was published: failures after publication are
+     * recovered or logged by the caller, since the baked bytes then belong to their new identity.
+     * A relink that cannot be published is undone as a failed swap is.
+     *
      * A PDF that cannot carry the metadata, or a rewrite that does not verify, throws
      * [BakeRefusedException]: the temp file is removed and the original is left untouched.
      */
@@ -130,15 +135,15 @@ class BakeService(
                 return@withContext null
             }
             // Non-atomic replace: delete original, then move temp into place.
-            var swapped = false
+            var standing = false
             try {
                 fs.delete(norm)
                 fs.move(tmpPath, norm)
-                swapped = true
+                if (newSha != docId) emitRelink(docId, newSha)
+                standing = true
             } finally {
-                if (!swapped) restoreOriginal(norm, src, docId, tmpPath)
+                if (!standing) restoreOriginal(norm, src, docId, newSha, tmpPath)
             }
-            if (newSha != docId) emitRelink(docId, newSha)
             BakeResult(oldSha256 = docId, newSha256 = newSha, finalRelPath = norm)
         }
     }
@@ -162,11 +167,19 @@ class BakeService(
         norm: String,
         src: ByteArray,
         oldSha: String,
+        bakedSha: String,
         tmpPath: String,
     ) {
+        var recovery: String? = null
         runCatchingCancellable {
             if (!fs.holds(norm, oldSha)) {
                 if (fs.exists(norm)) {
+                    // A sync writer may have replaced the baked bytes while publication failed.
+                    // Its file stays; save the original under an ordinary, indexable recovery name.
+                    if (!fs.holds(norm, bakedSha)) {
+                        recovery = keepOriginal(norm, src)
+                        error("$norm holds another file; the original is at $recovery")
+                    }
                     // A move that reports a failure may still have landed, so where the bytes are
                     // afterwards is what counts.
                     val parked = runCatchingCancellable { fs.move(norm, tmpPath) }
@@ -179,12 +192,23 @@ class BakeService(
             }
             if (fs.exists(tmpPath)) fs.delete(tmpPath)
         }.onFailure { failure ->
-            val where = onDisk(norm, tmpPath)
+            val where = onDisk(listOfNotNull(norm, tmpPath, recovery))
             log.error("Restoring $norm after a failed bake failed; the document's bytes are at: $where", failure)
         }
     }
 
+    private suspend fun keepOriginal(
+        norm: String,
+        src: ByteArray,
+    ): String {
+        val parent = NpnPaths.parentDir(norm)
+        val name = NpnPaths.Temp.recoveryName(Uuid.random().toString())
+        val recovery = if (parent.isEmpty()) name else "$parent/$name"
+        fs.writeBytesOnce(recovery, src)
+        return recovery
+    }
+
     /** Which of [paths] hold a file, for a log line that says where a failed bake left a document. */
-    private suspend fun onDisk(vararg paths: String): String =
+    private suspend fun onDisk(paths: List<String>): String =
         paths.filter { runCatchingCancellable { fs.exists(it) }.getOrDefault(false) }.joinToString().ifEmpty { "-" }
 }

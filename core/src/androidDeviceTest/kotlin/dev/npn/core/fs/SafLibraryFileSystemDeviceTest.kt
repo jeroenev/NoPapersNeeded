@@ -108,6 +108,89 @@ class SafLibraryFileSystemDeviceTest {
             assertArrayEquals(second, SafLibraryFileSystem(context, treeUri).readBytes("$BUCKET/second.jsonl"))
         }
 
+    /** A cached bucket moved elsewhere under the same name must not receive subsequent writes. */
+    @Test
+    fun aWriteAfterItsBucketMovedIsVisibleAtTheCanonicalPathToAFreshFilesystem() =
+        runBlocking {
+            publish("first".encodeToByteArray(), "first")
+            moveBucketElsewhere()
+
+            val second = "second".encodeToByteArray()
+            publish(second, "second")
+
+            assertArrayEquals(second, SafLibraryFileSystem(context, treeUri).readBytes("$BUCKET/second.jsonl"))
+        }
+
+    /** Reconciliation cannot keep seeing journal objects through a displaced bucket's cached id. */
+    @Test
+    fun aListingAfterItsBucketMovedDoesNotReportDisplacedObjectsAtTheirOldPath() =
+        runBlocking {
+            publish("first".encodeToByteArray(), "first")
+            moveBucketElsewhere()
+
+            assertTrue(fs.listAllUnder(BUCKET).isEmpty())
+        }
+
+    /** A staging file left in a displaced bucket cannot justify acknowledging a canonical object. */
+    @Test
+    fun aBucketMovedBetweenStagingAndPublicationRefusesThePublication() =
+        runBlocking {
+            val bytes = "complete journal object".encodeToByteArray()
+            val staging = "$BUCKET/object.part"
+            fs.writeBytesOnce(staging, bytes)
+            TestDocumentsProvider.awaitWrite("object.part")
+            moveBucketElsewhere()
+
+            assertThrowsBlocking(VerifiedPublicationFailedException::class.java) {
+                fs.publishVerifiedObjectOnce(staging, "$BUCKET/object.jsonl", bytes.inputStream().sha256Hex())
+            }
+
+            assertArrayEquals(bytes, TestDocumentsProvider.bytesForName("object.part"))
+            assertTrue(SafLibraryFileSystem(context, treeUri).listAllUnder(BUCKET).isEmpty())
+        }
+
+    /** Validate the actual chain again after the provider has performed its rename. */
+    @Test
+    fun aBucketMovedDuringTheProvidersRenameRefusesThePublication() =
+        runBlocking {
+            val bytes = "complete journal object".encodeToByteArray()
+            val staging = "$BUCKET/object.part"
+            fs.writeBytesOnce(staging, bytes)
+            TestDocumentsProvider.awaitWrite("object.part")
+            TestDocumentsProvider.moveParentOnRenameTo = elsewhere()
+
+            assertThrowsBlocking(VerifiedPublicationFailedException::class.java) {
+                fs.publishVerifiedObjectOnce(staging, "$BUCKET/object.jsonl", bytes.inputStream().sha256Hex())
+            }
+
+            assertArrayEquals(bytes, TestDocumentsProvider.bytesForName("object.jsonl"))
+            assertTrue(SafLibraryFileSystem(context, treeUri).listAllUnder(BUCKET).isEmpty())
+        }
+
+    /** Sidecars bypass journal publication, so their write must refresh its own creation parent. */
+    @Test
+    fun aSidecarWriteAfterItsDirectoryMovedUsesTheDirectoryAtItsCurrentPath() =
+        runBlocking {
+            val path = ".npn/ocr/device/sidecar.bin"
+            fs.writeBytesOnce(path, "old".encodeToByteArray())
+            TestDocumentsProvider.awaitWrite("sidecar.bin")
+            TestDocumentsProvider.moveExternally(checkNotNull(TestDocumentsProvider.idForName("device")), elsewhere())
+
+            val bytes = "new".encodeToByteArray()
+            val freshPath = ".npn/ocr/device/new-sidecar.bin"
+            fs.writeBytesOnce(freshPath, bytes)
+            TestDocumentsProvider.awaitWrite("new-sidecar.bin")
+
+            assertArrayEquals(bytes, SafLibraryFileSystem(context, treeUri).readBytes(freshPath))
+        }
+
+    private fun moveBucketElsewhere() {
+        TestDocumentsProvider.moveExternally(
+            checkNotNull(TestDocumentsProvider.idForName("objects-v2-ab")),
+            TestDocumentsProvider.addFile(name = "elsewhere", bytes = byteArrayOf(), mime = Document.MIME_TYPE_DIR),
+        )
+    }
+
     /** Stage [bytes] under [nonce] in [BUCKET] and publish them as `<content>.jsonl`, as the journal does. */
     private suspend fun publish(
         bytes: ByteArray,

@@ -73,6 +73,16 @@ interface AiEditJobDao {
     @Upsert
     suspend fun upsertDocs(rows: List<AiEditJobDocEntity>)
 
+    /** Persist a submitted run and all its documents together, so interruption leaves no orphan. */
+    @Transaction
+    suspend fun insertRun(
+        job: AiEditJobEntity,
+        docs: List<AiEditJobDocEntity>,
+    ) {
+        upsertJob(job)
+        upsertDocs(docs)
+    }
+
     /**
      * Write what a drain step learned about [job]: its own row and [docs], in one transaction and
      * only while the job still exists. A run discarded while its model calls were in flight stays

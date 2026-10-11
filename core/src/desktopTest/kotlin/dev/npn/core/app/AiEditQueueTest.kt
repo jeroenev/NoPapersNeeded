@@ -145,6 +145,19 @@ private fun suggestion(
 
 class AiEditQueueSuggestionTest {
     @Test
+    fun `a submitted run stores each document once in its first submitted order`() =
+        runTest {
+            withQueue { rig ->
+                val jobId = rig.enqueue("b", "a", "b", "c", "a")
+
+                rig.rows(jobId).map { it.docId } shouldContainExactly listOf("b", "a", "c")
+                rig.rows(jobId).map { it.position } shouldContainExactly listOf(0, 1, 2)
+                rig.job(jobId).shouldNotBeNull()
+                rig.kicks shouldBe 1
+            }
+        }
+
+    @Test
     fun `a queued run is suggested in submitted order, one chunk per drain step`() =
         runTest {
             withQueue { rig ->

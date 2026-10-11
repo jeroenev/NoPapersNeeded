@@ -578,9 +578,36 @@ class JournalCoordinator internal constructor(
                 // Fold the freshly-written events into the live state up front. reconcile()'s fast
                 // path returns the state unchanged when it read no new sources (the events were just
                 // recorded directly), so the projection rescan must see them here.
-                if (ops.isNotEmpty()) recordProjected(current, ops)
-                rescanFrom(current)
+                val published = ops.takeIf { it.isNotEmpty() }?.let { writeTransaction(it) }
+                projectAndRescan(current, published)
             }
+        }
+
+    /**
+     * Commit a filesystem change's relink. Once its transaction is durable, the change stands:
+     * projection or rescan failures are recovered and logged rather than inviting a byte rollback.
+     * Throws only before publication, when the caller must restore its original file.
+     */
+    internal suspend fun commitAndRescanStanding(ops: List<PendingOp>) {
+        locked {
+            ensureWritable()
+            val current = foldedState()
+            withContext(NonCancellable) {
+                val published = writeTransaction(ops)
+                log.runLogged("Projecting the published ${published.relPath} and rescanning") {
+                    projectAndRescan(current, published)
+                }
+            }
+        }
+    }
+
+    private suspend fun projectAndRescan(
+        current: FoldedState,
+        published: PublishedTransaction?,
+    ): ScanReport =
+        withDurableProjectionRecovery {
+            if (published != null) recordWritten(current, accumulator.localSource(published))
+            rescanFrom(current)
         }
 
     /**

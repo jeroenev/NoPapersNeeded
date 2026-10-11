@@ -54,20 +54,16 @@ class SafLibraryFileSystem(
      * Path-to-docId memoization for directories; see [SafDirectoryCache]. SAF has no path lookup,
      * so without this every operation re-lists all of its ancestors. Our own destructive
      * operations ([delete], [move]) invalidate the affected subtree eagerly; a directory deleted
-     * outside the app is detected and recovered inside the cache. One renamed away outside it is
+     * outside the app is detected and recovered inside the cache. One moved or renamed away is
      * checked for where the tree's current path matters: before a listing under a path (how a
      * reconcile reads the journal) and before a publish, acknowledged only at its canonical path.
      */
-    private val dirCache =
-        SafDirectoryCache(treeDocId, { queryChildren(it) }) { DocumentFile.fromSingleUri(context, docUri(it))?.name }
+    private val dirCache = SafDirectoryCache(treeDocId, ::queryChildren)
 
-    private fun childrenUri(parentDocId: String): Uri =
-        DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentDocId)
+    /** The parent at this path now, including at providers whose ids survive moves. */
+    private fun refreshParent(relPath: String): String? = dirCache.refresh(splitSegments(relPath).dropLast(1))
 
     private fun docUri(docId: String): Uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
-
-    private fun splitSegments(relPath: String): List<String> =
-        NpnPaths.normalize(relPath).split('/').filter { it.isNotEmpty() }
 
     private val projection =
         arrayOf(
@@ -81,7 +77,13 @@ class SafLibraryFileSystem(
     private fun queryChildren(parentDocId: String): List<Entry> {
         val out = ArrayList<Entry>()
         val cursor =
-            resolver.query(childrenUri(parentDocId), projection, null, null, null)
+            resolver.query(
+                DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentDocId),
+                projection,
+                null,
+                null,
+                null,
+            )
                 ?: throw IOException("Cannot query children of $parentDocId")
         cursor.use { c ->
             while (c.moveToNext()) {
@@ -100,13 +102,22 @@ class SafLibraryFileSystem(
     }
 
     /** Resolve a relative path to its document entry, or null if any segment is missing. */
-    private fun resolveEntry(relPath: String): Entry? {
+    private fun resolveEntry(
+        relPath: String,
+        fresh: Boolean = false,
+    ): Entry? {
         val segments = splitSegments(relPath)
         if (segments.isEmpty()) {
             // The root itself; synthesize a directory entry.
             return Entry(treeDocId, "", DocumentsContract.Document.MIME_TYPE_DIR, 0L, 0L)
         }
-        val children = dirCache.childrenOfDir(segments.subList(0, segments.size - 1)) ?: return null
+        val parents = segments.subList(0, segments.size - 1)
+        val children =
+            if (fresh) {
+                dirCache.refresh(parents)?.let(::queryChildren)
+            } else {
+                dirCache.childrenOfDir(parents)
+            } ?: return null
         val match = children.firstOrNull { it.name == segments.last() } ?: return null
         if (match.isDir) dirCache.remember(segments.joinToString("/"), match.docId)
         return match
@@ -129,15 +140,15 @@ class SafLibraryFileSystem(
      * Resolve [dirSegments] as a directory chain, creating any level that does not exist yet, and
      * return the deepest docId. Shared by [mkdirs] and the creating half of [resolveParentDir].
      *
-     * Unlike the read paths this does not retry past a stale cache entry: creating under a docId
-     * whose directory was deleted outside the app fails loudly here, which is the right outcome for
-     * a write-once filesystem — better a clear error than a file quietly landing somewhere else. For
-     * the same reason a level maps only to a directory with exactly its name ([createExact]).
+     * Refresh the actual parent chain first, so a cached id that survived a move or rename cannot
+     * send a write to a displaced directory. Missing levels are created with exactly their name
+     * ([createExact]); the copy also checks that its parent still has this path before succeeding.
      */
     private fun createDirPath(
         dirSegments: List<String>,
         relForError: String,
     ): String {
+        dirCache.refresh(dirSegments)?.let { return it }
         var parentId = treeDocId
         for ((index, seg) in dirSegments.withIndex()) {
             val key = dirSegments.subList(0, index + 1).joinToString("/")
@@ -170,9 +181,6 @@ class SafLibraryFileSystem(
         return parentId
     }
 
-    private fun mimeForName(name: String): String =
-        if (NpnPaths.isPdf(name)) "application/pdf" else "application/octet-stream"
-
     override suspend fun listAll(): List<FileMeta> =
         withContext(Dispatchers.IO) {
             listAllFrom(treeDocId, "")
@@ -186,9 +194,8 @@ class SafLibraryFileSystem(
     override suspend fun listAllUnder(relPath: String): List<FileMeta> =
         withContext(Dispatchers.IO) {
             val norm = NpnPaths.normalize(relPath)
-            dirCache.forgetRenamed(splitSegments(norm))
-            val root = resolveEntry(norm)
-            if (root == null || !root.isDir) emptyList() else listAllFrom(root.docId, norm)
+            val rootId = dirCache.refresh(splitSegments(norm))
+            if (rootId == null) emptyList() else listAllFrom(rootId, norm)
         }
 
     private fun listAllFrom(
@@ -274,7 +281,7 @@ class SafLibraryFileSystem(
         relPath: String,
         bytes: ByteArray,
     ) = withContext(Dispatchers.IO) {
-        if (resolveEntry(relPath) != null) {
+        if (resolveEntry(relPath, fresh = true) != null) {
             error("Target already exists: $relPath")
         }
         val name = splitSegments(relPath).last()
@@ -312,24 +319,22 @@ class SafLibraryFileSystem(
             "Object staging must be in the canonical bucket"
         }
         val canonicalName = canonicalSegments.last()
-        // The bucket's cached chain must still carry its names, or the object would be checked,
-        // and acknowledged, in a directory renamed away (at a provider whose ids survive that).
-        dirCache.forgetRenamed(canonicalSegments.dropLast(1))
-
+        // Resolve names AND parentage: a cloud provider can keep an id and name through a move.
         // A canonical object already present means the content was published earlier (content
         // addressed: same hash ⇒ same bytes). Verify its bytes and drop our staging copy.
-        resolveEntry(canonicalPath)?.let { existing ->
+        resolveEntry(canonicalPath, fresh = true)?.let { existing ->
             check(!existing.isDir) { "Canonical object path is a directory: $canonicalPath" }
             check(sha256OfEntry(existing) == expectedHash) {
                 "Canonical object exists with invalid bytes: $canonicalPath"
             }
+            requirePublishedAtPath(existing, canonicalPath)
             // Best effort: an orphaned staging file is never read as an object.
             runCatchingCancellable { delete(stagingPath) }
             return@withContext
         }
 
         val staging =
-            resolveEntry(stagingPath)
+            resolveEntry(stagingPath, fresh = true)
                 ?: throw VerifiedPublicationFailedException("Staging object is missing: $stagingPath")
         check(!staging.isDir) { "Staging object path is a directory: $stagingPath" }
         check(sha256OfEntry(staging) == expectedHash) { "Staging object hash mismatch: $stagingPath" }
@@ -347,10 +352,21 @@ class SafLibraryFileSystem(
 
         // Confirm the published object is intact and correctly named before reporting success.
         val published =
-            resolveEntry(canonicalPath)
+            resolveEntry(canonicalPath, fresh = true)
                 ?: throw retryablePublish(canonicalPath, IOException("Published object not found after rename"))
         check(sha256OfEntry(published) == expectedHash) {
             "Published object hash mismatch: $canonicalPath"
+        }
+        requirePublishedAtPath(published, canonicalPath)
+    }
+
+    /** A move while the provider renamed or read the object must not make a publication succeed. */
+    private fun requirePublishedAtPath(
+        published: Entry,
+        canonicalPath: String,
+    ) {
+        if (resolveEntry(canonicalPath, fresh = true)?.docId != published.docId) {
+            throw retryablePublish(canonicalPath, IOException("Published object left its canonical path"))
         }
     }
 
@@ -374,10 +390,10 @@ class SafLibraryFileSystem(
         fromRelPath: String,
         toRelPath: String,
     ) = withContext(Dispatchers.IO) {
-        if (resolveEntry(toRelPath) != null) {
+        if (resolveEntry(toRelPath, fresh = true) != null) {
             error("Target already exists: $toRelPath")
         }
-        val source = resolveEntry(fromRelPath) ?: throw IOException("Not found: $fromRelPath")
+        val source = resolveEntry(fromRelPath, fresh = true) ?: throw IOException("Not found: $fromRelPath")
         // Moving a directory relocates every descendant path, so the cached docIds keyed under the
         // OLD path are about to be wrong. Nothing above it moves, so only that subtree goes.
         // Document moves (the hot path: import, rename, storage-path rules) move files, which are
@@ -439,7 +455,7 @@ class SafLibraryFileSystem(
                     ?: throw IOException("Cannot read source for move: $fromRelPath")
             }
         val renamed = publishMovedCopy(stagingUri, toName, fromRelPath, toRelPath)
-        if (resolveEntry(toRelPath)?.docId != DocumentsContract.getDocumentId(renamed)) {
+        if (resolveEntry(toRelPath, fresh = true)?.docId != DocumentsContract.getDocumentId(renamed)) {
             deleteQuietly(renamed)
             throw IOException("Move target collided: $toRelPath")
         }
@@ -481,14 +497,27 @@ class SafLibraryFileSystem(
             streamInto(createdUri, relForError) {
                 if (read != null) DigestInputStream(openInput(), read) else openInput()
             }
-            if (read != null && digestSha256(createdUri, relForError) != read.digest().toHexLower()) {
-                throw IOException("Copy does not read back as its source: $relForError")
-            }
+            verifyCopy(createdUri, parentId, relForError, read?.digest()?.toHexLower())
         } catch (e: Throwable) {
             deleteQuietly(createdUri)
             throw e
         }
         return createdUri
+    }
+
+    /** [expectedSha256] is the source's digest when the copy must read back as it; the parent must still hold it. */
+    private fun verifyCopy(
+        uri: Uri,
+        parentId: String,
+        relForError: String,
+        expectedSha256: String?,
+    ) {
+        if (expectedSha256 != null && digestSha256(uri, relForError) != expectedSha256) {
+            throw IOException("Copy does not read back as its source: $relForError")
+        }
+        if (refreshParent(relForError) != parentId) {
+            throw IOException("Copy's parent left its path: $relForError")
+        }
     }
 
     /** Write everything [openInput] yields into the existing file at [target], from its start. */
@@ -562,7 +591,7 @@ class SafLibraryFileSystem(
 
     override suspend fun delete(relPath: String) =
         withContext(Dispatchers.IO) {
-            val entry = resolveEntry(relPath) ?: return@withContext
+            val entry = resolveEntry(relPath, fresh = true) ?: return@withContext
             // DocumentsContract.deleteDocument removes directories recursively.
             DocumentsContract.deleteDocument(resolver, docUri(entry.docId))
             // Deleting a directory invalidates its own cached docId and every descendant's, but
@@ -589,7 +618,7 @@ class SafLibraryFileSystem(
         source: ExternalSource,
         toRelPath: String,
     ) = withContext(Dispatchers.IO) {
-        if (resolveEntry(toRelPath) != null) {
+        if (resolveEntry(toRelPath, fresh = true) != null) {
             error("Target already exists: $toRelPath")
         }
         val name = splitSegments(toRelPath).last()
@@ -604,3 +633,9 @@ class SafLibraryFileSystem(
     /** SAF provides no reliable change notifications; indexing is rescan-driven. */
     override fun watch(): Flow<FsEvent> = emptyFlow()
 }
+
+private fun splitSegments(relPath: String): List<String> =
+    NpnPaths.normalize(relPath).split('/').filter { it.isNotEmpty() }
+
+private fun mimeForName(name: String): String =
+    if (NpnPaths.isPdf(name)) "application/pdf" else "application/octet-stream"

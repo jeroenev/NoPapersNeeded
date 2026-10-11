@@ -84,6 +84,10 @@ class TestDocumentsProvider : DocumentsProvider() {
                 addNode(node.parentId ?: ROOT_ID, displayName, node.mime, FOREIGN_BYTES)
             }
             node.name = deduplicatedName(node.parentId, displayName, excludingId = documentId)
+            moveParentOnRenameTo?.let { parent ->
+                moveParentOnRenameTo = null
+                requireNode(checkNotNull(node.parentId)).parentId = parent
+            }
             if (failRenameAfterLanding) {
                 failRenameAfterLanding = false
                 throw IOException("Rename landed before the provider reported failure")
@@ -183,6 +187,9 @@ class TestDocumentsProvider : DocumentsProvider() {
         var failWritesAfterBytes: Int? = null
         var failRenameAfterLanding = false
 
+        /** Move the renamed file's directory, retaining its name and id, during the next rename. */
+        var moveParentOnRenameTo: String? = null
+
         fun reset() {
             synchronized(lock) {
                 nodes.clear()
@@ -191,6 +198,7 @@ class TestDocumentsProvider : DocumentsProvider() {
                 raceOnRenameName = null
                 failWritesAfterBytes = null
                 failRenameAfterLanding = false
+                moveParentOnRenameTo = null
             }
         }
 
@@ -207,6 +215,17 @@ class TestDocumentsProvider : DocumentsProvider() {
             newName: String,
         ) {
             synchronized(lock) { nodes.values.first { it.name == name }.name = newName }
+        }
+
+        /** Move a document as another app would, keeping its opaque id and display name. */
+        fun moveExternally(
+            documentId: String,
+            newParentId: String,
+        ) {
+            synchronized(lock) {
+                requireNode(newParentId)
+                requireNode(documentId).parentId = newParentId
+            }
         }
 
         fun idForName(name: String): String? = synchronized(lock) { nodes.values.firstOrNull { it.name == name }?.id }
@@ -296,7 +315,7 @@ class TestDocumentsProvider : DocumentsProvider() {
 
     private data class Node(
         val id: String,
-        val parentId: String?,
+        var parentId: String?,
         var name: String,
         val mime: String,
         var bytes: ByteArray,

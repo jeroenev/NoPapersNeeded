@@ -28,8 +28,9 @@ internal data class Entry(
  *
  * A cached docId can lie two ways: its directory was deleted (perhaps recreated) outside the app,
  * which a listing shows ([resolveDir]), or renamed, at a provider whose ids survive a rename (cloud
- * providers; ExternalStorageProvider's are path-derived), whose listing still looks fine. Only
- * [forgetRenamed] sees the second, for a caller that needs the path the tree has now.
+ * providers; ExternalStorageProvider's are path-derived), whose listing still looks fine. A move
+ * can also keep its name and change its parent. [refresh] resolves the actual chain for callers
+ * that need the path the tree has now, while ordinary reads reuse the cache.
  *
  * Split out of [SafLibraryFileSystem] because the interesting part is not SAF: it is deciding when
  * a negative result is real and when it is a cached docId lying (see [resolveDir]), and doing so
@@ -38,8 +39,6 @@ internal data class Entry(
 internal class SafDirectoryCache(
     private val rootDocId: String,
     private val listChildren: (parentDocId: String) -> List<Entry>,
-    /** The display name the provider gives a document now, or null when it cannot say. */
-    private val nameOf: (docId: String) -> String?,
 ) {
     private val dirDocIds = ConcurrentHashMap<String, String>()
 
@@ -85,19 +84,28 @@ internal class SafDirectoryCache(
     }
 
     /**
-     * Forget [dirSegments]'s cached chain from its first level whose directory is now called
-     * something else: renamed away with its id kept, it would go on serving the old path. One
-     * single-document query per cached level and no listing, however big the directories. A name
-     * the provider cannot say is no evidence of a rename.
+     * Resolve [dirSegments] from the root's current children, checking each directory's name AND
+     * parent. An opaque id can survive a move without its name changing, so querying its display
+     * name alone cannot prove it is still at the cached path. Forget a changed level and everything
+     * below it; ordinary [resolveDir] calls keep reusing levels this refresh proved current.
+     *
+     * Lists one parent per level. Writes and path-sensitive listings pay this at their boundary;
+     * hot per-file reads do not. A failed listing propagates rather than vouching for a stale id.
      */
-    fun forgetRenamed(dirSegments: List<String>) {
-        val levels = dirSegments.indices.map { dirSegments.subList(0, it + 1).joinToString("/") }
-        val renamed =
-            dirSegments.indices.firstOrNull { index ->
-                val name = dirDocIds[levels[index]]?.let(nameOf)
-                name != null && name != dirSegments[index]
-            } ?: return
-        invalidateSubtree(levels[renamed])
+    fun refresh(dirSegments: List<String>): String? {
+        var parentId = rootDocId
+        for (index in dirSegments.indices) {
+            val key = dirSegments.subList(0, index + 1).joinToString("/")
+            val child = listChildren(parentId).firstOrNull { it.name == dirSegments[index] && it.isDir }
+            if (child == null) {
+                invalidateSubtree(key)
+                return null
+            }
+            if (child.docId != dirDocIds[key]) invalidateSubtree(key)
+            dirDocIds[key] = child.docId
+            parentId = child.docId
+        }
+        return parentId
     }
 
     /**

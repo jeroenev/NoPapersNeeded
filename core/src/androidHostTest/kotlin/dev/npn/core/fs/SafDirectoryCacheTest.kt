@@ -4,10 +4,10 @@ import android.provider.DocumentsContract
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 
-/** [SafDirectoryCache] over a provider whose ids survive a rename, as cloud providers' do. */
+/** [SafDirectoryCache] over a provider whose ids survive moves and renames, as cloud providers' do. */
 class SafDirectoryCacheTest {
     private val tree = Tree()
-    private val cache = SafDirectoryCache(ROOT, tree::children, tree::nameOf)
+    private val cache = SafDirectoryCache(ROOT, tree::children)
 
     /**
      * Another app renames `.npn` away, keeping its id and its children, and makes a new one: once its
@@ -21,7 +21,7 @@ class SafDirectoryCacheTest {
 
         tree.rename(tree.idOf(ROOT, ".npn"), ".npn-backup")
         val new = tree.journal()
-        cache.forgetRenamed(BUCKET)
+        cache.refresh(BUCKET) shouldBe new
 
         cache.resolveDir(BUCKET).docId shouldBe new
     }
@@ -35,52 +35,67 @@ class SafDirectoryCacheTest {
         val journal = tree.idOf(checkNotNull(npn), "journal")
 
         tree.rename(journal, "journal-old")
-        cache.forgetRenamed(BUCKET)
+        cache.refresh(BUCKET) shouldBe null
 
         cache.cached(".npn") shouldBe npn
         cache.cached(".npn/journal") shouldBe null
         cache.cached(BUCKET.joinToString("/")) shouldBe null
     }
 
-    /** Checking names costs one single-document lookup per cached level and no listing at all. */
+    /** A refresh pays for the actual parent chain once; ordinary reads keep reusing it afterwards. */
     @Test
-    fun checkingAChainListsNothing() {
+    fun aRefreshedChainKeepsOrdinaryReadsCached() {
         val bucket = tree.journal()
         cache.resolveDir(BUCKET)
         val listings = tree.listings
 
-        cache.forgetRenamed(BUCKET)
+        cache.refresh(BUCKET) shouldBe bucket
 
-        tree.listings shouldBe listings
-        tree.lookups shouldBe BUCKET.size
+        tree.listings shouldBe listings + BUCKET.size
+        cache.resolveDir(BUCKET).docId shouldBe bucket
+        tree.listings shouldBe listings + BUCKET.size
         cache.cached(BUCKET.joinToString("/")) shouldBe bucket
     }
 
-    /** A name the provider cannot say is no evidence of a rename: the cached chain stays. */
+    /** Moving a directory can preserve both its name and id while changing the path it serves. */
     @Test
-    fun aNameTheProviderCannotSayKeepsTheChain() {
+    fun aMovedBucketNoLongerServesItsOldPath() {
         val bucket = tree.journal()
         cache.resolveDir(BUCKET)
-        tree.namesKnown = false
+        val elsewhere = tree.add(ROOT, "elsewhere")
+        tree.move(bucket, elsewhere)
 
-        cache.forgetRenamed(BUCKET)
+        cache.refresh(BUCKET) shouldBe null
 
-        cache.cached(BUCKET.joinToString("/")) shouldBe bucket
+        cache.cached(BUCKET.joinToString("/")) shouldBe null
     }
 
-    /** A provider tree whose document ids stay the same across a rename. */
+    /** A replacement at the same path must supply its own id, even when the old one still exists. */
+    @Test
+    fun aMovedParentAndItsDescendantsAreReplacedByTheCurrentChain() {
+        val old = tree.journal()
+        cache.resolveDir(BUCKET)
+        val elsewhere = tree.add(ROOT, "elsewhere")
+        tree.move(tree.idOf(ROOT, ".npn"), elsewhere)
+        val current = tree.journal()
+
+        cache.refresh(BUCKET) shouldBe current
+
+        cache.resolveDir(BUCKET).docId shouldBe current
+        (current == old) shouldBe false
+    }
+
+    /** A provider tree whose document ids stay the same across moves and renames. */
     private class Tree {
         private class Node(
             val id: String,
-            val parent: String?,
+            var parent: String?,
             var name: String,
             val dir: Boolean,
         )
 
         private val nodes = LinkedHashMap<String, Node>()
         var listings = 0
-        var lookups = 0
-        var namesKnown = true
 
         init {
             nodes[ROOT] = Node(ROOT, null, "", dir = true)
@@ -110,6 +125,13 @@ class SafDirectoryCacheTest {
             checkNotNull(nodes[id]).name = name
         }
 
+        fun move(
+            id: String,
+            parent: String,
+        ) {
+            checkNotNull(nodes[id]).parent = parent
+        }
+
         fun idOf(
             parent: String,
             name: String,
@@ -121,11 +143,6 @@ class SafDirectoryCacheTest {
                 val mime = if (it.dir) DocumentsContract.Document.MIME_TYPE_DIR else "application/json"
                 Entry(it.id, it.name, mime, 0L, 0L)
             }
-        }
-
-        fun nameOf(id: String): String? {
-            lookups++
-            return if (namesKnown) nodes[id]?.name else null
         }
     }
 

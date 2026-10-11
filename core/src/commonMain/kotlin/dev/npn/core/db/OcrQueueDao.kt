@@ -26,6 +26,68 @@ interface OcrQueueDao {
     @Upsert
     suspend fun upsert(entry: OcrQueueEntity)
 
+    /**
+     * Ask for a pass without withdrawing an earlier request. Reading its flags and writing the
+     * merged row share a transaction, including the stamp that distinguishes a fresh request from
+     * the one a running pass saw. Explicit requests reset failed attempts and their backoff.
+     */
+    @Transaction
+    suspend fun enqueue(
+        docId: String,
+        now: Long,
+        rerun: Boolean = false,
+        aiRequested: Boolean = false,
+    ): OcrQueueEntity {
+        val row = getByDocId(docId)
+        val pending =
+            OcrQueueEntity(
+                docId = docId,
+                state = QueueState.PENDING.column,
+                updatedAt = maxOf(now, (row?.updatedAt ?: 0) + 1),
+                rerun = rerun || row?.rerun == true,
+                aiRequested = aiRequested || row?.aiRequested == true,
+            )
+        upsert(pending)
+        return pending
+    }
+
+    /** The previous and queued rows of an import, read and changed atomically for its rollback. */
+    @Transaction
+    suspend fun enqueueForImport(
+        docId: String,
+        now: Long,
+    ): Pair<OcrQueueEntity?, OcrQueueEntity> = getByDocId(docId) to enqueue(docId, now)
+
+    /** Undo only an import's own queue write; a request made since it landed stays owed. */
+    @Transaction
+    suspend fun undoEnqueue(
+        queued: OcrQueueEntity,
+        previous: OcrQueueEntity?,
+    ) {
+        if (getByDocId(queued.docId) != queued) return
+        if (previous != null) upsert(previous) else deleteRow(queued.docId)
+    }
+
+    /** Queue a background upgrade only while the row is eligible, keeping its retry budget. */
+    @Transaction
+    suspend fun enqueueUpgrade(
+        docId: String,
+        now: Long,
+        maxAttempts: Int?,
+    ) {
+        val row = getByDocId(docId)
+        if (row != null && row.queueState != QueueState.DONE) return
+        if (row != null && maxAttempts != null && row.attempts >= maxAttempts) return
+        upsert(
+            OcrQueueEntity(
+                docId = docId,
+                state = QueueState.PENDING.column,
+                attempts = row?.attempts ?: 0,
+                updatedAt = now,
+            ),
+        )
+    }
+
     @Query("SELECT * FROM ocr_queue ORDER BY updatedAt")
     fun observeQueue(): Flow<List<OcrQueueEntity>>
 
@@ -80,6 +142,15 @@ interface OcrQueueDao {
     suspend fun delete(docId: String) {
         deleteRow(docId)
         clearCachedPages(docId)
+    }
+
+    /** A sidecar adoption may drop only the row it checked, never a request made meanwhile. */
+    @Transaction
+    suspend fun deleteIfUnchanged(
+        docId: String,
+        seen: OcrQueueEntity?,
+    ) {
+        if (getByDocId(docId) == seen) delete(docId)
     }
 
     /** Pages a failed run of [engine] in [lang] already read for [docId] (see [OcrPageCacheEntity]). */

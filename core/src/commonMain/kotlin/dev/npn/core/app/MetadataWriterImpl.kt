@@ -125,7 +125,7 @@ class MetadataWriterImpl internal constructor(
                 // Against what the document shows, inherited values included: clearing one is a write.
                 ids.filter { state.inheritedFields(it)[k] != v }.map { PendingOp.fieldSet(it, k, v) }
             }
-        if (changed) followUp(ids, autoMatch = k == FieldKeys.TITLE)
+        if (changed) followUp(ids, autoMatch = true)
     }
 
     override suspend fun applyEdits(
@@ -171,9 +171,9 @@ class MetadataWriterImpl internal constructor(
             edits.flatMap { it.ops() }
         }
         // The same follow-ups the individual setters do, but once per document for the whole edit
-        // instead of once per value, and only for a document it wrote to. Auto-match only reacts to a
-        // new title, matching setField.
-        for (edit in edits.filterNot { it.isEmpty }) followUp(listOf(edit.docId), autoMatch = edit.setsTitle)
+        // instead of once per value, and only for a document it wrote to. Any field may be a rule's
+        // input; tag-only writes do not rerun rules, avoiding tag changes feeding back into them.
+        for (edit in edits.filterNot { it.isEmpty }) followUp(listOf(edit.docId), autoMatch = edit.values.isNotEmpty())
     }
 
     /** What one document gets of an [applyEdits]: the [tags] to add and the field [values] to set. */
@@ -183,7 +183,6 @@ class MetadataWriterImpl internal constructor(
         val values: List<Pair<String, String?>>,
     ) {
         val isEmpty: Boolean get() = tags.isEmpty() && values.isEmpty()
-        val setsTitle: Boolean get() = values.any { it.first == FieldKeys.TITLE }
 
         fun ops(): List<PendingOp> =
             tags.map { PendingOp.tagAdd(docId, it) } +
@@ -210,8 +209,8 @@ class MetadataWriterImpl internal constructor(
 
     /**
      * What a write to [docIds] sets off once it is published: the auto-match rules when [autoMatch]
-     * (a new title), then the storage-path rule, for each document. The write landed whatever they
-     * do, so a failure is logged for its document and the others carry on; thrown, it would have a
+     * (a field value changed), then the storage-path rule, for each document. The write landed
+     * whatever they do, so a failure is logged for its document and the others carry on; thrown, it would have a
      * caller take the write for one that did not land, and send it again.
      */
     private suspend fun followUp(

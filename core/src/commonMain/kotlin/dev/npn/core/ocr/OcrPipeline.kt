@@ -477,7 +477,9 @@ class OcrPipeline(
         // Adopted text does not settle a run still owed here, nor one whose sidecar a pass cut short
         // already published; processDoc does, once it is due, and hands that text on as produced.
         val row = ocrQueueDao.getByDocId(doc.docId)
-        if (row?.isOwedHere() != true && !publishedFor(row, stored)) ocrQueueDao.delete(doc.docId)
+        if (row?.isOwedHere() != true && !publishedFor(row, stored)) {
+            ocrQueueDao.deleteIfUnchanged(doc.docId, row)
+        }
     }
 
     /**
@@ -557,16 +559,7 @@ class OcrPipeline(
     ) {
         if (!doc.isLive) return
         if (!canImprove(doc, stored)) return
-        val entry = ocrQueueDao.getByDocId(doc.docId)
-        if (entry != null && (entry.queueState != QueueState.DONE || retry.givesUp(entry.attempts))) return
-        ocrQueueDao.upsert(
-            OcrQueueEntity(
-                docId = doc.docId,
-                state = QueueState.PENDING.column,
-                attempts = entry?.attempts ?: 0,
-                updatedAt = clock.nowMillis(),
-            ),
-        )
+        ocrQueueDao.enqueueUpgrade(doc.docId, clock.nowMillis(), retry.maxAttempts)
     }
 
     // --- indexing / state helpers ---

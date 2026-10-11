@@ -230,6 +230,46 @@ class BakeServiceTest {
             noTempLitter().shouldBeTrue()
         }
 
+    @Test
+    fun aRelinkThatCannotBePublishedRestoresTheOriginalBytes() =
+        runTest {
+            val original = fixturePdf()
+            fs.writeBytesOnce("doc.pdf", original)
+            val oldSha = fs.sha256("doc.pdf")
+
+            assertFailsWith<IOException> {
+                BakeService(fs, io).bakeInPlace("doc.pdf", oldSha, xmp(tags = listOf("t"))) { _, _ ->
+                    throw IOException("journal disk full")
+                }
+            }
+
+            fs.readBytes("doc.pdf") shouldBe original
+            fs.sha256("doc.pdf") shouldBe oldSha
+            noTempLitter().shouldBeTrue()
+        }
+
+    @Test
+    fun aFailedRelinkLeavesAnExternalReplacementAloneAndKeepsTheOriginalForRecovery() =
+        runTest {
+            val original = fixturePdf()
+            val other = "a sync writer's unrelated replacement".encodeToByteArray()
+            fs.writeBytesOnce("doc.pdf", original)
+            val oldSha = fs.sha256("doc.pdf")
+
+            assertFailsWith<IOException> {
+                BakeService(fs, io).bakeInPlace("doc.pdf", oldSha, xmp(tags = listOf("t"))) { _, _ ->
+                    fs.delete("doc.pdf")
+                    fs.writeBytesOnce("doc.pdf", other)
+                    throw IOException("journal unavailable")
+                }
+            }
+
+            fs.readBytes("doc.pdf") shouldBe other
+            val recovery = fs.listAll().single { it.name.startsWith("npn-recovery-") }
+            fs.readBytes(recovery.relPath) shouldBe original
+            fs.sha256(recovery.relPath) shouldBe oldSha
+        }
+
     /** The rename landed, but the provider reported a failure: undone, the document is back as it was. */
     @Test
     fun aMoveThatLandsAndThenFailsEndsWithTheOriginalBytesAndNoRelink() =

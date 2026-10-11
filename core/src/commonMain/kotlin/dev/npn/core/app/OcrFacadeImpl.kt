@@ -2,7 +2,6 @@ package dev.npn.core.app
 
 import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.OcrQueueDao
-import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.QueueState
 import dev.npn.core.db.queueState
 import dev.npn.core.journal.EpochClock
@@ -160,7 +159,8 @@ internal class OcrFacadeImpl(
      * drain. The row write is a partial UPDATE so this state flip cannot clobber metadata columns a
      * concurrent journal fold just projected onto the same row.
      *
-     * A request already on the row ([OcrQueueEntity.rerun], [OcrQueueEntity.aiRequested]) is kept:
+     * A request already on the row ([dev.npn.core.db.OcrQueueEntity.rerun],
+     * [dev.npn.core.db.OcrQueueEntity.aiRequested]) is kept:
      * asking for one thing does not withdraw what was asked before it ran. The row's stamp always
      * moves on, even within the millisecond of the last: it is how a pass tells a request made while
      * it ran from the one it read (`OcrQueueDao.settle`).
@@ -170,16 +170,7 @@ internal class OcrFacadeImpl(
         rerun: Boolean = false,
         aiRequested: Boolean = false,
     ) {
-        val existing = queue.getByDocId(docId)
-        queue.upsert(
-            OcrQueueEntity(
-                docId = docId,
-                state = QueueState.PENDING.column,
-                updatedAt = maxOf(clock.nowMillis(), (existing?.updatedAt ?: 0) + 1),
-                rerun = rerun || existing?.rerun == true,
-                aiRequested = aiRequested || existing?.aiRequested == true,
-            ),
-        )
+        queue.enqueue(docId, clock.nowMillis(), rerun, aiRequested)
         documentDao.updateOcrState(docId, OcrState.PENDING.column, null, null)
         worker.kick()
     }

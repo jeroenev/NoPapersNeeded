@@ -30,7 +30,7 @@ internal class BakeRelink(
         log.runLogged("Handing the enrichment mark of $original on to its bake") {
             enrichment.enrichedAt(original)?.let { enrichment.markEnriched(AiEnrichedEntity(baked, it)) }
         }
-        relink.applyRelink(original, baked)
+        relink.applyBakeRelink(original, baked)
         log.runLogged("Indexing the text of $baked") { ocr.reselect(baked) }
     }
 }
