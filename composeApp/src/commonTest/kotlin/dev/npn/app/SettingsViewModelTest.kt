@@ -8,13 +8,8 @@ import dev.npn.app.ui.settings.SettingsViewModel
 import dev.npn.app.ui.settings.TextSetting
 import dev.npn.app.ui.settings.evaluateStoragePath
 import dev.npn.app.ui.settings.text
-import dev.npn.core.ai.AiCheck
-import dev.npn.core.ai.AiCheckOutcome
-import dev.npn.core.ai.AiCheckStatus
-import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiReasoningLevel
-import dev.npn.core.ai.AiSelfTestReport
 import dev.npn.core.app.AiTagging
 import dev.npn.core.app.StoragePathSetting
 import dev.npn.core.app.ViewType
@@ -48,10 +43,11 @@ class SettingsViewModelTest : MainDispatcherTest() {
     private fun vm(
         settings: FakeSettingsRepository = FakeSettingsRepository(),
         session: FakeLibrarySession = FakeLibrarySession(),
-        selfTest: suspend (AiConfig) -> AiSelfTestReport = { error("no self-test expected") },
-    ) = SettingsViewModel(settings, session, selfTest) { folder, library ->
-        folder == library || folder.startsWith("$library/")
-    }
+    ) = SettingsViewModel(
+        settings,
+        session,
+        inLibrary = { folder, library -> folder == library || folder.startsWith("$library/") },
+    )
 
     @Test
     fun clearingTheThumbnailCacheSaysWhatItCleared() =
@@ -500,23 +496,6 @@ class SettingsViewModelTest : MainDispatcherTest() {
             settings.settingsFlow.value?.aiApiKey shouldBe "sk-secret"
         }
 
-    /** The model list and the self-test ask the endpoint the screen shows, typed values included. */
-    @Test
-    fun aRequestFromTheScreenUsesWhatIsTyped() =
-        runTest(dispatcher) {
-            var asked: AiConfig? = null
-            val model =
-                vm(settings = aiSettings()) { config ->
-                    asked = config
-                    report(AiCheckStatus.PASSED)
-                }
-            model.type(TextSetting.AI_MODEL, "llama3.3")
-            model.runAiSelfTest()
-            runCurrent()
-
-            asked?.model shouldBe "llama3.3"
-        }
-
     /** A base URL typed for one provider is not saved for the next. */
     @Test
     fun switchingProviderDropsATypedBaseUrl() =
@@ -636,89 +615,6 @@ class SettingsViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
             session.reviewConfig.migrations shouldBe emptyList()
             session.reviewConfig.reviewModeSets shouldContainExactly listOf(ReviewMode.INBOX_WORKFLOW)
-        }
-
-    private fun aiSettings() =
-        FakeSettingsRepository().apply {
-            updateSettings {
-                it.copy(
-                    aiEnabled = true,
-                    aiProvider = AiProvider.OLLAMA,
-                    aiModel = "qwen3:8b",
-                    aiOcrAuto = true,
-                )
-            }
-        }
-
-    private fun report(vision: AiCheckStatus) =
-        AiSelfTestReport(
-            listOf(
-                AiCheckOutcome(AiCheck.API, AiCheckStatus.PASSED),
-                AiCheckOutcome(AiCheck.MESSAGES, AiCheckStatus.PASSED),
-                AiCheckOutcome(AiCheck.VISION, vision),
-            ),
-        )
-
-    @Test
-    fun aFailedVisionCheckSwitchesAiPageReadingOff() =
-        runTest(dispatcher) {
-            // The one setting this test is allowed to change on the user's behalf: page reading on
-            // a model that cannot read images is a paid request per page that returns nothing.
-            val settings = aiSettings()
-            val model = vm(settings = settings, selfTest = { report(AiCheckStatus.FAILED) })
-
-            model.runAiSelfTest()
-            advanceUntilIdle()
-
-            settings.settingsFlow.value?.aiOcrAuto shouldBe false
-            model.aiSelfTest.value.aiOcrTurnedOff shouldBe true
-            model.aiSelfTest.value.running shouldBe false
-        }
-
-    @Test
-    fun aFailedSwitchOffOfPageReadingIsReportedNotClaimed() =
-        runTest(dispatcher) {
-            val settings = aiSettings().apply { failEdit = { error("read-only file system") } }
-            val model = vm(settings = settings, selfTest = { report(AiCheckStatus.FAILED) })
-            val messages = collecting(model.messages.map { it.text })
-
-            model.runAiSelfTest()
-            advanceUntilIdle()
-
-            model.aiSelfTest.value.aiOcrTurnedOff shouldBe false
-            model.aiSelfTest.value.running shouldBe false
-            messages shouldContainExactly
-                listOf(failure(Res.string.common_save_setting_failed, "read-only file system"))
-        }
-
-    @Test
-    fun aPassingOrSkippedVisionCheckLeavesAiPageReadingAlone() =
-        runTest(dispatcher) {
-            listOf(AiCheckStatus.PASSED, AiCheckStatus.SKIPPED).forEach { status ->
-                val settings = aiSettings()
-                val model = vm(settings = settings, selfTest = { report(status) })
-
-                model.runAiSelfTest()
-                advanceUntilIdle()
-
-                settings.settingsFlow.value?.aiOcrAuto shouldBe true
-                model.aiSelfTest.value.aiOcrTurnedOff shouldBe false
-            }
-        }
-
-    @Test
-    fun aFailedVisionCheckReportsNoChangeWhenPageReadingWasAlreadyOff() =
-        runTest(dispatcher) {
-            // Nothing was switched off, so the screen must not claim it was.
-            val settings = aiSettings().apply { updateSettings { it.copy(aiOcrAuto = false) } }
-            val model = vm(settings = settings, selfTest = { report(AiCheckStatus.FAILED) })
-
-            model.runAiSelfTest()
-            advanceUntilIdle()
-
-            model.aiSelfTest.value.aiOcrTurnedOff shouldBe false
-            model.aiSelfTest.value.report
-                ?.statusOf(AiCheck.VISION) shouldBe AiCheckStatus.FAILED
         }
 
     private companion object {

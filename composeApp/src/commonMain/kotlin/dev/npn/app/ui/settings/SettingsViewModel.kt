@@ -396,14 +396,38 @@ class SettingsViewModel(
                 _aiSelfTest.value = AiSelfTestState(running = true)
                 val config = shownSettings().toAiConfig()
                 val report = selfTest(config)
-                val turnedOff = report.provesAiOcrCannotWork && config.ocrAuto && turnOffAiOcr()
-                _aiSelfTest.value = AiSelfTestState(report = report, aiOcrTurnedOff = turnedOff)
+                // The endpoint can be edited while its paid probes run. Its verdict applies only
+                // to what was tested, never to the replacement model or its OCR preference.
+                if (shownSettings().toAiConfig() != config) {
+                    _aiSelfTest.value = AiSelfTestState()
+                    return@launch
+                }
+                val turnedOff = report.provesAiOcrCannotWork && config.ocrAuto && turnOffAiOcr(config)
+                val expected = if (turnedOff) config.copy(ocrAuto = false) else config
+                _aiSelfTest.value =
+                    if (shownSettings().toAiConfig() == expected) {
+                        AiSelfTestState(report = report, aiOcrTurnedOff = turnedOff)
+                    } else {
+                        AiSelfTestState()
+                    }
             }
     }
 
     /** Switch AI page reading off; true once it is, false (and reported) when the write failed. */
-    private suspend fun turnOffAiOcr(): Boolean =
-        reporting(Res.string.common_save_setting_failed) { settings.edit { it.copy(aiOcrAuto = false) } }
+    private suspend fun turnOffAiOcr(tested: AiConfig): Boolean {
+        var turnedOff = false
+        val saved =
+            reporting(Res.string.common_save_setting_failed) {
+                settings.edit { current ->
+                    // Recheck inside the repository's serialized edit: another settings write may
+                    // have landed while this one waited. Include unsaved endpoint typing too.
+                    val shown = current.withTyped(typedText.map { (setting, typed) -> setting to typed.draft.value })
+                    turnedOff = shown.toAiConfig() == tested
+                    if (turnedOff) current.copy(aiOcrAuto = false) else current
+                }
+            }
+        return saved && turnedOff
+    }
 
     override fun clearThumbnailCache() =
         launchReporting(Res.string.common_settings_clear_thumbnails_failed) {

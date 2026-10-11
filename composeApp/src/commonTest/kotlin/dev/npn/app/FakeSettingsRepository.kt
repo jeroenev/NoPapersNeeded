@@ -5,6 +5,7 @@ import dev.npn.core.app.SettingsCodec
 import dev.npn.core.app.SettingsRepository
 import dev.npn.core.app.SettingsSnapshot
 import dev.npn.core.app.ViewType
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.filterNotNull
@@ -32,8 +33,10 @@ class FakeSettingsRepository(
 
     /** If set, [edit] throws this, as a failed properties-file or DataStore write would. */
     var failEdit: (() -> Nothing)? = null
+    var editGate: CompletableDeferred<Unit>? = null
 
     override suspend fun edit(transform: (SettingsSnapshot) -> SettingsSnapshot) {
+        editGate?.await()
         failEdit?.invoke()
         settingsFlow.value = SettingsCodec.normalise(transform(settingsFlow.value ?: defaultSnapshot()))
     }
