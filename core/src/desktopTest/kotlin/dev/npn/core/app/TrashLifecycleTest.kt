@@ -28,6 +28,7 @@ import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
@@ -506,6 +507,7 @@ class TrashLifecycleTest {
                 StoragePathRuleApplicator(rig.fs, rig.db, { null }, { _, _ -> }),
                 NpnLog.None,
                 BakeLock(),
+                rig.clock,
             )
     }
 
@@ -564,7 +566,8 @@ class TrashPurgeTest {
                         .listAllUnder(NpnPaths.TRASH_DIR)
                         .filter { !it.isDirectory }
                         .map { it.name }
-                left shouldBe listOf("today__${today.take(NpnPaths.TRASH_HASH_PREFIX_LENGTH)}.pdf")
+                left.map { NpnPaths.trashHashPrefix(it) } shouldBe
+                    listOf(today.take(NpnPaths.TRASH_HASH_PREFIX_LENGTH))
                 rig.session.docLifecycle.restoreDoc(today)
                 rig.exists("today.pdf").shouldBeTrue()
             } finally {
@@ -618,7 +621,9 @@ class TrashPurgeTest {
                 Files.setLastModifiedTime(rig.libRoot.resolve("old.pdf"), FileTime.fromMillis(now - 90 * DAY))
                 rig.session.rescan()
                 val id = rig.docId("old.pdf")
-                rig.fs.move("old.pdf", NpnPaths.trashPath("old.pdf", id))
+                // As an older build's entry would name it: aged, yet nothing here records the trash.
+                val entry = NpnPaths.trashPath("old.pdf", id, now - 90 * DAY)
+                rig.fs.move("old.pdf", entry)
 
                 val (second, secondDb) = rig.secondSession(backgroundScope, clock = MutableClock(now + 1))
                 try {
@@ -629,7 +634,7 @@ class TrashPurgeTest {
                     secondDb.close()
                 }
 
-                rig.fs.sha256(NpnPaths.trashPath("old.pdf", id)) shouldBe id
+                rig.fs.sha256(entry) shouldBe id
             } finally {
                 rig.close()
             }
@@ -648,7 +653,7 @@ class TrashPurgeTest {
                 val now = 400 * DAY
                 rig.clock.now = now
                 val bytes = PdfFixtures.embeddedTextPdf("trashed on another device")
-                val entry = NpnPaths.trashPath("elsewhere.pdf", sha256Bytes(bytes))
+                val entry = NpnPaths.trashPath("elsewhere.pdf", sha256Bytes(bytes), now - 90 * DAY)
                 rig.writePdf(entry, bytes)
                 Files.setLastModifiedTime(rig.libRoot.resolve(entry), FileTime.fromMillis(now - 90 * DAY))
                 rig.session.rescan()
@@ -737,7 +742,12 @@ class TrashPurgeTest {
                 rig.session.purgeTrash(olderThanDays = 30)
 
                 afterListing shouldBe null
-                rig.fs.sha256(entry) shouldBe id
+                // The re-trash is a new episode with its own entry name; the purge left it holding
+                // the document's bytes.
+                val kept = trashEntries(rig.fs).map { it.relPath }
+                kept shouldHaveSize 1
+                kept.single() shouldNotBe entry
+                rig.fs.sha256(kept.single()) shouldBe id
             } finally {
                 rig.close()
             }
@@ -948,6 +958,7 @@ class BulkTrashTest {
             StoragePathRuleApplicator(files, rig.db, { null }, { _, _ -> }),
             NpnLog.None,
             BakeLock(),
+            rig.clock,
         )
 
     @AfterTest
@@ -1197,6 +1208,7 @@ class PermanentDeleteTest {
                         StoragePathRuleApplicator(files, rig.db, { null }, { _, _ -> }),
                         NpnLog.None,
                         BakeLock(),
+                        rig.clock,
                     )
                 rig.writePdf("inbox/x.pdf", "deleted for good")
                 coordinator.rescan()
@@ -1384,6 +1396,7 @@ class TrashOwnFileTest {
             StoragePathRuleApplicator(files, rig.db, { null }, { _, _ -> }),
             NpnLog.None,
             BakeLock(),
+            rig.clock,
         )
 
     @AfterTest
@@ -1461,7 +1474,9 @@ class TrashOwnFileTest {
             files.calls("sha256").shouldBeEmpty()
             names.forEach { rig.exists("$it.pdf").shouldBeFalse() }
             trashEntries().map { it.name }.sorted() shouldBe
-                names.zip(ids) { name, id -> "${name}__${id.take(NpnPaths.TRASH_HASH_PREFIX_LENGTH)}.pdf" }
+                names.zip(ids) { name, id ->
+                    "${name}__${id.take(NpnPaths.TRASH_HASH_PREFIX_LENGTH)}-${rig.clock.now}.pdf"
+                }
             ids.forEach {
                 rig.db
                     .documentDao()
@@ -1499,6 +1514,7 @@ class LifecycleBehindARescanTest {
             StoragePathRuleApplicator(files, rig.db, { null }, { _, _ -> }),
             NpnLog.None,
             BakeLock(),
+            rig.clock,
         )
 
     @AfterTest
@@ -1686,6 +1702,7 @@ class TrashEntryTest {
                 StoragePathRuleApplicator(rig.fs, rig.db, { null }, { _, _ -> }),
                 NpnLog.None,
                 BakeLock(),
+                rig.clock,
             )
 
         suspend fun trashEntries() = rig.fs.listAllUnder(NpnPaths.TRASH_DIR).filter { !it.isDirectory }

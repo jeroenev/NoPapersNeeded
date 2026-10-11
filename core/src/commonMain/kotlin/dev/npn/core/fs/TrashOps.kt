@@ -5,33 +5,41 @@ import dev.npn.core.util.runCatchingCancellable
 /**
  * Soft-delete operations backed by [LibraryFileSystem] and the `.npn/trash/` convention.
  * Moving to trash is a plain file move: the file stays in the library so it
- * syncs, but is excluded from the index. Filenames get a hash suffix to avoid collisions;
- * further collisions get a numeric `-1`, `-2`, ... suffix so the move stays write-once.
+ * syncs, but is excluded from the index. Filenames get a hash suffix to avoid collisions and
+ * their trash episode ([NpnPaths.trashPath]) to keep each episode's entry distinct, so the move
+ * stays write-once and the purge can tell a new episode's entry from an old one's.
  */
 class TrashOps(
     private val fs: LibraryFileSystem,
 ) {
     /**
      * Move [relPath] into `.npn/trash/`, returning the trash-relative path used. The base
-     * trash name is [NpnPaths.trashPath]; if that already exists, `-1`, `-2`, ... is inserted
-     * before the extension until a free name is found.
+     * trash name is [NpnPaths.trashPath]; if that already exists (two trashes in the same
+     * millisecond), the episode counts up until a free name is found.
      */
     suspend fun moveToTrash(
         relPath: String,
         sha256: String,
+        episodeMillis: Long,
     ): String {
-        val target = trashTarget(relPath, sha256)
+        val target = trashTarget(relPath, sha256, episodeMillis)
         fs.move(relPath, target)
         return target
     }
 
-    /** Where [moveToTrash] puts [relPath], the file of the document [sha256]. */
+    /** Where [moveToTrash] puts [relPath], the file of the document [sha256] trashed at [episodeMillis]. */
     suspend fun trashTarget(
         relPath: String,
         sha256: String,
+        episodeMillis: Long,
     ): String {
         val name = NpnPaths.sanitizeFileName(NpnPaths.fileName(relPath))
-        return uniquify(NpnPaths.trashPath(name, sha256))
+        var episode = episodeMillis
+        while (true) {
+            val target = NpnPaths.trashPath(name, sha256, episode)
+            if (!fs.exists(target)) return target
+            episode++
+        }
     }
 
     /**
@@ -129,7 +137,12 @@ class TrashOps(
      * Permanently delete the trash entries, of [listing] (from [listTrash]) or else as listed now,
      * whose documents were trashed, or deleted for good, strictly before [cutoffMillis]. For a caller
      * under the writer lock, whose trash, restore and delete for good cannot land between [documents]
-     * and the deletes: a restore and a trash again reuse an entry's name.
+     * and the deletes. A restore and a trash again make a new episode, and its own entry name
+     * ([NpnPaths.trashPath]): an entry carrying a newer episode than any recorded here is that
+     * episode's copy, arrived before its events, and is kept — the events of a synced library can
+     * land after the file. An entry without one (an older build's plain name, whose `-N` collision
+     * names read as episodes of 1, 2, ...) has no newer episode to find and is judged by the
+     * recorded times alone.
      *
      * [documents] maps each document known to be trashed or deleted to when that happened, and may
      * map others to null. An entry belongs to the documents whose id starts with the hash prefix in
@@ -156,6 +169,8 @@ class TrashOps(
     ) {
         val byPrefix = documents.entries.groupBy { it.key.take(NpnPaths.TRASH_HASH_PREFIX_LENGTH) }
         for (meta in listing ?: listTrash()) {
+            val episode = NpnPaths.trashEpisodeMillis(meta.name)
+            if (episode != null && episode >= cutoffMillis) continue
             val owners = NpnPaths.trashHashPrefix(meta.name)?.let(byPrefix::get).orEmpty()
             val allOld = owners.all { (_, trashed) -> trashed != null && trashed < cutoffMillis }
             if (!allOld) continue
@@ -166,9 +181,6 @@ class TrashOps(
             if (owned) fs.delete(meta.relPath)
         }
     }
-
-    private suspend fun uniquify(path: String): String =
-        uniquifyPath(path, startIndex = 1, suffix = { "-$it" }, exists = fs::exists)
 
     private suspend fun uniquifyRestored(
         path: String,

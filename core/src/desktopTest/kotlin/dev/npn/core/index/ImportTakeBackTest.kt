@@ -79,7 +79,7 @@ class ImportTakeBackTest {
         rig.writePdf(relPath, content)
         rig.rescan()
         val id = rig.fs.sha256(relPath)
-        TrashOps(rig.fs).moveToTrash(relPath, id)
+        TrashOps(rig.fs).moveToTrash(relPath, id, rig.clock.nowMillis())
         rig.clock.advance()
         rig.writer().commit(listOf(PendingOp.docTrash(id, relPath)))
         rig.rescan()

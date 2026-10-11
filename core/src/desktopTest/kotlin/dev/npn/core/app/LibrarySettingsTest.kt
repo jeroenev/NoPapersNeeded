@@ -1,7 +1,7 @@
 package dev.npn.core.app
 
 import dev.npn.core.db.AutoMatchRuleEntity
-import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.TrashOps
 import dev.npn.core.index.MutableClock
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.HlcWatermarkAllocator
@@ -168,7 +168,8 @@ class LibrarySettingsTest {
                     secondDb.close()
                 }
 
-                rig.fs.sha256(NpnPaths.trashPath("bill.pdf", id)) shouldBe id
+                val entry = TrashOps(rig.fs).listTrash().map { it.relPath }.single()
+                rig.fs.sha256(entry) shouldBe id
             } finally {
                 rig.close()
             }
@@ -240,7 +241,8 @@ class LibrarySettingsTest {
                 rig.clock.now = 800 * DAY
                 rig.session.purgeExpiredTrash()
 
-                rig.fs.sha256(NpnPaths.trashPath("bill.pdf", id)) shouldBe id
+                val entry = TrashOps(rig.fs).listTrash().map { it.relPath }.single()
+                rig.fs.sha256(entry) shouldBe id
             } finally {
                 rig.close()
             }

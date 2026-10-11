@@ -235,7 +235,7 @@ class DocumentRestoreTest {
             val id = rig.docId("a.pdf")
             val bucketPath = JournalPaths.objectPath("ab" + "0".repeat(62))
             // That device moved the file into the trash, and the move synced with its event.
-            val trashed = rig.libRoot.resolve(NpnPaths.trashPath("a.pdf", id))
+            val trashed = rig.libRoot.resolve(NpnPaths.trashPath("a.pdf", id, rig.clock.nowMillis()))
             Files.createDirectories(trashed.parent)
             Files.move(rig.libRoot.resolve("a.pdf"), trashed)
             ContentAddressedJournalWriter(rig.fs, "other-installation", HlcWatermarkAllocator(rig.clock))

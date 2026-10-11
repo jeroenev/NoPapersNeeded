@@ -51,7 +51,7 @@ class MetadataListingTest {
         write("${NpnPaths.OCR_DIR}/$hash.dev-a.json")
         write("${NpnPaths.OCR_DIR}/$hash.dev-b.tesseract.json")
         write("${NpnPaths.OCR_DIR}/${"b".repeat(64)}.dev-a.json")
-        write(NpnPaths.trashPath("old.pdf", hash))
+        write(NpnPaths.trashPath("old.pdf", hash, 1_000))
         write("${NpnPaths.JOURNAL_DIR}/objects/x.json")
         fs = ListingCounter(JvmLibraryFileSystem(root, PathExternalIo))
     }
@@ -83,7 +83,8 @@ class MetadataListingTest {
     @Test
     fun trashLookupsWalkOnlyTheTrashDirectory() =
         runTest {
-            TrashOps(fs).listTrash().map { it.relPath } shouldContainExactly listOf(NpnPaths.trashPath("old.pdf", hash))
+            TrashOps(fs).listTrash().map { it.relPath } shouldContainExactly
+                listOf(NpnPaths.trashPath("old.pdf", hash, 1_000))
 
             fs.wholeLibraryWalks shouldBe 0
             fs.walkedDirs shouldContainExactly listOf(NpnPaths.TRASH_DIR)

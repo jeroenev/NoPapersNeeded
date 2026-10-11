@@ -198,11 +198,11 @@ class LibrarySessionImpl private constructor(
      * place by a rescan.
      *
      * The trash is listed before the writer lock; its entries are checked against the rows and the
-     * journal and deleted under it, so a restore and a trash again, which give the document its
-     * entry's name back with a new trash time, cannot land in between. A batch of [PURGE_BATCH]
-     * entries per hold: the check reads every document's trash time, so once per batch rather than
-     * per entry, and no hold lasts through a long run of deletes (binder calls under SAF) that every
-     * write waits on.
+     * journal and deleted under it. An entry's name carries the trash episode it belongs to
+     * ([NpnPaths.trashPath]), so even a restore and a trash again whose events arrive after its
+     * entry cannot pass for the old episode's. A batch of [PURGE_BATCH] entries per hold: the check
+     * reads every document's trash time, so once per batch rather than per entry, and no hold lasts
+     * through a long run of deletes (binder calls under SAF) that every write waits on.
      */
     internal suspend fun purgeTrash(olderThanDays: Int) {
         val cutoff = deps.clock.nowMillis() - olderThanDays.toLong() * MILLIS_PER_DAY

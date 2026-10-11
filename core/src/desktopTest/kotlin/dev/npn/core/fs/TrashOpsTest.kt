@@ -36,8 +36,8 @@ class TrashOpsTest {
     fun moveToTrashAndRestoreRoundtrip() =
         runTest {
             fs.writeBytesOnce("inbox/doc.pdf", "content".encodeToByteArray())
-            val trashRel = trash.moveToTrash("inbox/doc.pdf", "deadbeefcafebabe")
-            trashRel shouldBe ".npn/trash/doc__deadbeef.pdf"
+            val trashRel = trash.moveToTrash("inbox/doc.pdf", "deadbeefcafebabe", 1_000)
+            trashRel shouldBe ".npn/trash/doc__deadbeef-1000.pdf"
             fs.exists("inbox/doc.pdf").shouldBeFalse()
             fs.exists(trashRel).shouldBeTrue()
 
@@ -54,8 +54,8 @@ class TrashOpsTest {
             val id = sha256Bytes(content)
             fs.writeBytesOnce("a/doc.pdf", content)
             fs.writeBytesOnce("b/doc.pdf", content)
-            val kept = trash.moveToTrash("a/doc.pdf", id)
-            val changed = trash.moveToTrash("b/doc.pdf", id)
+            val kept = trash.moveToTrash("a/doc.pdf", id, 1_000)
+            val changed = trash.moveToTrash("b/doc.pdf", id, 2_000)
             val hashed = trash.hashCandidates(id)
             fs.delete(changed)
             fs.writeBytesOnce(changed, "other content".encodeToByteArray())
@@ -72,16 +72,17 @@ class TrashOpsTest {
             hashing shouldBe listOf(changed)
         }
 
+    /** Two trashes whose name would collide (same millisecond) take consecutive episodes. */
     @Test
-    fun moveToTrashAvoidsCollisionWithNumericSuffix() =
+    fun moveToTrashKeepsEpisodesDistinctWhenAMillisecondCollides() =
         runTest {
             fs.writeBytesOnce("a/doc.pdf", "1".encodeToByteArray())
             fs.writeBytesOnce("b/doc.pdf", "2".encodeToByteArray())
-            // Same name + same hash prefix -> second must get -1.
-            val first = trash.moveToTrash("a/doc.pdf", "deadbeefcafebabe")
-            val second = trash.moveToTrash("b/doc.pdf", "deadbeefcafebabe")
-            first shouldBe ".npn/trash/doc__deadbeef.pdf"
-            second shouldBe ".npn/trash/doc__deadbeef-1.pdf"
+            // Same name + same hash prefix in the same millisecond -> the episode counts up.
+            val first = trash.moveToTrash("a/doc.pdf", "deadbeefcafebabe", 1_000)
+            val second = trash.moveToTrash("b/doc.pdf", "deadbeefcafebabe", 1_000)
+            first shouldBe ".npn/trash/doc__deadbeef-1000.pdf"
+            second shouldBe ".npn/trash/doc__deadbeef-1001.pdf"
             trash.listTrash() shouldHaveSize 2
         }
 
@@ -89,7 +90,7 @@ class TrashOpsTest {
     fun aMoveIntoTheTrashThatALeftTemporaryFileIsNotATrashEntry() =
         runTest {
             fs.writeBytesOnce("inbox/doc.pdf", "content".encodeToByteArray())
-            val trashed = trash.moveToTrash("inbox/doc.pdf", "deadbeefcafebabe")
+            val trashed = trash.moveToTrash("inbox/doc.pdf", "deadbeefcafebabe", 1_000)
             fs.writeBytesOnce(
                 "${NpnPaths.TRASH_DIR}/${NpnPaths.Temp.moveName("interrupted")}",
                 "partial".encodeToByteArray(),
@@ -103,7 +104,7 @@ class TrashOpsTest {
     fun aTrashedNameWithABackslashIsPassedOver() =
         runTest {
             assumeTrue(File.separatorChar == '/')
-            val old = trashWithMtime("x/old.pdf", "old", mtime = 1_000)
+            val old = trashWithMtime("x/old.pdf", "old", mtime = 1_000, episodeMillis = 1_000)
             val odd = root.resolve(NpnPaths.TRASH_DIR).resolve("a\\b__00000000.pdf")
             Files.write(odd, "odd".encodeToByteArray())
             Files.setLastModifiedTime(odd, FileTime.fromMillis(1000))
@@ -118,7 +119,7 @@ class TrashOpsTest {
     fun restoreUniquifiesWhenTargetTaken() =
         runTest {
             fs.writeBytesOnce("inbox/doc.pdf", "orig".encodeToByteArray())
-            val trashRel = trash.moveToTrash("inbox/doc.pdf", "deadbeefcafebabe")
+            val trashRel = trash.moveToTrash("inbox/doc.pdf", "deadbeefcafebabe", 1_000)
             // A new file now occupies the original path.
             fs.writeBytesOnce("inbox/doc.pdf", "new".encodeToByteArray())
             val restored = trash.restore(trashRel, "inbox/doc.pdf")
@@ -131,8 +132,8 @@ class TrashOpsTest {
     @Test
     fun purgeOlderThanRemovesOldEntries() =
         runTest {
-            val old = trashWithMtime("x/old.pdf", "old bytes", mtime = 1_000)
-            val recent = trashWithMtime("y/recent.pdf", "recent bytes", mtime = 1_000)
+            val old = trashWithMtime("x/old.pdf", "old bytes", mtime = 1_000, episodeMillis = 100_000)
+            val recent = trashWithMtime("y/recent.pdf", "recent bytes", mtime = 1_000, episodeMillis = 900_000)
 
             trash.purgeOlderThan(
                 cutoffMillis = 500_000,
@@ -147,8 +148,8 @@ class TrashOpsTest {
     fun purgeMeasuresATrashedDocumentFromWhenItWasTrashed() =
         runTest {
             // Both PDFs are old; moving into trash keeps their mtime.
-            val recent = trashWithMtime("x/recent.pdf", "recent bytes", mtime = 1_000)
-            val longAgo = trashWithMtime("y/longago.pdf", "long ago bytes", mtime = 1_000)
+            val recent = trashWithMtime("x/recent.pdf", "recent bytes", mtime = 1_000, episodeMillis = 1_000)
+            val longAgo = trashWithMtime("y/longago.pdf", "long ago bytes", mtime = 1_000, episodeMillis = 1_000)
 
             trash.purgeOlderThan(
                 cutoffMillis = 500_000,
@@ -163,11 +164,28 @@ class TrashOpsTest {
     fun purgeKeepsAnEntryWhoseDocumentIsNotTrashedYet() =
         runTest {
             // The move into trash runs before its doc-trash commit: the row is still live.
-            val moving = trashWithMtime("x/moving.pdf", "moving bytes", mtime = 1_000)
+            val moving = trashWithMtime("x/moving.pdf", "moving bytes", mtime = 1_000, episodeMillis = 1_000)
 
             trash.purgeOlderThan(cutoffMillis = 500_000, documents = mapOf(moving.id to null))
 
             fs.exists(moving.entry).shouldBeTrue()
+        }
+
+    /**
+     * A restore and a trash again make a new episode, whose entry a synced library can receive
+     * before its events. A journal still reading the old, long-past trash must not take the new
+     * episode's entry — the document's only copy — for the old one's.
+     */
+    @Test
+    fun purgeKeepsAnEntryOfANewerEpisodeThanItsJournalShows() =
+        runTest {
+            val reTrashed =
+                trashWithMtime("x/doc.pdf", "restored and trashed again", mtime = 1_000, episodeMillis = 900_000)
+
+            // What a journal holding only the first trash (long past) says about it.
+            trash.purgeOlderThan(cutoffMillis = 500_000, documents = mapOf(reTrashed.id to 100_000L))
+
+            fs.exists(reTrashed.entry).shouldBeTrue()
         }
 
     /**
@@ -177,11 +195,11 @@ class TrashOpsTest {
     @Test
     fun purgeKeepsAnEntryWithNoDocument() =
         runTest {
-            val orphan = trashWithMtime("x/orphan.pdf", "orphan bytes", mtime = 1_000)
+            val orphan = trashWithMtime("x/orphan.pdf", "orphan bytes", mtime = 1_000, episodeMillis = 1_000)
             val stray = root.resolve(NpnPaths.TRASH_DIR).resolve("stray.pdf")
             Files.write(stray, "stray".encodeToByteArray())
             Files.setLastModifiedTime(stray, FileTime.fromMillis(1_000))
-            val owned = trashWithMtime("x/owned.pdf", "owned bytes", mtime = 1_000)
+            val owned = trashWithMtime("x/owned.pdf", "owned bytes", mtime = 1_000, episodeMillis = 1_000)
 
             trash.purgeOlderThan(cutoffMillis = 500_000, documents = mapOf(owned.id to 100_000L))
 
@@ -198,7 +216,7 @@ class TrashOpsTest {
     @Test
     fun purgeKeepsAnEntryWhileAnyDocumentSharingItsPrefixKeepsIt() =
         runTest {
-            val entry = trashWithMtime("x/old.pdf", CLASHING_FIRST, mtime = 1_000)
+            val entry = trashWithMtime("x/old.pdf", CLASHING_FIRST, mtime = 1_000, episodeMillis = 100_000)
             val clash = sha256Bytes(CLASHING_SECOND.encodeToByteArray())
             entry.id.take(NpnPaths.TRASH_HASH_PREFIX_LENGTH) shouldBe clash.take(NpnPaths.TRASH_HASH_PREFIX_LENGTH)
             val trashedLongAgo = entry.id to 100_000L
@@ -219,10 +237,10 @@ class TrashOpsTest {
     @Test
     fun purgeKeepsAnEntryACollidingDocumentDoesNotOwn() =
         runTest {
-            val colliding = trashWithMtime("x/colliding.pdf", CLASHING_FIRST, mtime = 1_000)
+            val colliding = trashWithMtime("x/colliding.pdf", CLASHING_FIRST, mtime = 1_000, episodeMillis = 100_000)
             // Another file's bytes under a name the old document's entry could carry.
             fs.writeBytesOnce("y/unknown.pdf", CLASHING_SECOND.encodeToByteArray())
-            val entry = trash.moveToTrash("y/unknown.pdf", colliding.id)
+            val entry = trash.moveToTrash("y/unknown.pdf", colliding.id, 100_000)
             Files.setLastModifiedTime(root.resolve(entry), FileTime.fromMillis(1_000))
 
             trash.purgeOlderThan(500_000, mapOf(colliding.id to 100_000L))
@@ -246,16 +264,20 @@ class TrashOpsTest {
         val id: String,
     )
 
-    /** Trash [relPath], holding [content], under a name carrying its real hash, then age the entry. */
+    /**
+     * Trash [relPath], holding [content], under a name carrying its real hash and [episodeMillis],
+     * then age the entry.
+     */
     private suspend fun trashWithMtime(
         relPath: String,
         content: String,
         mtime: Long,
+        episodeMillis: Long,
     ): Trashed {
         val bytes = content.encodeToByteArray()
         fs.writeBytesOnce(relPath, bytes)
         val id = sha256Bytes(bytes)
-        val trashed = trash.moveToTrash(relPath, id)
+        val trashed = trash.moveToTrash(relPath, id, episodeMillis)
         Files.setLastModifiedTime(root.resolve(trashed), FileTime.fromMillis(mtime))
         return Trashed(trashed, id)
     }

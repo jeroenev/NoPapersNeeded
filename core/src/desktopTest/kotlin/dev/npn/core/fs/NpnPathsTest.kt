@@ -41,9 +41,22 @@ class NpnPathsTest {
 
     @Test
     fun trashPathKeepsExtensionAndHashPrefix() {
-        NpnPaths.trashPath("Invoice.pdf", "deadbeefcafebabe0000") shouldBe ".npn/trash/Invoice__deadbeef.pdf"
-        NpnPaths.trashPath("noext", "deadbeefcafebabe0000") shouldBe ".npn/trash/noext__deadbeef"
-        NpnPaths.trashPath("a.b.pdf", "deadbeefcafebabe0000") shouldBe ".npn/trash/a.b__deadbeef.pdf"
+        NpnPaths.trashPath("Invoice.pdf", "deadbeefcafebabe0000", 1234) shouldBe
+            ".npn/trash/Invoice__deadbeef-1234.pdf"
+        NpnPaths.trashPath("noext", "deadbeefcafebabe0000", 1234) shouldBe ".npn/trash/noext__deadbeef-1234"
+        NpnPaths.trashPath("a.b.pdf", "deadbeefcafebabe0000", 1234) shouldBe
+            ".npn/trash/a.b__deadbeef-1234.pdf"
+    }
+
+    /** The episode round-trips: it is what tells one trash's entry from the next one's. */
+    @Test
+    fun trashEpisodeMillisRoundTripsAndReadsOldNames() {
+        NpnPaths.trashEpisodeMillis(NpnPaths.trashPath("Invoice.pdf", "deadbeefcafebabe0000", 1234)) shouldBe 1234
+        NpnPaths.trashEpisodeMillis(NpnPaths.trashPath("noext", "deadbeefcafebabe0000", 1234)) shouldBe 1234
+        // An older build's plain name and its -N collision names: no episode, or one as old as any.
+        NpnPaths.trashEpisodeMillis("Invoice__deadbeef.pdf") shouldBe null
+        NpnPaths.trashEpisodeMillis("Invoice__deadbeef-2.pdf") shouldBe 2
+        NpnPaths.trashEpisodeMillis("Invoice.pdf") shouldBe null
     }
 
     @Test

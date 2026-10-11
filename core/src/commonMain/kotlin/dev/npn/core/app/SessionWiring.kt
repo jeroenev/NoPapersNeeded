@@ -180,6 +180,7 @@ internal suspend fun buildLibrary(
             pathRules,
             deps.log,
             bakes,
+            clock = deps.clock,
             applyAutoMatch = { ruleApplier.applyToDoc(it, organize = false) },
         )
     return Library(

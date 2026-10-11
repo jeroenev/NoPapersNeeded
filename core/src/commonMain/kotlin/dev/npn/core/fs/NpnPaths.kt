@@ -42,31 +42,45 @@ object NpnPaths {
     const val MARKER_CASE_CONFLICT = " (Case Conflict"
 
     /**
-     * `.npn/trash/<baseName>__<first 8 hash chars>.<ext>`
+     * `.npn/trash/<baseName>__<first 8 hash chars>-<episode>.<ext>`
      *
      * The hash suffix keeps trash filenames collision-resistant across devices while staying
-     * write-once. Files without an extension are handled (no trailing dot).
+     * write-once, and [episodeMillis] — when this trash happened — keeps them episode-unique: a
+     * restore and a trash again give the document a new name, so the purge that reads an old trash
+     * time from a lagging journal ([dev.npn.core.fs.TrashOps.purgeOlderThan]) can see that the entry
+     * before it is not the old episode's. Two entries in the same millisecond take the next free
+     * episode ([dev.npn.core.fs.TrashOps.trashTarget]). Files without an extension are handled (no
+     * trailing dot).
      */
     fun trashPath(
         originalName: String,
         sha256: String,
+        episodeMillis: Long,
     ): String {
         val hashPrefix = sha256.take(TRASH_HASH_PREFIX_LENGTH)
         val dot = originalName.lastIndexOf('.')
         return if (dot > 0) {
             val base = originalName.substring(0, dot)
             val ext = originalName.substring(dot + 1)
-            "$TRASH_DIR/${base}__$hashPrefix.$ext"
+            "$TRASH_DIR/${base}__$hashPrefix-$episodeMillis.$ext"
         } else {
-            "$TRASH_DIR/${originalName}__$hashPrefix"
+            "$TRASH_DIR/${originalName}__$hashPrefix-$episodeMillis"
         }
     }
 
     /**
-     * The document hash prefix in a [trashPath] file name, past any `-N` collision suffix, or null
-     * when [fileName] is not one of those names.
+     * The document hash prefix in a [trashPath] file name, past any episode suffix, or null when
+     * [fileName] is not one of those names.
      */
     fun trashHashPrefix(fileName: String): String? = trashNamePattern.find(fileName)?.groupValues?.get(1)
+
+    /**
+     * When the trash a [trashPath] file name stands for happened, or null for a name without one: an
+     * older build's `-N` collision suffix reads here as an episode of 1, 2, ... — as old as any
+     * recorded trash time — and a name without a suffix is that older build's plain one.
+     */
+    fun trashEpisodeMillis(fileName: String): Long? =
+        trashNamePattern.find(fileName)?.groupValues?.get(2)?.drop(1)?.toLongOrNull()
 
     /**
      * The app's own temporary files in the library. Each kind is named here alone, so a rescan can

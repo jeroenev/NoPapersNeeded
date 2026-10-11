@@ -12,6 +12,7 @@ import dev.npn.core.fs.TrashOps
 import dev.npn.core.fs.holds
 import dev.npn.core.index.hasStoredStat
 import dev.npn.core.index.holdsDocument
+import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.FieldKeys
@@ -56,6 +57,8 @@ class MetadataWriterImpl internal constructor(
     private val log: NpnLog,
     /** The session's, shared with its bakes: a trash or delete for good waits for a bake. */
     private val bakeLock: BakeLock,
+    /** The session's, so a trash entry's name carries the episode its event's time stands for. */
+    private val clock: EpochClock,
     private val applyAutoMatch: suspend (String) -> Unit = {},
 ) : MetadataWriter,
     TagAdmin,
@@ -308,7 +311,10 @@ class MetadataWriterImpl internal constructor(
             // unchanged. Another app may have written over it since the last rescan; that file
             // stays where it is for the next rescan to index, and the trash is recorded as for a
             // document whose file is gone.
-            val trashPath = if (fs.holdsDocument(doc)) trashOps.trashTarget(origPath, id) else null
+            // The entry's name carries when this trash happened, so a purge can tell this episode's
+            // entry from an older one's that a lagging journal still describes (TrashOps.purgeOlderThan).
+            val trashPath =
+                if (fs.holdsDocument(doc)) trashOps.trashTarget(origPath, id, clock.nowMillis()) else null
             trashed = id
             LifecycleChange(
                 // The event carries origPath for a restore on another device.
