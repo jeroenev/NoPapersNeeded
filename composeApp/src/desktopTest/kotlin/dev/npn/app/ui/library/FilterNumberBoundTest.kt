@@ -2,17 +2,20 @@
 
 package dev.npn.app.ui.library
 
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.unit.dp
 import dev.npn.app.resourcesIn
 import dev.npn.app.ui.common.LocalAppLocale
 import dev.npn.app.ui.theme.NpnTheme
@@ -94,6 +97,23 @@ class FilterNumberBoundTest {
     }
 
     @Test
+    fun resizingTheBoundsKeepsInvalidTextAndBlocksApply() {
+        val words = Words.of(Locale.ENGLISH)
+        onUiThread {
+            panel(words) {
+                type("1.")
+                for (width in listOf(300, WIDTH)) {
+                    panelWidth = width
+                    repeat(3) { scene.render() }
+                    shown() shouldBe "1."
+                    field().config.getOrNull(SemanticsProperties.Error).shouldNotBeNull()
+                    applyButton().config.contains(SemanticsProperties.Disabled) shouldBe true
+                }
+            }
+        }
+    }
+
+    @Test
     fun clearAllEmptiesTheBound() {
         val words = Words.of(Locale.ENGLISH)
         onUiThread {
@@ -169,6 +189,7 @@ class FilterNumberBoundTest {
         val words: Words,
     ) {
         var filter by mutableStateOf(LibraryFilter())
+        var panelWidth by mutableStateOf(WIDTH)
         val applied = mutableListOf<LibraryFilter>()
         lateinit var scene: ImageComposeScene
 
@@ -220,6 +241,7 @@ class FilterNumberBoundTest {
                     onApply = { panel.applied += it },
                     onDismiss = {},
                     fillHeight = false,
+                    modifier = Modifier.width(panel.panelWidth.dp),
                 )
             }
         }

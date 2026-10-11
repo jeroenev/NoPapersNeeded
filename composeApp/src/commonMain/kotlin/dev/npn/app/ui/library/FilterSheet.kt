@@ -34,6 +34,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -365,16 +366,22 @@ private fun BoundsLayout(
     from: @Composable (Modifier) -> Unit,
     to: @Composable (Modifier) -> Unit,
 ) {
+    // Moving between layouts must keep each editor's composition, including partial input
+    // that has no canonical value in the filter draft yet.
+    val currentFrom by rememberUpdatedState(from)
+    val currentTo by rememberUpdatedState(to)
+    val fromSlot = remember { movableContentOf<Modifier> { currentFrom(it) } }
+    val toSlot = remember { movableContentOf<Modifier> { currentTo(it) } }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         if (maxWidth < BoundsStackBelow) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                from(Modifier.fillMaxWidth())
-                to(Modifier.fillMaxWidth())
+                fromSlot(Modifier.fillMaxWidth())
+                toSlot(Modifier.fillMaxWidth())
             }
         } else {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                from(Modifier.weight(1f))
-                to(Modifier.weight(1f))
+                fromSlot(Modifier.weight(1f))
+                toSlot(Modifier.weight(1f))
             }
         }
     }
