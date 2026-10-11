@@ -40,7 +40,7 @@ internal class ExternalDocumentMoves(
     ) {
         val observable =
             rows.filter { row ->
-                val intended = state.effectiveProp(row.docId, SystemProperty.STORAGE_PATH)
+                val intended = state.inheritedProp(row.docId, SystemProperty.STORAGE_PATH)
                 row.isLive && (intended == null || intended == row.relPath)
             }
         if (observable.isEmpty()) return

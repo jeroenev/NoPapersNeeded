@@ -127,6 +127,31 @@ class FoldFilesystemWorkTest {
             db.ftsDao().searchDocIds("renamed") shouldContainExactly listOf(docId)
         }
 
+    /**
+     * A path written for a relink predecessor moves the live document's file: the relink target
+     * shares the file with the id that was renamed away, so the intent written there is its own.
+     */
+    @Test
+    fun aRenameWrittenForARelinkPredecessorMovesTheLiveDocumentsFile() =
+        runTest {
+            writePdfs(1)
+            coordinator.rescan()
+            val docId = checkNotNull(db.documentDao().rowAtPath("doc-0.pdf")).docId
+            val older = "a".repeat(64)
+            fs.clear()
+
+            coordinator.commitAndApply(
+                listOf(
+                    PendingOp.propSet(older, SystemProperty.STORAGE_PATH, "archive/renamed.pdf"),
+                    PendingOp.relink(older, docId),
+                ),
+            )
+
+            Files.exists(libRoot.resolve("archive/renamed.pdf")) shouldBe true
+            Files.exists(libRoot.resolve("doc-0.pdf")) shouldBe false
+            db.documentDao().getByDocId(docId)?.relPath shouldBe "archive/renamed.pdf"
+        }
+
     private companion object {
         const val DOCS = 12
         const val BASELINE_BY_KEY = "SELECT value FROM kv WHERE key = ?"

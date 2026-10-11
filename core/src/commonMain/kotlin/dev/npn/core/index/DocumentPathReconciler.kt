@@ -193,7 +193,7 @@ internal class DocumentPathReconciler(
         docId: String,
     ): String? {
         if (state.isTrashed(docId) || state.isDeleted(docId) || state.resolveDocId(docId) != docId) return null
-        return state.effectiveProp(docId, SystemProperty.STORAGE_PATH)
+        return state.inheritedProp(docId, SystemProperty.STORAGE_PATH)
     }
 
     private suspend fun reconcileAvailable(

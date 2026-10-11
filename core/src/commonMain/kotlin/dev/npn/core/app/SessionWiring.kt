@@ -147,7 +147,7 @@ internal suspend fun buildLibrary(
             coordinator.commitBuilt { state ->
                 // Once per change: a document that cannot follow its location (storage that cannot
                 // move it, a move that keeps failing) would have it journaled again after every write.
-                if (state.effectiveProp(docId, SystemProperty.STORAGE_PATH) == path) {
+                if (state.inheritedProp(docId, SystemProperty.STORAGE_PATH) == path) {
                     emptyList()
                 } else {
                     listOf(PendingOp.propSet(docId, SystemProperty.STORAGE_PATH, path))
