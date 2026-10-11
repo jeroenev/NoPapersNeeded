@@ -284,8 +284,10 @@ internal class DocumentDrafts(
     /**
      * Mark the save done, keeping only the field edits made *while* it ran — comparing against
      * [written] rather than clearing the map wholesale is what stops a keystroke landing mid-save
-     * from being swallowed. A refused entry is always such an edit (a draft with one never saves),
-     * even one typed exactly like the value just written.
+     * from being swallowed. The comparison is the normalized one [field] echoes with, so a value
+     * differing from what landed only in whitespace is no edit either. A refused entry is always
+     * such an edit (a draft with one never saves), even one typed exactly like the value just
+     * written.
      */
     private fun settle(
         docId: String,
@@ -296,7 +298,7 @@ internal class DocumentDrafts(
             val latest = all.getValue(docId)
             val unwritten =
                 latest.fields.filter { (key, value) ->
-                    key in latest.refused || key !in written || written[key] != value
+                    key in latest.refused || key !in written || written[key].normalized() != value.normalized()
                 }
             val types = latest.types.filterKeys { it in unwritten }
             all + (docId to latest.copy(fields = unwritten, types = types, saving = false, saved = true))
@@ -354,7 +356,9 @@ internal class DocumentDrafts(
                     }
                 }
             outcome.onFailure { error ->
-                withContext(Dispatchers.Main) {
+                // NonCancellable, as the [finally] above: a cancellation must not skip this fixup
+                // and strand the draft at `saving`, un-saveable and un-discardable.
+                withContext(NonCancellable + Dispatchers.Main) {
                     if (fieldsLanded) settle(docId, captured.fields)
                     mutate { all ->
                         val latest = all.getValue(docId)

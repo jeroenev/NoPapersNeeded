@@ -36,7 +36,6 @@ import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_no_ai_metadata_suggestions
 import no_papers_needed.composeapp.generated.resources.common_no_ai_tag_suggestions
-import no_papers_needed.composeapp.generated.resources.common_save_field_failed
 import no_papers_needed.composeapp.generated.resources.detail_add_tag_failed
 import no_papers_needed.composeapp.generated.resources.detail_ocr_details_failed
 import no_papers_needed.composeapp.generated.resources.detail_ocr_engine_failed
@@ -78,27 +77,6 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     // ViewerTransformTest for the zoom/pan math).
 
     @Test
-    fun setFieldPassesBlankThroughForTheWriterToClear() =
-        runTest(dispatcher) {
-            val session = FakeLibrarySession()
-            val model = vm(session = session)
-            model.setField(FieldKeys.TITLE, "   ")
-            advanceUntilIdle()
-            // Blank reaches the writer as-is; canonicalization there turns it into a clear.
-            session.meta.fieldSets shouldContainExactly listOf(Triple(listOf("doc-1"), FieldKeys.TITLE, "   "))
-        }
-
-    @Test
-    fun setFieldNonBlankPassesThrough() =
-        runTest(dispatcher) {
-            val session = FakeLibrarySession()
-            val model = vm(session = session)
-            model.setField(FieldKeys.TITLE, "Invoice 2026")
-            advanceUntilIdle()
-            session.meta.fieldSets shouldContainExactly listOf(Triple(listOf("doc-1"), FieldKeys.TITLE, "Invoice 2026"))
-        }
-
-    @Test
     fun defineFieldRegistersThenWritesTheValue() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
@@ -135,18 +113,6 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             model.addTag("finance")
             advanceUntilIdle()
             messages shouldContainExactly listOf(failure(Res.string.detail_add_tag_failed, "journal write failed"))
-        }
-
-    @Test
-    fun setFieldFailureEmitsMessage() =
-        runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { meta.failSetField = { error("io") } }
-            val model = vm(session = session)
-            val messages = collecting(model.messages.map { it.text })
-            advanceUntilIdle()
-            model.setField("amount", "42")
-            advanceUntilIdle()
-            messages shouldContainExactly listOf(failure(Res.string.common_save_field_failed, "io"))
         }
 
     /**

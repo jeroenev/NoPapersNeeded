@@ -545,11 +545,6 @@ class DocDetailViewModel(
         aiMetadata.update { it.copy(suggestion = it.suggestion.without(key)) }
     }
 
-    fun setField(
-        key: String,
-        value: String?,
-    ) = launchMetadata(Res.string.common_save_field_failed) { meta.setField(docId, key, value) }
-
     /**
      * Register [def] and, when [value] is non-blank, set it on this document. The definition goes
      * first so the value is canonicalized against the new type rather than as plain text.

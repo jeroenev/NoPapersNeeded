@@ -335,6 +335,46 @@ class DocumentDraftsTest : MainDispatcherTest() {
         }
 
     /**
+     * A write that fails as its save scope is cancelled still ends the draft's save. The failure
+     * fixup must run even then, or the draft is stuck at `saving` — unsavable and undiscardable for
+     * the rest of the session.
+     */
+    @Test
+    fun aFailedSaveWhoseScopeIsCancelledStillUnsticksTheDraft() =
+        runTest(dispatcher) {
+            val fake = FakeMetadataWriter()
+            val saveScope = CoroutineScope(SupervisorJob() + dispatcher)
+            val writer =
+                object : MetadataWriter by fake {
+                    override suspend fun applyEdits(
+                        docIds: List<String>,
+                        addTags: List<String>,
+                        fields: Map<String, String?>,
+                        fillOnly: Boolean,
+                    ) {
+                        saveScope.cancel()
+                        error("disk full")
+                    }
+                }
+            try {
+                val store = DocumentDrafts(writer, saveScope)
+                store.field("one", FieldKeys.TITLE, "B", persisted = "A")
+                store.save("one")
+                runCurrent()
+
+                val draft = store.state.getValue("one")
+                assertFalse(draft.saving)
+                assertNotNull(draft.error)
+                draft.fields shouldBe mapOf(FieldKeys.TITLE to "B")
+                // Unstuck: the draft can still be discarded.
+                store.discard("one")
+                assertTrue(store.state.isEmpty())
+            } finally {
+                saveScope.cancel()
+            }
+        }
+
+    /**
      * During a navigation transition the incoming and outgoing screens are both composed, and both
      * can be editing the same document — expanding the wide layout's preview panel into the
      * full-screen detail route does exactly that. The incoming editor registers before the outgoing
