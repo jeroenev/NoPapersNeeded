@@ -419,7 +419,7 @@ private fun AiMetadataSuggestions(
                 value = value,
                 replaces = current[key]?.takeIf { it.isNotBlank() && it != value },
                 key = key,
-                onAccept = actions::acceptAiMetadata,
+                onAccept = { actions.acceptAiMetadata(it) },
                 onDismiss = actions::dismissAiMetadata,
             )
         }
@@ -442,7 +442,7 @@ private fun AiMetadataSuggestionRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SuggestedFieldValue(label = label, value = value, replaces = replaces, modifier = Modifier.weight(1f))
-        IconButton(onClick = { onAccept(key) }) {
+        IconButton(onClick = { onAccept(key) }, enabled = !LocalDocumentWriteBlocked.current) {
             Icon(
                 Icons.Filled.Check,
                 contentDescription = stringResource(Res.string.detail_use_suggestion, label),

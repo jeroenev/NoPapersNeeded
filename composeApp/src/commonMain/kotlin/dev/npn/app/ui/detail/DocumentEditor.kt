@@ -124,7 +124,7 @@ internal fun DocumentEditor(
  * The panel's actions for one document: field values and the review flag go into [store]'s draft
  * for it, measured against the [persisted] values, and everything else goes straight to [writes].
  */
-private class DraftedActions(
+internal class DraftedActions(
     private val writes: DocumentWrites,
     private val store: DocumentDrafts,
     private val docId: String,
@@ -148,12 +148,27 @@ private class DraftedActions(
     // Saves the draft along with the flag, like the save bar's "reviewed" button.
     override fun setReviewed(reviewed: Boolean) = store.save(docId, reviewed = reviewed)
 
-    // Accepting a suggestion saves immediately (the "saved" notice says so), but any draft the user
-    // typed for that field must be dropped first: otherwise the overlay would keep showing the typed
-    // value and the next save would overwrite the accepted suggestion.
-    override fun acceptAiMetadata(key: String) {
-        store.clearField(docId, key)
-        writes.acceptAiMetadata(key)
+    // Once the suggestion lands, drop the draft it replaces. A failed write keeps it, and typing
+    // during the write is a later edit that the accepted suggestion must not discard.
+    override fun acceptAiMetadata(
+        key: String,
+        onStart: (String) -> Boolean,
+        onAccepted: () -> Unit,
+        onFinished: (Boolean) -> Unit,
+    ) {
+        val captured = store.state[docId]
+        writes.acceptAiMetadata(
+            key,
+            onStart = { value -> onStart(value) && store.beginAcceptance(docId, key, value) },
+            onAccepted = {
+                store.clearField(docId, key, captured)
+                onAccepted()
+            },
+            onFinished = { accepted ->
+                store.finishAcceptance(docId, accepted)
+                onFinished(accepted)
+            },
+        )
     }
 }
 

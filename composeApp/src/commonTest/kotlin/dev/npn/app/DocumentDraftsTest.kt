@@ -7,6 +7,9 @@ import dev.npn.core.model.FieldType
 import dev.npn.core.testing.FakeMetadataWriter
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -261,6 +264,74 @@ class DocumentDraftsTest : MainDispatcherTest() {
             val draft = store.state.getValue("one")
             draft.fields shouldBe mapOf(FieldKeys.NOTES to "Call back")
             assertNotNull(draft.error)
+        }
+
+    /** A failure of the reviewed marker cannot undo fields that were already written. */
+    @Test
+    fun aReviewFailureKeepsAnEditBackToThePreviouslyStoredValue() =
+        runTest(dispatcher) {
+            val fake = FakeMetadataWriter()
+            val reviewStarted = CompletableDeferred<Unit>()
+            val finishReview = CompletableDeferred<Unit>()
+            val writer =
+                object : MetadataWriter by fake {
+                    override suspend fun setReviewed(
+                        docIds: List<String>,
+                        reviewed: Boolean,
+                    ) {
+                        reviewStarted.complete(Unit)
+                        finishReview.await()
+                        error("review failed")
+                    }
+                }
+            val store = DocumentDrafts(writer, this)
+            store.field("one", FieldKeys.TITLE, "B", persisted = "A")
+            var advanced = false
+            store.save("one", reviewed = true) { advanced = true }
+            reviewStarted.await()
+            store.field("one", FieldKeys.TITLE, "A", persisted = "A")
+            finishReview.complete(Unit)
+            advanceUntilIdle()
+
+            fake.batchedEdits.single().fields shouldBe mapOf(FieldKeys.TITLE to "B")
+            store.state.getValue("one").fields shouldBe mapOf(FieldKeys.TITLE to "A")
+            store.state.getValue("one").error shouldBe "review failed"
+            assertFalse(advanced)
+        }
+
+    @Test
+    fun cancellingTheReviewedWriteKeepsEditsMadeAfterTheFieldsLanded() =
+        runTest(dispatcher) {
+            val fake = FakeMetadataWriter()
+            val reviewStarted = CompletableDeferred<Unit>()
+            val writer =
+                object : MetadataWriter by fake {
+                    override suspend fun setReviewed(
+                        docIds: List<String>,
+                        reviewed: Boolean,
+                    ) {
+                        reviewStarted.complete(Unit)
+                        CompletableDeferred<Unit>().await()
+                    }
+                }
+            val saveScope = CoroutineScope(SupervisorJob() + dispatcher)
+            try {
+                val store = DocumentDrafts(writer, saveScope)
+                store.field("one", FieldKeys.TITLE, "B", persisted = "A")
+                store.save("one", reviewed = true)
+                reviewStarted.await()
+                store.field("one", FieldKeys.TITLE, "A", persisted = "A")
+                saveScope.cancel()
+                runCurrent()
+
+                fake.batchedEdits.single().fields shouldBe mapOf(FieldKeys.TITLE to "B")
+                val draft = store.state.getValue("one")
+                draft.fields shouldBe mapOf(FieldKeys.TITLE to "A")
+                assertFalse(draft.saving)
+                draft.error shouldBe null
+            } finally {
+                saveScope.cancel()
+            }
         }
 
     /**

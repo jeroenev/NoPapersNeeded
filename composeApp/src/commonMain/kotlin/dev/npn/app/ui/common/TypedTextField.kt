@@ -32,6 +32,7 @@ fun TypedTextField(
     supportingText: @Composable (() -> Unit)? = null,
     trailingIcon: @Composable (() -> Unit)? = null,
     visualTransformation: VisualTransformation = VisualTransformation.None,
+    isError: Boolean = false,
 ) {
     var text by remember { mutableStateOf(value) }
     var seen by remember { mutableStateOf(value) }
@@ -58,6 +59,7 @@ fun TypedTextField(
         supportingText = supportingText,
         trailingIcon = trailingIcon,
         visualTransformation = visualTransformation,
+        isError = isError,
         singleLine = true,
         modifier = modifier.fillMaxWidth().onFocusChanged { if (focus.lost(it.isFocused)) onDone() },
     )

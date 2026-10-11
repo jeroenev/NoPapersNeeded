@@ -124,7 +124,7 @@ class NumberFieldEntryTest {
     @Test
     fun anAcceptedSuggestionReplacesTheText() =
         onUiThread {
-            editor {
+            editor(writes = AcceptingWrites) {
                 val suggested = AiMetadataState(suggestion = FieldSuggestion(mapOf(KEY to "7.25")))
                 ai = AiPanelState(AiTagState(available = true), suggested)
                 scene.render()
@@ -264,6 +264,7 @@ class NumberFieldEntryTest {
     private fun editor(
         language: String? = null,
         amount: String = "3",
+        writes: DocumentWrites = NoWrites,
         block: Editor.() -> Unit,
     ) {
         val owner =
@@ -288,7 +289,7 @@ class NumberFieldEntryTest {
                                         ),
                                     ai = editor.ai,
                                 ),
-                            writes = NoWrites,
+                            writes = writes,
                             preview = { Text("PDF preview", modifier = it) },
                             onReviewNext = {},
                             hasNext = false,
@@ -318,6 +319,20 @@ class NumberFieldEntryTest {
             editor.block()
         } finally {
             editor.scene.close()
+        }
+    }
+
+    /** An accepted suggestion whose write lands at once: `7.25` is the value the test suggests. */
+    private object AcceptingWrites : DocumentWrites by NoWrites {
+        override fun acceptAiMetadata(
+            key: String,
+            onStart: (String) -> Boolean,
+            onAccepted: () -> Unit,
+            onFinished: (Boolean) -> Unit,
+        ) {
+            val landed = onStart("7.25")
+            if (landed) onAccepted()
+            onFinished(landed)
         }
     }
 

@@ -100,7 +100,16 @@ interface DocumentWrites {
 
     fun suggestAiMetadata()
 
-    fun acceptAiMetadata(key: String)
+    /**
+     * Accept a field's suggestion if [onStart] permits its value. [onAccepted] runs only once the
+     * write lands; [onFinished] releases the caller's write guard on success, failure or cancellation.
+     */
+    fun acceptAiMetadata(
+        key: String,
+        onStart: (String) -> Boolean = { true },
+        onAccepted: () -> Unit = {},
+        onFinished: (Boolean) -> Unit = {},
+    )
 
     fun dismissAiMetadata(key: String)
 

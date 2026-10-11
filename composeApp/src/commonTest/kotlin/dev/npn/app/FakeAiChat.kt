@@ -34,10 +34,16 @@ class FakeAiChat : AiChat {
     var savedChatSessions: List<AiChatSession> = emptyList()
     var createdChatSession: AiChatSession = AiChatSession("created", null, 0L)
     var chatTranscripts: Map<String, List<AiChatHistoryItem>> = emptyMap()
+    var transcriptGate: CompletableDeferred<Unit>? = null
+    var sessionsGate: CompletableDeferred<Unit>? = null
+    var deleteGate: CompletableDeferred<Unit>? = null
 
     override suspend fun configured(): Boolean = configuredValue
 
-    override suspend fun chatSessions(): List<AiChatSession> = savedChatSessions
+    override suspend fun chatSessions(): List<AiChatSession> {
+        sessionsGate?.await()
+        return savedChatSessions
+    }
 
     override suspend fun createChatSession(): AiChatSession = createdChatSession
 
@@ -45,6 +51,7 @@ class FakeAiChat : AiChat {
     var failDeleteChatSession: (() -> Nothing)? = null
 
     override suspend fun deleteChatSession(sessionId: String) {
+        deleteGate?.await()
         failDeleteChatSession?.invoke()
         savedChatSessions = savedChatSessions.filterNot { it.id == sessionId }
     }
@@ -60,8 +67,10 @@ class FakeAiChat : AiChat {
         cleared += sessionId
     }
 
-    override suspend fun chatTranscriptFor(sessionId: String): List<AiChatHistoryItem> =
-        chatTranscripts[sessionId].orEmpty()
+    override suspend fun chatTranscriptFor(sessionId: String): List<AiChatHistoryItem> {
+        transcriptGate?.await()
+        return chatTranscripts[sessionId].orEmpty()
+    }
 
     override fun ask(
         sessionId: String,

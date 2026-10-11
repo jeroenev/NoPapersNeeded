@@ -508,9 +508,37 @@ class DocDetailViewModel(
     }
 
     /** Accept one field's suggestion: write it via the normal journal path and drop it. */
-    override fun acceptAiMetadata(key: String) {
-        aiMetadata.value.suggestion[key]?.let { setField(key, it) }
-        dismissAiMetadata(key)
+    override fun acceptAiMetadata(
+        key: String,
+        onStart: (String) -> Boolean,
+        onAccepted: () -> Unit,
+        onFinished: (Boolean) -> Unit,
+    ) {
+        val suggested = aiMetadata.value.suggestion[key] ?: return
+        if (!onStart(suggested)) return
+        var accepted = false
+        val operation =
+            viewModelScope.launch {
+                reporting(Res.string.common_save_field_failed) {
+                    metadataMutex.withLock {
+                        meta.setField(docId, key, suggested)
+                        aiMetadata.update { state ->
+                            if (state.suggestion[key] ==
+                                suggested
+                            ) {
+                                state.copy(suggestion = state.suggestion.without(key))
+                            } else {
+                                state
+                            }
+                        }
+                        onAccepted()
+                        accepted = true
+                    }
+                }
+            }
+        // A cancelled scope may prevent the launch body from starting, so a finally inside it
+        // cannot release a guard acquired synchronously by onStart.
+        operation.invokeOnCompletion { onFinished(accepted) }
     }
 
     override fun dismissAiMetadata(key: String) {

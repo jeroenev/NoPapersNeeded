@@ -2,7 +2,6 @@ package dev.npn.app.ui.settings
 
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -10,6 +9,7 @@ import dev.npn.app.platform.supportsSafStorage
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.SettingsSection
 import dev.npn.app.ui.common.SwitchRow
+import dev.npn.app.ui.common.TypedTextField
 import dev.npn.app.ui.common.rememberStorageAccess
 import dev.npn.app.ui.common.resolve
 import dev.npn.core.app.LibraryLocations
@@ -132,10 +132,11 @@ internal fun StoragePathRuleEditor(
         enabled = enabled || evaluation.error == null,
         onCheckedChange = onEnabledChange,
     )
-    OutlinedTextField(
+    TypedTextField(
         value = template,
         onValueChange = onTemplateChange,
-        label = { Text(text = stringResource(Res.string.common_settings_storage_path_template)) },
+        onDone = {},
+        label = stringResource(Res.string.common_settings_storage_path_template),
         supportingText = {
             Text(
                 text =

@@ -4,12 +4,15 @@ package dev.npn.app.ui.settings
 
 import androidx.compose.material3.Surface
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.text.AnnotatedString
 import dev.npn.app.ui.detail.click
 import dev.npn.app.ui.detail.isEnabled
 import dev.npn.app.ui.detail.node
+import dev.npn.app.ui.detail.nodes
 import dev.npn.app.ui.detail.onUiThread
 import dev.npn.app.ui.theme.NpnTheme
 import io.kotest.matchers.collections.shouldContainExactly
@@ -44,6 +47,45 @@ class StoragePathRuleEditorTest {
             try {
                 scene.render()
                 scene.node(::isSwitch).isEnabled() shouldBe false
+            } finally {
+                scene.close()
+            }
+        }
+
+    /** The owner may still show the previous Flow emission when the next key arrives. */
+    @Test
+    fun templateKeysAreKeptBeforeTheOwnerCatchesUp() =
+        onUiThread {
+            val typed = mutableListOf<String>()
+            val scene =
+                ImageComposeScene(WIDTH, HEIGHT) {
+                    NpnTheme(darkTheme = false) {
+                        Surface {
+                            StoragePathRuleEditor(
+                                template = "{title}.pdf",
+                                enabled = false,
+                                fieldTypes = emptyMap(),
+                                onTemplateChange = { typed += it },
+                                onEnabledChange = {},
+                            )
+                        }
+                    }
+                }
+            try {
+                scene.render()
+
+                fun field() = scene.nodes().single { it.config.getOrNull(SemanticsProperties.EditableText) != null }
+                field().config[SemanticsActions.RequestFocus].action?.invoke()
+                scene.render()
+                for (key in listOf("a", "b")) {
+                    val end = field().config[SemanticsProperties.EditableText].length
+                    field().config[SemanticsActions.SetSelection].action?.invoke(end, end, false)
+                    scene.render()
+                    field().config[SemanticsActions.InsertTextAtCursor].action?.invoke(AnnotatedString(key))
+                    scene.render()
+                }
+                typed shouldContainExactly listOf("{title}.pdfa", "{title}.pdfab")
+                field().config[SemanticsProperties.EditableText].text shouldBe "{title}.pdfab"
             } finally {
                 scene.close()
             }

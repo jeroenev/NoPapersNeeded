@@ -155,6 +155,32 @@ internal class DocumentDrafts(
         val reverted = HashSet<String>()
     }
 
+    /** Reserve the document before a suggestion write starts, using the same edit rules as Save. */
+    fun beginAcceptance(
+        docId: String,
+        key: String,
+        value: String,
+    ): Boolean {
+        val draft = state[docId] ?: DocumentDraft()
+        if (draft.saving || !draft.writable) return false
+        edit(docId) { it.copy(saving = true) }
+        inFlight[docId] = InFlightSave(mapOf(key to value))
+        return true
+    }
+
+    /** Release the reservation even if the accepting viewmodel was cleared before its write ran. */
+    fun finishAcceptance(
+        docId: String,
+        accepted: Boolean,
+    ) {
+        if (accepted) {
+            settle(docId, inFlight[docId]?.writes.orEmpty())
+            edit(docId) { it.copy(saving = false) }
+        } else {
+            edit(docId) { unlanded(docId, it) }
+        }
+    }
+
     /**
      * Record an edit to one field. [persisted] is what the library already holds: an edit that
      * lands back on it — typing and undoing, or picking the value that was already there — leaves
@@ -202,14 +228,27 @@ internal class DocumentDrafts(
 
     /**
      * Drop a single field from the draft. Accepting an AI suggestion for a field means abandoning
-     * whatever the user typed there, so its draft entry must go — otherwise [DocumentDraft.overlay]
+     * whatever the user typed there, so its draft entry must go once the write lands — otherwise [DocumentDraft.overlay]
      * would keep showing the typed value and a later save would overwrite the accepted suggestion
-     * with it. Routes through [edit] so the prune-when-settled rule holds.
+     * with it. Keeps an edit made since [captured], while the write ran. Routes through [edit] so
+     * the prune-when-settled rule holds.
      */
     fun clearField(
         docId: String,
         key: String,
+        captured: DocumentDraft?,
     ) {
+        val latest = state[docId] ?: return
+        if (latest.fields.containsKey(key) != (captured?.fields?.containsKey(key) == true) ||
+            latest.fields[key] != captured?.fields?.get(key)
+        ) {
+            return
+        }
+        if (latest.types[key] != captured?.types?.get(key) ||
+            (key in latest.refused) != (captured?.refused?.contains(key) == true)
+        ) {
+            return
+        }
         edit(docId) { it.copy(fields = it.fields - key, types = it.types - key, refused = it.refused - key) }
     }
 
@@ -295,25 +334,32 @@ internal class DocumentDrafts(
             // way. State mutation, by contrast, is main-thread-only by construction (the plain
             // mutableStateOf relies on it), so every touch of [drafts] hops to Main.
             var finished = false
+            var fieldsLanded = false
             val outcome =
                 try {
                     runCatchingCancellable {
                         // Every edited field in one transaction: a failure retains the whole draft.
                         // The reviewed marker is deliberately last, after the fields have succeeded.
                         if (captured.fields.isNotEmpty()) writer.applyEdits(listOf(docId), fields = captured.fields)
+                        fieldsLanded = true
                         if (reviewed != null) writer.setReviewed(listOf(docId), reviewed)
                         withContext(Dispatchers.Main) { settle(docId, captured.fields) }
                     }.also { finished = true }
                 } finally {
                     // Cancelled: clear the saving flag even while cancelling, so the draft is not stuck.
                     if (!finished) {
-                        withContext(NonCancellable + Dispatchers.Main) { edit(docId) { unlanded(docId, it) } }
+                        withContext(NonCancellable + Dispatchers.Main) {
+                            if (fieldsLanded) settle(docId, captured.fields) else edit(docId) { unlanded(docId, it) }
+                        }
                     }
                 }
             outcome.onFailure { error ->
                 withContext(Dispatchers.Main) {
+                    if (fieldsLanded) settle(docId, captured.fields)
                     mutate { all ->
-                        all + (docId to unlanded(docId, all.getValue(docId)).copy(error = error.reason()))
+                        val latest = all.getValue(docId)
+                        val remaining = if (fieldsLanded) latest else unlanded(docId, latest)
+                        all + (docId to remaining.copy(saved = false, error = error.reason()))
                     }
                 }
                 return@launch

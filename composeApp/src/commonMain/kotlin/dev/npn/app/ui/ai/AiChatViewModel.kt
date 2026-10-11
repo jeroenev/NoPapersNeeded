@@ -25,6 +25,7 @@ import no_papers_needed.composeapp.generated.resources.ai_chat_delete_failed
 import no_papers_needed.composeapp.generated.resources.ai_chat_new_failed
 import no_papers_needed.composeapp.generated.resources.common_ai_assistant_empty_answer
 import no_papers_needed.composeapp.generated.resources.common_ai_assistant_unreachable
+import org.jetbrains.compose.resources.StringResource
 
 /**
  * Chat UI state. [configured] is null until the initial config probe completes, then true/false so
@@ -37,6 +38,8 @@ data class AiChatUiState(
     val sessions: List<AiChatSession> = emptyList(),
     val currentSessionId: String? = null,
     val busy: Boolean = false,
+    /** A session is being created, selected or deleted; sending waits until its history is ready. */
+    val loading: Boolean = true,
     val configured: Boolean? = null,
     val docTitles: Map<String, String> = emptyMap(),
 )
@@ -71,10 +74,16 @@ class AiChatViewModel(
             settings.aiConfigured().collect { configured -> _ui.update { it.copy(configured = configured) } }
         }
         viewModelScope.launch {
-            val stored = storedSessions()
-            val created = ai.createChatSession()
-            _ui.update { it.copy(sessions = listed(stored, created), currentSessionId = created.id) }
-            loadSession(created.id)
+            try {
+                reporting(Res.string.ai_chat_new_failed) {
+                    val stored = storedSessions()
+                    val created = ai.createChatSession()
+                    _ui.update { it.copy(sessions = listed(stored, created), currentSessionId = created.id) }
+                    loadSession(created.id)
+                }
+            } finally {
+                _ui.update { it.copy(loading = false) }
+            }
         }
         // Resolve display titles for cited documents as they appear in the transcript, so the
         // bubbles can label their doc chips. Title lookup is data access and belongs here, not in
@@ -111,7 +120,7 @@ class AiChatViewModel(
      */
     fun send(question: String) {
         val trimmed = question.trim()
-        if (trimmed.isEmpty() || _ui.value.busy) return
+        if (trimmed.isEmpty() || _ui.value.busy || _ui.value.loading) return
         val sessionId = _ui.value.currentSessionId ?: return
 
         _ui.update {
@@ -156,6 +165,7 @@ class AiChatViewModel(
      * Clears run one after another, so the latest one finishing means every one has.
      */
     fun clear() {
+        if (_ui.value.loading) return
         job?.cancel()
         job = null
         _ui.update {
@@ -180,15 +190,13 @@ class AiChatViewModel(
 
     /** Switch to an existing conversation and restore its visible turns. */
     fun switchSession(sessionId: String) {
-        if (_ui.value.busy || _ui.value.sessions.none { it.id == sessionId }) return
-        stop()
-        viewModelScope.launch { loadSession(sessionId) }
+        if (_ui.value.sessions.none { it.id == sessionId }) return
+        launchTransition(Res.string.ai_chat_new_failed) { loadSession(sessionId) }
     }
 
     /** Create and select a new empty conversation. */
-    fun newSession() {
-        if (_ui.value.busy) return
-        launchReporting(Res.string.ai_chat_new_failed) {
+    fun newSession() =
+        launchTransition(Res.string.ai_chat_new_failed) {
             val session = ai.createChatSession()
             val stored = storedSessions(ifUnreadable = _ui.value.sessions)
             _ui.update {
@@ -199,23 +207,37 @@ class AiChatViewModel(
                 )
             }
         }
-    }
 
     /** Delete a conversation and select the newest remaining one. */
-    fun deleteSession(sessionId: String) {
-        if (_ui.value.busy) return
-        launchReporting(Res.string.ai_chat_delete_failed) {
+    fun deleteSession(sessionId: String) =
+        launchTransition(Res.string.ai_chat_delete_failed) {
             ai.deleteChatSession(sessionId)
             val state = _ui.value
             val stored = storedSessions(ifUnreadable = state.sessions.filterNot { it.id == sessionId })
             if (sessionId != state.currentSessionId) {
                 val current = state.sessions.firstOrNull { it.id == state.currentSessionId }
                 _ui.update { it.copy(sessions = listed(stored, current)) }
-                return@launchReporting
+                return@launchTransition
             }
             val next = stored.firstOrNull() ?: ai.createChatSession()
             _ui.update { it.copy(sessions = listed(stored, next)) }
             loadSession(next.id)
+        }
+
+    /** Claim the transition before launching: another action cannot start during its first read. */
+    private fun launchTransition(
+        failed: StringResource,
+        block: suspend () -> Unit,
+    ) {
+        if (_ui.value.busy || _ui.value.loading) return
+        _ui.update { it.copy(loading = true) }
+        viewModelScope.launch {
+            try {
+                clearing?.join()
+                reporting(failed, block)
+            } finally {
+                _ui.update { it.copy(loading = false) }
+            }
         }
     }
 

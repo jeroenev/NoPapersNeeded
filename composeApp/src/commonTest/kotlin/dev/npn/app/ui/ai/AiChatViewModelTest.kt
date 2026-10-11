@@ -101,6 +101,107 @@ class AiChatViewModelTest : MainDispatcherTest() {
                 .map { it.id } shouldContainExactly listOf(fresh.id, saved.id)
         }
 
+    @Test
+    fun sendingDuringInitialHistoryLoadWaitsForTheSelectedSession() =
+        runTest(dispatcher) {
+            val gate = CompletableDeferred<Unit>()
+            val session = FakeLibrarySession().apply { aiChat.transcriptGate = gate }
+            val model = vm(session)
+            runCurrent()
+            model.ui.value.loading shouldBe true
+
+            model.send("during load")
+            session.aiChat.asked shouldBe emptyList()
+            gate.complete(Unit)
+            advanceUntilIdle()
+            model.send("after load")
+            advanceUntilIdle()
+            session.aiChat.asked shouldContainExactly listOf("created" to "after load")
+        }
+
+    @Test
+    fun switchingChatsBlocksActionsUntilTheNewHistoryIsReady() =
+        runTest(dispatcher) {
+            val other = AiChatSession("other", "Other chat", 1L)
+            val session =
+                FakeLibrarySession().apply {
+                    aiChat.savedChatSessions = listOf(other)
+                    aiChat.chatTranscripts = mapOf(other.id to listOf(AiChatHistoryItem.UserTurn("old question")))
+                }
+            val model = vm(session)
+            advanceUntilIdle()
+            val gate = CompletableDeferred<Unit>()
+            session.aiChat.transcriptGate = gate
+
+            model.switchSession(other.id)
+            model.ui.value.loading shouldBe true
+            runCurrent()
+            model.send("during switch")
+            model.newSession()
+            model.deleteSession(other.id)
+            model.clear()
+            model.stop()
+            runCurrent()
+            session.aiChat.asked shouldBe emptyList()
+            session.aiChat.cleared shouldBe emptyList()
+            session.aiChat.savedChatSessions shouldContainExactly listOf(other)
+
+            gate.complete(Unit)
+            advanceUntilIdle()
+            model.ui.value.currentSessionId shouldBe other.id
+            model.ui.value.loading shouldBe false
+            model.send("after switch")
+            advanceUntilIdle()
+            session.aiChat.asked shouldContainExactly listOf(other.id to "after switch")
+        }
+
+    @Test
+    fun creatingAChatBlocksSendingIntoTheOneBeforeIt() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = vm(session)
+            advanceUntilIdle()
+            val gate = CompletableDeferred<Unit>()
+            session.aiChat.sessionsGate = gate
+            session.aiChat.createdChatSession = AiChatSession("next", null, 1L)
+
+            model.newSession()
+            runCurrent()
+            model.send("during creation")
+            session.aiChat.asked shouldBe emptyList()
+            gate.complete(Unit)
+            advanceUntilIdle()
+            model.send("after creation")
+            advanceUntilIdle()
+            session.aiChat.asked shouldContainExactly listOf("next" to "after creation")
+        }
+
+    @Test
+    fun deletingTheOpenChatBlocksSendingUntilAnotherIsSelected() =
+        runTest(dispatcher) {
+            val open = AiChatSession("open", "Open chat", 2L)
+            val other = AiChatSession("other", "Other chat", 1L)
+            val session =
+                FakeLibrarySession().apply {
+                    aiChat.createdChatSession = open
+                    aiChat.savedChatSessions = listOf(open, other)
+                }
+            val model = vm(session)
+            advanceUntilIdle()
+            val gate = CompletableDeferred<Unit>()
+            session.aiChat.deleteGate = gate
+
+            model.deleteSession(open.id)
+            runCurrent()
+            model.send("during deletion")
+            session.aiChat.asked shouldBe emptyList()
+            gate.complete(Unit)
+            advanceUntilIdle()
+            model.send("after deletion")
+            advanceUntilIdle()
+            session.aiChat.asked shouldContainExactly listOf(other.id to "after deletion")
+        }
+
     /** The open chat is stored only once asked in; deleting another one must not drop it from the list. */
     @Test
     fun deletingAnotherChatKeepsTheOpenUnaskedOneListed() =

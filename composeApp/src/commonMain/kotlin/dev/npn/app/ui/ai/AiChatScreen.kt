@@ -145,8 +145,8 @@ fun AiChatScreen(
         topBar = {
             AiChatTopBar(
                 title = chatTitle(ui.currentSessionId, historySessions),
-                clearEnabled = items.isNotEmpty() && !ui.busy,
-                newSessionEnabled = !ui.busy,
+                clearEnabled = items.isNotEmpty() && !ui.busy && !ui.loading,
+                newSessionEnabled = !ui.busy && !ui.loading,
                 onBack = onBack,
                 onClear = vm::clear,
                 onNewSession = vm::newSession,
@@ -155,6 +155,7 @@ fun AiChatScreen(
                 ChatHistoryMenu(
                     sessions = historySessions,
                     currentSessionId = ui.currentSessionId,
+                    enabled = !ui.busy && !ui.loading,
                     onSession = vm::switchSession,
                     onDeleteSession = vm::deleteSession,
                 )
@@ -164,7 +165,7 @@ fun AiChatScreen(
         Column(Modifier.fillMaxSize().padding(padding)) {
             // The progress bar only covers the pre-first-token phase; once text streams the
             // growing answer is the progress indicator.
-            if (ui.busy && !hasStreamingText(items)) {
+            if (ui.loading || (ui.busy && !hasStreamingText(items))) {
                 LinearProgressIndicator(Modifier.fillMaxWidth())
             }
             LazyColumn(
@@ -176,24 +177,7 @@ fun AiChatScreen(
                 // Keyed by session and item, so a row's own state (an expanded tool row) stays with
                 // its item, and never carries over to whatever sits at that position in another chat.
                 items(items, key = { "${ui.currentSessionId}:${it.id}" }) { item ->
-                    when (item) {
-                        is TranscriptItem.UserTurn -> {
-                            UserBubble(item)
-                        }
-
-                        is TranscriptItem.AssistantTurn -> {
-                            // Skip a finished, empty assistant turn entirely (no blank bubble); a
-                            // still-streaming turn may legitimately be empty before the first token
-                            // and keeps rendering so the in-progress bubble is visible.
-                            if (item.text.isNotEmpty() || item.streaming) {
-                                AssistantBubble(item, onOpenDoc, onOpenFiltered, onAiEditDocs, ui.docTitles)
-                            }
-                        }
-
-                        is TranscriptItem.ToolUse -> {
-                            ToolRow(item)
-                        }
-                    }
+                    TranscriptRow(item, ui.docTitles, onOpenDoc, onOpenFiltered, onAiEditDocs)
                 }
             }
 
@@ -206,6 +190,7 @@ fun AiChatScreen(
                     InputRow(
                         value = input,
                         busy = ui.busy,
+                        enabled = !ui.loading,
                         onValueChange = { input = it },
                         onSend = {
                             vm.send(input)
@@ -230,6 +215,34 @@ private fun chatTitle(
     } else {
         sessions.firstOrNull { it.id == currentSessionId }?.title ?: stringResource(Res.string.ai_new_chat)
     }
+
+@Composable
+private fun TranscriptRow(
+    item: TranscriptItem,
+    docTitles: Map<String, String>,
+    onOpenDoc: (String) -> Unit,
+    onOpenFiltered: (List<String>) -> Unit,
+    onAiEditDocs: (List<String>) -> Unit,
+) {
+    when (item) {
+        is TranscriptItem.UserTurn -> {
+            UserBubble(item)
+        }
+
+        is TranscriptItem.AssistantTurn -> {
+            // Skip a finished, empty assistant turn entirely (no blank bubble); a
+            // still-streaming turn may legitimately be empty before the first token
+            // and keeps rendering so the in-progress bubble is visible.
+            if (item.text.isNotEmpty() || item.streaming) {
+                AssistantBubble(item, onOpenDoc, onOpenFiltered, onAiEditDocs, docTitles)
+            }
+        }
+
+        is TranscriptItem.ToolUse -> {
+            ToolRow(item)
+        }
+    }
+}
 
 /** Back, then the chat's actions; [historyMenu] sits between starting a chat and the AI edit hand-off. */
 @Composable
@@ -273,6 +286,7 @@ private fun AiChatTopBar(
 private fun ChatHistoryMenu(
     sessions: List<AiChatSession>,
     currentSessionId: String?,
+    enabled: Boolean,
     onSession: (String) -> Unit,
     onDeleteSession: (String) -> Unit,
 ) {
@@ -282,8 +296,9 @@ private fun ChatHistoryMenu(
             icon = Icons.Outlined.History,
             label = stringResource(Res.string.ai_chat_history),
             onClick = { expanded = true },
+            enabled = enabled,
         )
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenu(expanded = expanded && enabled, onDismissRequest = { expanded = false }) {
             sessions.forEach { session ->
                 DropdownMenuItem(
                     text = {
@@ -461,12 +476,13 @@ private fun ToolRow(item: TranscriptItem.ToolUse) {
 private fun InputRow(
     value: String,
     busy: Boolean,
+    enabled: Boolean,
     onValueChange: (String) -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
 ) {
     // Plain Enter sends (and is consumed so no newline is inserted); Shift+Enter inserts one.
-    val send = { if (!busy && value.isNotBlank()) onSend() }
+    val send = { if (enabled && !busy && value.isNotBlank()) onSend() }
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -485,7 +501,7 @@ private fun InputRow(
                         }
                     },
             placeholder = { Text(stringResource(Res.string.ai_ask_documents)) },
-            enabled = !busy,
+            enabled = enabled && !busy,
             maxLines = 4,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
             keyboardActions = KeyboardActions(onSend = { send() }),
@@ -497,7 +513,7 @@ private fun InputRow(
         } else {
             IconButton(
                 onClick = onSend,
-                enabled = value.isNotBlank(),
+                enabled = enabled && value.isNotBlank(),
             ) {
                 Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(Res.string.ai_send))
             }

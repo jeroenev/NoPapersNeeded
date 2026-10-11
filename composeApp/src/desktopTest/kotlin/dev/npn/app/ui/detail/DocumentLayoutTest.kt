@@ -263,7 +263,12 @@ internal object NoWrites : DocumentWrites {
 
     override fun suggestAiMetadata() = Unit
 
-    override fun acceptAiMetadata(key: String) = Unit
+    override fun acceptAiMetadata(
+        key: String,
+        onStart: (String) -> Boolean,
+        onAccepted: () -> Unit,
+        onFinished: (Boolean) -> Unit,
+    ) = Unit
 
     override fun dismissAiMetadata(key: String) = Unit
 
