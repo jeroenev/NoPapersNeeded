@@ -235,6 +235,8 @@ val packageAppImage =
         iconFile.set(npnIconPng)
         appDir.set(layout.buildDirectory.dir("appimage/AppDir"))
         outFile.set(layout.buildDirectory.file("appimage/$npnAppName-$npnAppVersion-$appImageArch.AppImage"))
+        // appimagetool names the .zsync after the AppImage it writes.
+        zsyncFile.set(layout.file(outFile.map { it.asFile.resolveSibling("${it.asFile.name}.zsync") }))
     }
 
 // --- Bundled Tesseract (Windows) -------------------------------------------

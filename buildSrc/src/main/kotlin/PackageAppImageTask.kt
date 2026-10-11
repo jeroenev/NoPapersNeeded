@@ -58,6 +58,14 @@ abstract class PackageAppImageTask
         @get:OutputFile
         abstract val outFile: RegularFileProperty
 
+        /**
+         * The update metadata appimagetool writes beside [outFile] (in the working directory it runs
+         * in). A declared output like [outFile]: without it, an up-to-date rerun skips the check
+         * below and a lost .zsync surfaces only in the release upload.
+         */
+        @get:OutputFile
+        abstract val zsyncFile: RegularFileProperty
+
         @TaskAction
         fun build() {
             val name = appName.get()
@@ -116,6 +124,6 @@ abstract class PackageAppImageTask
                     workingDir = out.parentFile
                 }.assertNormalExitValue()
             logger.lifecycle("AppImage written: ${out.absolutePath}")
-            require(File(out.path + ".zsync").exists()) { "appimagetool wrote no .zsync next to ${out.name}" }
+            require(zsyncFile.get().asFile.exists()) { "appimagetool wrote no .zsync next to ${out.name}" }
         }
     }

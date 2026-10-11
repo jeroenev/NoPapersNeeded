@@ -17,6 +17,8 @@ import dev.npn.app.platform.DocumentScanner
 import dev.npn.app.platform.ScanResult
 import dev.npn.app.platform.ScannedPdf
 import dev.npn.core.fs.ExternalSource
+import dev.npn.core.util.AndroidLog
+import dev.npn.core.util.warn
 
 private const val SCANNED_PDF_NAME = "scan.pdf"
 
@@ -52,12 +54,34 @@ object MlKitDocumentScanner : DocumentScanner {
                     currentOnResult(ScanResult.Failed)
                 } else {
                     // Listeners scoped to the activity are dropped when it stops, so a scanner that
-                    // is slow to hand back its intent cannot keep a finished activity alive.
+                    // is slow to hand back its intent cannot keep a finished activity alive. The
+                    // plain listeners below see every handoff; one that no activity-scoped listener
+                    // delivered is logged, since the tap would otherwise end with no result and no
+                    // trace at all.
+                    var delivered = false
                     GmsDocumentScanning
                         .getClient(options)
                         .getStartScanIntent(activity)
-                        .addOnSuccessListener(activity) { launcher.launch(IntentSenderRequest.Builder(it).build()) }
-                        .addOnFailureListener(activity) { currentOnResult(ScanResult.Failed) }
+                        .also { handoff ->
+                            handoff.addOnSuccessListener(activity) {
+                                delivered = true
+                                launcher.launch(IntentSenderRequest.Builder(it).build())
+                            }
+                            handoff.addOnFailureListener(activity) {
+                                delivered = true
+                                currentOnResult(ScanResult.Failed)
+                            }
+                            handoff.addOnSuccessListener {
+                                if (!delivered) {
+                                    AndroidLog.warn(
+                                        "Scan handoff arrived after the activity went; nothing was scanned",
+                                    )
+                                }
+                            }
+                            handoff.addOnFailureListener {
+                                if (!delivered) AndroidLog.warn("Scan handoff failed after the activity went", it)
+                            }
+                        }
                 }
             }
         }
