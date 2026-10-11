@@ -27,6 +27,12 @@ kotlin {
             // return defaults. Nothing under test calls the framework itself.
             isReturnDefaultValues = true
         }
+        // Share commonTest's session fakes through the test hierarchy, including the shared suite.
+        withDeviceTestBuilder {
+            sourceSetTreeName = "test"
+        }.configure {
+            instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        }
     }
 
     sourceSets {
@@ -100,12 +106,25 @@ kotlin {
                 ) { builtBy("copyAndroidMainComposeResourcesToAndroidAssets") },
             )
         }
+        getByName("androidDeviceTest") {
+            dependencies {
+                implementation(libs.androidx.test.junit)
+                implementation(libs.androidx.test.runner)
+            }
+        }
     }
 }
 
 dependencies {
     androidRuntimeClasspath(libs.compose.uiTooling)
     kover(project(":core"))
+}
+
+// Kotest's JVM engine pulls this agent in through the shared property tests. Android cannot run
+// its instrumentation API, and its desktop JNA jar conflicts with core's Android JNA AAR.
+// https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-debug/
+configurations.named("androidDeviceTestRuntimeClasspath") {
+    exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-debug")
 }
 
 compose.resources {

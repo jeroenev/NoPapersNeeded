@@ -69,6 +69,15 @@ jobs:
           :core:compileAndroidMain
           :composeApp:compileKotlinDesktop
           :composeApp:compileAndroidMain
+          :core:compileAndroidDeviceTest
+          :composeApp:compileAndroidDeviceTest
+          :androidApp:compileDebugAndroidTestKotlin
+          :core:checkAndroidDeviceTestDuplicateClasses
+          :composeApp:checkAndroidDeviceTestDuplicateClasses
+          :androidApp:checkDebugAndroidTestDuplicateClasses
+          :core:mergeAndroidDeviceTestJavaResource
+          :composeApp:mergeAndroidDeviceTestJavaResource
+          :androidApp:mergeDebugAndroidTestJavaResource
           detektTyped
 
       - name: Assemble APK, build and package desktop app

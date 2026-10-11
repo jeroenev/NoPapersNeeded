@@ -9,6 +9,7 @@ import android.provider.DocumentsContract.Root
 import android.provider.DocumentsProvider
 import java.io.ByteArrayOutputStream
 import java.io.FileNotFoundException
+import java.io.IOException
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -83,6 +84,10 @@ class TestDocumentsProvider : DocumentsProvider() {
                 addNode(node.parentId ?: ROOT_ID, displayName, node.mime, FOREIGN_BYTES)
             }
             node.name = deduplicatedName(node.parentId, displayName, excludingId = documentId)
+            if (failRenameAfterLanding) {
+                failRenameAfterLanding = false
+                throw IOException("Rename landed before the provider reported failure")
+            }
             documentId
         }
 
@@ -111,7 +116,11 @@ class TestDocumentsProvider : DocumentsProvider() {
         val (readSide, writeSide) = ParcelFileDescriptor.createPipe()
         val bytes = synchronized(lock) { requireNode(documentId).bytes.copyOf() }
         thread(name = "test-provider-read", isDaemon = true) {
-            ParcelFileDescriptor.AutoCloseOutputStream(writeSide).use { it.write(bytes) }
+            try {
+                ParcelFileDescriptor.AutoCloseOutputStream(writeSide).use { it.write(bytes) }
+            } catch (_: IOException) {
+                // A rejected or interrupted copy closes its reader before this producer finishes.
+            }
         }
         return readSide
     }
@@ -172,6 +181,7 @@ class TestDocumentsProvider : DocumentsProvider() {
         var raceOnCreateName: String? = null
         var raceOnRenameName: String? = null
         var failWritesAfterBytes: Int? = null
+        var failRenameAfterLanding = false
 
         fun reset() {
             synchronized(lock) {
@@ -180,6 +190,7 @@ class TestDocumentsProvider : DocumentsProvider() {
                 raceOnCreateName = null
                 raceOnRenameName = null
                 failWritesAfterBytes = null
+                failRenameAfterLanding = false
             }
         }
 

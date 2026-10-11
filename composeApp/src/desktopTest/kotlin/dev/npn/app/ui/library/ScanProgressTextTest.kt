@@ -19,11 +19,14 @@ class ScanProgressTextTest {
     @Test
     fun everyPhaseReadsAsASentenceInTheAppLanguage() =
         runTest {
-            for (phase in IndexProgress.Phase.entries) {
-                val progress = ScanProgressUi(phase, done = 1, total = 10)
-                val shown = progress.bannerText().resolve(german)
-                shown.lowercase() shouldNotContain phase.name.lowercase()
-                shown shouldNotBe progress.bannerText().resolve(English)
+            for (language in listOf("nl", "de", "fr", "es", "pt")) {
+                val translated = resourcesIn(Locale.forLanguageTag(language))
+                for (phase in IndexProgress.Phase.entries) {
+                    val progress = ScanProgressUi(phase, done = 1, total = 10)
+                    val shown = progress.bannerText().resolve(translated)
+                    shown.lowercase() shouldNotContain phase.name.lowercase()
+                    shown shouldNotBe progress.bannerText().resolve(English)
+                }
             }
         }
 

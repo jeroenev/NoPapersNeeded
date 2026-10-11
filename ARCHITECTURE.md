@@ -283,8 +283,10 @@ live in `buildSrc`. Hot Reload via `mise hot`.
   turn, is on disk and the same reconcile pass has read it; what the index remembers of a snapshot
   vouches for nothing. The pass reads that snapshot instead of the object, so an object a sync
   conflict wrote over since fails nothing. Nor does a manifest vouch for more than it holds: those
-  snapshots must hold every event the index recorded for the object. One that names an object
-  without its events deletes nothing, and the index drops that claim, so the object is live again
+  snapshots must hold every event the index recorded for the object, including every payload key
+  in its richest copy. This is checked against the snapshot bytes, since the index merges richer
+  copies across sources. An older snapshot that dropped keys cannot justify deleting their original.
+  One that names an object without its events deletes nothing, and the index drops that claim, so the object is live again
   (its loss counts as one) until a compaction carries it. A source that vanished is a loss only while no listed file holds its
   events (`carriedByListed`); an unexplained one is tolerated for a grace window
   (`SourceSetValidator.PENDING_SUPERSESSION_LIMIT` reconciles, for a snapshot still on its way),

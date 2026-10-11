@@ -29,11 +29,15 @@ class RelinkSignalLabelTest {
     @Test
     fun noLabelIsAMachineTag() =
         runTest {
-            for (signal in RelinkSignal.entries) {
-                val shown = signal.label().resolve(german)
-                shown shouldNotBe signal.label().resolve(English)
-                shown.lowercase() shouldNotContain signal.name.lowercase()
-                for (tag in listOf("path-match", "fuzzy", "dir", "+", "_")) shown shouldNotContain tag
+            for (language in listOf("nl", "de", "fr", "es", "pt")) {
+                val translated = resourcesIn(Locale.forLanguageTag(language))
+                for (signal in RelinkSignal.entries) {
+                    val shown = signal.label().resolve(translated)
+                    shown shouldNotBe signal.label().resolve(English)
+                    shown.lowercase() shouldNotContain signal.name.lowercase()
+                    shown.lowercase() shouldNotBe "dir"
+                    for (tag in listOf("path-match", "fuzzy", "+", "_")) shown shouldNotContain tag
+                }
             }
         }
 }

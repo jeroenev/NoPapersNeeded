@@ -58,14 +58,16 @@ class FieldHintTest {
 
     @Test
     fun theSeededHintsShowInTheAppLanguage() {
-        val dutch = dutch(SEEDED.values + Res.string.detail_title_hint)
-        for (res in SEEDED.values) dutch.getValue(res) shouldNotBe english(res)
-        onUiThread {
-            val shown = panelTexts(seeds)
-            for (res in SEEDED.values) shown shouldContain dutch.getValue(res)
-            for (english in FieldKeys.SEED_HINTS.values) shown.none { english in it } shouldBe true
-            // One hint under the title: its own, which says how the file is renamed, and no note besides.
-            shown shouldNotContain dutch.getValue(Res.string.detail_title_hint)
+        for (language in listOf("nl", "de", "fr", "es", "pt")) {
+            val translated = translated(SEEDED.values + Res.string.detail_title_hint, language)
+            for (res in SEEDED.values) translated.getValue(res) shouldNotBe english(res)
+            onUiThread {
+                val shown = panelTexts(seeds, language)
+                for (res in SEEDED.values) shown shouldContain translated.getValue(res)
+                for (english in FieldKeys.SEED_HINTS.values) shown.none { english in it } shouldBe true
+                // One hint under the title: its own, which says how the file is renamed, and no note besides.
+                shown shouldNotContain translated.getValue(Res.string.detail_title_hint)
+            }
         }
     }
 
@@ -73,7 +75,7 @@ class FieldHintTest {
     fun aHintTheLibraryWroteShowsAsWritten() {
         val own = "Wie de rekening stuurde"
         val edited = seeds.map { if (it.key == FieldKeys.CORRESPONDENT) it.copy(hint = own) else it }
-        val dutch = dutch(listOf(Res.string.detail_field_seed_hint_correspondent))
+        val dutch = translated(listOf(Res.string.detail_field_seed_hint_correspondent))
         onUiThread {
             val shown = panelTexts(edited)
             shown shouldContain own
@@ -84,7 +86,7 @@ class FieldHintTest {
     @Test
     fun aTitleWithoutAHintStillSaysHowTheFileIsRenamed() {
         val bare = seeds.map { if (it.key == FieldKeys.TITLE) it.copy(hint = null) else it }
-        val dutch = dutch(listOf(Res.string.detail_title_hint))
+        val dutch = translated(listOf(Res.string.detail_title_hint))
         onUiThread { panelTexts(bare) shouldContain dutch.getValue(Res.string.detail_title_hint) }
     }
 
@@ -101,11 +103,14 @@ class FieldHintTest {
         sender.hintText().shouldBeInstanceOf<UiText.Raw>()
     }
 
-    /** Every text the document panel's fields show for [defs], in Dutch. */
-    private fun panelTexts(defs: List<FieldDef>): List<String> {
+    /** Every text the document panel's fields show for [defs], in [language]. */
+    private fun panelTexts(
+        defs: List<FieldDef>,
+        language: String = "nl",
+    ): List<String> {
         val scene =
             ImageComposeScene(WIDTH, HEIGHT) {
-                CompositionLocalProvider(LocalAppLocale provides "nl") {
+                CompositionLocalProvider(LocalAppLocale provides language) {
                     NpnTheme(darkTheme = false) {
                         Surface {
                             Box(Modifier.verticalScroll(rememberScrollState())) {
@@ -129,9 +134,12 @@ class FieldHintTest {
         }
     }
 
-    /** [resources] in Dutch, read before a scene sets the JVM's locale. */
-    private fun dutch(resources: Collection<StringResource>): Map<StringResource, String> {
-        val environment = resourcesIn(Locale.forLanguageTag("nl"))
+    /** [resources] in [language], read before a scene sets the JVM's locale. */
+    private fun translated(
+        resources: Collection<StringResource>,
+        language: String = "nl",
+    ): Map<StringResource, String> {
+        val environment = resourcesIn(Locale.forLanguageTag(language))
         return runBlocking { resources.associateWith { getString(environment, it) } }
     }
 

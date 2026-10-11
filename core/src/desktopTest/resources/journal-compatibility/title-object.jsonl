@@ -1,0 +1,1 @@
+{"v":1,"seq":1,"hlc":{"t":1000,"c":0,"d":"00000000-0000-4000-8000-000000000001"},"dev":"00000000-0000-4000-8000-000000000001","doc":null,"op":"field-def","p":{"key":"title","def":{"label":"Title","type":"text","position":0,"perDocument":true}}}

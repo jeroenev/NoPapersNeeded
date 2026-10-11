@@ -137,6 +137,56 @@ prefixed with the current branch name when needed.
 `mise test-fast` also runs the shared UI tests; `mise test-all` and `mise check` add the
 Android-target host tests. See [AGENTS.md](AGENTS.md) for the full list.
 
+Regression coverage follows the failure modes from the code audit:
+
+- `DocumentLifecycleSequenceTest` runs repeatable generated sequences of import, trash, restore,
+  delete, rename, move, metadata edits, disappearance and bake through public session facets.
+  An independent model checks two devices after each operation, then checks a new device and an
+  index rebuild. A failure prints the seed and complete operation trace.
+- `LifecycleRecoveryTest` injects failures before and after publication or a file move, closes the
+  session, and checks recovery through another open. `FileSystemFaults` is the one-shot storage
+  adapter these tests use; it can also refuse deletion after a tombstone has landed.
+- Gated tests in `BakeInPlaceTest`, `TrashLifecycleTest`, `HiddenDocumentImportTest`,
+  `StoragePathRuleIntegrationTest`, `OcrPipelineRerunTest`, `DocumentDraftsTest` and
+  `AiChatViewModelTest` check operations while another operation is suspended at its storage or
+  save boundary. They assert the result after the gate opens, rather than relying on timing alone.
+- `LibrarySettingsTest` and `FieldRegistryTest` cover different devices and missing local index
+  rows. `IndexUpgradeTest` starts a session over a dropped index, holds its initial rescan, and
+  fails that rescan before retrying: OCR requests, paid pages, enrichment and edit jobs survive.
+  `SessionStartupCloseTest` closes during that first scan, releases every waiting queue drainer,
+  and checks that paid work remains queued.
+- `OlderJournalFixtureTest` reads frozen object and older snapshot bytes from
+  `core/src/desktopTest/resources/journal-compatibility/`, tests both arrival orders, and rebuilds
+  the index after reconciliation. Do not regenerate these fixtures with the current encoders.
+  `LibraryOpenTest` also checks legacy v1 segments; database migration tests use exported schemas.
+- `WatchedFolderImporterTest`, `StoragePathRuleIntegrationTest` and `OcrPipelineNoEngineTest`
+  cover a watched folder inside the library, storage without relocation, and installing an OCR
+  engine after an earlier run had none. The UI wording tests cover every translated locale for
+  seeded hints, scan phases and relink reasons, including text that the localization key guard
+  cannot inspect.
+
+Android's host JVM has framework stubs. Its tests cannot verify a real document provider, an
+activity's retained state, URI grants, FileProvider routing or the installed app's network policy.
+Run the instrumentation suites on a connected Android device:
+
+```
+mise test-device
+# Equivalent:
+./gradlew :core:connectedAndroidDeviceTest :composeApp:connectedAndroidDeviceTest :androidApp:connectedDebugAndroidTest
+```
+
+Set `ANDROID_SERIAL` to one serial from `adb devices` to select a device. This also avoids duplicate
+test runs when wireless ADB exposes the same phone through both an IP address and an mDNS name.
+
+The core suite drives a controllable real `DocumentsProvider`, including directory collisions,
+stale directory IDs, interrupted copies and a rename that lands before reporting failure.
+The Compose suite checks actual activity recreation and library switching, and the system's
+persistable-grant refusal. The app suite intercepts the share chooser to check that two shares with
+the same name keep separate readable URIs, and contacts only a loopback HTTP server to check the
+installed app's network policy. These tests make no paid AI calls. CI compiles all three device
+suites and checks for duplicate classes and Java resources without building their APKs; running
+them needs a device and remains an explicit local check.
+
 ### Deploying to an Android device
 
 To iterate on a physical device without a cable, pair once over Wi-Fi

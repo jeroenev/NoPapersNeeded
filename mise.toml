@@ -107,6 +107,10 @@ run = "./gradlew :core:desktopTest :composeApp:desktopTest"
 description = "Run every test suite: both targets, the desktop shell and the build logic"
 run = "./gradlew allTests :desktopApp:test :buildSrc:test"
 
+[tasks.test-device]
+description = "Run Android instrumentation tests on a connected device (storage, lifecycle, sharing and network)"
+run = "./gradlew :core:connectedAndroidDeviceTest :composeApp:connectedAndroidDeviceTest :androidApp:connectedDebugAndroidTest"
+
 [tasks.check]
 description = "Run all checks (tests + lint) across every module"
 run = "./gradlew check"

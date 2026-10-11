@@ -15,6 +15,8 @@ dependencies {
     // Play would otherwise do: the APK comes from GitHub releases.
     implementation(libs.androidx.profileinstaller)
     baselineProfile(projects.baselineprofile)
+    androidTestImplementation(libs.androidx.test.junit)
+    androidTestImplementation(libs.androidx.test.runner)
 }
 
 val npnVersion = NpnVersion.of(project)
@@ -43,6 +45,7 @@ android {
                 .toInt()
         versionCode = npnVersion.code
         versionName = npnVersion.name
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     packaging {
         resources {

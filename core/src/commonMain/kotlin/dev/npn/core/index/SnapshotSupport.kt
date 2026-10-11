@@ -9,10 +9,13 @@ import dev.npn.core.db.SourceStatus
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.journal.CompactionCandidate
 import dev.npn.core.journal.CompactionSource
+import dev.npn.core.journal.EventCopies
 import dev.npn.core.journal.EventDecoderRegistry
+import dev.npn.core.journal.JournalSourceRead
 import dev.npn.core.journal.PublishedSnapshot
 import dev.npn.core.journal.SnapshotCodec
 import dev.npn.core.journal.SnapshotManifest
+import dev.npn.core.journal.SnapshotV2Reader
 import dev.npn.core.util.runCatchingCancellable
 
 /**
@@ -109,9 +112,10 @@ class SnapshotSupport(
      * [sources] is the source table before the pass.
      *
      * A manifest is taken at its word only as far as the events go: a source is carried when every
-     * event the index recorded for it is among those of the listed snapshots that supersede it,
-     * directly or through a chain, as a compaction always writes them. Leftovers are rare, and only
-     * a pass that has one loads any events.
+     * event the index recorded for it is carried in full by the listed snapshots that supersede it,
+     * directly or through a chain. The snapshot's bytes prove that: the event table keeps the richest
+     * copy across sources, so its joins cannot prove which keys an older snapshot actually holds.
+     * Leftovers are rare, and only a pass that has one loads any events.
      */
     suspend fun supersededLeftovers(
         listed: Set<String>,
@@ -156,14 +160,24 @@ class SnapshotSupport(
                     reaches.values.any { source.contentHash in it.hashes }
             }
         if (candidates.isEmpty()) return Leftovers(emptySet(), emptyList())
-        val eventsOf = HashMap<String, Set<EventKey>>()
+        val eventsOf = HashMap<String, Map<EventKey, String>>()
+        val requiredBySource = dao.eventsOfSources(candidates.map { it.path }).groupBy { it.sourcePath }
         val carried = HashSet<String>()
         val refuted = ArrayList<MetadataSupersededEntity>()
         for (candidate in candidates) {
             val carriers = reaches.filterValues { candidate.contentHash in it.hashes }
-            val held = carriers.keys.flatMapTo(HashSet()) { eventsOf.getOrPut(it) { dao.eventKeys(it) } }
-            val required = dao.eventKeys(candidate.path)
-            if (required.isNotEmpty() && held.containsAll(required)) {
+            val held = carriers.keys.map { eventsOf.getOrPut(it) { snapshotCopies(it) } }
+            val required = requiredBySource[candidate.path].orEmpty()
+            val fullyCarried =
+                required.isNotEmpty() &&
+                    required.all { stored ->
+                        val event = EventDecoderRegistry.decodeStored(stored.canonicalJson)
+                        held.any { copies ->
+                            val copy = copies[event.dev to event.seq]
+                            copy != null && EventCopies.richer(copy, stored.canonicalJson) == copy
+                        }
+                    }
+            if (fullyCarried) {
                 carried += candidate.path
             } else {
                 val claimants = carriers.values.flatMapTo(HashSet()) { it.snapshots }
@@ -173,13 +187,18 @@ class SnapshotSupport(
         }
         return Leftovers(carried, refuted)
     }
+
+    /** Canonical copies actually present in a verified snapshot, independent of the merged index. */
+    private suspend fun snapshotCopies(path: String): Map<EventKey, String> {
+        val read = runCatchingCancellable { SnapshotV2Reader.read(path, fs.readBytes(path)) }.getOrNull()
+        return (read as? JournalSourceRead.Accepted)?.events.orEmpty().associate {
+            (it.event.dev to it.event.seq) to it.canonicalJson
+        }
+    }
 }
 
 /** An event's identity in the index: its device and sequence. */
 private typealias EventKey = Pair<String, Long>
-
-private suspend fun MetadataProjectionDao.eventKeys(sourcePath: String): Set<EventKey> =
-    sourceEvents(sourcePath).mapTo(HashSet()) { it.eventDeviceId to it.eventSequence }
 
 /**
  * The applied snapshots' supersession claims, as a graph: a snapshot to the hashes it supersedes,

@@ -165,6 +165,39 @@ class SafLibraryFileSystemDeviceTest {
             assertNull(TestDocumentsProvider.idForName("final (1).pdf"))
         }
 
+    @Test
+    fun aPublicationWhoseRenameLandedBeforeFailureCanBeRetriedWithoutReplacingItsBytes() =
+        runBlocking {
+            val bytes = "complete journal object".encodeToByteArray()
+            val staging = "$BUCKET/object.part"
+            val canonical = "$BUCKET/object.jsonl"
+            val hash = bytes.inputStream().sha256Hex()
+            fs.writeBytesOnce(staging, bytes)
+            TestDocumentsProvider.awaitWrite("object.part")
+            TestDocumentsProvider.failRenameAfterLanding = true
+
+            assertThrowsBlocking(VerifiedPublicationFailedException::class.java) {
+                fs.publishVerifiedObjectOnce(staging, canonical, hash)
+            }
+            assertArrayEquals(bytes, SafLibraryFileSystem(context, treeUri).readBytes(canonical))
+            fs.publishVerifiedObjectOnce(staging, canonical, hash)
+            assertArrayEquals(bytes, fs.readBytes(canonical))
+            assertNull(TestDocumentsProvider.idForName("object.part"))
+        }
+
+    @Test
+    fun aFailedCrossDirectoryCopyKeepsTheSourceAndRemovesItsPartialDestination() =
+        runBlocking {
+            val bytes = ByteArray(512 * 1024) { (it % 251).toByte() }
+            TestDocumentsProvider.addFile(name = "source.pdf", bytes = bytes)
+            TestDocumentsProvider.failWritesAfterBytes = 16 * 1024
+
+            assertThrowsBlocking(IOException::class.java) { fs.move("source.pdf", "folder/destination.pdf") }
+
+            assertArrayEquals(bytes, fs.readBytes("source.pdf"))
+            assertNull(TestDocumentsProvider.idForName("destination.pdf"))
+        }
+
     private fun documentUri(documentId: String): Uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, documentId)
 
     private fun <T : Throwable> assertThrowsBlocking(

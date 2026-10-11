@@ -742,7 +742,7 @@ class OlderBuildSnapshotTest {
 
             repeat(2) { coordinator.reconcileMetadata() }
 
-            rig.exists(x.relPath).shouldBeFalse()
+            rig.exists(x.relPath).shouldBeTrue()
             shouldKeepPerDocument()
             shouldProjectPerDocument()
             rig.clock.advance()
@@ -762,7 +762,7 @@ class OlderBuildSnapshotTest {
             Files.move(inTransit, rig.libRoot.resolve(x.relPath))
             repeat(2) { coordinator.reconcileMetadata() }
 
-            rig.exists(x.relPath).shouldBeFalse()
+            rig.exists(x.relPath).shouldBeTrue()
             shouldKeepPerDocument()
             shouldProjectPerDocument()
         }

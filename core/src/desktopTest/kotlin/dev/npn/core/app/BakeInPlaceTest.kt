@@ -558,7 +558,7 @@ class TrashDuringABakeTest {
                 paused.reached.await()
                 val trash = async { rig.session.docLifecycle.trashDoc(id) }
                 // Time for the trash to land in the bake's window, as it would if it did not wait.
-                paused.finishesWithin(trash, QUIET_MILLIS)
+                paused.finishesWithin(trash, QUIET_MILLIS) shouldBe false
                 paused.release()
                 bake.await() shouldBe BakeOutcome.Baked
                 val receipt = trash.await().shouldNotBeNull()

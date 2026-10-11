@@ -37,8 +37,10 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -213,7 +215,12 @@ class IndexUpgradeTest {
      * a document that really is gone is still dropped.
      */
     @Test
-    fun theQueuesWaitForTheFirstRescanOfARebuiltIndex() =
+    fun theQueuesWaitForTheFirstRescanOfARebuiltIndex() = queuesWaitForRescan(initialListingFails = false)
+
+    @Test
+    fun theQueuesSurviveAFailedStartupRescanUntilARetrySucceeds() = queuesWaitForRescan(initialListingFails = true)
+
+    private fun queuesWaitForRescan(initialListingFails: Boolean) =
         runTest {
             val gateway = FakeSseGateway("").start()
             val endpoint =
@@ -247,13 +254,20 @@ class IndexUpgradeTest {
 
             data.listFiles { file -> file.name.startsWith("index.db") }.orEmpty().forEach { it.delete() }
 
-            val listing = HeldListing()
+            val listing = HeldListing(failFirst = initialListingFails)
             try {
                 val reopened =
                     openSession(backgroundScope, library, data, aiConfig = { endpoint }, files = listing::over)
                 reopened.use { session, deps ->
                     val device = deps.deviceDb
                     session.start()
+                    val retry =
+                        if (initialListingFails) {
+                            listing.failed.await()
+                            backgroundScope.launch { session.rescan() }
+                        } else {
+                            null
+                        }
                     listing.reached.await()
 
                     // Every drain is asked for while the rescan is held, and none gets anywhere.
@@ -279,6 +293,7 @@ class IndexUpgradeTest {
 
                     listing.release()
                     drains.join()
+                    retry?.join()
 
                     device.ocrQueueDao().getByDocId(docId)?.queueState shouldBe QueueState.DONE
                     device.ocrQueueDao().getByDocId(gone) shouldBe null
@@ -331,10 +346,13 @@ class IndexUpgradeTest {
  * clock.
  */
 private class HeldListing(
+    failFirst: Boolean = false,
     private val realTime: CoroutineDispatcher = Dispatchers.Default,
 ) {
     val reached = CompletableDeferred<Unit>()
+    val failed = CompletableDeferred<Unit>()
     private val gate = CompletableDeferred<Unit>()
+    private val failure = AtomicBoolean(failFirst)
 
     fun release() = gate.complete(Unit)
 
@@ -347,6 +365,10 @@ private class HeldListing(
     fun over(fs: LibraryFileSystem): LibraryFileSystem =
         object : LibraryFileSystem by fs {
             override suspend fun listAllIndexable(): List<FileMeta> {
+                if (failure.getAndSet(false)) {
+                    failed.complete(Unit)
+                    throw IOException("Initial rescan listing failed")
+                }
                 reached.complete(Unit)
                 gate.await()
                 return fs.listAllIndexable()
