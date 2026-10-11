@@ -37,6 +37,33 @@ class JvmLibraryFileSystemTest {
         root.toFile().deleteRecursively()
     }
 
+    /** What does not exist has no metadata, as in the SAF implementation; nothing throws. */
+    @Test
+    fun statReturnsNullForWhatIsGone() =
+        runTest {
+            fs.stat("missing.pdf") shouldBe null
+            fs.writeBytesOnce("inbox/gone.pdf", "bytes".encodeToByteArray())
+            fs.delete("inbox/gone.pdf")
+            fs.stat("inbox/gone.pdf") shouldBe null
+        }
+
+    /** A file another hand moves away while it is hashed is not proven to hold its bytes. */
+    @Test
+    fun holdsIsFalseWhenTheFileVanishesWhileItIsHashed() =
+        runTest {
+            fs.writeBytesOnce("inbox/doc.pdf", "content".encodeToByteArray())
+            val id = fs.sha256("inbox/doc.pdf")
+            val vanishing =
+                object : LibraryFileSystem by fs {
+                    override suspend fun sha256(relPath: String): String {
+                        fs.delete(relPath)
+                        return fs.sha256(relPath)
+                    }
+                }
+
+            vanishing.holds("inbox/doc.pdf", id).shouldBeFalse()
+        }
+
     @Test
     fun walkAndStat() =
         runTest {

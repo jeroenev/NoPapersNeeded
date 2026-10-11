@@ -9,6 +9,7 @@ import java.nio.ByteBuffer
 import java.nio.file.FileVisitOption
 import java.nio.file.FileVisitResult
 import java.nio.file.Files
+import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.nio.file.SimpleFileVisitor
 import java.nio.file.StandardOpenOption
@@ -164,9 +165,14 @@ class JvmLibraryFileSystem internal constructor(
     override suspend fun stat(relPath: String): FileMeta? =
         withContext(Dispatchers.IO) {
             val p = resolve(relPath)
-            if (!Files.exists(p)) return@withContext null
-            val attrs = Files.readAttributes(p, BasicFileAttributes::class.java)
-            metaOf(p, attrs)
+            try {
+                val attrs = Files.readAttributes(p, BasicFileAttributes::class.java)
+                metaOf(p, attrs)
+            } catch (ignored: NoSuchFileException) {
+                // Gone before or during the read (a sync tool moving it away): as in the SAF impl,
+                // no metadata rather than a failure for what does not exist.
+                null
+            }
         }
 
     override suspend fun readBytes(relPath: String): ByteArray =

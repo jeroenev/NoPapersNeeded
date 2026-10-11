@@ -1,5 +1,6 @@
 package dev.npn.core.fs
 
+import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ChannelResult
@@ -261,8 +262,14 @@ interface LibraryFileSystem {
     fun watch(): Flow<FsEvent>
 }
 
-/** Whether [relPath] is a file whose bytes hash to [hash], the SHA-256 that is a document's id. */
+/**
+ * Whether [relPath] is a file whose bytes hash to [hash], the SHA-256 that is a document's id. A
+ * file moved away or written over while it is looked at ([stat] or the read) is not one: the
+ * question is whether the bytes are proven to be [hash]'s, and a failure to read them is not.
+ */
 internal suspend fun LibraryFileSystem.holds(
     relPath: String,
     hash: String,
-): Boolean = stat(relPath)?.isDirectory == false && sha256(relPath) == hash
+): Boolean =
+    stat(relPath)?.isDirectory == false &&
+        runCatchingCancellable { sha256(relPath) }.getOrNull() == hash
