@@ -73,7 +73,7 @@ class OcrVersions internal constructor(
     /**
      * Pick the version to index: among versions matching the [override] engine (all versions
      * when no override or no match), the highest-ranked engine, then the newest re-run of it, then
-     * the highest writer key, so every device converges on the same choice.
+     * the lowest writer key, so every device converges on the same choice.
      */
     fun select(
         versions: List<Version>,
