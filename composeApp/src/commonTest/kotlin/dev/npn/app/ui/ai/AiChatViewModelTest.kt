@@ -41,6 +41,19 @@ class AiChatViewModelTest : MainDispatcherTest() {
         settings: FakeSettingsRepository = aiConfiguredSettings(),
     ) = AiChatViewModel(session, settings)
 
+    @Test
+    fun anUnreadableSessionListIsReportedWhileANewChatCanStillOpen() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession().apply { aiChat.failChatSessions = { error("unreadable sessions") } }
+            val model = vm(session)
+            val messages = collecting(model.messages.map { it.text })
+            advanceUntilIdle()
+
+            messages shouldContainExactly listOf(failure(Res.string.ai_chat_open_failed, "unreadable sessions"))
+            model.ui.value.currentSessionId shouldBe session.aiChat.createdChatSession.id
+            model.ui.value.loading shouldBe false
+        }
+
     /** An open chat follows Settings: configuring AI there, or turning it off, applies at once. */
     @Test
     fun configuredFollowsSettings() =

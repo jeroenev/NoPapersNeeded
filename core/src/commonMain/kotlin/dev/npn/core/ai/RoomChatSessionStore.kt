@@ -20,8 +20,9 @@ internal class RoomChatSessionStore(
         kv
             .get(KEY)
             ?.let {
-                runCatching { json.decodeFromString(ListSerializer(AiChatSession.serializer()), it) }
-                    .getOrDefault(emptyList())
+                // The next edit reads this list before writing it. A decode failure must stop
+                // that edit rather than replace every saved session with a new empty list.
+                json.decodeFromString(ListSerializer(AiChatSession.serializer()), it)
             }.orEmpty()
             .mapNotNull { it.fromPlaceholder() }
 

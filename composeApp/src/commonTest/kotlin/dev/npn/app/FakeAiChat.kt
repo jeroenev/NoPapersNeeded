@@ -37,11 +37,13 @@ class FakeAiChat : AiChat {
     var transcriptGate: CompletableDeferred<Unit>? = null
     var sessionsGate: CompletableDeferred<Unit>? = null
     var deleteGate: CompletableDeferred<Unit>? = null
+    var failChatSessions: (() -> Nothing)? = null
 
     override suspend fun configured(): Boolean = configuredValue
 
     override suspend fun chatSessions(): List<AiChatSession> {
         sessionsGate?.await()
+        failChatSessions?.invoke()
         return savedChatSessions
     }
 

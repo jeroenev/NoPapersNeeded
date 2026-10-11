@@ -253,7 +253,9 @@ class AiChatViewModel(
 
     /** The sessions the store lists, or [ifUnreadable] when it cannot be read. */
     private suspend fun storedSessions(ifUnreadable: List<AiChatSession> = emptyList()): List<AiChatSession> =
-        runCatchingCancellable { ai.chatSessions() }.getOrDefault(ifUnreadable)
+        runCatchingCancellable { ai.chatSessions() }
+            .onFailure { message(uiText(Res.string.ai_chat_open_failed, it.reasonText())) }
+            .getOrDefault(ifUnreadable)
 
     /**
      * The session list: [stored], with [current] in front while the store doesn't have it. A session

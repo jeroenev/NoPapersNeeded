@@ -38,9 +38,9 @@ internal class RoomChatHistoryProvider(
         kv
             .get(key(conversationId))
             ?.let {
-                runCatching {
-                    json.decodeFromString(ListSerializer(Message.serializer()), it).let(::sanitize)
-                }.getOrDefault(emptyList())
+                // Undecodable history is still user content. Reading it as empty would let the
+                // next turn replace it, including history written by a newer Koog version.
+                json.decodeFromString(ListSerializer(Message.serializer()), it).let(::sanitize)
             }.orEmpty()
 
     /** Whether [conversationId] has anything stored, without decoding it. */
