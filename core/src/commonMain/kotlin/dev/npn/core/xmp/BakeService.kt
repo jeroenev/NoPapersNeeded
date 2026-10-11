@@ -161,7 +161,8 @@ class BakeService(
      * goes only once [norm] holds the original again (until then [dev.npn.core.fs.TempFileSweep]
      * keeps it, as it keeps any bake's temporary file whose bytes are not at its document's path).
      * The caller still sees the swap's failure; a restore that fails too is logged with where the
-     * document's bytes are.
+     * document's bytes are, and saves the original under a recovery name first ([keepOriginal])
+     * whenever [norm] no longer holds them, so no run of failures loses them.
      */
     private suspend fun restoreOriginal(
         norm: String,
@@ -184,7 +185,11 @@ class BakeService(
                     // afterwards is what counts.
                     val parked = runCatchingCancellable { fs.move(norm, tmpPath) }
                     if (fs.exists(norm)) {
-                        throw IllegalStateException("$norm still holds the baked bytes", parked.exceptionOrNull())
+                        // [norm] keeps the baked bytes and [writeBytesOnce] below cannot land: the
+                        // original is saved before the failure is raised, as in the branch above.
+                        recovery = runCatchingCancellable { keepOriginal(norm, src) }.getOrNull()
+                        val saved = recovery?.let { "; the original is at $it" }.orEmpty()
+                        throw IllegalStateException("$norm still holds the baked bytes$saved", parked.exceptionOrNull())
                     }
                 }
                 fs.writeBytesOnce(norm, src)
@@ -192,6 +197,11 @@ class BakeService(
             }
             if (fs.exists(tmpPath)) fs.delete(tmpPath)
         }.onFailure { failure ->
+            // Any failure here can leave the original nowhere but in memory: a later one saves it
+            // under a recovery name too, before the log says where a reader would find it.
+            if (recovery == null && runCatchingCancellable { !fs.holds(norm, oldSha) }.getOrDefault(true)) {
+                recovery = runCatchingCancellable { keepOriginal(norm, src) }.getOrNull()
+            }
             val where = onDisk(listOfNotNull(norm, tmpPath, recovery))
             log.error("Restoring $norm after a failed bake failed; the document's bytes are at: $where", failure)
         }

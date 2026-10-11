@@ -13,6 +13,7 @@ import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
@@ -317,6 +318,34 @@ class BakeServiceTest {
         }
 
     /**
+     * The undo's parking move of the baked bytes reports failure without landing, so the document
+     * path keeps them and the write of the original back cannot land either. The original is then
+     * saved under a recovery name before the undo gives up: a double fault never loses it.
+     */
+    @Test
+    fun aFailedParkOfTheBakedBytesSavesTheOriginalForRecovery() =
+        runTest {
+            val original = fixturePdf()
+            fs.writeBytesOnce("doc.pdf", original)
+            val oldSha = fs.sha256("doc.pdf")
+            val failing = MoveRefusedFrom(fs, refuseFrom = "doc.pdf")
+
+            assertFailsWith<IOException> {
+                BakeService(failing, io).bakeInPlace("doc.pdf", oldSha, xmp(tags = listOf("t"))) { _, _ ->
+                    throw IOException("journal unavailable")
+                }
+            }
+
+            // The path keeps the baked bytes (nothing moved away from it) ...
+            fs.readBytes("doc.pdf") shouldNotBe original
+            // ... and the original survives under a recovery name, as the branch that finds another
+            // file there saves it.
+            val recovery = fs.listAll().single { it.name.startsWith("npn-recovery-") }
+            fs.readBytes(recovery.relPath) shouldBe original
+            fs.sha256(recovery.relPath) shouldBe oldSha
+        }
+
+    /**
      * A bake cancelled while it swaps the files (right after the original went, or during the move)
      * ends consistent either way: baked and relinked, or the original with no relink. Never the
      * baked bytes without their relink, nor the document path empty.
@@ -400,6 +429,23 @@ class BakeServiceTest {
         override suspend fun sha256(relPath: String): String {
             if (NpnPaths.isPdf(relPath)) calls += "sha256 $relPath"
             return fs.sha256(relPath)
+        }
+    }
+
+    /**
+     * [fs] whose move away from [refuseFrom] reports failure without landing, as a provider that
+     * never started it.
+     */
+    private class MoveRefusedFrom(
+        private val fs: LibraryFileSystem,
+        private val refuseFrom: String,
+    ) : LibraryFileSystem by fs {
+        override suspend fun move(
+            fromRelPath: String,
+            toRelPath: String,
+        ) {
+            if (fromRelPath == refuseFrom) throw IOException("move refused")
+            fs.move(fromRelPath, toRelPath)
         }
     }
 
