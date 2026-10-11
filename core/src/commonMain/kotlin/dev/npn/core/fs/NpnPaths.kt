@@ -226,7 +226,10 @@ object NpnPaths {
     /**
      * Sanitize a single path SEGMENT. Directory separators and Windows-reserved characters
      * (`<>:"/\|?*`) are replaced with '_'; control characters too. Leading/trailing whitespace
-     * and dots are trimmed to avoid hidden files and Windows-reserved names.
+     * and dots are trimmed to avoid hidden files and Windows-reserved names. Windows-reserved
+     * device names (CON, PRN, AUX, NUL, COM1-9, LPT1-9) get a '_' prefix, so every name the app
+     * builds — imports, renames, trash entries, storage paths — spells them the way Windows can
+     * create them.
      */
     fun sanitizeSegment(input: String): String {
         val cleaned = StringBuilder(input.length)
@@ -236,23 +239,22 @@ object NpnPaths {
                 else -> cleaned.append(char)
             }
         }
-        return cleaned.toString().trim { it.isWhitespace() || it == '.' }
+        val trimmed = cleaned.toString().trim { it.isWhitespace() || it == '.' }
+        return if (trimmed.uppercase() in reservedWindowsDeviceNames) "_$trimmed" else trimmed
     }
 
     /**
      * Sanitize a full file name, preserving its extension. The part after the LAST dot is treated
      * as an extension only when a non-empty base precedes it and a non-empty extension follows it;
      * otherwise the whole string is the base (so trailing-dot names like `x.` cannot come back).
-     * The base is sanitized via [sanitizeSegment]; Windows-reserved device names (CON, PRN, AUX,
-     * NUL, COM1-9, LPT1-9) get a '_' prefix. Identity for already-valid names.
+     * The base is sanitized via [sanitizeSegment]. Identity for already-valid names.
      */
     fun sanitizeFileName(name: String): String {
         val dot = name.lastIndexOf('.')
         val hasExtension = dot > 0 && dot < name.lastIndex
         val base = if (hasExtension) name.substring(0, dot) else name
         val ext = if (hasExtension) name.substring(dot) else ""
-        val cleanBase = sanitizeSegment(base)
-        val safeBase = if (cleanBase.uppercase() in reservedWindowsDeviceNames) "_$cleanBase" else cleanBase
+        val safeBase = sanitizeSegment(base)
         return if (ext.isEmpty()) safeBase else "$safeBase$ext"
     }
 

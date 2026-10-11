@@ -39,6 +39,13 @@ class StoragePathTemplateTest {
             "invoice_July_ final.pdf"
     }
 
+    /** A name Windows reserves as a device is spelled the way a rename spells it, rule or not. */
+    @Test
+    fun reservedDeviceNamesAgreeWithRename() {
+        val deviceTitle = context.copy(fields = context.fields + (FieldKeys.TITLE to "CON"))
+        StoragePathTemplate.expand("{title}.pdf", deviceTitle).pathOrNull shouldBe "_CON.pdf"
+    }
+
     @Test
     fun rejectsUnsafeAndInvalidPathsSayingWhy() {
         val expected =
@@ -49,6 +56,7 @@ class StoragePathTemplateTest {
                 "../{title}.pdf" to StoragePathError.Traversal,
                 ".npn/{title}.pdf" to StoragePathError.ReservedDirectory(".npn"),
                 "bad:name/{title}.pdf" to StoragePathError.InvalidSegment("bad:name"),
+                "CON/{title}.pdf" to StoragePathError.InvalidSegment("CON"),
                 "{correspondent}" to StoragePathError.Blank,
                 " " to StoragePathError.Blank,
                 "a\\b/{title}.pdf" to StoragePathError.Backslash,

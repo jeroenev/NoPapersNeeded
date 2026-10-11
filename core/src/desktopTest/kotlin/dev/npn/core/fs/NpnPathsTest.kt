@@ -102,6 +102,8 @@ class NpnPathsTest {
         NpnPaths.sanitizeSegment("invoice/July: final") shouldBe "invoice_July_ final"
         NpnPaths.sanitizeSegment("  padded  ") shouldBe "padded"
         NpnPaths.sanitizeSegment("already-fine") shouldBe "already-fine"
+        NpnPaths.sanitizeSegment("CON") shouldBe "_CON"
+        NpnPaths.sanitizeSegment("com5") shouldBe "_com5"
     }
 
     @Test
