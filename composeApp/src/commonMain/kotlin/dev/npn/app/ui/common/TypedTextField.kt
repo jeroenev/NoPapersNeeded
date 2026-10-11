@@ -35,24 +35,14 @@ fun TypedTextField(
     isError: Boolean = false,
 ) {
     var text by remember { mutableStateOf(value) }
-    var seen by remember { mutableStateOf(value) }
-    val unconfirmed = remember { ArrayDeque<String>() }
-    if (value != seen) {
-        seen = value
-        val echo = unconfirmed.indexOf(value)
-        if (echo >= 0) {
-            repeat(echo + 1) { unconfirmed.removeFirst() }
-        } else {
-            unconfirmed.clear()
-            text = value
-        }
-    }
+    val echoes = remember { EchoTracker(value) }
+    echoes.ownerValue(value)?.let { text = it }
     val focus = remember { FocusEdge() }
     OutlinedTextField(
         value = text,
         onValueChange = { typed ->
             text = typed
-            unconfirmed.addLast(typed)
+            echoes.typed(typed)
             onValueChange(typed)
         },
         label = { Text(label) },

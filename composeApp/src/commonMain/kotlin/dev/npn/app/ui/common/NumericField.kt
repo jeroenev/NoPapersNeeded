@@ -6,7 +6,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -37,25 +36,15 @@ fun NumericField(
     modifier: Modifier = Modifier,
 ) {
     var text by remember { mutableStateOf(value.toString()) }
-    var seen by remember { mutableIntStateOf(value) }
-    val unconfirmed = remember { ArrayDeque<Int>() }
-    if (value != seen) {
-        seen = value
-        val echo = unconfirmed.indexOf(value)
-        if (echo >= 0) {
-            repeat(echo + 1) { unconfirmed.removeFirst() }
-        } else {
-            unconfirmed.clear()
-            text = value.toString()
-        }
-    }
+    val echoes = remember { EchoTracker(value) }
+    echoes.ownerValue(value)?.let { text = it.toString() }
     val outOfRange = text.toIntOrNull()?.let { it !in range } ?: true
     OutlinedTextField(
         value = text,
         onValueChange = { raw ->
             text = raw.filter { it.isDigit() }.take(maxDigits)
             text.toIntOrNull()?.takeIf { it in range }?.let {
-                unconfirmed.addLast(it)
+                echoes.typed(it)
                 onValueChange(it)
             }
         },
