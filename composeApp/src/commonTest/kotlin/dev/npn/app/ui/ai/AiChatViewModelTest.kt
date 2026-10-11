@@ -24,6 +24,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_chat_delete_failed
+import no_papers_needed.composeapp.generated.resources.ai_chat_open_failed
 import no_papers_needed.composeapp.generated.resources.common_ai_assistant_empty_answer
 import no_papers_needed.composeapp.generated.resources.common_ai_assistant_unreachable
 import kotlin.test.Test
@@ -153,6 +154,29 @@ class AiChatViewModelTest : MainDispatcherTest() {
             model.send("after switch")
             advanceUntilIdle()
             session.aiChat.asked shouldContainExactly listOf(other.id to "after switch")
+        }
+
+    /** A conversation whose turns cannot be read says so, and the one on screen stays. */
+    @Test
+    fun switchingToAChatWhoseHistoryCannotBeReadSaysSoAndStaysPut() =
+        runTest(dispatcher) {
+            val other = AiChatSession("other", "Other chat", 1L)
+            val session =
+                FakeLibrarySession().apply {
+                    aiChat.savedChatSessions = listOf(other)
+                }
+            val model = vm(session)
+            advanceUntilIdle()
+            val before = model.ui.value.currentSessionId
+            val messages = collecting(model.messages.map { it.text })
+            session.aiChat.failChatTranscript = { error("database closed") }
+
+            model.switchSession(other.id)
+            advanceUntilIdle()
+
+            messages shouldContainExactly listOf(failure(Res.string.ai_chat_open_failed, "database closed"))
+            model.ui.value.currentSessionId shouldBe before
+            model.ui.value.loading shouldBe false
         }
 
     @Test

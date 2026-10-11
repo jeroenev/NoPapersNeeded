@@ -148,8 +148,10 @@
     <string name="ai_chat_clear_failed">Het gesprek kon niet worden gewist: %1$s</string>
     <string name="ai_chat_new_failed">Er kon geen nieuwe chat worden gestart: %1$s</string>
     <string name="ai_chat_delete_failed">De chat kon niet worden verwijderd: %1$s</string>
+    <string name="ai_chat_open_failed">Het gesprek kon niet worden geopend: %1$s</string>
     <string name="ai_edit_review_open_failed">De AI-bewerking kon niet worden geopend: %1$s</string>
     <string name="ai_edit_review_discard_failed">De AI-bewerking kon niet worden verworpen: %1$s</string>
+    <string name="ai_edit_review_queue_drop_failed">De voltooide run kon niet uit de wachtrij worden verwijderd: %1$s</string>
     <string name="ai_edit_setup_load_failed">Sommige opties voor de AI-bewerking konden niet worden geladen: %1$s</string>
     <plurals name="ai_edit_apply_tags_failed">
         <item quantity="one">Kon de tags van %1$d van %2$d document niet bijwerken</item>

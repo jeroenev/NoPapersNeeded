@@ -148,8 +148,10 @@
     <string name="ai_chat_clear_failed">No se pudo borrar la conversación: %1$s</string>
     <string name="ai_chat_new_failed">No se pudo iniciar un chat nuevo: %1$s</string>
     <string name="ai_chat_delete_failed">No se pudo eliminar el chat: %1$s</string>
+    <string name="ai_chat_open_failed">No se pudo abrir la conversación: %1$s</string>
     <string name="ai_edit_review_open_failed">No se pudo abrir la edición con IA: %1$s</string>
     <string name="ai_edit_review_discard_failed">No se pudo descartar la edición con IA: %1$s</string>
+    <string name="ai_edit_review_queue_drop_failed">No se pudo quitar la ejecución terminada de la cola: %1$s</string>
     <string name="ai_edit_setup_load_failed">No se pudieron cargar algunas opciones de la edición con IA: %1$s</string>
     <plurals name="ai_edit_apply_tags_failed">
         <item quantity="one">No se pudieron actualizar las etiquetas de %1$d de %2$d documento</item>

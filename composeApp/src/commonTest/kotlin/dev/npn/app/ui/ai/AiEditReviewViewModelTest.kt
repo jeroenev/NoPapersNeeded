@@ -26,6 +26,7 @@ import no_papers_needed.composeapp.generated.resources.ai_edit_apply_fields_fail
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_finish_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_review_discard_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_review_open_failed
+import no_papers_needed.composeapp.generated.resources.ai_edit_review_queue_drop_failed
 import kotlin.test.Test
 
 private fun reviewDoc(
@@ -174,8 +175,8 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
 
     /**
      * Once the writes landed the run is applied, even when it then cannot leave the queue: the page
-     * shows Done with what was written and says the run could not be discarded, and there is no
-     * second Apply to write it all again.
+     * shows Done with what was written and says the run could not be removed from the queue, and
+     * there is no second Apply to write it all again.
      */
     @Test
     fun anAppliedRunThatCannotLeaveTheQueueIsDoneAndSaysSo() =
@@ -194,7 +195,8 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             model.phase.value shouldBe QueuedReviewPhase.Done(result)
-            messages shouldContainExactly listOf(failure(Res.string.ai_edit_review_discard_failed, "database closed"))
+            messages shouldContainExactly
+                listOf(failure(Res.string.ai_edit_review_queue_drop_failed, "database closed"))
             review.applied.size shouldBe 1
         }
 

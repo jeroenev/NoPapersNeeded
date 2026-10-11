@@ -148,8 +148,10 @@
     <string name="ai_chat_clear_failed">Could not clear the conversation: %1$s</string>
     <string name="ai_chat_new_failed">Could not start a new chat: %1$s</string>
     <string name="ai_chat_delete_failed">Could not delete the chat: %1$s</string>
+    <string name="ai_chat_open_failed">Could not open the conversation: %1$s</string>
     <string name="ai_edit_review_open_failed">Could not open the AI edit: %1$s</string>
     <string name="ai_edit_review_discard_failed">Could not discard the AI edit: %1$s</string>
+    <string name="ai_edit_review_queue_drop_failed">Could not remove the finished run from the queue: %1$s</string>
     <string name="ai_edit_setup_load_failed">Some AI edit options could not be loaded: %1$s</string>
     <plurals name="ai_edit_apply_tags_failed">
         <item quantity="one">Could not update the tags of %1$d of %2$d document</item>

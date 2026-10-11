@@ -148,8 +148,10 @@
     <string name="ai_chat_clear_failed">Impossible d’effacer la conversation : %1$s</string>
     <string name="ai_chat_new_failed">Impossible de démarrer une nouvelle conversation : %1$s</string>
     <string name="ai_chat_delete_failed">Impossible de supprimer la conversation : %1$s</string>
+    <string name="ai_chat_open_failed">Impossible d’ouvrir la conversation : %1$s</string>
     <string name="ai_edit_review_open_failed">Impossible d’ouvrir la modification IA : %1$s</string>
     <string name="ai_edit_review_discard_failed">Impossible d’abandonner la modification IA : %1$s</string>
+    <string name="ai_edit_review_queue_drop_failed">Impossible de retirer l’exécution terminée de la file d’attente : %1$s</string>
     <string name="ai_edit_setup_load_failed">Certaines options de la modification IA n’ont pas pu être chargées : %1$s</string>
     <plurals name="ai_edit_apply_tags_failed">
         <item quantity="one">Impossible de mettre à jour les étiquettes de %1$d document sur %2$d</item>

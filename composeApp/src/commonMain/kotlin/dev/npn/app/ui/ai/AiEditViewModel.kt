@@ -28,6 +28,7 @@ import dev.npn.core.model.ReviewMode
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -38,6 +39,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_failed
@@ -677,9 +679,12 @@ class AiEditViewModel(
     private suspend fun suggestBatch() {
         // Snapshot the request once so mid-run state changes cannot affect this batch.
         val request = buildRequest()
+        // Cancelled runs stay cancelled: a progress callback delivered after [cancel] ran must not
+        // put the spinner back on a screen that is already back at Idle.
+        val running = currentCoroutineContext()
         val result =
             edit.suggestNextBatch(_ui.value.scopeKey(), request) { progress ->
-                _ui.update { it.copy(phase = EditPhase.Suggesting(progress)) }
+                if (running.isActive) _ui.update { it.copy(phase = EditPhase.Suggesting(progress)) }
             }
         when (result) {
             BatchResult.Empty -> {

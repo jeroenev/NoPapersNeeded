@@ -67,8 +67,12 @@ class FakeAiChat : AiChat {
         cleared += sessionId
     }
 
+    /** If set, [chatTranscriptFor] throws this. */
+    var failChatTranscript: (() -> Nothing)? = null
+
     override suspend fun chatTranscriptFor(sessionId: String): List<AiChatHistoryItem> {
         transcriptGate?.await()
+        failChatTranscript?.invoke()
         return chatTranscripts[sessionId].orEmpty()
     }
 

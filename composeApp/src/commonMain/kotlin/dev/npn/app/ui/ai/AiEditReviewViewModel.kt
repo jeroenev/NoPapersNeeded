@@ -19,6 +19,7 @@ import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_finish_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_review_discard_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_review_open_failed
+import no_papers_needed.composeapp.generated.resources.ai_edit_review_queue_drop_failed
 
 /**
  * The phases of reviewing a run that was suggested in the background. Deliberately shorter than
@@ -150,7 +151,7 @@ class AiEditReviewViewModel(
 
             is ApplyOutcome.Done -> {
                 outcome.followUpFailure?.let { failure ->
-                    message(uiText(Res.string.ai_edit_review_discard_failed, failure.reasonText()))
+                    message(uiText(Res.string.ai_edit_review_queue_drop_failed, failure.reasonText()))
                 }
                 _phase.value = QueuedReviewPhase.Done(outcome.result)
             }

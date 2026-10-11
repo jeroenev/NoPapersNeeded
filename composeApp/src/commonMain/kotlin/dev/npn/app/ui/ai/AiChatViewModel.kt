@@ -6,6 +6,7 @@ import dev.npn.app.ui.common.aiConfigured
 import dev.npn.app.ui.common.reasonText
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.AiChatEvent
+import dev.npn.core.ai.AiChatHistoryItem
 import dev.npn.core.ai.AiChatSession
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.SettingsRepository
@@ -23,6 +24,7 @@ import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_chat_clear_failed
 import no_papers_needed.composeapp.generated.resources.ai_chat_delete_failed
 import no_papers_needed.composeapp.generated.resources.ai_chat_new_failed
+import no_papers_needed.composeapp.generated.resources.ai_chat_open_failed
 import no_papers_needed.composeapp.generated.resources.common_ai_assistant_empty_answer
 import no_papers_needed.composeapp.generated.resources.common_ai_assistant_unreachable
 import org.jetbrains.compose.resources.StringResource
@@ -188,10 +190,12 @@ class AiChatViewModel(
         }
     }
 
-    /** Switch to an existing conversation and restore its visible turns. */
+    /** Switch to an existing conversation and restore its visible turns; one whose turns cannot be
+     * read is named as such, and the conversation on screen stays.
+     */
     fun switchSession(sessionId: String) {
         if (_ui.value.sessions.none { it.id == sessionId }) return
-        launchTransition(Res.string.ai_chat_new_failed) { loadSession(sessionId) }
+        launchTransition(Res.string.ai_chat_open_failed) { loadSession(sessionId) }
     }
 
     /** Create and select a new empty conversation. */
@@ -221,7 +225,13 @@ class AiChatViewModel(
             }
             val next = stored.firstOrNull() ?: ai.createChatSession()
             _ui.update { it.copy(sessions = listed(stored, next)) }
-            loadSession(next.id)
+            // The deleted conversation must not stay on screen when the next one's turns cannot be
+            // read: that one shows empty and says so, rather than this transition reporting its
+            // delete, which landed.
+            runCatchingCancellable { loadSession(next.id) }.getOrElse { failure ->
+                showSession(next.id, emptyList())
+                message(uiText(Res.string.ai_chat_open_failed, failure.reasonText()))
+            }
         }
 
     /** Claim the transition before launching: another action cannot start during its first read. */
@@ -276,8 +286,13 @@ class AiChatViewModel(
     /** Mark any trailing still-streaming assistant turn as complete (keeps partial text). */
     private fun finishStreaming() = _ui.update { it.copy(transcript = it.transcript.finalized()) }
 
-    private suspend fun loadSession(sessionId: String) {
-        val history = runCatchingCancellable { ai.chatTranscriptFor(sessionId) }.getOrDefault(emptyList())
+    /** Show [sessionId]'s turns; a transcript that cannot be read throws, leaving the state as it is. */
+    private suspend fun loadSession(sessionId: String) = showSession(sessionId, ai.chatTranscriptFor(sessionId))
+
+    private fun showSession(
+        sessionId: String,
+        history: List<AiChatHistoryItem>,
+    ) {
         _ui.update {
             it.copy(
                 currentSessionId = sessionId,
