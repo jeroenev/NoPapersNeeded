@@ -22,14 +22,16 @@ data class NpnVersion(
     companion object {
         const val PROPERTY = "npn.version"
 
-        private val FORMAT = Regex("""(\d+)\.(\d+)\.(\d+)""")
+        // Keep the persisted/tagged spelling identical to package names, and bound components
+        // before converting them so invalid input cannot overflow an integer.
+        private val FORMAT = Regex("""(0|[1-9][0-9]{0,2})\.(0|[1-9][0-9]?)\.(0|[1-9][0-9]?)""")
         private const val MAX_MAJOR = 255
         private const val MAX_MINOR_PATCH = 99
 
         fun parse(value: String): NpnVersion {
             val match =
-                requireNotNull(FORMAT.matchEntire(value.trim())) {
-                    "$PROPERTY must be major.minor.patch (digits only), got '$value'"
+                requireNotNull(FORMAT.matchEntire(value)) {
+                    "$PROPERTY must be major.minor.patch without leading zeros, got '$value'"
                 }
             val (major, minor, patch) = match.destructured.toList().map(String::toInt)
             require(major in 0..MAX_MAJOR && minor in 0..MAX_MINOR_PATCH && patch in 0..MAX_MINOR_PATCH) {
