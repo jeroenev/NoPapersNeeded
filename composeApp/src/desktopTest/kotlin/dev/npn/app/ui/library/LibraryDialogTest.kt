@@ -5,6 +5,7 @@ package dev.npn.app.ui.library
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.LocalSaveableStateRegistry
 import androidx.compose.runtime.saveable.SaveableStateRegistry
 import androidx.compose.runtime.saveable.SaverScope
@@ -104,9 +105,45 @@ class LibraryDialogTest {
             }
         }
 
+    /**
+     * An open filter editor keeps its unapplied draft when it moves between the side panel's call
+     * site and the sheet's: the window crossing the wide/compact breakpoint disposes one subtree and
+     * composes the other, and the draft lives above that split.
+     */
+    @Test
+    fun anOpenFilterKeepsItsDraftWhenTheEditorMovesCallSites() =
+        onUiThread {
+            val sidePanel = mutableStateOf(true)
+            lateinit var dialog: MutableState<LibraryDialog?>
+            val scene = scene(SaveableStateRegistry(restoredValues = null) { true }, sidePanel) { dialog = it }
+            try {
+                scene.render()
+                dialog.value = LibraryDialog.Filter
+                scene.render()
+                scene
+                    .untaggedSwitch()
+                    ?.config
+                    ?.get(SemanticsActions.OnClick)
+                    ?.action
+                    ?.invoke()
+                scene.render()
+                scene.untaggedSwitch()?.config?.getOrNull(SemanticsProperties.ToggleableState) shouldBe
+                    ToggleableState.On
+
+                // The window crosses the breakpoint: the editor moves to its other call site.
+                sidePanel.value = false
+                scene.render()
+                scene.untaggedSwitch()?.config?.getOrNull(SemanticsProperties.ToggleableState) shouldBe
+                    ToggleableState.On
+            } finally {
+                scene.close()
+            }
+        }
+
     /** The part of the library screen under test: its dialog value and, when open, the filter panel. */
     private fun scene(
         registry: SaveableStateRegistry,
+        sidePanel: MutableState<Boolean> = mutableStateOf(true),
         onDialog: (MutableState<LibraryDialog?>) -> Unit,
     ) = ImageComposeScene(WIDTH, HEIGHT) {
         CompositionLocalProvider(LocalSaveableStateRegistry provides registry) {
@@ -115,15 +152,28 @@ class LibraryDialogTest {
                     val dialog = rememberLibraryDialog()
                     onDialog(dialog)
                     if (dialog.value == LibraryDialog.Filter) {
-                        FilterPanel(
-                            filter = LibraryFilter(),
-                            tags = emptyList(),
-                            fields = FieldFilterOptions(),
-                            reviewMode = ReviewMode.DEFAULT,
-                            onApply = {},
-                            onDismiss = {},
-                            fillHeight = false,
-                        )
+                        val editor = rememberFilterEditorState(LibraryFilter())
+                        if (sidePanel.value) {
+                            FilterPanel(
+                                editor = editor,
+                                tags = emptyList(),
+                                fields = FieldFilterOptions(),
+                                reviewMode = ReviewMode.DEFAULT,
+                                onApply = {},
+                                onDismiss = {},
+                                fillHeight = false,
+                            )
+                        } else {
+                            FilterPanel(
+                                editor = editor,
+                                tags = emptyList(),
+                                fields = FieldFilterOptions(),
+                                reviewMode = ReviewMode.DEFAULT,
+                                onApply = {},
+                                onDismiss = {},
+                                fillHeight = true,
+                            )
+                        }
                     }
                 }
             }

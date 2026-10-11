@@ -32,13 +32,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -98,7 +99,7 @@ private const val MAX_TAG_CHIPS_PER_GROUP = 30
  */
 @Composable
 fun FilterSheet(
-    filter: LibraryFilter,
+    editor: FilterEditorState,
     tags: List<TagInfo>,
     fields: FieldFilterOptions,
     reviewMode: ReviewMode,
@@ -107,7 +108,7 @@ fun FilterSheet(
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         FilterPanel(
-            filter = filter,
+            editor = editor,
             tags = tags,
             fields = fields,
             reviewMode = reviewMode,
@@ -119,9 +120,70 @@ fun FilterSheet(
     }
 }
 
+/**
+ * The filter editor's draft, and the live filter it was last brought up to. On a wide window the
+ * search and the chips beside the editor change the live filter while it is open: the draft takes
+ * only what such a change touched, and keeps the edits not applied yet. The dialog holds it, above
+ * the panel/sheet split, so a window crossing the wide/compact breakpoint with the editor open keeps
+ * its unapplied edits (and their invalid-entry guard) instead of silently resetting them.
+ */
+@Stable
+class FilterEditorState internal constructor(
+    draft: LibraryFilter,
+    live: LibraryFilter,
+    tagQuery: String,
+    matchAll: Boolean,
+) {
+    var draft by mutableStateOf(draft)
+    var live by mutableStateOf(live)
+    var tagQuery by mutableStateOf(tagQuery)
+    var matchAll by mutableStateOf(matchAll)
+
+    /**
+     * Keys of the numeric bounds currently holding text that does not parse. Apply is blocked while
+     * any is present so an invalid entry can never be silently dropped and the stale value applied.
+     */
+    var invalidBounds by mutableStateOf(emptySet<String>())
+        private set
+    var resetCounter by mutableStateOf(0)
+        private set
+
+    fun setBoundValidity(
+        boundKey: String,
+        valid: Boolean,
+    ) {
+        invalidBounds = if (valid) invalidBounds - boundKey else invalidBounds + boundKey
+    }
+
+    fun clearAll() {
+        draft = LibraryFilter()
+        invalidBounds = emptySet()
+        resetCounter++
+    }
+
+    /** Bring the draft onto [filter], keeping the edits [filter] did not touch. */
+    fun bringUpTo(filter: LibraryFilter) {
+        if (filter != live) {
+            draft = draft.rebased(live, filter)
+            live = filter
+        }
+    }
+}
+
+/** The filter editor's draft state, kept across the panel/sheet split and destination recreation. */
+@Composable
+fun rememberFilterEditorState(filter: LibraryFilter): FilterEditorState {
+    val editor =
+        rememberSaveable(saver = FilterEditorStateSaver) {
+            FilterEditorState(draft = filter, live = filter, tagQuery = "", matchAll = filter.tagsAny.isEmpty())
+        }
+    editor.bringUpTo(filter)
+    return editor
+}
+
 @Composable
 fun FilterPanel(
-    filter: LibraryFilter,
+    editor: FilterEditorState,
     tags: List<TagInfo>,
     fields: FieldFilterOptions,
     reviewMode: ReviewMode,
@@ -131,31 +193,13 @@ fun FilterPanel(
     fillHeight: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    // The panel's draft and the live filter it was last brought up to. On a wide window the search
-    // and the chips beside the panel change the live filter while it is open: the draft takes only
-    // what such a change touched, and keeps the edits not applied yet.
-    var draft by rememberSaveable(stateSaver = LibraryFilterSaver) { mutableStateOf(filter) }
-    var live by rememberSaveable(stateSaver = LibraryFilterSaver) { mutableStateOf(filter) }
-    if (filter != live) {
-        draft = draft.rebased(live, filter)
-        live = filter
-    }
-    // Keys of the numeric bounds currently holding text that does not parse. Apply is blocked while
-    // any is present so an invalid entry can never be silently dropped and the stale value applied.
-    var invalidBounds by remember { mutableStateOf(emptySet<String>()) }
-    var resetCounter by remember { mutableStateOf(0) }
-    val setBoundValidity: (String, Boolean) -> Unit = { boundKey, valid ->
-        invalidBounds = if (valid) invalidBounds - boundKey else invalidBounds + boundKey
-    }
+    val draft = editor.draft
+    val setBoundValidity: (String, Boolean) -> Unit = editor::setBoundValidity
 
     Surface(modifier = modifier, tonalElevation = 3.dp) {
         Column(if (fillHeight) Modifier.fillMaxSize() else Modifier.fillMaxWidth()) {
             FilterPanelHeader(
-                onClearAll = {
-                    draft = LibraryFilter()
-                    invalidBounds = emptySet()
-                    resetCounter++
-                },
+                onClearAll = editor::clearAll,
                 onDismiss = onDismiss,
             )
 
@@ -167,13 +211,14 @@ fun FilterPanel(
                     .padding(bottom = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                key(resetCounter) {
+                key(editor.resetCounter) {
                     FilterFields(
+                        editor = editor,
                         draft = draft,
                         tags = tags,
                         fields = fields,
                         reviewMode = reviewMode,
-                        onDraftChange = { draft = it },
+                        onDraftChange = { editor.draft = it },
                         onBoundValidity = setBoundValidity,
                     )
                 }
@@ -182,7 +227,7 @@ fun FilterPanel(
             HorizontalDivider()
             OutlinedButton(
                 onClick = { onApply(draft) },
-                enabled = invalidBounds.isEmpty(),
+                enabled = editor.invalidBounds.isEmpty(),
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
             ) { Text(stringResource(Res.string.library_apply_filters)) }
         }
@@ -190,10 +235,24 @@ fun FilterPanel(
 }
 
 /** Filter edits are a user-authored draft and must survive destination recreation until applied. */
-private val LibraryFilterSaver =
-    Saver<LibraryFilter, String>(
-        save = { NpnJson.Persisted.encodeToString(it) },
-        restore = { NpnJson.Persisted.decodeFromString(it) },
+private val FilterEditorStateSaver =
+    listSaver<FilterEditorState, String>(
+        save = {
+            listOf(
+                NpnJson.Persisted.encodeToString(it.draft),
+                NpnJson.Persisted.encodeToString(it.live),
+                it.tagQuery,
+                it.matchAll.toString(),
+            )
+        },
+        restore = {
+            FilterEditorState(
+                draft = NpnJson.Persisted.decodeFromString(it[0]),
+                live = NpnJson.Persisted.decodeFromString(it[1]),
+                tagQuery = it[2],
+                matchAll = it[3].toBoolean(),
+            )
+        },
     )
 
 /** Title row of the filter panel: the "Filters" heading, the clear-all button and close. */
@@ -230,10 +289,12 @@ data class FieldFilterOptions(
 
 /**
  * The editable filter fields (tags, reviewed, one row per default field, untagged-only). Edits
- * produce a new draft [LibraryFilter] via [onDraftChange]; the panel owns the draft state.
+ * produce a new draft [LibraryFilter] via [onDraftChange]; the dialog's [FilterEditorState] owns the
+ * draft state and the tag section's transient text.
  */
 @Composable
 private fun FilterFields(
+    editor: FilterEditorState,
     draft: LibraryFilter,
     tags: List<TagInfo>,
     fields: FieldFilterOptions,
@@ -241,7 +302,7 @@ private fun FilterFields(
     onDraftChange: (LibraryFilter) -> Unit,
     onBoundValidity: (String, Boolean) -> Unit,
 ) {
-    TagFilterSection(tags, draft, onDraftChange)
+    TagFilterSection(editor, tags, draft, onDraftChange)
 
     // The stored reviewed marker is only maintained in the inbox workflow; outside it,
     // review state is derived from tags (reviewed == tagged) and the marker is stale.
@@ -417,13 +478,14 @@ private fun NumberBound(
 
 @Composable
 private fun TagFilterSection(
+    editor: FilterEditorState,
     tags: List<TagInfo>,
     filter: LibraryFilter,
     onFilterChange: (LibraryFilter) -> Unit,
 ) {
     SectionLabel(stringResource(Res.string.ux_include_tags))
     val mixed = filter.tagsAll.isNotEmpty() && filter.tagsAny.isNotEmpty()
-    var matchAll by remember { mutableStateOf(filter.tagsAny.isEmpty()) }
+    val matchAll = editor.matchAll
     val effectiveAll =
         when {
             filter.tagsAll.isNotEmpty() -> true
@@ -434,7 +496,7 @@ private fun TagFilterSection(
         FilterChip(
             selected = !mixed && effectiveAll,
             onClick = {
-                matchAll = true
+                editor.matchAll = true
                 onFilterChange(filter.matchIncludedTags(true))
             },
             label = { Text(stringResource(Res.string.ux_match_all)) },
@@ -442,7 +504,7 @@ private fun TagFilterSection(
         FilterChip(
             selected = !mixed && !effectiveAll,
             onClick = {
-                matchAll = false
+                editor.matchAll = false
                 onFilterChange(filter.matchIncludedTags(false))
             },
             label = { Text(stringResource(Res.string.ux_match_any)) },
@@ -451,10 +513,10 @@ private fun TagFilterSection(
     if (mixed) {
         Text(stringResource(Res.string.ux_mixed_tags), style = MaterialTheme.typography.bodySmall)
     }
-    var tagQuery by remember { mutableStateOf("") }
+    val tagQuery = editor.tagQuery
     OutlinedTextField(
         value = tagQuery,
-        onValueChange = { tagQuery = it },
+        onValueChange = { editor.tagQuery = it },
         label = { Text(stringResource(Res.string.library_search_tags)) },
         singleLine = true,
         modifier = Modifier.fillMaxWidth(),

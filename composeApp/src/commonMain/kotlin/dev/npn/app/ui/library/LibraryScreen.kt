@@ -239,13 +239,14 @@ fun LibraryScreen(
             val previewItem = items.firstOrNull { it.doc.docId == previewDocId }.takeIf { wide }
             when {
                 dialog == LibraryDialog.Filter -> {
+                    val editor = rememberFilterEditorState(ui.filter)
                     val apply = { applied: LibraryFilter ->
                         vm.setFilter(applied)
                         dialog = null
                     }
                     if (wide) {
                         FilterPanel(
-                            filter = ui.filter,
+                            editor = editor,
                             tags = tags,
                             fields = fieldFilters,
                             reviewMode = reviewMode,
@@ -256,7 +257,7 @@ fun LibraryScreen(
                         )
                     } else {
                         FilterSheet(
-                            filter = ui.filter,
+                            editor = editor,
                             tags = tags,
                             fields = fieldFilters,
                             reviewMode = reviewMode,

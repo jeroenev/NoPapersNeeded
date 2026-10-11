@@ -136,10 +136,16 @@ class FilterNumberBoundTest {
                 filter = LibraryFilter(fieldRanges = mapOf(KEY to FieldRange(from = "3")))
                 scene.render()
                 shown() shouldBe "3"
+                // The invalid entry is gone with its replacement; Apply is back on, so the change
+                // is not stuck behind an entry that is no longer there.
+                repeat(2) { scene.render() }
+                applyButton().config.contains(SemanticsProperties.Disabled) shouldBe false
 
                 filter = LibraryFilter()
                 scene.render()
                 shown() shouldBe ""
+                repeat(2) { scene.render() }
+                applyButton().config.contains(SemanticsProperties.Disabled) shouldBe false
             }
         }
     }
@@ -234,7 +240,7 @@ class FilterNumberBoundTest {
         val content: @Composable () -> Unit = {
             NpnTheme(darkTheme = false) {
                 FilterPanel(
-                    filter = panel.filter,
+                    editor = rememberFilterEditorState(panel.filter),
                     tags = emptyList(),
                     fields = FieldFilterOptions(listOf(AMOUNT)),
                     reviewMode = ReviewMode.DEFAULT,
