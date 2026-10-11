@@ -55,6 +55,23 @@ class WorkQueueTransactionsTest {
             }
         }
 
+    /** A plain ask (no flags) made while a pass ran is another run: the pass cannot settle over it. */
+    @Test
+    fun aPlainAskMadeWhileAPassRanCannotBeSettledOver() =
+        runTest {
+            TempIndexDb().use { dbs ->
+                val queue = dbs.deviceDb.ocrQueueDao()
+                val seen = queue.enqueue("doc", now = 10)
+
+                // A row dropped mid-pass (an adoption) is re-created plain by an import or a rescan.
+                queue.delete("doc")
+                val ask = queue.enqueue("doc", now = 12)
+
+                queue.settle("doc", seen) { ask.copy(state = QueueState.DONE.column) } shouldBe null
+                queue.getByDocId("doc") shouldBe ask
+            }
+        }
+
     @Test
     fun aBackgroundUpgradeKeepsTheAttemptBudgetAndLeavesFailedRowsAlone() =
         runTest {

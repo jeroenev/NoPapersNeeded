@@ -29,7 +29,9 @@ interface OcrQueueDao {
     /**
      * Ask for a pass without withdrawing an earlier request. Reading its flags and writing the
      * merged row share a transaction, including the stamp that distinguishes a fresh request from
-     * the one a running pass saw. Explicit requests reset failed attempts and their backoff.
+     * the one a running pass saw. Every ask resets failed attempts and their backoff: the budget
+     * belongs to the work queued, and an ask queues it afresh. The one ask that keeps an old
+     * budget is [enqueueUpgrade].
      */
     @Transaction
     suspend fun enqueue(
@@ -113,10 +115,11 @@ interface OcrQueueDao {
 
     /**
      * Write what a pass over [docId] came to: [settled], built from the row as it is now. A row that
-     * holds a request ([OcrQueueEntity.rerun], [OcrQueueEntity.aiRequested]) made while the pass ran
-     * is left as it is, owed, for the drain to run that request. A request is new when [seen], the
-     * row the pass started from, lacked it, or when it was asked again, which stamps the row afresh
-     * ([OcrQueueEntity.updatedAt]). Returns the row written, or null when it was left for a request.
+     * holds a request made while the pass ran is left as it is, owed, for the drain to run that
+     * request: one that carries a flag ([OcrQueueEntity.rerun], [OcrQueueEntity.aiRequested]) the row
+     * the pass started from lacked, or one re-stamped since ([OcrQueueEntity.updatedAt]), which
+     * [enqueue] does on every ask, plain or flagged. Returns the row written, or null when it was
+     * left for a request.
      */
     @Transaction
     suspend fun settle(
@@ -127,7 +130,7 @@ interface OcrQueueDao {
         val row = getByDocId(docId)
         val rerunAsked = row?.rerun == true && seen?.rerun != true
         val aiAsked = row?.aiRequested == true && seen?.aiRequested != true
-        val askedAgain = row != null && (row.rerun || row.aiRequested) && row.updatedAt != seen?.updatedAt
+        val askedAgain = row != null && row.updatedAt != seen?.updatedAt
         if (rerunAsked || aiAsked || askedAgain) return null
         val written = settled(row)
         upsert(written)
