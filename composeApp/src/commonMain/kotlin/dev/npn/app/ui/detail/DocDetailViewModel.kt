@@ -209,8 +209,9 @@ class DocDetailViewModel(
     private val doc: StateFlow<DocListItem?> =
         documents
             .observeDoc(docId)
+            .map { it.forEditor() }
             .onEach { docObserved = true }
-            .stateIn(viewModelScope, WhileSubscribedTimeout, initialItem)
+            .stateIn(viewModelScope, WhileSubscribedTimeout, initialItem.forEditor())
 
     private val reviewMode: StateFlow<ReviewMode> =
         session.reviewConfig.reviewMode
@@ -344,8 +345,9 @@ class DocDetailViewModel(
      * initial value of the review-mode flow, so the seeded reviewed badge does not flicker when
      * that emission arrives.
      */
-    private fun seedState(item: DocListItem?): MetadataUiState =
-        MetadataUiState(
+    private fun seedState(initial: DocListItem?): MetadataUiState {
+        val item = initial.forEditor()
+        return MetadataUiState(
             document =
                 DocumentSection(
                     item = item,
@@ -354,6 +356,7 @@ class DocDetailViewModel(
                     highlightTerms = highlightTerms,
                 ),
         )
+    }
 
     init {
         loadPageCount()
@@ -687,6 +690,9 @@ class DocDetailViewModel(
         maxDim: Int,
     ): ByteArray? = content.renderPage(docId, pageIndex, maxDim)
 }
+
+/** Missing files and bake predecessors still carry editable metadata; lifecycle tombstones do not. */
+private fun DocListItem?.forEditor(): DocListItem? = this?.takeUnless { it.doc.trashed || it.doc.deleted }
 
 private fun BakeFailure.text(): UiText =
     when (this) {

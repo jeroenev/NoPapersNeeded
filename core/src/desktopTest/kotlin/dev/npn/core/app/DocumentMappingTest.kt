@@ -46,7 +46,7 @@ class DocumentMappingTest {
 
     @Test
     fun carriesEveryExposedColumn() {
-        val doc = entity(title = "July statement", ocrSource = "device-a.mlkit").toDoc()
+        val doc = entity(title = "July statement", ocrSource = "device-a.mlkit").copy(deleted = true).toDoc()
 
         doc shouldBe
             Doc(
@@ -67,6 +67,7 @@ class DocumentMappingTest {
                         FieldKeys.NOTES to "a note",
                     ),
                 trashed = true,
+                deleted = true,
                 trashedOrigPath = "inbox/statement.pdf",
                 missing = true,
                 ocrState = OcrState.NONE,

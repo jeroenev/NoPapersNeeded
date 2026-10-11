@@ -10,8 +10,7 @@ import kotlinx.coroutines.flow.Flow
  * disposable index row — never leaves `core.db`; [DocumentRepositoryImpl] maps it here exactly
  * once, so a column change ripples no further than that mapping.
  *
- * Deliberately absent: `mtime` and `deleted`. They are index bookkeeping with no consumer outside
- * `core`.
+ * Deliberately absent: `mtime`, which is index bookkeeping with no consumer outside `core`.
  */
 data class Doc(
     val docId: String,
@@ -42,6 +41,8 @@ data class Doc(
     val ocrSource: String?,
     /** User-pinned engine, or null for automatic best-engine selection. */
     val ocrEngineOverride: OcrEngineRef?,
+    /** A retained tombstone, so an open editor can stop offering writes when deletion syncs in. */
+    val deleted: Boolean = false,
 ) {
     // Named accessors for the well-known fields. They are lookups into [fields], nothing more; the
     // registry-driven UI reads the map directly, these exist for the seams that name a key.

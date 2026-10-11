@@ -94,4 +94,71 @@ class DocDetailLoadingViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
             model.metadata.value.document.loadState shouldBe DocLoadState.Present(row)
         }
+
+    @Test
+    fun aTrashedRowStopsBeingEditableAndRestoringItBringsItBack() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val row = DocListItem(doc("doc-1"), emptyList())
+            session.documents.singleDoc.value = row
+            val model = vm(session)
+            advanceUntilIdle()
+            model.metadata.value.document.loadState shouldBe DocLoadState.Present(row)
+
+            session.documents.singleDoc.value = row.copy(doc = row.doc.copy(trashed = true))
+            advanceUntilIdle()
+            model.metadata.value.document.loadState shouldBe DocLoadState.Missing
+            model.metadata.value.document.item shouldBe null
+
+            session.documents.singleDoc.value = row
+            advanceUntilIdle()
+            model.metadata.value.document.loadState shouldBe DocLoadState.Present(row)
+        }
+
+    @Test
+    fun aDeletedRowStopsBeingEditableAndUndeletingItBringsItBack() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val row = DocListItem(doc("doc-1"), emptyList())
+            session.documents.singleDoc.value = row
+            val model = vm(session)
+            advanceUntilIdle()
+
+            session.documents.singleDoc.value = row.copy(doc = row.doc.copy(deleted = true))
+            advanceUntilIdle()
+            model.metadata.value.document.loadState shouldBe DocLoadState.Missing
+            model.metadata.value.document.item shouldBe null
+
+            session.documents.singleDoc.value = row
+            advanceUntilIdle()
+            model.metadata.value.document.loadState shouldBe DocLoadState.Present(row)
+        }
+
+    @Test
+    fun aLifecycleTombstoneSeedNeverShowsAnEditableDocument() =
+        runTest(dispatcher) {
+            val row = DocListItem(doc("doc-1"), emptyList())
+            for (hidden in listOf(row.doc.copy(trashed = true), row.doc.copy(deleted = true))) {
+                val model =
+                    DocDetailViewModel(
+                        "doc-1",
+                        FakeLibrarySession(),
+                        aiConfiguredSettings(),
+                        initialItem = row.copy(doc = hidden),
+                    )
+                model.metadata.value.document.loadState shouldBe DocLoadState.Missing
+                model.metadata.value.document.item shouldBe null
+            }
+        }
+
+    @Test
+    fun aMissingFileStillHasEditableMetadata() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val row = DocListItem(doc("doc-1").copy(missing = true), emptyList())
+            session.documents.singleDoc.value = row
+            val model = vm(session)
+            advanceUntilIdle()
+            model.metadata.value.document.loadState shouldBe DocLoadState.Present(row)
+        }
 }

@@ -45,6 +45,7 @@ internal fun DocumentEntity.toDoc(fields: Map<String, String> = emptyMap()): Doc
         reviewed = reviewed,
         fields = cachedFields() + fields,
         trashed = trashed,
+        deleted = deleted,
         trashedOrigPath = trashedOrigPath,
         missing = missing,
         ocrState = OcrState.fromColumn(ocrState),
