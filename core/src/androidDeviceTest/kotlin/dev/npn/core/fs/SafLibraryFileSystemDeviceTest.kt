@@ -187,7 +187,7 @@ class SafLibraryFileSystemDeviceTest {
     private fun moveBucketElsewhere() {
         TestDocumentsProvider.moveExternally(
             checkNotNull(TestDocumentsProvider.idForName("objects-v2-ab")),
-            TestDocumentsProvider.addFile(name = "elsewhere", bytes = byteArrayOf(), mime = Document.MIME_TYPE_DIR),
+            elsewhere(),
         )
     }
 
@@ -292,3 +292,6 @@ class SafLibraryFileSystemDeviceTest {
         const val BUCKET = "${NpnPaths.JOURNAL_DIR}/objects-v2-ab"
     }
 }
+
+private fun elsewhere(): String =
+    TestDocumentsProvider.addFile(name = "elsewhere", bytes = byteArrayOf(), mime = Document.MIME_TYPE_DIR)
