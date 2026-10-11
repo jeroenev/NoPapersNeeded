@@ -25,6 +25,15 @@ abstract class LocalizationGuardTask : DefaultTask() {
     @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val resourceRoots: ConfigurableFileCollection
 
+    /**
+     * The [resourceRoots] whose strings Compose Multiplatform reads (composeResources). Their values
+     * are read verbatim — only \n, \t, \uXXXX and \\ are escapes there — so an Android habit like \'
+     * would reach the UI as a literal backslash. The Android resource roots keep their own rules.
+     */
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val composeResourceRoots: ConfigurableFileCollection
+
     @get:InputDirectory
     @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val uiSourceDirectory: DirectoryProperty
@@ -37,18 +46,25 @@ abstract class LocalizationGuardTask : DefaultTask() {
     fun checkLocalization() {
         val problems = mutableListOf<String>()
         val roots = resourceRoots.files.sortedBy { it.path }
-        val defaults = readResources(roots.map { it.resolve("values") }.filter { it.isDirectory }, problems)
-        val translations =
-            roots
-                .flatMap { it.listFiles().orEmpty().toList() }
-                .filter { it.isDirectory && TRANSLATION.matches(it.name) }
-                .groupBy { it.name }
-                .toSortedMap()
-        if (translations.isEmpty()) {
-            problems += "No values-<language> directories found under ${roots.map { it.path }}"
-        }
-        translations.forEach { (directory, files) ->
-            checkTranslation(directory, defaults, readResources(files, problems), problems)
+        // Each root is its own resource namespace: its translations are checked against its own
+        // defaults, never against another root's, so a translation filed under the wrong root cannot
+        // stand in for a missing one.
+        roots.forEach { root ->
+            val defaults = readResources(listOf(root.resolve("values")).filter { it.isDirectory }, problems)
+            val translations =
+                root
+                    .listFiles()
+                    .orEmpty()
+                    .toList()
+                    .filter { it.isDirectory && TRANSLATION.matches(it.name) }
+                    .sortedBy { it.name }
+            if (translations.isEmpty()) {
+                problems += "No values-<language> directories found under ${root.path}"
+            }
+            translations.forEach { directory ->
+                checkTranslation(directory.name, defaults, readResources(listOf(directory), problems), problems)
+            }
+            if (root in composeResourceRoots.files) checkComposeEscapes(root, problems)
         }
 
         checkHardcodedComposeStrings(problems)
@@ -66,9 +82,52 @@ abstract class LocalizationGuardTask : DefaultTask() {
             )
         }
         logger.lifecycle(
-            "Localization guard passed: default resources, ${translations.keys.joinToString()} and commonMain UI " +
-                "are in sync.",
+            "Localization guard passed: every root's defaults and translations are in sync, and " +
+                "commonMain UI matches them.",
         )
+    }
+
+    /**
+     * Compose resources read their values verbatim: only \n, \t, \uXXXX and \\ are escapes there.
+     * An Android-style escape like \' (a bare apostrophe needs no escape) reaches the UI as a
+     * literal backslash.
+     */
+    private fun checkComposeEscapes(
+        root: File,
+        problems: MutableList<String>,
+    ) {
+        val valueDirectories =
+            root
+                .listFiles()
+                .orEmpty()
+                .toList()
+                .filter { it.isDirectory && (it.name == "values" || TRANSLATION.matches(it.name)) }
+        resourceXmlFiles(valueDirectories).forEach { file ->
+            val document =
+                try {
+                    newDocumentBuilderFactory().newDocumentBuilder().parse(file)
+                } catch (exception: Exception) {
+                    return@forEach // Already reported by readResources.
+                }
+            val resources = document.documentElement ?: return@forEach
+            childElements(resources).filter { it.tagName == "string" || it.tagName == "plurals" }.forEach { element ->
+                val key = "${element.tagName}/${element.getAttribute("name")}"
+                val texts =
+                    if (element.tagName == "string") {
+                        listOf(element.textContent)
+                    } else {
+                        childElements(element).filter { it.tagName == "item" }.map { it.textContent }
+                    }
+                texts.forEach { text ->
+                    val stripped = COMPOSE_ESCAPE.replace(text, "")
+                    ESCAPE.findAll(stripped).forEach { match ->
+                        problems +=
+                            "$key in ${file.path} uses the escape ${match.value}: Compose resources read " +
+                            "only \\n, \\t, \\uXXXX and \\\\; write a plain ${'\''} for an apostrophe"
+                    }
+                }
+            }
+        }
     }
 
     /** Compares one translation ([directory], e.g. `values-de`) against the default resources. */
@@ -342,5 +401,9 @@ abstract class LocalizationGuardTask : DefaultTask() {
         /** A language qualifier (`values-de`, `values-pt-rBR`, `values-b+sr+Latn`), not `values-night`. */
         private val TRANSLATION = Regex("values-(?:[a-z]{2,3}(?:-r[A-Z]{2})?|b\\+[A-Za-z0-9+]+)")
         private val PLACEHOLDER = Regex("%(?:(\\d+)\\$)?[-#+ 0,(<]*\\d*(?:\\.\\d+)?([tT])?([a-zA-Z%])")
+        /** Any backslash escape in a value. */
+        private val ESCAPE = Regex("\\\\.")
+        /** The escapes Compose resources read; any other reaches the UI with its backslash. */
+        private val COMPOSE_ESCAPE = Regex("\\\\(?:\\\\|n|t|u[a-fA-F0-9]{4})")
     }
 }

@@ -10,6 +10,7 @@ import kotlin.test.assertFailsWith
 
 class LocalizationGuardTaskTest {
     private val root: File = createTempDirectory("localization-guard").toFile()
+    private val extraRoots = mutableListOf<File>()
 
     @AfterTest
     fun cleanUp() {
@@ -56,6 +57,8 @@ class LocalizationGuardTaskTest {
             project.tasks
                 .register("checkLocalization", LocalizationGuardTask::class.java) {
                     resourceRoots.from(root.resolve("res"))
+                    resourceRoots.from(extraRoots)
+                    composeResourceRoots.from(root.resolve("res"))
                     uiSourceDirectory.set(root.resolve("ui"))
                     hardcodedAllowlist.set(root.resolve("allowlist.txt"))
                 }.get()
@@ -113,5 +116,57 @@ class LocalizationGuardTaskTest {
         strings("values-night", """<string name="unrelated">Dark</string>""")
 
         runGuard()
+    }
+
+    /** Compose reads values verbatim: an Android-style \' reaches the UI as a literal backslash. */
+    @Test
+    fun `reports an Android-style escaped apostrophe in Compose values`() {
+        consistentResources()
+        strings(
+            "values-de",
+            """<string name="greeting">Android\'s %1${'$'}s</string>""",
+            """<plurals name="docs"><item quantity="one">Ein Dokument</item>""" +
+                """<item quantity="other">%1${'$'}d Dokumente</item></plurals>""",
+        )
+
+        val problems = problems()
+
+        assertEquals(1, problems.size, problems.joinToString("\n"))
+        assertContains(problems.single(), "string/greeting")
+        assertContains(problems.single(), "uses the escape")
+    }
+
+    @Test
+    fun `allows the escapes Compose reads`() {
+        val text = """Line\nTab\tUnicode \u00e9 Backslash\\ End"""
+        strings("values", """<string name="greeting">$text</string>""")
+        strings("values-nl", """<string name="greeting">$text</string>""")
+        strings("values-de", """<string name="greeting">$text</string>""")
+
+        runGuard()
+    }
+
+    /** Each root's translations answer to its own defaults; another root's cannot stand in. */
+    @Test
+    fun `reports a key whose only translation sits under another root`() {
+        consistentResources()
+        root.resolve("android-res/values").mkdirs()
+        root.resolve("android-res/values/strings.xml")
+            .writeText("<resources>\n<string name=\"app_label\">NPN</string>\n</resources>\n")
+        root.resolve("android-res/values-de").mkdirs()
+        root.resolve("android-res/values-de/strings.xml")
+            .writeText(
+                "<resources>\n<string name=\"app_label\">NPN</string>\n" +
+                    "<string name=\"greeting\">Hallo %1${'$'}s</string>\n</resources>\n",
+            )
+        strings("values-de", """<plurals name="docs"><item quantity="one">Ein Dokument</item>""" +
+            """<item quantity="other">%1${'$'}d Dokumente</item></plurals>""")
+        extraRoots += root.resolve("android-res")
+
+        val problems = problems()
+
+        assertEquals(2, problems.size, problems.joinToString("\n"))
+        assertContains(problems[0], "values-de contains extra string/greeting")
+        assertContains(problems[1], "values-de is missing string/greeting")
     }
 }

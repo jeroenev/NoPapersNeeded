@@ -106,8 +106,8 @@
     </plurals>
 
     <string name="detail_page_number">Pagina %1$d</string>
-    <string name="detail_no_pages">Dit document heeft geen pagina\'s om te tonen.</string>
-    <string name="detail_pages_failed">De pagina\'s van dit document konden niet worden gelezen.</string>
+    <string name="detail_no_pages">Dit document heeft geen pagina's om te tonen.</string>
+    <string name="detail_pages_failed">De pagina's van dit document konden niet worden gelezen.</string>
     <string name="detail_render_page_failed">Deze pagina kon niet worden weergegeven.</string>
     <string name="detail_zoom_out">Uitzoomen</string>
     <string name="detail_zoom_in">Inzoomen</string>

@@ -106,13 +106,13 @@
     <string name="common_settings_api_key_help_provider">Stored only on this device; sent only to the selected provider.</string>
     <string name="common_settings_model">Model</string>
     <string name="common_settings_model_help">Model ID exactly as the server lists it (see its %1$s), e.g. %2$s or %3$s. Client-side provider prefixes do not apply.</string>
-    <string name="common_settings_model_pick_help">Load the provider\'s models with the arrow, or type a model ID.</string>
+    <string name="common_settings_model_pick_help">Load the provider's models with the arrow, or type a model ID.</string>
     <string name="common_settings_load_models">Load models</string>
     <string name="common_settings_models_loading">Loading models…</string>
     <string name="common_settings_models_error">Could not load models: %1$s</string>
     <string name="common_settings_reasoning_assistant">Assistant reasoning: %1$s</string>
     <string name="common_settings_reasoning_edit">AI edit reasoning: %1$s</string>
-    <string name="common_settings_reasoning_help">How much the model may think before answering. Default keeps the server\'s behaviour; not every provider or model supports every level.</string>
+    <string name="common_settings_reasoning_help">How much the model may think before answering. Default keeps the server's behaviour; not every provider or model supports every level.</string>
     <string name="common_settings_reasoning_default">Default</string>
     <string name="common_settings_reasoning_none">Off</string>
     <string name="common_settings_reasoning_low">Low</string>

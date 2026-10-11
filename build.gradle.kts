@@ -32,6 +32,7 @@ val checkLocalization by tasks.registering(LocalizationGuardTask::class) {
         layout.projectDirectory.dir("composeApp/src/commonMain/composeResources"),
         layout.projectDirectory.dir("androidApp/src/main/res"),
     )
+    composeResourceRoots.from(layout.projectDirectory.dir("composeApp/src/commonMain/composeResources"))
     uiSourceDirectory.set(layout.projectDirectory.dir("composeApp/src/commonMain/kotlin/dev/npn/app"))
     hardcodedAllowlist.set(layout.projectDirectory.file("config/localization-hardcoded-allowlist.txt"))
 }

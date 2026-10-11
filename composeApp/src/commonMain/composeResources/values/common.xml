@@ -108,7 +108,7 @@
     <string name="common_folder_in_library_watched">That folder is inside the library, so its PDFs are already part of it and the watched folder was not changed. Choose a folder outside the library.</string>
     <string name="common_settings_advanced">Advanced</string>
     <string name="common_settings_use_saf">Use Storage Access Framework</string>
-    <string name="common_settings_use_saf_help">Legacy mode: open folders through Android\'s document picker instead of directly on device storage. Slower, without change notifications, and files added by sync tools may go unnoticed. Applies the next time you choose a folder.</string>
+    <string name="common_settings_use_saf_help">Legacy mode: open folders through Android's document picker instead of directly on device storage. Slower, without change notifications, and files added by sync tools may go unnoticed. Applies the next time you choose a folder.</string>
     <string name="common_settings_library_saf_note">This library is opened through the Storage Access Framework.</string>
     <string name="common_settings_storage_access_missing">Access to device storage is not allowed. Files added by other apps, such as Syncthing, will not be visible.</string>
     <string name="common_already_running">No Papers Needed is already open. Switch to its window to carry on.</string>
