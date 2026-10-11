@@ -1,5 +1,7 @@
 package dev.npn.core.fs
 
+import dev.npn.core.util.runCatchingCancellable
+
 /**
  * Soft-delete operations backed by [LibraryFileSystem] and the `.npn/trash/` convention.
  * Moving to trash is a plain file move: the file stays in the library so it
@@ -132,7 +134,7 @@ class TrashOps(
      * [documents] maps each document known to be trashed or deleted to when that happened, and may
      * map others to null. An entry belongs to the documents whose id starts with the hash prefix in
      * its name ([NpnPaths.trashHashPrefix]), all of them, so a prefix two documents share only keeps
-     * it longer and its bytes need no hashing:
+     * it longer:
      * - a trashed or deleted document: when that happened decides. The entry's mtime cannot, because
      *   a move into trash keeps the PDF's own mtime, so a document imported long ago would go the
      *   moment it was trashed.
@@ -141,20 +143,27 @@ class TrashOps(
      * - no document: kept, as nothing says when it was trashed. An import journals nothing, so
      *   another device's trash of a document never edited is unknown until its event arrives, which
      *   may come after the file; and a crash may have left a document's only copy here.
+     *
+     * An entry whose documents are all old still goes only once its bytes hash to one of them
+     * ([holds], as [copiesOf] proves a copy). The name's 8 hex are a 32-bit prefix
+     * another document shares by chance, known here or not: an old colliding document must not
+     * destroy an unknown document's only copy. Only an entry otherwise about to go is hashed.
      */
     suspend fun purgeOlderThan(
         cutoffMillis: Long,
         documents: Map<String, Long?>,
         listing: List<FileMeta>? = null,
     ) {
-        val byPrefix =
-            documents.entries.groupBy(
-                keySelector = { it.key.take(NpnPaths.TRASH_HASH_PREFIX_LENGTH) },
-                valueTransform = { it.value },
-            )
+        val byPrefix = documents.entries.groupBy { it.key.take(NpnPaths.TRASH_HASH_PREFIX_LENGTH) }
         for (meta in listing ?: listTrash()) {
             val owners = NpnPaths.trashHashPrefix(meta.name)?.let(byPrefix::get).orEmpty()
-            if (owners.isNotEmpty() && owners.all { it != null && it < cutoffMillis }) fs.delete(meta.relPath)
+            val allOld = owners.all { (_, trashed) -> trashed != null && trashed < cutoffMillis }
+            if (!allOld) continue
+            val owned =
+                owners.any { (doc, _) ->
+                    runCatchingCancellable { fs.holds(meta.relPath, doc) }.getOrDefault(false)
+                }
+            if (owned) fs.delete(meta.relPath)
         }
     }
 
