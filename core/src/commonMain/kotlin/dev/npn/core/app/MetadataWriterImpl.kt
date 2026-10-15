@@ -544,23 +544,30 @@ class MetadataWriterImpl internal constructor(
     ): RelocationOutcome =
         relocate(docId) { doc ->
             val clean = NpnPaths.sanitizeFileName(newFileName.trim()).ifEmpty { return@relocate null }
+            val name = if (NpnPaths.isPdf(clean)) clean else "$clean.pdf"
             val dir = NpnPaths.parentDir(doc.relPath)
-            if (dir.isEmpty()) clean else "$dir/$clean"
+            if (dir.isEmpty()) name else "$dir/$name"
         }
 
     override suspend fun moveFile(
         docId: String,
         newDirRelPath: String,
     ): RelocationOutcome =
-        relocate(docId) { doc ->
-            val dir = NpnPaths.normalize(newDirRelPath)
-            if (dir.isEmpty()) doc.fileName else "$dir/${doc.fileName}"
+        if (!NpnPaths.isSafe(newDirRelPath)) {
+            RelocationOutcome.INVALID_NAME
+        } else {
+            relocate(docId) { doc ->
+                val dir = NpnPaths.normalize(newDirRelPath)
+                if (dir.isEmpty()) doc.fileName else "$dir/${doc.fileName}"
+            }
         }
 
     /**
      * Journal [destination] as [docId]'s location, which the fold then moves its file to. Storage that
      * cannot move a document would leave it where it is with the journal saying otherwise, so there
-     * nothing is written.
+     * nothing is written. A target that is the document's own file under another spelling (a case-only
+     * rename where the filesystem ignores case) is left alone: the fold cannot tell that move apart
+     * from one already made.
      */
     private suspend fun relocate(
         docId: String,
@@ -569,9 +576,11 @@ class MetadataWriterImpl internal constructor(
         if (!fs.supportsDocumentRelocation) return RelocationOutcome.UNSUPPORTED
         val doc = documentDao.getByDocId(docId)?.takeIf { it.isLive } ?: return RelocationOutcome.UNCHANGED
         val target = destination(doc) ?: return RelocationOutcome.UNCHANGED
-        if (NpnPaths.normalize(target) == NpnPaths.normalize(doc.relPath)) return RelocationOutcome.UNCHANGED
-        require(DocumentPaths.isDocumentPath(target)) { "Invalid document path: $target" }
-        check(!fs.exists(target)) { "Target already exists: $target" }
+        if (!DocumentPaths.isDocumentPath(target)) return RelocationOutcome.INVALID_NAME
+        if (target == doc.relPath) return RelocationOutcome.UNCHANGED
+        if (fs.exists(target)) {
+            return if (fs.sameFile(doc.relPath, target)) RelocationOutcome.UNCHANGED else RelocationOutcome.TAKEN
+        }
         coordinator.commitAndApply(listOf(PendingOp.propSet(docId, SystemProperty.STORAGE_PATH, target)))
         followUp(listOf(docId), autoMatch = true)
         return RelocationOutcome.MOVED

@@ -254,6 +254,41 @@ class TrashLifecycleTest {
             }
         }
 
+    /**
+     * A name the user types is an answer, never an exception: a taken name says so, a name without
+     * its `.pdf` gets one, and a path the library could not index is refused, with nothing written.
+     */
+    @Test
+    fun renameOntoATakenOrUnusableNameIsATypedOutcome() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+                rig.writePdf("b.pdf", PdfFixtures.embeddedTextPdf("beta"))
+                rig.session.rescan()
+                val id = rig.fs.sha256("a.pdf")
+                val lifecycle = rig.session.docLifecycle
+
+                lifecycle.renameFile(id, "b.pdf") shouldBe RelocationOutcome.TAKEN
+                lifecycle.renameFile(id, "a (conflicted copy)") shouldBe RelocationOutcome.INVALID_NAME
+                lifecycle.moveFile(id, "../outside") shouldBe RelocationOutcome.INVALID_NAME
+                rig.db
+                    .documentDao()
+                    .getByDocId(id)!!
+                    .relPath shouldBe "a.pdf"
+                rig.fs.sha256("b.pdf") shouldNotBe id
+
+                lifecycle.renameFile(id, "c") shouldBe RelocationOutcome.MOVED
+                rig.exists("c.pdf").shouldBeTrue()
+                rig.db
+                    .documentDao()
+                    .getByDocId(id)!!
+                    .relPath shouldBe "c.pdf"
+            } finally {
+                rig.close()
+            }
+        }
+
     @Test
     fun moveFileUpdatesPathSameDocId() =
         runTest {

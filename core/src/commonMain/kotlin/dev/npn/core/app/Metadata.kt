@@ -136,7 +136,8 @@ interface DocLifecycle {
 
     /**
      * Give the document's file [newFileName] in its folder: its new location is journaled and the file
-     * follows it. On storage that cannot move a document, nothing is written.
+     * follows it. A name without a `.pdf` extension gets one. On storage that cannot move a document,
+     * onto a name another file has, or to a path the library could not index, nothing is written.
      */
     suspend fun renameFile(
         docId: String,
@@ -157,6 +158,12 @@ enum class RelocationOutcome {
 
     /** Nothing to do: the document is not in the library, or already there. */
     UNCHANGED,
+
+    /** Another file already has the new name, so nothing was written. */
+    TAKEN,
+
+    /** The new location is not one the library could hold a document at, so nothing was written. */
+    INVALID_NAME,
 
     /**
      * This library's storage cannot move a document's file (a folder opened through Android's folder

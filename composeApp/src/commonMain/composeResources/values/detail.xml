@@ -171,6 +171,8 @@
     <string name="detail_trash_failed">Could not move the document to the trash: %1$s</string>
     <string name="detail_rename_failed">Could not rename the file: %1$s</string>
     <string name="detail_rename_unsupported">Could not rename the file: this library is opened through Android's folder picker, which cannot rename files.</string>
+    <string name="detail_rename_taken">Could not rename the file: another file in its folder already has that name.</string>
+    <string name="detail_rename_invalid">Could not rename the file: the library cannot keep a document under that name.</string>
     <string name="detail_ai_ocr_failed">Could not read the text with the assistant: %1$s</string>
     <string name="detail_ocr_engine_failed">Could not change the OCR engine: %1$s</string>
 </resources>

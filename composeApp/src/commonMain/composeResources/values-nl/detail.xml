@@ -166,6 +166,8 @@
     <string name="detail_trash_failed">Het document kon niet naar de prullenbak worden verplaatst: %1$s</string>
     <string name="detail_rename_failed">Het bestand kon niet worden hernoemd: %1$s</string>
     <string name="detail_rename_unsupported">Het bestand kon niet worden hernoemd: deze bibliotheek is geopend via de mapkiezer van Android, die geen bestanden kan hernoemen.</string>
+    <string name="detail_rename_taken">Het bestand kon niet worden hernoemd: een ander bestand in de map heeft al die naam.</string>
+    <string name="detail_rename_invalid">Het bestand kon niet worden hernoemd: de bibliotheek kan geen document onder die naam bewaren.</string>
     <string name="detail_ai_ocr_failed">De tekst kon niet met de assistent worden uitgelezen: %1$s</string>
     <string name="detail_ocr_engine_failed">De OCR-engine kon niet worden gewijzigd: %1$s</string>
 </resources>

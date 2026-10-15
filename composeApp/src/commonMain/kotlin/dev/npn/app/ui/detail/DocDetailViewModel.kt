@@ -75,6 +75,8 @@ import no_papers_needed.composeapp.generated.resources.detail_ocr_details_failed
 import no_papers_needed.composeapp.generated.resources.detail_ocr_engine_failed
 import no_papers_needed.composeapp.generated.resources.detail_remove_tag_failed
 import no_papers_needed.composeapp.generated.resources.detail_rename_failed
+import no_papers_needed.composeapp.generated.resources.detail_rename_invalid
+import no_papers_needed.composeapp.generated.resources.detail_rename_taken
 import no_papers_needed.composeapp.generated.resources.detail_rename_unsupported
 import no_papers_needed.composeapp.generated.resources.detail_share_failed
 import no_papers_needed.composeapp.generated.resources.detail_shared_baked_copy
@@ -572,12 +574,17 @@ class DocDetailViewModel(
             onDone()
         }
 
-    /** Rename this document's file; a library whose storage cannot rename files says so. */
+    /** Rename this document's file; a rename that cannot be carried out says why. */
     override fun rename(newFileName: String) =
         launchReporting(Res.string.detail_rename_failed) {
-            if (docLifecycle.renameFile(docId, newFileName) == RelocationOutcome.UNSUPPORTED) {
-                message(uiText(Res.string.detail_rename_unsupported))
-            }
+            val refusal =
+                when (docLifecycle.renameFile(docId, newFileName)) {
+                    RelocationOutcome.MOVED, RelocationOutcome.UNCHANGED -> null
+                    RelocationOutcome.UNSUPPORTED -> Res.string.detail_rename_unsupported
+                    RelocationOutcome.TAKEN -> Res.string.detail_rename_taken
+                    RelocationOutcome.INVALID_NAME -> Res.string.detail_rename_invalid
+                }
+            refusal?.let { message(uiText(it)) }
         }
 
     override fun reOcr() =

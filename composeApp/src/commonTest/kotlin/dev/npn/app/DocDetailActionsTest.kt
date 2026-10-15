@@ -25,6 +25,8 @@ import no_papers_needed.composeapp.generated.resources.detail_bake_failed_unsupp
 import no_papers_needed.composeapp.generated.resources.detail_baked_in_place
 import no_papers_needed.composeapp.generated.resources.detail_could_not_bake_copy
 import no_papers_needed.composeapp.generated.resources.detail_exported_baked_copy
+import no_papers_needed.composeapp.generated.resources.detail_rename_invalid
+import no_papers_needed.composeapp.generated.resources.detail_rename_taken
 import no_papers_needed.composeapp.generated.resources.detail_rename_unsupported
 import no_papers_needed.composeapp.generated.resources.detail_share_failed
 import no_papers_needed.composeapp.generated.resources.detail_split_failed_unreadable
@@ -94,6 +96,26 @@ class DocDetailActionsTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             messages shouldContainExactly listOf(uiText(Res.string.detail_rename_unsupported))
+        }
+
+    /** A name another file has, or one the library could not hold a document under, says which. */
+    @Test
+    fun aRenameOntoAnUnusableNameSaysWhy() =
+        runTest(dispatcher) {
+            for ((outcome, text) in listOf(
+                RelocationOutcome.TAKEN to Res.string.detail_rename_taken,
+                RelocationOutcome.INVALID_NAME to Res.string.detail_rename_invalid,
+            )) {
+                val session = FakeLibrarySession().apply { docLifecycle.relocation = outcome }
+                val model = vm(session = session)
+                val messages = collecting(model.messages.map { it.text })
+                advanceUntilIdle()
+
+                model.rename("invoice.pdf")
+                advanceUntilIdle()
+
+                messages shouldContainExactly listOf(uiText(text))
+            }
         }
 
     @Test
