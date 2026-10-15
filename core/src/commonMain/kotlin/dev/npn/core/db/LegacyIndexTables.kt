@@ -44,6 +44,10 @@ internal object LegacyIndexTables {
      * behind, and the `kv` rows under [keys] or starting with [keyPrefix]. The copy commits before
      * anything is removed from the index, so a crash in between only means copying the same rows
      * again on the next open. A few lookups once the index holds none of it.
+     *
+     * Once device.db exists it is the authority: a row only moves where device.db has none, and a
+     * job it already holds keeps its own documents. An older index put back beside a newer device.db
+     * so cannot revert the device id, a chat or a queue.
      */
     suspend fun moveDeviceState(
         index: NpnDatabase,
@@ -54,13 +58,14 @@ internal object LegacyIndexTables {
         val state = index.useReaderConnection { connection -> connection.deviceState(keys, keyPrefix) }
         if (state.isEmpty) return
         device.withWriteTransaction {
-            device.keyValueDao().putAll(state.kv)
-            state.editJobs.forEach { device.aiEditJobDao().upsertJob(it) }
-            device.aiEditJobDao().upsertDocs(state.editJobDocs)
-            state.enrichQueue.forEach { device.aiEnrichQueueDao().upsert(it) }
-            state.enriched.forEach { device.aiEnrichQueueDao().markEnriched(it) }
-            state.ocrQueue.forEach { device.ocrQueueDao().upsert(it) }
-            state.ocrPages.forEach { device.ocrQueueDao().cachePage(it) }
+            device.keyValueDao().putMissing(state.kv)
+            val editJobs = device.aiEditJobDao()
+            val newJobs = state.editJobs.filter { editJobs.insertJobIfAbsent(it) != -1L }.mapTo(HashSet()) { it.jobId }
+            editJobs.insertDocsIfAbsent(state.editJobDocs.filter { it.jobId in newJobs })
+            device.aiEnrichQueueDao().insertIfAbsent(state.enrichQueue)
+            device.aiEnrichQueueDao().markEnrichedIfAbsent(state.enriched)
+            device.ocrQueueDao().insertIfAbsent(state.ocrQueue)
+            device.ocrQueueDao().cachePagesIfAbsent(state.ocrPages)
         }
         index.useWriterConnection { connection ->
             connection.immediateTransaction {

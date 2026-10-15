@@ -1,6 +1,8 @@
 package dev.npn.core.db
 
 import androidx.room3.Dao
+import androidx.room3.Insert
+import androidx.room3.OnConflictStrategy
 import androidx.room3.Query
 import androidx.room3.Transaction
 import androidx.room3.Upsert
@@ -52,6 +54,10 @@ interface AiEditJobDao {
     @Upsert
     suspend fun upsertJob(job: AiEditJobEntity)
 
+    /** Insert [job] unless one with its id exists; the new row id, or -1 when it was kept out. */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertJobIfAbsent(job: AiEditJobEntity): Long
+
     /** The next documents of [jobId] still owed a model call, in submitted order. */
     @Query(
         """
@@ -72,6 +78,9 @@ interface AiEditJobDao {
 
     @Upsert
     suspend fun upsertDocs(rows: List<AiEditJobDocEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertDocsIfAbsent(rows: List<AiEditJobDocEntity>)
 
     /** Persist a submitted run and all its documents together, so interruption leaves no orphan. */
     @Transaction

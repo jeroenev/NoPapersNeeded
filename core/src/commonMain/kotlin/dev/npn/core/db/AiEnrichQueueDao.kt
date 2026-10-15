@@ -1,6 +1,8 @@
 package dev.npn.core.db
 
 import androidx.room3.Dao
+import androidx.room3.Insert
+import androidx.room3.OnConflictStrategy
 import androidx.room3.Query
 import androidx.room3.Upsert
 import kotlinx.coroutines.flow.Flow
@@ -20,6 +22,9 @@ interface AiEnrichQueueDao {
 
     @Upsert
     suspend fun upsert(entry: AiEnrichQueueEntity)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertIfAbsent(entries: List<AiEnrichQueueEntity>)
 
     @Query("SELECT * FROM ai_enrich_queue WHERE docId = :docId")
     suspend fun getByDocId(docId: String): AiEnrichQueueEntity?
@@ -41,4 +46,7 @@ interface AiEnrichQueueDao {
 
     @Upsert
     suspend fun markEnriched(entry: AiEnrichedEntity)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun markEnrichedIfAbsent(entries: List<AiEnrichedEntity>)
 }

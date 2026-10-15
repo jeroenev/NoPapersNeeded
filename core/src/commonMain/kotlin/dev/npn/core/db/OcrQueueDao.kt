@@ -1,6 +1,8 @@
 package dev.npn.core.db
 
 import androidx.room3.Dao
+import androidx.room3.Insert
+import androidx.room3.OnConflictStrategy
 import androidx.room3.Query
 import androidx.room3.Transaction
 import androidx.room3.Upsert
@@ -25,6 +27,9 @@ interface OcrQueueDao {
 
     @Upsert
     suspend fun upsert(entry: OcrQueueEntity)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertIfAbsent(entries: List<OcrQueueEntity>)
 
     /**
      * Ask for a pass without withdrawing an earlier request. Reading its flags and writing the
@@ -166,6 +171,9 @@ interface OcrQueueDao {
 
     @Upsert
     suspend fun cachePage(page: OcrPageCacheEntity)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun cachePagesIfAbsent(pages: List<OcrPageCacheEntity>)
 
     @Query("DELETE FROM ocr_page_cache WHERE docId = :docId")
     suspend fun clearCachedPages(docId: String)

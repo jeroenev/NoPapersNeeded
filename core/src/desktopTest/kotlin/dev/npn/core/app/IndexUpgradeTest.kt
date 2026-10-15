@@ -161,6 +161,57 @@ class IndexUpgradeTest {
             }
         }
 
+    /**
+     * Once device.db exists it is the authority: an older index put back beside it brings back
+     * neither an id this installation gave up, nor an older chat transcript or edit run in place of
+     * the ones the device holds now. What device.db lacks still moves, and the index keeps none of it.
+     */
+    @Test
+    fun anOlderIndexBesideTheDeviceDatabaseOverwritesNothing() =
+        runTest {
+            var deviceId = ""
+            openSession(backgroundScope, library, data).use { session, deps ->
+                deviceId = session.deviceId
+                deps.deviceDb.keyValueDao().put("ai-chat:c1", "[\"newer\"]")
+                deps.deviceDb.aiEditJobDao().upsertJob(
+                    AiEditJobEntity("job-1", requestJson = "{}", createdAt = 1, updatedAt = 7, nextAttemptAt = 0),
+                )
+                deps.deviceDb.aiEditJobDao().upsertDocs(
+                    listOf(AiEditJobDocEntity("job-1", "a".repeat(64), position = 0, suggestionJson = "{\"paid\":true}")),
+                )
+            }
+
+            data.listFiles { file -> file.name.startsWith("index.db") }!!.forEach { it.delete() }
+            createFromSchema(File(data, "index.db"), version = 22) { connection ->
+                for ((key, value) in LEGACY_KV) connection.exec("INSERT INTO kv (key, value) VALUES (?, ?)", key, value)
+                connection.exec(
+                    "INSERT INTO ai_edit_jobs (jobId, requestJson, createdAt, updatedAt, attempts, nextAttemptAt) " +
+                        "VALUES ('job-1', '{}', 1, 2, 0, 0), ('job-2', '{}', 1, 2, 0, 0)",
+                )
+                connection.exec(
+                    "INSERT INTO ai_edit_job_docs (jobId, docId, position, suggestionJson, attempts, failed) " +
+                        "VALUES ('job-1', ?, 0, NULL, 0, 0), ('job-1', ?, 1, NULL, 0, 0), ('job-2', ?, 0, NULL, 0, 0)",
+                    "a".repeat(64),
+                    "b".repeat(64),
+                    "c".repeat(64),
+                )
+            }
+
+            openSession(backgroundScope, library, data).use { session, deps ->
+                session.deviceId shouldBe deviceId
+                val device = deps.deviceDb
+                device.keyValueDao().get("device.id") shouldBe deviceId
+                device.keyValueDao().get("ai-chat:c1") shouldBe "[\"newer\"]"
+                device.keyValueDao().get("ai-chat:session-metadata") shouldBe "[]"
+                device.aiEditJobDao().job("job-1")?.updatedAt shouldBe 7
+                device.aiEditJobDao().docsFor("job-1").map { it.suggestionJson } shouldBe listOf("{\"paid\":true}")
+                device.aiEditJobDao().docsFor("job-2").map { it.docId } shouldBe listOf("c".repeat(64))
+
+                deps.db.keyValueDao().getAll(LEGACY_KV.keys.toList()) shouldBe mapOf(OBSERVATION_KEY to "seen")
+                deps.db.tableNames() shouldNotContainAnyOf MOVED_TABLES
+            }
+        }
+
     /** The index is a cache: deleting it costs a rebuild, never this device's own state. */
     @Test
     fun aDroppedIndexRebuildsAndTheDeviceStateSurvives() =

@@ -1,6 +1,8 @@
 package dev.npn.core.db
 
 import androidx.room3.Dao
+import androidx.room3.Insert
+import androidx.room3.OnConflictStrategy
 import androidx.room3.Query
 import androidx.room3.Upsert
 
@@ -19,6 +21,10 @@ interface KeyValueDao {
 
     @Upsert
     suspend fun putAll(entries: List<KeyValueEntity>)
+
+    /** Store each of [entries] whose key has no value yet, keeping the ones that do. */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun putMissing(entries: List<KeyValueEntity>)
 
     @Query("SELECT * FROM kv WHERE key IN (:keys)")
     suspend fun getChunk(keys: List<String>): List<KeyValueEntity>
