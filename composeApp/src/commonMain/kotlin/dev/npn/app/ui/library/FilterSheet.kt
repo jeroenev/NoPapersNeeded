@@ -36,6 +36,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.movableContentOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -145,7 +146,7 @@ class FilterEditorState internal constructor(
      */
     var invalidBounds by mutableStateOf(emptySet<String>())
         private set
-    var resetCounter by mutableStateOf(0)
+    var resetCounter by mutableIntStateOf(0)
         private set
 
     fun setBoundValidity(
