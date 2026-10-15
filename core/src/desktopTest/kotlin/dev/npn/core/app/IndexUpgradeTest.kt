@@ -177,7 +177,9 @@ class IndexUpgradeTest {
                     AiEditJobEntity("job-1", requestJson = "{}", createdAt = 1, updatedAt = 7, nextAttemptAt = 0),
                 )
                 deps.deviceDb.aiEditJobDao().upsertDocs(
-                    listOf(AiEditJobDocEntity("job-1", "a".repeat(64), position = 0, suggestionJson = "{\"paid\":true}")),
+                    listOf(
+                        AiEditJobDocEntity("job-1", "a".repeat(64), position = 0, suggestionJson = "{\"paid\":true}"),
+                    ),
                 )
             }
 

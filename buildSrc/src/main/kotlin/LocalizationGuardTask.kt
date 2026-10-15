@@ -401,8 +401,10 @@ abstract class LocalizationGuardTask : DefaultTask() {
         /** A language qualifier (`values-de`, `values-pt-rBR`, `values-b+sr+Latn`), not `values-night`. */
         private val TRANSLATION = Regex("values-(?:[a-z]{2,3}(?:-r[A-Z]{2})?|b\\+[A-Za-z0-9+]+)")
         private val PLACEHOLDER = Regex("%(?:(\\d+)\\$)?[-#+ 0,(<]*\\d*(?:\\.\\d+)?([tT])?([a-zA-Z%])")
+
         /** Any backslash escape in a value. */
         private val ESCAPE = Regex("\\\\.")
+
         /** The escapes Compose resources read; any other reaches the UI with its backslash. */
         private val COMPOSE_ESCAPE = Regex("\\\\(?:\\\\|n|t|u[a-fA-F0-9]{4})")
     }

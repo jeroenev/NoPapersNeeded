@@ -151,16 +151,21 @@ class LocalizationGuardTaskTest {
     fun `reports a key whose only translation sits under another root`() {
         consistentResources()
         root.resolve("android-res/values").mkdirs()
-        root.resolve("android-res/values/strings.xml")
+        root
+            .resolve("android-res/values/strings.xml")
             .writeText("<resources>\n<string name=\"app_label\">NPN</string>\n</resources>\n")
         root.resolve("android-res/values-de").mkdirs()
-        root.resolve("android-res/values-de/strings.xml")
+        root
+            .resolve("android-res/values-de/strings.xml")
             .writeText(
                 "<resources>\n<string name=\"app_label\">NPN</string>\n" +
                     "<string name=\"greeting\">Hallo %1${'$'}s</string>\n</resources>\n",
             )
-        strings("values-de", """<plurals name="docs"><item quantity="one">Ein Dokument</item>""" +
-            """<item quantity="other">%1${'$'}d Dokumente</item></plurals>""")
+        strings(
+            "values-de",
+            """<plurals name="docs"><item quantity="one">Ein Dokument</item>""" +
+                """<item quantity="other">%1${'$'}d Dokumente</item></plurals>""",
+        )
         extraRoots += root.resolve("android-res")
 
         val problems = problems()

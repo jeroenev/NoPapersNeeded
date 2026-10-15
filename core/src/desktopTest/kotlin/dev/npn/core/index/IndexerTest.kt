@@ -544,9 +544,17 @@ class IndexerTest {
         runTest {
             rig.writePdf("a.pdf", "alpha")
             rig.rescan()
-            val docId = rig.db.documentDao().rowAtPath("a.pdf")!!.docId
+            val docId =
+                rig.db
+                    .documentDao()
+                    .rowAtPath("a.pdf")!!
+                    .docId
             rig.db.documentDao().updateOcrState(docId, OcrState.DONE.column, pageCount = 3, engine = "tesseract")
-            val addedAt = rig.db.documentDao().getByDocId(docId)!!.addedAt
+            val addedAt =
+                rig.db
+                    .documentDao()
+                    .getByDocId(docId)!!
+                    .addedAt
 
             // Deleted for good with its file gone; then a sync tool puts the very bytes back.
             val writer = rig.writer("dev-main")

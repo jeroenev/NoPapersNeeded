@@ -80,7 +80,12 @@ object NpnPaths {
      * recorded trash time — and a name without a suffix is that older build's plain one.
      */
     fun trashEpisodeMillis(fileName: String): Long? =
-        trashNamePattern.find(fileName)?.groupValues?.get(2)?.drop(1)?.toLongOrNull()
+        trashNamePattern
+            .find(fileName)
+            ?.groupValues
+            ?.get(2)
+            ?.drop(1)
+            ?.toLongOrNull()
 
     /**
      * The app's own temporary files in the library. Each kind is named here alone, so a rescan can
