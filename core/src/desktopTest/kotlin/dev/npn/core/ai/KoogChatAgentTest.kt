@@ -1,5 +1,6 @@
 package dev.npn.core.ai
 
+import ai.koog.prompt.Prompt
 import ai.koog.prompt.executor.model.PromptExecutor
 import ai.koog.prompt.llm.LLMCapability
 import ai.koog.prompt.llm.LLMProvider
@@ -229,6 +230,46 @@ class KoogChatAgentTest {
                     .map { it.id }
             toolCallIds shouldHaveSize 2
             toolCallIds.toSet() shouldHaveSize 2
+        }
+
+    private fun blankIdSearch(): List<StreamFrame> =
+        listOf(
+            StreamFrame.ToolCallComplete(id = null, name = "search_documents", content = "{\"query\":\"x\"}", index = null),
+            end(),
+        )
+
+    /** Every tool call id and every tool result id in [prompt], in order. */
+    private fun toolIds(prompt: Prompt): Pair<List<String?>, List<String?>> {
+        val parts = prompt.messages.flatMap { it.parts }
+        return parts.filterIsInstance<MessagePart.Tool.Call>().map { it.id } to
+            parts.filterIsInstance<MessagePart.Tool.Result>().map { it.id }
+    }
+
+    @Test
+    fun fallbackToolCallIdsAreUniqueAcrossIterations() =
+        runTest {
+            val executor = scriptedExecutor(listOf(blankIdSearch(), blankIdSearch(), textFrames("done")))
+            agent(executor).run("q", "session-1").collectList()
+
+            val (calls, results) = toolIds(executor.prompts.last())
+            calls shouldHaveSize 2
+            calls.toSet() shouldHaveSize 2
+            results shouldContainExactly calls
+        }
+
+    @Test
+    fun fallbackToolCallIdsAreUniqueAcrossTurns() =
+        runTest {
+            val executor =
+                scriptedExecutor(listOf(blankIdSearch(), textFrames("one"), blankIdSearch(), textFrames("two")))
+            val agent = agent(executor)
+            agent.run("first", "session-1").collectList()
+            agent.run("second", "session-1").collectList()
+
+            val (calls, results) = toolIds(executor.prompts.last())
+            calls shouldHaveSize 2
+            calls.toSet() shouldHaveSize 2
+            results shouldContainExactly calls
         }
 
     @Test

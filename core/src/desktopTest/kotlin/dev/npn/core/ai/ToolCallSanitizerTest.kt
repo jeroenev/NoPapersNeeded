@@ -3,6 +3,8 @@ package dev.npn.core.ai
 import ai.koog.prompt.streaming.StreamFrame
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
+import io.kotest.matchers.string.shouldStartWith
 import kotlin.test.Test
 
 class ToolCallSanitizerTest {
@@ -10,11 +12,11 @@ class ToolCallSanitizerTest {
     fun blankToolNamesAreNotDispatchable() {
         StreamFrame
             .ToolCallComplete("call-1", "", "{}", null)
-            .toUsableToolCall(0)
+            .toUsableToolCall()
             .shouldBeNull()
         StreamFrame
             .ToolCallComplete("call-1", "   ", "{}", null)
-            .toUsableToolCall(0)
+            .toUsableToolCall()
             .shouldBeNull()
     }
 
@@ -23,10 +25,16 @@ class ToolCallSanitizerTest {
         val call =
             StreamFrame
                 .ToolCallComplete(null, " search_documents ", "{}", null)
-                .toUsableToolCall(3)
+                .toUsableToolCall()
+        val other =
+            StreamFrame
+                .ToolCallComplete(" ", "search_documents", "{}", null)
+                .toUsableToolCall()
 
         call?.name shouldBe "search_documents"
-        call?.id shouldBe "call_3"
+        call?.id shouldStartWith "call_"
         call?.argsJson shouldBe "{}"
+        other?.id shouldStartWith "call_"
+        call?.id shouldNotBe other?.id
     }
 }

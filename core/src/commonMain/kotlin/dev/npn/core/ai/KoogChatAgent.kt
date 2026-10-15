@@ -72,7 +72,7 @@ internal class KoogChatAgent(
                                     }
 
                                     is StreamFrame.ToolCallComplete -> {
-                                        frame.toUsableToolCall(calls.size)?.let { call ->
+                                        frame.toUsableToolCall()?.let { call ->
                                             responseFrames += frame.withSafeArguments(call)
                                             calls += call
                                         }
