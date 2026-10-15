@@ -173,11 +173,11 @@ class TrashOps(
             if (episode != null && episode >= cutoffMillis) continue
             val owners = NpnPaths.trashHashPrefix(meta.name)?.let(byPrefix::get).orEmpty()
             val allOld = owners.all { (_, trashed) -> trashed != null && trashed < cutoffMillis }
-            if (!allOld) continue
             val owned =
-                owners.any { (doc, _) ->
-                    runCatchingCancellable { fs.holds(meta.relPath, doc) }.getOrDefault(false)
-                }
+                allOld &&
+                    owners.any { (doc, _) ->
+                        runCatchingCancellable { fs.holds(meta.relPath, doc) }.getOrDefault(false)
+                    }
             if (owned) fs.delete(meta.relPath)
         }
     }

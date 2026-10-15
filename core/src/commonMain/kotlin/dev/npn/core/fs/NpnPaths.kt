@@ -325,10 +325,9 @@ object NpnPaths {
      * @throws IllegalArgumentException when [relPath] is not [isSafe].
      */
     fun normalize(relPath: String): String {
-        val segments = segments(relPath)
-        val reason = unsafeReason(segments)
+        val reason = unsafeReason(relPath)
         require(reason == null) { "${reason?.message}: '$relPath'" }
-        return segments.joinToString("/")
+        return joinSegments(relPath)
     }
 
     /**
@@ -346,7 +345,16 @@ object NpnPaths {
     fun isSafe(relPath: String): Boolean = unsafeReason(relPath) == null
 
     /** Why [relPath] is not [isSafe], or null when it is. */
-    fun unsafeReason(relPath: String): UnsafePath? = unsafeReason(segments(relPath))
+    fun unsafeReason(relPath: String): UnsafePath? {
+        val segments = segments(relPath)
+        return when {
+            segments.firstOrNull()?.let(drivePrefix::matches) == true -> UnsafePath.DRIVE_PREFIX
+            segments.any { '\\' in it } -> UnsafePath.BACKSLASH
+            segments.any { it == "." || it == ".." } -> UnsafePath.TRAVERSAL
+            segments.any { '\u0000' in it } -> UnsafePath.NUL
+            else -> null
+        }
+    }
 
     /** What makes a path [unsafeReason] refuses unusable as a library-relative path. */
     enum class UnsafePath(
@@ -362,15 +370,6 @@ object NpnPaths {
 
     /** [normalize] without the safety gate, for classifying paths observed on disk. */
     private fun joinSegments(relPath: String): String = segments(relPath).joinToString("/")
-
-    private fun unsafeReason(segments: List<String>): UnsafePath? =
-        when {
-            segments.firstOrNull()?.let(drivePrefix::matches) == true -> UnsafePath.DRIVE_PREFIX
-            segments.any { '\\' in it } -> UnsafePath.BACKSLASH
-            segments.any { it == "." || it == ".." } -> UnsafePath.TRAVERSAL
-            segments.any { '\u0000' in it } -> UnsafePath.NUL
-            else -> null
-        }
 
     /** A drive letter and colon (`C:`, `c:relative.pdf`), absolute or drive-relative on Windows. */
     private val drivePrefix = Regex("^[A-Za-z]:.*")
