@@ -300,6 +300,16 @@ class Indexer(
             existingByPath[row.relPath] = row
         }
 
+        /**
+         * Know [row] by id alone. A tombstone (`deleted`) row is read this way, for the document's
+         * own bytes coming back: they return the document, not start one, while its path stays out
+         * of [existingByPath] — another document landing on it still takes it (upsertAll moves the
+         * hidden holder aside).
+         */
+        fun loadById(row: DocumentEntity) {
+            existingByDocId[row.docId] = row
+        }
+
         /** Queue [row] to be written, after every row queued so far, and keep both lookups current. */
         fun write(row: DocumentEntity) {
             val old = existingByDocId[row.docId]
@@ -330,6 +340,11 @@ class Indexer(
         // One bulk read (chunked under SQLite's bind limit), not a query per document: this runs
         // over the whole projection on every rescan.
         for (row in documentDao.getByDocIds(dbProjection.map { it.docId })) recon.load(row)
+        // Rows the projection does not name are tombstones (`deleted` rows). The hashed bytes may
+        // be their document's own, back at its path: read them by id, so the return refreshes that
+        // row with its date added, page count and OCR bookkeeping instead of starting a new one.
+        val tombstoned = hashes.values.filterNot(recon.existingByDocId::containsKey).distinct()
+        for (row in documentDao.getByDocIds(tombstoned)) recon.loadById(row)
         val now = clock.nowMillis()
 
         for (meta in toHash) {
@@ -349,14 +364,16 @@ class Indexer(
                 )
             }
 
+            // Bytes a relink superseded (a bake's original) are an earlier version of another
+            // document, which no event makes live again: a row rewrite would give the superseded
+            // document the copy's path, and a new one would be counted and offered for a relink,
+            // then hidden by this very fold, on every rescan.
+            if (state.resolveDocId(hash) != hash) continue
+
             if (existingDoc != null) {
                 reconcileKnownHash(existingDoc, meta, hash, diskPaths, hashes, recon)
                 continue
             }
-            // Bytes a relink superseded (a bake's original) are an earlier version of another
-            // document, which no event makes live again: written as a new document, they would be
-            // counted and offered for a relink, then hidden by this very fold, on every rescan.
-            if (state.resolveDocId(hash) != hash) continue
 
             recon.write(newDocument(hash, meta, now))
             recon.newDocs[hash] = meta
@@ -590,6 +607,10 @@ class Indexer(
         } else {
             journalDocs.addAll(state.docsWithMetadata())
             for (pm in documentDao.allPathsAndMeta()) journalDocs.add(pm.docId)
+            // A deleted row is in neither list above, yet a rescan must project it too: when its
+            // own bytes are back on disk (contentAt knows them), the fold resurrects the document,
+            // preferring the file over the journal that hides it (see FoldPass.lifecycle).
+            (scope as? FoldScope.FullRescan)?.contentAt?.values?.let(journalDocs::addAll)
         }
 
         // Bulk preload the current projection (rows, tags, fields, FTS content) so the per-doc
