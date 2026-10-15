@@ -5,6 +5,7 @@ import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.work.QueueRetryPolicy
 import dev.npn.core.work.backoffMs
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
@@ -124,6 +125,23 @@ class AiAutoEnricherRetryTest {
                 rig.writesBlocked = false
                 rig.drain() shouldBe 1
                 rig.enrichedAt("d1").shouldNotBeNull()
+            }
+        }
+
+    /**
+     * Blocked writes are an answer, not a failure: anything else going wrong while the enricher asks
+     * reaches the drain, which logs it, rather than passing for a block.
+     */
+    @Test
+    fun `a failure asking whether writes are taken is not mistaken for a block`() =
+        runTest {
+            withRig { rig ->
+                rig.insertAndQueue("d1")
+                rig.canWrite = { error("the coordinator broke") }
+
+                shouldThrow<IllegalStateException> { rig.enricher.processNext() }.message shouldBe
+                    "the coordinator broke"
+                rig.ai.suggestEditsCalls.shouldBeEmpty()
             }
         }
 

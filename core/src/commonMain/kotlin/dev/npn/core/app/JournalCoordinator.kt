@@ -465,6 +465,12 @@ class JournalCoordinator internal constructor(
     suspend fun checkWritable() = locked { ensureWritable() }
 
     /**
+     * Whether a commit would be taken now: false once [close] has run or while writes are blocked.
+     * For a caller that only waits a refusal out, so a refusal is an answer rather than a failure.
+     */
+    suspend fun canWrite(): Boolean = withContext(dispatcher) { mutex.withLock { !closed && writeBlockReason == null } }
+
+    /**
      * Run [block] under the single-writer mutex: for a change to which file holds which hash that
      * does not go through the journal, an import placing its file and row. That serializes it
      * against other imports and against every rescan, whose listing and row writes it would

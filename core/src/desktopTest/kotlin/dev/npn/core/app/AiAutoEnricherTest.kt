@@ -394,7 +394,7 @@ class AiAutoEnricherSessionTest {
                         policy = UnattendedAiPolicy { ACTIVE },
                         clock = rig.clock,
                         health = EndpointHealth(),
-                        checkWritable = {},
+                        canWrite = { true },
                         onEnqueued = {},
                     )
                 enricher.enqueue(id) shouldBe true

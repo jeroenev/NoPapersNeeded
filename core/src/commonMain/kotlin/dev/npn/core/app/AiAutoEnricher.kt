@@ -69,8 +69,8 @@ class AiAutoEnricher(
     private val clock: EpochClock,
     /** The endpoint's cooldown, shared with every other queue that calls it. */
     private val health: EndpointHealth,
-    /** Throws while the library refuses metadata writes (`JournalCoordinator.checkWritable`). */
-    private val checkWritable: suspend () -> Unit,
+    /** Whether the library takes metadata writes now (`JournalCoordinator.canWrite`). */
+    private val canWrite: suspend () -> Boolean,
     /** Asks for a drain of this queue; called whenever [enqueue] writes a new row. */
     private val onEnqueued: () -> Unit,
 ) {
@@ -128,7 +128,7 @@ class AiAutoEnricher(
             return true
         }
         // An answer the library would not save is not worth paying for; the row waits, uncharged.
-        if (runCatchingCancellable { checkWritable() }.isFailure) return false
+        if (!canWrite()) return false
         return enrich(entry, request)
     }
 

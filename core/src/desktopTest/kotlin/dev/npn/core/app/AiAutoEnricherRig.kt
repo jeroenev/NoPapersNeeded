@@ -57,6 +57,9 @@ internal class Rig(
     /** Whether the library refuses metadata writes, as a latched journal coordinator does. */
     var writesBlocked = false
 
+    /** How the enricher asks whether the library takes writes; by default it answers [writesBlocked]. */
+    var canWrite: suspend () -> Boolean = { !writesBlocked }
+
     val enricher: AiAutoEnricher by lazy { newEnricher(health) }
 
     /**
@@ -74,7 +77,7 @@ internal class Rig(
             policy = UnattendedAiPolicy { config },
             clock = clock,
             health = health,
-            checkWritable = { check(!writesBlocked) { "Metadata writes are disabled" } },
+            canWrite = { canWrite() },
             onEnqueued = { kicks++ },
         )
 

@@ -267,7 +267,7 @@ internal fun buildEnrichment(
             policy = UnattendedAiPolicy(deps.settings.aiConfig),
             clock = deps.clock,
             health = ai.endpointHealth,
-            checkWritable = coordinator::checkWritable,
+            canWrite = coordinator::canWrite,
             onEnqueued = onEnqueued,
         )
     }) {
