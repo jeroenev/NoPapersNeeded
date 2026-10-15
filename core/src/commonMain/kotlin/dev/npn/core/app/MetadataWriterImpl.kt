@@ -577,11 +577,15 @@ class MetadataWriterImpl internal constructor(
         if (!fs.supportsDocumentRelocation) return RelocationOutcome.UNSUPPORTED
         val doc = documentDao.getByDocId(docId)?.takeIf { it.isLive } ?: return RelocationOutcome.UNCHANGED
         val target = destination(doc) ?: return RelocationOutcome.UNCHANGED
-        if (!DocumentPaths.isDocumentPath(target)) return RelocationOutcome.INVALID_NAME
-        if (target == doc.relPath) return RelocationOutcome.UNCHANGED
-        if (fs.exists(target)) {
-            return if (fs.sameFile(doc.relPath, target)) RelocationOutcome.UNCHANGED else RelocationOutcome.TAKEN
-        }
+        val refusal =
+            when {
+                !DocumentPaths.isDocumentPath(target) -> RelocationOutcome.INVALID_NAME
+                target == doc.relPath -> RelocationOutcome.UNCHANGED
+                !fs.exists(target) -> null
+                fs.sameFile(doc.relPath, target) -> RelocationOutcome.UNCHANGED
+                else -> RelocationOutcome.TAKEN
+            }
+        refusal?.let { return it }
         coordinator.commitAndApply(listOf(PendingOp.propSet(docId, SystemProperty.STORAGE_PATH, target)))
         followUp(listOf(docId), autoMatch = true)
         return RelocationOutcome.MOVED
