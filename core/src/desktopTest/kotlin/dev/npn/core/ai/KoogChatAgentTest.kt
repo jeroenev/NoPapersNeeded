@@ -1,6 +1,5 @@
 package dev.npn.core.ai
 
-import ai.koog.prompt.Prompt
 import ai.koog.prompt.executor.model.PromptExecutor
 import ai.koog.prompt.llm.LLMCapability
 import ai.koog.prompt.llm.LLMProvider
@@ -232,49 +231,40 @@ class KoogChatAgentTest {
             toolCallIds.toSet() shouldHaveSize 2
         }
 
-    private fun blankIdSearch(): List<StreamFrame> =
-        listOf(
-            StreamFrame.ToolCallComplete(
-                id = null,
-                name = "search_documents",
-                content = "{\"query\":\"x\"}",
-                index = null,
-            ),
-            end(),
-        )
-
-    /** Every tool call id and every tool result id in [prompt], in order. */
-    private fun toolIds(prompt: Prompt): Pair<List<String?>, List<String?>> {
-        val parts = prompt.messages.flatMap { it.parts }
-        return parts.filterIsInstance<MessagePart.Tool.Call>().map { it.id } to
-            parts.filterIsInstance<MessagePart.Tool.Result>().map { it.id }
-    }
-
+    /**
+     * Calls without an id get fallback ids unique in the whole stored conversation: across the
+     * iterations of one turn and across turns, since every turn replays the ones before.
+     */
     @Test
-    fun fallbackToolCallIdsAreUniqueAcrossIterations() =
+    fun fallbackToolCallIdsAreUniqueAcrossIterationsAndTurns() =
         runTest {
-            val executor = scriptedExecutor(listOf(blankIdSearch(), blankIdSearch(), textFrames("done")))
-            agent(executor).run("q", "session-1").collectList()
-
-            val (calls, results) = toolIds(executor.prompts.last())
-            calls shouldHaveSize 2
-            calls.toSet() shouldHaveSize 2
-            results shouldContainExactly calls
-        }
-
-    @Test
-    fun fallbackToolCallIdsAreUniqueAcrossTurns() =
-        runTest {
+            val blankIdSearch =
+                listOf(
+                    StreamFrame.ToolCallComplete(
+                        id = null,
+                        name = "search_documents",
+                        content = "{\"query\":\"x\"}",
+                        index = null,
+                    ),
+                    end(),
+                )
             val executor =
-                scriptedExecutor(listOf(blankIdSearch(), textFrames("one"), blankIdSearch(), textFrames("two")))
+                scriptedExecutor(
+                    listOf(blankIdSearch, blankIdSearch, textFrames("one"), blankIdSearch, textFrames("two")),
+                )
             val agent = agent(executor)
             agent.run("first", "session-1").collectList()
             agent.run("second", "session-1").collectList()
 
-            val (calls, results) = toolIds(executor.prompts.last())
-            calls shouldHaveSize 2
-            calls.toSet() shouldHaveSize 2
-            results shouldContainExactly calls
+            val parts =
+                executor.prompts
+                    .last()
+                    .messages
+                    .flatMap { it.parts }
+            val calls = parts.filterIsInstance<MessagePart.Tool.Call>().map { it.id }
+            calls shouldHaveSize 3
+            calls.toSet() shouldHaveSize 3
+            parts.filterIsInstance<MessagePart.Tool.Result>().map { it.id } shouldContainExactly calls
         }
 
     @Test
