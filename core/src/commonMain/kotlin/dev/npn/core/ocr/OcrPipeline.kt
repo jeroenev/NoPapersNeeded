@@ -520,8 +520,10 @@ class OcrPipeline(
      * again on the next reconcile, forever.
      *
      * A [rerun] the user asked for lowers the bar to "at least as good as the indexed version":
-     * re-running an engine that ranks below it would produce text nobody selects. [aiRequested] is
-     * the user's "OCR with AI" on this device; see [OcrEngineSelector.forDocument].
+     * re-running an engine that ranks below it would produce text nobody selects. So would a re-run
+     * of an engine other than the one the document is pinned to, while a version of that one is
+     * stored: the pin keeps selecting it. [aiRequested] is the user's "OCR with AI" on this device;
+     * see [OcrEngineSelector.forDocument].
      */
     private suspend fun canImprove(
         doc: DocumentEntity,
@@ -533,7 +535,11 @@ class OcrPipeline(
         if (!engine.available()) return false
         if (stored.isEmpty()) return true
         val ownRank = OcrEngineId.rank(engine.name)
-        if (rerun) return ownRank >= OcrEngineId.rank(versions.select(stored, doc.ocrEngineOverride)?.engine)
+        if (rerun) {
+            val pin = doc.ocrEngineOverride
+            val pinKeepsAnother = pin != null && pin != engine.name && stored.any { it.engine == pin }
+            return !pinKeepsAnother && ownRank >= OcrEngineId.rank(versions.select(stored, pin)?.engine)
+        }
         val outranksStored = ownRank > stored.maxOf { OcrEngineId.rank(it.engine) }
         val triedHere = stored.any { it.deviceId == deviceId && it.engine == engine.name }
         if (!outranksStored || triedHere) return false

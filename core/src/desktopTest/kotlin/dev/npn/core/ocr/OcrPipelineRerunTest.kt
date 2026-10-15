@@ -96,6 +96,27 @@ class OcrPipelineRerunTest {
             rig.db.ftsDao().searchDocIds("phone") shouldContainExactly listOf(docId)
         }
 
+    /**
+     * Under a pin to an engine this device does not run, a re-run's text would never be selected
+     * over the pinned version, so the engine is not run for it.
+     */
+    @Test
+    fun rerunUnderAPinToAnotherEngineDoesNotRun() =
+        runTest {
+            val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
+            rig.writeForeignSidecar(docId, "devB", "tesseract", "desk words")
+            val doc = rig.db.documentDao().getByDocId(docId).shouldNotBeNull()
+            rig.db.documentDao().upsert(doc.copy(ocrEngineOverride = "tesseract"))
+
+            val mlkit = FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "phone words")
+            requestRerun(docId)
+            rig.pipeline("devA", mlkit).processDoc(docId)
+
+            mlkit.calls shouldBe 0
+            OcrSidecarFiles(rig.fs).listForHash(docId) shouldContainExactly listOf("devB")
+            rig.db.ftsDao().searchDocIds("desk") shouldContainExactly listOf(docId)
+        }
+
     @Test
     fun aFailedRerunKeepsTheRequestAndItsError() =
         runTest {
