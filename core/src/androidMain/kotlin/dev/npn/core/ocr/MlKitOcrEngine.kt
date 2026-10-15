@@ -24,8 +24,6 @@ class MlKitOcrEngine : OcrEngine {
 
     override suspend fun available(): Boolean = true
 
-    private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-
     override suspend fun recognizePng(
         png: ByteArray,
         lang: String,
@@ -47,5 +45,13 @@ class MlKitOcrEngine : OcrEngine {
                     if (cont.isActive) cont.resumeWithException(IOException("text recognition was cancelled"))
                 }
         }
+    }
+
+    private companion object {
+        /**
+         * One client for the process, never closed: ML Kit keeps the model loaded per process
+         * anyway, and a client per engine would leave one open handle behind every session.
+         */
+        val recognizer by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
     }
 }
