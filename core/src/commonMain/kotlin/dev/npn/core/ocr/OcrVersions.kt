@@ -89,19 +89,21 @@ class OcrVersions internal constructor(
 
     /**
      * The writer key [deviceId]'s new sidecar of [engine] is published under: its first run's key,
-     * or a re-run key stamped [runMillis] once [stored] holds a version of that engine from it.
+     * or a re-run key once [stored] holds a version of that engine from it. The re-run is stamped
+     * [runMillis], but always above that device and engine's latest run, so it is the newest
+     * ([select]) and its key is new even when the clock stood still or went back.
      */
     fun newWriterKey(
         stored: List<Version>,
         deviceId: String,
         engine: String,
         runMillis: Long,
-    ): String =
-        if (stored.any { it.engine == engine && it.deviceId == deviceId }) {
-            OcrSidecarName.rerunWriterKey(deviceId, runMillis, engine)
-        } else {
-            OcrSidecarName.writerKey(deviceId, engine)
-        }
+    ): String {
+        val own = stored.filter { it.engine == engine && it.deviceId == deviceId }
+        if (own.isEmpty()) return OcrSidecarName.writerKey(deviceId, engine)
+        val run = maxOf(runMillis, own.maxOf { it.run } + 1)
+        return OcrSidecarName.rerunWriterKey(deviceId, run, engine)
+    }
 
     /** Whether [version] of [docId] is an `embedded` sidecar with a usable text layer on every page. */
     suspend fun hasFullTextLayer(

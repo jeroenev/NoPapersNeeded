@@ -5,6 +5,7 @@ import dev.npn.core.db.QueueState
 import dev.npn.core.db.documentEntity
 import dev.npn.core.db.searchDocIds
 import dev.npn.core.fs.OcrSidecarFiles
+import dev.npn.core.index.MutableClock
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
@@ -134,6 +135,30 @@ class OcrPipelineRerunTest {
                 .ocrQueueDao()
                 .getByDocId(docId)
                 ?.rerun shouldBe true
+        }
+
+    /** A re-run stamped while the clock stood behind an earlier one still replaces its text. */
+    @Test
+    fun aRerunAfterTheClockWentBackIsIndexed() =
+        runTest {
+            val clock = MutableClock(start = 10_000)
+            val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
+            rig
+                .pipeline("devA", FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "first reading"), clock = clock)
+                .processDoc(docId)
+            requestRerun(docId)
+            rig
+                .pipeline("devA", FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "second reading"), clock = clock)
+                .processDoc(docId)
+
+            clock.now = 5_000
+            requestRerun(docId)
+            rig
+                .pipeline("devA", FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "third reading"), clock = clock)
+                .processDoc(docId)
+
+            rig.db.ftsDao().searchDocIds("third") shouldContainExactly listOf(docId)
+            rig.db.ftsDao().searchDocIds("second") shouldContainExactly emptyList()
         }
 
     @Test
