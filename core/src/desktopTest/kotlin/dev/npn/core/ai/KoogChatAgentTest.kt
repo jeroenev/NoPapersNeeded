@@ -234,7 +234,12 @@ class KoogChatAgentTest {
 
     private fun blankIdSearch(): List<StreamFrame> =
         listOf(
-            StreamFrame.ToolCallComplete(id = null, name = "search_documents", content = "{\"query\":\"x\"}", index = null),
+            StreamFrame.ToolCallComplete(
+                id = null,
+                name = "search_documents",
+                content = "{\"query\":\"x\"}",
+                index = null,
+            ),
             end(),
         )
 

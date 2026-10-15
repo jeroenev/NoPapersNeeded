@@ -103,7 +103,12 @@ class OcrVersionsSelectTest {
             listOf(
                 KeyCase("a first run takes the plain key", emptyList(), 500, "d.mlkit"),
                 KeyCase("another device's run is no first run of ours", listOf(first("e", "mlkit")), 500, "d.mlkit"),
-                KeyCase("another engine's run is no first run of ours", listOf(first("d", "tesseract")), 500, "d.mlkit"),
+                KeyCase(
+                    "another engine's run is no first run of ours",
+                    listOf(first("d", "tesseract")),
+                    500,
+                    "d.mlkit",
+                ),
                 KeyCase("a re-run takes the clock", listOf(first("d", "mlkit")), 500, "d.r500.mlkit"),
                 KeyCase(
                     "a re-run under a clock gone back stays newest",

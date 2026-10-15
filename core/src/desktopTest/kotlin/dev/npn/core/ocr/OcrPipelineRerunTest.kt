@@ -105,7 +105,11 @@ class OcrPipelineRerunTest {
         runTest {
             val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
             rig.writeForeignSidecar(docId, "devB", "tesseract", "desk words")
-            val doc = rig.db.documentDao().getByDocId(docId).shouldNotBeNull()
+            val doc =
+                rig.db
+                    .documentDao()
+                    .getByDocId(docId)
+                    .shouldNotBeNull()
             rig.db.documentDao().upsert(doc.copy(ocrEngineOverride = "tesseract"))
 
             val mlkit = FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "phone words")
@@ -165,18 +169,27 @@ class OcrPipelineRerunTest {
             val clock = MutableClock(start = 10_000)
             val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
             rig
-                .pipeline("devA", FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "first reading"), clock = clock)
-                .processDoc(docId)
+                .pipeline(
+                    "devA",
+                    FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "first reading"),
+                    clock = clock,
+                ).processDoc(docId)
             requestRerun(docId)
             rig
-                .pipeline("devA", FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "second reading"), clock = clock)
-                .processDoc(docId)
+                .pipeline(
+                    "devA",
+                    FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "second reading"),
+                    clock = clock,
+                ).processDoc(docId)
 
             clock.now = 5_000
             requestRerun(docId)
             rig
-                .pipeline("devA", FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "third reading"), clock = clock)
-                .processDoc(docId)
+                .pipeline(
+                    "devA",
+                    FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "third reading"),
+                    clock = clock,
+                ).processDoc(docId)
 
             rig.db.ftsDao().searchDocIds("third") shouldContainExactly listOf(docId)
             rig.db.ftsDao().searchDocIds("second") shouldContainExactly emptyList()
