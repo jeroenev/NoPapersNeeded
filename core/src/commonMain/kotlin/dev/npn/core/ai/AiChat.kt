@@ -100,7 +100,8 @@ interface AiChat : AiAvailability {
 
     /**
      * Every session asked in and not deleted since, a cleared one untitled, newest first. A read:
-     * it never writes, and never decodes a conversation to answer.
+     * it never writes. It decodes only a conversation behind an older build's placeholder title,
+     * and a conversation that fails to decode there never fails the list.
      */
     suspend fun chatSessions(): List<AiChatSession>
 

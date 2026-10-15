@@ -3,6 +3,7 @@ package dev.npn.core.ai
 import dev.npn.core.db.KeyValueDao
 import dev.npn.core.db.KeyValueEntity
 import dev.npn.core.util.NpnJson
+import dev.npn.core.util.runCatchingCancellable
 import kotlinx.serialization.builtins.ListSerializer
 
 /**
@@ -43,17 +44,22 @@ internal class RoomChatSessionStore(
      * reads as absent.
      *
      * A session asked "New chat" is titled exactly like a placeholder, and keeps its title: only a
-     * title its own first question could not have produced is one.
+     * title its own first question could not have produced is one. A conversation that cannot be
+     * decoded keeps its session listed untitled: its own reads refuse it, and it must not stop the
+     * list or edits to every other session.
      */
     private suspend fun AiChatSession.fromPlaceholder(): AiChatSession? {
         if (title !in LEGACY_PLACEHOLDER_TITLES) return this
+        if (!conversations.has(id)) return null
         val firstQuestion =
-            KoogChatHistoryMapper
-                .map(conversations.load(id))
-                .filterIsInstance<AiChatHistoryItem.UserTurn>()
-                .firstOrNull()
+            runCatchingCancellable {
+                KoogChatHistoryMapper
+                    .map(conversations.load(id))
+                    .filterIsInstance<AiChatHistoryItem.UserTurn>()
+                    .firstOrNull()
+            }.getOrNull()
         if (firstQuestion != null && AiChatSession.titleFrom(firstQuestion.text) == title) return this
-        return if (conversations.has(id)) copy(title = null) else null
+        return copy(title = null)
     }
 
     private companion object {
