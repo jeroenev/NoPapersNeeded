@@ -629,8 +629,12 @@ class AiEditViewModel(
             }
     }
 
-    /** Cancel an in-flight suggestion run and return to Idle (nothing was written). */
+    /**
+     * Cancel an in-flight suggestion run and return to Idle (nothing was written). Anything else is
+     * left alone: a Cancel from the frame before the Review landed must not discard the batch.
+     */
     fun cancel() {
+        if (run?.isActive != true || _ui.value.phase !is EditPhase.Suggesting) return
         run?.cancel()
         run = null
         _ui.update { it.copy(phase = EditPhase.Idle) }

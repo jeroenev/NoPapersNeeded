@@ -158,6 +158,33 @@ class AiEditSuggestionTest : MainDispatcherTest() {
             model.ui.value.phase shouldBe EditPhase.Idle
         }
 
+    @Test
+    fun aCancelAfterTheBatchLandedKeepsTheReview() =
+        runTest(dispatcher) {
+            val run =
+                FakeAiEditRun().apply {
+                    inScope("a")
+                    progress = listOf(progress(0, "a"))
+                    gate = CompletableDeferred()
+                    batch = review(reviewDoc("a", tags = listOf("t")))
+                }
+            val model = vm(run)
+            collecting(model.ui)
+            advanceUntilIdle()
+
+            model.start()
+            advanceUntilIdle()
+            run.gate?.complete(Unit)
+            advanceUntilIdle()
+            // A Cancel still on screen from the last frame lands after the Review did.
+            model.cancel()
+
+            model.ui.value.phase
+                .shouldBeInstanceOf<EditPhase.Review>()
+                .docs
+                .map { it.docId } shouldContainExactly listOf("a")
+        }
+
     private fun progress(
         done: Int,
         docId: String,
