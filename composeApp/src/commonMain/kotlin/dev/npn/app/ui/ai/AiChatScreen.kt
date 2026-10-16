@@ -74,7 +74,7 @@ import dev.npn.core.ai.AiChatSession
 import dev.npn.core.ai.ChatTools
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.SettingsRepository
-import kotlinx.serialization.json.Json
+import dev.npn.core.util.NpnJson
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -601,7 +601,7 @@ private fun argValue(
     key: String,
 ): String? =
     runCatching {
-        Json
+        NpnJson.Lenient
             .parseToJsonElement(argsJson)
             .jsonObject[key]
             ?.jsonPrimitive

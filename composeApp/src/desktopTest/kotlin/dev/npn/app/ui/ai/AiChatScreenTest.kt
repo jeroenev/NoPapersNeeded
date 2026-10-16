@@ -84,6 +84,34 @@ class AiChatScreenTest {
             }
         }
 
+    /** Tool arguments are model output: a row labels them as leniently as the tool read them. */
+    @Test
+    fun aToolRowLabelsArgumentsWithUnquotedKeys() =
+        onUiThread {
+            val chat = AiChatSession("a", "Invoices", 1L)
+            val session =
+                FakeLibrarySession().apply {
+                    aiChat.createdChatSession = chat
+                    aiChat.savedChatSessions = listOf(chat)
+                    aiChat.chatTranscripts =
+                        mapOf(
+                            chat.id to
+                                listOf(
+                                    AiChatHistoryItem.UserTurn("my invoices"),
+                                    AiChatHistoryItem.ToolUse("search_documents", "{query: invoices}", "found one"),
+                                ),
+                        )
+                }
+            val scene = scene(session)
+            try {
+                scene.render()
+
+                scene.has { it.text()?.contains("\"invoices\"") == true } shouldBe true
+            } finally {
+                scene.close()
+            }
+        }
+
     /** Enter in the question field sends it; Shift+Enter leaves it there for another line. */
     @Test
     fun enterSendsTheQuestionAndShiftEnterDoesNot() =
