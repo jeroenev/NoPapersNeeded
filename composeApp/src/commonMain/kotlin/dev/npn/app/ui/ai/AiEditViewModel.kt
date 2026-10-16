@@ -49,6 +49,7 @@ import no_papers_needed.composeapp.generated.resources.ai_edit_apply_tags_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_more_remain_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_queue_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_setup_load_failed
+import no_papers_needed.composeapp.generated.resources.ai_edit_start_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_suggest_failed
 
 /**
@@ -579,20 +580,26 @@ class AiEditViewModel(
      *
      * Refuses whatever [AiEditUiState.startBlocker] refuses, judged against that fresh count: the
      * same gate the button reads, so nothing spends model calls while the page says it cannot. A
-     * finished run asked for a next batch that is no longer there stops offering one.
+     * finished run asked for a next batch that is no longer there stops offering one. A scope that
+     * cannot be read is reported, and the page stays where it was.
      */
     override fun start() {
         if (run?.isActive == true) return
         val state = _ui.value
         run =
             viewModelScope.launch {
-                val remaining = edit.remainingDocs(state.scopeKey())
-                val blocker = state.startBlocker(ScopePreview(remaining.size, emptyList()))
-                when {
-                    blocker == StartBlocker.NO_DOCUMENTS -> endWithoutNextBatch()
-                    blocker != null -> Unit
-                    state.runsInBackground(remaining.size) -> queueRun(remaining.map { it.doc.docId })
-                    else -> suggestBatch()
+                runCatchingCancellable {
+                    val remaining = edit.remainingDocs(state.scopeKey())
+                    val blocker = state.startBlocker(ScopePreview(remaining.size, emptyList()))
+                    when {
+                        blocker == StartBlocker.NO_DOCUMENTS -> endWithoutNextBatch()
+                        blocker != null -> Unit
+                        state.runsInBackground(remaining.size) -> queueRun(remaining.map { it.doc.docId })
+                        else -> suggestBatch()
+                    }
+                }.onFailure { failure ->
+                    message(uiText(Res.string.ai_edit_start_failed, failure.reasonText()))
+                    _ui.update { s -> if (s.phase is EditPhase.Suggesting) s.copy(phase = EditPhase.Idle) else s }
                 }
             }
     }

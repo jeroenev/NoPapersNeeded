@@ -179,4 +179,5 @@
         <item quantity="other">Vorschläge für %1$d von %2$d Dokumenten konnten nicht abgerufen werden</item>
     </plurals>
     <string name="ai_edit_queue_failed">KI-Bearbeitung konnte nicht eingereiht werden: %1$s</string>
+    <string name="ai_edit_start_failed">KI-Bearbeitung konnte nicht gestartet werden: %1$s</string>
 </resources>

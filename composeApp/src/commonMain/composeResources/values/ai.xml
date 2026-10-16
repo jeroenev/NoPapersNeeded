@@ -179,4 +179,5 @@
         <item quantity="other">Could not get suggestions for %1$d of %2$d documents</item>
     </plurals>
     <string name="ai_edit_queue_failed">Could not queue the AI edit: %1$s</string>
+    <string name="ai_edit_start_failed">Could not start the AI edit: %1$s</string>
 </resources>

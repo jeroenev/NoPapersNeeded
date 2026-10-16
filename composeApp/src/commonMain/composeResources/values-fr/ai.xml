@@ -179,4 +179,5 @@
         <item quantity="other">Impossible d’obtenir des suggestions pour %1$d des %2$d documents</item>
     </plurals>
     <string name="ai_edit_queue_failed">Impossible de mettre la modification IA en file : %1$s</string>
+    <string name="ai_edit_start_failed">Impossible de lancer la modification IA : %1$s</string>
 </resources>

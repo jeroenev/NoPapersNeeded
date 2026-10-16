@@ -179,4 +179,5 @@
         <item quantity="other">No se pudieron obtener sugerencias para %1$d de %2$d documentos</item>
     </plurals>
     <string name="ai_edit_queue_failed">No se pudo poner en cola la edición con IA: %1$s</string>
+    <string name="ai_edit_start_failed">No se pudo iniciar la edición con IA: %1$s</string>
 </resources>

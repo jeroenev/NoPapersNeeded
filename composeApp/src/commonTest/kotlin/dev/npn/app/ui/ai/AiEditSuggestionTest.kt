@@ -4,6 +4,7 @@ package dev.npn.app.ui.ai
 
 import dev.npn.app.MainDispatcherTest
 import dev.npn.app.collecting
+import dev.npn.app.ui.common.reasonText
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.ApplyResult
 import dev.npn.core.app.EditProgress
@@ -16,6 +17,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.ai_edit_start_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_suggest_failed
 import kotlin.test.Test
 
@@ -132,6 +134,27 @@ class AiEditSuggestionTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             // The batch's answer arrives after the cancel and must not bring the page back.
+            model.ui.value.phase shouldBe EditPhase.Idle
+        }
+
+    @Test
+    fun aStartWhoseScopeCannotBeReadIsReported() =
+        runTest(dispatcher) {
+            val failure = IllegalStateException("database closed")
+            val run =
+                FakeAiEditRun().apply {
+                    inScope("a")
+                    remainingFailure = failure
+                }
+            val model = vm(run)
+            collecting(model.ui)
+            val messages = collecting(model.messages.map { it.text })
+            advanceUntilIdle()
+
+            model.start()
+            advanceUntilIdle()
+
+            messages shouldContainExactly listOf(uiText(Res.string.ai_edit_start_failed, failure.reasonText()))
             model.ui.value.phase shouldBe EditPhase.Idle
         }
 

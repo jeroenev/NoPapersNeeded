@@ -179,4 +179,5 @@
         <item quantity="other">Kon geen suggesties ophalen voor %1$d van de %2$d documenten</item>
     </plurals>
     <string name="ai_edit_queue_failed">De AI-bewerking kon niet in de wachtrij worden gezet: %1$s</string>
+    <string name="ai_edit_start_failed">De AI-bewerking kon niet worden gestart: %1$s</string>
 </resources>

@@ -67,6 +67,9 @@ internal class FakeAiEditRun : AiEditRun {
     /** Thrown by [moreRemain] when set. */
     var moreRemainFailure: Throwable? = null
 
+    /** Thrown by [remainingDocs] when set, as a failed read of the scope would be. */
+    var remainingFailure: Throwable? = null
+
     /** Put documents with these ids in scope. */
     fun inScope(vararg docIds: String) {
         documents.value = docIds.map { listItem(it) }
@@ -84,6 +87,7 @@ internal class FakeAiEditRun : AiEditRun {
 
     override suspend fun remainingDocs(key: ScopeKey): List<DocListItem> {
         keys += key
+        remainingFailure?.let { throw it }
         return documents.value.filterNot { it.doc.docId in processed.value }
     }
 
