@@ -33,6 +33,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,8 +49,11 @@ import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.model.FieldDef
 import dev.npn.core.rules.AutoMatchRule
+import dev.npn.core.rules.AutoMatchRuleJson
 import dev.npn.core.rules.MatchAlgorithm
 import dev.npn.core.rules.RuleField
+import dev.npn.core.util.NpnJson
+import kotlinx.serialization.Serializable
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.common_delete
@@ -95,9 +100,10 @@ fun AutoMatchRulesScreen(
     val snackbar = remember { SnackbarHostState() }
     SnackbarMessages(vm.messages, snackbar)
 
-    var showForm by remember { mutableStateOf(false) }
-    var editing by remember { mutableStateOf<AutoMatchRule?>(null) }
-    var deleteTarget by remember { mutableStateOf<String?>(null) }
+    // Saveable, like the form's own fields, so an open dialog is back after the screen is recreated.
+    var showForm by rememberSaveable { mutableStateOf(false) }
+    var editing by rememberSaveable(stateSaver = EditedRuleSaver) { mutableStateOf(null) }
+    var deleteTarget by rememberSaveable { mutableStateOf<String?>(null) }
 
     AutoMatchRulesScaffold(
         rules = rules,
@@ -288,7 +294,7 @@ private fun RuleFormDialog(
     onConfirm: (AutoMatchRule) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var state by remember(rule) { mutableStateOf(rule.toFormState()) }
+    var state by rememberSaveable(rule, stateSaver = RuleFormState.Saver) { mutableStateOf(rule.toFormState()) }
     val regexValid = state.algorithm != MatchAlgorithm.REGEX || runCatching { Regex(state.pattern) }.isSuccess
     val canSave = state.name.isNotBlank() && state.pattern.isNotBlank() && regexValid
 
@@ -332,6 +338,7 @@ private fun RuleFormDialog(
     )
 }
 
+@Serializable
 private data class RuleFormState(
     val name: String = "",
     val field: RuleField = RuleField.Content,
@@ -341,7 +348,19 @@ private data class RuleFormState(
     /** Field key -> value the rule sets; blank values are dropped on save. */
     val sets: Map<String, String> = emptyMap(),
     val position: String = "0",
-)
+) {
+    companion object {
+        val Saver: Saver<RuleFormState, String> =
+            Saver(
+                save = { NpnJson.Persisted.encodeToString(serializer(), it) },
+                restore = { NpnJson.Persisted.decodeFromString(serializer(), it) },
+            )
+    }
+}
+
+/** The rule the form edits, saved in its stored form; a new rule saves nothing. */
+private val EditedRuleSaver: Saver<AutoMatchRule?, String> =
+    Saver(save = { rule -> rule?.let(AutoMatchRuleJson::encode) }, restore = AutoMatchRuleJson::decode)
 
 private fun AutoMatchRule?.toFormState(): RuleFormState =
     if (this == null) {

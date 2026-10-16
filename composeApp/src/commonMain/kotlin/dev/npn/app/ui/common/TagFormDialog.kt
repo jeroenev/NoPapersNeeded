@@ -25,7 +25,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,8 +76,8 @@ fun TagFormDialog(
     /** Hidden for bulk styling, where a single dialog applies one color to many tags. */
     showNameField: Boolean = true,
 ) {
-    var name by remember { mutableStateOf(initialName) }
-    var color by remember { mutableStateOf(initialColor) }
+    var name by rememberSaveable { mutableStateOf(initialName) }
+    var color by rememberSaveable { mutableStateOf(initialColor) }
 
     AlertDialog(
         onDismissRequest = onDismiss,

@@ -47,6 +47,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,6 +70,8 @@ import dev.npn.app.ui.common.onSecondaryClick
 import dev.npn.app.ui.common.parseHexColor
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.TagInfo
+import dev.npn.core.util.NpnJson
+import kotlinx.serialization.Serializable
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.common_delete
@@ -102,10 +106,13 @@ import org.jetbrains.compose.resources.stringResource
 
 /**
  * Multi-select state of the tag grid. Only real tags (nodes with a [TagInfo]) are selectable;
- * namespace-only nodes carry no journal state of their own.
+ * namespace-only nodes carry no journal state of their own. Saveable, so a selection survives a
+ * trip to another tab and back.
  */
-private class TagSelection {
-    var selected by mutableStateOf(emptySet<String>())
+private class TagSelection(
+    initial: Set<String> = emptySet(),
+) {
+    var selected by mutableStateOf(initial)
 
     val active: Boolean get() = selected.isNotEmpty()
 
@@ -116,28 +123,47 @@ private class TagSelection {
     fun clear() {
         selected = emptySet()
     }
+
+    companion object {
+        val Saver: Saver<TagSelection, List<String>> =
+            Saver(save = { it.selected.toList() }, restore = { TagSelection(it.toSet()) })
+    }
 }
 
 /**
  * The one dialog the tags screen has open, or none. Every action but rename names a list of tags: a
- * card's own menu one, the selection all of it.
+ * card's own menu one, the selection all of it. Saved as JSON, so it is open again after the screen
+ * is recreated.
  */
+@Serializable
 private sealed interface TagDialog {
+    @Serializable
     data class Rename(
         val name: String,
     ) : TagDialog
 
+    @Serializable
     data class Merge(
         val names: List<String>,
     ) : TagDialog
 
+    @Serializable
     data class Style(
         val names: List<String>,
     ) : TagDialog
 
+    @Serializable
     data class Delete(
         val names: List<String>,
     ) : TagDialog
+
+    companion object {
+        val Saver: Saver<TagDialog?, String> =
+            Saver(
+                save = { dialog -> dialog?.let { NpnJson.Persisted.encodeToString(serializer(), it) } },
+                restore = { NpnJson.Persisted.decodeFromString(serializer(), it) },
+            )
+    }
 }
 
 @Composable
@@ -146,8 +172,8 @@ fun TagManagementScreen(session: LibrarySession) {
     val tags by vm.tags.collectAsStateWithLifecycle()
     val tree = remember(tags) { buildTree(tags) }
 
-    var dialog by remember { mutableStateOf<TagDialog?>(null) }
-    val selection = remember { TagSelection() }
+    var dialog by rememberSaveable(stateSaver = TagDialog.Saver) { mutableStateOf(null) }
+    val selection = rememberSaveable(saver = TagSelection.Saver) { TagSelection() }
 
     val snackbar = remember { SnackbarHostState() }
     SnackbarMessages(vm.messages, snackbar)
