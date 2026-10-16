@@ -21,6 +21,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -29,6 +31,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.EchoTracker
 import dev.npn.app.ui.common.ScrollToTopOnNewResults
 import dev.npn.app.ui.common.ScrollbarWidth
 import dev.npn.app.ui.common.VerticalScrollbar
@@ -90,16 +93,31 @@ internal fun DocGrid(
     columnWidth: Int,
     onColumnWidthChange: (Int) -> Unit,
 ) {
-    // Live cell width; re-seeded when the persisted value changes (e.g. after a commit).
-    var width by remember { mutableStateOf(columnWidth.toFloat()) }
-    LaunchedEffect(columnWidth) { width = columnWidth.toFloat() }
+    // Live cell width; re-seeded when the persisted value changes elsewhere (the stored value
+    // arriving, another window), never by the late echo of one of its own commits.
+    var width by remember { mutableFloatStateOf(columnWidth.toFloat()) }
+    val echoes = remember { EchoTracker(columnWidth) }
+    // The width last committed or last heard from the owner: what a commit is compared against.
+    var requested by remember { mutableIntStateOf(columnWidth) }
+    LaunchedEffect(columnWidth) {
+        echoes.ownerValue(columnWidth)?.let {
+            requested = it
+            width = it.toFloat()
+        }
+    }
 
     // Debounced commit so pinches and fine-grained touchpad deltas don't write settings per event.
-    val committed by rememberUpdatedState(columnWidth)
+    val commit by rememberUpdatedState(onColumnWidthChange)
     LaunchedEffect(Unit) {
         snapshotFlow { width.roundToInt() }
             .debounce(GRID_ZOOM_COMMIT_DEBOUNCE_MS)
-            .collect { if (it != committed) onColumnWidthChange(it) }
+            .collect {
+                if (it != requested) {
+                    requested = it
+                    echoes.typed(it)
+                    commit(it)
+                }
+            }
     }
 
     val minWidth = GridSizing.MIN_COLUMN_WIDTH.toFloat()
