@@ -2,6 +2,7 @@ package dev.npn.core.ocr
 
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.QueueState
+import dev.npn.core.index.requireByDocId
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -86,7 +87,7 @@ class OcrQueueRecoveryTest {
                 .getByDocId(docId)
                 .shouldNotBeNull()
                 .state shouldBe QueueState.DONE.column
-            db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrState.DONE.column
+            db.documentDao().requireByDocId(docId).ocrState shouldBe OcrState.DONE.column
         }
 
     @Test

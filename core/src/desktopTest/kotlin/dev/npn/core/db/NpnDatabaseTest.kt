@@ -3,6 +3,7 @@ package dev.npn.core.db
 import androidx.room3.RoomRawQuery
 import dev.npn.core.app.DocumentRepositoryImpl
 import dev.npn.core.index.FtsRows
+import dev.npn.core.index.requireByDocId
 import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
@@ -32,12 +33,12 @@ class NpnDatabaseTest {
         runTest {
             val dao = db.documentDao()
             dao.upsert(documentEntity("a".repeat(64)))
-            dao.getByDocId("a".repeat(64))!!.fileName shouldBe "${"a".repeat(64)}.pdf"
+            dao.requireByDocId("a".repeat(64)).fileName shouldBe "${"a".repeat(64)}.pdf"
             dao.allPathsAndMeta().single { it.relPath == "${"a".repeat(64)}.pdf" }.docId shouldBe "a".repeat(64)
 
             // upsert updates in place
             dao.upsert(documentEntity("a".repeat(64), reviewed = true))
-            dao.getByDocId("a".repeat(64))!!.reviewed shouldBe true
+            dao.requireByDocId("a".repeat(64)).reviewed shouldBe true
         }
 
     @Test

@@ -13,6 +13,7 @@ import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.index.MetadataAccumulator
 import dev.npn.core.index.MutableClock
 import dev.npn.core.index.WatchedFileSystem
+import dev.npn.core.index.requireByDocId
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.JournalPath
@@ -64,7 +65,7 @@ class TrashLifecycleTest {
                 rig.session.docLifecycle.trashDoc(id)
 
                 rig.exists("a.pdf").shouldBeFalse()
-                val doc = rig.db.documentDao().getByDocId(id)!!
+                val doc = rig.db.documentDao().requireByDocId(id)
                 doc.trashed.shouldBeTrue()
                 // A file now exists under .npn/trash/.
                 val trash =
@@ -131,7 +132,7 @@ class TrashLifecycleTest {
                 rig.journalObjectCount() shouldBe objects
                 rig.db
                     .documentDao()
-                    .getByDocId(id)!!
+                    .requireByDocId(id)
                     .trashed
                     .shouldBeTrue()
                 rig.exists("a.pdf").shouldBeFalse()
@@ -140,7 +141,7 @@ class TrashLifecycleTest {
 
                 rig.db
                     .documentDao()
-                    .getByDocId(id)!!
+                    .requireByDocId(id)
                     .trashed
                     .shouldBeFalse()
                 rig.exists("a.pdf").shouldBeTrue()
@@ -188,7 +189,7 @@ class TrashLifecycleTest {
                 rig.exists("docs/a.pdf").shouldBeTrue()
                 rig.db
                     .documentDao()
-                    .getByDocId(id)!!
+                    .requireByDocId(id)
                     .trashed
                     .shouldBeFalse()
             } finally {
@@ -211,7 +212,7 @@ class TrashLifecycleTest {
                 trashEntries(rig.fs).shouldBeEmpty()
                 rig.db
                     .documentDao()
-                    .getByDocId(id)!!
+                    .requireByDocId(id)
                     .deleted
                     .shouldBeTrue()
 
@@ -219,7 +220,7 @@ class TrashLifecycleTest {
                 rig.session.rescan()
                 rig.db
                     .documentDao()
-                    .getByDocId(id)!!
+                    .requireByDocId(id)
                     .deleted
                     .shouldBeTrue()
             } finally {
@@ -241,14 +242,14 @@ class TrashLifecycleTest {
                 rig.exists("a.pdf").shouldBeFalse()
                 rig.db
                     .documentDao()
-                    .getByDocId(id)!!
+                    .requireByDocId(id)
                     .relPath shouldBe "renamed.pdf"
 
                 // Survives rescan with the same docId.
                 rig.session.rescan()
                 rig.db
                     .documentDao()
-                    .getByDocId(id)!!
+                    .requireByDocId(id)
                     .relPath shouldBe "renamed.pdf"
             } finally {
                 rig.close()
@@ -275,7 +276,7 @@ class TrashLifecycleTest {
                 lifecycle.moveFile(id, "../outside") shouldBe RelocationOutcome.INVALID_NAME
                 rig.db
                     .documentDao()
-                    .getByDocId(id)!!
+                    .requireByDocId(id)
                     .relPath shouldBe "a.pdf"
                 rig.fs.sha256("b.pdf") shouldNotBe id
 
@@ -283,7 +284,7 @@ class TrashLifecycleTest {
                 rig.exists("c.pdf").shouldBeTrue()
                 rig.db
                     .documentDao()
-                    .getByDocId(id)!!
+                    .requireByDocId(id)
                     .relPath shouldBe "c.pdf"
             } finally {
                 rig.close()
@@ -303,13 +304,13 @@ class TrashLifecycleTest {
                 rig.exists("archive/a.pdf").shouldBeTrue()
                 rig.db
                     .documentDao()
-                    .getByDocId(id)!!
+                    .requireByDocId(id)
                     .relPath shouldBe "archive/a.pdf"
 
                 rig.session.rescan()
                 rig.db
                     .documentDao()
-                    .getByDocId(id)!!
+                    .requireByDocId(id)
                     .relPath shouldBe "archive/a.pdf"
             } finally {
                 rig.close()

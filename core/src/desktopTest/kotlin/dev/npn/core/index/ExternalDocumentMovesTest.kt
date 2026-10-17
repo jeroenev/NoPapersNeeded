@@ -23,7 +23,7 @@ class ExternalDocumentMovesTest {
                 intended shouldBe "archive/manual.pdf"
                 rig.db
                     .documentDao()
-                    .getByDocId(hash)!!
+                    .requireByDocId(hash)
                     .relPath shouldBe "archive/manual.pdf"
                 rig.exists("original.pdf") shouldBe false
                 val version = rig.accumulator.loadState().propVersion(hash, SystemProperty.STORAGE_PATH)
@@ -82,7 +82,7 @@ class ExternalDocumentMovesTest {
                 coordinator.rescan()
                 a.db
                     .documentDao()
-                    .getByDocId(hash)!!
+                    .requireByDocId(hash)
                     .relPath shouldBe "manual.pdf"
                 a.accumulator.loadState().effectiveProp(hash, SystemProperty.STORAGE_PATH) shouldBe "manual.pdf"
                 a.exists("app.pdf") shouldBe false
@@ -95,11 +95,11 @@ class ExternalDocumentMovesTest {
                 b.coordinator(b.writer("replica")).rescan()
                 b.db
                     .documentDao()
-                    .getByDocId(hash)!!
+                    .requireByDocId(hash)
                     .relPath shouldBe "manual.pdf"
                 b.db
                     .documentDao()
-                    .getByDocId(hash)!!
+                    .requireByDocId(hash)
                     .reviewed shouldBe true
             } finally {
                 a.close()
@@ -125,7 +125,7 @@ class ExternalDocumentMovesTest {
                 coordinator.rescan()
                 rig.db
                     .documentDao()
-                    .getByDocId(hash)!!
+                    .requireByDocId(hash)
                     .relPath shouldBe "remote.pdf"
                 rig.accumulator.loadState().propVersion(hash, SystemProperty.STORAGE_PATH) shouldBe remoteVersion
             } finally {
@@ -191,7 +191,7 @@ class ExternalDocumentMovesTest {
                 coordinator.rescan()
                 rig.db
                     .documentDao()
-                    .getByDocId(hash)!!
+                    .requireByDocId(hash)
                     .relPath shouldBe "applied.pdf"
                 rig.accumulator.loadState().propVersion(hash, SystemProperty.STORAGE_PATH) shouldBe version
             } finally {

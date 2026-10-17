@@ -7,6 +7,7 @@ import dev.npn.core.db.queueState
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.index.MutableClock
 import dev.npn.core.index.WriteSettle
+import dev.npn.core.index.requireByDocId
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
@@ -231,7 +232,7 @@ class OcrPipelineStaleFileTest {
             rig.db.documentDao().upsert(
                 rig.db
                     .documentDao()
-                    .getByDocId(realId)!!
+                    .requireByDocId(realId)
                     .copy(
                         docId = EMPTY,
                         relPath = "empty.pdf",

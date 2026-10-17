@@ -3,6 +3,7 @@ package dev.npn.core.ocr
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.QueueState
 import dev.npn.core.db.searchDocIds
+import dev.npn.core.index.requireByDocId
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -45,7 +46,7 @@ class AiOcrPipelineTest {
 
             ai.calls shouldBe 0
             local.calls shouldBe 1
-            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "mlkit"
+            db.documentDao().requireByDocId(docId).ocrEngine shouldBe "mlkit"
             db.ftsDao().searchDocIds("local") shouldContainExactly listOf(docId)
         }
 
@@ -61,8 +62,8 @@ class AiOcrPipelineTest {
             ai.calls shouldBe 1
             local.calls shouldBe 0
             OcrSidecarCodec.decode(OcrSidecarFiles(fs).read(docId, "devA.ai")).engine shouldBe OcrEngineId.AI.column
-            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe OcrEngineId.AI.column
-            db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrState.DONE.column
+            db.documentDao().requireByDocId(docId).ocrEngine shouldBe OcrEngineId.AI.column
+            db.documentDao().requireByDocId(docId).ocrState shouldBe OcrState.DONE.column
             db.ftsDao().searchDocIds("transcribed") shouldContainExactly listOf(docId)
         }
 
@@ -80,7 +81,7 @@ class AiOcrPipelineTest {
 
             ai.calls shouldBe 1
             local.calls shouldBe 0
-            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe OcrEngineId.AI.column
+            db.documentDao().requireByDocId(docId).ocrEngine shouldBe OcrEngineId.AI.column
             db.ftsDao().searchDocIds("model") shouldContainExactly listOf(docId)
         }
 
@@ -91,7 +92,7 @@ class AiOcrPipelineTest {
             val ai = FakeOcrEngine(isAvailable = true, name = OcrEngineId.AI.column, canned = "accurate model reading")
             val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
             rig.pipeline("devA", local, engines = selector(local, ai)).processDoc(docId)
-            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "mlkit"
+            db.documentDao().requireByDocId(docId).ocrEngine shouldBe "mlkit"
 
             rig.askForAi(docId)
             rig.pipeline("devA", local, engines = selector(local, ai)).processDoc(docId)
@@ -100,7 +101,7 @@ class AiOcrPipelineTest {
             // Both versions co-exist (sidecars are write-once); search follows the better one.
             OcrSidecarCodec.decode(OcrSidecarFiles(fs).read(docId, "devA.mlkit")).engine shouldBe "mlkit"
             OcrSidecarCodec.decode(OcrSidecarFiles(fs).read(docId, "devA.ai")).engine shouldBe OcrEngineId.AI.column
-            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe OcrEngineId.AI.column
+            db.documentDao().requireByDocId(docId).ocrEngine shouldBe OcrEngineId.AI.column
             db.ftsDao().searchDocIds("accurate") shouldContainExactly listOf(docId)
             db.ftsDao().searchDocIds("locel") shouldBe emptyList()
         }
@@ -119,7 +120,7 @@ class AiOcrPipelineTest {
 
             ai.calls shouldBe 0
             local.calls shouldBe 1
-            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "mlkit"
+            db.documentDao().requireByDocId(docId).ocrEngine shouldBe "mlkit"
             db.ftsDao().searchDocIds("local") shouldContainExactly listOf(docId)
         }
 
@@ -140,8 +141,8 @@ class AiOcrPipelineTest {
 
             ai.calls shouldBe 0
             local.calls shouldBe 3
-            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "mlkit"
-            db.documentDao().getByDocId(docId)!!.pageCount shouldBe 3
+            db.documentDao().requireByDocId(docId).ocrEngine shouldBe "mlkit"
+            db.documentDao().requireByDocId(docId).pageCount shouldBe 3
 
             pipe.reconcileSidecars()
 
@@ -169,7 +170,7 @@ class AiOcrPipelineTest {
 
             ai.calls shouldBe 3
             local.calls shouldBe 0
-            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe OcrEngineId.AI.column
+            db.documentDao().requireByDocId(docId).ocrEngine shouldBe OcrEngineId.AI.column
             db.ftsDao().searchDocIds("model") shouldContainExactly listOf(docId)
 
             pipe.reconcileSidecars()
@@ -199,7 +200,7 @@ class AiOcrPipelineTest {
             pipe.drain()
 
             ai.calls shouldBe 1
-            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe OcrEngineId.AI.column
+            db.documentDao().requireByDocId(docId).ocrEngine shouldBe OcrEngineId.AI.column
             db.ftsDao().searchDocIds("model") shouldContainExactly listOf(docId)
         }
 
@@ -386,7 +387,7 @@ class AiOcrPipelineTest {
 
             ai.calls shouldBe 0
             local.calls shouldBe 1
-            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "mlkit"
+            db.documentDao().requireByDocId(docId).ocrEngine shouldBe "mlkit"
             db.ftsDao().searchDocIds("fallback") shouldContainExactly listOf(docId)
         }
 
@@ -410,7 +411,7 @@ class AiOcrPipelineTest {
 
             ai.calls shouldBe 0
             local.calls shouldBe 0
-            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe OcrEngineId.EMBEDDED.column
+            db.documentDao().requireByDocId(docId).ocrEngine shouldBe OcrEngineId.EMBEDDED.column
         }
 }
 

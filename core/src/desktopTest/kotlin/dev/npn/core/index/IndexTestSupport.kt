@@ -181,6 +181,14 @@ class LegacySegments(
 suspend fun DocumentDao.rowAtPath(relPath: String): DocumentEntity? =
     allPathsAndMeta().firstOrNull { it.relPath == relPath }?.let { getByDocId(it.docId) }
 
+/** [rowAtPath], failing the test with [relPath] when no live row is there. */
+suspend fun DocumentDao.requireRowAtPath(relPath: String): DocumentEntity =
+    checkNotNull(rowAtPath(relPath)) { "No live index row at $relPath" }
+
+/** The row of [docId], failing the test with the id when the index has none. */
+suspend fun DocumentDao.requireByDocId(docId: String): DocumentEntity =
+    checkNotNull(getByDocId(docId)) { "No index row for document $docId" }
+
 /**
  * Hand-cranked test clock. With [autoTick] off (default) it returns [now] verbatim and only
  * [advance] moves it — the explicit-advance style the indexer/reconcile tests rely on. With

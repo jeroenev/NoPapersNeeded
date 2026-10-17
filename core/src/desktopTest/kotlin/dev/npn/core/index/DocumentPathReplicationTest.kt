@@ -90,11 +90,11 @@ class DocumentPathReplicationTest {
                 b.rescan()
                 a.db
                     .documentDao()
-                    .getByDocId(hash)!!
+                    .requireByDocId(hash)
                     .relPath shouldBe "b.pdf"
                 b.db
                     .documentDao()
-                    .getByDocId(hash)!!
+                    .requireByDocId(hash)
                     .relPath shouldBe "b.pdf"
                 a.exists("a.pdf") shouldBe false
                 copyJournal(a, rebuilt)
@@ -103,7 +103,7 @@ class DocumentPathReplicationTest {
                 rebuilt.rescan()
                 rebuilt.db
                     .documentDao()
-                    .getByDocId(hash)!!
+                    .requireByDocId(hash)
                     .relPath shouldBe "b.pdf"
                 rebuilt.fs.sha256("b.pdf") shouldBe hash
                 rebuilt.exists("old.pdf") shouldBe false
@@ -132,15 +132,15 @@ class DocumentPathReplicationTest {
                 rig.fs.sha256("new.pdf") shouldBe hash
                 rig.db
                     .documentDao()
-                    .getByDocId(blocker)!!
+                    .requireByDocId(blocker)
                     .missing shouldBe true
                 rig.db
                     .documentDao()
-                    .getByDocId(blocker)!!
+                    .requireByDocId(blocker)
                     .reviewed shouldBe true
                 rig.db
                     .documentDao()
-                    .getByDocId(hash)!!
+                    .requireByDocId(hash)
                     .relPath shouldBe "new.pdf"
             } finally {
                 rig.close()
@@ -164,7 +164,7 @@ class DocumentPathReplicationTest {
                 )
                 rig.db
                     .documentDao()
-                    .getByDocId(hash)!!
+                    .requireByDocId(hash)
                     .reviewed shouldBe true
                 rig.rescan().pathConflicts.size shouldBe 1
                 rig.exists("old.pdf") shouldBe true
@@ -282,7 +282,7 @@ class DocumentPathReplicationTest {
                 rig.rescan()
                 rig.db
                     .documentDao()
-                    .getByDocId(hash)!!
+                    .requireByDocId(hash)
                     .relPath shouldBe "archive/new.pdf"
                 rig.fs.sha256("archive/new.pdf") shouldBe hash
                 rig.exists("old.pdf") shouldBe false
@@ -363,7 +363,7 @@ class DocumentPathReplicationTest {
                     rig.exists("old.pdf") shouldBe true
                     rig.db
                         .documentDao()
-                        .getByDocId(hash)!!
+                        .requireByDocId(hash)
                         .relPath shouldBe "old.pdf"
                 }
             } finally {

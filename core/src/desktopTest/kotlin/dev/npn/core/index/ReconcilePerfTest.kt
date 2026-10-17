@@ -157,7 +157,7 @@ class ReconcilePerfTest {
         runTest {
             writePdf("a.pdf", "alpha")
             rescan()
-            val docId = db.documentDao().rowAtPath("a.pdf")!!.docId
+            val docId = db.documentDao().requireRowAtPath("a.pdf").docId
 
             // A committed tag publishes a journal object; project it through the coordinator.
             val writer = writer("dev-main")
@@ -183,7 +183,7 @@ class ReconcilePerfTest {
         runTest {
             writePdf("a.pdf", "alpha")
             rescan()
-            val docId = db.documentDao().rowAtPath("a.pdf")!!.docId
+            val docId = db.documentDao().requireRowAtPath("a.pdf").docId
 
             // An older build's v1 segment, as libraries still hold them.
             clock.advance()
@@ -217,8 +217,8 @@ class ReconcilePerfTest {
             writePdf("a.pdf", "alpha")
             writePdf("b.pdf", "bravo")
             rescan()
-            val a = db.documentDao().rowAtPath("a.pdf")!!.docId
-            val b = db.documentDao().rowAtPath("b.pdf")!!.docId
+            val a = db.documentDao().requireRowAtPath("a.pdf").docId
+            val b = db.documentDao().requireRowAtPath("b.pdf").docId
 
             val writer = writer("dev-main")
             val coordinator = coordinator(writer)
@@ -248,7 +248,7 @@ class ReconcilePerfTest {
 
             val incrementalTagsA = db.tagDao().tagsForDocument(a)
             val incrementalTagsB = db.tagDao().tagsForDocument(b)
-            val incrementalB = db.documentDao().getByDocId(b)!!
+            val incrementalB = db.documentDao().requireByDocId(b)
 
             incrementalTagsA shouldContainExactly listOf("receipt")
             incrementalTagsB shouldContainExactly listOf("urgent")
@@ -260,9 +260,9 @@ class ReconcilePerfTest {
 
             db.tagDao().tagsForDocument(a) shouldContainExactly incrementalTagsA
             db.tagDao().tagsForDocument(b) shouldContainExactly incrementalTagsB
-            val fullB = db.documentDao().getByDocId(b)!!
+            val fullB = db.documentDao().requireByDocId(b)
             fullB.reviewed shouldBe incrementalB.reviewed
-            db.documentDao().getByDocId(a)!!.correspondent shouldBe "acme"
+            db.documentDao().requireByDocId(a).correspondent shouldBe "acme"
         }
 
     /**
@@ -272,7 +272,7 @@ class ReconcilePerfTest {
     private suspend fun seedReadyLibrary(): String {
         writePdf("a.pdf", "alpha")
         rescan()
-        val docId = db.documentDao().rowAtPath("a.pdf")!!.docId
+        val docId = db.documentDao().requireRowAtPath("a.pdf").docId
         val coordinator = coordinator(writer("dev-main"))
         coordinator.refreshState()
         clock.advance()
@@ -397,7 +397,7 @@ class ReconcilePerfTest {
         runTest {
             writePdf("a.pdf", "alpha")
             rescan()
-            val docId = db.documentDao().rowAtPath("a.pdf")!!.docId
+            val docId = db.documentDao().requireRowAtPath("a.pdf").docId
 
             clock.advance()
             val segment = LegacySegments(fs, "dev-main", clock).write(listOf(PendingOp.tagAdd(docId, "invoice")))

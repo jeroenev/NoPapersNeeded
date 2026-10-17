@@ -5,6 +5,7 @@ import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.index.MetadataWriteBlocked
+import dev.npn.core.index.requireByDocId
 import dev.npn.core.journal.CompactionCandidate
 import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.JournalCodec
@@ -81,7 +82,7 @@ class MetadataWriterTest {
                 rig.session.meta.setReviewed(listOf(id), true)
                 rig.db
                     .documentDao()
-                    .getByDocId(id)!!
+                    .requireByDocId(id)
                     .reviewed shouldBe true
             } finally {
                 rig.close()
@@ -178,7 +179,7 @@ class MetadataWriterTest {
 
                 rig.session.meta.setField(listOf(id), "correspondent", "ACME")
                 rig.session.meta.setField(listOf(id), "docType", "Invoice")
-                val doc = rig.db.documentDao().getByDocId(id)!!
+                val doc = rig.db.documentDao().requireByDocId(id)
                 doc.correspondent shouldBe "ACME"
                 doc.docType shouldBe "Invoice"
 
@@ -295,14 +296,14 @@ class MetadataWriterTest {
                 // Projected onto the override column (not the indexed-version column).
                 rig.db
                     .documentDao()
-                    .getByDocId(id)!!
+                    .requireByDocId(id)
                     .ocrEngineOverride shouldBe "tesseract"
 
                 // Clearing removes the override.
                 rig.session.ocr.setOcrEngine(id, null)
                 rig.db
                     .documentDao()
-                    .getByDocId(id)!!
+                    .requireByDocId(id)
                     .ocrEngineOverride shouldBe null
             } finally {
                 rig.close()
@@ -455,7 +456,7 @@ class MetadataWriterTest {
                 rig.session.docLifecycle.trashDoc(id)
                 bridgeSession.rescan()
                 db2.metadataProjectionDao().allEvents().map { it.operation } shouldContain "doc-trash"
-                db2.documentDao().getByDocId(id)!!.trashed shouldBe true
+                db2.documentDao().requireByDocId(id).trashed shouldBe true
 
                 bridgeSession.close()
             } finally {

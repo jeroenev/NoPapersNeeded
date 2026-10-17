@@ -6,6 +6,7 @@ import dev.npn.core.db.TempIndexDb
 import dev.npn.core.db.documentEntity
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.PathExternalIo
+import dev.npn.core.index.requireByDocId
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -55,7 +56,7 @@ class ThumbnailServiceTest {
             isPng(store.lastPng!!).shouldBeTrue()
 
             // pageCount backfilled from the open handle.
-            db.documentDao().getByDocId(docId)!!.pageCount shouldBe 2
+            db.documentDao().requireByDocId(docId).pageCount shouldBe 2
             db.thumbnailDao().get(docId)!!.cachePath shouldBe path
         }
 

@@ -58,7 +58,7 @@ class IndexerTest {
             for (pm in docs) {
                 rig.db
                     .documentDao()
-                    .getByDocId(pm.docId)!!
+                    .requireByDocId(pm.docId)
                     .addedAt shouldBe 1_000L
             }
         }
@@ -106,7 +106,7 @@ class IndexerTest {
             val docId =
                 rig.db
                     .documentDao()
-                    .rowAtPath("a.pdf")!!
+                    .requireRowAtPath("a.pdf")
                     .docId
 
             rig.moveFile("a.pdf", "archive/a.pdf")
@@ -115,7 +115,7 @@ class IndexerTest {
             report.moved shouldBe 1
             report.added shouldBe 0
             rig.db.documentDao().rowAtPath("a.pdf") shouldBe null
-            val moved = rig.db.documentDao().rowAtPath("archive/a.pdf")!!
+            val moved = rig.db.documentDao().requireRowAtPath("archive/a.pdf")
             moved.docId shouldBe docId
             moved.missing.shouldBeFalse()
         }
@@ -128,7 +128,7 @@ class IndexerTest {
             val docId =
                 rig.db
                     .documentDao()
-                    .rowAtPath("a.pdf")!!
+                    .requireRowAtPath("a.pdf")
                     .docId
 
             rig.copyFile("a.pdf", "copies/a-copy.pdf")
@@ -140,7 +140,7 @@ class IndexerTest {
             // canonical row untouched
             rig.db
                 .documentDao()
-                .getByDocId(docId)!!
+                .requireByDocId(docId)
                 .relPath shouldBe "a.pdf"
             rig.db.duplicateDao().forDoc(docId) shouldHaveSize 1
 
@@ -157,7 +157,7 @@ class IndexerTest {
             val oldId =
                 rig.db
                     .documentDao()
-                    .rowAtPath("a.pdf")!!
+                    .requireRowAtPath("a.pdf")
                     .docId
 
             // Tag the old doc via a real journal event, then fold it in.
@@ -176,12 +176,12 @@ class IndexerTest {
             val newId =
                 rig.db
                     .documentDao()
-                    .rowAtPath("a.pdf")!!
+                    .requireRowAtPath("a.pdf")
                     .docId
             (newId != oldId).shouldBeTrue()
             rig.db
                 .documentDao()
-                .getByDocId(oldId)!!
+                .requireByDocId(oldId)
                 .missing
                 .shouldBeTrue()
             report.relinkCandidates
@@ -199,7 +199,7 @@ class IndexerTest {
             rig.db.tagDao().tagsForDocument(newId) shouldContainExactly listOf("invoice")
             rig.db
                 .documentDao()
-                .getByDocId(oldId)!!
+                .requireByDocId(oldId)
                 .deleted
                 .shouldBeTrue()
 
@@ -208,7 +208,7 @@ class IndexerTest {
                 coordinator.rescan()
                 rig.db
                     .documentDao()
-                    .getByDocId(oldId)!!
+                    .requireByDocId(oldId)
                     .deleted
                     .shouldBeTrue()
             }
@@ -222,7 +222,7 @@ class IndexerTest {
             val docId =
                 rig.db
                     .documentDao()
-                    .rowAtPath("a.pdf")!!
+                    .requireRowAtPath("a.pdf")
                     .docId
 
             rig.deleteFile("a.pdf")
@@ -230,7 +230,7 @@ class IndexerTest {
             gone.missingCount shouldBe 1
             rig.db
                 .documentDao()
-                .getByDocId(docId)!!
+                .requireByDocId(docId)
                 .missing
                 .shouldBeTrue()
 
@@ -238,7 +238,7 @@ class IndexerTest {
             rig.rescan()
             rig.db
                 .documentDao()
-                .getByDocId(docId)!!
+                .requireByDocId(docId)
                 .missing
                 .shouldBeFalse()
         }
@@ -290,7 +290,7 @@ class IndexerTest {
             val docId =
                 rig.db
                     .documentDao()
-                    .rowAtPath("a.pdf")!!
+                    .requireRowAtPath("a.pdf")
                     .docId
 
             val writer = rig.writer("dev-main")
@@ -305,7 +305,7 @@ class IndexerTest {
             rig.rescan()
 
             rig.db.tagDao().tagsForDocument(docId) shouldContainExactly listOf("receipt")
-            val row = rig.db.documentDao().getByDocId(docId)!!
+            val row = rig.db.documentDao().requireByDocId(docId)
             row.reviewed shouldBe true
             row.correspondent shouldBe "acme"
 
@@ -324,7 +324,7 @@ class IndexerTest {
             val docId =
                 rig.db
                     .documentDao()
-                    .rowAtPath("a.pdf")!!
+                    .requireRowAtPath("a.pdf")
                     .docId
 
             val writer = rig.writer("dev-main")
@@ -342,7 +342,7 @@ class IndexerTest {
 
             // The `documents` cache columns are written by the Indexer from the field map, so each
             // one must agree with the `document_fields` row for the same key.
-            val row = rig.db.documentDao().getByDocId(docId)!!
+            val row = rig.db.documentDao().requireByDocId(docId)
             val fields =
                 rig.db
                     .documentFieldDao()
@@ -406,7 +406,7 @@ class IndexerTest {
             val docId =
                 rig.db
                     .documentDao()
-                    .rowAtPath("a.pdf")!!
+                    .requireRowAtPath("a.pdf")
                     .docId
 
             val devA = rig.writer("device-A")
@@ -441,7 +441,7 @@ class IndexerTest {
             val docId =
                 rig.db
                     .documentDao()
-                    .rowAtPath("a.pdf")!!
+                    .requireRowAtPath("a.pdf")
                     .docId
 
             // Simulate the OCR pipeline writing extracted text into the FTS content column.
@@ -486,7 +486,7 @@ class IndexerTest {
             val docId =
                 rig.db
                     .documentDao()
-                    .rowAtPath("a.pdf")!!
+                    .requireRowAtPath("a.pdf")
                     .docId
 
             rig.db.ftsDao().upsertContent(

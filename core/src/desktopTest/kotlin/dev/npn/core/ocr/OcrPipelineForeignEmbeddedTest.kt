@@ -1,6 +1,7 @@
 package dev.npn.core.ocr
 
 import dev.npn.core.db.searchDocIds
+import dev.npn.core.index.requireByDocId
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
@@ -39,7 +40,7 @@ class OcrPipelineForeignEmbeddedTest {
             OcrSidecarFiles(rig.fs).listForHash(docId) shouldContainExactly listOf("otherdev.embedded")
             rig.db
                 .documentDao()
-                .getByDocId(docId)!!
+                .requireByDocId(docId)
                 .ocrState shouldBe OcrState.ADOPTED.column
             rig.db.ftsDao().searchDocIds("layer") shouldContainExactly listOf(docId)
         }
@@ -57,7 +58,7 @@ class OcrPipelineForeignEmbeddedTest {
             fake.calls shouldBe 1
             rig.db
                 .documentDao()
-                .getByDocId(docId)!!
+                .requireByDocId(docId)
                 .ocrEngine shouldBe "mlkit"
         }
 

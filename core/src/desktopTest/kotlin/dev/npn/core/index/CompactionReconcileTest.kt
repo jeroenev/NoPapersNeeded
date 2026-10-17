@@ -126,7 +126,7 @@ class CompactionReconcileTest {
             val coordinator = coordinator(threshold = 3)
             initialScan()
             coordinator.refreshState()
-            val docId = db.documentDao().rowAtPath("a.pdf")!!.docId
+            val docId = db.documentDao().requireRowAtPath("a.pdf").docId
 
             // 6 separate transactions -> 6 v2 objects, above the threshold of 3.
             repeat(6) { i ->
@@ -160,7 +160,7 @@ class CompactionReconcileTest {
             val coordinator = coordinator(threshold = 3)
             initialScan()
             coordinator.refreshState()
-            val docId = db.documentDao().rowAtPath("a.pdf")!!.docId
+            val docId = db.documentDao().requireRowAtPath("a.pdf").docId
             repeat(5) { i ->
                 clock.advance()
                 coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "tag$i")))
@@ -419,7 +419,7 @@ class CompactionReconcileTest {
             val coordinator = coordinator(threshold = 3)
             initialScan()
             coordinator.refreshState()
-            val docId = db.documentDao().rowAtPath("a.pdf")!!.docId
+            val docId = db.documentDao().requireRowAtPath("a.pdf").docId
             repeat(4) { i ->
                 clock.advance()
                 coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "tag$i")))
@@ -446,7 +446,7 @@ class CompactionReconcileTest {
             val coordinator = coordinator(threshold = 3)
             initialScan()
             coordinator.refreshState()
-            val docId = db.documentDao().rowAtPath("a.pdf")!!.docId
+            val docId = db.documentDao().requireRowAtPath("a.pdf").docId
             repeat(6) { i ->
                 clock.advance()
                 coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "tag$i")))
@@ -472,7 +472,7 @@ class CompactionReconcileTest {
             val coordinator = coordinator(threshold = 3)
             initialScan()
             coordinator.refreshState()
-            val docId = db.documentDao().rowAtPath("a.pdf")!!.docId
+            val docId = db.documentDao().requireRowAtPath("a.pdf").docId
 
             // First snapshot from 6 objects.
             repeat(6) { i ->

@@ -2,6 +2,7 @@ package dev.npn.core.app
 
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.index.requireByDocId
 import dev.npn.core.journal.JournalCodec
 import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.JournalPath
@@ -99,7 +100,7 @@ class StoragePathRuleIntegrationTest {
                 rig.session.meta.setField(imported.docId, "invoiceDate", "2026-03-14")
                 rig.db
                     .documentDao()
-                    .getByDocId(imported.docId)!!
+                    .requireByDocId(imported.docId)
                     .relPath shouldBe "organized/2026/scan.pdf"
             } finally {
                 rig.close()
@@ -117,7 +118,7 @@ class StoragePathRuleIntegrationTest {
                         as ImportOutcome.Imported
                 rig.session.meta.setField(imported.docId, FieldKeys.TITLE, "Annual report")
 
-                val moved = rig.db.documentDao().getByDocId(imported.docId)!!
+                val moved = rig.db.documentDao().requireByDocId(imported.docId)
                 moved.relPath shouldBe "by-title/Annual report.pdf"
                 moved.fileName shouldBe "Annual report.pdf"
                 rig.exists(moved.relPath) shouldBe true
@@ -126,7 +127,7 @@ class StoragePathRuleIntegrationTest {
                 rig.session.meta.setField(imported.docId, FieldKeys.TITLE, "Annual report")
                 rig.db
                     .documentDao()
-                    .getByDocId(imported.docId)!!
+                    .requireByDocId(imported.docId)
                     .relPath shouldBe moved.relPath
                 rig.exists("by-title/Annual report-1.pdf") shouldBe false
             } finally {
@@ -157,7 +158,7 @@ class StoragePathRuleIntegrationTest {
                 first.await()
                 second.await()
 
-                val doc = rig.db.documentDao().getByDocId(imported.docId)!!
+                val doc = rig.db.documentDao().requireByDocId(imported.docId)
                 doc.relPath shouldBe "by-title/New.pdf"
                 rig.exists("by-title/New.pdf") shouldBe true
                 rig.exists("by-title/Old.pdf") shouldBe false

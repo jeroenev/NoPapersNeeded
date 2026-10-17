@@ -1,6 +1,7 @@
 package dev.npn.core.app
 
 import dev.npn.core.index.MutableClock
+import dev.npn.core.index.requireByDocId
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.pdf.PdfBoxEngine
 import dev.npn.core.pdf.PdfFixtures
@@ -49,7 +50,7 @@ class HlcSeedingTest {
 
                 rig.db
                     .documentDao()
-                    .getByDocId(id)!!
+                    .requireByDocId(id)
                     .correspondent shouldBe "from-a"
                 rig.session.documents
                     .observeDoc(id)
@@ -58,7 +59,7 @@ class HlcSeedingTest {
 
                 // Device 2 syncs back and converges to device 1's newer edits.
                 session2.rescan()
-                db2.documentDao().getByDocId(id)!!.correspondent shouldBe "from-a"
+                db2.documentDao().requireByDocId(id).correspondent shouldBe "from-a"
                 session2.close()
             } finally {
                 if (db2 !== rig.db) db2.close()
@@ -100,7 +101,7 @@ class HlcSeedingTest {
                 session2.meta.setField(id, FieldKeys.TITLE, "second")
                 rig.db
                     .documentDao()
-                    .getByDocId(id)!!
+                    .requireByDocId(id)
                     .title shouldBe "second"
 
                 // Deleting the field written by the previous session must stick...

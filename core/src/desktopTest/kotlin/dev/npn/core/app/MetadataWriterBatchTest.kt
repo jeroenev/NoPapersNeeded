@@ -1,5 +1,6 @@
 package dev.npn.core.app
 
+import dev.npn.core.index.requireByDocId
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pdf.PdfFixtures
@@ -44,7 +45,7 @@ class MetadataWriterBatchTest {
                 )
 
                 rig.journalObjectCount() shouldBe objectsBefore + 2
-                val doc = rig.db.documentDao().getByDocId(id)!!
+                val doc = rig.db.documentDao().requireByDocId(id)
                 doc.title shouldBe "Annual report"
                 doc.correspondent shouldBe "Acme"
                 doc.docDate shouldBe "2026-01-31"
@@ -87,8 +88,8 @@ class MetadataWriterBatchTest {
                 // One metadata object for both documents, followed by their two path intents.
                 rig.journalObjectCount() shouldBe objectsBefore + 3
 
-                val docA = rig.db.documentDao().getByDocId(a)!!
-                val docB = rig.db.documentDao().getByDocId(b)!!
+                val docA = rig.db.documentDao().requireByDocId(a)
+                val docB = rig.db.documentDao().requireByDocId(b)
                 docA.correspondent shouldBe "Acme"
                 docB.correspondent shouldBe "Acme"
                 // Titles are untouched, so each keeps its own rule path under the shared folder.
@@ -124,7 +125,7 @@ class MetadataWriterBatchTest {
 
                 rig.session.meta.applyEdits(listOf(id), fields = mapOf(FieldKeys.CORRESPONDENT to null))
 
-                val doc = rig.db.documentDao().getByDocId(id)!!
+                val doc = rig.db.documentDao().requireByDocId(id)
                 doc.title shouldBe "Keep me"
                 doc.correspondent shouldBe null
             } finally {

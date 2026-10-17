@@ -2,6 +2,7 @@ package dev.npn.core.ocr
 
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.QueueState
+import dev.npn.core.index.requireByDocId
 import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.work.QueueDrainer
 import io.kotest.assertions.throwables.shouldThrow
@@ -104,7 +105,7 @@ class OcrPipelineHookTest {
                 rebuilt.documentDao().upsert(
                     rig.db
                         .documentDao()
-                        .getByDocId(docId)!!
+                        .requireByDocId(docId)
                         .copy(ocrState = OcrState.NONE.column),
                 )
                 // The queue is this device's and outlives the index; re-queued as a rebuild's rescan
@@ -192,7 +193,7 @@ class OcrPipelineHookTest {
                     rebuilt.documentDao().upsert(
                         rig.db
                             .documentDao()
-                            .getByDocId(docId)!!
+                            .requireByDocId(docId)
                             .copy(ocrState = OcrState.NONE.column),
                     )
                 }

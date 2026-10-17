@@ -11,6 +11,7 @@ import dev.npn.core.db.TempIndexDb
 import dev.npn.core.db.documentEntity
 import dev.npn.core.index.FtsRows
 import dev.npn.core.index.MutableClock
+import dev.npn.core.index.requireByDocId
 import dev.npn.core.testing.FakeAiSuggest
 import dev.npn.core.testing.FakeFieldRegistry
 import dev.npn.core.testing.FakeMetadataWriter
@@ -123,7 +124,7 @@ internal class Rig(
     )
 
     suspend fun trash(docId: String) {
-        val doc = db.documentDao().getByDocId(docId)!!
+        val doc = db.documentDao().requireByDocId(docId)
         db.documentDao().upsert(doc.copy(trashed = true))
     }
 

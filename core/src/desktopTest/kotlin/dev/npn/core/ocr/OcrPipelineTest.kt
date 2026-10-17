@@ -6,6 +6,7 @@ import dev.npn.core.db.QueueState
 import dev.npn.core.db.documentEntity
 import dev.npn.core.db.searchDocIds
 import dev.npn.core.index.MutableClock
+import dev.npn.core.index.requireByDocId
 import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.work.QueueDrainer
 import dev.npn.core.work.backoffMs
@@ -43,14 +44,14 @@ class OcrPipelineTest {
             rig.pipeline("devA", fake).processDoc(docId)
 
             fake.calls shouldBe 0
-            db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrState.DONE.column
+            db.documentDao().requireByDocId(docId).ocrState shouldBe OcrState.DONE.column
             db.ftsDao().searchDocIds("invoice") shouldContainExactly listOf(docId)
 
             // Sidecar written once for this device+engine, engine=embedded.
             val sidecar = OcrSidecarCodec.decode(OcrSidecarFiles(fs).read(docId, "devA.embedded"))
             sidecar.engine shouldBe OcrEngineId.EMBEDDED.column
             sidecar.pages.size shouldBe 2
-            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe OcrEngineId.EMBEDDED.column
+            db.documentDao().requireByDocId(docId).ocrEngine shouldBe OcrEngineId.EMBEDDED.column
         }
 
     @Test
@@ -65,8 +66,8 @@ class OcrPipelineTest {
             fake.calls shouldBe 1 // one page
             val sidecar = OcrSidecarCodec.decode(OcrSidecarFiles(fs).read(docId, "devA.mlkit"))
             sidecar.engine shouldBe "mlkit"
-            db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrState.DONE.column
-            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "mlkit"
+            db.documentDao().requireByDocId(docId).ocrState shouldBe OcrState.DONE.column
+            db.documentDao().requireByDocId(docId).ocrEngine shouldBe "mlkit"
             db.ftsDao().searchDocIds("scanned") shouldContainExactly listOf(docId)
         }
 
@@ -126,7 +127,7 @@ class OcrPipelineTest {
                 rig.pipeline("devB", fakeB, dbB, deviceB.ocrQueueDao()).processDoc(docId)
 
                 fakeB.calls shouldBe 0
-                dbB.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrState.ADOPTED.column
+                dbB.documentDao().requireByDocId(docId).ocrState shouldBe OcrState.ADOPTED.column
                 dbB.ftsDao().searchDocIds("alpha") shouldContainExactly listOf(docId)
             } finally {
                 dbB.close()
@@ -199,7 +200,7 @@ class OcrPipelineTest {
                     .first { it.docId == docId }
             entry.attempts shouldBe 3
             entry.state shouldBe QueueState.FAILED.column
-            db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrState.FAILED.column
+            db.documentDao().requireByDocId(docId).ocrState shouldBe OcrState.FAILED.column
         }
 
     @Test
@@ -234,8 +235,8 @@ class OcrPipelineTest {
 
             rig.pipeline("devA", FakeOcrEngine(isAvailable = true, name = "tesseract")).reconcileSidecars()
 
-            db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrState.ADOPTED.column
-            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "tesseract"
+            db.documentDao().requireByDocId(docId).ocrState shouldBe OcrState.ADOPTED.column
+            db.documentDao().requireByDocId(docId).ocrEngine shouldBe "tesseract"
             db.ftsDao().searchDocIds("charlie") shouldContainExactly listOf(docId)
             rig.deviceDb
                 .ocrQueueDao()
@@ -254,7 +255,7 @@ class OcrPipelineTest {
             // mlkit outranks tesseract: adopt the foreign text now, but queue an own OCR run.
             rig.pipeline("devA", FakeOcrEngine(isAvailable = true, name = "mlkit")).reconcileSidecars()
 
-            db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrState.ADOPTED.column
+            db.documentDao().requireByDocId(docId).ocrState shouldBe OcrState.ADOPTED.column
             db.ftsDao().searchDocIds("charlie") shouldContainExactly listOf(docId)
             val entry =
                 rig.deviceDb
@@ -279,8 +280,8 @@ class OcrPipelineTest {
             // Both versions co-exist on disk; the better one is indexed.
             OcrSidecarCodec.decode(OcrSidecarFiles(fs).read(docId, "devA.mlkit")).engine shouldBe "mlkit"
             OcrSidecarCodec.decode(OcrSidecarFiles(fs).read(docId, "otherdev")).engine shouldBe "tesseract"
-            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "mlkit"
-            db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrState.DONE.column
+            db.documentDao().requireByDocId(docId).ocrEngine shouldBe "mlkit"
+            db.documentDao().requireByDocId(docId).ocrState shouldBe OcrState.DONE.column
             db.ftsDao().searchDocIds("delta") shouldContainExactly listOf(docId)
             db.ftsDao().searchDocIds("charlie") shouldBe emptyList()
         }
@@ -297,7 +298,7 @@ class OcrPipelineTest {
             // Own engine does not outrank mlkit -> pure adoption of the best stored version.
             rig.pipeline("devA", FakeOcrEngine(isAvailable = true, name = "mlkit")).processDoc(docId)
 
-            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "mlkit"
+            db.documentDao().requireByDocId(docId).ocrEngine shouldBe "mlkit"
             db.ftsDao().searchDocIds("mlkit") shouldContainExactly listOf(docId)
             db.ftsDao().searchDocIds("tesseract") shouldBe emptyList()
             db.ftsDao().searchDocIds("legacy") shouldBe emptyList()
@@ -312,19 +313,19 @@ class OcrPipelineTest {
             rig.writeForeignSidecar(docId, dev = "phonedev", engine = "mlkit", text = "mlkit words")
             val pipe = rig.pipeline("devA", FakeOcrEngine(isAvailable = false, name = "mlkit"))
             pipe.processDoc(docId)
-            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "mlkit"
+            db.documentDao().requireByDocId(docId).ocrEngine shouldBe "mlkit"
 
             // Simulate the folded override (the Indexer projects SystemProperty.OCR_ENGINE here).
             setOverride(docId, "tesseract")
             pipe.reselect(docId)
-            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "tesseract"
+            db.documentDao().requireByDocId(docId).ocrEngine shouldBe "tesseract"
             db.ftsDao().searchDocIds("tesseract") shouldContainExactly listOf(docId)
             db.ftsDao().searchDocIds("mlkit") shouldBe emptyList()
 
             // Clearing the override re-selects the best-ranked version.
             setOverride(docId, null)
             pipe.reselect(docId)
-            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "mlkit"
+            db.documentDao().requireByDocId(docId).ocrEngine shouldBe "mlkit"
             db.ftsDao().searchDocIds("mlkit") shouldContainExactly listOf(docId)
         }
 
@@ -338,7 +339,7 @@ class OcrPipelineTest {
 
             rig.pipeline("devA", FakeOcrEngine(isAvailable = false, name = "mlkit")).processDoc(docId)
 
-            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "tesseract"
+            db.documentDao().requireByDocId(docId).ocrEngine shouldBe "tesseract"
             db.ftsDao().searchDocIds("tesseract") shouldContainExactly listOf(docId)
         }
 
@@ -366,7 +367,7 @@ class OcrPipelineTest {
             pipe.processDoc(docId)
 
             fake.calls shouldBe 0
-            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "tesseract"
+            db.documentDao().requireByDocId(docId).ocrEngine shouldBe "tesseract"
             rig.deviceDb
                 .ocrQueueDao()
                 .observeQueue()
@@ -388,7 +389,7 @@ class OcrPipelineTest {
             rig.writeForeignSidecar(docId, dev = "olddev", engine = "mixed", text = "legacy mixed words")
 
             rig.pipeline("devA", FakeOcrEngine(isAvailable = false, name = "mlkit")).processDoc(docId)
-            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "mixed"
+            db.documentDao().requireByDocId(docId).ocrEngine shouldBe "mixed"
 
             val repo = DocumentRepositoryImpl(db)
             repo
@@ -409,7 +410,7 @@ class OcrPipelineTest {
         docId: String,
         engine: String?,
     ) {
-        val doc = db.documentDao().getByDocId(docId)!!
+        val doc = db.documentDao().requireByDocId(docId)
         db.documentDao().upsert(doc.copy(ocrEngineOverride = engine))
     }
 
