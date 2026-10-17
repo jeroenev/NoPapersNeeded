@@ -15,7 +15,7 @@ import kotlinx.coroutines.sync.withLock
  * `embedded` one has a text layer on every page) holds for good and is remembered.
  *
  * @param minEmbeddedCharsPerPage the trimmed length from which a page's embedded text counts as a
- *  usable text layer ([OcrConfig.minEmbeddedCharsPerPage]).
+ *  usable text layer ([OcrPipeline.MIN_EMBEDDED_CHARS_PER_PAGE]).
  */
 class OcrVersions internal constructor(
     private val sidecars: OcrSidecarFiles,

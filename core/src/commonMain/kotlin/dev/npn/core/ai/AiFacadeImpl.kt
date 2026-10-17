@@ -227,7 +227,7 @@ class AiFacadeImpl(
          * One retry, and deliberately only one: this is the only immediate retry on the paid OCR
          * path. Vision models do occasionally answer a page with a refusal, an empty message or a
          * transient endpoint error, and asking again fixes it. The pipeline's own retries of the
-         * document ([dev.npn.core.ocr.OcrConfig.maxAttempts]) wait out a backoff and resume from
+         * document ([dev.npn.core.ocr.OcrPipeline.MAX_ATTEMPTS]) wait out a backoff and resume from
          * the pages already read ([dev.npn.core.db.OcrPageCacheEntity]), so a page that was read is
          * never paid for twice; anything more here would turn a systematically failing endpoint
          * into a bill instead of an error.

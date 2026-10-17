@@ -29,23 +29,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Tunables for the hybrid extract-or-OCR pipeline.
- *
- * @param minEmbeddedCharsPerPage per-page threshold: a page whose trimmed embedded text has
- *  at least this many characters is treated as already having a usable text layer, so it is
- *  not rendered and OCR'd.
- * @param renderDpiDim max longer-side pixel dimension used when rendering a page for OCR.
- * @param maxAttempts attempts before a queue entry is marked permanently failed. Each failed
- *  attempt first waits out the [QueueRetryPolicy] backoff, so a failing document is not retried at
- *  once.
- */
-data class OcrConfig(
-    val minEmbeddedCharsPerPage: Int = 32,
-    val renderDpiDim: Int = 2000,
-    val maxAttempts: Int = 3,
-)
-
-/**
  * Hybrid OCR pipeline with co-existing OCR versions. Every device+engine pair may publish its
  * own sidecar for a document; the version indexed for search is the highest-priority engine
  * ([OcrEngineId.rank]) unless the user pinned an engine per document
@@ -83,13 +66,27 @@ class OcrPipeline(
     private val fieldDao: DocumentFieldDao,
     private val deviceId: String,
     private val language: suspend () -> String,
-    private val config: OcrConfig = OcrConfig(),
     private val clock: EpochClock = SystemEpochClock,
     private val onTextIndexed: suspend (docId: String, text: String) -> Unit = { _, _ -> },
     private val onOcrProduced: suspend (docId: String) -> Unit = {},
     private val onStaleFile: suspend (docId: String) -> Unit = {},
 ) {
     companion object {
+        /**
+         * Per-page threshold: a page whose trimmed embedded text has at least this many characters
+         * is treated as already having a usable text layer, so it is not rendered and OCR'd.
+         */
+        const val MIN_EMBEDDED_CHARS_PER_PAGE = 32
+
+        /** Max longer-side pixel dimension used when rendering a page for OCR. */
+        const val RENDER_DIM = 2000
+
+        /**
+         * Attempts before a queue entry is marked permanently failed. Each failed attempt first
+         * waits out the [QueueRetryPolicy] backoff, so a failing document is not retried at once.
+         */
+        const val MAX_ATTEMPTS = 3
+
         private val UNPROCESSED_STATES = setOf(OcrState.NONE, OcrState.PENDING, OcrState.FAILED)
 
         /**
@@ -102,10 +99,10 @@ class OcrPipeline(
         private const val STALE_FILE = "the file did not hold the document's bytes when read"
     }
 
-    private val retry = QueueRetryPolicy(config.maxAttempts)
+    private val retry = QueueRetryPolicy(MAX_ATTEMPTS)
 
     /** What is stored for each document, and which version of it to index. */
-    private val versions = OcrVersions(sidecars, config.minEmbeddedCharsPerPage)
+    private val versions = OcrVersions(sidecars, MIN_EMBEDDED_CHARS_PER_PAGE)
 
     private val _inFlight = MutableStateFlow<String?>(null)
 
@@ -378,12 +375,12 @@ class OcrPipeline(
             var usedOcr = false
             for (i in 0 until handle.pageCount) {
                 val embedded = handle.extractText(i)
-                if (embedded.trim().length >= config.minEmbeddedCharsPerPage || !canOcr) {
+                if (embedded.trim().length >= MIN_EMBEDDED_CHARS_PER_PAGE || !canOcr) {
                     // Usable text layer (or no engine): keep the embedded text as-is.
                     pages.add(embedded)
                 } else {
                     val text =
-                        read[i] ?: engine.recognizePng(handle.renderPagePng(i, config.renderDpiDim), lang).also {
+                        read[i] ?: engine.recognizePng(handle.renderPagePng(i, RENDER_DIM), lang).also {
                             // Kept until the run publishes: a later page failing must not cost this one again.
                             ocrQueueDao.cachePage(OcrPageCacheEntity(doc.docId, engine.name, lang, i, it))
                         }

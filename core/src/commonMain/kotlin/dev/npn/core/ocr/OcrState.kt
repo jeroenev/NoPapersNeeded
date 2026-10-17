@@ -18,7 +18,7 @@ enum class OcrState(
     /** This device produced the indexed text. */
     DONE("done"),
 
-    /** This device tried and gave up after [OcrConfig.maxAttempts]. */
+    /** This device tried and gave up after [OcrPipeline.MAX_ATTEMPTS]. */
     FAILED("failed"),
 
     /** Indexed text came from another device's sidecar, not from a run here. */

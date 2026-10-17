@@ -183,7 +183,7 @@ class OcrPipelineStaleFileTest {
 
             pipeline.processNext() shouldBe true
             queue.getByDocId(docId).shouldNotBeNull().attempts shouldBe 0
-            repeat(OcrConfig().maxAttempts) {
+            repeat(OcrPipeline.MAX_ATTEMPTS) {
                 clock.advance(DAY_MILLIS)
                 pipeline.processNext() shouldBe true
                 queue.getByDocId(docId).shouldNotBeNull().attempts shouldBe it + 1
@@ -195,7 +195,7 @@ class OcrPipelineStaleFileTest {
                 .getByDocId(docId)
                 .shouldNotBeNull()
                 .ocrState shouldBe OcrState.FAILED.column
-            stale shouldHaveSize OcrConfig().maxAttempts + 1
+            stale shouldHaveSize OcrPipeline.MAX_ATTEMPTS + 1
             clock.advance(DAY_MILLIS)
             pipeline.processNext() shouldBe false
         }
