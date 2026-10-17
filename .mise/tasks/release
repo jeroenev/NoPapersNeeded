@@ -55,8 +55,10 @@ fi
 
 current=$(sed -n 's/^npn\.version=//p' "$props")
 [ -n "$current" ] || die "npn.version not found in $props"
-[ "$version" != "$current" ] && [ "$(printf '%s\n%s\n' "$current" "$version" | sort -V | tail -n1)" = "$version" ] ||
+newest=$(printf '%s\n%s\n' "$current" "$version" | sort -V | tail -n1)
+if [ "$version" = "$current" ] || [ "$newest" != "$version" ]; then
     die "$version is not newer than the current $current"
+fi
 
 echo ">> $current -> $version"
 sed -i "s/^npn\.version=.*/npn.version=$version/" "$props"
