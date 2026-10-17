@@ -36,7 +36,6 @@ class CompactionReconcileTest {
     private val fs = rig.fs
     private val db = rig.db
     private val clock = rig.clock
-    private val accumulator = rig.accumulator
 
     // A large "now" so that files (real JVM mtimes near epoch-now) are older than the window.
     private val farFuture = 4_000_000_000_000L
