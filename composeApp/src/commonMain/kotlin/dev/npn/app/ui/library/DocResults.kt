@@ -3,17 +3,23 @@ package dev.npn.app.ui.library
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.ZoomOut
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -36,6 +42,7 @@ import dev.npn.app.ui.common.ScrollToTopOnNewResults
 import dev.npn.app.ui.common.ScrollbarWidth
 import dev.npn.app.ui.common.VerticalScrollbar
 import dev.npn.app.ui.common.ctrlScrollZoom
+import dev.npn.app.ui.common.isLandscape
 import dev.npn.app.ui.common.pinchToZoom
 import dev.npn.core.app.DocListItem
 import dev.npn.core.settings.GridSizing
@@ -259,6 +266,55 @@ private fun GridZoomControls(
                     contentDescription = stringResource(Res.string.library_larger_grid_items),
                 )
             }
+        }
+    }
+}
+
+@Composable
+internal fun DocList(
+    results: DocumentResults,
+    wiring: DocItemWiring,
+    selectionMode: Boolean,
+    selected: Set<String>,
+    landscapeColumns: Boolean,
+) {
+    val row: @Composable (DocListItem) -> Unit = { item ->
+        DocListRow(item, wiring, selectionMode, selected = item.doc.docId in selected)
+    }
+
+    // Multi-column list when the option is on and the content area is landscape; otherwise the
+    // classic single-column list. Two columns keeps each row wide enough to stay readable.
+    // Rows keep an end gutter clear so their content never sits under the scrollbar.
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        if (landscapeColumns && isLandscape) {
+            val gridState = rememberLazyGridState()
+            ScrollToTopOnNewResults(results.query, gridState)
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                state = gridState,
+                modifier = Modifier.fillMaxSize().padding(end = ScrollbarWidth),
+            ) {
+                items(results.items, key = { it.doc.docId }) { item ->
+                    Column {
+                        row(item)
+                        HorizontalDivider()
+                    }
+                }
+            }
+            VerticalScrollbar(gridState)
+        } else {
+            val listState = rememberLazyListState()
+            ScrollToTopOnNewResults(results.query, listState)
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize().padding(end = ScrollbarWidth),
+            ) {
+                items(results.items, key = { it.doc.docId }) { item ->
+                    row(item)
+                    HorizontalDivider()
+                }
+            }
+            VerticalScrollbar(listState)
         }
     }
 }

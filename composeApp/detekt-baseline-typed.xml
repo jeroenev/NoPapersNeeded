@@ -36,7 +36,7 @@
     <ID>MultipleEmitters:FilterSheet.kt:@Composable private fun TagFilterSection</ID>
     <ID>MultipleEmitters:ImportSettingsPane.kt:@Composable private fun OcrLanguageSettings</ID>
     <ID>MultipleEmitters:ImportSettingsPane.kt:@Composable private fun WatchedFolderSettings</ID>
-    <ID>MutableStateAutoboxing:DocGrid.kt:mutableStateOf(0f)</ID>
+    <ID>MutableStateAutoboxing:DocResults.kt:mutableStateOf(0f)</ID>
     <ID>MutableStateAutoboxing:MetadataOcr.kt:mutableStateOf(0)</ID>
     <ID>MutableStateAutoboxing:PageViewer.kt:mutableStateOf(0)</ID>
     <ID>MutableStateAutoboxing:PageViewer.kt:mutableStateOf(0f)</ID>

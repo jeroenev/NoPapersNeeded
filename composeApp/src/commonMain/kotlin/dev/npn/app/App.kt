@@ -47,10 +47,10 @@ import dev.npn.app.ui.ai.AiEditReviewScreen
 import dev.npn.app.ui.ai.AiEditScreen
 import dev.npn.app.ui.ai.AiEditSelection
 import dev.npn.app.ui.common.DesktopBridge
-import dev.npn.app.ui.common.PublishWindowTitle
 import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.LocaleProvider
 import dev.npn.app.ui.common.ProvideWindowWidthClass
+import dev.npn.app.ui.common.PublishWindowTitle
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.testTagsAsResourceIds
 import dev.npn.app.ui.detail.BrowseContext
