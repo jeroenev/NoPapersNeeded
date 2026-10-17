@@ -2,7 +2,6 @@ package dev.npn.core.app
 
 import dev.npn.core.db.LegacyIndexTables
 import dev.npn.core.db.NpnDatabase
-import dev.npn.core.journal.PendingOp
 import dev.npn.core.util.NpnJson
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -28,22 +27,9 @@ class SavedViewRepositoryImpl internal constructor(
             .map { views -> views.sortedWith(compareBy(SavedView::name, SavedView::id)) }
 
     /** Save [view], writing nothing when the journal already holds it as it is. */
-    override suspend fun save(view: SavedView) =
-        owned {
-            coordinator.commitBuilt { state ->
-                val value = encode(view)
-                listOfNotNull(
-                    PendingOp.settingSet(key(view.id), value).takeIf { state.effectiveSetting(key(view.id)) != value },
-                )
-            }
-        }
+    override suspend fun save(view: SavedView) = owned { coordinator.putSetting(key(view.id), encode(view)) }
 
-    override suspend fun delete(id: String) =
-        owned {
-            coordinator.commitBuilt { state ->
-                listOfNotNull(state.effectiveSetting(key(id))?.let { PendingOp.settingSet(key(id), null) })
-            }
-        }
+    override suspend fun delete(id: String) = owned { coordinator.putSetting(key(id), null) }
 
     /**
      * Move the views older builds kept in the index into the journal, then drop their table. A view

@@ -1,7 +1,11 @@
 package dev.npn.core.app
 
+import dev.npn.core.db.DocumentDao
+import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.model.SystemProperty
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 /** Library-wide review workflow, synced via the journal. */
 interface ReviewConfigFacade {
@@ -17,4 +21,32 @@ interface ReviewConfigFacade {
      * default false). No-op set writes nothing.
      */
     suspend fun markReviewedForMigration(onlyTagged: Boolean)
+}
+
+/**
+ * [ReviewConfigFacade] over the journal: the review workflow is a library setting, and the switch
+ * to the inbox workflow marks documents reviewed with the same `prop-set` events [MetadataWriterImpl]
+ * writes. Writes run through [owned], so the session waits them out before it closes.
+ */
+internal class JournalReviewConfig(
+    private val coordinator: JournalCoordinator,
+    private val documentDao: DocumentDao,
+    private val owned: suspend (suspend () -> Unit) -> Unit,
+) : ReviewConfigFacade {
+    override val reviewMode: Flow<ReviewMode> =
+        coordinator.settingFlow(ReviewMode.WIRE_KEY).map(ReviewMode::fromWire)
+
+    override suspend fun setReviewMode(mode: ReviewMode) =
+        owned { coordinator.putSetting(ReviewMode.WIRE_KEY, mode.wire) }
+
+    // Journal events are permanent, so only documents the projection does not show reviewed yet
+    // get one: a second run, or a library already reviewed, writes nothing.
+    override suspend fun markReviewedForMigration(onlyTagged: Boolean) =
+        owned {
+            val ops =
+                documentDao
+                    .unreviewedLiveDocIds(taggedOnly = onlyTagged)
+                    .map { PendingOp.propSet(it, SystemProperty.REVIEWED, "true") }
+            if (ops.isNotEmpty()) coordinator.commitAndApply(ops)
+        }
 }

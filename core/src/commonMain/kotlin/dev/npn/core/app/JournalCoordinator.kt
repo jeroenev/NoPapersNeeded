@@ -486,6 +486,18 @@ class JournalCoordinator internal constructor(
     suspend fun commitAndApply(ops: List<PendingOp>): Boolean = commitBuilt { ops }
 
     /**
+     * Write [value] under the synced setting [key], null to clear it, unless the journal already
+     * holds it, so an unchanged value adds no event.
+     */
+    internal suspend fun putSetting(
+        key: String,
+        value: String?,
+    ): Boolean =
+        commitBuilt { state ->
+            if (state.effectiveSetting(key) == value) emptyList() else listOf(PendingOp.settingSet(key, value))
+        }
+
+    /**
      * Throw now if a commit would be refused. For a caller that changes the filesystem before it
      * commits, outside the lock (an in-place bake, before its relink), so a refused commit does not
      * strand a rewritten PDF with no journal record of it; or that pays for work only a commit can
