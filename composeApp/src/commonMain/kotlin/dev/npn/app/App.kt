@@ -234,7 +234,7 @@ private fun AppRoot(
                             key(library) {
                                 DocumentDraftHost(library.drafts) {
                                     MainNav(
-                                        env = env,
+                                        settings = env.settings,
                                         session = current.session,
                                         library = library,
                                         aiConfigured = aiConfigured,
@@ -285,7 +285,7 @@ private fun OpenFailedDialog(
 
 @Composable
 private fun MainNav(
-    env: AppEnvironment,
+    settings: SettingsRepository,
     session: LibrarySession,
     /** The library's navigation and the browse order the detail screen pages through. */
     library: LibraryUi,
@@ -312,7 +312,7 @@ private fun MainNav(
     val libraryFilterHandoff = remember { LibraryFilterHandoff() }
 
     DriveWindowTitle(nav)
-    WithUpdateBanner(env.settings, snackbar) {
+    WithUpdateBanner(settings, snackbar) {
         WithDraftResumeBanner(onOpen = { docId -> nav.resumeDraft(docId, browse) }) {
             // The rail carries AI edit on a wide window, so the chat's top bar offers it only on a
             // compact one.
@@ -332,7 +332,7 @@ private fun MainNav(
                 LibraryViewModelHost(library) {
                     MainNavHost(
                         nav = nav,
-                        env = env,
+                        settings = settings,
                         session = session,
                         browse = browse,
                         aiSelection = aiSelection,
@@ -364,7 +364,7 @@ private fun NavHostController.resumeDraft(
 @Composable
 private fun MainNavHost(
     nav: NavHostController,
-    env: AppEnvironment,
+    settings: SettingsRepository,
     session: LibrarySession,
     browse: BrowseContext,
     aiSelection: AiEditSelection,
@@ -376,7 +376,7 @@ private fun MainNavHost(
         composable<Route.Library> {
             LibraryScreen(
                 session = session,
-                env = env,
+                settings = settings,
                 onOpenDoc = { docId, order, query ->
                     browse.setOrder(order, query)
                     nav.navigate(Route.DocDetail(docId))
@@ -395,7 +395,7 @@ private fun MainNavHost(
             DocDetailScreen(
                 docId = route.docId,
                 session = session,
-                settings = env.settings,
+                settings = settings,
                 browse = browse,
                 onBack = { if (nav.currentBackStackEntry == entry) nav.popBackStack() },
                 onNavigateToDoc = { targetId ->
@@ -426,22 +426,22 @@ private fun MainNavHost(
                 onOpenEditRun = { jobId -> nav.navigate(Route.AiEditReview(jobId)) },
             )
         }
-        settingsRoutes(nav, env, session, browse, onOpenLibrary)
-        aiRoutes(nav, session, env.settings, aiSelection, libraryFilterHandoff, showAiEditTopBar)
+        settingsRoutes(nav, settings, session, browse, onOpenLibrary)
+        aiRoutes(nav, session, settings, aiSelection, libraryFilterHandoff, showAiEditTopBar)
     }
 }
 
 /** Settings and the pages only reachable from it. */
 private fun NavGraphBuilder.settingsRoutes(
     nav: NavHostController,
-    env: AppEnvironment,
+    settings: SettingsRepository,
     session: LibrarySession,
     browse: BrowseContext,
     onOpenLibrary: (location: String) -> Unit,
 ) {
     composable<Route.Settings> { entry ->
         SettingsScreen(
-            env = env,
+            settings = settings,
             session = session,
             category = SettingsCategoryId.fromRouteKey(entry.toRoute<Route.Settings>().category),
             onOpenCategory = { id -> nav.navigate(Route.Settings(id.routeKey)) },

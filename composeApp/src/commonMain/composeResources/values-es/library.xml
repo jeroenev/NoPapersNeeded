@@ -33,9 +33,13 @@
         <item quantity="one">%1$d documento movido a la papelera</item>
         <item quantity="other">%1$d documentos movidos a la papelera</item>
     </plurals>
-    <plurals name="library_results_summary">
-        <item quantity="one">%1$d documento · %2$s</item>
-        <item quantity="other">%1$d documentos · %2$s</item>
+    <plurals name="library_results_summary_ascending">
+        <item quantity="one">%1$d documento · %2$s · Ascendente</item>
+        <item quantity="other">%1$d documentos · %2$s · Ascendente</item>
+    </plurals>
+    <plurals name="library_results_summary_descending">
+        <item quantity="one">%1$d documento · %2$s · Descendente</item>
+        <item quantity="other">%1$d documentos · %2$s · Descendente</item>
     </plurals>
     <string name="library_select">Seleccionar</string>
     <string name="library_deselect">Deseleccionar</string>

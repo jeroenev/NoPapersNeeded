@@ -33,9 +33,13 @@
         <item quantity="one">%1$d document naar prullenbak verplaatst</item>
         <item quantity="other">%1$d documenten naar prullenbak verplaatst</item>
     </plurals>
-    <plurals name="library_results_summary">
-        <item quantity="one">%1$d document · %2$s</item>
-        <item quantity="other">%1$d documenten · %2$s</item>
+    <plurals name="library_results_summary_ascending">
+        <item quantity="one">%1$d document · %2$s · Oplopend</item>
+        <item quantity="other">%1$d documenten · %2$s · Oplopend</item>
+    </plurals>
+    <plurals name="library_results_summary_descending">
+        <item quantity="one">%1$d document · %2$s · Aflopend</item>
+        <item quantity="other">%1$d documenten · %2$s · Aflopend</item>
     </plurals>
     <string name="library_select">Selecteren</string>
     <string name="library_deselect">Deselecteren</string>

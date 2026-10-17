@@ -56,13 +56,11 @@ internal fun LibraryViewsMenuButton(
     reviewMode: ReviewMode,
     reviewBadge: Int,
     savedViews: List<SavedView>,
+    actions: SavedViewActions,
     onAllDocuments: () -> Unit,
     onReviewQueue: () -> Unit,
     onSaveCurrentView: () -> Unit,
-    onSavedView: (SavedView) -> Unit,
     onRenameSavedView: (SavedView) -> Unit,
-    onDeleteSavedView: (SavedView) -> Unit,
-    onTogglePinSavedView: (SavedView) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
     val inbox = reviewMode.reviewMarkerIsAuthoritative
@@ -121,10 +119,10 @@ internal fun LibraryViewsMenuButton(
             savedViews.sortedByDescending { it.pinned }.forEach { view ->
                 SavedViewMenuItem(
                     view = view,
-                    onOpen = { dismissThen { onSavedView(view) } },
+                    onOpen = { dismissThen { actions.applySavedView(view) } },
                     onRename = { dismissThen { onRenameSavedView(view) } },
-                    onDelete = { dismissThen { onDeleteSavedView(view) } },
-                    onTogglePin = { onTogglePinSavedView(view) },
+                    onDelete = { dismissThen { actions.deleteSavedView(view) } },
+                    onTogglePin = { actions.toggleSavedViewPin(view) },
                 )
             }
             ActionMenuItems(

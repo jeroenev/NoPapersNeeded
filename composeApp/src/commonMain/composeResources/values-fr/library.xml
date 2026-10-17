@@ -33,9 +33,13 @@
         <item quantity="one">%1$d document mis à la corbeille</item>
         <item quantity="other">%1$d documents mis à la corbeille</item>
     </plurals>
-    <plurals name="library_results_summary">
-        <item quantity="one">%1$d document · %2$s</item>
-        <item quantity="other">%1$d documents · %2$s</item>
+    <plurals name="library_results_summary_ascending">
+        <item quantity="one">%1$d document · %2$s · Croissant</item>
+        <item quantity="other">%1$d documents · %2$s · Croissant</item>
+    </plurals>
+    <plurals name="library_results_summary_descending">
+        <item quantity="one">%1$d document · %2$s · Décroissant</item>
+        <item quantity="other">%1$d documents · %2$s · Décroissant</item>
     </plurals>
     <string name="library_select">Sélectionner</string>
     <string name="library_deselect">Désélectionner</string>

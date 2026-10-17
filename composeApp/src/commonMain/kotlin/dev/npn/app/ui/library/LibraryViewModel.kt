@@ -103,12 +103,72 @@ data class LibraryUiState(
     val selectionMode: Boolean get() = selected.isNotEmpty()
 }
 
+/** The grid's minimum cell width (dp) until the settings have loaded. */
+internal const val DEFAULT_GRID_COLUMN_WIDTH = 160
+
+/** What the library's saved-views menu does to a saved view, implemented by [LibraryViewModel]. */
+interface SavedViewActions {
+    fun applySavedView(view: SavedView)
+
+    /** Flip the pinned state of [view] and persist it. */
+    fun toggleSavedViewPin(view: SavedView)
+
+    /** Delete [view] by id. */
+    fun deleteSavedView(view: SavedView)
+}
+
+/**
+ * What the library list asks of its viewmodel, so the list composables take this and never the
+ * viewmodel itself. Implemented by [LibraryViewModel]; each member's contract is documented there.
+ */
+interface LibraryActions : SavedViewActions {
+    fun onQueryChange(text: String)
+
+    fun acceptSuggestion(text: String)
+
+    fun setFilter(filter: LibraryFilter)
+
+    fun clearFilter()
+
+    fun applyReviewPreset()
+
+    fun setSort(
+        field: SortField,
+        ascending: Boolean,
+    )
+
+    fun setViewType(v: ViewType)
+
+    fun setGridColumnWidth(dp: Int)
+
+    fun toggleSelection(docId: String)
+
+    fun startSelection(docId: String)
+
+    fun selectAll(docIds: List<String>)
+
+    fun clearSelection()
+
+    fun dismissBanner()
+
+    fun refresh()
+
+    fun bulkSetReviewed(reviewed: Boolean)
+
+    fun import(sources: List<Pair<ExternalSource, String>>)
+
+    fun importScan(result: ScanResult)
+
+    suspend fun tagsInSelection(): List<String>
+}
+
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 @Suppress("TooManyFunctions")
 class LibraryViewModel(
     session: LibrarySession,
     private val settings: SettingsRepository,
-) : MessagesViewModel() {
+) : MessagesViewModel(),
+    LibraryActions {
     private val documentRepository = session.documents
     private val savedViewRepository = session.savedViews
     private val meta = session.meta
@@ -131,7 +191,7 @@ class LibraryViewModel(
         settings.settings
             .map { it.gridColumnWidth }
             .distinctUntilChanged()
-            .stateIn(viewModelScope, WhileSubscribedTimeout, 160)
+            .stateIn(viewModelScope, WhileSubscribedTimeout, DEFAULT_GRID_COLUMN_WIDTH)
 
     /** Whether AI is configured, which offers AI edit on a selection; follows Settings. */
     val aiConfigured: StateFlow<Boolean> =
@@ -270,7 +330,7 @@ class LibraryViewModel(
             .distinctUntilChanged()
             .stateIn(viewModelScope, WhileSubscribedTimeout, 0)
 
-    fun onQueryChange(text: String) {
+    override fun onQueryChange(text: String) {
         queryInput.value = text
     }
 
@@ -278,18 +338,18 @@ class LibraryViewModel(
      * Apply an autocomplete suggestion: updates the raw query text and the active filter
      * immediately (bypassing the filter debounce).
      */
-    fun acceptSuggestion(text: String) {
+    override fun acceptSuggestion(text: String) {
         val completed = completeActiveSearchToken(queryInput.value, text)
         queryInput.value = completed
         _ui.update { it.copy(filter = it.filter.copy(query = completed.ifBlank { null })) }
     }
 
-    fun setFilter(filter: LibraryFilter) {
+    override fun setFilter(filter: LibraryFilter) {
         _ui.update { it.copy(filter = filter, bannerDismissed = false) }
         queryInput.value = filter.query ?: ""
     }
 
-    fun clearFilter() {
+    override fun clearFilter() {
         _ui.update { it.copy(filter = LibraryFilter()) }
         queryInput.value = ""
     }
@@ -298,7 +358,7 @@ class LibraryViewModel(
      * Review queue preset. In UNTAGGED_ONLY mode this filters untagged documents; in INBOX_WORKFLOW
      * it filters documents that are unreviewed or untagged. Replaces any active filter.
      */
-    fun applyReviewPreset() {
+    override fun applyReviewPreset() {
         val filter =
             when (reviewMode.value) {
                 ReviewMode.UNTAGGED_ONLY -> LibraryFilter(untaggedOnly = true)
@@ -308,7 +368,7 @@ class LibraryViewModel(
         queryInput.value = ""
     }
 
-    fun setSort(
+    override fun setSort(
         field: SortField,
         ascending: Boolean,
     ) {
@@ -319,7 +379,7 @@ class LibraryViewModel(
         launchReporting(Res.string.common_save_setting_failed) { settings.edit { it.copy(librarySort = sort) } }
     }
 
-    fun setViewType(v: ViewType) {
+    override fun setViewType(v: ViewType) {
         viewOverridden = true
         _ui.update { it.copy(viewType = v) }
         // Persist so the choice becomes the default and survives restart (also keeps the settings
@@ -327,7 +387,7 @@ class LibraryViewModel(
         launchReporting(Res.string.common_save_setting_failed) { settings.edit { it.copy(defaultViewType = v) } }
     }
 
-    fun applySavedView(view: SavedView) {
+    override fun applySavedView(view: SavedView) {
         viewOverridden = true
         // Guards the seed only; a saved view's sort is part of the view, not a new default.
         sortOverridden = true
@@ -339,7 +399,7 @@ class LibraryViewModel(
      * Persist the grid cell width (dp) chosen by direct manipulation (pinch / ctrl+scroll / zoom
      * buttons) on the grid. The grid previews changes locally and commits through here.
      */
-    fun setGridColumnWidth(dp: Int) =
+    override fun setGridColumnWidth(dp: Int) =
         launchReporting(Res.string.common_save_setting_failed) { settings.edit { it.copy(gridColumnWidth = dp) } }
 
     private companion object {
@@ -349,32 +409,32 @@ class LibraryViewModel(
         const val MIN_SUGGESTION_LENGTH = 2
     }
 
-    fun toggleSelection(docId: String) {
+    override fun toggleSelection(docId: String) {
         _ui.update { cur ->
             val next = if (docId in cur.selected) cur.selected - docId else cur.selected + docId
             cur.copy(selected = next)
         }
     }
 
-    fun startSelection(docId: String) {
+    override fun startSelection(docId: String) {
         _ui.update { it.copy(selected = setOf(docId)) }
     }
 
     /** Enter selection mode with every visible document selected (desktop Ctrl+A / Select all). */
-    fun selectAll(docIds: List<String>) {
+    override fun selectAll(docIds: List<String>) {
         _ui.update { it.copy(selected = docIds.toSet()) }
     }
 
-    fun clearSelection() {
+    override fun clearSelection() {
         _ui.update { it.copy(selected = emptySet()) }
     }
 
-    fun dismissBanner() {
+    override fun dismissBanner() {
         _ui.update { it.copy(bannerDismissed = true) }
     }
 
     /** Rescan the library folder (pull to refresh); a rescan that fails says so. */
-    fun refresh() =
+    override fun refresh() =
         launchReporting(Res.string.library_refresh_failed) {
             _ui.update { it.copy(refreshing = true) }
             try {
@@ -396,7 +456,7 @@ class LibraryViewModel(
      * vocabulary would bury the handful actually in play. Reads the repository rather than the
      * visible results so a selection that survived a filter change still lists completely.
      */
-    suspend fun tagsInSelection(): List<String> {
+    override suspend fun tagsInSelection(): List<String> {
         val selected = _ui.value.selected.toList()
         if (selected.isEmpty()) return emptyList()
         return documentRepository
@@ -407,7 +467,7 @@ class LibraryViewModel(
             .sorted()
     }
 
-    fun bulkSetReviewed(reviewed: Boolean) =
+    override fun bulkSetReviewed(reviewed: Boolean) =
         runOnSelection(Res.plurals.library_review_failed) {
             meta.setReviewed(it, reviewed)
         }
@@ -491,13 +551,13 @@ class LibraryViewModel(
     }
 
     /** Import PDFs from external sources, tallying the per-source outcome into a message. */
-    fun import(sources: List<Pair<ExternalSource, String>>) =
+    override fun import(sources: List<Pair<ExternalSource, String>>) =
         launchReporting(Res.string.library_import_failed) {
             message(ingest.importAll(sources).asUiText())
         }
 
     /** What a platform scan came to: import the PDF, say the scanner failed, or stay quiet. */
-    fun importScan(result: ScanResult) {
+    override fun importScan(result: ScanResult) {
         when (result) {
             is ScanResult.Scanned -> {
                 launchReporting(Res.string.common_scan_import_failed) {
@@ -537,13 +597,13 @@ class LibraryViewModel(
     ) = launchReporting(Res.string.library_save_view_failed) { savedViewRepository.save(view.copy(name = name.trim())) }
 
     /** Flip the pinned state of [view] and persist it. */
-    fun toggleSavedViewPin(view: SavedView) =
+    override fun toggleSavedViewPin(view: SavedView) =
         launchReporting(Res.string.library_save_view_failed) {
             savedViewRepository.save(view.copy(pinned = !view.pinned))
         }
 
     /** Delete [view] by id. */
-    fun deleteSavedView(view: SavedView) =
+    override fun deleteSavedView(view: SavedView) =
         launchReporting(Res.string.library_delete_view_failed) { savedViewRepository.delete(view.id) }
 
     /** Capture the given [ui] (filter/sort/view) as a new [SavedView] named [name]. */

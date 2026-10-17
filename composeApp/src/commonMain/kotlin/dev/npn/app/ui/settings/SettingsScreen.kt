@@ -42,7 +42,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import dev.npn.app.di.AppEnvironment
 import dev.npn.app.ui.common.BackTopBar
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.HelpText
@@ -51,6 +50,7 @@ import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.rememberLibraryFolderPicker
 import dev.npn.app.ui.detail.LocalDocumentDrafts
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.app.SettingsRepository
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_clear_search
 import no_papers_needed.composeapp.generated.resources.common_settings_search
@@ -85,7 +85,7 @@ private val PaneGroupSpacing: Dp = 24.dp
  */
 @Composable
 fun SettingsScreen(
-    env: AppEnvironment,
+    settings: SettingsRepository,
     session: LibrarySession,
     category: SettingsCategoryId?,
     onOpenCategory: (SettingsCategoryId) -> Unit,
@@ -94,7 +94,7 @@ fun SettingsScreen(
     onResumeDraft: (docId: String) -> Unit,
     onAutoMatchRules: () -> Unit,
 ) {
-    val vm: SettingsViewModel = viewModel { SettingsViewModel(env.settings, session) }
+    val vm: SettingsViewModel = viewModel { SettingsViewModel(settings, session) }
     val state by vm.state.collectAsStateWithLifecycle()
     val aiModels by vm.aiModels.collectAsStateWithLifecycle()
     val aiSelfTest by vm.aiSelfTest.collectAsStateWithLifecycle()

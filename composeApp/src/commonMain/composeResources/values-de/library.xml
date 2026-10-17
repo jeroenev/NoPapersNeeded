@@ -33,9 +33,13 @@
         <item quantity="one">%1$d Dokument in den Papierkorb verschoben</item>
         <item quantity="other">%1$d Dokumente in den Papierkorb verschoben</item>
     </plurals>
-    <plurals name="library_results_summary">
-        <item quantity="one">%1$d Dokument · %2$s</item>
-        <item quantity="other">%1$d Dokumente · %2$s</item>
+    <plurals name="library_results_summary_ascending">
+        <item quantity="one">%1$d Dokument · %2$s · Aufsteigend</item>
+        <item quantity="other">%1$d Dokumente · %2$s · Aufsteigend</item>
+    </plurals>
+    <plurals name="library_results_summary_descending">
+        <item quantity="one">%1$d Dokument · %2$s · Absteigend</item>
+        <item quantity="other">%1$d Dokumente · %2$s · Absteigend</item>
     </plurals>
     <string name="library_select">Auswählen</string>
     <string name="library_deselect">Abwählen</string>

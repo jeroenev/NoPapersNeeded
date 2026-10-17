@@ -64,6 +64,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -86,7 +87,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import dev.npn.app.di.AppEnvironment
 import dev.npn.app.platform.LocalDocumentScanner
 import dev.npn.app.platform.platformFileToExternalSource
 import dev.npn.app.ui.common.ActionMenuItems
@@ -109,12 +109,15 @@ import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.OcrStatus
+import dev.npn.core.app.SavedView
+import dev.npn.core.app.SettingsRepository
 import dev.npn.core.app.SortField
 import dev.npn.core.app.ViewType
 import dev.npn.core.index.IndexProgress
 import dev.npn.core.index.ScanReport
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.model.labelFor
 import io.github.vinceglb.filekit.dialogs.FileKitMode
 import io.github.vinceglb.filekit.dialogs.FileKitType
 import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher
@@ -145,7 +148,8 @@ import no_papers_needed.composeapp.generated.resources.library_ocr_pending
 import no_papers_needed.composeapp.generated.resources.library_ocr_pending_running
 import no_papers_needed.composeapp.generated.resources.library_refresh
 import no_papers_needed.composeapp.generated.resources.library_remove_tag
-import no_papers_needed.composeapp.generated.resources.library_results_summary
+import no_papers_needed.composeapp.generated.resources.library_results_summary_ascending
+import no_papers_needed.composeapp.generated.resources.library_results_summary_descending
 import no_papers_needed.composeapp.generated.resources.library_review
 import no_papers_needed.composeapp.generated.resources.library_scan_document
 import no_papers_needed.composeapp.generated.resources.library_selected_count
@@ -174,25 +178,74 @@ private const val SIDE_PANEL_FRACTION = 0.5f
 private val SidePanelMinWidth = 420.dp
 private val SidePanelMaxWidth = 800.dp
 
+/**
+ * Everything the library list shows, collected once by [LibraryScreen] from its viewmodel's flows.
+ * Immutable, so the list skips when only the side panel or a dialog changes.
+ */
+@Immutable
+internal data class LibraryContentState(
+    val ui: LibraryUiState = LibraryUiState(),
+    /** Null until the first result set arrives, so the list shows a spinner, not "no documents". */
+    val results: DocumentResults? = null,
+    val queryText: String = "",
+    val suggestions: List<String> = emptyList(),
+    val tagColors: Map<String, String?> = emptyMap(),
+    val reviewMode: ReviewMode = ReviewMode.DEFAULT,
+    val reviewCount: Int = 0,
+    val savedViews: List<SavedView> = emptyList(),
+    val banners: LibraryBanners = LibraryBanners(),
+    /** The registry fields the sort menu offers. */
+    val sortableFields: List<FieldDef> = emptyList(),
+    /** Every registry field, for the active-filter chips' labels. */
+    val fields: List<FieldDef> = emptyList(),
+    val gridColumnWidth: Int = DEFAULT_GRID_COLUMN_WIDTH,
+    val landscapeListColumns: Boolean = false,
+)
+
+/** What the progress and warning banners above the results report. */
+@Immutable
+internal data class LibraryBanners(
+    val scanProgress: IndexProgress? = null,
+    val lastScan: ScanReport? = null,
+    val ocr: OcrStatus = OcrStatus(pending = 0, running = false),
+    val enrichmentPending: Int = 0,
+)
+
 @Composable
 fun LibraryScreen(
     session: LibrarySession,
-    env: AppEnvironment,
+    settings: SettingsRepository,
     onOpenDoc: (docId: String, order: List<String>, searchQuery: String?) -> Unit,
     onTrash: () -> Unit,
     /** Opens the processing queue page, behind the OCR / AI-enrichment progress banners. */
     onOpenQueue: () -> Unit,
     /** Opens the AI-edit page, optionally scoped to the given documents (empty = no preselection). */
     onAiEdit: (List<String>) -> Unit,
-    filterHandoff: LibraryFilterHandoff? = null,
+    filterHandoff: LibraryFilterHandoff,
 ) {
-    val vm: LibraryViewModel = viewModel { LibraryViewModel(session, env.settings) }
+    val vm: LibraryViewModel = viewModel { LibraryViewModel(session, settings) }
     val ui by vm.ui.collectAsStateWithLifecycle()
     val results by vm.documents.collectAsStateWithLifecycle()
+    val tags by vm.tags.collectAsStateWithLifecycle()
+    val tagColors by vm.tagColors.collectAsStateWithLifecycle()
+    val fieldFilters by vm.fieldFilters.collectAsStateWithLifecycle()
+    val sortableFields by vm.sortableFields.collectAsStateWithLifecycle()
+    val reviewMode by vm.reviewMode.collectAsStateWithLifecycle()
+    val reviewCount by vm.needsReviewCount.collectAsStateWithLifecycle()
+    val savedViews by vm.savedViews.collectAsStateWithLifecycle()
+    val queryText by vm.queryText.collectAsStateWithLifecycle()
+    val suggestions by vm.suggestions.collectAsStateWithLifecycle()
+    val gridColumnWidth by vm.gridColumnWidth.collectAsStateWithLifecycle()
+    val landscapeListColumns by vm.landscapeListColumns.collectAsStateWithLifecycle()
+    val aiConfigured by vm.aiConfigured.collectAsStateWithLifecycle()
+    val scanProgress by vm.scanProgress.collectAsStateWithLifecycle()
+    val lastScan by vm.lastScanReport.collectAsStateWithLifecycle()
+    val ocr by vm.ocrStatus.collectAsStateWithLifecycle()
+    val enrichmentPending by vm.enrichmentPending.collectAsStateWithLifecycle()
     val docs = results?.items
 
     LaunchedEffect(Unit) {
-        filterHandoff?.consume()?.let(vm::setFilter)
+        filterHandoff.consume()?.let(vm::setFilter)
     }
 
     // Opening a doc records the current sorted+filtered order so the detail screen can page between
@@ -201,10 +254,6 @@ fun LibraryScreen(
     val openDoc: (String) -> Unit = { docId ->
         onOpenDoc(docId, docs.orEmpty().map { it.doc.docId }, ui.filter.query)
     }
-    val tags by vm.tags.collectAsStateWithLifecycle()
-    val fieldFilters by vm.fieldFilters.collectAsStateWithLifecycle()
-    val reviewMode by vm.reviewMode.collectAsStateWithLifecycle()
-    val aiConfigured by vm.aiConfigured.collectAsStateWithLifecycle()
 
     val snackbar = remember { SnackbarHostState() }
     SnackbarMessages(vm.messages, snackbar)
@@ -223,9 +272,24 @@ fun LibraryScreen(
         Row(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f)) {
                 LibraryContent(
-                    vm = vm,
+                    state =
+                        LibraryContentState(
+                            ui = ui,
+                            results = results,
+                            queryText = queryText,
+                            suggestions = suggestions,
+                            tagColors = tagColors,
+                            reviewMode = reviewMode,
+                            reviewCount = reviewCount,
+                            savedViews = savedViews,
+                            banners = LibraryBanners(scanProgress, lastScan, ocr, enrichmentPending),
+                            sortableFields = sortableFields,
+                            fields = fieldFilters.fields,
+                            gridColumnWidth = gridColumnWidth,
+                            landscapeListColumns = landscapeListColumns,
+                        ),
+                    actions = vm,
                     content = session.content,
-                    wide = wide,
                     snackbar = snackbar,
                     onOpenDoc = onDocClick,
                     onOpenQueue = onOpenQueue,
@@ -276,7 +340,7 @@ fun LibraryScreen(
                     DocPreviewPanel(
                         item = previewItem,
                         session = session,
-                        settings = env.settings,
+                        settings = settings,
                         snackbar = snackbar,
                         onClose = { previewDocId = null },
                         onExpand = { openDoc(previewItem.doc.docId) },
@@ -303,19 +367,16 @@ fun LibraryScreen(
 }
 
 /**
- * The library list with its bars, search, chips and banners. Collects what it shows from [vm]
- * itself; the screen hands over only what the list cannot know: the layout width, the snackbar it
+ * The library list with its bars, search, chips and banners: a renderer of [state] that acts
+ * through [actions]. The screen hands over the rest of what the list cannot know: the snackbar it
  * shares with the preview panel, where navigation goes, and [onDialog] for the dialogs the screen
  * hosts. [onAiEdit] is null while no AI endpoint is configured.
  */
 @Composable
 private fun LibraryContent(
-    vm: LibraryViewModel,
+    state: LibraryContentState,
+    actions: LibraryActions,
     content: DocContentFacade,
-    // Wide layouts show more top-bar actions as direct icons before spilling them into the overflow
-    // menu, and preview a tapped document in the side panel, so its click label reads "Preview"
-    // where compact layouts open it and read "Open".
-    wide: Boolean,
     snackbar: SnackbarHostState,
     onOpenDoc: (String) -> Unit,
     onOpenQueue: () -> Unit,
@@ -323,23 +384,14 @@ private fun LibraryContent(
     onAiEdit: ((selection: List<String>) -> Unit)?,
     onDialog: (LibraryDialog) -> Unit,
 ) {
-    val ui by vm.ui.collectAsStateWithLifecycle()
-    // Read once, not delegated: the empty and loading branches below smart-cast it.
-    val results = vm.documents.collectAsStateWithLifecycle().value
-    val tagColors by vm.tagColors.collectAsStateWithLifecycle()
-    val reviewMode by vm.reviewMode.collectAsStateWithLifecycle()
-    val reviewCount by vm.needsReviewCount.collectAsStateWithLifecycle()
-    val savedViews by vm.savedViews.collectAsStateWithLifecycle()
-    val scanProgress by vm.scanProgress.collectAsStateWithLifecycle()
-    val lastScan by vm.lastScanReport.collectAsStateWithLifecycle()
-    val ocr by vm.ocrStatus.collectAsStateWithLifecycle()
-    val enrichmentPending by vm.enrichmentPending.collectAsStateWithLifecycle()
-    val sortableFields by vm.sortableFields.collectAsStateWithLifecycle()
-    val fieldFilters by vm.fieldFilters.collectAsStateWithLifecycle()
-    val queryText by vm.queryText.collectAsStateWithLifecycle()
-    val suggestions by vm.suggestions.collectAsStateWithLifecycle()
-    val gridColumnWidth by vm.gridColumnWidth.collectAsStateWithLifecycle()
-    val landscapeListColumns by vm.landscapeListColumns.collectAsStateWithLifecycle()
+    val ui = state.ui
+    // A local, not the property: the empty and loading branches below smart-cast it.
+    val results = state.results
+    val reviewMode = state.reviewMode
+    // Wide layouts show more top-bar actions as direct icons before spilling them into the overflow
+    // menu, and preview a tapped document in the side panel, so its click label reads "Preview"
+    // where compact layouts open it and read "Open".
+    val wide = LocalWindowWidthClass.current.isWide
     val allDocIds = remember(results) { results?.items.orEmpty().map { it.doc.docId } }
 
     val importPicker =
@@ -348,24 +400,24 @@ private fun LibraryContent(
             mode = FileKitMode.Multiple(),
         ) { files ->
             if (files.isNullOrEmpty()) return@rememberFilePickerLauncher
-            vm.import(files.map { platformFileToExternalSource(it) to it.name })
+            actions.import(files.map { platformFileToExternalSource(it) to it.name })
         }
     val onImport: () -> Unit = { importPicker.launch() }
     // Null without a scanner (desktop); the scan's result comes back to the viewmodel, even when
     // this activity was recreated while the scanner was open.
-    val scan = LocalDocumentScanner.current?.rememberLauncher(vm::importScan)
+    val scan = LocalDocumentScanner.current?.rememberLauncher(actions::importScan)
 
     val scope = rememberCoroutineScope()
     val onAddTag = { onDialog(LibraryDialog.AddTag) }
     // Only the tags the selection actually carries: removing any other is a no-op.
-    val onRemoveTag: () -> Unit = { scope.launch { onDialog(LibraryDialog.RemoveTag(vm.tagsInSelection())) } }
+    val onRemoveTag: () -> Unit = { scope.launch { onDialog(LibraryDialog.RemoveTag(actions.tagsInSelection())) } }
     val onRequestTrash = { onDialog(LibraryDialog.ConfirmTrash) }
     // Hand the selection to the AI-edit page and leave selection mode behind.
     val aiEditSelection: (() -> Unit)? =
         onAiEdit?.let { open ->
             {
                 val selected = ui.selected.toList()
-                vm.clearSelection()
+                actions.clearSelection()
                 open(selected)
             }
         }
@@ -378,20 +430,20 @@ private fun LibraryContent(
     // as it was.
     val selectedNow by rememberUpdatedState(ui.selected)
     val wiring =
-        remember(content, tagColors, reviewMode, wide, onOpenDoc, onAddTag, onRemoveTag, onRequestTrash) {
+        remember(content, state.tagColors, reviewMode, wide, onOpenDoc, onAddTag, onRemoveTag, onRequestTrash) {
             fun onSelection(action: () -> Unit): (String) -> Unit =
                 { docId ->
-                    if (docId !in selectedNow) vm.startSelection(docId)
+                    if (docId !in selectedNow) actions.startSelection(docId)
                     action()
                 }
             DocItemWiring(
                 content = content,
-                tagColors = tagColors,
+                tagColors = state.tagColors,
                 reviewMode = reviewMode,
                 previewOnClick = wide,
                 onOpen = onOpenDoc,
-                onToggleSelect = vm::toggleSelection,
-                onStartSelection = vm::startSelection,
+                onToggleSelect = actions::toggleSelection,
+                onStartSelection = actions::startSelection,
                 onAddTag = onSelection(onAddTag),
                 onRemoveTag = onSelection(onRemoveTag),
                 onTrash = onSelection(onRequestTrash),
@@ -412,38 +464,36 @@ private fun LibraryContent(
                     total = allDocIds.size,
                     reviewMode = reviewMode,
                     wide = wide,
-                    onClose = vm::clearSelection,
-                    onSelectAll = { vm.selectAll(allDocIds) },
+                    onClose = actions::clearSelection,
+                    onSelectAll = { actions.selectAll(allDocIds) },
                     onAddTag = onAddTag,
                     onRemoveTag = onRemoveTag,
                     onAiEdit = aiEditSelection,
-                    onReviewedChange = vm::bulkSetReviewed,
+                    onReviewedChange = actions::bulkSetReviewed,
                     onRequestTrash = onRequestTrash,
                 )
             } else {
                 LibraryTopBar(
                     viewType = ui.viewType,
                     sort = ui.sort,
-                    sortableFields = sortableFields,
+                    sortableFields = state.sortableFields,
                     wide = wide,
                     extras = {
                         LibraryViewsMenuButton(
                             reviewMode = reviewMode,
-                            reviewBadge = reviewCount,
-                            savedViews = savedViews,
-                            onAllDocuments = vm::clearFilter,
-                            onReviewQueue = vm::applyReviewPreset,
+                            reviewBadge = state.reviewCount,
+                            savedViews = state.savedViews,
+                            actions = actions,
+                            onAllDocuments = actions::clearFilter,
+                            onReviewQueue = actions::applyReviewPreset,
                             onSaveCurrentView = { onDialog(LibraryDialog.SaveView) },
-                            onSavedView = vm::applySavedView,
                             onRenameSavedView = { onDialog(LibraryDialog.RenameView(it)) },
-                            onDeleteSavedView = vm::deleteSavedView,
-                            onTogglePinSavedView = vm::toggleSavedViewPin,
                         )
                     },
                     onOpenFilter = { onDialog(LibraryDialog.Filter) },
-                    onSetSort = vm::setSort,
-                    onSetView = vm::setViewType,
-                    onRefresh = vm::refresh,
+                    onSetSort = actions::setSort,
+                    onSetView = actions::setViewType,
+                    onRefresh = actions::refresh,
                 )
             }
         },
@@ -472,18 +522,18 @@ private fun LibraryContent(
                     selectionMode = ui.selectionMode,
                     onFocusSearch = searchFocus::requestFocus,
                     onImport = onImport,
-                    onSelectAll = { if (allDocIds.isNotEmpty()) vm.selectAll(allDocIds) },
+                    onSelectAll = { if (allDocIds.isNotEmpty()) actions.selectAll(allDocIds) },
                     onRequestTrash = onRequestTrash,
-                    onClearSelection = vm::clearSelection,
-                    onClearQuery = { vm.onQueryChange("") },
+                    onClearSelection = actions::clearSelection,
+                    onClearQuery = { actions.onQueryChange("") },
                 ),
         ) {
             SearchField(
-                value = queryText,
-                onValueChange = vm::onQueryChange,
+                value = state.queryText,
+                onValueChange = actions::onQueryChange,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                suggestions = suggestions,
-                onPickSuggestion = vm::acceptSuggestion,
+                suggestions = state.suggestions,
+                onPickSuggestion = actions::acceptSuggestion,
                 focusRequester = searchFocus,
                 onFocusChange = { searchFocused = it },
             )
@@ -493,7 +543,7 @@ private fun LibraryContent(
             // only appears when there is something to review, so a cleared inbox does not leave a
             // permanent "0" in the way. The chip's selected state mirrors whether the INBOX_WORKFLOW
             // preset (unreviewedOrUntagged) is the active filter, so it reads as a filter, not a count.
-            if (reviewMode.reviewMarkerIsAuthoritative && !ui.selectionMode && reviewCount > 0) {
+            if (reviewMode.reviewMarkerIsAuthoritative && !ui.selectionMode && state.reviewCount > 0) {
                 val reviewFilterActive = ui.filter.unreviewedOrUntagged
                 FilterChip(
                     selected = reviewFilterActive,
@@ -502,12 +552,12 @@ private fun LibraryContent(
                     // facet the user narrowed the queue with after applying the preset.
                     onClick = {
                         if (reviewFilterActive) {
-                            vm.setFilter(ui.filter.copy(unreviewedOrUntagged = false))
+                            actions.setFilter(ui.filter.copy(unreviewedOrUntagged = false))
                         } else {
-                            vm.applyReviewPreset()
+                            actions.applyReviewPreset()
                         }
                     },
-                    label = { Text(stringResource(Res.string.ux_review_count, reviewCount)) },
+                    label = { Text(stringResource(Res.string.ux_review_count, state.reviewCount)) },
                     leadingIcon = {
                         Icon(
                             Icons.Filled.CheckCircle,
@@ -520,17 +570,14 @@ private fun LibraryContent(
             }
             ActiveFilters(
                 filter = ui.filter,
-                fields = fieldFilters.fields,
-                onFilterChange = vm::setFilter,
+                fields = state.fields,
+                onFilterChange = actions::setFilter,
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
             Banners(
-                scanProgress = scanProgress,
-                lastScan = lastScan,
-                ocr = ocr,
-                enrichmentPending = enrichmentPending,
+                banners = state.banners,
                 dismissed = ui.bannerDismissed,
-                onDismiss = vm::dismissBanner,
+                onDismiss = actions::dismissBanner,
                 onGoToTrash = onOpenTrash,
                 onOpenQueue = onOpenQueue,
             )
@@ -542,14 +589,14 @@ private fun LibraryContent(
                 ResultsSummary(
                     count = items.size,
                     sort = ui.sort,
-                    sortableFields = sortableFields,
+                    sortableFields = state.sortableFields,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 )
             }
 
             PullToRefreshBox(
                 isRefreshing = ui.refreshing,
-                onRefresh = vm::refresh,
+                onRefresh = actions::refresh,
                 modifier = Modifier.fillMaxSize(),
             ) {
                 if (results == null) {
@@ -571,7 +618,7 @@ private fun LibraryContent(
                             title = stringResource(Res.string.library_no_matches_title),
                             subtitle = stringResource(Res.string.library_no_matches_subtitle),
                             actionLabel = stringResource(Res.string.library_clear_filters),
-                            onAction = vm::clearFilter,
+                            onAction = actions::clearFilter,
                         )
                     }
                 } else {
@@ -582,8 +629,8 @@ private fun LibraryContent(
                                 wiring = wiring,
                                 selectionMode = ui.selectionMode,
                                 selected = ui.selected,
-                                columnWidth = gridColumnWidth,
-                                onColumnWidthChange = vm::setGridColumnWidth,
+                                columnWidth = state.gridColumnWidth,
+                                onColumnWidthChange = actions::setGridColumnWidth,
                             )
                         }
 
@@ -593,7 +640,7 @@ private fun LibraryContent(
                                 wiring = wiring,
                                 selectionMode = ui.selectionMode,
                                 selected = ui.selected,
-                                landscapeColumns = landscapeListColumns,
+                                landscapeColumns = state.landscapeListColumns,
                             )
                         }
                     }
@@ -704,14 +751,13 @@ private fun SortMenuButton(
     var expanded by remember { mutableStateOf(false) }
     // Document columns first, then every sortable registry field in registry order.
     val options =
-        listOf(SortField.Name to null, SortField.Added to null, SortField.Size to null) +
-            sortableFields.map { SortField.Field(it.key) to it }
+        listOf(SortField.Name, SortField.Added, SortField.Size) + sortableFields.map { SortField.Field(it.key) }
     Box {
         TooltipIconButton(Icons.AutoMirrored.Filled.Sort, stringResource(Res.string.library_sort), { expanded = true })
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            options.forEach { (field, def) ->
+            options.forEach { field ->
                 DropdownMenuItem(
-                    text = { Text(def?.label ?: sortLabel(field)) },
+                    text = { Text(sortLabel(field, sortableFields)) },
                     leadingIcon = { RadioButton(selected = sort.field == field, onClick = null) },
                     onClick = {
                         onSetSort(field, sort.ascending)
@@ -823,17 +869,15 @@ private fun SelectionTopBar(
 
 @Composable
 private fun Banners(
-    scanProgress: IndexProgress?,
-    lastScan: ScanReport?,
-    ocr: OcrStatus,
-    enrichmentPending: Int,
+    banners: LibraryBanners,
     dismissed: Boolean,
     onDismiss: () -> Unit,
     onGoToTrash: () -> Unit,
     onOpenQueue: () -> Unit,
 ) {
     Column(Modifier.padding(horizontal = 16.dp)) {
-        scanProgress?.let { ScanProgressBanner(it) }
+        banners.scanProgress?.let { ScanProgressBanner(it) }
+        val lastScan = banners.lastScan
         PathConflictsBanner(lastScan?.pathConflicts.orEmpty())
         val conflicts = lastScan?.conflictFiles.orEmpty()
         val dupes = lastScan?.duplicates.orEmpty()
@@ -841,8 +885,27 @@ private fun Banners(
             ScanIssuesBanner(conflicts.size, dupes.size, onGoToTrash, onDismiss)
         }
         // Both indicators open the same queue view, which is the detail behind either count.
-        if (ocr.pending > 0) OcrStatusIndicator(ocr, onOpenQueue)
-        if (enrichmentPending > 0) EnrichmentStatusIndicator(enrichmentPending, onOpenQueue)
+        val ocr = banners.ocr
+        if (ocr.pending > 0) {
+            QueueStatusIndicator(
+                icon = Icons.Filled.Refresh,
+                label =
+                    pluralStringResource(
+                        if (ocr.running) Res.plurals.library_ocr_pending_running else Res.plurals.library_ocr_pending,
+                        ocr.pending,
+                        ocr.pending,
+                    ),
+                onClick = onOpenQueue,
+            )
+        }
+        val enrichment = banners.enrichmentPending
+        if (enrichment > 0) {
+            QueueStatusIndicator(
+                icon = Icons.Filled.AutoAwesome,
+                label = pluralStringResource(Res.plurals.queue_ai_pending, enrichment, enrichment),
+                onClick = onOpenQueue,
+            )
+        }
     }
 }
 
@@ -875,56 +938,25 @@ private fun ScanIssuesBanner(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Icon(Icons.Filled.Warning, contentDescription = null)
-            val conflictText =
+            // One sentence per kind of issue, each on its own line.
+            Column(Modifier.weight(1f)) {
                 if (conflictCount > 0) {
-                    pluralStringResource(Res.plurals.library_conflict_file_count, conflictCount, conflictCount)
-                } else {
-                    null
+                    Text(
+                        pluralStringResource(Res.plurals.library_conflict_file_count, conflictCount, conflictCount),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                 }
-            val duplicateText =
                 if (duplicateCount > 0) {
-                    pluralStringResource(Res.plurals.library_duplicate_count, duplicateCount, duplicateCount)
-                } else {
-                    null
+                    Text(
+                        pluralStringResource(Res.plurals.library_duplicate_count, duplicateCount, duplicateCount),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                 }
-            Text(
-                listOfNotNull(conflictText, duplicateText).joinToString(" "),
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodySmall,
-            )
+            }
             TextButton(onClick = onGoToTrash) { Text(stringResource(Res.string.library_review)) }
             TextButton(onClick = onDismiss) { Text(stringResource(Res.string.library_dismiss)) }
         }
     }
-}
-
-@Composable
-private fun OcrStatusIndicator(
-    ocr: OcrStatus,
-    onOpenQueue: () -> Unit,
-) {
-    QueueStatusIndicator(
-        icon = Icons.Filled.Refresh,
-        label =
-            if (ocr.running) {
-                pluralStringResource(Res.plurals.library_ocr_pending_running, ocr.pending, ocr.pending)
-            } else {
-                pluralStringResource(Res.plurals.library_ocr_pending, ocr.pending, ocr.pending)
-            },
-        onClick = onOpenQueue,
-    )
-}
-
-@Composable
-private fun EnrichmentStatusIndicator(
-    pending: Int,
-    onOpenQueue: () -> Unit,
-) {
-    QueueStatusIndicator(
-        icon = Icons.Filled.AutoAwesome,
-        label = pluralStringResource(Res.plurals.queue_ai_pending, pending, pending),
-        onClick = onOpenQueue,
-    )
 }
 
 /** One line of "N documents still waiting", clickable through to the queue view behind the count. */
@@ -1002,21 +1034,16 @@ private fun ResultsSummary(
     sortableFields: List<FieldDef>,
     modifier: Modifier = Modifier,
 ) {
-    val fieldLabel =
-        when (val field = sort.field) {
-            is SortField.Field -> sortableFields.firstOrNull { it.key == field.key }?.label ?: field.key
-            else -> sortLabel(sort.field)
-        }
-    val direction =
-        stringResource(
-            if (sort.ascending) Res.string.library_sort_ascending else Res.string.library_sort_descending,
-        )
     HelpText(
         pluralStringResource(
-            Res.plurals.library_results_summary,
+            if (sort.ascending) {
+                Res.plurals.library_results_summary_ascending
+            } else {
+                Res.plurals.library_results_summary_descending
+            },
             count,
             count,
-            "$fieldLabel · $direction",
+            sortLabel(sort.field, sortableFields),
         ),
         modifier = modifier.semantics { liveRegion = LiveRegionMode.Polite },
         maxLines = 1,
@@ -1024,15 +1051,15 @@ private fun ResultsSummary(
     )
 }
 
+/** A sort's name: a document column's own, or a registry field's label (its key once it is gone). */
 @Composable
-private fun sortLabel(field: SortField): String =
+private fun sortLabel(
+    field: SortField,
+    sortableFields: List<FieldDef>,
+): String =
     when (field) {
         SortField.Name -> stringResource(Res.string.library_sort_name)
-
         SortField.Added -> stringResource(Res.string.library_sort_added)
-
         SortField.Size -> stringResource(Res.string.library_sort_size)
-
-        // A field the registry no longer lists (e.g. a saved sort on a deleted field): show the key.
-        is SortField.Field -> field.key
+        is SortField.Field -> sortableFields.labelFor(field.key)
     }
