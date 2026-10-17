@@ -148,28 +148,20 @@ internal class DraftedActions(
     // Saves the draft along with the flag, like the save bar's "reviewed" button.
     override fun setReviewed(reviewed: Boolean) = store.save(docId, reviewed = reviewed)
 
-    // Once the suggestion lands, drop the draft it replaces. A failed write keeps it, and typing
-    // during the write is a later edit that the accepted suggestion must not discard.
+    // Once the suggestion lands, the store drops the draft it replaces. A failed write keeps it, and
+    // typing during the write is a later edit that the accepted suggestion must not discard.
     override fun acceptAiMetadata(
         key: String,
         onStart: (String) -> Boolean,
-        onAccepted: () -> Unit,
         onFinished: (Boolean) -> Unit,
-    ) {
-        val captured = store.state[docId]
-        writes.acceptAiMetadata(
-            key,
-            onStart = { value -> onStart(value) && store.beginAcceptance(docId, key, value) },
-            onAccepted = {
-                store.clearField(docId, key, captured)
-                onAccepted()
-            },
-            onFinished = { accepted ->
-                store.finishAcceptance(docId, accepted)
-                onFinished(accepted)
-            },
-        )
-    }
+    ) = writes.acceptAiMetadata(
+        key,
+        onStart = { value -> onStart(value) && store.beginAcceptance(docId, key, value) },
+        onFinished = { accepted ->
+            store.finishAcceptance(docId, accepted)
+            onFinished(accepted)
+        },
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)

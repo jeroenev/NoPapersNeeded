@@ -59,9 +59,13 @@ data class VocabularyState(
     val allTagNames: List<String> = tagColors.keys.toList()
 }
 
-/** The panel's two AI sections: tag suggestions and single-value field suggestions. */
+/**
+ * The panel's two AI sections: tag suggestions and single-value field suggestions. Both are shown
+ * only while AI is configured in Settings ([available]); until that is first read they stay hidden.
+ */
 @Immutable
 data class AiPanelState(
+    val available: Boolean = false,
     val tags: AiTagState = AiTagState(),
     val metadata: AiMetadataState = AiMetadataState(),
 )
@@ -101,13 +105,12 @@ interface DocumentWrites {
     fun suggestAiMetadata()
 
     /**
-     * Accept a field's suggestion if [onStart] permits its value. [onAccepted] runs only once the
-     * write lands; [onFinished] releases the caller's write guard on success, failure or cancellation.
+     * Accept a field's suggestion if [onStart] permits its value. [onFinished] releases the caller's
+     * write guard on success, failure or cancellation, saying whether the write landed.
      */
     fun acceptAiMetadata(
         key: String,
         onStart: (String) -> Boolean = { true },
-        onAccepted: () -> Unit = {},
         onFinished: (Boolean) -> Unit = {},
     )
 

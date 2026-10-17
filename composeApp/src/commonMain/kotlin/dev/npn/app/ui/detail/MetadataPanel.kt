@@ -224,7 +224,7 @@ private fun DetailsTab(
             actions = actions,
         )
         AiMetadataSuggestions(
-            available = state.ai.tags.available == true,
+            available = state.ai.available,
             state = state.ai.metadata,
             labels = state.document.fieldDefs.associate { it.key to it.label },
             current = doc.fields,
@@ -249,6 +249,7 @@ private fun DetailsTab(
         )
 
         AiTagSuggestions(
+            available = state.ai.available,
             state = state.ai.tags,
             actions = actions,
         )
@@ -298,41 +299,24 @@ private fun ReviewStatusSection(
 
 /**
  * AI new-tag suggestions for the current doc. Hidden entirely unless the AI endpoint is configured
- * ([AiTagState.available]). Offers a "Suggest tags" button (spinner while running) and renders each
+ * ([available]). Offers a "Suggest tags" button (spinner while running) and renders each
  * suggestion as an [InputChip] visually distinct from real tags: tapping the chip (or its leading +)
  * accepts it, the trailing × dismisses it; a "Dismiss all" button clears the lot.
  */
 @Composable
 private fun AiTagSuggestions(
+    available: Boolean,
     state: AiTagState,
     actions: DocumentWrites,
 ) {
-    if (state.available != true) return
+    if (!available) return
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TextButton(onClick = actions::suggestAiTags, enabled = !state.suggesting) {
-                Icon(
-                    Icons.Outlined.AutoAwesome,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                )
-                Text(stringResource(Res.string.detail_suggest_tags), modifier = Modifier.padding(start = 8.dp))
-            }
-            if (state.suggesting) {
-                val busyLabel = stringResource(Res.string.detail_suggesting_tags)
-                CircularProgressIndicator(
-                    Modifier.size(16.dp).semantics {
-                        contentDescription = busyLabel
-                        liveRegion = LiveRegionMode.Polite
-                    },
-                    strokeWidth = 2.dp,
-                )
-            }
-        }
+        AiSuggestButton(
+            label = stringResource(Res.string.detail_suggest_tags),
+            busyLabel = stringResource(Res.string.detail_suggesting_tags),
+            suggesting = state.suggesting,
+            onClick = actions::suggestAiTags,
+        )
         if (state.suggestions.isNotEmpty()) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 state.suggestions.forEach { suggestion ->
@@ -389,30 +373,12 @@ private fun AiMetadataSuggestions(
 ) {
     if (!available) return
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TextButton(onClick = actions::suggestAiMetadata, enabled = !state.suggesting) {
-                Icon(
-                    Icons.Outlined.AutoAwesome,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                )
-                Text(stringResource(Res.string.detail_suggest_metadata), modifier = Modifier.padding(start = 8.dp))
-            }
-            if (state.suggesting) {
-                val busyLabel = stringResource(Res.string.detail_suggesting_metadata)
-                CircularProgressIndicator(
-                    Modifier.size(16.dp).semantics {
-                        contentDescription = busyLabel
-                        liveRegion = LiveRegionMode.Polite
-                    },
-                    strokeWidth = 2.dp,
-                )
-            }
-        }
+        AiSuggestButton(
+            label = stringResource(Res.string.detail_suggest_metadata),
+            busyLabel = stringResource(Res.string.detail_suggesting_metadata),
+            suggesting = state.suggesting,
+            onClick = actions::suggestAiMetadata,
+        )
         for ((key, value) in state.suggestion.values) {
             AiMetadataSuggestionRow(
                 label = labels[key] ?: key,
@@ -421,6 +387,35 @@ private fun AiMetadataSuggestions(
                 key = key,
                 onAccept = { actions.acceptAiMetadata(it) },
                 onDismiss = actions::dismissAiMetadata,
+            )
+        }
+    }
+}
+
+/** An AI "suggest" action, disabled with a spinner announcing [busyLabel] while [suggesting]. */
+@Composable
+private fun AiSuggestButton(
+    label: String,
+    busyLabel: String,
+    suggesting: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TextButton(onClick = onClick, enabled = !suggesting) {
+            Icon(Icons.Outlined.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
+            Text(label, modifier = Modifier.padding(start = 8.dp))
+        }
+        if (suggesting) {
+            CircularProgressIndicator(
+                Modifier.size(16.dp).semantics {
+                    contentDescription = busyLabel
+                    liveRegion = LiveRegionMode.Polite
+                },
+                strokeWidth = 2.dp,
             )
         }
     }

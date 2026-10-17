@@ -133,7 +133,7 @@ class DocumentLayoutTest {
         onUiThread {
             val suggested =
                 AiPanelState(
-                    tags = AiTagState(available = true),
+                    available = true,
                     metadata = AiMetadataState(suggestion = FieldSuggestion(mapOf(FieldKeys.TITLE to "March bill"))),
                 )
             val scene = scene(1280, 800, ai = suggested)
@@ -266,7 +266,6 @@ internal object NoWrites : DocumentWrites {
     override fun acceptAiMetadata(
         key: String,
         onStart: (String) -> Boolean,
-        onAccepted: () -> Unit,
         onFinished: (Boolean) -> Unit,
     ) = Unit
 
