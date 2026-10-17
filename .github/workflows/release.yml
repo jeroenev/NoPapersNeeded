@@ -15,9 +15,9 @@ name: Release
 # that signs the APK. Every other step, including the downloaded tools the packaging runs
 # (appimagetool, flatpak-builder), runs without them. Actions are pinned to a commit, with the
 # release they came from in a comment. The build jobs restore no Gradle cache (`cache-disabled`):
-# the other workflows save theirs on main with actions that are not pinned, and Gradle re-verifies
-# neither the distribution nor the jars a restored home holds, so the signing step and every
-# package build would run whatever those wrote. The wrapper instead downloads Gradle and checks its
+# the other workflows save theirs on main, and Gradle re-verifies neither the distribution nor the
+# jars a restored home holds, so the signing step and every package build would run whatever those
+# wrote. The wrapper instead downloads Gradle and checks its
 # distributionSha256Sum.
 on:
   push:
