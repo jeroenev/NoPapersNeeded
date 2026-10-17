@@ -4,13 +4,12 @@
 # passed on. That is what `mise release` pushes, and the release starts before CI on the bump itself
 # has finished. release.yml runs this before it builds anything. Needs the parent commit and
 # origin/main in the checkout, and gh with a token that can read the repository's Actions runs.
-#
-# CI passed on a commit when a ci.yml run on a push or a manual dispatch tested it and completed
-# successfully. A pull_request run is listed under the pull request's head commit too, but it tested
-# that commit merged into its base branch, so its success says nothing about the commit alone.
+# What counts as CI passing on a commit is ci-status.sh's, shared with `mise release`.
 set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
+# shellcheck source=.github/scripts/ci-status.sh
+source .github/scripts/ci-status.sh
 
 props=gradle.properties
 main=origin/main
@@ -20,26 +19,15 @@ refuse() {
     exit 1
 }
 
-# Sets ci to how ci.yml went on commit $1: "passed" when a push or manual run on it completed
-# successfully, "merge" when there is no such run but a pull_request run succeeded, "none" otherwise.
+# Sets ci to ci_status of commit $1.
 check_ci() {
-    local runs own
-    runs=$(gh run list --workflow ci.yml --commit "$1" --json event,status,conclusion \
-        --jq '.[] | "\(.event) \(.status) \(.conclusion)"') || refuse "Could not list the CI runs on $1."
-    own=$(sed -nE 's/^(push|workflow_dispatch) //p' <<<"$runs")
-    if grep -qx "completed success" <<<"$own"; then
-        ci=passed
-    elif [ -z "$own" ] && grep -qx "pull_request completed success" <<<"$runs"; then
-        ci=merge
-    else
-        ci=none
-    fi
+    ci=$(ci_status "$1") || refuse "Could not list the CI runs on $1."
 }
 
-# Why CI is no evidence for commit $1, after check_ci "$1" found none.
+# Why CI is no evidence for commit $1, after check_ci "$1" found it did not pass.
 no_ci() {
-    if [ "$ci" = merge ]; then
-        echo "CI passed on $1 only in a pull request, which tested it merged into its base branch, not $1 itself (run CI on it with 'gh workflow run ci.yml --ref <branch>' and rerun this workflow)"
+    if [ "$ci" = pull-request ]; then
+        echo "CI ran on $1 only in a pull request, which tested it merged into its base branch, not $1 itself (run CI on it with 'gh workflow run ci.yml --ref <branch>' and rerun this workflow)"
     else
         echo "CI has not passed on $1"
     fi

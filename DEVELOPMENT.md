@@ -392,7 +392,7 @@ waits for that run nor reruns the tests.
 The tag starts `.github/workflows/release.yml`. Before it builds anything, it refuses a tag that
 does not match `npn.version`, and a tagged commit CI has not passed on unless it changes only the
 `npn.version` line on top of a `main` commit CI passed on
-(`.github/scripts/check-release-commit.sh`, which counts runs the same way). It then builds the signed APK, AppImage (with its
+(`.github/scripts/check-release-commit.sh`, which counts runs with the same `ci-status.sh`). It then builds the signed APK, AppImage (with its
 `.zsync`), `.deb`, `.rpm`, `.flatpak`, Linux tarball, `.msi` and `.exe` into a draft release,
 adds `SHA256SUMS` and publishes it. If a build job fails the draft stays
 unpublished: fix the problem, delete the draft and the tag, and release the next patch

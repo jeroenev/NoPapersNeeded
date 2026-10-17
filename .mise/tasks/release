@@ -36,22 +36,22 @@ git fetch --quiet --tags origin main
 
 # ...and only once CI has passed on it. The tag goes on the bump commit made below, which changes
 # only npn.version; release.yml builds it without rerunning the tests or waiting for CI on it, once
-# .github/scripts/check-release-commit.sh has checked both of those again. Only a push or manual run
-# tested the commit itself: a pull_request run tested it merged into its base branch.
+# .github/scripts/check-release-commit.sh has checked both of those again. Both read CI the same way
+# (.github/scripts/ci-status.sh): only a push or manual run tested the commit itself.
 command -v gh >/dev/null || die "needs the GitHub CLI (gh) to check CI on main"
+# shellcheck source=.github/scripts/ci-status.sh
+source .github/scripts/ci-status.sh
 head=$(git rev-parse --short HEAD)
-runs=$(gh run list --workflow ci.yml --commit "$(git rev-parse HEAD)" --json event,status,conclusion \
-    --jq '.[] | "\(.event) \(.status) \(.conclusion)"')
-own=$(sed -nE 's/^(push|workflow_dispatch) //p' <<<"$runs")
-if ! grep -qx "completed success" <<<"$own"; then
-    if [ -z "$own" ]; then
-        [ -z "$runs" ] ||
-            die "CI has not run on $head itself, only in a pull request, which tests it merged into its base branch; start it with: gh workflow run ci.yml --ref main"
-        die "CI has not run on $head (a docs-only commit skips it); start it with: gh workflow run ci.yml --ref main"
-    fi
-    ! grep -qv "^completed" <<<"$own" || die "CI is still running on $head; wait for it with: gh run watch"
-    die "CI did not pass on $head; fix main first"
-fi
+ci=$(ci_status "$(git rev-parse HEAD)") || die "could not list the CI runs on $head"
+case "$ci" in
+passed) ;;
+pull-request)
+    die "CI has not run on $head itself, only in a pull request, which tests it merged into its base branch; start it with: gh workflow run ci.yml --ref main"
+    ;;
+none) die "CI has not run on $head (a docs-only commit skips it); start it with: gh workflow run ci.yml --ref main" ;;
+running) die "CI is still running on $head; wait for it with: gh run watch" ;;
+*) die "CI did not pass on $head; fix main first" ;;
+esac
 
 current=$(sed -n 's/^npn\.version=//p' "$props")
 [ -n "$current" ] || die "npn.version not found in $props"
