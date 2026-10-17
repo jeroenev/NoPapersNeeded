@@ -99,10 +99,16 @@ object ExternalStorageTreePaths {
      */
     fun localDirectoryForTreeUri(uri: Uri): String? {
         val docId = runCatching { DocumentsContract.getTreeDocumentId(uri) }.getOrNull() ?: return null
+        return pathOf(uri.authority.orEmpty(), docId)?.takeIf { File(it).isDirectory }
+    }
 
+    /** [resolve] against this device's primary external storage. */
+    fun pathOf(
+        authority: String,
+        docId: String,
+    ): String? {
         @Suppress("DEPRECATION")
         val primary = Environment.getExternalStorageDirectory().absolutePath
-        val path = resolve(uri.authority.orEmpty(), docId, primary) ?: return null
-        return path.takeIf { File(it).isDirectory }
+        return resolve(authority, docId, primary)
     }
 }

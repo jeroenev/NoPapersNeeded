@@ -1,7 +1,6 @@
 package dev.npn.core.watch
 
 import android.net.Uri
-import android.os.Environment
 import android.provider.DocumentsContract
 import dev.npn.core.app.LibraryLocations
 import dev.npn.core.fs.ExternalStorageTreePaths
@@ -40,10 +39,7 @@ private fun pathOf(
     tree: TreeDocument?,
 ): String? {
     if (tree == null) return location.takeUnless { LibraryLocations.isContentUri(it) }
-
-    @Suppress("DEPRECATION")
-    val primary = Environment.getExternalStorageDirectory().absolutePath
-    return ExternalStorageTreePaths.resolve(tree.authority, tree.documentId, primary)
+    return ExternalStorageTreePaths.pathOf(tree.authority, tree.documentId)
 }
 
 /** A SAF tree uri's provider and the document id of the folder it grants. */

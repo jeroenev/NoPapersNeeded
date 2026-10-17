@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 import dev.npn.core.fs.ExternalSource
+import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Hex
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -62,5 +63,5 @@ class SafWatchedFolder(
     override fun changes(): Flow<Unit> = emptyFlow()
 
     private fun isPdf(file: DocumentFile): Boolean =
-        file.type == "application/pdf" || (file.name?.endsWith(".pdf", ignoreCase = true) == true)
+        file.type == "application/pdf" || file.name?.let(NpnPaths::isPdf) == true
 }
