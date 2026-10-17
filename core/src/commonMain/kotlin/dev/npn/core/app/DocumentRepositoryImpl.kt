@@ -104,19 +104,10 @@ class DocumentRepositoryImpl(
                     val hits = ftsDao.search(FtsQuery.sanitize(queryText))
                     val snippetById = hits.associate { it.docId to it.snippet }
                     val order = hits.map { it.docId }.withIndex().associate { it.value to it.index }
-                    val matched = docs.filter { it.docId in snippetById }
-                    val ids = matched.map { it.docId }
-                    val tagsByDoc = tagsForDocuments(ids)
-                    val fieldsByDoc = fieldsFor(ids)
-                    matched
-                        .sortedBy { order[it.docId] ?: Int.MAX_VALUE }
-                        .map {
-                            DocListItem(
-                                it.toDoc(fieldsByDoc[it.docId].orEmpty()),
-                                tagsByDoc[it.docId].orEmpty(),
-                                snippetById[it.docId],
-                            )
-                        }
+                    listItems(
+                        docs.filter { it.docId in snippetById }.sortedBy { order[it.docId] ?: Int.MAX_VALUE },
+                        snippetById,
+                    )
                 }
             }.flowOn(Dispatchers.Default)
     }
@@ -172,12 +163,17 @@ class DocumentRepositoryImpl(
     override suspend fun liveDocuments(docIds: List<String>): List<DocListItem> =
         listItems(documentDao.getByDocIds(docIds.distinct()).filter { it.isLive })
 
-    /** [docs] with their tags and custom fields, each attached in one pass. */
-    private suspend fun listItems(docs: List<DocumentEntity>): List<DocListItem> {
+    /** [docs] with their tags, custom fields and search [snippets], each attached in one pass. */
+    private suspend fun listItems(
+        docs: List<DocumentEntity>,
+        snippets: Map<String, String?> = emptyMap(),
+    ): List<DocListItem> {
         val ids = docs.map { it.docId }
         val tagsByDoc = tagsForDocuments(ids)
         val fieldsByDoc = fieldsFor(ids)
-        return docs.map { DocListItem(it.toDoc(fieldsByDoc[it.docId].orEmpty()), tagsByDoc[it.docId].orEmpty()) }
+        return docs.map {
+            DocListItem(it.toDoc(fieldsByDoc[it.docId].orEmpty()), tagsByDoc[it.docId].orEmpty(), snippets[it.docId])
+        }
     }
 
     private suspend fun fieldsFor(docIds: List<String>): Map<String, Map<String, String>> {
@@ -412,7 +408,7 @@ class DocumentRepositoryImpl(
 
     private fun escapeLike(s: String): String = s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
-    /** WHERE clause list plus ordered bind lambdas, built once and shared by list + count queries. */
+    /** The list query's WHERE terms, and its binds in the order their placeholders appear. */
     private data class QueryParts(
         val where: List<String>,
         val binds: List<(SQLiteStatement, Int) -> Unit>,
