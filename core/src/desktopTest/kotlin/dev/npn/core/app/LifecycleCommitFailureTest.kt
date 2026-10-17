@@ -35,7 +35,7 @@ class LifecycleCommitFailureTest {
             val id = rig.fs.sha256("a.pdf")
             val before = rig.db.documentDao().getByDocId(id)
 
-            lifecycle.failures = 1
+            lifecycle.faults.publishFailures = 1
             assertFailsWith<VerifiedPublicationFailedException> { lifecycle.docs.trashDoc(id) }
 
             rig.exists("a.pdf").shouldBeTrue()
@@ -63,7 +63,7 @@ class LifecycleCommitFailureTest {
             lifecycle.docs.trashDoc(id)
             val before = rig.db.documentDao().getByDocId(id)
 
-            lifecycle.failures = 1
+            lifecycle.faults.publishFailures = 1
             assertFailsWith<VerifiedPublicationFailedException> { lifecycle.docs.restoreDoc(id) }
 
             rig.exists("a.pdf").shouldBeFalse()
@@ -92,7 +92,7 @@ class LifecycleCommitFailureTest {
             lifecycle.docs.trashDoc(id)
             val before = rig.db.documentDao().getByDocId(id)
 
-            lifecycle.failures = 1
+            lifecycle.faults.publishFailures = 1
             assertFailsWith<VerifiedPublicationFailedException> { lifecycle.docs.deleteDocPermanently(id) }
 
             rig.fs.trashEntries() shouldHaveSize 1
@@ -134,28 +134,19 @@ class LifecycleCommitFailureTest {
         }
 
     /**
-     * A [DocLifecycleImpl] and its coordinator over an [IndexRig] whose next [failures] journal
-     * publishes fail; with [statFailuresOfObjects], that many reads of a published object's metadata
+     * A [DocLifecycleImpl] and its coordinator over an [IndexRig] whose journal publishes fail as
+     * [faults] says; with [statFailuresOfObjects], that many reads of a published object's metadata
      * fail too, which fails projecting a commit after its publish.
      */
     private class Lifecycle(
         val rig: IndexRig,
         statFailuresOfObjects: Int,
     ) {
-        var failures = 0
+        val faults = FileSystemFaults()
         private var statFailures = statFailuresOfObjects
 
         private val journalFs =
-            object : LibraryFileSystem by rig.fs {
-                override suspend fun publishVerifiedObjectOnce(
-                    stagingPath: String,
-                    canonicalPath: String,
-                    expectedHash: String,
-                ) {
-                    if (failures-- > 0) throw VerifiedPublicationFailedException("rename failed")
-                    rig.fs.publishVerifiedObjectOnce(stagingPath, canonicalPath, expectedHash)
-                }
-
+            object : LibraryFileSystem by faults.over(rig.fs) {
                 override suspend fun stat(relPath: String): FileMeta? {
                     if (JournalPaths.classify(relPath) is JournalPath.ObjectV2 && statFailures-- > 0) {
                         throw IOException("stat failed")
