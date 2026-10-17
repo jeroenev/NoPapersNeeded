@@ -27,21 +27,21 @@ class FieldDefFoldTest {
         def: FieldDef,
         t: Long,
         dev: String = "d1",
-    ) = JournalEvent(1, seq, Hlc(t, 0, dev), dev, null, JournalOp.FieldDefSet(def.key, def))
+    ) = event(JournalOp.FieldDefSet(def.key, def), null, seq, t, dev)
 
     private fun remove(
         seq: Long,
         key: String,
         t: Long,
         dev: String = "d1",
-    ) = JournalEvent(1, seq, Hlc(t, 0, dev), dev, null, JournalOp.FieldDefSet(key, null))
+    ) = event(JournalOp.FieldDefSet(key, null), null, seq, t, dev)
 
     private fun value(
         seq: Long,
         key: String,
         value: String,
         t: Long,
-    ) = JournalEvent(1, seq, Hlc(t, 0, "d1"), "d1", "a".repeat(64), JournalOp.FieldSet(key, value))
+    ) = event(JournalOp.FieldSet(key, value), "a".repeat(64), seq, t)
 
     /** Numbers an older build stored in another form fold to the one canonical form. */
     @Test

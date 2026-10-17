@@ -11,7 +11,7 @@ class RenameMergeTest {
         tag: String,
         t: Long,
         dev: String = "d1",
-    ) = JournalEvent(1, seq, Hlc(t, 0, dev), dev, doc, JournalOp.TagAdd(tag))
+    ) = event(JournalOp.TagAdd(tag), doc, seq, t, dev)
 
     private fun rename(
         seq: Long,
@@ -19,7 +19,7 @@ class RenameMergeTest {
         to: String,
         t: Long,
         dev: String = "d1",
-    ) = JournalEvent(1, seq, Hlc(t, 0, dev), dev, null, JournalOp.TagRename(from, to))
+    ) = event(JournalOp.TagRename(from, to), null, seq, t, dev)
 
     private fun merge(
         seq: Long,
@@ -27,7 +27,7 @@ class RenameMergeTest {
         to: String,
         t: Long,
         dev: String = "d1",
-    ) = JournalEvent(1, seq, Hlc(t, 0, dev), dev, null, JournalOp.TagMerge(from, to))
+    ) = event(JournalOp.TagMerge(from, to), null, seq, t, dev)
 
     @Test
     fun add_before_rename_follows_rename() {

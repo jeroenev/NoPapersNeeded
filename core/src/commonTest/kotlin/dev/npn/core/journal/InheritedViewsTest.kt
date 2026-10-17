@@ -15,23 +15,17 @@ class InheritedViewsTest {
     private val b = "b".repeat(64)
     private val c = "c".repeat(64)
 
-    private fun event(
-        doc: String,
-        op: JournalOp,
-        t: Long,
-    ) = JournalEvent(1, t, Hlc(t, 0, "d1"), "d1", doc, op)
-
     private fun title(
         doc: String,
         value: String?,
         t: Long,
-    ) = event(doc, JournalOp.FieldSet(FieldKeys.TITLE, value), t)
+    ) = event(JournalOp.FieldSet(FieldKeys.TITLE, value), doc, t, t)
 
     private fun relink(
         old: String,
         new: String,
         t: Long,
-    ) = event(old, JournalOp.Relink(new), t)
+    ) = event(JournalOp.Relink(new), old, t, t)
 
     /** [verify] the fold of [events] in their order and in reverse. */
     private fun folded(
@@ -66,22 +60,22 @@ class InheritedViewsTest {
 
     @Test
     fun a_clear_masks_an_inherited_property() {
-        val pin = event(a, JournalOp.PropSet(SystemProperty.OCR_ENGINE, "tesseract"), 10)
-        val unpin = event(b, JournalOp.PropSet(SystemProperty.OCR_ENGINE, null), 30)
+        val pin = event(JournalOp.PropSet(SystemProperty.OCR_ENGINE, "tesseract"), a, 10, 10)
+        val unpin = event(JournalOp.PropSet(SystemProperty.OCR_ENGINE, null), b, 30, 30)
         folded(pin, relink(a, b, 20)) { assertEquals("tesseract", it.inheritedProp(b, SystemProperty.OCR_ENGINE)) }
         folded(pin, relink(a, b, 20), unpin) { assertNull(it.inheritedProp(b, SystemProperty.OCR_ENGINE)) }
     }
 
     @Test
     fun removing_an_inherited_tag_removes_the_predecessors_adds() {
-        val add = event(a, JournalOp.TagAdd("filed"), 10)
+        val add = event(JournalOp.TagAdd("filed"), a, 10, 10)
         val state = JournalFolder.fold(listOf(add, relink(a, b, 20)))
         assertEquals(setOf("filed"), state.inheritedTags(b))
 
         val removal = state.tagRemovalOps(listOf(b, a), "filed")
 
         assertEquals(listOf(PendingOp.tagRemove(b, "filed", listOf(add.dot))), removal)
-        state.apply(event(b, removal.single().op, 30))
+        state.apply(event(removal.single().op, b, 30, 30))
         assertEquals(emptySet(), state.inheritedTags(b))
         assertEquals(emptySet(), state.effectiveTags(a))
     }

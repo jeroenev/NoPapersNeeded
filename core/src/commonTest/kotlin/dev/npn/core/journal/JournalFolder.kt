@@ -13,3 +13,12 @@ object JournalFolder {
 
     fun fold(events: Iterable<JournalEvent>): FoldedState = fold(events.asSequence())
 }
+
+/** A [JournalEvent] of [op] on [doc], [dev]'s [seq]th, at wall time [t]: how the fold tests write events. */
+fun event(
+    op: JournalOp,
+    doc: String?,
+    seq: Long,
+    t: Long,
+    dev: String = "d1",
+): JournalEvent = JournalEvent(JournalEventVersions.V1, seq, Hlc(t, 0, dev), dev, doc, op)

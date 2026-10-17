@@ -17,7 +17,7 @@ class PropsTrashRelinkTest {
         value: String?,
         t: Long,
         dev: String = "d1",
-    ) = JournalEvent(1, seq, Hlc(t, 0, dev), dev, doc, JournalOp.PropSet(key, value))
+    ) = event(JournalOp.PropSet(key, value), doc, seq, t, dev)
 
     @Test
     fun prop_lww_by_hlc() {
@@ -38,8 +38,8 @@ class PropsTrashRelinkTest {
     @Test
     fun prop_tiebreak_by_device_id() {
         // same physical + counter, different device -> higher deviceId wins
-        val ea = JournalEvent(1, 1, Hlc(10, 0, "aaa"), "aaa", doc, JournalOp.PropSet(SystemProperty.OCR_ENGINE, "a"))
-        val ez = JournalEvent(1, 1, Hlc(10, 0, "zzz"), "zzz", doc, JournalOp.PropSet(SystemProperty.OCR_ENGINE, "z"))
+        val ea = event(JournalOp.PropSet(SystemProperty.OCR_ENGINE, "a"), doc, 1, 10, "aaa")
+        val ez = event(JournalOp.PropSet(SystemProperty.OCR_ENGINE, "z"), doc, 1, 10, "zzz")
         assertEquals("z", JournalFolder.fold(listOf(ea, ez)).effectiveProp(doc, SystemProperty.OCR_ENGINE))
     }
 
@@ -49,7 +49,7 @@ class PropsTrashRelinkTest {
         value: String?,
         t: Long,
         dev: String = "d1",
-    ) = JournalEvent(1, seq, Hlc(t, 0, dev), dev, doc, JournalOp.FieldSet(key, value))
+    ) = event(JournalOp.FieldSet(key, value), doc, seq, t, dev)
 
     @Test
     fun field_lww_and_clear() {
@@ -77,19 +77,19 @@ class PropsTrashRelinkTest {
         path: String,
         t: Long,
         dev: String = "d1",
-    ) = JournalEvent(1, seq, Hlc(t, 0, dev), dev, doc, JournalOp.DocTrash(path))
+    ) = event(JournalOp.DocTrash(path), doc, seq, t, dev)
 
     private fun restore(
         seq: Long,
         t: Long,
         dev: String = "d1",
-    ) = JournalEvent(1, seq, Hlc(t, 0, dev), dev, doc, JournalOp.DocRestore)
+    ) = event(JournalOp.DocRestore, doc, seq, t, dev)
 
     private fun delete(
         seq: Long,
         t: Long,
         dev: String = "d1",
-    ) = JournalEvent(1, seq, Hlc(t, 0, dev), dev, doc, JournalOp.DocDelete)
+    ) = event(JournalOp.DocDelete, doc, seq, t, dev)
 
     @Test
     fun trash_restore_lww() {
@@ -117,7 +117,7 @@ class PropsTrashRelinkTest {
         seq: Long,
         t: Long,
         dev: String = "d1",
-    ) = JournalEvent(1, seq, Hlc(t, 0, dev), dev, doc, JournalOp.DocUndelete)
+    ) = event(JournalOp.DocUndelete, doc, seq, t, dev)
 
     @Test
     fun undelete_newer_than_delete_brings_the_doc_back_out_of_the_trash() {
@@ -155,7 +155,7 @@ class PropsTrashRelinkTest {
         new: String,
         t: Long,
         dev: String,
-    ) = JournalEvent(1, seq, Hlc(t, 0, dev), dev, old, JournalOp.Relink(new))
+    ) = event(JournalOp.Relink(new), old, seq, t, dev)
 
     @Test
     fun relink_chain_resolution() {

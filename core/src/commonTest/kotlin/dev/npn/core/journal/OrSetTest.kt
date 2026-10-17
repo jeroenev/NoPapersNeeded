@@ -12,7 +12,7 @@ class OrSetTest {
         seq: Long,
         tag: String,
         t: Long,
-    ) = JournalEvent(1, seq, Hlc(t, 0, dev), dev, doc, JournalOp.TagAdd(tag))
+    ) = event(JournalOp.TagAdd(tag), doc, seq, t, dev)
 
     private fun remove(
         dev: String,
@@ -20,7 +20,7 @@ class OrSetTest {
         tag: String,
         t: Long,
         dots: List<Dot>,
-    ) = JournalEvent(1, seq, Hlc(t, 0, dev), dev, doc, JournalOp.TagRemove(tag, dots))
+    ) = event(JournalOp.TagRemove(tag, dots), doc, seq, t, dev)
 
     @Test
     fun add_then_remove_observed_dot() {

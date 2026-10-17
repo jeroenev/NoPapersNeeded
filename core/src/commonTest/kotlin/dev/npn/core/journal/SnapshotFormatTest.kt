@@ -13,14 +13,7 @@ class SnapshotFormatTest {
         dev: String,
         seq: Long,
         physical: Long,
-    ) = JournalEvent(
-        version = JournalEventVersions.V1,
-        seq = seq,
-        hlc = Hlc(physical, 0, dev),
-        dev = dev,
-        doc = doc,
-        op = JournalOp.TagAdd("t$seq"),
-    )
+    ) = event(JournalOp.TagAdd("t$seq"), doc, seq, physical, dev)
 
     private fun snapshotBytes(
         supersedes: List<String>,
