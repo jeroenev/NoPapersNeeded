@@ -105,9 +105,10 @@ class QueueDrainer(
 
     /**
      * Cancel and await the worker loop and every [drainAndAwait], without cancelling the parent
-     * scope. A direct [drain] call is the caller's own to cancel.
+     * scope. A direct [drain] call is the caller's own to cancel. For tests: the session stops its
+     * drainers by cancelling the scope they run in.
      */
-    suspend fun close() {
+    internal suspend fun close() {
         kicks.close()
         workerJob.cancelAndJoin()
     }
