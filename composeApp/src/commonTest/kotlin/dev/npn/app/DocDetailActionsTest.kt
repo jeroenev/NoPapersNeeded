@@ -7,8 +7,8 @@ import dev.npn.core.app.AiOcrOutcome
 import dev.npn.core.app.BakeFailure
 import dev.npn.core.app.BakeOutcome
 import dev.npn.core.app.RelocationOutcome
-import dev.npn.core.app.SplitFailure
 import dev.npn.core.app.SplitOutcome
+import dev.npn.core.index.SplitFailure
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe

@@ -4,6 +4,7 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.FieldKeyCount
 import dev.npn.core.db.isLive
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.index.SplitFailure
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType

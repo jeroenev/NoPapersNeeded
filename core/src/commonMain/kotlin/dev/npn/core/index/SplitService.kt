@@ -1,6 +1,5 @@
 package dev.npn.core.index
 
-import dev.npn.core.app.SplitFailure
 import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.isLive

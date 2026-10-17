@@ -5,6 +5,7 @@ import dev.npn.core.index.ImportResult
 import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.index.MaintenanceService
 import dev.npn.core.index.ScanReport
+import dev.npn.core.index.SplitFailure
 import dev.npn.core.index.SplitService
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.FieldKeys

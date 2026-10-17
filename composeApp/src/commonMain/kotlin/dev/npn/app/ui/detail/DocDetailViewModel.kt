@@ -22,10 +22,10 @@ import dev.npn.core.app.DocumentRepository
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.OcrVersion
 import dev.npn.core.app.RelocationOutcome
-import dev.npn.core.app.SplitFailure
 import dev.npn.core.app.SplitOutcome
 import dev.npn.core.app.effectiveReviewed
 import dev.npn.core.app.reusableFieldValues
+import dev.npn.core.index.SplitFailure
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.ocr.OcrEngineRef

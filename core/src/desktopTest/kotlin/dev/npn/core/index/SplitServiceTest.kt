@@ -1,6 +1,5 @@
 package dev.npn.core.index
 
-import dev.npn.core.app.SplitFailure
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.documentEntity
 import dev.npn.core.db.fieldTypes
