@@ -3,10 +3,10 @@ package dev.npn.app.ui.ai
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.reasonText
 import dev.npn.app.ui.common.uiText
-import dev.npn.core.app.ApplyResult
-import dev.npn.core.app.EditRunReview
 import dev.npn.core.app.LibrarySession
-import dev.npn.core.app.ReviewDoc
+import dev.npn.core.app.aiedit.ApplyResult
+import dev.npn.core.app.aiedit.EditRunReview
+import dev.npn.core.app.aiedit.ReviewDoc
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -53,11 +53,11 @@ sealed interface QueuedReviewPhase {
  * Drives the Review of one background AI edit run.
  *
  * This is the second half of the AI-edit flow with the first half replaced: the suggestions were
- * bought earlier by [dev.npn.core.app.AiEditQueue] and only projected onto Review rows when this
+ * bought earlier by [dev.npn.core.app.aiedit.AiEditQueue] and only projected onto Review rows when this
  * screen opens, so what the user confirms is measured against the documents as they are *now*.
  * From there on the semantics are the interactive run's — same pre-select policy, same selection
  * toggles, same partial-failure Retry — because they are the same code
- * ([dev.npn.core.app.ReviewApply] and [toggleChip] and friends).
+ * ([dev.npn.core.app.aiedit.ReviewApply] and [toggleChip] and friends).
  *
  * The run is dropped from the queue exactly when it stops being reviewable: a fully applied
  * [apply], or [leaveReview]. Leaving the screen any other way keeps it, so a half-finished review costs

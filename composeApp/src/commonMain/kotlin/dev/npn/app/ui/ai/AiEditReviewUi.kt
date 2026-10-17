@@ -52,10 +52,10 @@ import dev.npn.app.ui.common.ExpanderRow
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.SuggestedFieldValue
 import dev.npn.app.ui.common.TagSuggestionLabel
-import dev.npn.core.app.ApplyResult
 import dev.npn.core.app.DocContentFacade
-import dev.npn.core.app.ReviewDoc
-import dev.npn.core.app.ReviewField
+import dev.npn.core.app.aiedit.ApplyResult
+import dev.npn.core.app.aiedit.ReviewDoc
+import dev.npn.core.app.aiedit.ReviewField
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_add_tag
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_summary

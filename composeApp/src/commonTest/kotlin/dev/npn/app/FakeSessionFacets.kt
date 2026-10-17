@@ -1,10 +1,8 @@
 package dev.npn.app
 
 import dev.npn.core.ai.AiEditRequest
-import dev.npn.core.app.AiEditQueueFacade
 import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.AiOcrOutcome
-import dev.npn.core.app.EditRunReview
 import dev.npn.core.app.ImportOutcome
 import dev.npn.core.app.IngestFacade
 import dev.npn.core.app.MaintenanceFacade
@@ -20,6 +18,8 @@ import dev.npn.core.app.StoragePathSetting
 import dev.npn.core.app.TrashRetentionFacade
 import dev.npn.core.app.TrashSettings
 import dev.npn.core.app.WorkFacade
+import dev.npn.core.app.aiedit.AiEditQueueFacade
+import dev.npn.core.app.aiedit.EditRunReview
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.index.IndexProgress
 import dev.npn.core.index.ScanReport

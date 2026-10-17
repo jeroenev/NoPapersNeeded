@@ -1,9 +1,15 @@
-package dev.npn.core.app
+package dev.npn.core.app.aiedit
 
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiEditSuggestion
 import dev.npn.core.ai.AiSuggest
+import dev.npn.core.app.DocContentFacade
+import dev.npn.core.app.DocListItem
+import dev.npn.core.app.DocumentRepository
+import dev.npn.core.app.FieldRegistry
+import dev.npn.core.app.MetadataWriter
+import dev.npn.core.app.TagRepository
 import dev.npn.core.db.AiEditJobDao
 import dev.npn.core.db.AiEditJobDocEntity
 import dev.npn.core.db.AiEditJobEntity

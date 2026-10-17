@@ -1,4 +1,4 @@
-package dev.npn.core.app
+package dev.npn.core.app.aiedit
 
 import dev.npn.core.ai.AiEditSuggestion
 import dev.npn.core.ai.FieldSuggestion

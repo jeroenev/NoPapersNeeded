@@ -2,6 +2,7 @@ package dev.npn.core.app
 
 import dev.npn.core.ai.AiChat
 import dev.npn.core.ai.AiSuggest
+import dev.npn.core.app.aiedit.AiEditQueueFacade
 
 /**
  * Everything scoped to one opened library folder: a pure aggregate of narrow facets plus

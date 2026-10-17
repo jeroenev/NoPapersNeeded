@@ -1,7 +1,18 @@
-package dev.npn.core.app
+package dev.npn.core.app.aiedit
 
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiSuggest
+import dev.npn.core.app.Doc
+import dev.npn.core.app.DocContentFacade
+import dev.npn.core.app.DocListItem
+import dev.npn.core.app.DocumentRepository
+import dev.npn.core.app.FieldRegistry
+import dev.npn.core.app.LibraryFilter
+import dev.npn.core.app.LibrarySort
+import dev.npn.core.app.MetadataWriter
+import dev.npn.core.app.SavedView
+import dev.npn.core.app.TagRepository
+import dev.npn.core.app.displayTitleOf
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

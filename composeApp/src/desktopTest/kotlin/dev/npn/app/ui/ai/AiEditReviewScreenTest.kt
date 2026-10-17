@@ -20,11 +20,11 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import dev.npn.app.FakeLibrarySession
 import dev.npn.app.ui.theme.NpnTheme
-import dev.npn.core.app.ApplyOutcome
-import dev.npn.core.app.ApplyResult
-import dev.npn.core.app.EditRunReview
-import dev.npn.core.app.ReviewChip
-import dev.npn.core.app.ReviewDoc
+import dev.npn.core.app.aiedit.ApplyOutcome
+import dev.npn.core.app.aiedit.ApplyResult
+import dev.npn.core.app.aiedit.EditRunReview
+import dev.npn.core.app.aiedit.ReviewChip
+import dev.npn.core.app.aiedit.ReviewDoc
 import io.kotest.matchers.collections.shouldContainExactly
 import java.util.Locale
 import javax.swing.SwingUtilities

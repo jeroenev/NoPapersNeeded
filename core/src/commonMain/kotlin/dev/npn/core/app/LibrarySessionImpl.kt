@@ -3,6 +3,7 @@ package dev.npn.core.app
 import dev.npn.core.ai.AiChat
 import dev.npn.core.ai.AiFacadeImpl
 import dev.npn.core.ai.AiSuggest
+import dev.npn.core.app.aiedit.AiEditQueueFacade
 import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.fs.ExternalSource

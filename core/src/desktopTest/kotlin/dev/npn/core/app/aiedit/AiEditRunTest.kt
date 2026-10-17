@@ -1,12 +1,18 @@
 @file:OptIn(ExperimentalCoroutinesApi::class)
 
-package dev.npn.core.app
+package dev.npn.core.app.aiedit
 
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiEditSuggestion
 import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.ai.TagSuggestion
+import dev.npn.core.app.AppSessionRig
+import dev.npn.core.app.DocumentRepositoryImpl
+import dev.npn.core.app.LibraryFilter
+import dev.npn.core.app.LibrarySort
+import dev.npn.core.app.SavedView
+import dev.npn.core.app.SortField
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.testing.FakeAiSuggest

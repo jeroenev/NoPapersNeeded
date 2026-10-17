@@ -1,4 +1,4 @@
-package dev.npn.core.app
+package dev.npn.core.app.aiedit
 
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiEditSuggestion
@@ -6,6 +6,8 @@ import dev.npn.core.ai.AiFieldConfig
 import dev.npn.core.ai.AiFieldMode
 import dev.npn.core.ai.AiSuggest
 import dev.npn.core.ai.UnattendedAiPolicy
+import dev.npn.core.app.FieldRegistry
+import dev.npn.core.app.MetadataWriter
 import dev.npn.core.db.AiEnrichQueueDao
 import dev.npn.core.db.AiEnrichQueueEntity
 import dev.npn.core.db.AiEnrichedEntity

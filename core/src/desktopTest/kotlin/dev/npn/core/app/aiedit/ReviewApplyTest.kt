@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalCoroutinesApi::class)
 
-package dev.npn.core.app
+package dev.npn.core.app.aiedit
 
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.testing.FakeMetadataWriter

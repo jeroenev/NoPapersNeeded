@@ -10,10 +10,10 @@ import dev.npn.app.failure
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.ai.TagSuggestion
-import dev.npn.core.app.AiEditRunImpl
-import dev.npn.core.app.ApplyOutcome
-import dev.npn.core.app.ApplyResult
-import dev.npn.core.app.ReviewDoc
+import dev.npn.core.app.aiedit.AiEditRunImpl
+import dev.npn.core.app.aiedit.ApplyOutcome
+import dev.npn.core.app.aiedit.ApplyResult
+import dev.npn.core.app.aiedit.ReviewDoc
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.testing.edit
 import dev.npn.core.testing.listItem

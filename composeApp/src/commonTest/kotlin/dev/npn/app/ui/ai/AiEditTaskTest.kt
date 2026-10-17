@@ -6,10 +6,10 @@ import dev.npn.app.FakeLibrarySession
 import dev.npn.app.MainDispatcherTest
 import dev.npn.app.collecting
 import dev.npn.core.ai.AiFieldMode
-import dev.npn.core.app.EditScope
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.SavedView
+import dev.npn.core.app.aiedit.EditScope
 import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder

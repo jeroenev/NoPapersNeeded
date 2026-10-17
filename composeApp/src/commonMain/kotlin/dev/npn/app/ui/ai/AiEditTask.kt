@@ -1,7 +1,7 @@
 package dev.npn.app.ui.ai
 
 import dev.npn.core.ai.AiFieldMode
-import dev.npn.core.app.EditScope
+import dev.npn.core.app.aiedit.EditScope
 
 /**
  * The job the user opened the AI-edit page to do.

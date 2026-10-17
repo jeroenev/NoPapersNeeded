@@ -3,10 +3,10 @@ package dev.npn.app.ui.ai
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.reasonText
 import dev.npn.app.ui.common.uiText
-import dev.npn.core.app.ApplyOutcome
-import dev.npn.core.app.ApplyResult
-import dev.npn.core.app.ReviewChip
-import dev.npn.core.app.ReviewDoc
+import dev.npn.core.app.aiedit.ApplyOutcome
+import dev.npn.core.app.aiedit.ApplyResult
+import dev.npn.core.app.aiedit.ReviewChip
+import dev.npn.core.app.aiedit.ReviewDoc
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_finish_failed
 import org.jetbrains.compose.resources.StringResource

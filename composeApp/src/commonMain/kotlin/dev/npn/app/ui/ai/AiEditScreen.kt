@@ -30,9 +30,9 @@ import androidx.navigationevent.compose.rememberNavigationEventState
 import dev.npn.app.ui.common.BackTopBar
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.SnackbarMessages
-import dev.npn.core.app.EditProgress
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.SettingsRepository
+import dev.npn.core.app.aiedit.EditProgress
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_applying
 import no_papers_needed.composeapp.generated.resources.ai_edit_cancel_confirm
@@ -159,7 +159,7 @@ internal fun LeaveGuard(
  * Suggestion progress.
  *
  * Reports documents *completed*, not the one being worked on: the run is concurrent
- * ([dev.npn.core.app.AiEditRun]), so there is no single current document, and the title the run
+ * ([dev.npn.core.app.aiedit.AiEditRun]), so there is no single current document, and the title the run
  * reports is the one that finished last. (Counting `done + 1` as "working on number N" would claim
  * "13 of 12" for a finished batch of twelve.)
  */

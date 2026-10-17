@@ -1,12 +1,13 @@
 @file:OptIn(ExperimentalCoroutinesApi::class)
 
-package dev.npn.core.app
+package dev.npn.core.app.aiedit
 
 import dev.npn.core.ai.AiEditSuggestion
 import dev.npn.core.ai.AiFieldMode
 import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.ai.UnattendedAiPolicy
+import dev.npn.core.app.AppSessionRig
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType

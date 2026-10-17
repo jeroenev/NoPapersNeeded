@@ -1,8 +1,8 @@
 package dev.npn.app.ui.ai
 
-import dev.npn.core.app.ReviewChip
-import dev.npn.core.app.ReviewDoc
-import dev.npn.core.app.ReviewField
+import dev.npn.core.app.aiedit.ReviewChip
+import dev.npn.core.app.aiedit.ReviewDoc
+import dev.npn.core.app.aiedit.ReviewField
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 

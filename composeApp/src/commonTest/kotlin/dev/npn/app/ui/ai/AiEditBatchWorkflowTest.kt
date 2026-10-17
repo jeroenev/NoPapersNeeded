@@ -4,8 +4,8 @@ package dev.npn.app.ui.ai
 
 import dev.npn.app.MainDispatcherTest
 import dev.npn.app.collecting
-import dev.npn.core.app.ApplyOutcome
-import dev.npn.core.app.ApplyResult
+import dev.npn.core.app.aiedit.ApplyOutcome
+import dev.npn.core.app.aiedit.ApplyResult
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf

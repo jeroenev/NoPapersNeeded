@@ -6,8 +6,8 @@ import dev.npn.app.MainDispatcherTest
 import dev.npn.app.collecting
 import dev.npn.app.ui.common.reasonText
 import dev.npn.app.ui.common.uiText
-import dev.npn.core.app.ApplyResult
-import dev.npn.core.app.EditProgress
+import dev.npn.core.app.aiedit.ApplyResult
+import dev.npn.core.app.aiedit.EditProgress
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf

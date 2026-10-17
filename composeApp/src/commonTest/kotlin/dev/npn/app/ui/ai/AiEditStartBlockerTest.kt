@@ -1,9 +1,9 @@
 package dev.npn.app.ui.ai
 
 import dev.npn.core.ai.AiEditRequest
-import dev.npn.core.app.ApplyResult
-import dev.npn.core.app.EditProgress
-import dev.npn.core.app.EditScope
+import dev.npn.core.app.aiedit.ApplyResult
+import dev.npn.core.app.aiedit.EditProgress
+import dev.npn.core.app.aiedit.EditScope
 import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test

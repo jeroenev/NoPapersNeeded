@@ -3,6 +3,8 @@ package dev.npn.core.app
 import dev.npn.core.ai.AiFacadeImpl
 import dev.npn.core.ai.RoomChatHistoryProvider
 import dev.npn.core.ai.UnattendedAiPolicy
+import dev.npn.core.app.aiedit.AiAutoEnricher
+import dev.npn.core.app.aiedit.AiEditQueue
 import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.LegacyIndexTables
 import dev.npn.core.db.defs

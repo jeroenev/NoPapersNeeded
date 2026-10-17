@@ -1,6 +1,11 @@
-package dev.npn.core.app
+package dev.npn.core.app.aiedit
 
 import dev.npn.core.ai.AiEditSuggestion
+import dev.npn.core.app.DocContentFacade
+import dev.npn.core.app.DocListItem
+import dev.npn.core.app.FieldRegistry
+import dev.npn.core.app.MetadataWriter
+import dev.npn.core.app.TagRepository
 import dev.npn.core.util.runCatchingCancellable
 
 /**

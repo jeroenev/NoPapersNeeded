@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.Dropdown
 import dev.npn.app.ui.common.SettingsSection
 import dev.npn.core.ai.AiFieldMode
-import dev.npn.core.app.EditScope
+import dev.npn.core.app.aiedit.EditScope
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_field_mode_all
 import no_papers_needed.composeapp.generated.resources.ai_edit_field_mode_unfilled

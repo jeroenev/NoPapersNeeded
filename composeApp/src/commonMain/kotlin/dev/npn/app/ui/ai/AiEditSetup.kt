@@ -40,7 +40,7 @@ import dev.npn.app.ui.common.RadioRow
 import dev.npn.app.ui.common.SwitchRow
 import dev.npn.core.app.AiTagging
 import dev.npn.core.app.DocContentFacade
-import dev.npn.core.app.EditScope
+import dev.npn.core.app.aiedit.EditScope
 import dev.npn.core.model.FieldDef
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_add_field
