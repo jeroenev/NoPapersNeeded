@@ -9,6 +9,7 @@ import dev.npn.core.fs.DocumentPaths
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.holds
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.PendingOp
@@ -60,7 +61,8 @@ internal class ExternalDocumentMoves(
         known: Map<String, String>,
     ): Boolean {
         known[row.relPath]?.let { return it == row.docId }
-        return fs.exists(row.relPath) && fs.sha256(row.relPath) == row.docId
+        // A file that cannot be read now proves nothing: its baseline waits for a pass that can.
+        return fs.holds(row.relPath, row.docId)
     }
 
     suspend fun detect(

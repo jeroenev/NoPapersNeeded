@@ -8,7 +8,6 @@ import dev.npn.core.db.FtsDocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.PathMeta
 import dev.npn.core.db.TagEntity
-import dev.npn.core.db.isLive
 import dev.npn.core.db.missingSentinel
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
@@ -159,14 +158,8 @@ class Indexer(
             // sizes (and so hash costs) vary by orders of magnitude.
             coroutineScope {
                 val pending = Channel<FileMeta>(Channel.UNLIMITED)
-                // Unlimited and not yet closed, so every offer succeeds. Checked rather than
-                // discarded because a capacity change here would otherwise silently drop
-                // files from the scan instead of failing.
-                for (meta in toHash) {
-                    check(
-                        pending.trySend(meta).isSuccess,
-                    ) { "hash queue rejected ${meta.relPath}" }
-                }
+                // Unlimited, so no send waits for the workers.
+                for (meta in toHash) pending.send(meta)
                 pending.close()
                 repeat(minOf(HASH_CONCURRENCY, toHash.size)) {
                     launch(Dispatchers.Default) {
@@ -500,8 +493,7 @@ class Indexer(
         preserveLifecycleDocs: Set<String> = emptySet(),
     ): List<Resurrected> {
         if (events.isEmpty()) return emptyList()
-        _scanState.value = IndexProgress(IndexProgress.Phase.FOLDING)
-        try {
+        return folding {
             val documents = LinkedHashSet<String>()
             val styledTags = LinkedHashSet<String>()
             for (event in events) {
@@ -539,17 +531,19 @@ class Indexer(
                 documents += current
                 documents += state.predecessorsOf(current)
             }
-            return projection { applyFold(state, FoldScope.Events(documents, styledTags, preserveLifecycleDocs)) }
-        } finally {
-            _scanState.value = null
+            projection { applyFold(state, FoldScope.Events(documents, styledTags, preserveLifecycleDocs)) }
         }
     }
 
     /** Reproject a reconciled mixed-version accumulator without rereading journal sources. */
-    suspend fun refreshState(state: FoldedState): List<Resurrected> {
+    suspend fun refreshState(state: FoldedState): List<Resurrected> =
+        folding { projection { applyFold(state, FoldScope.WholeDb) } }
+
+    /** Run [fold], showing the folding phase while it runs. */
+    private inline fun <T> folding(fold: () -> T): T {
         _scanState.value = IndexProgress(IndexProgress.Phase.FOLDING)
         try {
-            return projection { applyFold(state, FoldScope.WholeDb) }
+            return fold()
         } finally {
             _scanState.value = null
         }
@@ -876,32 +870,6 @@ class Indexer(
     private companion object {
         const val HASH_CONCURRENCY = 4
     }
-}
-
-/**
- * Whether the file [this] describes still has the [size] and [mtime] a document's row stored: the
- * evidence a rescan and an import (`ImportService`) take that the bytes there are still that
- * document's without hashing them, for a document that is not hidden. A hidden one gave its path
- * up, so a file there is hashed.
- */
-internal fun FileMeta.hasStoredStat(
-    size: Long,
-    mtime: Long,
-): Boolean = this.size == size && mtimeMillis == mtime
-
-/**
- * Whether the file at [row]'s path holds its document's bytes, [size] of them, by the index's
- * standard of proof: a live row's file that still has the size and mtime the row stored holds them
- * ([hasStoredStat]), and any other file of that size is hashed. Moving or keeping a document's file
- * goes by this, so an unchanged file costs a stat and a file replaced since the last rescan is never
- * taken for the document.
- */
-internal suspend fun LibraryFileSystem.holdsDocument(
-    row: DocumentEntity,
-    size: Long = row.size,
-): Boolean {
-    val meta = stat(row.relPath)?.takeIf { !it.isDirectory && it.size == size } ?: return false
-    return (row.isLive && meta.hasStoredStat(row.size, row.mtime)) || sha256(row.relPath) == row.docId
 }
 
 /**
