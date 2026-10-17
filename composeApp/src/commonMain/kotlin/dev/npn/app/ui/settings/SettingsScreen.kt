@@ -94,8 +94,8 @@ fun SettingsScreen(
     onOpenLibrary: (location: String) -> Unit,
     onResumeDraft: (docId: String) -> Unit,
     onAutoMatchRules: () -> Unit,
+    vm: SettingsViewModel = viewModel { SettingsViewModel(settings, session) },
 ) {
-    val vm: SettingsViewModel = viewModel { SettingsViewModel(settings, session) }
     val state by vm.state.collectAsStateWithLifecycle()
     val aiModels by vm.aiModels.collectAsStateWithLifecycle()
     val aiSelfTest by vm.aiSelfTest.collectAsStateWithLifecycle()

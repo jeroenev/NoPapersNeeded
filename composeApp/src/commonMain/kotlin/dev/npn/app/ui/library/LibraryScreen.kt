@@ -212,6 +212,8 @@ internal data class LibraryBanners(
     val enrichmentPending: Int = 0,
 )
 
+// The list gets the viewmodel only as its LibraryActions interface, the hand-down the conventions prescribe.
+@Suppress("ViewModelForwarding")
 @Composable
 fun LibraryScreen(
     session: LibrarySession,
@@ -223,8 +225,9 @@ fun LibraryScreen(
     /** Opens the AI-edit page, optionally scoped to the given documents (empty = no preselection). */
     onAiEdit: (List<String>) -> Unit,
     filterHandoff: LibraryFilterHandoff,
+    modifier: Modifier = Modifier,
+    vm: LibraryViewModel = viewModel { LibraryViewModel(session, settings) },
 ) {
-    val vm: LibraryViewModel = viewModel { LibraryViewModel(session, settings) }
     val ui by vm.ui.collectAsStateWithLifecycle()
     val results by vm.documents.collectAsStateWithLifecycle()
     val tags by vm.tags.collectAsStateWithLifecycle()
@@ -263,7 +266,7 @@ fun LibraryScreen(
 
     val wide = LocalWindowWidthClass.current.isWide
     // Measured for the side panel's width only; whether there is a side panel is the window's call.
-    BoxWithConstraints(Modifier.fillMaxSize()) {
+    BoxWithConstraints(modifier.fillMaxSize()) {
         // Wide layouts preview a tapped document in the side panel; compact ones open it directly.
         var previewDocId by rememberSaveable { mutableStateOf<String?>(null) }
         val onDocClick: (String) -> Unit = { docId -> if (wide) previewDocId = docId else openDoc(docId) }

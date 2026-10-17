@@ -84,7 +84,7 @@ fun TopBarActions(
  * before it acts, so an action that opens a dialog never leaves the menu standing behind it.
  */
 @Composable
-fun ActionMenuItems(
+internal fun ActionMenuItems(
     actions: List<TopBarAction>,
     onDismiss: () -> Unit,
 ) {

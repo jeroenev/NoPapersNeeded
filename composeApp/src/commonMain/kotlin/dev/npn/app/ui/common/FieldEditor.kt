@@ -123,8 +123,8 @@ private fun rememberFieldText(external: String): MutableState<String> {
 private fun CommitTextField(
     label: String,
     initial: String,
-    placeholder: String? = null,
     modifier: Modifier = Modifier,
+    placeholder: String? = null,
     isError: Boolean = false,
     supportingText: String? = null,
     onCommit: (String) -> Unit,

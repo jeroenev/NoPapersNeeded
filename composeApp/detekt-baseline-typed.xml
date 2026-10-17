@@ -5,7 +5,6 @@
     <ID>AbstractClassCanBeConcreteClass:MainDispatcherTest.kt:MainDispatcherTest$MainDispatcherTest</ID>
     <ID>AbstractClassCanBeConcreteClass:MessagesViewModel.kt:MessagesViewModel$MessagesViewModel</ID>
     <ID>ComposableParamOrder:ConfirmDialog.kt:@Composable fun ConfirmDialog</ID>
-    <ID>ComposableParamOrder:FieldEditor.kt:@Composable fun CommitTextField</ID>
     <ID>ComposableParamOrder:MetadataOcr.kt:@Composable internal fun OcrTextTab</ID>
     <ID>ComposableParamOrder:NumericField.kt:@Composable fun NumericField</ID>
     <ID>ComposableParamOrder:TagChip.kt:@Composable fun TagChip</ID>
@@ -23,12 +22,10 @@
     <ID>LambdaParameterEventTrailing:FieldEditor.kt:onCommit: (String) -&gt; Unit</ID>
     <ID>LambdaParameterInRestartableEffect:PageViewer.kt:render: suspend (pageIndex: Int, maxDim: Int) -&gt; ByteArray?</ID>
     <ID>LongParameterList:LibraryScreen.kt:@Composable private fun SelectionTopBar</ID>
-    <ID>LongParameterList:LibraryViewsMenu.kt:@Composable internal fun LibraryViewsMenuButton</ID>
     <ID>ModifierMissing:AiChatScreen.kt:@Composable fun AiChatScreen</ID>
     <ID>ModifierMissing:AiEditReviewScreen.kt:@Composable fun AiEditReviewScreen</ID>
     <ID>ModifierMissing:AiEditScreen.kt:@Composable fun AiEditScreen</ID>
     <ID>ModifierMissing:FieldDefFormState.kt:@Composable fun FieldDefForm</ID>
-    <ID>ModifierMissing:LibraryScreen.kt:@Composable fun LibraryScreen</ID>
     <ID>ModifierMissing:NavigationShell.kt:@Composable fun NavigationShell</ID>
     <ID>ModifierMissing:QueueScreen.kt:@Composable fun QueueScreen</ID>
     <ID>ModifierMissing:TagSuggestionLabel.kt:@Composable fun TagSuggestionLabel</ID>
@@ -41,8 +38,6 @@
     <ID>MultipleEmitters:FilterSheet.kt:@Composable private fun TagFilterSection</ID>
     <ID>MultipleEmitters:ImportSettingsPane.kt:@Composable private fun OcrLanguageSettings</ID>
     <ID>MultipleEmitters:ImportSettingsPane.kt:@Composable private fun WatchedFolderSettings</ID>
-    <ID>MultipleEmitters:QueueScreen.kt:@Composable private fun EditRunTrouble</ID>
-    <ID>MultipleEmitters:QueueScreen.kt:@Composable private fun QueueRowTrouble</ID>
     <ID>MutableStateAutoboxing:DocGrid.kt:mutableStateOf(0f)</ID>
     <ID>MutableStateAutoboxing:MetadataOcr.kt:mutableStateOf(0)</ID>
     <ID>MutableStateAutoboxing:PageViewer.kt:mutableStateOf(0)</ID>
@@ -55,16 +50,13 @@
     <ID>ParameterNaming:LibraryFolderPicker.kt:onPicked: (PlatformFile?) -&gt; Unit</ID>
     <ID>UnsafeCallOnNullableType:LocalAppLocale.kt:LocalAppLocale$default!!</ID>
     <ID>UnsafeCallOnNullableType:PageViewer.kt:parsed!!</ID>
-    <ID>UseOrEmpty:AutoMatchRulesScreen.kt:rule?.id ?: ""</ID>
     <ID>UseOrEmpty:LibraryViewModel.kt:LibraryViewModel$filter.query ?: ""</ID>
     <ID>UseOrEmpty:LibraryViewModel.kt:LibraryViewModel$view.filter.query ?: ""</ID>
     <ID>VarCouldBeVal:LocalAppLocale.kt:LocalAppLocale$private var default: Locale? = null</ID>
     <ID>ViewModelInjection:AiEditReviewScreen.kt:val vm: AiEditReviewViewModel = viewModel(key = jobId) { AiEditReviewViewModel(session, jobId) }</ID>
     <ID>ViewModelInjection:AiEditScreen.kt:val vm: AiEditViewModel = viewModel { AiEditViewModel(session, settings, selection) }</ID>
     <ID>ViewModelInjection:AutoMatchRulesScreen.kt:val vm: AutoMatchRulesViewModel = viewModel { AutoMatchRulesViewModel(session) }</ID>
-    <ID>ViewModelInjection:LibraryScreen.kt:val vm: LibraryViewModel = viewModel { LibraryViewModel(session, env.settings) }</ID>
     <ID>ViewModelInjection:QueueScreen.kt:val vm: QueueViewModel = viewModel { QueueViewModel(session) }</ID>
-    <ID>ViewModelInjection:SettingsScreen.kt:val vm: SettingsViewModel = viewModel { SettingsViewModel(env.settings, session) }</ID>
     <ID>ViewModelInjection:TagManagementScreen.kt:val vm: TagManagementViewModel = viewModel { TagManagementViewModel(session) }</ID>
     <ID>ViewModelInjection:TrashScreen.kt:val vm: TrashViewModel = viewModel { TrashViewModel(session) }</ID>
     <ID>ViewModelInjection:UpdateBanner.kt:val vm: UpdateNoticeViewModel = viewModel { UpdateNoticeViewModel(settings, GitHubLatestRelease()) }</ID>
