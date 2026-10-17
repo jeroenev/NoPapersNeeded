@@ -54,7 +54,7 @@ class FoldConvergencePropertyTest {
     }
 
     @Test
-    fun fold_is_order_independent_under_shuffle() =
+    fun foldIsOrderIndependentUnderShuffle() =
         propTest {
             checkAll(PropTestConfig(iterations = iterations), Arb.long()) { seed ->
                 val rng = Random(seed)
@@ -73,7 +73,7 @@ class FoldConvergencePropertyTest {
         }
 
     @Test
-    fun fold_is_independent_of_segment_partitioning() =
+    fun foldIsIndependentOfSegmentPartitioning() =
         propTest {
             checkAll(PropTestConfig(iterations = iterations), Arb.long()) { seed ->
                 val rng = Random(seed)

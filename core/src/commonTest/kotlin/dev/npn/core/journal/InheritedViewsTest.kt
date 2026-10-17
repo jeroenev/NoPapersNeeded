@@ -37,20 +37,20 @@ class InheritedViewsTest {
     }
 
     @Test
-    fun a_clear_on_the_target_masks_an_inherited_value() =
+    fun aClearOnTheTargetMasksAnInheritedValue() =
         folded(title(a, "Water bill", 10), relink(a, b, 20), title(b, null, 30)) { state ->
             assertEquals(emptyMap(), state.inheritedFields(b))
             assertEquals(mapOf(FieldKeys.TITLE to "Water bill"), state.effectiveFields(a))
         }
 
     @Test
-    fun a_later_write_on_a_predecessor_wins_over_the_targets_own() =
+    fun aLaterWriteOnAPredecessorWinsOverTheTargetsOwn() =
         folded(title(b, "Own", 10), title(a, "Inherited", 20), relink(a, b, 30)) { state ->
             assertEquals(mapOf(FieldKeys.TITLE to "Inherited"), state.inheritedFields(b))
         }
 
     @Test
-    fun a_chain_shows_its_newest_value_whatever_the_ids() {
+    fun aChainShowsItsNewestValueWhateverTheIds() {
         for ((older, newer) in listOf(a to b, b to a)) {
             folded(title(older, "Old", 10), title(newer, "New", 20), relink(older, newer, 30), relink(newer, c, 40)) {
                 assertEquals(mapOf(FieldKeys.TITLE to "New"), it.inheritedFields(c))
@@ -59,7 +59,7 @@ class InheritedViewsTest {
     }
 
     @Test
-    fun a_clear_masks_an_inherited_property() {
+    fun aClearMasksAnInheritedProperty() {
         val pin = event(JournalOp.PropSet(SystemProperty.OCR_ENGINE, "tesseract"), a, 10, 10)
         val unpin = event(JournalOp.PropSet(SystemProperty.OCR_ENGINE, null), b, 30, 30)
         folded(pin, relink(a, b, 20)) { assertEquals("tesseract", it.inheritedProp(b, SystemProperty.OCR_ENGINE)) }
@@ -67,7 +67,7 @@ class InheritedViewsTest {
     }
 
     @Test
-    fun removing_an_inherited_tag_removes_the_predecessors_adds() {
+    fun removingAnInheritedTagRemovesThePredecessorsAdds() {
         val add = event(JournalOp.TagAdd("filed"), a, 10, 10)
         val state = JournalFolder.fold(listOf(add, relink(a, b, 20)))
         assertEquals(setOf("filed"), state.inheritedTags(b))

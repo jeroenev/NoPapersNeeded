@@ -39,7 +39,7 @@ class EndpointCooldownTest {
     }
 
     @Test
-    fun `a failed enrichment holds queued edit runs back until the cooldown has passed`() =
+    fun aFailedEnrichmentHoldsQueuedEditRunsBackUntilTheCooldownHasPassed() =
         runTest {
             withRig { rig ->
                 val edits = rig.editQueue()
@@ -63,7 +63,7 @@ class EndpointCooldownTest {
      * problem: it says nothing about the endpoint, so queued edit runs carry on.
      */
     @Test
-    fun `a write that fails after an answer leaves the endpoint healthy for queued edit runs`() =
+    fun aWriteThatFailsAfterAnAnswerLeavesTheEndpointHealthyForQueuedEditRuns() =
         runTest {
             withRig { rig ->
                 val edits = rig.editQueue()
@@ -82,7 +82,7 @@ class EndpointCooldownTest {
         }
 
     @Test
-    fun `a failed edit run holds enrichment back, and an answer to either lifts it for both`() =
+    fun aFailedEditRunHoldsEnrichmentBackAndAnAnswerToEitherLiftsItForBoth() =
         runTest {
             withRig { rig ->
                 val edits = rig.editQueue()

@@ -22,7 +22,7 @@ class SnapshotFormatTest {
         SnapshotCodec.encodeSnapshot(SnapshotManifest(SnapshotCodec.SNAPSHOT_MANIFEST_VERSION, supersedes), events)
 
     @Test
-    fun snapshot_bucket_is_ignored_by_old_object_classification() {
+    fun snapshotBucketIsIgnoredByOldObjectClassification() {
         // The snapshot bucket must route to a distinct SnapshotV2 kind, not ObjectV2, so a
         // pre-snapshot reader (which only knows objects-v2-xx) treats it as an unknown file.
         val hash = "ab" + "0".repeat(62)
@@ -34,7 +34,7 @@ class SnapshotFormatTest {
     }
 
     @Test
-    fun snapshot_reader_accepts_multi_actor_events_and_manifest() {
+    fun snapshotReaderAcceptsMultiActorEventsAndManifest() {
         val events = listOf(event("dev-a", 1, 1000), event("dev-b", 1, 2000))
         val supersedes = listOf("11".repeat(32), "22".repeat(32))
         val bytes = snapshotBytes(supersedes, events)
@@ -46,7 +46,7 @@ class SnapshotFormatTest {
     }
 
     @Test
-    fun snapshot_reader_checks_the_hash_it_is_handed_rather_than_hashing_again() {
+    fun snapshotReaderChecksTheHashItIsHandedRatherThanHashingAgain() {
         val bytes = snapshotBytes(emptyList(), listOf(event("dev-a", 1, 1000)))
         val path = JournalPaths.objectPath(sha256Bytes(bytes), snapshot = true)
 
@@ -56,21 +56,21 @@ class SnapshotFormatTest {
     }
 
     @Test
-    fun snapshot_reader_rejects_hash_mismatch_as_retryable() {
+    fun snapshotReaderRejectsHashMismatchAsRetryable() {
         val bytes = snapshotBytes(emptyList(), listOf(event("dev-a", 1, 1000)))
         val wrongPath = JournalPaths.objectPath("0".repeat(64), snapshot = true)
         assertIs<JournalSourceRead.Retryable>(SnapshotV2Reader.read(wrongPath, bytes))
     }
 
     @Test
-    fun snapshot_reader_rejects_torn_manifest_as_retryable() {
+    fun snapshotReaderRejectsTornManifestAsRetryable() {
         val partial = "{".encodeToByteArray()
         val path = JournalPaths.objectPath(sha256Bytes(partial), snapshot = true)
         assertIs<JournalSourceRead.Retryable>(SnapshotV2Reader.read(path, partial))
     }
 
     @Test
-    fun snapshot_reader_rejects_unknown_manifest_version_as_unsupported() {
+    fun snapshotReaderRejectsUnknownManifestVersionAsUnsupported() {
         val manifest = """{"snap":99,"supersedes":[]}"""
         val bytes = (manifest + "\n" + JournalCodec.encode(event("dev-a", 1, 1000))).encodeToByteArray()
         val path = JournalPaths.objectPath(sha256Bytes(bytes), snapshot = true)
@@ -78,7 +78,7 @@ class SnapshotFormatTest {
     }
 
     @Test
-    fun old_object_reader_never_corrupts_on_a_snapshot_bucket_path() {
+    fun oldObjectReaderNeverCorruptsOnASnapshotBucketPath() {
         // A pre-snapshot StorageV2Reader would be asked about the snapshot path only if something
         // mis-routed it. It must fail soft (Unsupported/Retryable), never apply a partial fold.
         val events = listOf(event("dev-a", 1, 1000), event("dev-b", 1, 2000))

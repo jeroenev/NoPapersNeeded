@@ -23,7 +23,7 @@ class OrSetTest {
     ) = event(JournalOp.TagRemove(tag, dots), doc, seq, t, dev)
 
     @Test
-    fun add_then_remove_observed_dot() {
+    fun addThenRemoveObservedDot() {
         val a = add("d1", 1, "x", 10)
         val r = remove("d1", 2, "x", 20, listOf(a.dot))
         val state = JournalFolder.fold(listOf(a, r))
@@ -31,7 +31,7 @@ class OrSetTest {
     }
 
     @Test
-    fun remove_does_not_kill_concurrent_add_on_other_device() {
+    fun removeDoesNotKillConcurrentAddOnOtherDevice() {
         val a1 = add("d1", 1, "x", 10)
         // d2 concurrently adds x; d1's remove only observed a1's dot
         val a2 = add("d2", 1, "x", 11)
@@ -41,7 +41,7 @@ class OrSetTest {
     }
 
     @Test
-    fun readd_after_remove_creates_new_live_dot() {
+    fun readdAfterRemoveCreatesNewLiveDot() {
         val a1 = add("d1", 1, "x", 10)
         val r = remove("d1", 2, "x", 20, listOf(a1.dot))
         val a2 = add("d1", 3, "x", 30) // re-add, new dot
@@ -50,7 +50,7 @@ class OrSetTest {
     }
 
     @Test
-    fun removed_dot_arriving_after_remove_stays_dead() {
+    fun removedDotArrivingAfterRemoveStaysDead() {
         val a1 = add("d1", 1, "x", 10)
         val r = remove("d1", 2, "x", 20, listOf(a1.dot))
         // fold with remove BEFORE the add: tombstone must keep it dead regardless of order
@@ -59,7 +59,7 @@ class OrSetTest {
     }
 
     @Test
-    fun order_independence() {
+    fun orderIndependence() {
         val a1 = add("d1", 1, "x", 10)
         val a2 = add("d2", 1, "x", 11)
         val r = remove("d1", 2, "x", 20, listOf(a1.dot))

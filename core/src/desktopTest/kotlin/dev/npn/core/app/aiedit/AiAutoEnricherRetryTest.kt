@@ -22,7 +22,7 @@ import kotlin.time.Duration.Companion.days
  */
 class AiAutoEnricherRetryTest {
     @Test
-    fun `drains the whole backlog in one go`() =
+    fun drainsTheWholeBacklogInOneGo() =
         runTest {
             withRig { rig ->
                 rig.insertAndQueue("d1", "d2", "d3")
@@ -35,7 +35,7 @@ class AiAutoEnricherRetryTest {
 
     /** A document trashed or enriched by hand while it waited is no longer worth a call. */
     @Test
-    fun `drops a queued document that stopped being enrichable`() =
+    fun dropsAQueuedDocumentThatStoppedBeingEnrichable() =
         runTest {
             withRig { rig ->
                 rig.insert("d1")
@@ -51,7 +51,7 @@ class AiAutoEnricherRetryTest {
 
     /** Queue rows are the whole point: work survives the process that queued it. */
     @Test
-    fun `a restart resumes work queued by the previous run`() =
+    fun aRestartResumesWorkQueuedByThePreviousRun() =
         runTest {
             withRig { rig ->
                 rig.insert("d1")
@@ -65,7 +65,7 @@ class AiAutoEnricherRetryTest {
         }
 
     @Test
-    fun `a failed call keeps the row, backs it off and leaves the document unstamped`() =
+    fun aFailedCallKeepsTheRowBacksItOffAndLeavesTheDocumentUnstamped() =
         runTest {
             withRig { rig ->
                 rig.insert("d1")
@@ -87,7 +87,7 @@ class AiAutoEnricherRetryTest {
      * swallowing it) would blind the backoff and the row's `lastError`.
      */
     @Test
-    fun `a failed write backs off on the write's own cause, not a synthetic one`() =
+    fun aFailedWriteBacksOffOnTheWritesOwnCauseNotASyntheticOne() =
         runTest {
             withRig { rig ->
                 rig.insert("d1")
@@ -111,7 +111,7 @@ class AiAutoEnricherRetryTest {
      * makes no call, and the row waits without spending an attempt or cooling the endpoint down.
      */
     @Test
-    fun `makes no call while metadata writes are blocked`() =
+    fun makesNoCallWhileMetadataWritesAreBlocked() =
         runTest {
             withRig { rig ->
                 rig.insertAndQueue("d1")
@@ -133,7 +133,7 @@ class AiAutoEnricherRetryTest {
      * reaches the drain, which logs it, rather than passing for a block.
      */
     @Test
-    fun `a failure asking whether writes are taken is not mistaken for a block`() =
+    fun aFailureAskingWhetherWritesAreTakenIsNotMistakenForABlock() =
         runTest {
             withRig { rig ->
                 rig.insertAndQueue("d1")
@@ -146,7 +146,7 @@ class AiAutoEnricherRetryTest {
         }
 
     @Test
-    fun `does not retry before the backoff has elapsed, then succeeds`() =
+    fun doesNotRetryBeforeTheBackoffHasElapsedThenSucceeds() =
         runTest {
             withRig { rig ->
                 rig.insert("d1")
@@ -175,7 +175,7 @@ class AiAutoEnricherRetryTest {
 
     /** An outage must not fire the entire backlog at a dead endpoint one document at a time. */
     @Test
-    fun `stops the drain after a failure instead of walking the backlog`() =
+    fun stopsTheDrainAfterAFailureInsteadOfWalkingTheBacklog() =
         runTest {
             withRig { rig ->
                 rig.insertAndQueue("d1", "d2", "d3")
@@ -197,7 +197,7 @@ class AiAutoEnricherRetryTest {
      * asserted rather than skipped over.
      */
     @Test
-    fun `a poison document delays the queue by the cooldown but does not block it`() =
+    fun aPoisonDocumentDelaysTheQueueByTheCooldownButDoesNotBlockIt() =
         runTest {
             withRig { rig ->
                 rig.insertAndQueue("bad", "good")
@@ -223,7 +223,7 @@ class AiAutoEnricherRetryTest {
      * against a dead endpoint would spend one call per document. The cooldown is what caps that.
      */
     @Test
-    fun `an import against a dead endpoint costs one call per cooldown, not one per document`() =
+    fun anImportAgainstADeadEndpointCostsOneCallPerCooldownNotOnePerDocument() =
         runTest {
             withRig { rig ->
                 rig.ai.failWith = { error("endpoint down") }
@@ -250,7 +250,7 @@ class AiAutoEnricherRetryTest {
 
     /** The cooldown is an outage brake, not a rate limit: success clears it immediately. */
     @Test
-    fun `a success clears the cooldown for the next document`() =
+    fun aSuccessClearsTheCooldownForTheNextDocument() =
         runTest {
             withRig { rig ->
                 rig.insertAndQueue("bad", "good1", "good2")
@@ -273,7 +273,7 @@ class AiAutoEnricherRetryTest {
      * enrichment for a whole kick cycle — on Android, the rest of that maintenance window.
      */
     @Test
-    fun `a due retry is served after work that has never been tried`() =
+    fun aDueRetryIsServedAfterWorkThatHasNeverBeenTried() =
         runTest {
             withRig { rig ->
                 rig.insertAndQueue("bad")
@@ -296,7 +296,7 @@ class AiAutoEnricherRetryTest {
      * happens once it comes back.
      */
     @Test
-    fun `keeps retrying at the ceiling instead of giving up`() =
+    fun keepsRetryingAtTheCeilingInsteadOfGivingUp() =
         runTest {
             withRig { rig ->
                 rig.insert("d1")
@@ -322,7 +322,7 @@ class AiAutoEnricherRetryTest {
 
     /** Turning the feature off (or losing the endpoint config) must not consume the retries. */
     @Test
-    fun `waits without burning attempts while the feature is off`() =
+    fun waitsWithoutBurningAttemptsWhileTheFeatureIsOff() =
         runTest {
             withRig { rig ->
                 rig.insert("d1")
@@ -345,7 +345,7 @@ class AiAutoEnricherRetryTest {
      * backoff window. The row stays owed, for a later drain to pick up.
      */
     @Test
-    fun `a drain returns rather than waiting out a backoff`() =
+    fun aDrainReturnsRatherThanWaitingOutABackoff() =
         runTest {
             withRig { rig ->
                 rig.insert("d1")

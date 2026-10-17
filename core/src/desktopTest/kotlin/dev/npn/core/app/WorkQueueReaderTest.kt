@@ -79,13 +79,13 @@ internal class WorkQueueReaderTest : WorkQueueReaderFixture() {
     private suspend fun queue(): List<QueuedWork> = reader.queue.first()
 
     @Test
-    fun `an empty pair of queues yields nothing`() =
+    fun anEmptyPairOfQueuesYieldsNothing() =
         runTest {
             queue() shouldBe emptyList()
         }
 
     @Test
-    fun `both stages appear, OCR entries before enrichment entries`() =
+    fun bothStagesAppearOCREntriesBeforeEnrichmentEntries() =
         runTest {
             putDoc("a")
             putDoc("b")
@@ -97,7 +97,7 @@ internal class WorkQueueReaderTest : WorkQueueReaderFixture() {
         }
 
     @Test
-    fun `one document mid-pipeline appears once per stage`() =
+    fun oneDocumentMidPipelineAppearsOncePerStage() =
         runTest {
             putDoc("a")
             putOcr("a")
@@ -108,7 +108,7 @@ internal class WorkQueueReaderTest : WorkQueueReaderFixture() {
         }
 
     @Test
-    fun `the document the pipeline is working on right now reads as running`() =
+    fun theDocumentThePipelineIsWorkingOnRightNowReadsAsRunning() =
         runTest {
             putDoc("a")
             putDoc("b")
@@ -121,7 +121,7 @@ internal class WorkQueueReaderTest : WorkQueueReaderFixture() {
         }
 
     @Test
-    fun `nothing reads as running when no pipeline is working`() =
+    fun nothingReadsAsRunningWhenNoPipelineIsWorking() =
         runTest {
             // The state a restart used to leave behind: rows owed a pass, nobody working them.
             // Running now comes from the live pipeline, so an idle one cannot report otherwise.
@@ -132,7 +132,7 @@ internal class WorkQueueReaderTest : WorkQueueReaderFixture() {
         }
 
     @Test
-    fun `a row left running by an older build is ordinary outstanding work`() =
+    fun aRowLeftRunningByAnOlderBuildIsOrdinaryOutstandingWork() =
         runTest {
             // Builds before the in-process rework wrote "running" into the row; nothing could
             // clear one once its process died. It must read as work still owed, not as work
@@ -144,7 +144,7 @@ internal class WorkQueueReaderTest : WorkQueueReaderFixture() {
         }
 
     @Test
-    fun `a finished OCR row is history, not outstanding work`() =
+    fun aFinishedOCRRowIsHistoryNotOutstandingWork() =
         runTest {
             putDoc("a")
             putOcr("a", state = QueueState.DONE.column)
@@ -153,7 +153,7 @@ internal class WorkQueueReaderTest : WorkQueueReaderFixture() {
         }
 
     @Test
-    fun `a failed OCR row stays visible because it needs attention`() =
+    fun aFailedOCRRowStaysVisibleBecauseItNeedsAttention() =
         runTest {
             putDoc("a")
             putOcr("a", state = QueueState.FAILED.column, attempts = 3, lastError = "boom", nextAttemptAt = 9_000)
@@ -167,7 +167,7 @@ internal class WorkQueueReaderTest : WorkQueueReaderFixture() {
         }
 
     @Test
-    fun `a pending OCR row that has already burned attempts reads as a retry`() =
+    fun aPendingOCRRowThatHasAlreadyBurnedAttemptsReadsAsARetry() =
         runTest {
             putDoc("a")
             putOcr("a", state = QueueState.PENDING.column, attempts = 1, nextAttemptAt = 9_000)
@@ -177,7 +177,7 @@ internal class WorkQueueReaderTest : WorkQueueReaderFixture() {
         }
 
     @Test
-    fun `an enrichment row is waiting until it has failed, then retrying with its backoff`() =
+    fun anEnrichmentRowIsWaitingUntilItHasFailedThenRetryingWithItsBackoff() =
         runTest {
             putDoc("a")
             putDoc("b")
@@ -193,7 +193,7 @@ internal class WorkQueueReaderTest : WorkQueueReaderFixture() {
         }
 
     @Test
-    fun `entries are named by title when there is one, else by file name`() =
+    fun entriesAreNamedByTitleWhenThereIsOneElseByFileName() =
         runTest {
             putDoc("a", title = "Electricity bill")
             putDoc("b", title = "   ")
@@ -204,7 +204,7 @@ internal class WorkQueueReaderTest : WorkQueueReaderFixture() {
         }
 
     @Test
-    fun `rows outlive their document, and drop out once it is trashed or deleted`() =
+    fun rowsOutliveTheirDocumentAndDropOutOnceItIsTrashedOrDeleted() =
         runTest {
             putDoc("gone-trashed", trashed = true)
             putDoc("gone-deleted", deleted = true)
@@ -221,7 +221,7 @@ internal class WorkQueueReaderTest : WorkQueueReaderFixture() {
      * The database notifies from its own threads, so the wait is bounded in real time.
      */
     @Test
-    fun `a subscribed queue follows a document retitled and then trashed`() =
+    fun aSubscribedQueueFollowsADocumentRetitledAndThenTrashed() =
         runTest(timeout = 10.seconds) {
             putDoc("a")
             putOcr("a", state = QueueState.FAILED.column, attempts = 3)
@@ -277,7 +277,7 @@ internal class EditRunReaderTest : WorkQueueReaderFixture() {
     private suspend fun runs(): List<QueuedEditRun> = reader.editRuns.first()
 
     @Test
-    fun `an edit run's state is derived from how many of its documents are answered`() =
+    fun anEditRunsStateIsDerivedFromHowManyOfItsDocumentsAreAnswered() =
         runTest {
             putRun("untouched", listOf("a", "b", "c"))
             putRun("underway", listOf("d", "e", "f"), suggested = 1)
@@ -299,7 +299,7 @@ internal class EditRunReaderTest : WorkQueueReaderFixture() {
      * whose endpoint was removed must not show as running for ever.
      */
     @Test
-    fun `a half-suggested run nobody is draining is waiting, not running`() =
+    fun aHalfSuggestedRunNobodyIsDrainingIsWaitingNotRunning() =
         runTest {
             putRun("stalled", listOf("a", "b"), suggested = 1)
 
@@ -307,7 +307,7 @@ internal class EditRunReaderTest : WorkQueueReaderFixture() {
         }
 
     @Test
-    fun `a document given up on still counts as answered, so the run can finish`() =
+    fun aDocumentGivenUpOnStillCountsAsAnsweredSoTheRunCanFinish() =
         runTest {
             putRun("run", listOf("a", "b"), suggested = 1, failed = 1)
 
@@ -318,7 +318,7 @@ internal class EditRunReaderTest : WorkQueueReaderFixture() {
         }
 
     @Test
-    fun `finished runs come first, newest first, then the ones still working`() =
+    fun finishedRunsComeFirstNewestFirstThenTheOnesStillWorking() =
         runTest {
             putRun("working", listOf("a"), createdAt = 1)
             putRun("older-ready", listOf("b"), suggested = 1, createdAt = 2, updatedAt = 5)
@@ -328,7 +328,7 @@ internal class EditRunReaderTest : WorkQueueReaderFixture() {
         }
 
     @Test
-    fun `a run with no documents left is not reported at all`() =
+    fun aRunWithNoDocumentsLeftIsNotReportedAtAll() =
         runTest {
             deviceDb.aiEditJobDao().upsertJob(
                 AiEditJobEntity(jobId = "empty", requestJson = "{}", createdAt = 1, updatedAt = 1, nextAttemptAt = 1),

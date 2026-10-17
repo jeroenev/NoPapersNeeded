@@ -19,7 +19,7 @@ import kotlin.test.Test
 
 class AiEditQueueSuggestionTest {
     @Test
-    fun `a submitted run stores each document once in its first submitted order`() =
+    fun aSubmittedRunStoresEachDocumentOnceInItsFirstSubmittedOrder() =
         runTest {
             withQueue { rig ->
                 val jobId = rig.enqueue("b", "a", "b", "c", "a")
@@ -32,7 +32,7 @@ class AiEditQueueSuggestionTest {
         }
 
     @Test
-    fun `a queued run is suggested in submitted order, one chunk per drain step`() =
+    fun aQueuedRunIsSuggestedInSubmittedOrderOneChunkPerDrainStep() =
         runTest {
             withQueue { rig ->
                 rig.ai.edit = suggestion()
@@ -53,7 +53,7 @@ class AiEditQueueSuggestionTest {
 
     /** Queued work never waits for the maintenance tick: the queue itself asks for its drain. */
     @Test
-    fun `queueing a run kicks the queue's own drain`() =
+    fun queueingARunKicksTheQueuesOwnDrain() =
         runTest {
             withQueue { rig ->
                 rig.enqueue("a")
@@ -63,7 +63,7 @@ class AiEditQueueSuggestionTest {
         }
 
     @Test
-    fun `an unconfigured endpoint does no work at all`() =
+    fun anUnconfiguredEndpointDoesNoWorkAtAll() =
         runTest {
             withQueue { rig ->
                 rig.config = AiConfig.DISABLED
@@ -76,7 +76,7 @@ class AiEditQueueSuggestionTest {
         }
 
     @Test
-    fun `duplicate documents are queued once, because each one costs a model call`() =
+    fun duplicateDocumentsAreQueuedOnceBecauseEachOneCostsAModelCall() =
         runTest {
             withQueue { rig ->
                 rig.documents.documents.value = listOf(listItem("a"))
@@ -87,7 +87,7 @@ class AiEditQueueSuggestionTest {
         }
 
     @Test
-    fun `a document trashed since it was queued is dropped rather than asked about`() =
+    fun aDocumentTrashedSinceItWasQueuedIsDroppedRatherThanAskedAbout() =
         runTest {
             withQueue { rig ->
                 rig.ai.edit = suggestion()
@@ -103,7 +103,7 @@ class AiEditQueueSuggestionTest {
         }
 
     @Test
-    fun `a run whose every document has gone is dropped rather than stranded`() =
+    fun aRunWhoseEveryDocumentHasGoneIsDroppedRatherThanStranded() =
         runTest {
             withQueue { rig ->
                 val jobId = rig.enqueue("a")
@@ -116,7 +116,7 @@ class AiEditQueueSuggestionTest {
         }
 
     @Test
-    fun `a run survives the process that queued it`() =
+    fun aRunSurvivesTheProcessThatQueuedIt() =
         runTest {
             withQueue { rig ->
                 rig.ai.edit = suggestion()
@@ -134,7 +134,7 @@ class AiEditQueueSuggestionTest {
         }
 
     @Test
-    fun `a discard during an in-flight chunk is not undone by the chunk's write-back`() =
+    fun aDiscardDuringAnInFlightChunkIsNotUndoneByTheChunksWriteBack() =
         runTest {
             withQueue { rig ->
                 rig.ai.edit = suggestion()
@@ -162,7 +162,7 @@ class AiEditQueueSuggestionTest {
 
     /** What the processing queue shows as running comes from here, never from a run's progress. */
     @Test
-    fun `a run is in flight while its chunk is being suggested, and only then`() =
+    fun aRunIsInFlightWhileItsChunkIsBeingSuggestedAndOnlyThen() =
         runTest {
             withQueue { rig ->
                 rig.ai.edit = suggestion()
@@ -183,7 +183,7 @@ class AiEditQueueSuggestionTest {
 
     /** The user abandons a run against a slow endpoint; the drain must not make them wait for it. */
     @Test
-    fun `a discard returns while the run's model calls are still in flight`() =
+    fun aDiscardReturnsWhileTheRunsModelCallsAreStillInFlight() =
         runTest {
             withQueue { rig ->
                 rig.ai.edit = suggestion()

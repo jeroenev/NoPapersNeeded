@@ -30,21 +30,21 @@ class RenameMergeTest {
     ) = event(JournalOp.TagMerge(from, to), null, seq, t, dev)
 
     @Test
-    fun add_before_rename_follows_rename() {
+    fun addBeforeRenameFollowsRename() {
         val a = add(1, "old", 10)
         val r = rename(2, "old", "new", 20)
         assertEquals(setOf("new"), JournalFolder.fold(listOf(a, r)).effectiveTags(doc))
     }
 
     @Test
-    fun add_after_rename_keeps_literal_name() {
+    fun addAfterRenameKeepsLiteralName() {
         val r = rename(1, "old", "new", 10)
         val a = add(2, "old", 20) // added strictly after the rename hlc
         assertEquals(setOf("old"), JournalFolder.fold(listOf(r, a)).effectiveTags(doc))
     }
 
     @Test
-    fun rename_chain_a_b_c() {
+    fun renameChainABC() {
         val a = add(1, "a", 10)
         val r1 = rename(2, "a", "b", 20)
         val r2 = rename(3, "b", "c", 30)
@@ -52,7 +52,7 @@ class RenameMergeTest {
     }
 
     @Test
-    fun merge_folds_into_existing_tag() {
+    fun mergeFoldsIntoExistingTag() {
         val a1 = add(1, "cats", 10)
         val a2 = add(2, "felines", 11)
         val m = merge(3, "felines", "cats", 20)
@@ -60,7 +60,7 @@ class RenameMergeTest {
     }
 
     @Test
-    fun order_independent_rename() {
+    fun orderIndependentRename() {
         val a = add(1, "old", 10)
         val r1 = rename(2, "old", "mid", 20)
         val r2 = rename(3, "mid", "new", 30)

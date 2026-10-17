@@ -20,7 +20,7 @@ class PropsTrashRelinkTest {
     ) = event(JournalOp.PropSet(key, value), doc, seq, t, dev)
 
     @Test
-    fun prop_lww_by_hlc() {
+    fun propLwwByHlc() {
         val e1 = prop(1, SystemProperty.OCR_ENGINE, "tesseract", 10)
         val e2 = prop(2, SystemProperty.OCR_ENGINE, "mlkit", 20)
         assertEquals("mlkit", JournalFolder.fold(listOf(e1, e2)).effectiveProp(doc, SystemProperty.OCR_ENGINE))
@@ -29,14 +29,14 @@ class PropsTrashRelinkTest {
     }
 
     @Test
-    fun prop_null_clear_wins_when_later() {
+    fun propNullClearWinsWhenLater() {
         val e1 = prop(1, SystemProperty.OCR_ENGINE, "tesseract", 10)
         val e2 = prop(2, SystemProperty.OCR_ENGINE, null, 20)
         assertEquals(null, JournalFolder.fold(listOf(e1, e2)).effectiveProp(doc, SystemProperty.OCR_ENGINE))
     }
 
     @Test
-    fun prop_tiebreak_by_device_id() {
+    fun propTiebreakByDeviceId() {
         // same physical + counter, different device -> higher deviceId wins
         val ea = event(JournalOp.PropSet(SystemProperty.OCR_ENGINE, "a"), doc, 1, 10, "aaa")
         val ez = event(JournalOp.PropSet(SystemProperty.OCR_ENGINE, "z"), doc, 1, 10, "zzz")
@@ -52,7 +52,7 @@ class PropsTrashRelinkTest {
     ) = event(JournalOp.FieldSet(key, value), doc, seq, t, dev)
 
     @Test
-    fun field_lww_and_clear() {
+    fun fieldLwwAndClear() {
         val e1 = field(1, "amount", "10.00", 10)
         val e2 = field(2, "amount", "42.50", 20)
         assertEquals(mapOf("amount" to "42.50"), JournalFolder.fold(listOf(e1, e2)).effectiveFields(doc))
@@ -64,7 +64,7 @@ class PropsTrashRelinkTest {
     }
 
     @Test
-    fun fields_are_independent_by_key() {
+    fun fieldsAreIndependentByKey() {
         val a = field(1, "amount", "5", 10)
         val b = field(2, "vendor", "Acme", 20)
         val folded = JournalFolder.fold(listOf(a, b))
@@ -92,7 +92,7 @@ class PropsTrashRelinkTest {
     ) = event(JournalOp.DocDelete, doc, seq, t, dev)
 
     @Test
-    fun trash_restore_lww() {
+    fun trashRestoreLww() {
         val t = trash(1, "/x.pdf", 10)
         val r = restore(2, 20)
         assertFalse(JournalFolder.fold(listOf(t, r)).isTrashed(doc))
@@ -103,7 +103,7 @@ class PropsTrashRelinkTest {
     }
 
     @Test
-    fun delete_tombstone_wins_forever() {
+    fun deleteTombstoneWinsForever() {
         val d = delete(1, 10)
         val r = restore(2, 999) // even a much later restore cannot undo delete
         val state = JournalFolder.fold(listOf(d, r))
@@ -120,7 +120,7 @@ class PropsTrashRelinkTest {
     ) = event(JournalOp.DocUndelete, doc, seq, t, dev)
 
     @Test
-    fun undelete_newer_than_delete_brings_the_doc_back_out_of_the_trash() {
+    fun undeleteNewerThanDeleteBringsTheDocBackOutOfTheTrash() {
         val t = trash(1, "/x.pdf", 5)
         val d = delete(2, 10)
         val u = undelete(3, 20)
@@ -132,7 +132,7 @@ class PropsTrashRelinkTest {
     }
 
     @Test
-    fun delete_newer_than_undelete_wins() {
+    fun deleteNewerThanUndeleteWins() {
         val u = undelete(1, 10)
         val d = delete(2, 20)
         assertTrue(JournalFolder.fold(listOf(u, d)).isDeleted(doc))
@@ -140,7 +140,7 @@ class PropsTrashRelinkTest {
     }
 
     @Test
-    fun trash_after_undelete_trashes_again() {
+    fun trashAfterUndeleteTrashesAgain() {
         val d = delete(1, 10)
         val u = undelete(2, 20)
         val t = trash(3, "/x.pdf", 30)
@@ -158,7 +158,7 @@ class PropsTrashRelinkTest {
     ) = event(JournalOp.Relink(new), old, seq, t, dev)
 
     @Test
-    fun relink_chain_resolution() {
+    fun relinkChainResolution() {
         val r1 = relink(1, doc, doc2, 10, "d1")
         val r2 = relink(2, doc2, doc3, 20, "d1")
         val state = JournalFolder.fold(listOf(r1, r2))
@@ -167,7 +167,7 @@ class PropsTrashRelinkTest {
     }
 
     @Test
-    fun predecessors_are_every_id_resolving_onto_a_document() {
+    fun predecessorsAreEveryIdResolvingOntoADocument() {
         val state = JournalFolder.fold(listOf(relink(1, doc, doc2, 10, "d1")))
         assertEquals(listOf(doc), state.predecessorsOf(doc2))
 
@@ -179,7 +179,7 @@ class PropsTrashRelinkTest {
     }
 
     @Test
-    fun concurrent_relink_deterministic_winner() {
+    fun concurrentRelinkDeterministicWinner() {
         // two devices relink same old doc to different targets
         val rA = relink(1, doc, doc2, 10, "aaa")
         val rZ = relink(1, doc, doc3, 10, "zzz") // same physical+counter, zzz wins on tiebreak

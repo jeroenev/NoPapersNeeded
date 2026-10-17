@@ -45,7 +45,7 @@ class FieldDefFoldTest {
 
     /** Numbers an older build stored in another form fold to the one canonical form. */
     @Test
-    fun the_fold_reads_stored_numbers_in_their_canonical_form() {
+    fun theFoldReadsStoredNumbersInTheirCanonicalForm() {
         val state =
             JournalFolder.fold(
                 listOf(
@@ -63,7 +63,7 @@ class FieldDefFoldTest {
     }
 
     @Test
-    fun wire_shape_and_roundtrip() {
+    fun wireShapeAndRoundtrip() {
         val e =
             set(1, def("amount", position = 3, type = FieldType.DECIMAL, label = "Amount", ai = true, hint = "€"), 10)
         val encoded = JournalCodec.encode(e)
@@ -89,7 +89,7 @@ class FieldDefFoldTest {
      * before it existed, and a definition from a build that never wrote it reads as unset.
      */
     @Test
-    fun per_document_flag_is_written_only_when_set() {
+    fun perDocumentFlagIsWrittenOnlyWhenSet() {
         val title = set(1, def("title").copy(perDocument = true), 10)
         val titleDef = Json.parseToJsonElement(JournalCodec.encode(title)).jsonObject["p"]!!.jsonObject["def"]!!
         assertEquals("true", titleDef.jsonObject["perDocument"]!!.jsonPrimitive.content)
@@ -107,7 +107,7 @@ class FieldDefFoldTest {
     }
 
     @Test
-    fun unknown_type_decodes_as_unknown_op_not_crash() {
+    fun unknownTypeDecodesAsUnknownOpNotCrash() {
         val line =
             """{"v":1,"seq":5,"hlc":{"t":1,"c":0,"d":"x"},"dev":"x","doc":null,""" +
                 """"op":"field-def","p":{"key":"flag","def":{"label":"Flag","type":"boolean","position":0}}}"""
@@ -118,7 +118,7 @@ class FieldDefFoldTest {
     }
 
     @Test
-    fun lww_per_key_and_order_independent() {
+    fun lwwPerKeyAndOrderIndependent() {
         val a1 = set(1, def("amount", label = "Amount"), 10)
         val a2 = set(2, def("amount", label = "Total amount"), 20)
         val b = set(3, def("vendor", position = 1), 15, dev = "d2")
@@ -130,7 +130,7 @@ class FieldDefFoldTest {
     }
 
     @Test
-    fun two_devices_adding_two_fields_both_survive() {
+    fun twoDevicesAddingTwoFieldsBothSurvive() {
         val a = set(1, def("amount"), 10, dev = "d1")
         val b = set(1, def("vendor"), 10, dev = "d2")
         assertEquals(
@@ -144,7 +144,7 @@ class FieldDefFoldTest {
     }
 
     @Test
-    fun later_removal_wins_and_earlier_readd_does_not_resurrect() {
+    fun laterRemovalWinsAndEarlierReaddDoesNotResurrect() {
         val add = set(1, def("amount"), 10)
         val rm = remove(2, "amount", 20)
         val state = JournalFolder.fold(listOf(rm, add))
@@ -155,7 +155,7 @@ class FieldDefFoldTest {
     }
 
     @Test
-    fun registry_order_is_position_then_key() {
+    fun registryOrderIsPositionThenKey() {
         val state =
             JournalFolder.fold(
                 listOf(

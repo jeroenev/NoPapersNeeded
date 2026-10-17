@@ -16,7 +16,7 @@ class FieldValuesTest {
     ): String? = assertIs<FieldParse.Ok>(FieldValues.canonicalize(type, raw, locale)).canonical
 
     @Test
-    fun blank_input_clears_for_every_type() {
+    fun blankInputClearsForEveryType() {
         for (type in FieldType.entries) {
             assertNull(ok(type, null), type.name)
             assertNull(ok(type, ""), type.name)
@@ -25,13 +25,13 @@ class FieldValuesTest {
     }
 
     @Test
-    fun text_is_trimmed_only() {
+    fun textIsTrimmedOnly() {
         assertEquals("Acme Ltd", ok(FieldType.TEXT, "  Acme Ltd "))
         assertEquals("line one\nline two", ok(FieldType.LONG_TEXT, "line one\nline two\n"))
     }
 
     @Test
-    fun date_must_be_a_real_iso_date() {
+    fun dateMustBeARealIsoDate() {
         assertEquals("2026-07-15", ok(FieldType.DATE, " 2026-07-15 "))
         assertIs<FieldParse.Invalid>(FieldValues.canonicalize(FieldType.DATE, "15-07-2026"))
         assertIs<FieldParse.Invalid>(FieldValues.canonicalize(FieldType.DATE, "2026-13-01"))
@@ -39,7 +39,7 @@ class FieldValuesTest {
     }
 
     @Test
-    fun number_accepts_grouping_and_rejects_fractions() {
+    fun numberAcceptsGroupingAndRejectsFractions() {
         assertEquals("1234", ok(FieldType.NUMBER, "1,234"))
         assertEquals("1234", ok(FieldType.NUMBER, "1.234", nl))
         assertEquals("-42", ok(FieldType.NUMBER, "-42"))
@@ -49,7 +49,7 @@ class FieldValuesTest {
     }
 
     @Test
-    fun decimal_respects_locale_and_stores_a_dot() {
+    fun decimalRespectsLocaleAndStoresADot() {
         assertEquals("1234.56", ok(FieldType.DECIMAL, "1.234,56", nl))
         assertEquals("1234.56", ok(FieldType.DECIMAL, "1,234.56"))
         assertEquals("12.5", ok(FieldType.DECIMAL, "12.5"))
@@ -60,7 +60,7 @@ class FieldValuesTest {
     }
 
     @Test
-    fun grouping_must_sit_on_a_group_boundary() {
+    fun groupingMustSitOnAGroupBoundary() {
         // Valid grouping still works in both locales.
         assertEquals("1234", ok(FieldType.NUMBER, "1,234"))
         assertEquals("1234", ok(FieldType.NUMBER, "1.234", nl))
@@ -76,14 +76,14 @@ class FieldValuesTest {
     }
 
     @Test
-    fun the_same_number_stores_the_same_canonical_form_in_every_language() {
+    fun theSameNumberStoresTheSameCanonicalFormInEveryLanguage() {
         // Input language only decides how it is read; storage is always the canonical dot form.
         assertEquals("1234.56", ok(FieldType.DECIMAL, "1.234,56", nl))
         assertEquals("1234.56", ok(FieldType.DECIMAL, "1,234.56"))
     }
 
     @Test
-    fun a_number_has_exactly_one_canonical_form() {
+    fun aNumberHasExactlyOneCanonicalForm() {
         assertEquals("7", ok(FieldType.NUMBER, "007"))
         assertEquals("-7", ok(FieldType.NUMBER, "-007"))
         assertEquals("100", ok(FieldType.NUMBER, "100"))
@@ -103,7 +103,7 @@ class FieldValuesTest {
     }
 
     @Test
-    fun a_stored_value_reads_back_in_todays_canonical_form() {
+    fun aStoredValueReadsBackInTodaysCanonicalForm() {
         assertEquals("7", FieldValues.normalized(FieldType.NUMBER, "007"))
         assertEquals("1.5", FieldValues.normalized(FieldType.DECIMAL, "1.50"))
         // Off-type and non-numeric values are kept verbatim, never rewritten or dropped.
@@ -113,7 +113,7 @@ class FieldValuesTest {
     }
 
     @Test
-    fun display_localizes_decimals_and_leaves_the_rest_alone() {
+    fun displayLocalizesDecimalsAndLeavesTheRestAlone() {
         assertEquals("12,5", FieldValues.display(FieldType.DECIMAL, "12.5", nl))
         assertEquals("12.5", FieldValues.display(FieldType.DECIMAL, "12.5"))
         assertEquals("2026-07-15", FieldValues.display(FieldType.DATE, "2026-07-15", nl))
@@ -122,7 +122,7 @@ class FieldValuesTest {
     }
 
     @Test
-    fun numeric_shadow_only_for_numeric_types() {
+    fun numericShadowOnlyForNumericTypes() {
         assertEquals(12.5, FieldValues.numeric(FieldType.DECIMAL, "12.5"))
         assertEquals(7.0, FieldValues.numeric(FieldType.NUMBER, "7"))
         assertNull(FieldValues.numeric(FieldType.NUMBER, "seven"))
@@ -131,7 +131,7 @@ class FieldValuesTest {
     }
 
     @Test
-    fun is_canonical_round_trips() {
+    fun isCanonicalRoundTrips() {
         assertTrue(FieldValues.isCanonical(FieldType.DECIMAL, "12.5"))
         assertTrue(!FieldValues.isCanonical(FieldType.DECIMAL, "12,5"))
         assertTrue(!FieldValues.isCanonical(FieldType.TEXT, " x"))
@@ -140,7 +140,7 @@ class FieldValuesTest {
 
 class FieldKeysTest {
     @Test
-    fun normalize_collapses_whitespace_and_strips_symbols() {
+    fun normalizeCollapsesWhitespaceAndStripsSymbols() {
         assertEquals("invoice_number", FieldKeys.normalize(" invoice  number "))
         assertEquals("Amount", FieldKeys.normalize("Amount"))
         assertEquals("amount_EUR", FieldKeys.normalize("amount (€)EUR"))
@@ -149,13 +149,13 @@ class FieldKeysTest {
     }
 
     @Test
-    fun same_key_is_case_insensitive() {
+    fun sameKeyIsCaseInsensitive() {
         assertTrue(FieldKeys.sameKey("Amount", "amount"))
         assertTrue(!FieldKeys.sameKey("amount", "amounts"))
     }
 
     @Test
-    fun seed_matches_the_plan_table() {
+    fun seedMatchesThePlanTable() {
         val seed = FieldKeys.seedDefinitions()
         assertEquals(listOf("title", "correspondent", "docType", "docDate", "notes"), seed.map { it.key })
         assertEquals(FieldType.DATE, seed.single { it.key == FieldKeys.DOC_DATE }.type)

@@ -139,7 +139,7 @@ class SnapshotCompactionPropertyTest {
     }
 
     @Test
-    fun compaction_preserves_fold_including_future_objects() =
+    fun compactionPreservesFoldIncludingFutureObjects() =
         propTest {
             val compactor = SnapshotCompactor(NoPublishFs, "test-install")
             checkAll(PropTestConfig(iterations = iterations), Arb.long()) { seed ->
@@ -181,7 +181,7 @@ class SnapshotCompactionPropertyTest {
         }
 
     @Test
-    fun two_concurrent_snapshots_of_overlapping_sets_converge() =
+    fun twoConcurrentSnapshotsOfOverlappingSetsConverge() =
         propTest {
             val compactor = SnapshotCompactor(NoPublishFs, "test-install")
             checkAll(PropTestConfig(iterations = 200), Arb.long()) { seed ->

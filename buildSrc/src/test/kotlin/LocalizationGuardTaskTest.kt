@@ -73,13 +73,13 @@ class LocalizationGuardTaskTest {
             .filter { it.startsWith("  - ") }
 
     @Test
-    fun `passes when every translation matches the defaults`() {
+    fun passesWhenEveryTranslationMatchesTheDefaults() {
         consistentResources()
         runGuard()
     }
 
     @Test
-    fun `reports a key missing from a translation other than Dutch`() {
+    fun reportsAKeyMissingFromATranslationOtherThanDutch() {
         consistentResources()
         strings(
             "values-de",
@@ -94,7 +94,7 @@ class LocalizationGuardTaskTest {
     }
 
     @Test
-    fun `reports a mismatched placeholder in a translation other than Dutch`() {
+    fun reportsAMismatchedPlaceholderInATranslationOtherThanDutch() {
         consistentResources()
         strings(
             "values-de",
@@ -111,7 +111,7 @@ class LocalizationGuardTaskTest {
     }
 
     @Test
-    fun `ignores qualified directories that are not languages`() {
+    fun ignoresQualifiedDirectoriesThatAreNotLanguages() {
         consistentResources()
         strings("values-night", """<string name="unrelated">Dark</string>""")
 
@@ -120,7 +120,7 @@ class LocalizationGuardTaskTest {
 
     /** Compose reads values verbatim: an Android-style \' reaches the UI as a literal backslash. */
     @Test
-    fun `reports an Android-style escaped apostrophe in Compose values`() {
+    fun reportsAnAndroidStyleEscapedApostropheInComposeValues() {
         consistentResources()
         strings(
             "values-de",
@@ -137,7 +137,7 @@ class LocalizationGuardTaskTest {
     }
 
     @Test
-    fun `allows the escapes Compose reads`() {
+    fun allowsTheEscapesComposeReads() {
         val text = """Line\nTab\tUnicode \u00e9 Backslash\\ End"""
         strings("values", """<string name="greeting">$text</string>""")
         strings("values-nl", """<string name="greeting">$text</string>""")
@@ -148,7 +148,7 @@ class LocalizationGuardTaskTest {
 
     /** Each root's translations answer to its own defaults; another root's cannot stand in. */
     @Test
-    fun `reports a key whose only translation sits under another root`() {
+    fun reportsAKeyWhoseOnlyTranslationSitsUnderAnotherRoot() {
         consistentResources()
         root.resolve("android-res/values").mkdirs()
         root

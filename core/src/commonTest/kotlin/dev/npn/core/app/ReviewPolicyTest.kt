@@ -28,7 +28,7 @@ class ReviewPolicyTest {
         )
 
     @Test
-    fun `the recommended selection takes known tags and fill-ins only`() {
+    fun theRecommendedSelectionTakesKnownTagsAndFillInsOnly() {
         val recommended = doc.recommended()
 
         recommended.chips.map { it.tag to it.selected } shouldBe listOf("known" to true, "invented" to false)
@@ -37,7 +37,7 @@ class ReviewPolicyTest {
     }
 
     @Test
-    fun `invented tags, removals and overwrites need attention`() {
+    fun inventedTagsRemovalsAndOverwritesNeedAttention() {
         doc.needsAttention shouldBe 3
         doc.fields.map { it.recommended } shouldBe listOf(true, false)
     }

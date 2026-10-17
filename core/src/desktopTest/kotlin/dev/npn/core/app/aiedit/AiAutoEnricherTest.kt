@@ -36,7 +36,7 @@ import kotlin.test.Test
 class AiAutoEnricherTest {
     /** The whole point of the queue: the OCR drain thread must never wait on the endpoint. */
     @Test
-    fun `enqueue records the intent without calling the model`() =
+    fun enqueueRecordsTheIntentWithoutCallingTheModel() =
         runTest {
             withRig { rig ->
                 rig.insert("d1")
@@ -50,7 +50,7 @@ class AiAutoEnricherTest {
         }
 
     @Test
-    fun `does not queue when the setting is off or the endpoint is unconfigured`() =
+    fun doesNotQueueWhenTheSettingIsOffOrTheEndpointIsUnconfigured() =
         runTest {
             withRig { rig ->
                 rig.insert("d1")
@@ -67,7 +67,7 @@ class AiAutoEnricherTest {
         }
 
     @Test
-    fun `does not queue an already enriched or trashed document`() =
+    fun doesNotQueueAnAlreadyEnrichedOrTrashedDocument() =
         runTest {
             withRig { rig ->
                 rig.insert("done", aiEnrichedAt = 1L)
@@ -83,7 +83,7 @@ class AiAutoEnricherTest {
 
     /** Re-OCR, sidecar adoption and engine re-selection all re-fire the hook for the same doc. */
     @Test
-    fun `repeat enqueues never reset an existing row`() =
+    fun repeatEnqueuesNeverResetAnExistingRow() =
         runTest {
             withRig { rig ->
                 rig.insert("d1")
@@ -105,7 +105,7 @@ class AiAutoEnricherTest {
      * maintenance tick, since nothing observes the queue table.
      */
     @Test
-    fun `enqueue reports new work only when it actually queued something`() =
+    fun enqueueReportsNewWorkOnlyWhenItActuallyQueuedSomething() =
         runTest {
             withRig { rig ->
                 rig.insert("fresh")
@@ -130,7 +130,7 @@ class AiAutoEnricherTest {
         }
 
     @Test
-    fun `writes vocabulary tags and unfilled fields, then stamps and dequeues`() =
+    fun writesVocabularyTagsAndUnfilledFieldsThenStampsAndDequeues() =
         runTest {
             withRig { rig ->
                 rig.insert("d1")
@@ -180,7 +180,7 @@ class AiAutoEnricherTest {
      * per-tag grain would produce more than one recorded edit and fail here.
      */
     @Test
-    fun `commits a tag and a field together in exactly one write`() =
+    fun commitsATagAndAFieldTogetherInExactlyOneWrite() =
         runTest {
             withRig { rig ->
                 rig.insert("d1")
@@ -205,7 +205,7 @@ class AiAutoEnricherTest {
         }
 
     @Test
-    fun `asks for one additive closed-vocabulary request covering tags and unfilled fields`() =
+    fun asksForOneAdditiveClosedVocabularyRequestCoveringTagsAndUnfilledFields() =
         runTest {
             withRig { rig ->
                 rig.insert("d1")
@@ -233,7 +233,7 @@ class AiAutoEnricherTest {
      * automatic pass must never overwrite a human's value, whatever its type.
      */
     @Test
-    fun `the request covers every aiEnabled registry field, including a custom one`() =
+    fun theRequestCoversEveryAiEnabledRegistryFieldIncludingACustomOne() =
         runTest {
             withRig { rig ->
                 rig.fieldRegistry.upsert(
@@ -265,7 +265,7 @@ class AiAutoEnricherTest {
         }
 
     @Test
-    fun `never writes a brand-new tag even when the facade proposes one`() =
+    fun neverWritesABrandNewTagEvenWhenTheFacadeProposesOne() =
         runTest {
             withRig { rig ->
                 rig.insert("d1")
@@ -287,7 +287,7 @@ class AiAutoEnricherTest {
         }
 
     @Test
-    fun `stamps a document the model had no suggestion for, so it is not queued again`() =
+    fun stampsADocumentTheModelHadNoSuggestionForSoItIsNotQueuedAgain() =
         runTest {
             withRig { rig ->
                 rig.insert("d1")
@@ -309,7 +309,7 @@ class AiAutoEnricherTest {
      * goes, and the text produced for it later queues it again.
      */
     @Test
-    fun `a document without text is not asked about or marked, and is queued again once it has text`() =
+    fun aDocumentWithoutTextIsNotAskedAboutOrMarkedAndIsQueuedAgainOnceItHasText() =
         runTest {
             withRig { rig ->
                 rig.insert("d1", text = " ")
@@ -335,7 +335,7 @@ class AiAutoEnricherTest {
 
     /** Tags need no text: with no field to fill, a document without any is still asked about. */
     @Test
-    fun `a document without text is asked about its tags when no field is to be filled`() =
+    fun aDocumentWithoutTextIsAskedAboutItsTagsWhenNoFieldIsToBeFilled() =
         runTest {
             withRig { rig ->
                 rig.fieldRegistry.defs.value =
@@ -359,7 +359,7 @@ class AiAutoEnricherSessionTest {
      * is theirs, so the answer arriving afterwards fills only what is still empty.
      */
     @Test
-    fun `a value the user enters during the model call is not overwritten`() =
+    fun aValueTheUserEntersDuringTheModelCallIsNotOverwritten() =
         appSessionTest { rig ->
             rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
             rig.session.rescan()

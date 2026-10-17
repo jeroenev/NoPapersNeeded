@@ -101,9 +101,10 @@ naming:
       - 'linuxX64'
       - 'desktop'
   FunctionNaming:
-    # Composable functions are PascalCase by convention; test functions use backtick names.
+    # Composable functions are PascalCase by convention. Tests are camelCase like everything else,
+    # so the defaults' test excludes are dropped.
     ignoreAnnotated: ["Composable"]
-    excludes: ["**/commonTest/**", "**/desktopTest/**", "**/androidUnitTest/**", "**/test/**"]
+    excludes: []
 
 coroutines:
   GlobalCoroutineUsage:

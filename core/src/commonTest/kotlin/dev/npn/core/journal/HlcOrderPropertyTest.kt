@@ -24,7 +24,7 @@ class HlcOrderPropertyTest {
         ) { t, c, d -> Hlc(t, c, d) }
 
     @Test
-    fun antisymmetry_and_reflexivity() =
+    fun antisymmetryAndReflexivity() =
         propTest {
             checkAll(PropTestConfig(iterations = 500), hlcArb, hlcArb) { a, b ->
                 require(a.compareTo(a) == 0) { "reflexive" }
@@ -48,7 +48,7 @@ class HlcOrderPropertyTest {
         }
 
     @Test
-    fun sorting_is_a_total_order_no_ambiguous_ties() =
+    fun sortingIsATotalOrderNoAmbiguousTies() =
         propTest {
             checkAll(PropTestConfig(iterations = 300), Arb.long()) { seed ->
                 val rng = kotlin.random.Random(seed)

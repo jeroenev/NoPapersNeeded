@@ -26,7 +26,7 @@ class AiEditQueueReviewTest {
     }
 
     @Test
-    fun `a run still owing model calls does not open`() =
+    fun aRunStillOwingModelCallsDoesNotOpen() =
         runTest {
             withQueue { rig ->
                 val jobId = rig.enqueue("a")
@@ -36,7 +36,7 @@ class AiEditQueueReviewTest {
         }
 
     @Test
-    fun `an unknown run does not open`() =
+    fun anUnknownRunDoesNotOpen() =
         runTest {
             withQueue { rig ->
                 rig.queue.openEditRun("nope") shouldBe null
@@ -44,7 +44,7 @@ class AiEditQueueReviewTest {
         }
 
     @Test
-    fun `the review is projected against the document as it is when it opens, not when it was queued`() =
+    fun theReviewIsProjectedAgainstTheDocumentAsItIsWhenItOpensNotWhenItWasQueued() =
         runTest {
             withQueue { rig ->
                 rig.ai.edit = suggestion(title = "Electricity bill")
@@ -69,7 +69,7 @@ class AiEditQueueReviewTest {
         }
 
     @Test
-    fun `documents the model had nothing for are separated out, never written`() =
+    fun documentsTheModelHadNothingForAreSeparatedOutNeverWritten() =
         runTest {
             withQueue { rig ->
                 rig.ai.editByDoc = mapOf("a" to suggestion(), "b" to AiEditSuggestion.EMPTY)
@@ -82,7 +82,7 @@ class AiEditQueueReviewTest {
         }
 
     @Test
-    fun `applying writes the selection and takes the run out of the queue`() =
+    fun applyingWritesTheSelectionAndTakesTheRunOutOfTheQueue() =
         runTest {
             withQueue { rig ->
                 rig.ai.edit = suggestion(tag = "invoice", title = "Electricity bill")
@@ -108,7 +108,7 @@ class AiEditQueueReviewTest {
      * again, so Applying once more does not add it a second time.
      */
     @Test
-    fun `reopening a run after a partly failed apply does not offer what already landed`() =
+    fun reopeningARunAfterAPartlyFailedApplyDoesNotOfferWhatAlreadyLanded() =
         runTest {
             withQueue { rig ->
                 rig.ai.edit = suggestion(tag = "invoice", title = "Bill")
@@ -139,7 +139,7 @@ class AiEditQueueReviewTest {
      * it ends in reports them rather than "no documents were changed".
      */
     @Test
-    fun `a run discarded after a partly failed apply reports what landed`() =
+    fun aRunDiscardedAfterAPartlyFailedApplyReportsWhatLanded() =
         runTest {
             withQueue { rig ->
                 rig.ai.edit = suggestion(tag = "invoice", title = "Bill")
@@ -161,7 +161,7 @@ class AiEditQueueReviewTest {
      * have dropped a tag it had or gained one the model invented, in its own spelling.
      */
     @Test
-    fun `a suggested tag is new or known by the vocabulary when the run opens`() =
+    fun aSuggestedTagIsNewOrKnownByTheVocabularyWhenTheRunOpens() =
         runTest {
             withQueue { rig ->
                 val known = TagSuggestion("invoice", isNew = false)
@@ -184,7 +184,7 @@ class AiEditQueueReviewTest {
 
     /** A removal of a tag the document no longer carries, or a value it already has, changes nothing. */
     @Test
-    fun `a review leaves out removals and values that would change nothing`() =
+    fun aReviewLeavesOutRemovalsAndValuesThatWouldChangeNothing() =
         runTest {
             withQueue { rig ->
                 rig.ai.edit =
@@ -208,7 +208,7 @@ class AiEditQueueReviewTest {
         }
 
     @Test
-    fun `a partly failed apply keeps the run so the retry can finish it`() =
+    fun aPartlyFailedApplyKeepsTheRunSoTheRetryCanFinishIt() =
         runTest {
             withQueue { rig ->
                 rig.ai.edit = suggestion(tag = "invoice")
@@ -228,7 +228,7 @@ class AiEditQueueReviewTest {
      * drain and are not counted here.
      */
     @Test
-    fun `finishing a review deletes the run as owned work, applied or discarded`() =
+    fun finishingAReviewDeletesTheRunAsOwnedWorkAppliedOrDiscarded() =
         runTest {
             withQueue { rig ->
                 rig.ai.edit = suggestion(tag = "invoice")
@@ -253,7 +253,7 @@ class AiEditQueueReviewTest {
      * so the review is done, with the failure beside its counts, and the run stays queued.
      */
     @Test
-    fun `an applied run that cannot leave the queue is still done`() =
+    fun anAppliedRunThatCannotLeaveTheQueueIsStillDone() =
         runTest {
             withQueue { rig ->
                 rig.ai.edit = suggestion(tag = "invoice")
@@ -272,7 +272,7 @@ class AiEditQueueReviewTest {
         }
 
     @Test
-    fun `discarding drops the run and its suggestions`() =
+    fun discardingDropsTheRunAndItsSuggestions() =
         runTest {
             withQueue { rig ->
                 rig.ai.edit = suggestion()

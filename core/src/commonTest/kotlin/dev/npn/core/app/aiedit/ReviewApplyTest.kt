@@ -40,7 +40,7 @@ class ReviewApplyTest {
     private suspend fun apply(vararg docs: ReviewDoc): ApplyOutcome = apply.apply(docs.toList()) { false }
 
     @Test
-    fun `tag additions are grouped into one call per distinct tag`() =
+    fun tagAdditionsAreGroupedIntoOneCallPerDistinctTag() =
         runTest {
             val outcome = apply(reviewed("a", add = listOf("shared", "onlyA")), reviewed("b", add = listOf("shared")))
 
@@ -49,7 +49,7 @@ class ReviewApplyTest {
         }
 
     @Test
-    fun `tag removals are grouped the same way`() =
+    fun tagRemovalsAreGroupedTheSameWay() =
         runTest {
             apply(reviewed("a", remove = listOf("utility")), reviewed("b", remove = listOf("utility")))
 
@@ -62,7 +62,7 @@ class ReviewApplyTest {
      * one rejection lose the others' writes.
      */
     @Test
-    fun `fields are one edit per document`() =
+    fun fieldsAreOneEditPerDocument() =
         runTest {
             val fields = mapOf(FieldKeys.CORRESPONDENT to "Acme", FieldKeys.DOC_DATE to "2024-01-15")
 
@@ -73,7 +73,7 @@ class ReviewApplyTest {
         }
 
     @Test
-    fun `a batch with nothing selected writes nothing`() =
+    fun aBatchWithNothingSelectedWritesNothing() =
         runTest {
             val unticked =
                 reviewed("a", add = listOf("t")).let { it.copy(chips = it.chips.map { c -> c.copy(selected = false) }) }
@@ -85,7 +85,7 @@ class ReviewApplyTest {
 
     /** The retry holds only what is still owed, and the Done that ends it counts every attempt. */
     @Test
-    fun `a partly failed batch retries only what failed and counts it all at the end`() =
+    fun aPartlyFailedBatchRetriesOnlyWhatFailedAndCountsItAllAtTheEnd() =
         runTest {
             meta.failAddTagForDocs = setOf("b")
 
@@ -109,7 +109,7 @@ class ReviewApplyTest {
      * recommends again cannot send it twice (another OR-set dot), and Done counts it once.
      */
     @Test
-    fun `a suggestion that landed is not offered again by the retry`() =
+    fun aSuggestionThatLandedIsNotOfferedAgainByTheRetry() =
         runTest {
             meta.failApplyEditsForDocs = setOf("a")
 
@@ -129,7 +129,7 @@ class ReviewApplyTest {
 
     /** Whatever a caller hands back later, a suggestion the batch already wrote is not sent again. */
     @Test
-    fun `a suggestion that landed is never written again by the batch`() =
+    fun aSuggestionThatLandedIsNeverWrittenAgainByTheBatch() =
         runTest {
             meta.failApplyEditsForDocs = setOf("a")
             val original = reviewed("a", add = listOf("t"), fields = mapOf("k" to "v"))
@@ -144,7 +144,7 @@ class ReviewApplyTest {
 
     /** Leaving the rest of a batch after a partly failed Apply still reports what landed. */
     @Test
-    fun `what landed so far is reported before the batch is done`() =
+    fun whatLandedSoFarIsReportedBeforeTheBatchIsDone() =
         runTest {
             apply.landedSoFar() shouldBe ApplyResult(applied = 0, docsChanged = 0, moreRemain = false)
             meta.failApplyEditsForDocs = setOf("a")
@@ -159,7 +159,7 @@ class ReviewApplyTest {
      * stand, so the batch is done, with no next batch offered and the failure beside the counts.
      */
     @Test
-    fun `a batch whose follow-up question fails is still done`() =
+    fun aBatchWhoseFollowUpQuestionFailsIsStillDone() =
         runTest {
             val failure = IllegalStateException("database closed")
 

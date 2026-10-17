@@ -17,7 +17,7 @@ import kotlin.test.Test
 
 class AiEditQueueFailureTest {
     @Test
-    fun `a whole failed chunk is systemic - the run backs off and no document is charged`() =
+    fun aWholeFailedChunkIsSystemicTheRunBacksOffAndNoDocumentIsCharged() =
         runTest {
             withQueue { rig ->
                 rig.ai.failWith = { error("endpoint down") }
@@ -36,7 +36,7 @@ class AiEditQueueFailureTest {
         }
 
     @Test
-    fun `a systemic failure parks the whole queue, not just the run that hit it`() =
+    fun aSystemicFailureParksTheWholeQueueNotJustTheRunThatHitIt() =
         runTest {
             withQueue { rig ->
                 // Two runs: the second has never failed and so carries no backoff of its own. Only
@@ -60,7 +60,7 @@ class AiEditQueueFailureTest {
         }
 
     @Test
-    fun `one failing document among successes is charged the attempt, alone`() =
+    fun oneFailingDocumentAmongSuccessesIsChargedTheAttemptAlone() =
         runTest {
             withQueue { rig ->
                 rig.ai.edit = suggestion()
@@ -81,7 +81,7 @@ class AiEditQueueFailureTest {
 
     /** The queue view shows the stored error; a blank one would show an empty failure. */
     @Test
-    fun `a document failing with a blank message still stores what failed`() =
+    fun aDocumentFailingWithABlankMessageStillStoresWhatFailed() =
         runTest {
             withQueue { rig ->
                 rig.ai.edit = suggestion()
@@ -95,7 +95,7 @@ class AiEditQueueFailureTest {
         }
 
     @Test
-    fun `a run parked by a failure with a blank message still stores what failed`() =
+    fun aRunParkedByAFailureWithABlankMessageStillStoresWhatFailed() =
         runTest {
             withQueue { rig ->
                 rig.ai.failWith = { error("") }
@@ -108,7 +108,7 @@ class AiEditQueueFailureTest {
         }
 
     @Test
-    fun `a document the endpoint always rejects is given up on, so its run still finishes`() =
+    fun aDocumentTheEndpointAlwaysRejectsIsGivenUpOnSoItsRunStillFinishes() =
         runTest {
             withQueue { rig ->
                 rig.ai.edit = suggestion()
@@ -129,7 +129,7 @@ class AiEditQueueFailureTest {
         }
 
     @Test
-    fun `an outage inside the systemic budget costs the documents nothing`() =
+    fun anOutageInsideTheSystemicBudgetCostsTheDocumentsNothing() =
         runTest {
             withQueue { rig ->
                 rig.ai.failWith = { error("endpoint down") }
@@ -153,7 +153,7 @@ class AiEditQueueFailureTest {
         }
 
     @Test
-    fun `progress clears a backoff earned while the endpoint was down`() =
+    fun progressClearsABackoffEarnedWhileTheEndpointWasDown() =
         runTest {
             withQueue { rig ->
                 rig.ai.failWith = { error("endpoint down") }

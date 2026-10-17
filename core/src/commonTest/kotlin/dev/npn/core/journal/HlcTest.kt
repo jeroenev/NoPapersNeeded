@@ -6,7 +6,7 @@ import kotlin.test.assertTrue
 
 class HlcTest {
     @Test
-    fun total_order_physical_then_counter_then_device() {
+    fun totalOrderPhysicalThenCounterThenDevice() {
         val a = Hlc(100, 0, "z")
         val b = Hlc(100, 0, "a")
         assertTrue(a > b, "device id breaks ties, z > a")
@@ -19,12 +19,12 @@ class HlcTest {
     }
 
     @Test
-    fun equal_when_all_equal() {
+    fun equalWhenAllEqual() {
         assertEquals(0, Hlc(5, 2, "x").compareTo(Hlc(5, 2, "x")))
     }
 
     @Test
-    fun next_monotonic_when_wall_stalls() {
+    fun nextMonotonicWhenWallStalls() {
         val allocator = HlcWatermarkAllocator({ 1000L })
         val first = allocator.next("dev")
         val second = allocator.next("dev") // same wall time -> counter bumps
@@ -34,7 +34,7 @@ class HlcTest {
     }
 
     @Test
-    fun next_uses_wall_when_it_advances() {
+    fun nextUsesWallWhenItAdvances() {
         var now = 1000L
         val allocator = HlcWatermarkAllocator({ now })
         allocator.next("dev")
@@ -45,7 +45,7 @@ class HlcTest {
     }
 
     @Test
-    fun next_does_not_rewind_on_backwards_wall_clock() {
+    fun nextDoesNotRewindOnBackwardsWallClock() {
         var now = 5000L
         val allocator = HlcWatermarkAllocator({ now })
         val first = allocator.next("dev")
@@ -56,7 +56,7 @@ class HlcTest {
     }
 
     @Test
-    fun observe_merges_remote_ahead() {
+    fun observeMergesRemoteAhead() {
         val allocator = HlcWatermarkAllocator({ 1000L })
         allocator.next("local")
         val remote = Hlc(3000, 5, "remote")
@@ -67,7 +67,7 @@ class HlcTest {
     }
 
     @Test
-    fun observe_clamps_absurd_remote_future() {
+    fun observeClampsAbsurdRemoteFuture() {
         val now = 1_000_000L
         val allocator = HlcWatermarkAllocator({ now })
         allocator.observe(Hlc(now + HlcWatermarkAllocator.CLAMP_MS * 10, 0, "bad"))
@@ -78,7 +78,7 @@ class HlcTest {
     }
 
     @Test
-    fun observe_uses_local_wall_when_remote_behind() {
+    fun observeUsesLocalWallWhenRemoteBehind() {
         val now = 10_000L
         val allocator = HlcWatermarkAllocator({ now })
         allocator.observe(Hlc(500, 0, "remote"))
@@ -87,7 +87,7 @@ class HlcTest {
     }
 
     @Test
-    fun transaction_actor_allocator_stays_monotonic_across_actor_changes() {
+    fun transactionActorAllocatorStaysMonotonicAcrossActorChanges() {
         val allocator = HlcWatermarkAllocator(clock = { 1000L })
         val first = allocator.next("00000000-0000-4000-8000-000000000001")
         val second = allocator.next("00000000-0000-4000-8000-000000000002")

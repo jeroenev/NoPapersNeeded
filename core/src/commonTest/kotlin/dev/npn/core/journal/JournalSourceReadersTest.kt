@@ -23,7 +23,7 @@ class JournalSourceReadersTest {
     private fun objectPath(bytes: ByteArray): String = JournalPaths.objectPath(sha256Bytes(bytes))
 
     @Test
-    fun legacy_accepts_missing_version_and_reports_malformed_lines() {
+    fun legacyAcceptsMissingVersionAndReportsMalformedLines() {
         val missingVersion = JournalCodec.encode(event()).replaceFirst("\"v\":1,", "")
         val result =
             assertIs<JournalSourceRead.Accepted>(
@@ -34,7 +34,7 @@ class JournalSourceReadersTest {
     }
 
     @Test
-    fun v2_requires_explicit_version_and_applies_no_prefix() {
+    fun v2RequiresExplicitVersionAndAppliesNoPrefix() {
         val first = JournalCodec.encode(event()).replaceFirst("\"v\":1,", "")
         val bytes = first.encodeToByteArray()
         assertIs<JournalSourceRead.Retryable>(StorageV2Reader.read(objectPath(bytes), bytes))
@@ -44,7 +44,7 @@ class JournalSourceReadersTest {
     }
 
     @Test
-    fun v2_rejects_hash_mismatch_and_unknown_event_version() {
+    fun v2RejectsHashMismatchAndUnknownEventVersion() {
         val valid = JournalCodec.encode(event()).encodeToByteArray()
         val wrongPath = JournalPaths.objectPath("0".repeat(64))
         assertIs<JournalSourceRead.Retryable>(StorageV2Reader.read(wrongPath, valid))
@@ -54,7 +54,7 @@ class JournalSourceReadersTest {
     }
 
     @Test
-    fun v2_checks_the_hash_it_is_handed_rather_than_hashing_again() {
+    fun v2ChecksTheHashItIsHandedRatherThanHashingAgain() {
         val bytes = JournalCodec.encode(event()).encodeToByteArray()
 
         // The bytes match their path; only the handed hash does not, so a reader that re-hashed
@@ -66,7 +66,7 @@ class JournalSourceReadersTest {
     }
 
     @Test
-    fun v2_validates_complete_transaction() {
+    fun v2ValidatesCompleteTransaction() {
         val events = listOf(event(1), event(2))
         val bytes = JournalCodec.encodeLines(events).encodeToByteArray()
         val accepted = assertIs<JournalSourceRead.Accepted>(StorageV2Reader.read(objectPath(bytes), bytes))
@@ -78,7 +78,7 @@ class JournalSourceReadersTest {
     }
 
     @Test
-    fun unknown_operation_payload_is_preserved() {
+    fun unknownOperationPayloadIsPreserved() {
         val line =
             """{"v":1,"seq":1,"hlc":{"t":1,"c":0,"d":"$actor"},"dev":"$actor","doc":null,"op":"future","p":{"x":true}}"""
         val decoded = EventDecoderRegistry.decode(line, allowMissingV1 = false).event.op
@@ -88,7 +88,7 @@ class JournalSourceReadersTest {
     }
 
     @Test
-    fun duplicate_json_keys_are_rejected() {
+    fun duplicateJsonKeysAreRejected() {
         val line =
             """{"v":1,"v":1,"seq":1,"hlc":{"t":1,"c":0,"d":"$actor"},"dev":"$actor","doc":null,"op":"future","p":{}}"""
         val bytes = line.encodeToByteArray()
@@ -96,7 +96,7 @@ class JournalSourceReadersTest {
     }
 
     @Test
-    fun unknown_operations_and_string_versions_block_source_ingestion() {
+    fun unknownOperationsAndStringVersionsBlockSourceIngestion() {
         val unknown =
             """{"v":1,"seq":1,"hlc":{"t":1,"c":0,"d":"$actor"},"dev":"$actor","doc":null,"op":"future","p":{}}"""
         assertIs<JournalSourceRead.Unsupported>(StorageV1Reader.read(unknown.encodeToByteArray()))

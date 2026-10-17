@@ -26,7 +26,7 @@ class WireFormatTest {
     private fun fields(json: String): JsonObject = Json.parseToJsonElement(json).jsonObject
 
     @Test
-    fun envelope_field_names_exact() {
+    fun envelopeFieldNamesExact() {
         val e = event(sha, JournalOp.TagAdd("invoice"))
         val obj = fields(JournalCodec.encode(e))
         assertEquals(setOf("v", "seq", "hlc", "dev", "doc", "op", "p"), obj.keys)
@@ -46,7 +46,7 @@ class WireFormatTest {
     }
 
     @Test
-    fun null_doc_for_library_ops() {
+    fun nullDocForLibraryOps() {
         val e = event(null, JournalOp.TagRename("a", "b"))
         val obj = fields(JournalCodec.encode(e))
         assertTrue(obj["doc"] is JsonNull)
@@ -56,7 +56,7 @@ class WireFormatTest {
     }
 
     @Test
-    fun roundtrip_all_ops() {
+    fun roundtripAllOps() {
         val ops =
             listOf(
                 event(sha, JournalOp.TagAdd("t")),
@@ -84,7 +84,7 @@ class WireFormatTest {
     }
 
     @Test
-    fun op_wire_names_are_pinned() {
+    fun opWireNamesArePinned() {
         // A new op makes older builds refuse every object that holds it (see JournalOp).
         fun pinned(op: JournalOp): String? =
             when (op) {
@@ -144,7 +144,7 @@ class WireFormatTest {
     }
 
     @Test
-    fun tag_remove_dots_wire_shape() {
+    fun tagRemoveDotsWireShape() {
         val e = event(sha, JournalOp.TagRemove("t", listOf(Dot("d2", 7))))
         val p = fields(JournalCodec.encode(e))["p"]!!.jsonObject
         val dots = p["dots"]!!.jsonArray
@@ -154,7 +154,7 @@ class WireFormatTest {
     }
 
     @Test
-    fun prop_set_null_value_is_json_null() {
+    fun propSetNullValueIsJsonNull() {
         val e = event(sha, JournalOp.PropSet(SystemProperty.OCR_ENGINE, null))
         val p = fields(JournalCodec.encode(e))["p"]!!.jsonObject
         assertTrue(p["value"] is JsonNull)
@@ -163,7 +163,7 @@ class WireFormatTest {
     }
 
     @Test
-    fun field_set_wire_shape_and_roundtrip() {
+    fun fieldSetWireShapeAndRoundtrip() {
         val e = event(sha, JournalOp.FieldSet("amount", "42.50"))
         val p = fields(JournalCodec.encode(e))["p"]!!.jsonObject
         assertEquals("amount", p["key"]!!.jsonPrimitive.content)
@@ -177,7 +177,7 @@ class WireFormatTest {
     }
 
     @Test
-    fun unknown_op_parses_as_unknown_not_crash() {
+    fun unknownOpParsesAsUnknownNotCrash() {
         val line =
             """{"v":1,"seq":5,"hlc":{"t":1,"c":0,"d":"x"},"dev":"x","doc":null,""" +
                 """"op":"future-op","p":{"whatever":true}}"""
@@ -187,7 +187,7 @@ class WireFormatTest {
     }
 
     @Test
-    fun unknown_op_parses_as_unknown_and_garbage_as_nothing() {
+    fun unknownOpParsesAsUnknownAndGarbageAsNothing() {
         val good = JournalCodec.encode(event(sha, JournalOp.TagAdd("t")))
         val unknown = """{"v":1,"seq":6,"hlc":{"t":1,"c":0,"d":"x"},"dev":"x","doc":null,"op":"future-op","p":{}}"""
         assertTrue(JournalCodec.decodeLineOrNull(good)!!.op is JournalOp.TagAdd)
@@ -196,7 +196,7 @@ class WireFormatTest {
     }
 
     @Test
-    fun unknown_prop_key_becomes_unknown_op() {
+    fun unknownPropKeyBecomesUnknownOp() {
         val line =
             """{"v":1,"seq":1,"hlc":{"t":1,"c":0,"d":"x"},"dev":"x","doc":"$sha",""" +
                 """"op":"prop-set","p":{"key":"bogus","value":"z"}}"""
@@ -211,7 +211,7 @@ class WireFormatTest {
         """"op":"prop-set","p":{"key":"$key","value":"$value"}}"""
 
     @Test
-    fun legacy_prop_set_for_well_known_field_decodes_as_field_set() {
+    fun legacyPropSetForWellKnownFieldDecodesAsFieldSet() {
         // Libraries written before the field registry hold prop-set events for the well-known five.
         // Those keys decode as the FieldSet they would be written as today, so metadata survives,
         // while system-state keys stay PropSet and unknown keys degrade to Unknown.
@@ -234,7 +234,7 @@ class WireFormatTest {
     }
 
     @Test
-    fun blank_lines_decode_as_nothing() {
+    fun blankLinesDecodeAsNothing() {
         assertNull(JournalCodec.decodeLineOrNull(""))
         assertNull(JournalCodec.decodeLineOrNull("   "))
     }
