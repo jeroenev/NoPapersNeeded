@@ -7,7 +7,6 @@ import dev.npn.app.FakeSettingsRepository
 import dev.npn.app.MainDispatcherTest
 import dev.npn.app.collecting
 import dev.npn.app.failure
-import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.aiedit.AiEditRunImpl
@@ -27,10 +26,6 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.ai_edit_apply_failed
-import no_papers_needed.composeapp.generated.resources.ai_edit_apply_fields_failed
-import no_papers_needed.composeapp.generated.resources.ai_edit_apply_finish_failed
-import no_papers_needed.composeapp.generated.resources.ai_edit_apply_tags_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_more_remain_failed
 import kotlin.test.Test
 
