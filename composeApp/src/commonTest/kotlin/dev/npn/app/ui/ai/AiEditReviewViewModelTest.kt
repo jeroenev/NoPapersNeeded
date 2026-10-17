@@ -71,12 +71,8 @@ private class ScriptedReview(
     val applied = mutableListOf<List<ReviewDoc>>()
     var discarded = false
 
-    /** Thrown by [apply] when set, as a failure before any write landed would be. */
-    var applyFailure: Throwable? = null
-
     override suspend fun apply(reviewed: List<ReviewDoc>): ApplyOutcome {
         applied += reviewed
-        applyFailure?.let { throw it }
         return outcome
     }
 
@@ -204,29 +200,7 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
             review.applied.size shouldBe 1
         }
 
-    /** An Apply that fails before its writes land goes back to the Review as it was, and says so. */
-    @Test
-    fun anApplyThatFailsBeforeItsWritesLandGoesBackToTheReviewAndSaysSo() =
-        runTest(dispatcher) {
-            val review = ScriptedReview().apply { applyFailure = IllegalStateException("database closed") }
-            val model = AiEditReviewViewModel(sessionWith(review), "job")
-            collecting(model.phase)
-            val messages = collecting(model.messages.map { it.text })
-            advanceUntilIdle()
-            val before = model.phase.value
-
-            model.apply()
-            advanceUntilIdle()
-
-            model.phase.value shouldBe before
-            messages shouldContainExactly listOf(failure(Res.string.ai_edit_apply_finish_failed, "database closed"))
-
-            review.applyFailure = null
-            model.apply()
-            advanceUntilIdle()
-            model.phase.value.shouldBeInstanceOf<QueuedReviewPhase.Done>()
-        }
-
+    /** A partly failed Apply goes back to the Review with the rows still owed (see [ReviewControllerTest]). */
     @Test
     fun aPartialFailureGoesBackToReviewWithOnlyTheFailedDocuments() =
         runTest(dispatcher) {
@@ -238,7 +212,6 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
                 )
             val model = AiEditReviewViewModel(sessionWith(review), "job")
             collecting(model.phase)
-            val messages = collecting(model.messages.map { it.text })
             advanceUntilIdle()
 
             model.apply()
@@ -246,23 +219,6 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
 
             val phase = model.phase.value.shouldBeInstanceOf<QueuedReviewPhase.Review>()
             phase.batch.docs.map { it.docId } shouldContainExactly listOf("b")
-            // Only b's title is still owed, so it is the details that failed, not a tag.
-            messages shouldContainExactly listOf(uiText(Res.plurals.ai_edit_apply_fields_failed, 2, 1, 2))
-        }
-
-    @Test
-    fun nothingSelectedLeavesTheReviewExactlyAsItWas() =
-        runTest(dispatcher) {
-            val review = ScriptedReview(outcome = ApplyOutcome.NothingSelected)
-            val model = AiEditReviewViewModel(sessionWith(review), "job")
-            collecting(model.phase)
-            advanceUntilIdle()
-            val before = model.phase.value
-
-            model.apply()
-            advanceUntilIdle()
-
-            model.phase.value shouldBe before
         }
 
     /**

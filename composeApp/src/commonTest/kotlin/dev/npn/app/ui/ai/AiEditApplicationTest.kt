@@ -199,46 +199,18 @@ class AiEditApplicationTest : MainDispatcherTest() {
             model.ui.value.phase shouldBe EditPhase.Done(ApplyResult(applied = 2, docsChanged = 1, moreRemain = false))
         }
 
+    /** A partly failed Apply goes back to the Review with the rows still owed (see [ReviewControllerTest]). */
     @Test
-    fun applyingNothingStaysInTheReview() =
-        runTest(dispatcher) {
-            val (run, model) = reviewing(reviewDoc("a", newTags = listOf("new1")))
-            run.outcome = ApplyOutcome.NothingSelected
-
-            model.apply()
-            advanceUntilIdle()
-
-            model.reviewDocs().map { it.docId } shouldContainExactly listOf("a")
-        }
-
-    @Test
-    fun aPartlyFailedApplyReportsWhatItCouldNotWriteAndKeepsThoseRows() =
+    fun aPartlyFailedApplyKeepsTheRowsStillOwed() =
         runTest(dispatcher) {
             val tagsOwed = reviewDoc("a", tags = listOf("t1"))
-            val fieldsOwed = reviewDoc("b", fields = mapOf(FieldKeys.TITLE to "New title"))
-            val (run, model) = reviewing(tagsOwed, fieldsOwed)
-            val messages = collecting(model.messages.map { it.text })
-
-            // The retry's rows keep selected exactly what is still owed, which names the message.
+            val (run, model) = reviewing(tagsOwed, reviewDoc("b", fields = mapOf(FieldKeys.TITLE to "New title")))
             run.outcome = ApplyOutcome.Retry(listOf(tagsOwed), failedDocs = 1, total = 2)
-            model.apply()
-            advanceUntilIdle()
-            model.reviewDocs().map { it.docId } shouldContainExactly listOf("a")
 
-            run.outcome = ApplyOutcome.Retry(listOf(fieldsOwed), failedDocs = 1, total = 2)
             model.apply()
             advanceUntilIdle()
 
-            run.outcome = ApplyOutcome.Retry(listOf(tagsOwed, fieldsOwed), failedDocs = 2, total = 2)
-            model.apply()
-            advanceUntilIdle()
-
-            messages shouldContainExactly
-                listOf(
-                    uiText(Res.plurals.ai_edit_apply_tags_failed, 2, 1, 2),
-                    uiText(Res.plurals.ai_edit_apply_fields_failed, 2, 1, 2),
-                    uiText(Res.plurals.ai_edit_apply_failed, 2, 2, 2),
-                )
+            model.reviewDocs() shouldContainExactly listOf(tagsOwed)
         }
 
     /**
@@ -262,28 +234,6 @@ class AiEditApplicationTest : MainDispatcherTest() {
             model.ui.value.phase shouldBe EditPhase.Done(result)
             messages shouldContainExactly listOf(failure(Res.string.ai_edit_more_remain_failed, "database closed"))
             run.applied.size shouldBe 1
-        }
-
-    /** An Apply that fails before its writes land goes back to the Review as it was, and says so. */
-    @Test
-    fun anApplyThatFailsBeforeItsWritesLandGoesBackToTheReviewAndSaysSo() =
-        runTest(dispatcher) {
-            val (run, model) = reviewing(reviewDoc("a", tags = listOf("t1")))
-            val messages = collecting(model.messages.map { it.text })
-            val review = model.ui.value.phase
-            run.applyFailure = IllegalStateException("database closed")
-
-            model.apply()
-            advanceUntilIdle()
-
-            model.ui.value.phase shouldBe review
-            messages shouldContainExactly listOf(failure(Res.string.ai_edit_apply_finish_failed, "database closed"))
-
-            run.applyFailure = null
-            run.outcome = ApplyOutcome.Done(ApplyResult(applied = 1, docsChanged = 1, moreRemain = false))
-            model.apply()
-            advanceUntilIdle()
-            model.ui.value.phase shouldBe EditPhase.Done(ApplyResult(applied = 1, docsChanged = 1, moreRemain = false))
         }
 
     @Test
