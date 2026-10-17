@@ -1,8 +1,15 @@
 package dev.npn.app.ui.ai
 
 import dev.npn.app.ui.common.MessagesViewModel
+import dev.npn.app.ui.common.reasonText
+import dev.npn.app.ui.common.uiText
+import dev.npn.core.app.ApplyOutcome
+import dev.npn.core.app.ApplyResult
 import dev.npn.core.app.ReviewChip
 import dev.npn.core.app.ReviewDoc
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.ai_edit_apply_finish_failed
+import org.jetbrains.compose.resources.StringResource
 
 /**
  * What leaving a Review without applying actually does, which differs between the two flows and
@@ -16,6 +23,15 @@ enum class ReviewExit {
     /** Queued run: the stored suggestions are discarded and the run leaves the processing queue. */
     DISCARD_RUN,
 }
+
+/**
+ * One batch under Review: per-document suggestion chips and field rows awaiting confirmation
+ * ([docs]), and the documents the model had nothing for ([emptyDocs]). Nothing is written yet.
+ */
+data class ReviewBatchState(
+    val docs: List<ReviewDoc>,
+    val emptyDocs: List<ReviewDoc>,
+)
 
 /**
  * Everything the user can do to a Review batch. Both AI-edit viewmodels implement it, the
@@ -84,7 +100,55 @@ abstract class ReviewViewModel :
     final override fun setAllSelection(selected: Boolean) = updateReview { it.setAllSelected(selected) }
 
     final override fun selectRecommended() = updateReview { it.selectRecommended() }
+
+    /**
+     * Write [batch]'s selected suggestions through [write] and show what that came to: Done with
+     * what landed (a [ApplyOutcome.Done.followUpFailure] reported with [followUpFailed]), or the
+     * Review again — what a Retry still owes, said as such, or the batch as it was when nothing was
+     * selected or the Apply threw, which is reported.
+     */
+    protected suspend fun applyReview(
+        batch: ReviewBatchState,
+        followUpFailed: StringResource,
+        write: suspend (List<ReviewDoc>) -> ApplyOutcome,
+        showReview: (ReviewBatchState) -> Unit,
+        showDone: (ApplyResult) -> Unit,
+    ) {
+        var outcome: ApplyOutcome? = null
+        reporting(Res.string.ai_edit_apply_finish_failed) { outcome = write(batch.docs) }
+        when (val applied = outcome) {
+            null, ApplyOutcome.NothingSelected -> {
+                showReview(batch)
+            }
+
+            is ApplyOutcome.Done -> {
+                applied.followUpFailure?.let { message(uiText(followUpFailed, it.reasonText())) }
+                showDone(applied.result)
+            }
+
+            is ApplyOutcome.Retry -> {
+                message(applied.failureText())
+                showReview(batch.copy(docs = applied.remaining))
+            }
+        }
+    }
 }
+
+/** The tag additions and removals of this document that are ticked. */
+internal val ReviewDoc.selectedTagCount: Int
+    get() = chips.count { it.selected } + removals.count { it.selected }
+
+/** The field values of this document that are ticked. */
+internal val ReviewDoc.selectedFieldCount: Int
+    get() = fields.count { it.selected }
+
+/** Every ticked suggestion of this document. */
+internal val ReviewDoc.selectedCount: Int
+    get() = selectedTagCount + selectedFieldCount
+
+/** Every suggestion of this document, ticked or not. */
+internal val ReviewDoc.suggestionCount: Int
+    get() = chips.size + removals.size + fields.size
 
 /**
  * Selection toggling over a Review batch, as pure list transforms.

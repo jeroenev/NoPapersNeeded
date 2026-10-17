@@ -125,20 +125,17 @@ sealed interface HistoryUiState {
 }
 
 /**
- * AI tag-suggestion state for the detail screen. [available] follows whether AI is configured in
- * Settings and is null until first read (the button stays hidden until it is true), [suggesting]
- * is the in-flight busy flag, and [suggestions] are the not-yet-accepted new-tag proposals.
+ * AI tag-suggestion state for the detail screen. [suggesting] is the in-flight busy flag, and
+ * [suggestions] are the not-yet-accepted new-tag proposals.
  */
 data class AiTagState(
-    val available: Boolean? = null,
     val suggesting: Boolean = false,
     val suggestions: List<TagSuggestion> = emptyList(),
 )
 
 /**
- * AI metadata-suggestion state (title/correspondent/date) for the detail screen. Availability is
- * shared with [AiTagState.available] (one endpoint probe covers both); [suggesting] is the
- * in-flight busy flag, and [suggestion] holds the not-yet-accepted per-field proposals.
+ * AI field-suggestion state for the detail screen. [suggesting] is the in-flight busy flag, and
+ * [suggestion] holds the not-yet-accepted per-field proposals.
  */
 data class AiMetadataState(
     val suggesting: Boolean = false,
@@ -293,6 +290,9 @@ class DocDetailViewModel(
             }
         }
 
+    /** Whether AI is configured in Settings; false until first read. */
+    private val aiAvailable = MutableStateFlow(false)
+
     private val aiTags = MutableStateFlow(AiTagState())
 
     private val aiMetadata = MutableStateFlow(AiMetadataState())
@@ -300,7 +300,6 @@ class DocDetailViewModel(
     private val document: Flow<DocumentSection> =
         combine(doc, reviewMode, fieldDefs, ocrText, ocrVersions) { item, mode, defs, text, versions ->
             DocumentSection(
-                item = item,
                 loadState = loadStateOf(item),
                 reviewed = item?.effectiveReviewed(mode) == true,
                 reviewMode = mode,
@@ -329,7 +328,7 @@ class DocDetailViewModel(
         }
 
     private val aiPanel: Flow<AiPanelState> =
-        combine(aiTags, aiMetadata) { tags, metadata -> AiPanelState(tags, metadata) }
+        combine(aiAvailable, aiTags, aiMetadata, ::AiPanelState)
 
     /**
      * The single state the metadata panel renders. Assembled here rather than in the composable
@@ -352,7 +351,6 @@ class DocDetailViewModel(
         return MetadataUiState(
             document =
                 DocumentSection(
-                    item = item,
                     loadState = loadStateOf(item),
                     reviewed = item?.effectiveReviewed(ReviewMode.DEFAULT) == true,
                     highlightTerms = highlightTerms,
@@ -366,7 +364,7 @@ class DocDetailViewModel(
         // once, without reopening the document. The assistant-reading offer depends on it too.
         viewModelScope.launch {
             settings.aiConfigured().collectLatest { configured ->
-                aiTags.update { it.copy(available = configured) }
+                aiAvailable.value = configured
                 val offer =
                     runCatchingCancellable { ocr.aiOcrOffer(docId) }
                         .onFailure(::reportOcrDetailsFailure)
@@ -444,19 +442,30 @@ class DocDetailViewModel(
         if (aiTags.value.suggesting) return
         aiTags.update { it.copy(suggesting = true) }
         viewModelScope.launch {
-            runCatchingCancellable { ai.suggestEdits(docId, AiEditRequest(tags = true)).addTags }.fold(
-                onSuccess = { suggestions ->
-                    if (suggestions.isEmpty()) {
-                        message(uiText(Res.string.common_no_ai_tag_suggestions))
-                    }
-                    aiTags.update { it.copy(suggesting = false, suggestions = suggestions) }
-                },
-                onFailure = { error ->
-                    message(uiText(Res.string.detail_suggest_tags_failed, error.reasonText()))
-                    aiTags.update { it.copy(suggesting = false, suggestions = emptyList()) }
-                },
-            )
+            val suggestions =
+                suggest(
+                    failed = Res.string.detail_suggest_tags_failed,
+                    nothing = Res.string.common_no_ai_tag_suggestions,
+                    isEmpty = List<TagSuggestion>::isEmpty,
+                ) { ai.suggestEdits(docId, AiEditRequest(tags = true)).addTags }
+            aiTags.value = AiTagState(suggestions = suggestions.orEmpty())
         }
+    }
+
+    /**
+     * Ask the AI endpoint for this document's suggestions through [ask]: the answer, or null when it
+     * failed, which is reported with [failed]. An answer with nothing in it says [nothing].
+     */
+    private suspend fun <T : Any> suggest(
+        failed: StringResource,
+        nothing: StringResource,
+        isEmpty: (T) -> Boolean,
+        ask: suspend () -> T,
+    ): T? {
+        var answer: T? = null
+        reporting(failed) { answer = ask() }
+        if (answer?.let(isEmpty) == true) message(uiText(nothing))
+        return answer
     }
 
     /** Accept a suggestion: add it as a real tag (normal journal path) and drop it from the list. */
@@ -485,30 +494,24 @@ class DocDetailViewModel(
         if (aiMetadata.value.suggesting) return
         aiMetadata.update { it.copy(suggesting = true) }
         viewModelScope.launch {
-            // Every field the user marked for AI, in ALL mode: this is an explicit request to
-            // second-guess what is there, unlike the automatic pass which only fills gaps.
-            val request =
-                AiEditRequest(
-                    fields =
+            val suggestion =
+                suggest(
+                    failed = Res.string.detail_suggest_details_failed,
+                    nothing = Res.string.common_no_ai_metadata_suggestions,
+                    isEmpty = FieldSuggestion::isEmpty,
+                ) {
+                    // Every field the user marked for AI, in ALL mode: this is an explicit request to
+                    // second-guess what is there, unlike the automatic pass which only fills gaps.
+                    val fields =
                         fieldRegistry.current().filter { it.aiEnabled }.map {
                             AiFieldConfig(
                                 it.key,
                                 AiFieldMode.ALL,
                             )
-                        },
-                )
-            runCatchingCancellable { ai.suggestEdits(docId, request).metadata }.fold(
-                onSuccess = { suggestion ->
-                    if (suggestion.isEmpty) {
-                        message(uiText(Res.string.common_no_ai_metadata_suggestions))
-                    }
-                    aiMetadata.value = AiMetadataState(suggesting = false, suggestion = suggestion)
-                },
-                onFailure = { error ->
-                    message(uiText(Res.string.detail_suggest_details_failed, error.reasonText()))
-                    aiMetadata.value = AiMetadataState()
-                },
-            )
+                        }
+                    ai.suggestEdits(docId, AiEditRequest(fields = fields)).metadata
+                }
+            aiMetadata.value = AiMetadataState(suggestion = suggestion ?: FieldSuggestion.EMPTY)
         }
     }
 
@@ -516,7 +519,6 @@ class DocDetailViewModel(
     override fun acceptAiMetadata(
         key: String,
         onStart: (String) -> Boolean,
-        onAccepted: () -> Unit,
         onFinished: (Boolean) -> Unit,
     ) {
         val suggested = aiMetadata.value.suggestion[key] ?: return
@@ -524,20 +526,15 @@ class DocDetailViewModel(
         var accepted = false
         val operation =
             viewModelScope.launch {
-                reporting(Res.string.common_save_field_failed) {
-                    metadataMutex.withLock {
-                        meta.setField(docId, key, suggested)
-                        aiMetadata.update { state ->
-                            if (state.suggestion[key] ==
-                                suggested
-                            ) {
-                                state.copy(suggestion = state.suggestion.without(key))
-                            } else {
-                                state
-                            }
-                        }
-                        onAccepted()
-                        accepted = true
+                accepted =
+                    reporting(Res.string.common_save_field_failed) {
+                        metadataMutex.withLock { meta.setField(docId, key, suggested) }
+                    }
+                // A newer suggestion for the field, asked for while the write ran, stays.
+                if (accepted) {
+                    aiMetadata.update { state ->
+                        if (state.suggestion[key] != suggested) return@update state
+                        state.copy(suggestion = state.suggestion.without(key))
                     }
                 }
             }
@@ -588,14 +585,20 @@ class DocDetailViewModel(
         }
 
     override fun reOcr() =
-        launchReporting(Res.string.common_rerun_ocr_failed) {
-            _ui.update { it.copy(reindexing = true) }
-            try {
-                ocr.reOcr(docId)
-            } finally {
-                _ui.update { it.copy(reindexing = false) }
-            }
+        launchReporting(Res.string.common_rerun_ocr_failed) { busy({ copy(reindexing = it) }) { ocr.reOcr(docId) } }
+
+    /** Run [block] with the busy flag [flag] sets on [DetailUiState] raised, lowering it however it ends. */
+    private suspend fun <T> busy(
+        flag: DetailUiState.(Boolean) -> DetailUiState,
+        block: suspend () -> T,
+    ): T {
+        _ui.update { it.flag(true) }
+        try {
+            return block()
+        } finally {
+            _ui.update { it.flag(false) }
         }
+    }
 
     /**
      * Re-read this document's text with the AI (vision) engine. Shares [DetailUiState.reindexing]
@@ -609,13 +612,7 @@ class DocDetailViewModel(
      */
     override fun ocrWithAi() =
         launchReporting(Res.string.detail_ai_ocr_failed) {
-            _ui.update { it.copy(reindexing = true) }
-            val outcome =
-                try {
-                    ocr.ocrWithAi(docId)
-                } finally {
-                    _ui.update { it.copy(reindexing = false) }
-                }
+            val outcome = busy({ copy(reindexing = it) }) { ocr.ocrWithAi(docId) }
             if (outcome == AiOcrOutcome.NO_ENDPOINT) message(uiText(Res.string.detail_ai_ocr_no_endpoint))
         }
 
@@ -631,14 +628,7 @@ class DocDetailViewModel(
         segments: List<IntRange>,
         onDone: () -> Unit,
     ) = launchReporting(Res.string.detail_split_failed) {
-        _ui.update { it.copy(splitting = true) }
-        val outcome =
-            try {
-                maintenance.splitPdf(docId, segments)
-            } finally {
-                _ui.update { it.copy(splitting = false) }
-            }
-        when (outcome) {
+        when (val outcome = busy({ copy(splitting = it) }) { maintenance.splitPdf(docId, segments) }) {
             is SplitOutcome.Done -> onDone()
             is SplitOutcome.Failed -> message(outcome.reason.text())
         }
@@ -647,13 +637,7 @@ class DocDetailViewModel(
     /** Rewrite the library file with this document's metadata, and say how that went. */
     override fun bakeInPlace() =
         launchReporting(Res.string.detail_bake_failed) {
-            _ui.update { it.copy(baking = true) }
-            val outcome =
-                try {
-                    content.bakeInPlace(docId)
-                } finally {
-                    _ui.update { it.copy(baking = false) }
-                }
+            val outcome = busy({ copy(baking = it) }) { content.bakeInPlace(docId) }
             message(
                 when (outcome) {
                     BakeOutcome.Baked -> uiText(Res.string.detail_baked_in_place)

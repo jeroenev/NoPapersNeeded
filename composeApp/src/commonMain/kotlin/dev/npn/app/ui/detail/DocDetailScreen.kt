@@ -139,6 +139,8 @@ private fun LoadedDocScreen(
         // On a narrow bar the title, position, prev/next and the share + overflow actions crowd
         // each other; below the breakpoint the prev/next controls move out of the top bar and into
         // a floating pill over the content, leaving the bar just the title and document actions.
+        // Measured here rather than read from LocalWindowWidthClass: it is about what fits this bar,
+        // well below the width at which the window's layout changes.
         val compact = maxWidth < CompactTopBarBreakpoint
         Scaffold(
             modifier = Modifier.docPagingKeys(goPrevDoc, goNextDoc),

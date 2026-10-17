@@ -62,7 +62,6 @@ class AiChatViewModelTest : MainDispatcherTest() {
             val model = vm(settings = settings)
             collecting(model.ui)
 
-            model.ui.value.configured shouldBe null
             advanceUntilIdle()
             model.ui.value.configured shouldBe false
 

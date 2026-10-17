@@ -101,7 +101,7 @@ fun AiEditScreen(
                 }
 
                 is EditPhase.Review -> {
-                    ReviewBatch(phase.docs, phase.emptyDocs, session.content, review = vm, onOpenDoc = onOpenDoc)
+                    ReviewBatch(phase.batch, session.content, review = vm, onOpenDoc = onOpenDoc)
                 }
 
                 is EditPhase.Applying -> {

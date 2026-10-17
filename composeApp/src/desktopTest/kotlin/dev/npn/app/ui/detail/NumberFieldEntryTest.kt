@@ -126,14 +126,14 @@ class NumberFieldEntryTest {
         onUiThread {
             editor(writes = AcceptingWrites) {
                 val suggested = AiMetadataState(suggestion = FieldSuggestion(mapOf(KEY to "7.25")))
-                ai = AiPanelState(AiTagState(available = true), suggested)
+                ai = AiPanelState(available = true, metadata = suggested)
                 scene.render()
                 type("12.05")
                 scene.click { it.contentDescription() == "Use suggested $LABEL" }
                 scene.render()
                 // What the view model writes comes back later, as the document's own value.
                 item = DocListItem(doc(DOC_ID).withAmount("7.25"), emptyList())
-                ai = AiPanelState(AiTagState(available = true))
+                ai = AiPanelState(available = true)
                 scene.render()
                 shown() shouldBe "7.25"
             }
@@ -283,7 +283,7 @@ class NumberFieldEntryTest {
                                 MetadataUiState(
                                     document =
                                         DocumentSection(
-                                            item = editor.item,
+                                            loadState = DocLoadState.Present(editor.item),
                                             reviewMode = ReviewMode.INBOX_WORKFLOW,
                                             fieldDefs = defs,
                                         ),
@@ -327,13 +327,8 @@ class NumberFieldEntryTest {
         override fun acceptAiMetadata(
             key: String,
             onStart: (String) -> Boolean,
-            onAccepted: () -> Unit,
             onFinished: (Boolean) -> Unit,
-        ) {
-            val landed = onStart("7.25")
-            if (landed) onAccepted()
-            onFinished(landed)
-        }
+        ) = onFinished(onStart("7.25"))
     }
 
     private fun Doc.withAmount(value: String) = copy(fields = fields + (KEY to value))

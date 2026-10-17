@@ -30,8 +30,9 @@ import no_papers_needed.composeapp.generated.resources.common_ai_assistant_unrea
 import org.jetbrains.compose.resources.StringResource
 
 /**
- * Chat UI state. [configured] is null until the initial config probe completes, then true/false so
- * the screen can show a "configure in settings" hint instead of the input row. [busy] is true while
+ * Chat UI state. [configured] follows Settings, so the screen can show a "configure in settings"
+ * hint instead of the input row; it reads true until Settings first answer, so the input row does
+ * not flash the hint while they load. [busy] is true while
  * a request is streaming. [docTitles] resolves cited docRefs to display titles as they appear in
  * the transcript; an unresolved ref falls back to a shortened id at the render site.
  */
@@ -42,7 +43,7 @@ data class AiChatUiState(
     val busy: Boolean = false,
     /** A session is being created, selected or deleted; sending waits until its history is ready. */
     val loading: Boolean = true,
-    val configured: Boolean? = null,
+    val configured: Boolean = true,
     val docTitles: Map<String, String> = emptyMap(),
 )
 

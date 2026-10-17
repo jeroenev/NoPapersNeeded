@@ -97,7 +97,7 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             val phase = model.phase.value.shouldBeInstanceOf<QueuedReviewPhase.Review>()
-            phase.docs.map { it.docId } shouldContainExactly listOf("a", "b")
+            phase.batch.docs.map { it.docId } shouldContainExactly listOf("a", "b")
         }
 
     @Test
@@ -241,7 +241,7 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             val phase = model.phase.value.shouldBeInstanceOf<QueuedReviewPhase.Review>()
-            phase.docs.map { it.docId } shouldContainExactly listOf("b")
+            phase.batch.docs.map { it.docId } shouldContainExactly listOf("b")
             // Only b's title is still owed, so it is the details that failed, not a tag.
             messages shouldContainExactly listOf(uiText(Res.plurals.ai_edit_apply_fields_failed, 2, 1, 2))
         }

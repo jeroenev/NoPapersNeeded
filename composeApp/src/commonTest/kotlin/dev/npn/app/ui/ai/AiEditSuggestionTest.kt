@@ -47,7 +47,7 @@ class AiEditSuggestionTest : MainDispatcherTest() {
             shown.filterNotNull() shouldContainExactly listOf(0, 1)
             model.ui.value.phase
                 .shouldBeInstanceOf<EditPhase.Review>()
-                .docs
+                .batch.docs
                 .map { it.docId } shouldContainExactly listOf("a", "b")
         }
 
@@ -69,8 +69,8 @@ class AiEditSuggestionTest : MainDispatcherTest() {
             val review =
                 model.ui.value.phase
                     .shouldBeInstanceOf<EditPhase.Review>()
-            review.docs.map { it.docId } shouldContainExactly listOf("a")
-            review.emptyDocs.map { it.docId } shouldContainExactly listOf("b")
+            review.batch.docs.map { it.docId } shouldContainExactly listOf("a")
+            review.batch.emptyDocs.map { it.docId } shouldContainExactly listOf("b")
         }
 
     @Test
@@ -107,7 +107,7 @@ class AiEditSuggestionTest : MainDispatcherTest() {
             messages shouldContainExactly listOf(uiText(Res.plurals.ai_edit_suggest_failed, 2, 1, 2))
             model.ui.value.phase
                 .shouldBeInstanceOf<EditPhase.Review>()
-                .docs
+                .batch.docs
                 .map { it.docId } shouldContainExactly listOf("b")
         }
 
@@ -181,7 +181,7 @@ class AiEditSuggestionTest : MainDispatcherTest() {
 
             model.ui.value.phase
                 .shouldBeInstanceOf<EditPhase.Review>()
-                .docs
+                .batch.docs
                 .map { it.docId } shouldContainExactly listOf("a")
         }
 

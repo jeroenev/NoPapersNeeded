@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -35,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.AddFieldMenu
 import dev.npn.app.ui.common.FieldDefForm
 import dev.npn.app.ui.common.FieldDefFormState
 import dev.npn.app.ui.common.FieldEditor
@@ -90,8 +92,9 @@ internal fun FieldsSection(
                     // The title stands in for the file name when empty, so the file name is its placeholder.
                     placeholder = doc.fileName.takeIf { def.key == FieldKeys.TITLE },
                     onCommit = { actions.commitField(def.key, it) },
-                    onRemove = { actions.removeField(def.key) }.takeIf { !def.showByDefault },
-                )
+                ) {
+                    if (!def.showByDefault) RemoveFieldButton(def.label) { actions.removeField(def.key) }
+                }
                 // One hint per field: the title's seeded one also says how the file is renamed, so
                 // this note stands in only for a title without a hint.
                 if (def.key == FieldKeys.TITLE && def.hint == null) {
@@ -108,37 +111,25 @@ internal fun FieldsSection(
             for (orphan in orphanKeys) {
                 key("orphan:$orphan") {
                     val value = doc.fields.getValue(orphan)
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        // Shown verbatim as text: without a definition there is no type to judge it by.
-                        FieldEditor(
-                            def = orphanDef(orphan),
-                            value = value,
-                            onCommit = { actions.commitField(orphan, it) },
-                            modifier = Modifier.weight(1f),
-                        )
+                    // Shown verbatim as text: without a definition there is no type to judge it by.
+                    FieldRow(def = orphanDef(orphan), value = value, onCommit = { actions.commitField(orphan, it) }) {
                         IconButton(onClick = { newField = NewFieldSeed(key = orphan, label = orphan, value = value) }) {
                             Icon(
                                 Icons.Filled.PlaylistAdd,
                                 contentDescription = stringResource(Res.string.detail_add_to_fields),
                             )
                         }
-                        IconButton(onClick = { actions.removeField(orphan) }) {
-                            Icon(
-                                Icons.Filled.Close,
-                                contentDescription = stringResource(Res.string.detail_remove_field, orphan),
-                            )
-                        }
+                        RemoveFieldButton(orphan) { actions.removeField(orphan) }
                     }
                 }
             }
         }
-        AddFieldButton(
-            available = defs.filter { it !in shown },
+        // "Add field": every definition not on screen, then "New field…".
+        AddFieldMenu(
+            label = stringResource(Res.string.detail_add_field),
+            fields = defs.filter { it !in shown },
             onPick = { revealed = revealed + it.key },
+            newLabel = stringResource(Res.string.detail_new_field) + "…",
             onNew = { newField = NewFieldSeed() },
         )
     }
@@ -157,15 +148,16 @@ internal fun FieldsSection(
     }
 }
 
+/** One field's editor, followed by the [actions] offered on it, such as removing it. */
 @Composable
 private fun FieldRow(
     def: FieldDef,
     value: String?,
-    refused: Boolean,
-    suggestions: List<String>,
-    placeholder: String?,
     onCommit: (FieldParse) -> Unit,
-    onRemove: (() -> Unit)?,
+    refused: Boolean = false,
+    suggestions: List<String> = emptyList(),
+    placeholder: String? = null,
+    actions: @Composable RowScope.() -> Unit,
 ) {
     Row(
         Modifier.fillMaxWidth(),
@@ -181,52 +173,23 @@ private fun FieldRow(
             onCommit = onCommit,
             modifier = Modifier.weight(1f),
         )
-        if (onRemove != null) {
-            IconButton(onClick = onRemove) {
-                Icon(Icons.Filled.Close, contentDescription = stringResource(Res.string.detail_remove_field, def.label))
-            }
-        }
+        actions()
+    }
+}
+
+@Composable
+private fun RemoveFieldButton(
+    label: String,
+    onRemove: () -> Unit,
+) {
+    IconButton(onClick = onRemove) {
+        Icon(Icons.Filled.Close, contentDescription = stringResource(Res.string.detail_remove_field, label))
     }
 }
 
 /** A stand-in definition for an unregistered key: plain text, labelled by its key. */
 private fun orphanDef(key: String) =
     FieldDef(key = key, label = key, type = FieldType.TEXT, showByDefault = false, aiEnabled = false, position = 0)
-
-/** "Add field": every definition not on screen, then "New field…". */
-@Composable
-private fun AddFieldButton(
-    available: List<FieldDef>,
-    onPick: (FieldDef) -> Unit,
-    onNew: () -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        OutlinedButton(onClick = { expanded = true }) {
-            Icon(Icons.Filled.Add, contentDescription = null)
-            Text(stringResource(Res.string.detail_add_field), modifier = Modifier.padding(start = 8.dp))
-            Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            available.forEach { def ->
-                DropdownMenuItem(
-                    text = { Text(def.label) },
-                    onClick = {
-                        expanded = false
-                        onPick(def)
-                    },
-                )
-            }
-            DropdownMenuItem(
-                text = { Text(stringResource(Res.string.detail_new_field) + "\u2026") },
-                onClick = {
-                    expanded = false
-                    onNew()
-                },
-            )
-        }
-    }
-}
 
 /** What the "New field" dialog opens with: empty, or an orphan key being promoted with its value. */
 internal data class NewFieldSeed(
@@ -260,7 +223,7 @@ internal fun NewFieldDialog(
     val locale = rememberFieldLocale()
     val draftDef = form.toDef(position = (existing.maxOfOrNull { it.position } ?: -1) + 1)
     val valueValid = !refused && (value.isBlank() || FieldValues.canonicalize(form.type, value) is FieldParse.Ok)
-    val canSave = form.label.isNotBlank() && draftDef != null && !form.collides(existing) && valueValid
+    val canSave = form.canSave(existing) && valueValid
     // Switching type can strand the typed value. The new type's editor shows it the locale's way and
     // reads it back the same way: keep what it reads, in canonical form, and drop what it would
     // refuse, or what the old editor refused, so the dialog never confirms a value its editor does

@@ -212,7 +212,7 @@ private fun FieldDefDialog(
     var pendingTypeChange by remember { mutableStateOf<FieldDef?>(null) }
     val position = def?.position ?: ((existing.maxOfOrNull { it.position } ?: -1) + 1)
     val result = form.toDef(position)
-    val canSave = form.label.isNotBlank() && result != null && !form.collides(existing, own = def?.key)
+    val canSave = form.canSave(existing, own = def?.key)
     val changesTypeOfUsedField = def != null && usage > 0 && result != null && result.type != def.type
 
     AlertDialog(

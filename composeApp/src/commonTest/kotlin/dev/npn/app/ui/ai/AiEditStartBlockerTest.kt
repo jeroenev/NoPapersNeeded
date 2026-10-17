@@ -25,7 +25,7 @@ class AiEditStartBlockerTest {
     fun leavingAsksFirstExactlyWhilePaidSuggestionsWouldBeLost() {
         val progress = EditProgress(done = 1, total = 2, currentTitle = null, currentFileName = "a.pdf")
         EditPhase.Suggesting(progress).leavingDiscardsSuggestions shouldBe true
-        EditPhase.Review(emptyList(), emptyList()).leavingDiscardsSuggestions shouldBe true
+        EditPhase.Review(ReviewBatchState(emptyList(), emptyList())).leavingDiscardsSuggestions shouldBe true
         EditPhase.Idle.leavingDiscardsSuggestions shouldBe false
         EditPhase.Applying.leavingDiscardsSuggestions shouldBe false
         EditPhase.Queued(documents = 3).leavingDiscardsSuggestions shouldBe false

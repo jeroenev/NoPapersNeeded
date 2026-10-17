@@ -54,7 +54,7 @@ class AiEditApplicationTest : MainDispatcherTest() {
     private fun AiEditViewModel.reviewDocs() =
         ui.value.phase
             .shouldBeInstanceOf<EditPhase.Review>()
-            .docs
+            .batch.docs
 
     /**
      * A page in Review over the real run, for document a: the model suggests the library's tag

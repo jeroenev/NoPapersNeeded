@@ -40,7 +40,7 @@ class AiEditBatchWorkflowTest : MainDispatcherTest() {
             run.requests shouldHaveSize 2
             model.ui.value.phase
                 .shouldBeInstanceOf<EditPhase.Review>()
-                .docs
+                .batch.docs
                 .single()
                 .docId shouldBe "b"
         }

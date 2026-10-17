@@ -30,11 +30,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.AddFieldMenu
 import dev.npn.app.ui.common.Dropdown
 import dev.npn.app.ui.common.ExpanderRow
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.NumericField
+import dev.npn.app.ui.common.RadioRow
 import dev.npn.app.ui.common.SwitchRow
 import dev.npn.core.app.AiTagging
 import dev.npn.core.app.DocContentFacade
@@ -189,12 +191,13 @@ private fun ScopeSection(
 ) {
     SetupSection(stringResource(Res.string.ai_edit_scope)) {
         EditScope.entries.filter { ui.scopeAvailable(it) || it == ui.scope }.forEach { scope ->
-            ScopeOption(scope, scopeLabel(scope, ui), ui.scope, setup::setScope)
+            RadioRow(scopeLabel(scope, ui), selected = ui.scope == scope, onSelect = { setup.setScope(scope) })
             if (scope == EditScope.SAVED_VIEW && ui.scope == EditScope.SAVED_VIEW) {
                 SavedViewPicker(ui, setup::setSavedView)
             }
         }
-        BatchPreview(preview, ui.batchSize, content)
+        val runFields = ui.enabledFieldKeys().mapNotNull { key -> ui.fields.firstOrNull { it.key == key } }
+        BatchPreview(preview, ui.batchSize, runFields, content)
     }
 }
 
@@ -282,33 +285,15 @@ private fun FieldSection(
                 onModeChange = { setup.setFieldMode(key, it) },
             )
         }
-        AddFieldPicker(ui.fields.filter { it.key !in ui.fieldOptions }, setup::addField)
-    }
-}
-
-/** "Add a field to this run": every registered field the run does not list yet. */
-@Composable
-private fun AddFieldPicker(
-    available: List<FieldDef>,
-    onAdd: (String) -> Unit,
-) {
-    if (available.isEmpty()) return
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        TextButton(onClick = { expanded = true }) {
-            Icon(Icons.Filled.Add, contentDescription = null)
-            Text(stringResource(Res.string.ai_edit_add_field), modifier = Modifier.padding(start = 8.dp))
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            available.forEach { def ->
-                DropdownMenuItem(
-                    text = { Text(def.label) },
-                    onClick = {
-                        expanded = false
-                        onAdd(def.key)
-                    },
-                )
-            }
+        // "Add a field to this run": every registered field the run does not list yet.
+        val available = ui.fields.filter { it.key !in ui.fieldOptions }
+        if (available.isNotEmpty()) {
+            AddFieldMenu(
+                label = stringResource(Res.string.ai_edit_add_field),
+                fields = available,
+                onPick = { setup.addField(it.key) },
+                outlined = false,
+            )
         }
     }
 }
@@ -369,24 +354,15 @@ private fun RunPlacementOption(
     recommended: Boolean,
     onSelect: () -> Unit,
 ) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .selectable(selected = selected, role = Role.RadioButton) { onSelect() },
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        RadioButton(selected = selected, onClick = null)
-        Column(Modifier.weight(1f)) {
-            Text(label, style = MaterialTheme.typography.bodyLarge)
-            if (recommended) {
-                Text(
-                    stringResource(Res.string.ai_edit_recommended),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-            HelpText(help)
+    RadioRow(label, selected, onSelect) {
+        if (recommended) {
+            Text(
+                stringResource(Res.string.ai_edit_recommended),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
         }
+        HelpText(help)
     }
 }
 

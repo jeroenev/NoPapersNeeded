@@ -552,11 +552,15 @@ private fun NavGraphBuilder.aiRoutes(
                 aiSelection.set(docIds)
                 nav.navigateAi(Route.AiEdit)
             },
-            showAiEdit = showAiEditTopBar,
-            onAiEdit = {
-                aiSelection.set(emptyList())
-                nav.navigateAi(Route.AiEdit)
-            },
+            onAiEdit =
+                if (showAiEditTopBar) {
+                    {
+                        aiSelection.set(emptyList())
+                        nav.navigateAi(Route.AiEdit)
+                    }
+                } else {
+                    null
+                },
         )
     }
     composable<Route.AiEdit> {

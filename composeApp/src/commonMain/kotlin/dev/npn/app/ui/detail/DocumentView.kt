@@ -74,7 +74,7 @@ internal fun DocumentView(
                         // briefly show the previous document's rendered pages.
                         key(docId) {
                             PageViewer(
-                                pageIndex = ui.pageIndex,
+                                initialPage = ui.pageIndex,
                                 pageCount = ui.pageCount,
                                 render = vm::renderPage,
                                 onPageChange = vm::goToPage,

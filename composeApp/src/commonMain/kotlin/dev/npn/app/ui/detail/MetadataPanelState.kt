@@ -24,15 +24,13 @@ data class MetadataUiState(
 )
 
 /**
- * The document itself plus the library-wide settings that decide how it is shown. [item] is null
- * until the document row arrives (and stays null for a document that is gone), which the editor
- * shows as unavailable. [loadState] disambiguates that null: still-loading vs confirmed missing, so
- * a screen can wait rather than flash "unavailable". [reviewed] is already resolved against
+ * The document itself plus the library-wide settings that decide how it is shown. [loadState]
+ * holds the row once it arrives, and tells a row still loading from one confirmed missing, so a
+ * screen can wait rather than flash "unavailable". [reviewed] is already resolved against
  * [reviewMode], so no call site repeats that derivation.
  */
 @Immutable
 data class DocumentSection(
-    val item: DocListItem? = null,
     val loadState: DocLoadState = DocLoadState.Loading,
     val reviewed: Boolean = false,
     val reviewMode: ReviewMode = ReviewMode.DEFAULT,
@@ -42,7 +40,13 @@ data class DocumentSection(
     val ocrVersions: List<OcrVersion> = emptyList(),
     /** Terms from the search that opened this document, highlighted in the text tab. */
     val highlightTerms: List<String> = emptyList(),
-)
+) {
+    /**
+     * The document row, or null until it arrives and for a document that is gone, which the editor
+     * shows as unavailable.
+     */
+    val item: DocListItem? get() = (loadState as? DocLoadState.Present)?.item
+}
 
 /**
  * Library-wide values offered as completions while editing: tags, the existing values of each text
@@ -59,9 +63,13 @@ data class VocabularyState(
     val allTagNames: List<String> = tagColors.keys.toList()
 }
 
-/** The panel's two AI sections: tag suggestions and single-value field suggestions. */
+/**
+ * The panel's two AI sections: tag suggestions and single-value field suggestions. Both are shown
+ * only while AI is configured in Settings ([available]); until that is first read they stay hidden.
+ */
 @Immutable
 data class AiPanelState(
+    val available: Boolean = false,
     val tags: AiTagState = AiTagState(),
     val metadata: AiMetadataState = AiMetadataState(),
 )
@@ -101,13 +109,12 @@ interface DocumentWrites {
     fun suggestAiMetadata()
 
     /**
-     * Accept a field's suggestion if [onStart] permits its value. [onAccepted] runs only once the
-     * write lands; [onFinished] releases the caller's write guard on success, failure or cancellation.
+     * Accept a field's suggestion if [onStart] permits its value. [onFinished] releases the caller's
+     * write guard on success, failure or cancellation, saying whether the write landed.
      */
     fun acceptAiMetadata(
         key: String,
         onStart: (String) -> Boolean = { true },
-        onAccepted: () -> Unit = {},
         onFinished: (Boolean) -> Unit = {},
     )
 

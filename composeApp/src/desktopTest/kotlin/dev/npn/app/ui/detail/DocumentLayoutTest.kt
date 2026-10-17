@@ -133,7 +133,7 @@ class DocumentLayoutTest {
         onUiThread {
             val suggested =
                 AiPanelState(
-                    tags = AiTagState(available = true),
+                    available = true,
                     metadata = AiMetadataState(suggestion = FieldSuggestion(mapOf(FieldKeys.TITLE to "March bill"))),
                 )
             val scene = scene(1280, 800, ai = suggested)
@@ -174,10 +174,12 @@ class DocumentLayoutTest {
                                     MetadataUiState(
                                         document =
                                             DocumentSection(
-                                                item =
-                                                    DocListItem(
-                                                        doc("invoice", title = "Electricity invoice"),
-                                                        listOf("Utilities"),
+                                                loadState =
+                                                    DocLoadState.Present(
+                                                        DocListItem(
+                                                            doc("invoice", title = "Electricity invoice"),
+                                                            listOf("Utilities"),
+                                                        ),
                                                     ),
                                                 reviewMode = ReviewMode.INBOX_WORKFLOW,
                                                 // The panel renders fields from the registry; seed it as a
@@ -266,7 +268,6 @@ internal object NoWrites : DocumentWrites {
     override fun acceptAiMetadata(
         key: String,
         onStart: (String) -> Boolean,
-        onAccepted: () -> Unit,
         onFinished: (Boolean) -> Unit,
     ) = Unit
 

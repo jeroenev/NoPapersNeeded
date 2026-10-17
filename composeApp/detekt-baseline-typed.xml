@@ -14,8 +14,6 @@
     <ID>CompositionLocalAllowlist:DocumentEditor.kt:/** * True while this document cannot be written: a save is in flight, or the draft is not writable * yet (an unparseable date). Only controls that *trigger* a write read it — editing itself stays * live, so a save in progress never disables the field the user is typing in. */ internal val LocalDocumentWriteBlocked = staticCompositionLocalOf { false }</ID>
     <ID>CompositionLocalAllowlist:LocalAppLocale.kt:LocalAppLocale$private val currentLocale = staticCompositionLocalOf { Locale.getDefault().toString() }</ID>
     <ID>CompositionLocalNaming:LocalAppLocale.kt:LocalAppLocale$private val currentLocale = staticCompositionLocalOf { Locale.getDefault().toString() }</ID>
-    <ID>ContentSlotReused:FilterSheet.kt:from: @Composable (Modifier) -&gt; Unit</ID>
-    <ID>ContentSlotReused:FilterSheet.kt:to: @Composable (Modifier) -&gt; Unit</ID>
     <ID>ContentSlotReused:NavigationShell.kt:content: @Composable () -&gt; Unit</ID>
     <ID>InjectDispatcher:DefaultAppEnvironment.kt:DefaultAppEnvironment$Default</ID>
     <ID>InjectDispatcher:DocumentLayoutTest.kt:DocumentLayoutTest$Unconfined</ID>
@@ -23,7 +21,6 @@
     <ID>InjectDispatcher:PlatformHelpers.android.kt:IO</ID>
     <ID>InjectDispatcher:PlatformHelpers.desktop.kt:IO</ID>
     <ID>LambdaParameterEventTrailing:FieldEditor.kt:onCommit: (String) -&gt; Unit</ID>
-    <ID>LambdaParameterInRestartableEffect:DocGrid.kt:onColumnWidthChange: (Int) -&gt; Unit</ID>
     <ID>LambdaParameterInRestartableEffect:PageViewer.kt:render: suspend (pageIndex: Int, maxDim: Int) -&gt; ByteArray?</ID>
     <ID>LongParameterList:LibraryScreen.kt:@Composable private fun SelectionTopBar</ID>
     <ID>LongParameterList:LibraryViewsMenu.kt:@Composable internal fun LibraryViewsMenuButton</ID>
@@ -47,12 +44,9 @@
     <ID>MultipleEmitters:QueueScreen.kt:@Composable private fun EditRunTrouble</ID>
     <ID>MultipleEmitters:QueueScreen.kt:@Composable private fun QueueRowTrouble</ID>
     <ID>MutableStateAutoboxing:DocGrid.kt:mutableStateOf(0f)</ID>
-    <ID>MutableStateAutoboxing:FilterSheet.kt:mutableStateOf(0)</ID>
     <ID>MutableStateAutoboxing:MetadataOcr.kt:mutableStateOf(0)</ID>
-    <ID>MutableStateAutoboxing:MetadataPanel.kt:mutableStateOf(0)</ID>
     <ID>MutableStateAutoboxing:PageViewer.kt:mutableStateOf(0)</ID>
     <ID>MutableStateAutoboxing:PageViewer.kt:mutableStateOf(0f)</ID>
-    <ID>NoNameShadowing:AiEditViewModel.kt:AiEditViewModel${ it.copy(phase = EditPhase.Queued(docIds.size)) }</ID>
     <ID>NoNameShadowing:FilterSheet.kt:{ onDraftChange(draft.withFieldBounds(def.key, from = it)) }</ID>
     <ID>NoNameShadowing:FilterSheet.kt:{ onDraftChange(draft.withFieldBounds(def.key, to = it)) }</ID>
     <ID>ParameterNaming:AiChatScreen.kt:onOpenFiltered: (List&lt;String&gt;) -&gt; Unit</ID>

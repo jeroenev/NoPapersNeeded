@@ -81,13 +81,13 @@ import kotlin.math.roundToInt
  * page is rendered to PNG via [render] at a resolution bucketed off the current zoom, cached in a
  * small LRU (with ±1 prefetch) so swipes are instant and re-rendering never blanks the page.
  *
- * Zoom is transient UI state owned here (it need not survive process death); [pageIndex] /
- * [onPageChange] keep the ViewModel as the source of truth for the current page so external
- * controls (prev/next, go-to) stay in sync.
+ * Zoom is transient UI state owned here (it need not survive process death). The pager owns the
+ * current page too: it starts at [initialPage] and reports every settled page through
+ * [onPageChange], so the ViewModel can hand it back when the viewer is recreated.
  */
 @Composable
 fun PageViewer(
-    pageIndex: Int,
+    initialPage: Int,
     pageCount: PageCountState,
     render: suspend (pageIndex: Int, maxDim: Int) -> ByteArray?,
     onPageChange: (Int) -> Unit,
@@ -102,19 +102,12 @@ fun PageViewer(
     val count = ready.count
 
     val cache = remember { PageBitmapCache(maxEntries = 6) }
-    val pagerState = rememberPagerState(initialPage = pageIndex.coerceIn(0, count - 1)) { count }
+    val pagerState = rememberPagerState(initialPage = initialPage.coerceIn(0, count - 1)) { count }
     val scope = rememberCoroutineScope()
 
-    // Keep pager and the external page index in sync, both directions: settled pager page -> VM;
-    // VM page (prev/next/go-to) -> animate the pager. The VM ignores a page it already holds, so
-    // reporting every settle cannot loop, and comparing against [pageIndex] here would read the
-    // value this effect started with.
     val reportPage by rememberUpdatedState(onPageChange)
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.settledPage }.collect { reportPage(it) }
-    }
-    LaunchedEffect(pageIndex) {
-        if (pageIndex != pagerState.currentPage) pagerState.animateScrollToPage(pageIndex)
     }
 
     var showGoToPage by remember { mutableStateOf(false) }
@@ -226,7 +219,6 @@ fun PageViewer(
                 render = render,
                 cache = cache,
                 container = containerSize,
-                zoom = if (page == current) transformOf(current).zoom else 1f,
                 transform = if (page == current) transformOf(current) else ViewerTransform(),
                 onTransformChange = { setTransform(page, it) },
             )
@@ -282,10 +274,8 @@ private fun PageCountPlaceholder(
 ) {
     Box(modifier.background(MaterialTheme.colorScheme.surfaceVariant), Alignment.Center) {
         when (state) {
-            // Handled by the caller; never reaches here.
-            is PageCountState.Ready -> {
-                return@Box
-            }
+            // The caller shows the pages instead.
+            is PageCountState.Ready -> {}
 
             PageCountState.Loading -> {
                 CircularProgressIndicator()
@@ -328,11 +318,10 @@ private fun PageSlide(
     render: suspend (pageIndex: Int, maxDim: Int) -> ByteArray?,
     cache: PageBitmapCache,
     container: Size,
-    zoom: Float,
     transform: ViewerTransform,
     onTransformChange: (ViewerTransform) -> Unit,
 ) {
-    val bucket = zoomBucket(zoom)
+    val bucket = zoomBucket(transform.zoom)
     var state by remember(page) { mutableStateOf<PageState>(PageState.Loading) }
     // Bumped by the retry action so a failed render re-runs the effect below without changing the
     // page or bucket.
@@ -352,7 +341,8 @@ private fun PageSlide(
         if (existing != null) {
             state = PageState.Ready(existing)
         } else {
-            val bytes = runCatchingCancellable { render(page, BASE_MAX_DIM * bucket) }.getOrNull()
+            // The content facade says a page it cannot render with null, never by throwing.
+            val bytes = render(page, BASE_MAX_DIM * bucket)
             // Decode the possibly-large PNG off the composition/main thread.
             val bmp =
                 bytes?.let {

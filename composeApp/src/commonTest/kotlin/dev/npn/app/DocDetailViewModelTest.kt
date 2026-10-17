@@ -481,15 +481,15 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             val settings = FakeSettingsRepository()
             val model = vm(settings = settings)
             advanceUntilIdle()
-            model.metadata.value.ai.tags.available shouldBe false
+            model.metadata.value.ai.available shouldBe false
 
             settings.edit { it.copy(aiEnabled = true, aiProvider = AiProvider.OLLAMA, aiModel = "qwen3:8b") }
             advanceUntilIdle()
-            model.metadata.value.ai.tags.available shouldBe true
+            model.metadata.value.ai.available shouldBe true
 
             settings.edit { it.copy(aiEnabled = false) }
             advanceUntilIdle()
-            model.metadata.value.ai.tags.available shouldBe false
+            model.metadata.value.ai.available shouldBe false
         }
 
     @Test

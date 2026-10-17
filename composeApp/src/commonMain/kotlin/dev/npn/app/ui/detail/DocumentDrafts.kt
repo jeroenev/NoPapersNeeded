@@ -147,9 +147,13 @@ internal class DocumentDrafts(
     /** Each document's save in flight, from [save] until it lands ([settle]) or does not. */
     private val inFlight = HashMap<String, InFlightSave>()
 
-    /** A save in flight: the values it [writes], by key. */
+    /**
+     * A save in flight: the values it [writes], by key. An accepted suggestion also keeps the draft
+     * as it was [before] the write started, to tell the typing it replaces from typing done since.
+     */
     private class InFlightSave(
         val writes: Map<String, String?>,
+        val before: DocumentDraft? = null,
     ) {
         /** Its keys the user has put back to the stored value since: no change if it does not land. */
         val reverted = HashSet<String>()
@@ -161,20 +165,25 @@ internal class DocumentDrafts(
         key: String,
         value: String,
     ): Boolean {
-        val draft = state[docId] ?: DocumentDraft()
-        if (draft.saving || !draft.writable) return false
+        val draft = state[docId]
+        if (draft?.saving == true || draft?.writable == false) return false
         edit(docId) { it.copy(saving = true) }
-        inFlight[docId] = InFlightSave(mapOf(key to value))
+        inFlight[docId] = InFlightSave(mapOf(key to value), before = draft)
         return true
     }
 
-    /** Release the reservation even if the accepting viewmodel was cleared before its write ran. */
+    /**
+     * Release the reservation even if the accepting viewmodel was cleared before its write ran. Once
+     * the suggestion [accepted], the draft entry it replaces goes too.
+     */
     fun finishAcceptance(
         docId: String,
         accepted: Boolean,
     ) {
         if (accepted) {
-            settle(docId, inFlight[docId]?.writes.orEmpty())
+            val accepting = inFlight[docId]
+            accepting?.writes?.keys?.forEach { clearField(docId, it, accepting.before) }
+            settle(docId, accepting?.writes.orEmpty())
             edit(docId) { it.copy(saving = false) }
         } else {
             edit(docId) { unlanded(docId, it) }
@@ -233,7 +242,7 @@ internal class DocumentDrafts(
      * with it. Keeps an edit made since [captured], while the write ran. Routes through [edit] so
      * the prune-when-settled rule holds.
      */
-    fun clearField(
+    private fun clearField(
         docId: String,
         key: String,
         captured: DocumentDraft?,

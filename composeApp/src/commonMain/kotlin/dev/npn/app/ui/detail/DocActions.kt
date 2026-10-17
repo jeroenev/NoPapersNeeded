@@ -231,29 +231,14 @@ private fun DocActionsMenu(
     // A wide bar promotes the direct document edits to icons; AI OCR and bake-in-place stay one tap
     // away in the overflow. A compact bar — and the narrow side-panel header — keep everything in
     // the overflow so the few icons that fit there are not crowded out.
-    val inline =
-        if (compact) {
-            emptyList()
-        } else {
-            buildList {
-                add(rename)
-                add(reOcr)
-                add(split)
-                add(trash)
-            }
-        }
-    val overflow =
-        buildList {
-            if (compact) add(rename)
-            if (compact) add(reOcr)
-            aiOcrAction?.let { add(it) }
-            if (compact) add(split)
-            add(bake)
-            if (compact) add(trash)
-        }
     TopBarActions(
-        inline = inline,
-        overflow = overflow,
+        inline = if (compact) emptyList() else listOf(rename, reOcr, split, trash),
+        overflow =
+            if (compact) {
+                listOfNotNull(rename, reOcr, aiOcrAction, split, bake, trash)
+            } else {
+                listOfNotNull(aiOcrAction, bake)
+            },
         overflowLabel = stringResource(Res.string.detail_more_actions),
     )
 }

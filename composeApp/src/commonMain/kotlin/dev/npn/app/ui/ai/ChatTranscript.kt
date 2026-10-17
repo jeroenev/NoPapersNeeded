@@ -3,6 +3,22 @@ package dev.npn.app.ui.ai
 import dev.npn.core.ai.AiChatEvent
 import dev.npn.core.ai.AiChatHistoryItem
 import dev.npn.core.ai.extractDocRefs
+import dev.npn.core.util.NpnJson
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+
+/**
+ * A tool call's text arguments by name, blank ones left out. Model output, so anything that is not
+ * a JSON object (or a value that is not text) reads as no argument rather than failing.
+ */
+internal fun toolArgs(argsJson: String): Map<String, String> =
+    runCatching { NpnJson.Lenient.parseToJsonElement(argsJson).jsonObject }
+        .getOrNull()
+        .orEmpty()
+        .mapValues { (_, value) -> (value as? JsonPrimitive)?.contentOrNull }
+        .filterValues { !it.isNullOrBlank() }
+        .mapValues { (_, value) -> value.orEmpty() }
 
 /** One rendered item in the chat transcript: a user turn, a tool use, or an assistant turn. */
 sealed interface TranscriptItem {
@@ -19,13 +35,14 @@ sealed interface TranscriptItem {
     ) : TranscriptItem
 
     /**
-     * One tool invocation. [argsSummary] is the raw arguments JSON (the UI maps it to a label);
-     * [result] is empty while [running] and filled once the tool finished.
+     * One tool invocation. [args] are its arguments' non-blank text values by name, read once from
+     * the call's JSON (the UI picks the one its label names); [result] is empty while [running] and
+     * filled once the tool finished.
      */
     data class ToolUse(
         override val id: Long,
         val name: String,
-        val argsSummary: String,
+        val args: Map<String, String>,
         val result: String,
         val running: Boolean,
     ) : TranscriptItem
@@ -103,7 +120,7 @@ data class ChatTranscript(
         // turn (extracting its own docRefs) so pre-tool text is committed once and never merged
         // with post-tool text or overwritten by the run's full answer later.
         appended(finaliseTrailingAssistant(items)) { id ->
-            TranscriptItem.ToolUse(id, name, argsJson, result = "", running = true)
+            TranscriptItem.ToolUse(id, name, toolArgs(argsJson), result = "", running = true)
         }
 
     private fun finishTool(
@@ -178,7 +195,7 @@ data class ChatTranscript(
                             TranscriptItem.ToolUse(
                                 id = id,
                                 name = item.name,
-                                argsSummary = item.argsJson,
+                                args = toolArgs(item.argsJson),
                                 result = item.result,
                                 running = false,
                             )

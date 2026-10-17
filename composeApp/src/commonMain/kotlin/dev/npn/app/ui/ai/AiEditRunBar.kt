@@ -23,7 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.ConfirmDialog
-import dev.npn.core.ai.AiEditRequest
+import dev.npn.core.ai.AiEditRequest.Companion.MAX_FIELDS_PER_RUN
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_blocked_loading
 import no_papers_needed.composeapp.generated.resources.ai_edit_blocked_no_documents
@@ -171,29 +171,12 @@ private fun changeClauses(ui: AiEditUiState): List<String> {
 @Composable
 private fun blockerText(blocker: StartBlocker): String =
     when (blocker) {
-        StartBlocker.NO_TASK -> {
-            stringResource(Res.string.ai_edit_blocked_no_task)
-        }
-
-        StartBlocker.TOO_MANY_FIELDS -> {
-            stringResource(Res.string.ai_edit_too_many_fields, AiEditRequest.MAX_FIELDS_PER_RUN)
-        }
-
-        StartBlocker.NOTHING_REQUESTED -> {
-            stringResource(Res.string.ai_edit_blocked_nothing)
-        }
-
-        StartBlocker.NO_SAVED_VIEW -> {
-            stringResource(Res.string.ai_edit_blocked_no_saved_view)
-        }
-
-        StartBlocker.LOADING_SCOPE -> {
-            stringResource(Res.string.ai_edit_blocked_loading)
-        }
-
-        StartBlocker.NO_DOCUMENTS -> {
-            stringResource(Res.string.ai_edit_blocked_no_documents)
-        }
+        StartBlocker.NO_TASK -> stringResource(Res.string.ai_edit_blocked_no_task)
+        StartBlocker.TOO_MANY_FIELDS -> stringResource(Res.string.ai_edit_too_many_fields, MAX_FIELDS_PER_RUN)
+        StartBlocker.NOTHING_REQUESTED -> stringResource(Res.string.ai_edit_blocked_nothing)
+        StartBlocker.NO_SAVED_VIEW -> stringResource(Res.string.ai_edit_blocked_no_saved_view)
+        StartBlocker.LOADING_SCOPE -> stringResource(Res.string.ai_edit_blocked_loading)
+        StartBlocker.NO_DOCUMENTS -> stringResource(Res.string.ai_edit_blocked_no_documents)
     }
 
 @Composable

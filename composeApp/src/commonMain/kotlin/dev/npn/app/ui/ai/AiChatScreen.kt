@@ -74,10 +74,6 @@ import dev.npn.core.ai.AiChatSession
 import dev.npn.core.ai.ChatTools
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.SettingsRepository
-import dev.npn.core.util.NpnJson
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_ask_documents
 import no_papers_needed.composeapp.generated.resources.ai_assistant_title
@@ -112,9 +108,8 @@ fun AiChatScreen(
     onOpenDoc: (String) -> Unit,
     onOpenFiltered: (List<String>) -> Unit,
     onAiEditDocs: (List<String>) -> Unit,
-    showAiEdit: Boolean,
-    /** Hands off to the AI-edit page without preselection. */
-    onAiEdit: () -> Unit,
+    /** Hands off to the AI-edit page without preselection; null where the top bar offers no such action. */
+    onAiEdit: (() -> Unit)?,
     vm: AiChatViewModel = viewModel { AiChatViewModel(session, settings) },
 ) {
     val ui by vm.ui.collectAsStateWithLifecycle()
@@ -150,7 +145,7 @@ fun AiChatScreen(
                 onBack = onBack,
                 onClear = vm::clear,
                 onNewSession = vm::newSession,
-                onAiEdit = onAiEdit.takeIf { showAiEdit },
+                onAiEdit = onAiEdit,
             ) {
                 ChatHistoryMenu(
                     sessions = historySessions,
@@ -181,24 +176,20 @@ fun AiChatScreen(
                 }
             }
 
-            when (ui.configured) {
-                false -> {
-                    ConfigureHint()
-                }
-
-                else -> {
-                    InputRow(
-                        value = input,
-                        busy = ui.busy,
-                        enabled = !ui.loading,
-                        onValueChange = { input = it },
-                        onSend = {
-                            vm.send(input)
-                            input = ""
-                        },
-                        onStop = vm::stop,
-                    )
-                }
+            if (ui.configured) {
+                InputRow(
+                    value = input,
+                    busy = ui.busy,
+                    enabled = !ui.loading,
+                    onValueChange = { input = it },
+                    onSend = {
+                        vm.send(input)
+                        input = ""
+                    },
+                    onStop = vm::stop,
+                )
+            } else {
+                ConfigureHint()
             }
         }
     }
@@ -432,7 +423,7 @@ private fun ToolRow(item: TranscriptItem.ToolUse) {
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                toolLabel(item.name, item.argsSummary),
+                toolLabel(item.name, item.args),
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -542,34 +533,34 @@ private fun toolIcon(name: String): ImageVector =
     }
 
 /**
- * A human-readable label for a tool invocation, pulling the salient argument out of the raw
- * arguments JSON. Kept lenient: on any parse miss it falls back to a plain verb so a row is never
- * blank. Lives in the UI layer since it is purely presentational.
+ * A human-readable label for a tool invocation, naming its salient argument from [args]. Kept
+ * lenient: a missing argument reads as an unknown value so a row is never blank. Lives in the UI
+ * layer since it is purely presentational.
  */
 @Composable
 internal fun toolLabel(
     name: String,
-    argsJson: String,
+    args: Map<String, String>,
 ): String =
     when (name) {
         ChatTools.SEARCH_DOCUMENTS -> {
             stringResource(
                 Res.string.ai_tool_searched_documents,
-                quoted(argValue(argsJson, ChatTools.ARG_QUERY)),
+                quoted(args[ChatTools.ARG_QUERY]),
             )
         }
 
         ChatTools.SEARCH_FILENAMES -> {
             stringResource(
                 Res.string.ai_tool_searched_file_names,
-                quoted(argValue(argsJson, ChatTools.ARG_PATTERN)),
+                quoted(args[ChatTools.ARG_PATTERN]),
             )
         }
 
         ChatTools.DOCUMENTS_WITH_TAG -> {
             stringResource(
                 Res.string.ai_tool_listed_tagged_documents,
-                quoted(argValue(argsJson, ChatTools.ARG_TAG)),
+                quoted(args[ChatTools.ARG_TAG]),
             )
         }
 
@@ -580,14 +571,14 @@ internal fun toolLabel(
         ChatTools.GET_DOCUMENT -> {
             stringResource(
                 Res.string.ai_tool_read_document,
-                shortId(argValue(argsJson, ChatTools.ARG_DOC_ID)),
+                shortId(args[ChatTools.ARG_DOC_ID]),
             )
         }
 
         ChatTools.GET_DOCUMENT_TEXT -> {
             stringResource(
                 Res.string.ai_tool_read_document_text,
-                shortId(argValue(argsJson, ChatTools.ARG_DOC_ID)),
+                shortId(args[ChatTools.ARG_DOC_ID]),
             )
         }
 
@@ -595,18 +586,6 @@ internal fun toolLabel(
             name.replace('_', ' ')
         }
     }
-
-private fun argValue(
-    argsJson: String,
-    key: String,
-): String? =
-    runCatching {
-        NpnJson.Lenient
-            .parseToJsonElement(argsJson)
-            .jsonObject[key]
-            ?.jsonPrimitive
-            ?.contentOrNull
-    }.getOrNull()?.takeIf { it.isNotBlank() }
 
 @Composable
 private fun quoted(value: String?): String = value?.let { "\"$it\"" } ?: stringResource(Res.string.ai_unknown_value)

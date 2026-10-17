@@ -57,7 +57,7 @@ class PageViewerTest {
                     NpnTheme(darkTheme = false) {
                         Surface {
                             PageViewer(
-                                pageIndex = pageIndex,
+                                initialPage = pageIndex,
                                 pageCount = PageCountState.Ready(3),
                                 render = { _, _ -> null },
                                 onPageChange = { pageIndex = it },
@@ -96,7 +96,7 @@ class PageViewerTest {
                     NpnTheme(darkTheme = false) {
                         Surface {
                             PageViewer(
-                                pageIndex = 0,
+                                initialPage = 0,
                                 pageCount = PageCountState.Ready(1),
                                 render = { _, _ -> page },
                                 onPageChange = {},
