@@ -199,8 +199,6 @@ internal suspend fun buildLibrary(
         rules = AutoMatchRuleRepositoryImpl(db.autoMatchRuleDao(), ruleSource, ruleApplier, coordinator, lifetime),
         ruleSource = ruleSource,
         ruleApplier = ruleApplier,
-        writer = writer,
-        lifecycle = lifecycle,
         ownedWriter = OwnedWriter(writer, lifecycle, lifetime),
         reviewConfig = JournalReviewConfig(coordinator, db.documentDao(), lifetime),
         content = buildContent(deps, lifetime, coordinator, relinkBake, bakes),

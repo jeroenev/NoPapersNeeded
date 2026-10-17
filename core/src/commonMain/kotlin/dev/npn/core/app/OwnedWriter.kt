@@ -8,8 +8,10 @@ package dev.npn.core.app
  * split or OCR request) calls them itself.
  */
 internal class OwnedWriter(
-    private val writer: MetadataWriterImpl,
-    private val lifecycle: DocLifecycleImpl,
+    /** The writer itself, which this owns each call on; for work that already runs as the session's. */
+    val writer: MetadataWriterImpl,
+    /** The document lifecycle itself, as [writer] is. */
+    val lifecycle: DocLifecycleImpl,
     private val lifetime: SessionLifetime,
 ) : MetadataWriter,
     TagAdmin,
