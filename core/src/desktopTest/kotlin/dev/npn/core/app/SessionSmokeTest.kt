@@ -51,17 +51,6 @@ class SessionSmokeTest {
             docs shouldHaveSize 2
         }
 
-    @Test
-    fun importPdfBytesDedupsToDuplicate() =
-        appSessionTest { rig ->
-            val bytes = PdfFixtures.embeddedTextPdf("importable content here")
-            val first = rig.session.importPdfBytes(bytes, "imported.pdf")
-            first.shouldBeInstanceOf<ImportOutcome.Imported>()
-
-            val second = rig.session.importPdfBytes(bytes, "imported-again.pdf")
-            second.shouldBeInstanceOf<ImportOutcome.Duplicate>()
-        }
-
     /** One canonical path per hash, however many imports of the same bytes race each other. */
     @Test
     fun concurrentImportsOfTheSameBytesImportItOnce() =
