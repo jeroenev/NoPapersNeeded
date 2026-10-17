@@ -20,8 +20,7 @@ class BakeDurabilityTest {
     fun aBakeWhoseRelinkCannotBePublishedKeepsTheOriginalDocument() =
         runTest {
             val fault = RelinkFault(RelinkFault.Stage.PUBLICATION)
-            val rig = AppSessionRig.create(backgroundScope, files = fault::over)
-            try {
+            AppSessionRig.create(backgroundScope, files = fault::over).use { rig ->
                 val original = filedDocument(rig)
                 val before = rig.fs.readBytes("doc.pdf")
                 val count = rig.journalObjectCount()
@@ -37,8 +36,6 @@ class BakeDurabilityTest {
                     .documentDao()
                     .getByDocId(original)
                     ?.deleted shouldBe false
-            } finally {
-                rig.close()
             }
         }
 
@@ -47,8 +44,7 @@ class BakeDurabilityTest {
         runTest {
             for (stage in listOf(RelinkFault.Stage.PROJECTION, RelinkFault.Stage.RESCAN)) {
                 val fault = RelinkFault(stage)
-                val rig = AppSessionRig.create(backgroundScope, files = fault::over)
-                try {
+                AppSessionRig.create(backgroundScope, files = fault::over).use { rig ->
                     val original = filedDocument(rig)
                     val count = rig.journalObjectCount()
                     fault.armed = true
@@ -60,17 +56,10 @@ class BakeDurabilityTest {
                     rig.journalObjectCount() shouldBe count + 1
                     // A new device's empty index reconstructs the relink from the durable folder.
                     val (reopened, index) = rig.secondSession(backgroundScope)
-                    try {
-                        reopened.rescan()
-                        index.tagDao().tagsForDocument(baked) shouldContainExactly listOf("filed")
-                        index.documentDao().getByDocId(baked)?.title shouldBe "Water bill"
-                        index.documentDao().getByDocId(original)?.isLive shouldNotBe true
-                    } finally {
-                        reopened.close()
-                        index.close()
-                    }
-                } finally {
-                    rig.close()
+                    reopened.rescan()
+                    index.tagDao().tagsForDocument(baked) shouldContainExactly listOf("filed")
+                    index.documentDao().getByDocId(baked)?.title shouldBe "Water bill"
+                    index.documentDao().getByDocId(original)?.isLive shouldNotBe true
                 }
             }
         }

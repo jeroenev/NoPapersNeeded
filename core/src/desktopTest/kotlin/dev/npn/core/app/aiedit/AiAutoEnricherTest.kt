@@ -8,6 +8,7 @@ import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.app.AppSessionRig
+import dev.npn.core.app.appSessionTest
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
@@ -360,62 +361,57 @@ class AiAutoEnricherSessionTest {
      */
     @Test
     fun `a value the user enters during the model call is not overwritten`() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
-                rig.session.rescan()
-                // Its text is what the model is asked about.
-                rig.session.work.drainOcr()
-                val id = rig.docId("a.pdf")
-                val gate = CompletableDeferred<Unit>()
-                val answer =
-                    edit(
-                        metadata =
-                            FieldSuggestion(
-                                mapOf(
-                                    FieldKeys.TITLE to "Model title",
-                                    FieldKeys.CORRESPONDENT to "Acme",
-                                ),
+        appSessionTest { rig ->
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            // Its text is what the model is asked about.
+            rig.session.work.drainOcr()
+            val id = rig.docId("a.pdf")
+            val gate = CompletableDeferred<Unit>()
+            val answer =
+                edit(
+                    metadata =
+                        FieldSuggestion(
+                            mapOf(
+                                FieldKeys.TITLE to "Model title",
+                                FieldKeys.CORRESPONDENT to "Acme",
                             ),
-                    )
-                val ai =
-                    FakeAiSuggest().apply {
-                        edit = answer
-                        this.gate = gate
-                    }
-                val enricher =
-                    AiAutoEnricher(
-                        documentDao = rig.db.documentDao(),
-                        ftsDao = rig.db.ftsDao(),
-                        queueDao = rig.deviceDb.aiEnrichQueueDao(),
-                        ai = ai,
-                        meta = rig.session.meta,
-                        fieldRegistry = rig.session.fieldRegistry,
-                        policy = UnattendedAiPolicy { ACTIVE },
-                        clock = rig.clock,
-                        health = EndpointHealth(),
-                        canWrite = { true },
-                        onEnqueued = {},
-                    )
-                enricher.enqueue(id) shouldBe true
+                        ),
+                )
+            val ai =
+                FakeAiSuggest().apply {
+                    edit = answer
+                    this.gate = gate
+                }
+            val enricher =
+                AiAutoEnricher(
+                    documentDao = rig.db.documentDao(),
+                    ftsDao = rig.db.ftsDao(),
+                    queueDao = rig.deviceDb.aiEnrichQueueDao(),
+                    ai = ai,
+                    meta = rig.session.meta,
+                    fieldRegistry = rig.session.fieldRegistry,
+                    policy = UnattendedAiPolicy { ACTIVE },
+                    clock = rig.clock,
+                    health = EndpointHealth(),
+                    canWrite = { true },
+                    onEnqueued = {},
+                )
+            enricher.enqueue(id) shouldBe true
 
-                val enriching = backgroundScope.async { enricher.processNext() }
-                while (ai.suggestEditsCalls.isEmpty()) runCurrent()
-                rig.session.meta.setField(id, FieldKeys.TITLE, "Mine")
-                gate.complete(Unit)
+            val enriching = backgroundScope.async { enricher.processNext() }
+            while (ai.suggestEditsCalls.isEmpty()) runCurrent()
+            rig.session.meta.setField(id, FieldKeys.TITLE, "Mine")
+            gate.complete(Unit)
 
-                enriching.await() shouldBe true
-                val fields =
-                    rig.session.documents
-                        .observeDoc(id)
-                        .first()
-                        .shouldNotBeNull()
-                        .doc.fields
-                fields[FieldKeys.TITLE] shouldBe "Mine"
-                fields[FieldKeys.CORRESPONDENT] shouldBe "Acme"
-            } finally {
-                rig.close()
-            }
+            enriching.await() shouldBe true
+            val fields =
+                rig.session.documents
+                    .observeDoc(id)
+                    .first()
+                    .shouldNotBeNull()
+                    .doc.fields
+            fields[FieldKeys.TITLE] shouldBe "Mine"
+            fields[FieldKeys.CORRESPONDENT] shouldBe "Acme"
         }
 }

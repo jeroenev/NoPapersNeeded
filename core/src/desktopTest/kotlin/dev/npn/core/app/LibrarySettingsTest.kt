@@ -30,27 +30,20 @@ import kotlin.test.assertFailsWith
 class LibrarySettingsTest {
     @Test
     fun twoDevicesWithDifferentTemplatesConvergeOnOneValue() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            val (second, secondDb) = rig.secondSession(backgroundScope)
-            try {
-                rig.session.storagePath.setStoragePathTemplate("{title}.pdf")
-                second.storagePath.setStoragePathTemplate("archive/{title}.pdf")
+        appSessionTest { rig ->
+            val (second, _) = rig.secondSession(backgroundScope)
+            rig.session.storagePath.setStoragePathTemplate("{title}.pdf")
+            second.storagePath.setStoragePathTemplate("archive/{title}.pdf")
 
-                rig.session.rescan()
-                second.rescan()
+            rig.session.rescan()
+            second.rescan()
 
-                val first =
-                    rig.session.storagePath.storagePath
-                        .first()
-                first shouldBe second.storagePath.storagePath.first()
-                // The later write wins everywhere, whichever device made it.
-                first.template shouldBe "archive/{title}.pdf"
-            } finally {
-                second.close()
-                secondDb.close()
-                rig.close()
-            }
+            val first =
+                rig.session.storagePath.storagePath
+                    .first()
+            first shouldBe second.storagePath.storagePath.first()
+            // The later write wins everywhere, whichever device made it.
+            first.template shouldBe "archive/{title}.pdf"
         }
 
     @Test
@@ -62,8 +55,7 @@ class LibrarySettingsTest {
                     storagePathEnabled = true,
                     autoMatchRulesJson = AutoMatchRuleJson.encodeList(listOf(rule("r1", "Invoice rule"))),
                 )
-            val rig = AppSessionRig.create(backgroundScope, legacyLibrarySettings = { legacy })
-            try {
+            AppSessionRig.create(backgroundScope, legacyLibrarySettings = { legacy }).use { rig ->
                 rig.session.storagePath.storagePath
                     .first() shouldBe StoragePathSetting("{title}.pdf", enabled = true)
                 rig.session.rules
@@ -75,18 +67,11 @@ class LibrarySettingsTest {
                 rig.session.storagePath.setStoragePathTemplate(null)
                 val other = LegacyLibrarySettings("other/{title}.pdf", autoMatchRulesJson = "[]")
                 val (second, secondDb) = rig.secondSession(backgroundScope, legacyLibrarySettings = { other })
-                try {
-                    second.storagePath.storagePath.first() shouldBe StoragePathSetting(null, enabled = true)
-                    second.rules
-                        .observeRules()
-                        .first()
-                        .map { it.name } shouldBe listOf("Invoice rule")
-                } finally {
-                    second.close()
-                    secondDb.close()
-                }
-            } finally {
-                rig.close()
+                second.storagePath.storagePath.first() shouldBe StoragePathSetting(null, enabled = true)
+                second.rules
+                    .observeRules()
+                    .first()
+                    .map { it.name } shouldBe listOf("Invoice rule")
             }
         }
 
@@ -98,21 +83,13 @@ class LibrarySettingsTest {
     fun aDevicesStoragePathRuleIsAdoptedWholeOrNotAtAll() =
         runTest {
             val first = LegacyLibrarySettings("{title}.pdf", storagePathEnabled = false)
-            val rig = AppSessionRig.create(backgroundScope, legacyLibrarySettings = { first })
-            try {
+            AppSessionRig.create(backgroundScope, legacyLibrarySettings = { first }).use { rig ->
                 val other = LegacyLibrarySettings("archive/{title}.pdf", storagePathEnabled = true)
                 val (second, secondDb) = rig.secondSession(backgroundScope, legacyLibrarySettings = { other })
-                try {
-                    second.storagePath.storagePath.first() shouldBe StoragePathSetting("{title}.pdf", enabled = false)
-                    rig.session.rescan()
-                    rig.session.storagePath.storagePath
-                        .first() shouldBe StoragePathSetting("{title}.pdf", enabled = false)
-                } finally {
-                    second.close()
-                    secondDb.close()
-                }
-            } finally {
-                rig.close()
+                second.storagePath.storagePath.first() shouldBe StoragePathSetting("{title}.pdf", enabled = false)
+                rig.session.rescan()
+                rig.session.storagePath.storagePath
+                    .first() shouldBe StoragePathSetting("{title}.pdf", enabled = false)
             }
         }
 
@@ -121,21 +98,13 @@ class LibrarySettingsTest {
     fun aSwitchWithoutATemplateIsNotAdopted() =
         runTest {
             val first = LegacyLibrarySettings(" ", storagePathEnabled = true)
-            val rig = AppSessionRig.create(backgroundScope, legacyLibrarySettings = { first })
-            try {
+            AppSessionRig.create(backgroundScope, legacyLibrarySettings = { first }).use { rig ->
                 rig.session.storagePath.storagePath
                     .first() shouldBe StoragePathSetting()
                 val other = LegacyLibrarySettings("archive/{title}.pdf", storagePathEnabled = false)
                 val (second, secondDb) = rig.secondSession(backgroundScope, legacyLibrarySettings = { other })
-                try {
-                    second.storagePath.storagePath.first() shouldBe
-                        StoragePathSetting("archive/{title}.pdf", enabled = false)
-                } finally {
-                    second.close()
-                    secondDb.close()
-                }
-            } finally {
-                rig.close()
+                second.storagePath.storagePath.first() shouldBe
+                    StoragePathSetting("archive/{title}.pdf", enabled = false)
             }
         }
 
@@ -145,108 +114,81 @@ class LibrarySettingsTest {
      */
     @Test
     fun aDeviceWithAShorterRetentionKeepsTheLibrarysTrash() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope, deviceTrashRetentionDays = 30)
+        appSessionTest(deviceTrashRetentionDays = 30) { rig ->
+            rig.clock.now = 400 * DAY
+            rig.writePdf("bill.pdf", PdfFixtures.embeddedTextPdf("electricity bill"))
+            Files.setLastModifiedTime(rig.libRoot.resolve("bill.pdf"), FileTime.fromMillis(300 * DAY))
+            rig.session.rescan()
+            val id = rig.docId("bill.pdf")
+            rig.session.docLifecycle.trashDoc(id)
+
+            val (second, secondDb) =
+                rig.secondSession(
+                    backgroundScope,
+                    clock = MutableClock(400 * DAY + HOUR),
+                    deviceTrashRetentionDays = 0,
+                )
             try {
-                rig.clock.now = 400 * DAY
-                rig.writePdf("bill.pdf", PdfFixtures.embeddedTextPdf("electricity bill"))
-                Files.setLastModifiedTime(rig.libRoot.resolve("bill.pdf"), FileTime.fromMillis(300 * DAY))
-                rig.session.rescan()
-                val id = rig.docId("bill.pdf")
-                rig.session.docLifecycle.trashDoc(id)
-
-                val (second, secondDb) =
-                    rig.secondSession(
-                        backgroundScope,
-                        clock = MutableClock(400 * DAY + HOUR),
-                        deviceTrashRetentionDays = 0,
-                    )
-                try {
-                    second.rescan()
-                    second.trashPurge.purgeExpired()
-                } finally {
-                    second.close()
-                    secondDb.close()
-                }
-
-                val entry = TrashOps(rig.fs).listTrash().map { it.relPath }.single()
-                rig.fs.sha256(entry) shouldBe id
+                second.rescan()
+                second.trashPurge.purgeExpired()
             } finally {
-                rig.close()
+                second.close()
+                secondDb.close()
             }
+
+            val entry = TrashOps(rig.fs).listTrash().map { it.relPath }.single()
+            rig.fs.sha256(entry) shouldBe id
         }
 
     @Test
     fun twoDevicesWithDifferentRetentionsConvergeOnOneValue() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            val (second, secondDb) = rig.secondSession(backgroundScope)
-            try {
-                rig.session.trashRetention.setTrashRetentionDays(7)
-                second.trashRetention.setTrashRetentionDays(14)
+        appSessionTest { rig ->
+            val (second, _) = rig.secondSession(backgroundScope)
+            rig.session.trashRetention.setTrashRetentionDays(7)
+            second.trashRetention.setTrashRetentionDays(14)
 
-                rig.session.rescan()
-                second.rescan()
+            rig.session.rescan()
+            second.rescan()
 
-                rig.session.trashRetention.trashRetentionDays
-                    .first() shouldBe 14
-                second.trashRetention.trashRetentionDays
-                    .first() shouldBe 14
-            } finally {
-                second.close()
-                secondDb.close()
-                rig.close()
-            }
+            rig.session.trashRetention.trashRetentionDays
+                .first() shouldBe 14
+            second.trashRetention.trashRetentionDays
+                .first() shouldBe 14
         }
 
     /** The first device to open the library brings its retention; no device's replaces it later. */
     @Test
     fun aDevicesRetentionIsAdoptedOnce() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope, deviceTrashRetentionDays = 7)
-            try {
-                rig.session.trashRetention.trashRetentionDays
-                    .first() shouldBe 7
-                rig.session.trashRetention.setTrashRetentionDays(20)
-                val objects = rig.journalObjectCount()
+        appSessionTest(deviceTrashRetentionDays = 7) { rig ->
+            rig.session.trashRetention.trashRetentionDays
+                .first() shouldBe 7
+            rig.session.trashRetention.setTrashRetentionDays(20)
+            val objects = rig.journalObjectCount()
 
-                val (second, secondDb) = rig.secondSession(backgroundScope, deviceTrashRetentionDays = 3)
-                try {
-                    second.trashRetention.trashRetentionDays.first() shouldBe 20
-                } finally {
-                    second.close()
-                    secondDb.close()
-                }
-                rig.journalObjectCount() shouldBe objects
-            } finally {
-                rig.close()
-            }
+            val (second, secondDb) = rig.secondSession(backgroundScope, deviceTrashRetentionDays = 3)
+            second.trashRetention.trashRetentionDays.first() shouldBe 20
+            rig.journalObjectCount() shouldBe objects
         }
 
     /** A retention a newer build wrote, which this one cannot read, purges nothing. */
     @Test
     fun aRetentionThisBuildCannotReadKeepsTheTrash() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                rig.clock.now = 400 * DAY
-                rig.writePdf("bill.pdf", PdfFixtures.embeddedTextPdf("electricity bill"))
-                Files.setLastModifiedTime(rig.libRoot.resolve("bill.pdf"), FileTime.fromMillis(300 * DAY))
-                rig.session.rescan()
-                val id = rig.docId("bill.pdf")
-                rig.session.docLifecycle.trashDoc(id)
-                ContentAddressedJournalWriter(rig.fs, "newer-installation", HlcWatermarkAllocator(rig.clock))
-                    .commit(listOf(PendingOp.settingSet(LibrarySettingKeys.TRASH_RETENTION_DAYS, "forever")))
-                rig.session.rescan()
+        appSessionTest { rig ->
+            rig.clock.now = 400 * DAY
+            rig.writePdf("bill.pdf", PdfFixtures.embeddedTextPdf("electricity bill"))
+            Files.setLastModifiedTime(rig.libRoot.resolve("bill.pdf"), FileTime.fromMillis(300 * DAY))
+            rig.session.rescan()
+            val id = rig.docId("bill.pdf")
+            rig.session.docLifecycle.trashDoc(id)
+            ContentAddressedJournalWriter(rig.fs, "newer-installation", HlcWatermarkAllocator(rig.clock))
+                .commit(listOf(PendingOp.settingSet(LibrarySettingKeys.TRASH_RETENTION_DAYS, "forever")))
+            rig.session.rescan()
 
-                rig.clock.now = 800 * DAY
-                rig.session.trashPurge.purgeExpired()
+            rig.clock.now = 800 * DAY
+            rig.session.trashPurge.purgeExpired()
 
-                val entry = TrashOps(rig.fs).listTrash().map { it.relPath }.single()
-                rig.fs.sha256(entry) shouldBe id
-            } finally {
-                rig.close()
-            }
+            val entry = TrashOps(rig.fs).listTrash().map { it.relPath }.single()
+            rig.fs.sha256(entry) shouldBe id
         }
 
     @Test
@@ -291,29 +233,24 @@ class LibrarySettingsTest {
      */
     @Test
     fun rulesTheJournalCannotDecodeKeepTheCacheAndAreNeverWrittenOver() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                rig.session.rules.save(rule("r1", "Invoice rule"))
-                ContentAddressedJournalWriter(rig.fs, "newer-installation", HlcWatermarkAllocator(rig.clock))
-                    .commit(listOf(PendingOp.settingSet(LibrarySettingKeys.AUTO_MATCH_RULES, "{not json")))
-                rig.session.rescan()
-                rig.session.rules.mirror()
+        appSessionTest { rig ->
+            rig.session.rules.save(rule("r1", "Invoice rule"))
+            ContentAddressedJournalWriter(rig.fs, "newer-installation", HlcWatermarkAllocator(rig.clock))
+                .commit(listOf(PendingOp.settingSet(LibrarySettingKeys.AUTO_MATCH_RULES, "{not json")))
+            rig.session.rescan()
+            rig.session.rules.mirror()
 
-                rig.session.rules
-                    .observeRules()
-                    .first()
-                    .map { it.name } shouldBe listOf("Invoice rule")
-                val objects = rig.journalObjectCount()
-                assertFailsWith<IllegalStateException> { rig.session.rules.save(rule("", "Added later")) }
-                rig.journalObjectCount() shouldBe objects
-                rig.session.rules
-                    .observeRules()
-                    .first()
-                    .map { it.name } shouldContain "Invoice rule"
-            } finally {
-                rig.close()
-            }
+            rig.session.rules
+                .observeRules()
+                .first()
+                .map { it.name } shouldBe listOf("Invoice rule")
+            val objects = rig.journalObjectCount()
+            assertFailsWith<IllegalStateException> { rig.session.rules.save(rule("", "Added later")) }
+            rig.journalObjectCount() shouldBe objects
+            rig.session.rules
+                .observeRules()
+                .first()
+                .map { it.name } shouldContain "Invoice rule"
         }
 
     /**
@@ -325,8 +262,7 @@ class LibrarySettingsTest {
     fun rulesTheJournalCannotDecodeAreReportedOncePerStoredValue() =
         runTest {
             val log = RecordingLog()
-            val rig = AppSessionRig.create(backgroundScope, log = log)
-            try {
+            AppSessionRig.create(backgroundScope, log = log).use { rig ->
                 rig.session.rules.save(rule("r1", "Invoice rule"))
 
                 fun warnings() = log.entries.count { it.message.startsWith("Auto-match rules did not decode") }
@@ -346,8 +282,6 @@ class LibrarySettingsTest {
                         .map(AutoMatchRule::name) shouldBe listOf("Invoice rule")
                 }
                 warnings() shouldBe 2
-            } finally {
-                rig.close()
             }
         }
 

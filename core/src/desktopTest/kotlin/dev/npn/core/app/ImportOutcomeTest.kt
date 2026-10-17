@@ -14,31 +14,23 @@ import kotlin.test.Test
 class ImportOutcomeTest {
     @Test
     fun anEmptyFileIsRefusedAsEmpty() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                rig.session.importPdfBytes(ByteArray(0), "empty.pdf") shouldBe
-                    ImportOutcome.Failed(ImportFailure.EMPTY_FILE)
-                rig.fs
-                    .listAllIndexable()
-                    .filter { !it.isDirectory }
-                    .shouldBeEmpty()
-            } finally {
-                rig.close()
-            }
+        appSessionTest { rig ->
+            rig.session.importPdfBytes(ByteArray(0), "empty.pdf") shouldBe
+                ImportOutcome.Failed(ImportFailure.EMPTY_FILE)
+            rig.fs
+                .listAllIndexable()
+                .filter { !it.isDirectory }
+                .shouldBeEmpty()
         }
 
     @Test
     fun imagesThatAreNotImagesAreRefusedAndLogged() =
         runTest {
             val log = RecordingLog()
-            val rig = AppSessionRig.create(backgroundScope, log = log)
-            try {
+            AppSessionRig.create(backgroundScope, log = log).use { rig ->
                 rig.session.importImagesAsPdf(listOf("not an image".encodeToByteArray()), "scan.pdf") shouldBe
                     ImportOutcome.Failed(ImportFailure.UNREADABLE_IMAGES)
                 log.entries shouldHaveSize 1
-            } finally {
-                rig.close()
             }
         }
 

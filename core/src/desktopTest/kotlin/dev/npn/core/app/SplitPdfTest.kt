@@ -27,46 +27,41 @@ import kotlin.test.assertFailsWith
 class SplitPdfTest {
     @Test
     fun splitTwoPagePdfIntoTwoDocsTrashesOriginalAndCopiesMetadata() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                // Fixture PDFs have two pages.
-                val outcome = rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("splittable"), "contract.pdf")
-                val imported = outcome.shouldBeInstanceOf<ImportOutcome.Imported>()
-                rig.session.meta.addTag(listOf(imported.docId), "invoice")
-                rig.session.meta.setField(listOf(imported.docId), "correspondent", "acme")
-                rig.session.meta.setField(imported.docId, "docDate", "2026-01-15")
+        appSessionTest { rig ->
+            // Fixture PDFs have two pages.
+            val outcome = rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("splittable"), "contract.pdf")
+            val imported = outcome.shouldBeInstanceOf<ImportOutcome.Imported>()
+            rig.session.meta.addTag(listOf(imported.docId), "invoice")
+            rig.session.meta.setField(listOf(imported.docId), "correspondent", "acme")
+            rig.session.meta.setField(imported.docId, "docDate", "2026-01-15")
 
-                val split = rig.session.maintenance.splitPdf(imported.docId, listOf(0..0, 1..1))
-                val done = split.shouldBeInstanceOf<SplitOutcome.Done>()
-                done.partDocIds shouldHaveSize 2
+            val split = rig.session.maintenance.splitPdf(imported.docId, listOf(0..0, 1..1))
+            val done = split.shouldBeInstanceOf<SplitOutcome.Done>()
+            done.partDocIds shouldHaveSize 2
 
-                // Parts are live single-page documents next to the original, with metadata carried over.
-                for (partId in done.partDocIds) {
-                    val part =
-                        rig.session.documents
-                            .observeDoc(partId)
-                            .first()
-                    checkNotNull(part)
-                    part.tags shouldBe listOf("invoice")
-                    part.doc.correspondent shouldBe "acme"
-                    part.doc.docDate shouldBe "2026-01-15"
-                    rig.session.content.pageCount(partId) shouldBe 1
-                }
-                rig.session.documents
-                    .observeDoc(done.partDocIds[0])
-                    .first()!!
-                    .doc.fileName shouldBe "contract (part 1).pdf"
-
-                // Original is trashed, not deleted.
-                val trashed =
+            // Parts are live single-page documents next to the original, with metadata carried over.
+            for (partId in done.partDocIds) {
+                val part =
                     rig.session.documents
-                        .observeTrashed()
+                        .observeDoc(partId)
                         .first()
-                trashed.map { it.doc.docId } shouldBe listOf(imported.docId)
-            } finally {
-                rig.close()
+                checkNotNull(part)
+                part.tags shouldBe listOf("invoice")
+                part.doc.correspondent shouldBe "acme"
+                part.doc.docDate shouldBe "2026-01-15"
+                rig.session.content.pageCount(partId) shouldBe 1
             }
+            rig.session.documents
+                .observeDoc(done.partDocIds[0])
+                .first()!!
+                .doc.fileName shouldBe "contract (part 1).pdf"
+
+            // Original is trashed, not deleted.
+            val trashed =
+                rig.session.documents
+                    .observeTrashed()
+                    .first()
+            trashed.map { it.doc.docId } shouldBe listOf(imported.docId)
         }
 
     /**
@@ -75,29 +70,24 @@ class SplitPdfTest {
      */
     @Test
     fun aValueThatNoLongerFitsItsFieldsTypeIsCarriedAsItIs() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                val docId = rig.importDocument(PdfFixtures.embeddedTextPdf("retyped"), "invoice", "acme")
-                rig.session.fieldRegistry.fields
-                    .first { it.isNotEmpty() }
-                val due = FieldDef("due", "Due", FieldType.TEXT, showByDefault = true, aiEnabled = false, position = 9)
-                rig.session.fieldRegistry.upsert(due)
-                rig.session.meta.setField(docId, "due", "soon")
-                rig.session.fieldRegistry.upsert(due.copy(type = FieldType.DATE))
-                // An edit is still checked against the type; only the split's copy carries such a value.
-                assertFailsWith<IllegalArgumentException> {
-                    rig.session.meta.applyEdits(listOf(docId), fields = mapOf("due" to "later"))
-                }
+        appSessionTest { rig ->
+            val docId = rig.importDocument(PdfFixtures.embeddedTextPdf("retyped"), "invoice", "acme")
+            rig.session.fieldRegistry.fields
+                .first { it.isNotEmpty() }
+            val due = FieldDef("due", "Due", FieldType.TEXT, showByDefault = true, aiEnabled = false, position = 9)
+            rig.session.fieldRegistry.upsert(due)
+            rig.session.meta.setField(docId, "due", "soon")
+            rig.session.fieldRegistry.upsert(due.copy(type = FieldType.DATE))
+            // An edit is still checked against the type; only the split's copy carries such a value.
+            assertFailsWith<IllegalArgumentException> {
+                rig.session.meta.applyEdits(listOf(docId), fields = mapOf("due" to "later"))
+            }
 
-                val done = rig.splitInTwo(docId).shouldBeInstanceOf<SplitOutcome.Done>()
+            val done = rig.splitInTwo(docId).shouldBeInstanceOf<SplitOutcome.Done>()
 
-                for (partId in done.partDocIds) {
-                    rig.metadataOf(partId).second["due"] shouldBe "soon"
-                    rig.metadataOf(partId).second[FieldKeys.CORRESPONDENT] shouldBe "acme"
-                }
-            } finally {
-                rig.close()
+            for (partId in done.partDocIds) {
+                rig.metadataOf(partId).second["due"] shouldBe "soon"
+                rig.metadataOf(partId).second[FieldKeys.CORRESPONDENT] shouldBe "acme"
             }
         }
 
@@ -107,31 +97,25 @@ class SplitPdfTest {
      */
     @Test
     fun aFailedSplitTakesBackThePartsTheStoragePathRuleMoved() =
-        runTest {
-            val rule = StoragePathRule("{correspondent}/{title}.pdf", enabled = true)
-            val rig = AppSessionRig.create(backgroundScope, storagePath = rule)
-            try {
-                val outcome = rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("moved pages"), "contract.pdf")
-                val imported = outcome.shouldBeInstanceOf<ImportOutcome.Imported>()
-                rig.session.meta.addTag(listOf(imported.docId), "invoice")
-                rig.session.meta.setField(listOf(imported.docId), FieldKeys.CORRESPONDENT, "acme")
-                // The import's OCR writes the row in the background; it is done before the row is kept.
-                // The queues drain once the session has had its first rescan, which start() runs.
-                rig.session.rescan()
-                rig.session.work.drainOcr()
-                val original = checkNotNull(rig.db.documentDao().getByDocId(imported.docId))
-                original.relPath shouldBe "acme/contract.pdf"
-                rig.blockTrash()
+        appSessionTest(storagePath = StoragePathRule("{correspondent}/{title}.pdf", enabled = true)) { rig ->
+            val outcome = rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("moved pages"), "contract.pdf")
+            val imported = outcome.shouldBeInstanceOf<ImportOutcome.Imported>()
+            rig.session.meta.addTag(listOf(imported.docId), "invoice")
+            rig.session.meta.setField(listOf(imported.docId), FieldKeys.CORRESPONDENT, "acme")
+            // The import's OCR writes the row in the background; it is done before the row is kept.
+            // The queues drain once the session has had its first rescan, which start() runs.
+            rig.session.rescan()
+            rig.session.work.drainOcr()
+            val original = checkNotNull(rig.db.documentDao().getByDocId(imported.docId))
+            original.relPath shouldBe "acme/contract.pdf"
+            rig.blockTrash()
 
-                rig.session.maintenance.splitPdf(imported.docId, listOf(0..0, 1..1)) shouldBe
-                    SplitOutcome.Failed(SplitFailure.NOT_COMPLETED)
+            rig.session.maintenance.splitPdf(imported.docId, listOf(0..0, 1..1)) shouldBe
+                SplitOutcome.Failed(SplitFailure.NOT_COMPLETED)
 
-                rig.shouldHoldOnly(original)
-                rig.session.rescan()
-                rig.shouldHoldOnly(original)
-            } finally {
-                rig.close()
-            }
+            rig.shouldHoldOnly(original)
+            rig.session.rescan()
+            rig.shouldHoldOnly(original)
         }
 
     /**
@@ -140,30 +124,25 @@ class SplitPdfTest {
      */
     @Test
     fun aDocumentWhoseFileWasReplacedIsNotSplit() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                val outcome = rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("the document"), "contract.pdf")
-                val imported = outcome.shouldBeInstanceOf<ImportOutcome.Imported>()
-                rig.session.meta.addTag(listOf(imported.docId), "invoice")
-                rig.session.meta.setField(listOf(imported.docId), FieldKeys.CORRESPONDENT, "acme")
-                // The import's OCR writes the row in the background; it is done before the row is kept.
-                // The queues drain once the session has had its first rescan, which start() runs.
-                rig.session.rescan()
-                rig.session.work.drainOcr()
-                val original = checkNotNull(rig.db.documentDao().getByDocId(imported.docId))
-                val replacement = PdfFixtures.embeddedTextPdf("another document")
-                rig.fs.delete(original.relPath)
-                rig.writePdf(original.relPath, replacement)
+        appSessionTest { rig ->
+            val outcome = rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("the document"), "contract.pdf")
+            val imported = outcome.shouldBeInstanceOf<ImportOutcome.Imported>()
+            rig.session.meta.addTag(listOf(imported.docId), "invoice")
+            rig.session.meta.setField(listOf(imported.docId), FieldKeys.CORRESPONDENT, "acme")
+            // The import's OCR writes the row in the background; it is done before the row is kept.
+            // The queues drain once the session has had its first rescan, which start() runs.
+            rig.session.rescan()
+            rig.session.work.drainOcr()
+            val original = checkNotNull(rig.db.documentDao().getByDocId(imported.docId))
+            val replacement = PdfFixtures.embeddedTextPdf("another document")
+            rig.fs.delete(original.relPath)
+            rig.writePdf(original.relPath, replacement)
 
-                rig.session.maintenance.splitPdf(imported.docId, listOf(0..0, 1..1)) shouldBe
-                    SplitOutcome.Failed(SplitFailure.DOCUMENT_UNAVAILABLE)
+            rig.session.maintenance.splitPdf(imported.docId, listOf(0..0, 1..1)) shouldBe
+                SplitOutcome.Failed(SplitFailure.DOCUMENT_UNAVAILABLE)
 
-                rig.fs.readBytes(original.relPath) shouldBe replacement
-                rig.shouldHoldOnly(original)
-            } finally {
-                rig.close()
-            }
+            rig.fs.readBytes(original.relPath) shouldBe replacement
+            rig.shouldHoldOnly(original)
         }
 
     /**
@@ -175,8 +154,7 @@ class SplitPdfTest {
     fun aPartThatIsAnExistingDocumentKeepsItsOwnMetadata() =
         runTest {
             val hook = SplitHook()
-            val rig = AppSessionRig.create(backgroundScope, pdfEngine = hook::over)
-            try {
+            AppSessionRig.create(backgroundScope, pdfEngine = hook::over).use { rig ->
                 val receiptBytes = PdfFixtures.embeddedTextPdf("receipt")
                 val receipt = rig.importDocument(receiptBytes, "receipt", "beta")
                 val source = rig.importDocument(PdfFixtures.embeddedTextPdf("contract"), "invoice", "acme")
@@ -190,8 +168,6 @@ class SplitPdfTest {
                 rig.metadataOf(receipt) shouldBe before
                 rig.metadataOf(done.partDocIds[1]) shouldBe
                     (listOf("invoice") to mapOf(FieldKeys.CORRESPONDENT to "acme"))
-            } finally {
-                rig.close()
             }
         }
 
@@ -200,8 +176,7 @@ class SplitPdfTest {
     fun aPartThatBringsADocumentBackKeepsItsOwnMetadata() =
         runTest {
             val hook = SplitHook()
-            val rig = AppSessionRig.create(backgroundScope, pdfEngine = hook::over)
-            try {
+            AppSessionRig.create(backgroundScope, pdfEngine = hook::over).use { rig ->
                 val receiptBytes = PdfFixtures.embeddedTextPdf("receipt")
                 val receipt = rig.importDocument(receiptBytes, "receipt", "beta")
                 val before = rig.metadataOf(receipt)
@@ -216,8 +191,6 @@ class SplitPdfTest {
                 done.partDocIds[0] shouldBe receipt
                 checkNotNull(rig.db.documentDao().getByDocId(receipt)).isLive shouldBe true
                 rig.metadataOf(receipt) shouldBe before
-            } finally {
-                rig.close()
             }
         }
 
@@ -226,8 +199,7 @@ class SplitPdfTest {
     fun aFailedSplitLeavesAnExistingDocumentAsItWas() =
         runTest {
             val hook = SplitHook()
-            val rig = AppSessionRig.create(backgroundScope, pdfEngine = hook::over)
-            try {
+            AppSessionRig.create(backgroundScope, pdfEngine = hook::over).use { rig ->
                 val receiptBytes = PdfFixtures.embeddedTextPdf("receipt")
                 val receipt = rig.importDocument(receiptBytes, "receipt", "beta")
                 val source = rig.importDocument(PdfFixtures.embeddedTextPdf("contract"), "invoice", "acme")
@@ -246,8 +218,6 @@ class SplitPdfTest {
                 rig.metadataOf(receipt) shouldBe before
                 val rows = rig.db.documentDao().allPathsAndMeta()
                 rows.map { it.docId } shouldContainExactlyInAnyOrder listOf(receipt, source)
-            } finally {
-                rig.close()
             }
         }
 
@@ -259,8 +229,7 @@ class SplitPdfTest {
     fun aSplitWhoseOriginalWasTrashedMeanwhileIsDone() =
         runTest {
             val hook = SplitHook()
-            val rig = AppSessionRig.create(backgroundScope, pdfEngine = hook::over)
-            try {
+            AppSessionRig.create(backgroundScope, pdfEngine = hook::over).use { rig ->
                 val source = rig.importDocument(PdfFixtures.embeddedTextPdf("contract"), "invoice", "acme")
                 hook.beforePart = {
                     rig.session.docLifecycle
@@ -275,72 +244,55 @@ class SplitPdfTest {
                     rig.metadataOf(part).first shouldBe listOf("invoice")
                 }
                 checkNotNull(rig.db.documentDao().getByDocId(source)).trashed shouldBe true
-            } finally {
-                rig.close()
             }
         }
 
     @Test
     fun aPartIsNamedAfterItsOriginalWithoutTheExtensionInAnyCase() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                val outcome = rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("mixed case"), "Scan.Pdf")
-                val imported = outcome.shouldBeInstanceOf<ImportOutcome.Imported>()
+        appSessionTest { rig ->
+            val outcome = rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("mixed case"), "Scan.Pdf")
+            val imported = outcome.shouldBeInstanceOf<ImportOutcome.Imported>()
 
-                val split = rig.session.maintenance.splitPdf(imported.docId, listOf(0..0, 1..1))
-                val done = split.shouldBeInstanceOf<SplitOutcome.Done>()
+            val split = rig.session.maintenance.splitPdf(imported.docId, listOf(0..0, 1..1))
+            val done = split.shouldBeInstanceOf<SplitOutcome.Done>()
 
-                val part =
-                    checkNotNull(
-                        rig.session.documents
-                            .observeDoc(done.partDocIds[0])
-                            .first(),
-                    )
-                part.doc.fileName shouldBe "Scan (part 1).pdf"
-            } finally {
-                rig.close()
-            }
+            val part =
+                checkNotNull(
+                    rig.session.documents
+                        .observeDoc(done.partDocIds[0])
+                        .first(),
+                )
+            part.doc.fileName shouldBe "Scan (part 1).pdf"
         }
 
     @Test
     fun splitRejectsNonCoveringSegments() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                val outcome = rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("bad split"), "doc.pdf")
-                val imported = outcome.shouldBeInstanceOf<ImportOutcome.Imported>()
+        appSessionTest { rig ->
+            val outcome = rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("bad split"), "doc.pdf")
+            val imported = outcome.shouldBeInstanceOf<ImportOutcome.Imported>()
 
-                val invalid = SplitOutcome.Failed(SplitFailure.INVALID_PARTS)
-                rig.session.maintenance.splitPdf(imported.docId, listOf(0..0)) shouldBe invalid
-                rig.session.maintenance.splitPdf(imported.docId, listOf(0..0, 0..1)) shouldBe invalid
-                rig.session.maintenance.splitPdf(imported.docId, listOf(0..0, 1..2)) shouldBe invalid
+            val invalid = SplitOutcome.Failed(SplitFailure.INVALID_PARTS)
+            rig.session.maintenance.splitPdf(imported.docId, listOf(0..0)) shouldBe invalid
+            rig.session.maintenance.splitPdf(imported.docId, listOf(0..0, 0..1)) shouldBe invalid
+            rig.session.maintenance.splitPdf(imported.docId, listOf(0..0, 1..2)) shouldBe invalid
 
-                // Original untouched.
-                rig.session.documents
-                    .observeTrashed()
-                    .first() shouldHaveSize 0
-            } finally {
-                rig.close()
-            }
+            // Original untouched.
+            rig.session.documents
+                .observeTrashed()
+                .first() shouldHaveSize 0
         }
 
     @Test
     fun aSplitOfADocumentThatIsGoneSaysSo() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                val outcome = rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("gone"), "doc.pdf")
-                val imported = outcome.shouldBeInstanceOf<ImportOutcome.Imported>()
-                rig.session.docLifecycle.trashDoc(imported.docId)
+        appSessionTest { rig ->
+            val outcome = rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("gone"), "doc.pdf")
+            val imported = outcome.shouldBeInstanceOf<ImportOutcome.Imported>()
+            rig.session.docLifecycle.trashDoc(imported.docId)
 
-                rig.session.maintenance.splitPdf(imported.docId, listOf(0..0, 1..1)) shouldBe
-                    SplitOutcome.Failed(SplitFailure.DOCUMENT_UNAVAILABLE)
-                rig.session.maintenance.splitPdf("f".repeat(64), listOf(0..0, 1..1)) shouldBe
-                    SplitOutcome.Failed(SplitFailure.DOCUMENT_UNAVAILABLE)
-            } finally {
-                rig.close()
-            }
+            rig.session.maintenance.splitPdf(imported.docId, listOf(0..0, 1..1)) shouldBe
+                SplitOutcome.Failed(SplitFailure.DOCUMENT_UNAVAILABLE)
+            rig.session.maintenance.splitPdf("f".repeat(64), listOf(0..0, 1..1)) shouldBe
+                SplitOutcome.Failed(SplitFailure.DOCUMENT_UNAVAILABLE)
         }
 }
 

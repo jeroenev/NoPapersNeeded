@@ -22,6 +22,9 @@ import dev.npn.core.settings.SessionSettings
 import dev.npn.core.util.JvmLog
 import dev.npn.core.util.NpnLog
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.test.TestResult
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.runTest
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
@@ -109,14 +112,25 @@ class AppSessionRig private constructor(
             .listAllUnder(NpnPaths.JOURNAL_DIR)
             .count { JournalPaths.classify(it.relPath) is JournalPath.ObjectV2 }
 
-    /** Device databases of the [secondSession]s, closed with this rig. */
-    private val otherDeviceDbs = ArrayList<DeviceDatabase>()
+    /** The [secondSession]s and their databases, closed with this rig. */
+    private val otherSessions = ArrayList<LibrarySessionImpl>()
+    private val otherDeps = ArrayList<SessionDeps>()
+
+    /** Run [block] over this rig, then close it, whether or not [block] threw. */
+    suspend fun use(block: suspend (AppSessionRig) -> Unit) {
+        try {
+            block(this)
+        } finally {
+            close()
+        }
+    }
 
     suspend fun close() {
+        otherSessions.forEach { it.close() }
+        otherDeps.forEach { it.closeDb() }
         session.close()
         db.close()
         deviceDb.close()
-        otherDeviceDbs.forEach { it.close() }
         libRoot.toFile().deleteRecursively()
         dbDir.deleteRecursively()
     }
@@ -183,7 +197,7 @@ class AppSessionRig private constructor(
     /**
      * Build a SECOND session over the SAME library folder but a fresh, separate DB cache and a
      * distinct deviceId (simulating another device syncing the same folder). Returns the session
-     * plus its index db so the caller can close it; its device db closes with this rig.
+     * plus its index db; both close with this rig.
      */
     suspend fun secondSession(
         scope: CoroutineScope,
@@ -215,10 +229,42 @@ class AppSessionRig private constructor(
             )
         // Force a distinct deviceId by seeding the kv before openSession.
         deps.deviceDb.keyValueDao().put(DeviceIdentity.KEY_DEVICE_ID, "device-two")
-        otherDeviceDbs += deps.deviceDb
-        return LibrarySessionImpl.openSession(deps, writeUndelete) to deps.db
+        otherDeps += deps
+        return LibrarySessionImpl.openSession(deps, writeUndelete).also { otherSessions += it } to deps.db
     }
 }
+
+/**
+ * A test over a fresh [AppSessionRig], built in the test's background scope with these
+ * [AppSessionRig.create] options and closed before that scope ends.
+ */
+fun appSessionTest(
+    ocr: OcrEngine = NoopOcrEngine(),
+    storagePath: StoragePathRule? = null,
+    log: NpnLog = JvmLog(),
+    deviceTrashRetentionDays: Int? = null,
+    legacyLibrarySettings: suspend () -> LegacyLibrarySettings = { LegacyLibrarySettings() },
+    aiConfig: suspend () -> AiConfig = { AiConfig.DISABLED },
+    writeUndelete: Boolean = JournalOp.DocUndelete.WRITTEN,
+    pdfEngine: (PdfEngine) -> PdfEngine = { it },
+    files: (LibraryFileSystem) -> LibraryFileSystem = { it },
+    block: suspend TestScope.(AppSessionRig) -> Unit,
+): TestResult =
+    runTest {
+        AppSessionRig
+            .create(
+                backgroundScope,
+                ocr,
+                storagePath,
+                log,
+                deviceTrashRetentionDays,
+                legacyLibrarySettings,
+                aiConfig,
+                writeUndelete,
+                pdfEngine,
+                files,
+            ).use { block(it) }
+    }
 
 /**
  * A session over [library] whose app-local state lives in [data], as one device opens it, and

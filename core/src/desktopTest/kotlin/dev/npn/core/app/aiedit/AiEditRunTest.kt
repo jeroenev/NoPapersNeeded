@@ -13,6 +13,7 @@ import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.SavedView
 import dev.npn.core.app.SortField
+import dev.npn.core.app.appSessionTest
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.testing.FakeAiSuggest
@@ -503,34 +504,29 @@ class AiEditRunApplyTest {
 class AiEditRunSelectionQueryTest {
     @Test
     fun aSelectionPastSqlitesBindLimitResolvesToItsLiveDocuments() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                listOf("a", "b", "c", "d").forEach { rig.writePdf("$it.pdf", PdfFixtures.embeddedTextPdf(it)) }
-                rig.session.rescan()
-                val (a, b, c) = listOf("a.pdf", "b.pdf", "c.pdf").map { rig.docId(it) }
-                rig.session.docLifecycle.trashDoc(b)
-                // d stays live but unselected; the rest of the selection names nothing in the library.
-                val unknown = (1..SQLITE_MAX_VARIABLE_NUMBER).map { it.toString(16).padStart(64, '0') }
-                val selection = listOf(a, b, c) + unknown
-                val run =
-                    AiEditRunImpl(
-                        DocumentRepositoryImpl(rig.db),
-                        FakeMetadataWriter(),
-                        FakeDocContentFacade(),
-                        FakeAiSuggest(),
-                        FakeFieldRegistry(),
-                        FakeTagRepository(),
-                        selection,
-                    )
-                val key = key(scope = EditScope.SELECTION)
+        appSessionTest { rig ->
+            listOf("a", "b", "c", "d").forEach { rig.writePdf("$it.pdf", PdfFixtures.embeddedTextPdf(it)) }
+            rig.session.rescan()
+            val (a, b, c) = listOf("a.pdf", "b.pdf", "c.pdf").map { rig.docId(it) }
+            rig.session.docLifecycle.trashDoc(b)
+            // d stays live but unselected; the rest of the selection names nothing in the library.
+            val unknown = (1..SQLITE_MAX_VARIABLE_NUMBER).map { it.toString(16).padStart(64, '0') }
+            val selection = listOf(a, b, c) + unknown
+            val run =
+                AiEditRunImpl(
+                    DocumentRepositoryImpl(rig.db),
+                    FakeMetadataWriter(),
+                    FakeDocContentFacade(),
+                    FakeAiSuggest(),
+                    FakeFieldRegistry(),
+                    FakeTagRepository(),
+                    selection,
+                )
+            val key = key(scope = EditScope.SELECTION)
 
-                run.docsFor(key).first().map { it.doc.docId } shouldContainExactlyInAnyOrder listOf(a, c)
-                run.remainingDocs(key).map { it.doc.docId } shouldContainExactlyInAnyOrder listOf(a, c)
-                run.moreRemain(key) shouldBe true
-            } finally {
-                rig.close()
-            }
+            run.docsFor(key).first().map { it.doc.docId } shouldContainExactlyInAnyOrder listOf(a, c)
+            run.remainingDocs(key).map { it.doc.docId } shouldContainExactlyInAnyOrder listOf(a, c)
+            run.moreRemain(key) shouldBe true
         }
 
     private companion object {

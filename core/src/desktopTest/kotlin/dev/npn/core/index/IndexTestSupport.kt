@@ -20,6 +20,9 @@ import dev.npn.core.journal.JournalCodec
 import dev.npn.core.journal.JournalEvent
 import dev.npn.core.journal.JournalEventVersions
 import dev.npn.core.journal.PendingOp
+import kotlinx.coroutines.test.TestResult
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -131,6 +134,15 @@ class IndexRig private constructor(
         libRoot.toFile().deleteRecursively()
     }
 
+    /** Run [block] over this rig, then close it, whether or not [block] threw. */
+    suspend fun use(block: suspend (IndexRig) -> Unit) {
+        try {
+            block(this)
+        } finally {
+            close()
+        }
+    }
+
     companion object {
         /** A fresh rig; with [statements], every SQL statement the index database runs is logged there. */
         fun create(statements: StatementLog? = null): IndexRig {
@@ -143,6 +155,9 @@ class IndexRig private constructor(
         }
     }
 }
+
+/** A test over a fresh [IndexRig], closed once [block] is done. */
+fun indexTest(block: suspend TestScope.(IndexRig) -> Unit): TestResult = runTest { IndexRig.create().use { block(it) } }
 
 /**
  * Writes v1 segments, `.npn/journal/<deviceId>/<first seq>.jsonl`, the way builds before storage-v2

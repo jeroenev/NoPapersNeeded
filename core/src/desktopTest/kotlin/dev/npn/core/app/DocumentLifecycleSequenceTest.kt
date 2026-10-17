@@ -25,9 +25,8 @@ class DocumentLifecycleSequenceTest {
     fun lifecycleSequencesPreserveIdentityAndMetadataAcrossDevicesAndIndexRebuilds() =
         runTest {
             for (seed in SEEDS) {
-                val rig = AppSessionRig.create(backgroundScope, writeUndelete = true)
-                val (peer, peerDb) = rig.secondSession(backgroundScope, writeUndelete = true)
-                try {
+                AppSessionRig.create(backgroundScope, writeUndelete = true).use { rig ->
+                    val (peer, _) = rig.secondSession(backgroundScope, writeUndelete = true)
                     val expected =
                         List(DOCUMENTS) { number ->
                             ExpectedDocument(PdfFixtures.embeddedTextPdf("document $number seed $seed"))
@@ -86,10 +85,6 @@ class DocumentLifecycleSequenceTest {
                             }
                         }
                     }
-                } finally {
-                    peer.close()
-                    peerDb.close()
-                    rig.close()
                 }
             }
         }

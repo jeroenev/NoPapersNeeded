@@ -24,7 +24,6 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
 import kotlin.coroutines.ContinuationInterceptor
 import kotlin.test.Test
@@ -43,16 +42,12 @@ class HiddenDocumentImportTest {
         at: String = "a.pdf",
         files: (LibraryFileSystem) -> LibraryFileSystem = { it },
         block: suspend (id: String, bytes: ByteArray) -> Unit,
-    ) = runTest {
-        rig = AppSessionRig.create(backgroundScope, files = files)
-        try {
-            val bytes = PdfFixtures.embeddedTextPdf("alpha")
-            rig.writePdf(at, bytes)
-            rig.session.rescan()
-            block(rig.docId(at), bytes)
-        } finally {
-            rig.close()
-        }
+    ) = appSessionTest(files = files) {
+        rig = it
+        val bytes = PdfFixtures.embeddedTextPdf("alpha")
+        rig.writePdf(at, bytes)
+        rig.session.rescan()
+        block(rig.docId(at), bytes)
     }
 
     @Test

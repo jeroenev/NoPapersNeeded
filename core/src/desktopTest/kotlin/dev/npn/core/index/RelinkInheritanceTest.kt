@@ -3,7 +3,6 @@ package dev.npn.core.index
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.SystemProperty
-import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -61,23 +60,18 @@ class RelinkInheritanceTest {
         }
 
     /** A rig whose library holds one document, `c.pdf`, handed to [block] with its id. */
-    private suspend fun withCurrent(block: suspend (IndexRig, String) -> Unit) {
-        val rig = IndexRig.create()
-        try {
+    private suspend fun withCurrent(block: suspend (IndexRig, String) -> Unit) =
+        IndexRig.create().use { rig ->
             rig.writePdf("c.pdf", "charlie")
             rig.rescan()
             block(
                 rig,
                 rig.db
                     .documentDao()
-                    .rowAtPath("c.pdf")
-                    .shouldNotBeNull()
+                    .requireRowAtPath("c.pdf")
                     .docId,
             )
-        } finally {
-            rig.close()
         }
-    }
 
     /** Publish [op] as another device would, one clock tick after the last. */
     private suspend fun IndexRig.commit(op: PendingOp) {

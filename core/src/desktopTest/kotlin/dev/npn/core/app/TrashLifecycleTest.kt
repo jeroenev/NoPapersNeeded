@@ -13,6 +13,7 @@ import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.index.MetadataAccumulator
 import dev.npn.core.index.MutableClock
 import dev.npn.core.index.WatchedFileSystem
+import dev.npn.core.index.indexTest
 import dev.npn.core.index.requireByDocId
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.HlcWatermarkAllocator
@@ -55,52 +56,42 @@ import kotlin.test.assertFailsWith
 class TrashLifecycleTest {
     @Test
     fun trashMovesFileAndSetsFlag() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
-                rig.session.rescan()
-                val id = rig.fs.sha256("a.pdf")
+        appSessionTest { rig ->
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val id = rig.fs.sha256("a.pdf")
 
-                rig.session.docLifecycle.trashDoc(id)
+            rig.session.docLifecycle.trashDoc(id)
 
-                rig.exists("a.pdf").shouldBeFalse()
-                val doc = rig.db.documentDao().requireByDocId(id)
-                doc.trashed.shouldBeTrue()
-                // A file now exists under .npn/trash/.
-                val trash =
-                    rig.fs.listAll().filter {
-                        !it.isDirectory && it.relPath.startsWith("${NpnPaths.TRASH_DIR}/")
-                    }
-                trash.isNotEmpty().shouldBeTrue()
-            } finally {
-                rig.close()
-            }
+            rig.exists("a.pdf").shouldBeFalse()
+            val doc = rig.db.documentDao().requireByDocId(id)
+            doc.trashed.shouldBeTrue()
+            // A file now exists under .npn/trash/.
+            val trash =
+                rig.fs.listAll().filter {
+                    !it.isDirectory && it.relPath.startsWith("${NpnPaths.TRASH_DIR}/")
+                }
+            trash.isNotEmpty().shouldBeTrue()
         }
 
     /** Trashing a document already in the trash does nothing, and says so: there is nothing to undo. */
     @Test
     fun trashingADocumentAlreadyInTheTrashJournalsNothing() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
-                rig.session.rescan()
-                val id = rig.docId("a.pdf")
-                rig.session.docLifecycle
-                    .trashDoc(id)
-                    .shouldNotBeNull()
-                val objects = rig.journalObjectCount()
+        appSessionTest { rig ->
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+            rig.session.docLifecycle
+                .trashDoc(id)
+                .shouldNotBeNull()
+            val objects = rig.journalObjectCount()
 
-                rig.session.docLifecycle
-                    .trashDoc(id)
-                    .shouldBeNull()
+            rig.session.docLifecycle
+                .trashDoc(id)
+                .shouldBeNull()
 
-                rig.journalObjectCount() shouldBe objects
-                trashEntries(rig.fs) shouldHaveSize 1
-            } finally {
-                rig.close()
-            }
+            rig.journalObjectCount() shouldBe objects
+            trashEntries(rig.fs) shouldHaveSize 1
         }
 
     /**
@@ -110,150 +101,125 @@ class TrashLifecycleTest {
      */
     @Test
     fun anUndoLeavesADocumentTrashedAgainSinceInTheTrash() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
-                rig.session.rescan()
-                val id = rig.docId("a.pdf")
-                val lifecycle = rig.session.docLifecycle
-                val first = lifecycle.trashDoc(id).shouldNotBeNull()
-                lifecycle.restoreDoc(id)
-                val second = lifecycle.trashDoc(id).shouldNotBeNull()
-                second.trashedAt shouldBe
-                    rig.db
-                        .documentDao()
-                        .getByDocId(id)
-                        ?.trashedAt
-                val objects = rig.journalObjectCount()
-
-                lifecycle.undoTrash(listOf(first)) shouldBe 0
-
-                rig.journalObjectCount() shouldBe objects
+        appSessionTest { rig ->
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+            val lifecycle = rig.session.docLifecycle
+            val first = lifecycle.trashDoc(id).shouldNotBeNull()
+            lifecycle.restoreDoc(id)
+            val second = lifecycle.trashDoc(id).shouldNotBeNull()
+            second.trashedAt shouldBe
                 rig.db
                     .documentDao()
-                    .requireByDocId(id)
-                    .trashed
-                    .shouldBeTrue()
-                rig.exists("a.pdf").shouldBeFalse()
+                    .getByDocId(id)
+                    ?.trashedAt
+            val objects = rig.journalObjectCount()
 
-                lifecycle.undoTrash(listOf(second)) shouldBe 0
+            lifecycle.undoTrash(listOf(first)) shouldBe 0
 
-                rig.db
-                    .documentDao()
-                    .requireByDocId(id)
-                    .trashed
-                    .shouldBeFalse()
-                rig.exists("a.pdf").shouldBeTrue()
-            } finally {
-                rig.close()
-            }
+            rig.journalObjectCount() shouldBe objects
+            rig.db
+                .documentDao()
+                .requireByDocId(id)
+                .trashed
+                .shouldBeTrue()
+            rig.exists("a.pdf").shouldBeFalse()
+
+            lifecycle.undoTrash(listOf(second)) shouldBe 0
+
+            rig.db
+                .documentDao()
+                .requireByDocId(id)
+                .trashed
+                .shouldBeFalse()
+            rig.exists("a.pdf").shouldBeTrue()
         }
 
     /** The Undo of a trash already restored, here or elsewhere, finds nothing to do. */
     @Test
     fun anUndoOfADocumentRestoredSinceWritesNothing() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
-                rig.session.rescan()
-                val id = rig.docId("a.pdf")
-                val lifecycle = rig.session.docLifecycle
-                val trash = lifecycle.trashDoc(id).shouldNotBeNull()
-                lifecycle.restoreDoc(id)
-                val objects = rig.journalObjectCount()
+        appSessionTest { rig ->
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+            val lifecycle = rig.session.docLifecycle
+            val trash = lifecycle.trashDoc(id).shouldNotBeNull()
+            lifecycle.restoreDoc(id)
+            val objects = rig.journalObjectCount()
 
-                lifecycle.undoTrash(listOf(trash)) shouldBe 0
+            lifecycle.undoTrash(listOf(trash)) shouldBe 0
 
-                rig.journalObjectCount() shouldBe objects
-                rig.exists("a.pdf").shouldBeTrue()
-            } finally {
-                rig.close()
-            }
+            rig.journalObjectCount() shouldBe objects
+            rig.exists("a.pdf").shouldBeTrue()
         }
 
     @Test
     fun restoreBringsFileBack() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                rig.writePdf("docs/a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
-                rig.session.rescan()
-                val id = rig.fs.sha256("docs/a.pdf")
+        appSessionTest { rig ->
+            rig.writePdf("docs/a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val id = rig.fs.sha256("docs/a.pdf")
 
-                rig.session.docLifecycle.trashDoc(id)
-                rig.exists("docs/a.pdf").shouldBeFalse()
+            rig.session.docLifecycle.trashDoc(id)
+            rig.exists("docs/a.pdf").shouldBeFalse()
 
-                rig.session.docLifecycle.restoreDoc(id)
-                rig.exists("docs/a.pdf").shouldBeTrue()
-                rig.db
-                    .documentDao()
-                    .requireByDocId(id)
-                    .trashed
-                    .shouldBeFalse()
-            } finally {
-                rig.close()
-            }
+            rig.session.docLifecycle.restoreDoc(id)
+            rig.exists("docs/a.pdf").shouldBeTrue()
+            rig.db
+                .documentDao()
+                .requireByDocId(id)
+                .trashed
+                .shouldBeFalse()
         }
 
     @Test
     fun permanentDeleteRemovesFileAndStaysHiddenAfterRescan() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
-                rig.session.rescan()
-                val id = rig.fs.sha256("a.pdf")
-                rig.session.docLifecycle.trashDoc(id)
+        appSessionTest { rig ->
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val id = rig.fs.sha256("a.pdf")
+            rig.session.docLifecycle.trashDoc(id)
 
-                rig.session.docLifecycle.deleteDocPermanently(id) shouldBe PermanentDeleteOutcome.DELETED
-                rig.exists("a.pdf").shouldBeFalse()
-                trashEntries(rig.fs).shouldBeEmpty()
-                rig.db
-                    .documentDao()
-                    .requireByDocId(id)
-                    .deleted
-                    .shouldBeTrue()
+            rig.session.docLifecycle.deleteDocPermanently(id) shouldBe PermanentDeleteOutcome.DELETED
+            rig.exists("a.pdf").shouldBeFalse()
+            trashEntries(rig.fs).shouldBeEmpty()
+            rig.db
+                .documentDao()
+                .requireByDocId(id)
+                .deleted
+                .shouldBeTrue()
 
-                // After a rescan the tombstone keeps it hidden.
-                rig.session.rescan()
-                rig.db
-                    .documentDao()
-                    .requireByDocId(id)
-                    .deleted
-                    .shouldBeTrue()
-            } finally {
-                rig.close()
-            }
+            // After a rescan the tombstone keeps it hidden.
+            rig.session.rescan()
+            rig.db
+                .documentDao()
+                .requireByDocId(id)
+                .deleted
+                .shouldBeTrue()
         }
 
     @Test
     fun renameFileUpdatesPathSameDocId() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
-                rig.session.rescan()
-                val id = rig.fs.sha256("a.pdf")
+        appSessionTest { rig ->
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val id = rig.fs.sha256("a.pdf")
 
-                rig.session.docLifecycle.renameFile(id, "renamed.pdf") shouldBe RelocationOutcome.MOVED
-                rig.exists("renamed.pdf").shouldBeTrue()
-                rig.exists("a.pdf").shouldBeFalse()
-                rig.db
-                    .documentDao()
-                    .requireByDocId(id)
-                    .relPath shouldBe "renamed.pdf"
+            rig.session.docLifecycle.renameFile(id, "renamed.pdf") shouldBe RelocationOutcome.MOVED
+            rig.exists("renamed.pdf").shouldBeTrue()
+            rig.exists("a.pdf").shouldBeFalse()
+            rig.db
+                .documentDao()
+                .requireByDocId(id)
+                .relPath shouldBe "renamed.pdf"
 
-                // Survives rescan with the same docId.
-                rig.session.rescan()
-                rig.db
-                    .documentDao()
-                    .requireByDocId(id)
-                    .relPath shouldBe "renamed.pdf"
-            } finally {
-                rig.close()
-            }
+            // Survives rescan with the same docId.
+            rig.session.rescan()
+            rig.db
+                .documentDao()
+                .requireByDocId(id)
+                .relPath shouldBe "renamed.pdf"
         }
 
     /**
@@ -262,128 +228,103 @@ class TrashLifecycleTest {
      */
     @Test
     fun renameOntoATakenOrUnusableNameIsATypedOutcome() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
-                rig.writePdf("b.pdf", PdfFixtures.embeddedTextPdf("beta"))
-                rig.session.rescan()
-                val id = rig.fs.sha256("a.pdf")
-                val lifecycle = rig.session.docLifecycle
+        appSessionTest { rig ->
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.writePdf("b.pdf", PdfFixtures.embeddedTextPdf("beta"))
+            rig.session.rescan()
+            val id = rig.fs.sha256("a.pdf")
+            val lifecycle = rig.session.docLifecycle
 
-                lifecycle.renameFile(id, "b.pdf") shouldBe RelocationOutcome.TAKEN
-                lifecycle.renameFile(id, "a (conflicted copy)") shouldBe RelocationOutcome.INVALID_NAME
-                lifecycle.moveFile(id, "../outside") shouldBe RelocationOutcome.INVALID_NAME
-                rig.db
-                    .documentDao()
-                    .requireByDocId(id)
-                    .relPath shouldBe "a.pdf"
-                rig.fs.sha256("b.pdf") shouldNotBe id
+            lifecycle.renameFile(id, "b.pdf") shouldBe RelocationOutcome.TAKEN
+            lifecycle.renameFile(id, "a (conflicted copy)") shouldBe RelocationOutcome.INVALID_NAME
+            lifecycle.moveFile(id, "../outside") shouldBe RelocationOutcome.INVALID_NAME
+            rig.db
+                .documentDao()
+                .requireByDocId(id)
+                .relPath shouldBe "a.pdf"
+            rig.fs.sha256("b.pdf") shouldNotBe id
 
-                lifecycle.renameFile(id, "c") shouldBe RelocationOutcome.MOVED
-                rig.exists("c.pdf").shouldBeTrue()
-                rig.db
-                    .documentDao()
-                    .requireByDocId(id)
-                    .relPath shouldBe "c.pdf"
-            } finally {
-                rig.close()
-            }
+            lifecycle.renameFile(id, "c") shouldBe RelocationOutcome.MOVED
+            rig.exists("c.pdf").shouldBeTrue()
+            rig.db
+                .documentDao()
+                .requireByDocId(id)
+                .relPath shouldBe "c.pdf"
         }
 
     @Test
     fun moveFileUpdatesPathSameDocId() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
-                rig.session.rescan()
-                val id = rig.fs.sha256("a.pdf")
+        appSessionTest { rig ->
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val id = rig.fs.sha256("a.pdf")
 
-                rig.session.docLifecycle.moveFile(id, "archive") shouldBe RelocationOutcome.MOVED
-                rig.exists("archive/a.pdf").shouldBeTrue()
-                rig.db
-                    .documentDao()
-                    .requireByDocId(id)
-                    .relPath shouldBe "archive/a.pdf"
+            rig.session.docLifecycle.moveFile(id, "archive") shouldBe RelocationOutcome.MOVED
+            rig.exists("archive/a.pdf").shouldBeTrue()
+            rig.db
+                .documentDao()
+                .requireByDocId(id)
+                .relPath shouldBe "archive/a.pdf"
 
-                rig.session.rescan()
-                rig.db
-                    .documentDao()
-                    .requireByDocId(id)
-                    .relPath shouldBe "archive/a.pdf"
-            } finally {
-                rig.close()
-            }
+            rig.session.rescan()
+            rig.db
+                .documentDao()
+                .requireByDocId(id)
+                .relPath shouldBe "archive/a.pdf"
         }
 
     @Test
     fun trashingWhileWritesAreBlockedLeavesThePdfWhereItWas() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
-                rig.session.rescan()
-                val id = rig.docId("a.pdf")
-                blockMetadataWrites(rig)
+        appSessionTest { rig ->
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+            blockMetadataWrites(rig)
 
-                assertFailsWith<IllegalStateException> { rig.session.docLifecycle.trashDoc(id) }
+            assertFailsWith<IllegalStateException> { rig.session.docLifecycle.trashDoc(id) }
 
-                rig.exists("a.pdf").shouldBeTrue()
-                rig.db
-                    .documentDao()
-                    .getByDocId(id)
-                    ?.trashed shouldBe false
-            } finally {
-                rig.close()
-            }
+            rig.exists("a.pdf").shouldBeTrue()
+            rig.db
+                .documentDao()
+                .getByDocId(id)
+                ?.trashed shouldBe false
         }
 
     @Test
     fun deletingWhileWritesAreBlockedKeepsTheFile() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
-                rig.session.rescan()
-                val id = rig.docId("a.pdf")
-                rig.session.docLifecycle.trashDoc(id)
-                blockMetadataWrites(rig)
+        appSessionTest { rig ->
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+            rig.session.docLifecycle.trashDoc(id)
+            blockMetadataWrites(rig)
 
-                assertFailsWith<IllegalStateException> { rig.session.docLifecycle.deleteDocPermanently(id) }
+            assertFailsWith<IllegalStateException> { rig.session.docLifecycle.deleteDocPermanently(id) }
 
-                trashEntries(rig.fs) shouldHaveSize 1
-                rig.db
-                    .documentDao()
-                    .getByDocId(id)
-                    ?.deleted shouldBe false
-            } finally {
-                rig.close()
-            }
+            trashEntries(rig.fs) shouldHaveSize 1
+            rig.db
+                .documentDao()
+                .getByDocId(id)
+                ?.deleted shouldBe false
         }
 
     @Test
     fun restoringWhileWritesAreBlockedLeavesThePdfInTheTrash() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
-                rig.session.rescan()
-                val id = rig.docId("a.pdf")
-                rig.session.docLifecycle.trashDoc(id)
-                blockMetadataWrites(rig)
+        appSessionTest { rig ->
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+            rig.session.docLifecycle.trashDoc(id)
+            blockMetadataWrites(rig)
 
-                assertFailsWith<IllegalStateException> { rig.session.docLifecycle.restoreDoc(id) }
+            assertFailsWith<IllegalStateException> { rig.session.docLifecycle.restoreDoc(id) }
 
-                rig.exists("a.pdf").shouldBeFalse()
-                trashEntries(rig.fs) shouldHaveSize 1
-                rig.db
-                    .documentDao()
-                    .getByDocId(id)
-                    ?.trashed shouldBe true
-            } finally {
-                rig.close()
-            }
+            rig.exists("a.pdf").shouldBeFalse()
+            trashEntries(rig.fs) shouldHaveSize 1
+            rig.db
+                .documentDao()
+                .getByDocId(id)
+                ?.trashed shouldBe true
         }
 
     /**
@@ -551,14 +492,7 @@ class TrashLifecycleTest {
     private fun withLifecycle(
         statFailuresOfObjects: Int = 0,
         block: suspend (Lifecycle) -> Unit,
-    ) = runTest {
-        val rig = IndexRig.create()
-        try {
-            block(Lifecycle(rig, statFailuresOfObjects))
-        } finally {
-            rig.close()
-        }
-    }
+    ) = indexTest { block(Lifecycle(it, statFailuresOfObjects)) }
 
     private suspend fun trashEntries(fs: LibraryFileSystem) =
         fs.listAllUnder(NpnPaths.TRASH_DIR).filter { !it.isDirectory }
@@ -577,68 +511,53 @@ class TrashLifecycleTest {
 class TrashPurgeTest {
     @Test
     fun autoPurgeCountsRetentionFromTheTrashNotFromTheFile() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                val now = 400 * DAY
-                rig.clock.now = now - 60 * DAY
-                rig.writePdf("today.pdf", PdfFixtures.embeddedTextPdf("today"))
-                rig.writePdf("long-ago.pdf", PdfFixtures.embeddedTextPdf("long ago"))
-                // Both PDFs were imported long ago; a move into trash keeps that mtime.
-                for (name in listOf("today.pdf", "long-ago.pdf")) {
-                    Files.setLastModifiedTime(rig.libRoot.resolve(name), FileTime.fromMillis(now - 90 * DAY))
-                }
-                rig.session.rescan()
-                val today = rig.docId("today.pdf")
-                val longAgo = rig.docId("long-ago.pdf")
-
-                rig.session.docLifecycle.trashDoc(longAgo)
-                rig.clock.now = now
-                rig.session.docLifecycle.trashDoc(today)
-
-                rig.session.trashPurge.purge(olderThanDays = 30)
-
-                val left =
-                    rig.fs
-                        .listAllUnder(NpnPaths.TRASH_DIR)
-                        .filter { !it.isDirectory }
-                        .map { it.name }
-                left.map { NpnPaths.trashHashPrefix(it) } shouldBe
-                    listOf(today.take(NpnPaths.TRASH_HASH_PREFIX_LENGTH))
-                rig.session.docLifecycle.restoreDoc(today)
-                rig.exists("today.pdf").shouldBeTrue()
-            } finally {
-                rig.close()
+        appSessionTest { rig ->
+            val now = 400 * DAY
+            rig.clock.now = now - 60 * DAY
+            rig.writePdf("today.pdf", PdfFixtures.embeddedTextPdf("today"))
+            rig.writePdf("long-ago.pdf", PdfFixtures.embeddedTextPdf("long ago"))
+            // Both PDFs were imported long ago; a move into trash keeps that mtime.
+            for (name in listOf("today.pdf", "long-ago.pdf")) {
+                Files.setLastModifiedTime(rig.libRoot.resolve(name), FileTime.fromMillis(now - 90 * DAY))
             }
+            rig.session.rescan()
+            val today = rig.docId("today.pdf")
+            val longAgo = rig.docId("long-ago.pdf")
+
+            rig.session.docLifecycle.trashDoc(longAgo)
+            rig.clock.now = now
+            rig.session.docLifecycle.trashDoc(today)
+
+            rig.session.trashPurge.purge(olderThanDays = 30)
+
+            val left =
+                rig.fs
+                    .listAllUnder(NpnPaths.TRASH_DIR)
+                    .filter { !it.isDirectory }
+                    .map { it.name }
+            left.map { NpnPaths.trashHashPrefix(it) } shouldBe
+                listOf(today.take(NpnPaths.TRASH_HASH_PREFIX_LENGTH))
+            rig.session.docLifecycle.restoreDoc(today)
+            rig.exists("today.pdf").shouldBeTrue()
         }
 
     @Test
     fun aDeviceWithNoRowForATrashedDocumentKeepsItUntilItsRetentionEnds() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                val now = 400 * DAY
-                rig.clock.now = now
-                rig.writePdf("old.pdf", PdfFixtures.embeddedTextPdf("old"))
-                Files.setLastModifiedTime(rig.libRoot.resolve("old.pdf"), FileTime.fromMillis(now - 90 * DAY))
-                rig.session.rescan()
-                rig.session.docLifecycle.trashDoc(rig.docId("old.pdf"))
+        appSessionTest { rig ->
+            val now = 400 * DAY
+            rig.clock.now = now
+            rig.writePdf("old.pdf", PdfFixtures.embeddedTextPdf("old"))
+            Files.setLastModifiedTime(rig.libRoot.resolve("old.pdf"), FileTime.fromMillis(now - 90 * DAY))
+            rig.session.rescan()
+            rig.session.docLifecycle.trashDoc(rig.docId("old.pdf"))
 
-                // A device that joins now indexes only the PDFs on disk: the trashed one has no row.
-                val (second, secondDb) = rig.secondSession(backgroundScope, clock = MutableClock(now + 1))
-                try {
-                    second.trashPurge.purge(olderThanDays = 30)
-                } finally {
-                    second.close()
-                    secondDb.close()
-                }
+            // A device that joins now indexes only the PDFs on disk: the trashed one has no row.
+            val (second, secondDb) = rig.secondSession(backgroundScope, clock = MutableClock(now + 1))
+            second.trashPurge.purge(olderThanDays = 30)
 
-                rig.fs
-                    .listAllUnder(NpnPaths.TRASH_DIR)
-                    .filter { !it.isDirectory } shouldHaveSize 1
-            } finally {
-                rig.close()
-            }
+            rig.fs
+                .listAllUnder(NpnPaths.TRASH_DIR)
+                .filter { !it.isDirectory } shouldHaveSize 1
         }
 
     /**
@@ -649,32 +568,22 @@ class TrashPurgeTest {
      */
     @Test
     fun aDeviceWithNoRowKeepsTheFileOfATrashTheJournalNeverRecorded() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                val now = 400 * DAY
-                rig.clock.now = now
-                rig.writePdf("old.pdf", PdfFixtures.embeddedTextPdf("stranded"))
-                Files.setLastModifiedTime(rig.libRoot.resolve("old.pdf"), FileTime.fromMillis(now - 90 * DAY))
-                rig.session.rescan()
-                val id = rig.docId("old.pdf")
-                // As an older build's entry would name it: aged, yet nothing here records the trash.
-                val entry = NpnPaths.trashPath("old.pdf", id, now - 90 * DAY)
-                rig.fs.move("old.pdf", entry)
+        appSessionTest { rig ->
+            val now = 400 * DAY
+            rig.clock.now = now
+            rig.writePdf("old.pdf", PdfFixtures.embeddedTextPdf("stranded"))
+            Files.setLastModifiedTime(rig.libRoot.resolve("old.pdf"), FileTime.fromMillis(now - 90 * DAY))
+            rig.session.rescan()
+            val id = rig.docId("old.pdf")
+            // As an older build's entry would name it: aged, yet nothing here records the trash.
+            val entry = NpnPaths.trashPath("old.pdf", id, now - 90 * DAY)
+            rig.fs.move("old.pdf", entry)
 
-                val (second, secondDb) = rig.secondSession(backgroundScope, clock = MutableClock(now + 1))
-                try {
-                    second.rescan()
-                    second.trashPurge.purge(olderThanDays = 30)
-                } finally {
-                    second.close()
-                    secondDb.close()
-                }
+            val (second, secondDb) = rig.secondSession(backgroundScope, clock = MutableClock(now + 1))
+            second.rescan()
+            second.trashPurge.purge(olderThanDays = 30)
 
-                rig.fs.sha256(entry) shouldBe id
-            } finally {
-                rig.close()
-            }
+            rig.fs.sha256(entry) shouldBe id
         }
 
     /**
@@ -684,23 +593,18 @@ class TrashPurgeTest {
      */
     @Test
     fun aTrashEntryThatArrivedBeforeItsTrashIsKept() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                val now = 400 * DAY
-                rig.clock.now = now
-                val bytes = PdfFixtures.embeddedTextPdf("trashed on another device")
-                val entry = NpnPaths.trashPath("elsewhere.pdf", sha256Bytes(bytes), now - 90 * DAY)
-                rig.writePdf(entry, bytes)
-                Files.setLastModifiedTime(rig.libRoot.resolve(entry), FileTime.fromMillis(now - 90 * DAY))
-                rig.session.rescan()
+        appSessionTest { rig ->
+            val now = 400 * DAY
+            rig.clock.now = now
+            val bytes = PdfFixtures.embeddedTextPdf("trashed on another device")
+            val entry = NpnPaths.trashPath("elsewhere.pdf", sha256Bytes(bytes), now - 90 * DAY)
+            rig.writePdf(entry, bytes)
+            Files.setLastModifiedTime(rig.libRoot.resolve(entry), FileTime.fromMillis(now - 90 * DAY))
+            rig.session.rescan()
 
-                rig.session.trashPurge.purge(olderThanDays = 30)
+            rig.session.trashPurge.purge(olderThanDays = 30)
 
-                rig.exists(entry).shouldBeTrue()
-            } finally {
-                rig.close()
-            }
+            rig.exists(entry).shouldBeTrue()
         }
 
     /**
@@ -711,8 +615,8 @@ class TrashPurgeTest {
     fun aFileADeleteForGoodLeftGoesWhenItsRetentionEnds() =
         runTest {
             var refusing = true
-            val rig =
-                AppSessionRig.create(backgroundScope, files = { fs ->
+            AppSessionRig
+                .create(backgroundScope, files = { fs ->
                     object : LibraryFileSystem by fs {
                         override suspend fun delete(relPath: String) {
                             if (refusing && relPath.startsWith("${NpnPaths.TRASH_DIR}/")) throw IOException("Refused")
@@ -720,27 +624,25 @@ class TrashPurgeTest {
                         }
                     }
                 })
-            try {
-                val now = 400 * DAY
-                rig.clock.now = now - 10 * DAY
-                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("deleted for good, its file left"))
-                rig.session.rescan()
-                val id = rig.docId("a.pdf")
-                rig.session.docLifecycle.trashDoc(id)
-                rig.clock.now = now
-                rig.session.docLifecycle.deleteDocPermanently(id) shouldBe PermanentDeleteOutcome.FILE_LEFT
-                refusing = false
+                .use { rig ->
+                    val now = 400 * DAY
+                    rig.clock.now = now - 10 * DAY
+                    rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("deleted for good, its file left"))
+                    rig.session.rescan()
+                    val id = rig.docId("a.pdf")
+                    rig.session.docLifecycle.trashDoc(id)
+                    rig.clock.now = now
+                    rig.session.docLifecycle.deleteDocPermanently(id) shouldBe PermanentDeleteOutcome.FILE_LEFT
+                    refusing = false
 
-                rig.clock.now = now + 25 * DAY
-                rig.session.trashPurge.purge(olderThanDays = 30)
-                trashEntries(rig.fs) shouldHaveSize 1
+                    rig.clock.now = now + 25 * DAY
+                    rig.session.trashPurge.purge(olderThanDays = 30)
+                    trashEntries(rig.fs) shouldHaveSize 1
 
-                rig.clock.now = now + 31 * DAY
-                rig.session.trashPurge.purge(olderThanDays = 30)
-                trashEntries(rig.fs).shouldBeEmpty()
-            } finally {
-                rig.close()
-            }
+                    rig.clock.now = now + 31 * DAY
+                    rig.session.trashPurge.purge(olderThanDays = 30)
+                    trashEntries(rig.fs).shouldBeEmpty()
+                }
         }
 
     /**
@@ -752,8 +654,8 @@ class TrashPurgeTest {
     fun anEntryTrashedAgainWhileThePurgeRunsIsKept() =
         runTest {
             var afterListing: (suspend () -> Unit)? = null
-            val rig =
-                AppSessionRig.create(backgroundScope, files = { fs ->
+            AppSessionRig
+                .create(backgroundScope, files = { fs ->
                     object : LibraryFileSystem by fs {
                         override suspend fun listAllUnder(relPath: String): List<FileMeta> {
                             val listed = fs.listAllUnder(relPath)
@@ -762,32 +664,30 @@ class TrashPurgeTest {
                         }
                     }
                 })
-            try {
-                val now = 400 * DAY
-                rig.clock.now = now
-                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("trashed, restored and trashed again"))
-                rig.session.rescan()
-                val id = rig.docId("a.pdf")
-                rig.session.docLifecycle.trashDoc(id)
-                val entry = trashEntries(rig.fs).single().relPath
-                rig.clock.now = now + 31 * DAY
-                afterListing = {
-                    rig.session.docLifecycle.restoreDoc(id)
+                .use { rig ->
+                    val now = 400 * DAY
+                    rig.clock.now = now
+                    rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("trashed, restored and trashed again"))
+                    rig.session.rescan()
+                    val id = rig.docId("a.pdf")
                     rig.session.docLifecycle.trashDoc(id)
+                    val entry = trashEntries(rig.fs).single().relPath
+                    rig.clock.now = now + 31 * DAY
+                    afterListing = {
+                        rig.session.docLifecycle.restoreDoc(id)
+                        rig.session.docLifecycle.trashDoc(id)
+                    }
+
+                    rig.session.trashPurge.purge(olderThanDays = 30)
+
+                    afterListing shouldBe null
+                    // The re-trash is a new episode with its own entry name; the purge left it holding
+                    // the document's bytes.
+                    val kept = trashEntries(rig.fs).map { it.relPath }
+                    kept shouldHaveSize 1
+                    kept.single() shouldNotBe entry
+                    rig.fs.sha256(kept.single()) shouldBe id
                 }
-
-                rig.session.trashPurge.purge(olderThanDays = 30)
-
-                afterListing shouldBe null
-                // The re-trash is a new episode with its own entry name; the purge left it holding
-                // the document's bytes.
-                val kept = trashEntries(rig.fs).map { it.relPath }
-                kept shouldHaveSize 1
-                kept.single() shouldNotBe entry
-                rig.fs.sha256(kept.single()) shouldBe id
-            } finally {
-                rig.close()
-            }
         }
 
     private suspend fun trashEntries(fs: LibraryFileSystem) =
@@ -809,94 +709,84 @@ class RestoreTargetTest {
      */
     @Test
     fun aRenameOntoATrashedDocumentsPathTakesItAndTheRestoreGoesBesideIt() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                rig.writePdf("inbox/invoice.pdf", PdfFixtures.embeddedTextPdf("trashed"))
-                rig.writePdf("inbox/q.pdf", PdfFixtures.embeddedTextPdf("renamed"))
-                rig.session.rescan()
-                val trashed = rig.docId("inbox/invoice.pdf")
-                val renamed = rig.docId("inbox/q.pdf")
-                rig.session.docLifecycle.trashDoc(trashed)
+        appSessionTest { rig ->
+            rig.writePdf("inbox/invoice.pdf", PdfFixtures.embeddedTextPdf("trashed"))
+            rig.writePdf("inbox/q.pdf", PdfFixtures.embeddedTextPdf("renamed"))
+            rig.session.rescan()
+            val trashed = rig.docId("inbox/invoice.pdf")
+            val renamed = rig.docId("inbox/q.pdf")
+            rig.session.docLifecycle.trashDoc(trashed)
 
-                rig.session.docLifecycle.renameFile(renamed, "invoice.pdf")
+            rig.session.docLifecycle.renameFile(renamed, "invoice.pdf")
 
-                rig.exists("inbox/q.pdf").shouldBeFalse()
-                rig.fs.sha256("inbox/invoice.pdf") shouldBe renamed
+            rig.exists("inbox/q.pdf").shouldBeFalse()
+            rig.fs.sha256("inbox/invoice.pdf") shouldBe renamed
+            rig.db
+                .documentDao()
+                .getByDocId(renamed)
+                .shouldNotBeNull()
+                .relPath shouldBe "inbox/invoice.pdf"
+            val hidden =
                 rig.db
                     .documentDao()
-                    .getByDocId(renamed)
+                    .getByDocId(trashed)
                     .shouldNotBeNull()
-                    .relPath shouldBe "inbox/invoice.pdf"
-                val hidden =
-                    rig.db
-                        .documentDao()
-                        .getByDocId(trashed)
-                        .shouldNotBeNull()
-                hidden.trashed.shouldBeTrue()
-                hidden.missing.shouldBeFalse()
-                hidden.trashedOrigPath shouldBe "inbox/invoice.pdf"
-                rig.session.rescan()
-                rig.fs.sha256("inbox/invoice.pdf") shouldBe renamed
+            hidden.trashed.shouldBeTrue()
+            hidden.missing.shouldBeFalse()
+            hidden.trashedOrigPath shouldBe "inbox/invoice.pdf"
+            rig.session.rescan()
+            rig.fs.sha256("inbox/invoice.pdf") shouldBe renamed
 
-                rig.session.docLifecycle.restoreDoc(trashed)
+            rig.session.docLifecycle.restoreDoc(trashed)
 
-                rig.fs.sha256("inbox/invoice.pdf") shouldBe renamed
-                rig.fs.sha256("inbox/invoice (restored).pdf") shouldBe trashed
-                rig.session.rescan()
-                val restored =
-                    rig.db
-                        .documentDao()
-                        .getByDocId(trashed)
-                        .shouldNotBeNull()
-                restored.isLive.shouldBeTrue()
-                restored.relPath shouldBe "inbox/invoice (restored).pdf"
+            rig.fs.sha256("inbox/invoice.pdf") shouldBe renamed
+            rig.fs.sha256("inbox/invoice (restored).pdf") shouldBe trashed
+            rig.session.rescan()
+            val restored =
                 rig.db
                     .documentDao()
-                    .getByDocId(renamed)
+                    .getByDocId(trashed)
                     .shouldNotBeNull()
-                    .relPath shouldBe "inbox/invoice.pdf"
-            } finally {
-                rig.close()
-            }
+            restored.isLive.shouldBeTrue()
+            restored.relPath shouldBe "inbox/invoice (restored).pdf"
+            rig.db
+                .documentDao()
+                .getByDocId(renamed)
+                .shouldNotBeNull()
+                .relPath shouldBe "inbox/invoice.pdf"
         }
 
     /** Nor does a restore with no copy left in the trash take the path another document holds. */
     @Test
     fun aRestoreWithNoTrashCopyLeavesTheDocumentAtItsOldPathAlone() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                rig.writePdf("inbox/invoice.pdf", PdfFixtures.embeddedTextPdf("trashed"))
-                rig.writePdf("inbox/q.pdf", PdfFixtures.embeddedTextPdf("renamed"))
-                rig.session.rescan()
-                val trashed = rig.docId("inbox/invoice.pdf")
-                val renamed = rig.docId("inbox/q.pdf")
-                rig.session.docLifecycle.trashDoc(trashed)
-                rig.fs
-                    .listAllUnder(NpnPaths.TRASH_DIR)
-                    .filter { !it.isDirectory }
-                    .forEach { rig.fs.delete(it.relPath) }
-                rig.session.docLifecycle.renameFile(renamed, "invoice.pdf")
+        appSessionTest { rig ->
+            rig.writePdf("inbox/invoice.pdf", PdfFixtures.embeddedTextPdf("trashed"))
+            rig.writePdf("inbox/q.pdf", PdfFixtures.embeddedTextPdf("renamed"))
+            rig.session.rescan()
+            val trashed = rig.docId("inbox/invoice.pdf")
+            val renamed = rig.docId("inbox/q.pdf")
+            rig.session.docLifecycle.trashDoc(trashed)
+            rig.fs
+                .listAllUnder(NpnPaths.TRASH_DIR)
+                .filter { !it.isDirectory }
+                .forEach { rig.fs.delete(it.relPath) }
+            rig.session.docLifecycle.renameFile(renamed, "invoice.pdf")
 
-                rig.session.docLifecycle.restoreDoc(trashed)
+            rig.session.docLifecycle.restoreDoc(trashed)
 
-                rig.fs.sha256("inbox/invoice.pdf") shouldBe renamed
+            rig.fs.sha256("inbox/invoice.pdf") shouldBe renamed
+            rig.db
+                .documentDao()
+                .getByDocId(renamed)
+                .shouldNotBeNull()
+                .relPath shouldBe "inbox/invoice.pdf"
+            val restored =
                 rig.db
                     .documentDao()
-                    .getByDocId(renamed)
+                    .getByDocId(trashed)
                     .shouldNotBeNull()
-                    .relPath shouldBe "inbox/invoice.pdf"
-                val restored =
-                    rig.db
-                        .documentDao()
-                        .getByDocId(trashed)
-                        .shouldNotBeNull()
-                restored.trashed.shouldBeFalse()
-                restored.relPath shouldBe "inbox/invoice (restored).pdf"
-            } finally {
-                rig.close()
-            }
+            restored.trashed.shouldBeFalse()
+            restored.relPath shouldBe "inbox/invoice (restored).pdf"
         }
 
     /**
@@ -947,29 +837,24 @@ class RestoreTargetTest {
      * [block] gets the trashed document's id and the other one's row.
      */
     private fun withPathTakenByAGoneFile(block: suspend (AppSessionRig, String, DocumentEntity) -> Unit) =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                rig.writePdf("inbox/x.pdf", PdfFixtures.embeddedTextPdf("trashed"))
-                rig.session.rescan()
-                val trashed = rig.docId("inbox/x.pdf")
-                rig.session.docLifecycle.trashDoc(trashed)
-                val imported =
-                    rig.session.ingest
-                        .importPdfBytes(PdfFixtures.embeddedTextPdf("imported since"), "x.pdf")
-                        .shouldBeInstanceOf<ImportOutcome.Imported>()
-                imported.relPath shouldBe "inbox/x.pdf"
-                rig.session.work.drainOcr()
-                Files.delete(rig.libRoot.resolve("inbox/x.pdf"))
-                val later =
-                    rig.db
-                        .documentDao()
-                        .getByDocId(imported.docId)
-                        .shouldNotBeNull()
-                block(rig, trashed, later)
-            } finally {
-                rig.close()
-            }
+        appSessionTest { rig ->
+            rig.writePdf("inbox/x.pdf", PdfFixtures.embeddedTextPdf("trashed"))
+            rig.session.rescan()
+            val trashed = rig.docId("inbox/x.pdf")
+            rig.session.docLifecycle.trashDoc(trashed)
+            val imported =
+                rig.session.ingest
+                    .importPdfBytes(PdfFixtures.embeddedTextPdf("imported since"), "x.pdf")
+                    .shouldBeInstanceOf<ImportOutcome.Imported>()
+            imported.relPath shouldBe "inbox/x.pdf"
+            rig.session.work.drainOcr()
+            Files.delete(rig.libRoot.resolve("inbox/x.pdf"))
+            val later =
+                rig.db
+                    .documentDao()
+                    .getByDocId(imported.docId)
+                    .shouldNotBeNull()
+            block(rig, trashed, later)
         }
 }
 
@@ -1133,29 +1018,24 @@ class PermanentDeleteTest {
      */
     @Test
     fun deletingForGoodADocumentRestoredSinceLeavesItAndItsFile() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("restored before the delete"))
-                rig.session.rescan()
-                val id = rig.docId("a.pdf")
-                rig.session.docLifecycle.trashDoc(id)
-                rig.session.docLifecycle.restoreDoc(id)
-                val objects = rig.journalObjectCount()
+        appSessionTest { rig ->
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("restored before the delete"))
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+            rig.session.docLifecycle.trashDoc(id)
+            rig.session.docLifecycle.restoreDoc(id)
+            val objects = rig.journalObjectCount()
 
-                rig.session.docLifecycle.deleteDocPermanently(id) shouldBe PermanentDeleteOutcome.NOT_IN_TRASH
+            rig.session.docLifecycle.deleteDocPermanently(id) shouldBe PermanentDeleteOutcome.NOT_IN_TRASH
 
-                rig.fs.sha256("a.pdf") shouldBe id
-                rig.journalObjectCount() shouldBe objects
-                rig.db
-                    .documentDao()
-                    .getByDocId(id)
-                    .shouldNotBeNull()
-                    .isLive
-                    .shouldBeTrue()
-            } finally {
-                rig.close()
-            }
+            rig.fs.sha256("a.pdf") shouldBe id
+            rig.journalObjectCount() shouldBe objects
+            rig.db
+                .documentDao()
+                .getByDocId(id)
+                .shouldNotBeNull()
+                .isLive
+                .shouldBeTrue()
         }
 
     /**
@@ -1166,8 +1046,7 @@ class PermanentDeleteTest {
     fun aDocumentAnImportBroughtBackBeforeItsFileWentKeepsTheFile() =
         runTest {
             val importing = BeforeTrashListing()
-            val rig = AppSessionRig.create(backgroundScope, files = importing::over)
-            try {
+            AppSessionRig.create(backgroundScope, files = importing::over).use { rig ->
                 val bytes = PdfFixtures.embeddedTextPdf("deleted, and imported again")
                 rig.writePdf("a.pdf", bytes)
                 val id = trashedInPlace(rig, "a.pdf")
@@ -1187,8 +1066,6 @@ class PermanentDeleteTest {
                         .shouldNotBeNull()
                 row.deleted.shouldBeFalse()
                 row.relPath shouldBe "a.pdf"
-            } finally {
-                rig.close()
             }
         }
 
@@ -1201,8 +1078,7 @@ class PermanentDeleteTest {
     fun aRescanBeforeTheFileWentDoesNotKeepIt() =
         runTest {
             val rescanning = BeforeTrashListing()
-            val rig = AppSessionRig.create(backgroundScope, files = rescanning::over)
-            try {
+            AppSessionRig.create(backgroundScope, files = rescanning::over).use { rig ->
                 rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("deleted, its file still in place"))
                 val id = trashedInPlace(rig, "a.pdf")
                 rescanning.next = { rig.session.rescan() }
@@ -1217,8 +1093,6 @@ class PermanentDeleteTest {
                     .shouldNotBeNull()
                     .deleted
                     .shouldBeTrue()
-            } finally {
-                rig.close()
             }
         }
 
@@ -1229,45 +1103,40 @@ class PermanentDeleteTest {
      */
     @Test
     fun deletingForGoodReadsNoFileAnotherDocumentHoldsAtTheOldPath() =
-        runTest {
-            val rig = IndexRig.create()
-            try {
-                val recorded = WatchedFileSystem(rig.fs).also { it.db = rig.db }
-                val importing = BeforeTrashListing()
-                val files = importing.over(recorded)
-                val coordinator = rig.coordinator()
-                val writer =
-                    MetadataWriterImpl(
-                        coordinator,
-                        rig.db,
-                        files,
-                        TrashOps(files),
-                        StoragePathRuleApplicator(files, rig.db, { null }, { _, _ -> }),
-                        NpnLog.None,
-                        BakeLock(),
-                        rig.clock,
-                    )
-                rig.writePdf("inbox/x.pdf", "deleted for good")
+        indexTest { rig ->
+            val recorded = WatchedFileSystem(rig.fs).also { it.db = rig.db }
+            val importing = BeforeTrashListing()
+            val files = importing.over(recorded)
+            val coordinator = rig.coordinator()
+            val writer =
+                MetadataWriterImpl(
+                    coordinator,
+                    rig.db,
+                    files,
+                    TrashOps(files),
+                    StoragePathRuleApplicator(files, rig.db, { null }, { _, _ -> }),
+                    NpnLog.None,
+                    BakeLock(),
+                    rig.clock,
+                )
+            rig.writePdf("inbox/x.pdf", "deleted for good")
+            coordinator.rescan()
+            val deleted = rig.fs.sha256("inbox/x.pdf")
+            writer.trashDoc(deleted)
+            importing.next = {
+                rig.writePdf("inbox/x.pdf", "imported since")
                 coordinator.rescan()
-                val deleted = rig.fs.sha256("inbox/x.pdf")
-                writer.trashDoc(deleted)
-                importing.next = {
-                    rig.writePdf("inbox/x.pdf", "imported since")
-                    coordinator.rescan()
-                    recorded.clear()
-                }
-
-                writer.deleteDocPermanently(deleted)
-
-                recorded.calls("sha256").filterNot { it.contains(NpnPaths.TRASH_DIR) }.shouldBeEmpty()
-                rig.fs.readBytes("inbox/x.pdf").decodeToString() shouldBe "imported since"
-                rig.fs
-                    .listAllUnder(NpnPaths.TRASH_DIR)
-                    .filter { !it.isDirectory }
-                    .shouldBeEmpty()
-            } finally {
-                rig.close()
+                recorded.clear()
             }
+
+            writer.deleteDocPermanently(deleted)
+
+            recorded.calls("sha256").filterNot { it.contains(NpnPaths.TRASH_DIR) }.shouldBeEmpty()
+            rig.fs.readBytes("inbox/x.pdf").decodeToString() shouldBe "imported since"
+            rig.fs
+                .listAllUnder(NpnPaths.TRASH_DIR)
+                .filter { !it.isDirectory }
+                .shouldBeEmpty()
         }
 
     /**
@@ -1276,45 +1145,40 @@ class PermanentDeleteTest {
      */
     @Test
     fun deletingForGoodADocumentWithNoTrashCopyLeavesAnotherFileAtItsOldPath() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                rig.writePdf("inbox/invoice.pdf", PdfFixtures.embeddedTextPdf("trashed"))
-                rig.session.rescan()
-                val trashed = rig.docId("inbox/invoice.pdf")
-                rig.session.docLifecycle.trashDoc(trashed)
-                rig.fs
-                    .listAllUnder(NpnPaths.TRASH_DIR)
-                    .filter { !it.isDirectory }
-                    .forEach { rig.fs.delete(it.relPath) }
-                val newcomer = PdfFixtures.embeddedTextPdf("newcomer")
-                rig.writePdf("inbox/invoice.pdf", newcomer)
+        appSessionTest { rig ->
+            rig.writePdf("inbox/invoice.pdf", PdfFixtures.embeddedTextPdf("trashed"))
+            rig.session.rescan()
+            val trashed = rig.docId("inbox/invoice.pdf")
+            rig.session.docLifecycle.trashDoc(trashed)
+            rig.fs
+                .listAllUnder(NpnPaths.TRASH_DIR)
+                .filter { !it.isDirectory }
+                .forEach { rig.fs.delete(it.relPath) }
+            val newcomer = PdfFixtures.embeddedTextPdf("newcomer")
+            rig.writePdf("inbox/invoice.pdf", newcomer)
 
-                rig.session.docLifecycle.deleteDocPermanently(trashed)
+            rig.session.docLifecycle.deleteDocPermanently(trashed)
 
-                rig.fs.readBytes("inbox/invoice.pdf") shouldBe newcomer
-                rig.db
-                    .documentDao()
-                    .getByDocId(trashed)
-                    .shouldNotBeNull()
-                    .deleted
-                    .shouldBeTrue()
-                // The journal holds the deletion: a rescan, which folds it, keeps the document gone
-                // and indexes the newcomer.
-                rig.session.rescan()
-                rig.db
-                    .documentDao()
-                    .getByDocId(trashed)
-                    .shouldNotBeNull()
-                    .deleted
-                    .shouldBeTrue()
-                rig.db
-                    .documentDao()
-                    .getByRelPath("inbox/invoice.pdf")
-                    ?.docId shouldBe rig.fs.sha256("inbox/invoice.pdf")
-            } finally {
-                rig.close()
-            }
+            rig.fs.readBytes("inbox/invoice.pdf") shouldBe newcomer
+            rig.db
+                .documentDao()
+                .getByDocId(trashed)
+                .shouldNotBeNull()
+                .deleted
+                .shouldBeTrue()
+            // The journal holds the deletion: a rescan, which folds it, keeps the document gone
+            // and indexes the newcomer.
+            rig.session.rescan()
+            rig.db
+                .documentDao()
+                .getByDocId(trashed)
+                .shouldNotBeNull()
+                .deleted
+                .shouldBeTrue()
+            rig.db
+                .documentDao()
+                .getByRelPath("inbox/invoice.pdf")
+                ?.docId shouldBe rig.fs.sha256("inbox/invoice.pdf")
         }
 
     /**
@@ -1323,37 +1187,32 @@ class PermanentDeleteTest {
      */
     @Test
     fun deletingForGoodRemovesTheCopyInTheTrashAndTheOneAtItsPath() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                val bytes = PdfFixtures.embeddedTextPdf("in the trash, and back at its path")
-                rig.writePdf("a.pdf", bytes)
-                rig.session.rescan()
-                val id = rig.docId("a.pdf")
-                rig.session.docLifecycle.trashDoc(id)
-                rig.writePdf("a.pdf", bytes)
+        appSessionTest { rig ->
+            val bytes = PdfFixtures.embeddedTextPdf("in the trash, and back at its path")
+            rig.writePdf("a.pdf", bytes)
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+            rig.session.docLifecycle.trashDoc(id)
+            rig.writePdf("a.pdf", bytes)
 
-                rig.session.docLifecycle.deleteDocPermanently(id) shouldBe PermanentDeleteOutcome.DELETED
+            rig.session.docLifecycle.deleteDocPermanently(id) shouldBe PermanentDeleteOutcome.DELETED
 
-                rig.exists("a.pdf").shouldBeFalse()
-                rig.fs
-                    .listAllUnder(NpnPaths.TRASH_DIR)
-                    .filter { !it.isDirectory }
-                    .shouldBeEmpty()
-                rig.session.rescan()
-                rig.fs
-                    .listAllIndexable()
-                    .filter { !it.isDirectory }
-                    .shouldBeEmpty()
-                rig.db
-                    .documentDao()
-                    .getByDocId(id)
-                    .shouldNotBeNull()
-                    .deleted
-                    .shouldBeTrue()
-            } finally {
-                rig.close()
-            }
+            rig.exists("a.pdf").shouldBeFalse()
+            rig.fs
+                .listAllUnder(NpnPaths.TRASH_DIR)
+                .filter { !it.isDirectory }
+                .shouldBeEmpty()
+            rig.session.rescan()
+            rig.fs
+                .listAllIndexable()
+                .filter { !it.isDirectory }
+                .shouldBeEmpty()
+            rig.db
+                .documentDao()
+                .getByDocId(id)
+                .shouldNotBeNull()
+                .deleted
+                .shouldBeTrue()
         }
 
     /**
@@ -1362,31 +1221,26 @@ class PermanentDeleteTest {
      */
     @Test
     fun aFileThatCouldNotBeRemovedIsReportedAndTheDocumentStaysDeleted() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope, files = ::refusingTrashDeletes)
-            try {
-                val names = listOf("a", "b", "c")
-                names.forEach { rig.writePdf("$it.pdf", PdfFixtures.embeddedTextPdf("file of $it")) }
-                rig.session.rescan()
-                val ids = names.map { rig.docId("$it.pdf") }
-                ids.forEach { rig.session.docLifecycle.trashDoc(it) }
+        appSessionTest(files = ::refusingTrashDeletes) { rig ->
+            val names = listOf("a", "b", "c")
+            names.forEach { rig.writePdf("$it.pdf", PdfFixtures.embeddedTextPdf("file of $it")) }
+            rig.session.rescan()
+            val ids = names.map { rig.docId("$it.pdf") }
+            ids.forEach { rig.session.docLifecycle.trashDoc(it) }
 
-                rig.session.docLifecycle.deleteDocPermanently(ids[0]) shouldBe PermanentDeleteOutcome.FILE_LEFT
-                rig.session.docLifecycle.deleteDocsPermanently(ids.drop(1)) shouldBe
-                    PermanentDeleteTally(failed = 0, filesLeft = 2)
+            rig.session.docLifecycle.deleteDocPermanently(ids[0]) shouldBe PermanentDeleteOutcome.FILE_LEFT
+            rig.session.docLifecycle.deleteDocsPermanently(ids.drop(1)) shouldBe
+                PermanentDeleteTally(failed = 0, filesLeft = 2)
 
-                ids.forEach {
-                    rig.db
-                        .documentDao()
-                        .getByDocId(it)
-                        .shouldNotBeNull()
-                        .deleted
-                        .shouldBeTrue()
-                }
-                rig.fs.listAllUnder(NpnPaths.TRASH_DIR).filter { !it.isDirectory } shouldHaveSize 3
-            } finally {
-                rig.close()
+            ids.forEach {
+                rig.db
+                    .documentDao()
+                    .getByDocId(it)
+                    .shouldNotBeNull()
+                    .deleted
+                    .shouldBeTrue()
             }
+            rig.fs.listAllUnder(NpnPaths.TRASH_DIR).filter { !it.isDirectory } shouldHaveSize 3
         }
 
     /** [fs], whose provider refuses to delete anything in the trash. */

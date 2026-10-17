@@ -19,7 +19,6 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldStartWith
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
 import kotlin.test.Test
 
@@ -40,13 +39,9 @@ class DocumentRestoreTest {
     private fun withRig(
         writeUndelete: Boolean = JournalOp.DocUndelete.WRITTEN,
         block: suspend () -> Unit,
-    ) = runTest {
-        rig = AppSessionRig.create(backgroundScope, writeUndelete = writeUndelete)
-        try {
-            block()
-        } finally {
-            rig.close()
-        }
+    ) = appSessionTest(writeUndelete = writeUndelete) {
+        rig = it
+        block()
     }
 
     /** Neither deleted nor trashed once imported again, and still so after an edit and a rescan. */

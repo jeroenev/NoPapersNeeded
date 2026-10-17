@@ -9,14 +9,13 @@ import dev.npn.core.model.SystemProperty
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 
 /** Switching to the inbox workflow marks documents reviewed: once each, never twice. */
 class ReviewMigrationTest {
     @Test
     fun aMigrationWithNothingToMarkWritesNoEvent() =
-        withRig { rig ->
+        appSessionTest { rig ->
             rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
             rig.session.rescan()
             rig.session.reviewConfig.markReviewedForMigration(onlyTagged = false)
@@ -29,7 +28,7 @@ class ReviewMigrationTest {
 
     @Test
     fun onlyDocumentsNotYetReviewedAreMarked() =
-        withRig { rig ->
+        appSessionTest { rig ->
             rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
             rig.writePdf("b.pdf", PdfFixtures.embeddedTextPdf("bravo"))
             rig.session.rescan()
@@ -44,7 +43,7 @@ class ReviewMigrationTest {
 
     @Test
     fun theTaggedMigrationMarksOnlyTaggedDocumentsNotYetReviewed() =
-        withRig { rig ->
+        appSessionTest { rig ->
             rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
             rig.writePdf("b.pdf", PdfFixtures.embeddedTextPdf("bravo"))
             rig.writePdf("c.pdf", PdfFixtures.embeddedTextPdf("charlie"))
@@ -68,14 +67,4 @@ class ReviewMigrationTest {
             .mapNotNull(JournalCodec::decodeLineOrNull)
             .filter { (it.op as? JournalOp.PropSet)?.key == SystemProperty.REVIEWED }
             .map { it.doc }
-
-    private fun withRig(block: suspend (AppSessionRig) -> Unit) =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                block(rig)
-            } finally {
-                rig.close()
-            }
-        }
 }

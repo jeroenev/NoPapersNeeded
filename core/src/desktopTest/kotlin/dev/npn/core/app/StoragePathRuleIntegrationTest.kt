@@ -30,45 +30,33 @@ import kotlin.test.Test
 class StoragePathRuleIntegrationTest {
     @Test
     fun importUsesRuleAndUniquifiesCollisions() =
-        runTest {
-            val rule = StoragePathRule("organized/{title}.pdf", enabled = true)
-            val rig = AppSessionRig.create(backgroundScope, storagePath = rule)
-            try {
-                val first =
-                    rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("one"), "same.pdf")
-                        as ImportOutcome.Imported
-                val second =
-                    rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("two"), "same.pdf")
-                        as ImportOutcome.Imported
+        appSessionTest(storagePath = StoragePathRule("organized/{title}.pdf", enabled = true)) { rig ->
+            val first =
+                rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("one"), "same.pdf")
+                    as ImportOutcome.Imported
+            val second =
+                rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("two"), "same.pdf")
+                    as ImportOutcome.Imported
 
-                first.relPath shouldBe "organized/same.pdf"
-                second.relPath shouldBe "organized/same-1.pdf"
-                rig.exists(first.relPath) shouldBe true
-                rig.exists(second.relPath) shouldBe true
-            } finally {
-                rig.close()
-            }
+            first.relPath shouldBe "organized/same.pdf"
+            second.relPath shouldBe "organized/same-1.pdf"
+            rig.exists(first.relPath) shouldBe true
+            rig.exists(second.relPath) shouldBe true
         }
 
     /** A file the index has not seen yet at the rule's target takes that path too: the import goes beside it. */
     @Test
     fun importGoesBesideAnUnindexedFileAtTheRulesTarget() =
-        runTest {
-            val rule = StoragePathRule("organized/{title}.pdf", enabled = true)
-            val rig = AppSessionRig.create(backgroundScope, storagePath = rule)
-            try {
-                val there = PdfFixtures.embeddedTextPdf("there")
-                rig.writePdf("organized/same.pdf", there)
+        appSessionTest(storagePath = StoragePathRule("organized/{title}.pdf", enabled = true)) { rig ->
+            val there = PdfFixtures.embeddedTextPdf("there")
+            rig.writePdf("organized/same.pdf", there)
 
-                val imported =
-                    rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("one"), "same.pdf")
-                        as ImportOutcome.Imported
+            val imported =
+                rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("one"), "same.pdf")
+                    as ImportOutcome.Imported
 
-                imported.relPath shouldBe "organized/same-1.pdf"
-                rig.fs.readBytes("organized/same.pdf") shouldBe there
-            } finally {
-                rig.close()
-            }
+            imported.relPath shouldBe "organized/same-1.pdf"
+            rig.fs.readBytes("organized/same.pdf") shouldBe there
         }
 
     /**
@@ -78,61 +66,51 @@ class StoragePathRuleIntegrationTest {
      */
     @Test
     fun importExpandsADatePatternOnAUserDefinedDateField() =
-        runTest {
-            val rule = StoragePathRule("organized/{field:invoiceDate:yyyy}/{title}.pdf", enabled = true)
-            val rig = AppSessionRig.create(backgroundScope, storagePath = rule)
-            try {
-                rig.session.fieldRegistry.upsert(
-                    FieldDef(
-                        "invoiceDate",
-                        "Invoice date",
-                        FieldType.DATE,
-                        showByDefault = false,
-                        aiEnabled = false,
-                        position = 9,
-                    ),
-                )
-                val imported =
-                    rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("one"), "scan.pdf")
-                        as ImportOutcome.Imported
-                imported.relPath shouldBe "organized/scan.pdf"
+        appSessionTest(
+            storagePath = StoragePathRule("organized/{field:invoiceDate:yyyy}/{title}.pdf", enabled = true),
+        ) { rig ->
+            rig.session.fieldRegistry.upsert(
+                FieldDef(
+                    "invoiceDate",
+                    "Invoice date",
+                    FieldType.DATE,
+                    showByDefault = false,
+                    aiEnabled = false,
+                    position = 9,
+                ),
+            )
+            val imported =
+                rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("one"), "scan.pdf")
+                    as ImportOutcome.Imported
+            imported.relPath shouldBe "organized/scan.pdf"
 
-                rig.session.meta.setField(imported.docId, "invoiceDate", "2026-03-14")
-                rig.db
-                    .documentDao()
-                    .requireByDocId(imported.docId)
-                    .relPath shouldBe "organized/2026/scan.pdf"
-            } finally {
-                rig.close()
-            }
+            rig.session.meta.setField(imported.docId, "invoiceDate", "2026-03-14")
+            rig.db
+                .documentDao()
+                .requireByDocId(imported.docId)
+                .relPath shouldBe "organized/2026/scan.pdf"
         }
 
     @Test
     fun metadataChangeMovesOnceAndKeepsProjectionCoherent() =
-        runTest {
-            val rule = StoragePathRule("by-title/{title}.pdf", enabled = true)
-            val rig = AppSessionRig.create(backgroundScope, storagePath = rule)
-            try {
-                val imported =
-                    rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("content"), "scan.pdf")
-                        as ImportOutcome.Imported
-                rig.session.meta.setField(imported.docId, FieldKeys.TITLE, "Annual report")
+        appSessionTest(storagePath = StoragePathRule("by-title/{title}.pdf", enabled = true)) { rig ->
+            val imported =
+                rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("content"), "scan.pdf")
+                    as ImportOutcome.Imported
+            rig.session.meta.setField(imported.docId, FieldKeys.TITLE, "Annual report")
 
-                val moved = rig.db.documentDao().requireByDocId(imported.docId)
-                moved.relPath shouldBe "by-title/Annual report.pdf"
-                moved.fileName shouldBe "Annual report.pdf"
-                rig.exists(moved.relPath) shouldBe true
-                rig.exists(imported.relPath) shouldBe false
+            val moved = rig.db.documentDao().requireByDocId(imported.docId)
+            moved.relPath shouldBe "by-title/Annual report.pdf"
+            moved.fileName shouldBe "Annual report.pdf"
+            rig.exists(moved.relPath) shouldBe true
+            rig.exists(imported.relPath) shouldBe false
 
-                rig.session.meta.setField(imported.docId, FieldKeys.TITLE, "Annual report")
-                rig.db
-                    .documentDao()
-                    .requireByDocId(imported.docId)
-                    .relPath shouldBe moved.relPath
-                rig.exists("by-title/Annual report-1.pdf") shouldBe false
-            } finally {
-                rig.close()
-            }
+            rig.session.meta.setField(imported.docId, FieldKeys.TITLE, "Annual report")
+            rig.db
+                .documentDao()
+                .requireByDocId(imported.docId)
+                .relPath shouldBe moved.relPath
+            rig.exists("by-title/Annual report-1.pdf") shouldBe false
         }
 
     /**
@@ -176,52 +154,44 @@ class StoragePathRuleIntegrationTest {
      */
     @Test
     fun aLocationTheStorageCannotCarryOutIsJournaledOnce() =
-        runTest {
-            val rule = StoragePathRule("organized/{title}.pdf", enabled = true)
-            val rig = AppSessionRig.create(backgroundScope, storagePath = rule, files = ::notRelocating)
-            try {
-                rig.writePdf("scan.pdf", PdfFixtures.embeddedTextPdf("content"))
-                rig.session.rescan()
-                val id = rig.docId("scan.pdf")
+        appSessionTest(
+            storagePath = StoragePathRule("organized/{title}.pdf", enabled = true),
+            files = ::notRelocating,
+        ) { rig ->
+            rig.writePdf("scan.pdf", PdfFixtures.embeddedTextPdf("content"))
+            rig.session.rescan()
+            val id = rig.docId("scan.pdf")
 
-                rig.session.meta.addTag(listOf(id), "first")
-                rig.session.meta.addTag(listOf(id), "second")
+            rig.session.meta.addTag(listOf(id), "first")
+            rig.session.meta.addTag(listOf(id), "second")
 
-                rig.storagePathEvents() shouldContainExactly listOf(id to "organized/scan.pdf")
-                rig.db
-                    .documentDao()
-                    .getByDocId(id)
-                    .shouldNotBeNull()
-                    .relPath shouldBe "scan.pdf"
-            } finally {
-                rig.close()
-            }
+            rig.storagePathEvents() shouldContainExactly listOf(id to "organized/scan.pdf")
+            rig.db
+                .documentDao()
+                .getByDocId(id)
+                .shouldNotBeNull()
+                .relPath shouldBe "scan.pdf"
         }
 
     /** There, a rename the user asks for is refused rather than journaled as if it had happened. */
     @Test
     fun aRenameTheStorageCannotCarryOutIsRefused() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope, files = ::notRelocating)
-            try {
-                rig.writePdf("scan.pdf", PdfFixtures.embeddedTextPdf("content"))
-                rig.session.rescan()
-                val id = rig.docId("scan.pdf")
-                val objects = rig.journalObjectCount()
+        appSessionTest(files = ::notRelocating) { rig ->
+            rig.writePdf("scan.pdf", PdfFixtures.embeddedTextPdf("content"))
+            rig.session.rescan()
+            val id = rig.docId("scan.pdf")
+            val objects = rig.journalObjectCount()
 
-                rig.session.docLifecycle.renameFile(id, "invoice.pdf") shouldBe RelocationOutcome.UNSUPPORTED
-                rig.session.docLifecycle.moveFile(id, "archive") shouldBe RelocationOutcome.UNSUPPORTED
+            rig.session.docLifecycle.renameFile(id, "invoice.pdf") shouldBe RelocationOutcome.UNSUPPORTED
+            rig.session.docLifecycle.moveFile(id, "archive") shouldBe RelocationOutcome.UNSUPPORTED
 
-                rig.journalObjectCount() shouldBe objects
-                rig.db
-                    .documentDao()
-                    .getByDocId(id)
-                    .shouldNotBeNull()
-                    .relPath shouldBe "scan.pdf"
-                rig.exists("scan.pdf") shouldBe true
-            } finally {
-                rig.close()
-            }
+            rig.journalObjectCount() shouldBe objects
+            rig.db
+                .documentDao()
+                .getByDocId(id)
+                .shouldNotBeNull()
+                .relPath shouldBe "scan.pdf"
+            rig.exists("scan.pdf") shouldBe true
         }
 
     /** [fs] as storage that cannot move a document, as a library opened through Android's folder picker. */

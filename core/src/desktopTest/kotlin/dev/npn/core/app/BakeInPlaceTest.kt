@@ -43,40 +43,35 @@ import kotlin.test.Test
 class BakeInPlaceTest {
     @Test
     fun aBakedDocumentKeepsItsMetadataOnTheNewHash() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
-                rig.session.rescan()
-                val before = rig.docId("a.pdf")
-                rig.session.meta.applyEdits(
-                    listOf(before),
-                    addTags = listOf("filed"),
-                    fields = mapOf(FieldKeys.TITLE to "Water bill", FieldKeys.CORRESPONDENT to "Aquafin"),
-                )
+        appSessionTest { rig ->
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val before = rig.docId("a.pdf")
+            rig.session.meta.applyEdits(
+                listOf(before),
+                addTags = listOf("filed"),
+                fields = mapOf(FieldKeys.TITLE to "Water bill", FieldKeys.CORRESPONDENT to "Aquafin"),
+            )
 
-                rig.session.content.bakeInPlace(before) shouldBe BakeOutcome.Baked
+            rig.session.content.bakeInPlace(before) shouldBe BakeOutcome.Baked
 
-                val after = rig.docId("a.pdf")
-                after shouldNotBe before
-                rig.db
-                    .documentDao()
-                    .getByDocId(after)
-                    ?.relPath shouldBe "a.pdf"
-                rig.db
-                    .documentFieldDao()
-                    .valuesOf(after) shouldBe
-                    mapOf(FieldKeys.TITLE to "Water bill", FieldKeys.CORRESPONDENT to "Aquafin")
-                rig.db
-                    .tagDao()
-                    .tagsForDocument(after) shouldContainExactly listOf("filed")
-                rig.db
-                    .documentDao()
-                    .getByDocId(before)
-                    ?.deleted shouldBe true
-            } finally {
-                rig.close()
-            }
+            val after = rig.docId("a.pdf")
+            after shouldNotBe before
+            rig.db
+                .documentDao()
+                .getByDocId(after)
+                ?.relPath shouldBe "a.pdf"
+            rig.db
+                .documentFieldDao()
+                .valuesOf(after) shouldBe
+                mapOf(FieldKeys.TITLE to "Water bill", FieldKeys.CORRESPONDENT to "Aquafin")
+            rig.db
+                .tagDao()
+                .tagsForDocument(after) shouldContainExactly listOf("filed")
+            rig.db
+                .documentDao()
+                .getByDocId(before)
+                ?.deleted shouldBe true
         }
 
     /**
@@ -85,98 +80,77 @@ class BakeInPlaceTest {
      */
     @Test
     fun anEditToABakedDocumentKeepsWhatItInherited() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                val (before, after) = bakeFiled(rig)
+        appSessionTest { rig ->
+            val (before, after) = bakeFiled(rig)
 
-                rig.session.meta.setReviewed(listOf(after), true)
+            rig.session.meta.setReviewed(listOf(after), true)
 
-                fieldsOf(rig, after) shouldBe FILED
-                rig.db
-                    .tagDao()
-                    .tagsForDocument(after) shouldContainExactly listOf("filed")
-                rig.db.ftsDao().searchDocIds("water") shouldContain after
-                // Projected with it, the original stays superseded, as a rescan leaves it.
-                val superseded = rig.db.documentDao().getByDocId(before)
-                superseded?.deleted shouldBe true
-                rig.session.rescan()
-                rig.db.documentDao().getByDocId(before) shouldBe superseded
-            } finally {
-                rig.close()
-            }
+            fieldsOf(rig, after) shouldBe FILED
+            rig.db
+                .tagDao()
+                .tagsForDocument(after) shouldContainExactly listOf("filed")
+            rig.db.ftsDao().searchDocIds("water") shouldContain after
+            // Projected with it, the original stays superseded, as a rescan leaves it.
+            val superseded = rig.db.documentDao().getByDocId(before)
+            superseded?.deleted shouldBe true
+            rig.session.rescan()
+            rig.db.documentDao().getByDocId(before) shouldBe superseded
         }
 
     /** The storage-path rule after an edit to a baked document files it by what it inherited. */
     @Test
     fun anEditToABakedDocumentFilesItByWhatItInherited() =
-        runTest {
-            val rule = StoragePathRule("{correspondent}/{title}.pdf", enabled = true)
-            val rig = AppSessionRig.create(backgroundScope, storagePath = rule)
-            try {
-                val filed = "Aquafin/Water bill.pdf"
-                val (_, after) = bakeFiled(rig)
-                rig.docId(filed) shouldBe after
+        appSessionTest(storagePath = StoragePathRule("{correspondent}/{title}.pdf", enabled = true)) { rig ->
+            val filed = "Aquafin/Water bill.pdf"
+            val (_, after) = bakeFiled(rig)
+            rig.docId(filed) shouldBe after
 
-                rig.session.meta.addTag(listOf(after), "x")
+            rig.session.meta.addTag(listOf(after), "x")
 
-                rig.db
-                    .documentDao()
-                    .getByDocId(after)
-                    ?.relPath shouldBe filed
-                rig.docId(filed) shouldBe after
-            } finally {
-                rig.close()
-            }
+            rig.db
+                .documentDao()
+                .getByDocId(after)
+                ?.relPath shouldBe filed
+            rig.docId(filed) shouldBe after
         }
 
     /** What a baked document inherited is its own: a clear clears it and a removal removes it, for good. */
     @Test
     fun whatABakedDocumentInheritedCanBeCleared() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                val (_, after) = bakeFiled(rig)
+        appSessionTest { rig ->
+            val (_, after) = bakeFiled(rig)
 
-                rig.session.meta.setField(after, FieldKeys.TITLE, null)
-                rig.session.meta.removeTag(listOf(after), "filed")
+            rig.session.meta.setField(after, FieldKeys.TITLE, null)
+            rig.session.meta.removeTag(listOf(after), "filed")
 
-                val cleared = mapOf(FieldKeys.CORRESPONDENT to "Aquafin")
-                fieldsOf(rig, after) shouldBe cleared
-                rig.db
-                    .tagDao()
-                    .tagsForDocument(after)
-                    .shouldBeEmpty()
-                rig.session.rescan()
-                fieldsOf(rig, after) shouldBe cleared
-                rig.db
-                    .tagDao()
-                    .tagsForDocument(after)
-                    .shouldBeEmpty()
-            } finally {
-                rig.close()
-            }
+            val cleared = mapOf(FieldKeys.CORRESPONDENT to "Aquafin")
+            fieldsOf(rig, after) shouldBe cleared
+            rig.db
+                .tagDao()
+                .tagsForDocument(after)
+                .shouldBeEmpty()
+            rig.session.rescan()
+            fieldsOf(rig, after) shouldBe cleared
+            rig.db
+                .tagDao()
+                .tagsForDocument(after)
+                .shouldBeEmpty()
         }
 
     /** A document baked twice shows the title it was given between the bakes, not the first one. */
     @Test
     fun aDocumentBakedTwiceShowsItsLatestTitle() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                val (_, middle) = bakeFiled(rig)
-                rig.session.meta.setField(middle, FieldKeys.TITLE, "Sewer bill")
+        appSessionTest { rig ->
+            val (_, middle) = bakeFiled(rig)
+            rig.session.meta.setField(middle, FieldKeys.TITLE, "Sewer bill")
 
-                rig.session.content.bakeInPlace(middle) shouldBe BakeOutcome.Baked
+            rig.session.content.bakeInPlace(middle) shouldBe BakeOutcome.Baked
 
-                val last = rig.docId("a.pdf")
-                val latest = FILED + (FieldKeys.TITLE to "Sewer bill")
-                fieldsOf(rig, last) shouldBe latest
-                rig.session.rescan()
-                fieldsOf(rig, last) shouldBe latest
-            } finally {
-                rig.close()
-            }
+            val last = rig.docId("a.pdf")
+            val latest = FILED + (FieldKeys.TITLE to "Sewer bill")
+            fieldsOf(rig, last) shouldBe latest
+            rig.session.rescan()
+            fieldsOf(rig, last) shouldBe latest
         }
 
     /**
@@ -185,53 +159,43 @@ class BakeInPlaceTest {
      */
     @Test
     fun theOriginalBytesOfABakedDocumentAreADuplicateOfIt() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                val original = PdfFixtures.embeddedTextPdf("alpha")
-                val (before, after) = baked(rig, original)
-                val superseded = rig.db.documentDao().getByDocId(before)
-                val objects = rig.journalObjectCount()
+        appSessionTest { rig ->
+            val original = PdfFixtures.embeddedTextPdf("alpha")
+            val (before, after) = baked(rig, original)
+            val superseded = rig.db.documentDao().getByDocId(before)
+            val objects = rig.journalObjectCount()
 
-                rig.session.ingest.importPdfBytes(original, "a.pdf") shouldBe ImportOutcome.Duplicate(after, "a.pdf")
+            rig.session.ingest.importPdfBytes(original, "a.pdf") shouldBe ImportOutcome.Duplicate(after, "a.pdf")
 
-                libraryPdfs(rig) shouldContainExactly listOf("a.pdf")
-                rig.journalObjectCount() shouldBe objects
-                rig.session.rescan().added shouldBe 0
-                rig.db.documentDao().getByDocId(before) shouldBe superseded
-                libraryPdfs(rig) shouldContainExactly listOf("a.pdf")
-            } finally {
-                rig.close()
-            }
+            libraryPdfs(rig) shouldContainExactly listOf("a.pdf")
+            rig.journalObjectCount() shouldBe objects
+            rig.session.rescan().added shouldBe 0
+            rig.db.documentDao().getByDocId(before) shouldBe superseded
+            libraryPdfs(rig) shouldContainExactly listOf("a.pdf")
         }
 
     /** With the baked document in the trash, the library shows nothing those bytes stand for: the import is refused. */
     @Test
     fun theOriginalBytesOfABakedDocumentInTheTrashAreRefused() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                val original = PdfFixtures.embeddedTextPdf("alpha")
-                val (before, after) = baked(rig, original)
-                rig.session.docLifecycle.trashDoc(after)
-                val superseded = rig.db.documentDao().getByDocId(before)
-                val objects = rig.journalObjectCount()
+        appSessionTest { rig ->
+            val original = PdfFixtures.embeddedTextPdf("alpha")
+            val (before, after) = baked(rig, original)
+            rig.session.docLifecycle.trashDoc(after)
+            val superseded = rig.db.documentDao().getByDocId(before)
+            val objects = rig.journalObjectCount()
 
-                rig.session.ingest.importPdfBytes(original, "a.pdf") shouldBe
-                    ImportOutcome.Failed(ImportFailure.SUPERSEDED)
+            rig.session.ingest.importPdfBytes(original, "a.pdf") shouldBe
+                ImportOutcome.Failed(ImportFailure.SUPERSEDED)
 
-                libraryPdfs(rig).shouldBeEmpty()
-                rig.journalObjectCount() shouldBe objects
-                rig.session.rescan().added shouldBe 0
-                rig.db.documentDao().getByDocId(before) shouldBe superseded
-                rig.db
-                    .documentDao()
-                    .getByDocId(after)
-                    ?.trashed shouldBe true
-                libraryPdfs(rig).shouldBeEmpty()
-            } finally {
-                rig.close()
-            }
+            libraryPdfs(rig).shouldBeEmpty()
+            rig.journalObjectCount() shouldBe objects
+            rig.session.rescan().added shouldBe 0
+            rig.db.documentDao().getByDocId(before) shouldBe superseded
+            rig.db
+                .documentDao()
+                .getByDocId(after)
+                ?.trashed shouldBe true
+            libraryPdfs(rig).shouldBeEmpty()
         }
 
     /**
@@ -240,61 +204,46 @@ class BakeInPlaceTest {
      */
     @Test
     fun aFileWithTheOriginalBytesOfABakedDocumentGetsNoRow() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                val original = PdfFixtures.embeddedTextPdf("alpha")
-                val (before, _) = baked(rig, original)
-                val superseded = rig.db.documentDao().getByDocId(before)
-                rig.writePdf("copy.pdf", original)
+        appSessionTest { rig ->
+            val original = PdfFixtures.embeddedTextPdf("alpha")
+            val (before, _) = baked(rig, original)
+            val superseded = rig.db.documentDao().getByDocId(before)
+            rig.writePdf("copy.pdf", original)
 
-                repeat(2) {
-                    val report = rig.session.rescan()
-                    report.added shouldBe 0
-                    report.relinkCandidates.shouldBeEmpty()
-                }
-
-                rig.db.documentDao().getByDocId(before) shouldBe superseded
-            } finally {
-                rig.close()
+            repeat(2) {
+                val report = rig.session.rescan()
+                report.added shouldBe 0
+                report.relinkCandidates.shouldBeEmpty()
             }
+
+            rig.db.documentDao().getByDocId(before) shouldBe superseded
         }
 
     @Test
     fun aDocumentThatIsGoneIsNotBaked() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
-                rig.session.rescan()
-                val id = rig.docId("a.pdf")
-                rig.session.docLifecycle.trashDoc(id)
+        appSessionTest { rig ->
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+            rig.session.docLifecycle.trashDoc(id)
 
-                rig.session.content.bakeInPlace(id) shouldBe BakeOutcome.Failed(BakeFailure.DOCUMENT_UNAVAILABLE)
-            } finally {
-                rig.close()
-            }
+            rig.session.content.bakeInPlace(id) shouldBe BakeOutcome.Failed(BakeFailure.DOCUMENT_UNAVAILABLE)
         }
 
     /** The file at a document's path was replaced and the index has not looked yet: that file is not baked. */
     @Test
     fun aDocumentWhosePathHoldsAnotherFileIsNotBaked() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
-                rig.session.rescan()
-                val id = rig.docId("a.pdf")
-                val replacement = PdfFixtures.embeddedTextPdf("replacement")
-                rig.fs.delete("a.pdf")
-                rig.writePdf("a.pdf", replacement)
+        appSessionTest { rig ->
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+            val replacement = PdfFixtures.embeddedTextPdf("replacement")
+            rig.fs.delete("a.pdf")
+            rig.writePdf("a.pdf", replacement)
 
-                rig.session.content.bakeInPlace(id) shouldBe BakeOutcome.Failed(BakeFailure.DOCUMENT_UNAVAILABLE)
+            rig.session.content.bakeInPlace(id) shouldBe BakeOutcome.Failed(BakeFailure.DOCUMENT_UNAVAILABLE)
 
-                rig.fs.readBytes("a.pdf") shouldBe replacement
-            } finally {
-                rig.close()
-            }
+            rig.fs.readBytes("a.pdf") shouldBe replacement
         }
 
     /**
@@ -316,8 +265,7 @@ class BakeInPlaceTest {
         runTest {
             val other = PdfFixtures.embeddedTextPdf("another document, written over the one being baked")
             val replacing = Replacing("a.pdf", other, moment)
-            val rig = AppSessionRig.create(backgroundScope, files = replacing::over)
-            try {
+            AppSessionRig.create(backgroundScope, files = replacing::over).use { rig ->
                 rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
                 rig.session.rescan()
                 rig.session.work.drainOcr()
@@ -330,8 +278,6 @@ class BakeInPlaceTest {
                 rig.fs.readBytes("a.pdf") shouldBe other
                 rig.journalObjectCount() shouldBe objects
                 rig.exists(NpnPaths.Temp.bakePath("a.pdf")) shouldBe false
-            } finally {
-                rig.close()
             }
         }
 
@@ -383,8 +329,7 @@ class BakeInPlaceTest {
     fun aFileThatCannotCarryMetadataIsRefusedAndLeftAlone() =
         runTest {
             val log = RecordingLog()
-            val rig = AppSessionRig.create(backgroundScope, log = log)
-            try {
+            AppSessionRig.create(backgroundScope, log = log).use { rig ->
                 val bytes = "not really a pdf".encodeToByteArray()
                 rig.writePdf("broken.pdf", bytes)
                 rig.session.rescan()
@@ -394,8 +339,6 @@ class BakeInPlaceTest {
 
                 rig.docId("broken.pdf") shouldBe id
                 log.entries.any { it.error is BakeRefusedException } shouldBe true
-            } finally {
-                rig.close()
             }
         }
 
@@ -655,27 +598,22 @@ class BakedTextTest {
     /** A relink to other bytes, as the user makes one for an edited document, hands on no text. */
     @Test
     fun aRelinkToOtherBytesHandsOnNoText() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                rig.writePdf("scan.pdf", PdfFixtures.imageOnlyPdf())
-                val original = rig.docId("scan.pdf")
-                publishSidecar(rig, original, OcrEngineId.AI, TRANSCRIPTION)
-                rig.session.rescan()
-                rig.fs.delete("scan.pdf")
-                rig.writePdf("edited.pdf", PdfFixtures.imageOnlyPdf(pages = 2))
-                rig.session.rescan()
-                val edited = rig.docId("edited.pdf")
+        appSessionTest { rig ->
+            rig.writePdf("scan.pdf", PdfFixtures.imageOnlyPdf())
+            val original = rig.docId("scan.pdf")
+            publishSidecar(rig, original, OcrEngineId.AI, TRANSCRIPTION)
+            rig.session.rescan()
+            rig.fs.delete("scan.pdf")
+            rig.writePdf("edited.pdf", PdfFixtures.imageOnlyPdf(pages = 2))
+            rig.session.rescan()
+            val edited = rig.docId("edited.pdf")
 
-                rig.session.maintenance.applyRelink(original, edited)
+            rig.session.maintenance.applyRelink(original, edited)
 
-                rig.session.ocr
-                    .ocrVersions(edited)
-                    .map { it.engine } shouldNotContain OcrEngineId.AI.column
-                rig.db.ftsDao().contentForDoc(edited) shouldNotBe TRANSCRIPTION
-            } finally {
-                rig.close()
-            }
+            rig.session.ocr
+                .ocrVersions(edited)
+                .map { it.engine } shouldNotContain OcrEngineId.AI.column
+            rig.db.ftsDao().contentForDoc(edited) shouldNotBe TRANSCRIPTION
         }
 
     /** Publish [text] as [docId]'s one-page sidecar of [engine], written by this device. */

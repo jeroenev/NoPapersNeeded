@@ -6,7 +6,6 @@ import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.ints.shouldBeLessThanOrEqual
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.measureTime
@@ -95,26 +94,21 @@ class RelinkPairingTest {
 
     @Test
     fun aRescanProposesTheFileThatTookAMissingDocumentsName() =
-        runTest {
-            val rig = IndexRig.create()
-            try {
-                rig.writePdf("2024/invoice.pdf", "alpha")
-                rig.writePdf("2024/passport.pdf", "papers")
-                rig.rescan()
-                val oldId = checkNotNull(rig.db.documentDao().rowAtPath("2024/invoice.pdf")).docId
+        indexTest { rig ->
+            rig.writePdf("2024/invoice.pdf", "alpha")
+            rig.writePdf("2024/passport.pdf", "papers")
+            rig.rescan()
+            val oldId = checkNotNull(rig.db.documentDao().rowAtPath("2024/invoice.pdf")).docId
 
-                rig.deleteFile("2024/invoice.pdf")
-                rig.writePdf("archive/invoice.pdf", "alpha, edited")
-                rig.writePdf("2024/unrelated.pdf", "something else entirely")
-                rig.clock.advance()
-                val report = rig.rescan()
+            rig.deleteFile("2024/invoice.pdf")
+            rig.writePdf("archive/invoice.pdf", "alpha, edited")
+            rig.writePdf("2024/unrelated.pdf", "something else entirely")
+            rig.clock.advance()
+            val report = rig.rescan()
 
-                val newId = checkNotNull(rig.db.documentDao().rowAtPath("archive/invoice.pdf")).docId
-                report.relinkCandidates.map { Triple(it.oldDocId, it.newDocId, it.signals) } shouldContainExactly
-                    listOf(Triple(oldId, newId, setOf(RelinkSignal.SAME_NAME)))
-            } finally {
-                rig.close()
-            }
+            val newId = checkNotNull(rig.db.documentDao().rowAtPath("archive/invoice.pdf")).docId
+            report.relinkCandidates.map { Triple(it.oldDocId, it.newDocId, it.signals) } shouldContainExactly
+                listOf(Triple(oldId, newId, setOf(RelinkSignal.SAME_NAME)))
         }
 
     private fun pad(index: Int) = index.toString().padStart(4, '0')

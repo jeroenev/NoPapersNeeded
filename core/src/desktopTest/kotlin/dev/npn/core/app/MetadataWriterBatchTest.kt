@@ -23,43 +23,37 @@ class MetadataWriterBatchTest {
      */
     @Test
     fun applyEditsCommitsMetadataAndPathIntentAndMovesOnce() =
-        runTest {
-            val rule = StoragePathRule("{correspondent}/{title}.pdf", enabled = true)
-            val rig = AppSessionRig.create(backgroundScope, storagePath = rule)
-            try {
-                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
-                rig.session.rescan()
-                val id = rig.docId("a.pdf")
-                val objectsBefore = rig.journalObjectCount()
+        appSessionTest(storagePath = StoragePathRule("{correspondent}/{title}.pdf", enabled = true)) { rig ->
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+            val objectsBefore = rig.journalObjectCount()
 
-                rig.session.meta.applyEdits(
-                    docIds = listOf(id),
-                    // Blank and duplicate tags are dropped rather than committed.
-                    addTags = listOf("invoice", "invoice", "  "),
-                    fields =
-                        mapOf(
-                            FieldKeys.TITLE to "Annual report",
-                            FieldKeys.CORRESPONDENT to "Acme",
-                            FieldKeys.DOC_DATE to "2026-01-31",
-                        ),
-                )
+            rig.session.meta.applyEdits(
+                docIds = listOf(id),
+                // Blank and duplicate tags are dropped rather than committed.
+                addTags = listOf("invoice", "invoice", "  "),
+                fields =
+                    mapOf(
+                        FieldKeys.TITLE to "Annual report",
+                        FieldKeys.CORRESPONDENT to "Acme",
+                        FieldKeys.DOC_DATE to "2026-01-31",
+                    ),
+            )
 
-                rig.journalObjectCount() shouldBe objectsBefore + 2
-                val doc = rig.db.documentDao().requireByDocId(id)
-                doc.title shouldBe "Annual report"
-                doc.correspondent shouldBe "Acme"
-                doc.docDate shouldBe "2026-01-31"
-                doc.relPath shouldBe "Acme/Annual report.pdf"
-                rig.exists(doc.relPath) shouldBe true
+            rig.journalObjectCount() shouldBe objectsBefore + 2
+            val doc = rig.db.documentDao().requireByDocId(id)
+            doc.title shouldBe "Annual report"
+            doc.correspondent shouldBe "Acme"
+            doc.docDate shouldBe "2026-01-31"
+            doc.relPath shouldBe "Acme/Annual report.pdf"
+            rig.exists(doc.relPath) shouldBe true
 
-                val items =
-                    rig.session.documents
-                        .observeDocuments(LibraryFilter(), LibrarySort())
-                        .first()
-                tagsOf(items, id) shouldContainExactlyInAnyOrder listOf("invoice")
-            } finally {
-                rig.close()
-            }
+            val items =
+                rig.session.documents
+                    .observeDocuments(LibraryFilter(), LibrarySort())
+                    .first()
+            tagsOf(items, id) shouldContainExactlyInAnyOrder listOf("invoice")
         }
 
     /**
@@ -70,8 +64,7 @@ class MetadataWriterBatchTest {
     fun applyEditsWritesManyDocumentsInOneTransaction() =
         runTest {
             val rule = StoragePathRule("{correspondent}/{title}.pdf", enabled = true)
-            val rig = AppSessionRig.create(backgroundScope, storagePath = rule)
-            try {
+            AppSessionRig.create(backgroundScope, storagePath = rule).use { rig ->
                 rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
                 rig.writePdf("b.pdf", PdfFixtures.embeddedTextPdf("beta"))
                 rig.session.rescan()
@@ -104,33 +97,26 @@ class MetadataWriterBatchTest {
                         .first()
                 tagsOf(items, a) shouldContainExactlyInAnyOrder listOf("scan")
                 tagsOf(items, b) shouldContainExactlyInAnyOrder listOf("scan")
-            } finally {
-                rig.close()
             }
         }
 
     /** Absent keys are untouched; a present key with a blank value clears that property. */
     @Test
     fun applyEditsClearsOnlyThePropertiesItCarries() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
-                rig.session.rescan()
-                val id = rig.docId("a.pdf")
-                rig.session.meta.applyEdits(
-                    listOf(id),
-                    fields = mapOf(FieldKeys.TITLE to "Keep me", FieldKeys.CORRESPONDENT to "Acme"),
-                )
+        appSessionTest { rig ->
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+            rig.session.meta.applyEdits(
+                listOf(id),
+                fields = mapOf(FieldKeys.TITLE to "Keep me", FieldKeys.CORRESPONDENT to "Acme"),
+            )
 
-                rig.session.meta.applyEdits(listOf(id), fields = mapOf(FieldKeys.CORRESPONDENT to null))
+            rig.session.meta.applyEdits(listOf(id), fields = mapOf(FieldKeys.CORRESPONDENT to null))
 
-                val doc = rig.db.documentDao().requireByDocId(id)
-                doc.title shouldBe "Keep me"
-                doc.correspondent shouldBe null
-            } finally {
-                rig.close()
-            }
+            val doc = rig.db.documentDao().requireByDocId(id)
+            doc.title shouldBe "Keep me"
+            doc.correspondent shouldBe null
         }
 
     /**
@@ -140,72 +126,62 @@ class MetadataWriterBatchTest {
      */
     @Test
     fun aFillOnlyEditWritesOnlyWhatTheDocumentLacksWhenItCommits() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
-                rig.session.rescan()
-                val id = rig.docId("a.pdf")
-                rig.session.meta.setField(id, FieldKeys.TITLE, "Mine")
-                rig.session.meta.addTag(listOf(id), "Invoice")
+        appSessionTest { rig ->
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+            rig.session.meta.setField(id, FieldKeys.TITLE, "Mine")
+            rig.session.meta.addTag(listOf(id), "Invoice")
 
-                rig.session.meta.applyEdits(
-                    listOf(id),
-                    addTags = listOf("invoice", "energy"),
-                    fields = mapOf(FieldKeys.TITLE to "Model title", FieldKeys.CORRESPONDENT to "Acme"),
-                    fillOnly = true,
-                )
+            rig.session.meta.applyEdits(
+                listOf(id),
+                addTags = listOf("invoice", "energy"),
+                fields = mapOf(FieldKeys.TITLE to "Model title", FieldKeys.CORRESPONDENT to "Acme"),
+                fillOnly = true,
+            )
 
-                val doc =
-                    rig.db
-                        .documentDao()
-                        .getByDocId(id)
-                        .shouldNotBeNull()
-                doc.title shouldBe "Mine"
-                doc.correspondent shouldBe "Acme"
-                val items =
-                    rig.session.documents
-                        .observeDocuments(LibraryFilter(), LibrarySort())
-                        .first()
-                tagsOf(items, id) shouldContainExactlyInAnyOrder listOf("Invoice", "energy")
-            } finally {
-                rig.close()
-            }
+            val doc =
+                rig.db
+                    .documentDao()
+                    .getByDocId(id)
+                    .shouldNotBeNull()
+            doc.title shouldBe "Mine"
+            doc.correspondent shouldBe "Acme"
+            val items =
+                rig.session.documents
+                    .observeDocuments(LibraryFilter(), LibrarySort())
+                    .first()
+            tagsOf(items, id) shouldContainExactlyInAnyOrder listOf("Invoice", "energy")
         }
 
     /** A fill-only edit that finds everything filled writes nothing at all. */
     @Test
     fun aFillOnlyEditOfAFilledDocumentWritesNothing() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
-                rig.session.rescan()
-                val id = rig.docId("a.pdf")
-                rig.session.meta.applyEdits(
-                    listOf(id),
-                    addTags = listOf("invoice"),
-                    fields =
-                        mapOf(FieldKeys.TITLE to "Mine"),
-                )
-                val objectsBefore = rig.journalObjectCount()
+        appSessionTest { rig ->
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+            rig.session.meta.applyEdits(
+                listOf(id),
+                addTags = listOf("invoice"),
+                fields =
+                    mapOf(FieldKeys.TITLE to "Mine"),
+            )
+            val objectsBefore = rig.journalObjectCount()
 
-                rig.session.meta.applyEdits(
-                    listOf(id),
-                    addTags = listOf("invoice"),
-                    fields = mapOf(FieldKeys.TITLE to "Model title"),
-                    fillOnly = true,
-                )
+            rig.session.meta.applyEdits(
+                listOf(id),
+                addTags = listOf("invoice"),
+                fields = mapOf(FieldKeys.TITLE to "Model title"),
+                fillOnly = true,
+            )
 
-                rig.journalObjectCount() shouldBe objectsBefore
-                rig.db
-                    .documentDao()
-                    .getByDocId(id)
-                    .shouldNotBeNull()
-                    .title shouldBe "Mine"
-            } finally {
-                rig.close()
-            }
+            rig.journalObjectCount() shouldBe objectsBefore
+            rig.db
+                .documentDao()
+                .getByDocId(id)
+                .shouldNotBeNull()
+                .title shouldBe "Mine"
         }
 
     private fun tagsOf(

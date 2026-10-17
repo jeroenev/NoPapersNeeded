@@ -6,6 +6,7 @@ import dev.npn.core.app.ImportTally
 import dev.npn.core.app.IngestFacade
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySort
+import dev.npn.core.app.appSessionTest
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.ocr.OcrState
@@ -46,33 +47,28 @@ class WatchedFolderImporterTest {
 
     @Test
     fun importsNewPdfsAndSkipsThemOnLaterScans() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                stagePdf("scan-a.pdf", PdfFixtures.embeddedTextPdf("watched one"))
-                stagePdf("scan-b.pdf", PdfFixtures.embeddedTextPdf("watched two"))
-                Files.write(watchDir.resolve("notes.txt"), byteArrayOf(1, 2, 3))
+        appSessionTest { rig ->
+            stagePdf("scan-a.pdf", PdfFixtures.embeddedTextPdf("watched one"))
+            stagePdf("scan-b.pdf", PdfFixtures.embeddedTextPdf("watched two"))
+            Files.write(watchDir.resolve("notes.txt"), byteArrayOf(1, 2, 3))
 
-                val importer = WatchedFolderImporter(rig.session, JvmWatchedFolder(watchDir), { false })
+            val importer = WatchedFolderImporter(rig.session, JvmWatchedFolder(watchDir), { false })
 
-                val first = importer.scanOnce()
-                first.imported shouldBe 2
-                first.failed shouldBe 0
+            val first = importer.scanOnce()
+            first.imported shouldBe 2
+            first.failed shouldBe 0
 
-                // Second sweep: nothing new, sources kept (delete-after-import off).
-                importer.scanOnce() shouldBe ImportTally()
-                Files.exists(watchDir.resolve("scan-a.pdf")) shouldBe true
+            // Second sweep: nothing new, sources kept (delete-after-import off).
+            importer.scanOnce() shouldBe ImportTally()
+            Files.exists(watchDir.resolve("scan-a.pdf")) shouldBe true
 
-                val docs =
-                    rig.session.documents
-                        .observeDocuments(LibraryFilter(), LibrarySort())
-                        .first()
-                docs.map { it.doc.fileName }.sorted() shouldBe listOf("scan-a.pdf", "scan-b.pdf")
-                // Every auto-import is queued for OCR like a manual import.
-                docs.all { it.doc.ocrState == OcrState.PENDING || it.doc.ocrState == OcrState.DONE } shouldBe true
-            } finally {
-                rig.close()
-            }
+            val docs =
+                rig.session.documents
+                    .observeDocuments(LibraryFilter(), LibrarySort())
+                    .first()
+            docs.map { it.doc.fileName }.sorted() shouldBe listOf("scan-a.pdf", "scan-b.pdf")
+            // Every auto-import is queued for OCR like a manual import.
+            docs.all { it.doc.ocrState == OcrState.PENDING || it.doc.ocrState == OcrState.DONE } shouldBe true
         }
 
     /**
@@ -81,31 +77,26 @@ class WatchedFolderImporterTest {
      */
     @Test
     fun aMissingDocumentsBytesAreKeptWhenTheSourceIsDeletedAfterImport() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                val bytes = PdfFixtures.embeddedTextPdf("lost")
-                rig.writePdf("lost.pdf", bytes)
-                rig.session.rescan()
-                val id = rig.docId("lost.pdf")
-                Files.delete(rig.libRoot.resolve("lost.pdf"))
-                rig.session.rescan()
-                stagePdf("lost.pdf", bytes)
+        appSessionTest { rig ->
+            val bytes = PdfFixtures.embeddedTextPdf("lost")
+            rig.writePdf("lost.pdf", bytes)
+            rig.session.rescan()
+            val id = rig.docId("lost.pdf")
+            Files.delete(rig.libRoot.resolve("lost.pdf"))
+            rig.session.rescan()
+            stagePdf("lost.pdf", bytes)
 
-                val tally = WatchedFolderImporter(rig.session, JvmWatchedFolder(watchDir), { true }).scanOnce()
+            val tally = WatchedFolderImporter(rig.session, JvmWatchedFolder(watchDir), { true }).scanOnce()
 
-                tally.imported shouldBe 1
-                Files.exists(watchDir.resolve("lost.pdf")) shouldBe false
-                val row =
-                    rig.db
-                        .documentDao()
-                        .getByDocId(id)
-                        .shouldNotBeNull()
-                row.missing shouldBe false
-                rig.fs.sha256(row.relPath) shouldBe id
-            } finally {
-                rig.close()
-            }
+            tally.imported shouldBe 1
+            Files.exists(watchDir.resolve("lost.pdf")) shouldBe false
+            val row =
+                rig.db
+                    .documentDao()
+                    .getByDocId(id)
+                    .shouldNotBeNull()
+            row.missing shouldBe false
+            rig.fs.sha256(row.relPath) shouldBe id
         }
 
     @Test
@@ -139,35 +130,25 @@ class WatchedFolderImporterTest {
 
     @Test
     fun freshImporterReportsExistingFileAsDuplicateViaHashDedup() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                stagePdf("scan.pdf", PdfFixtures.embeddedTextPdf("same bytes"))
-                WatchedFolderImporter(rig.session, JvmWatchedFolder(watchDir), { false })
-                    .scanOnce()
-                    .imported shouldBe 1
+        appSessionTest { rig ->
+            stagePdf("scan.pdf", PdfFixtures.embeddedTextPdf("same bytes"))
+            WatchedFolderImporter(rig.session, JvmWatchedFolder(watchDir), { false })
+                .scanOnce()
+                .imported shouldBe 1
 
-                // A brand-new importer (e.g. background worker run) has no memory; hash dedup catches it.
-                val scan = WatchedFolderImporter(rig.session, JvmWatchedFolder(watchDir), { false }).scanOnce()
-                scan.imported shouldBe 0
-                scan.duplicates shouldBe 1
-            } finally {
-                rig.close()
-            }
+            // A brand-new importer (e.g. background worker run) has no memory; hash dedup catches it.
+            val scan = WatchedFolderImporter(rig.session, JvmWatchedFolder(watchDir), { false }).scanOnce()
+            scan.imported shouldBe 0
+            scan.duplicates shouldBe 1
         }
 
     @Test
     fun deleteAfterImportRemovesConsumedSources() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                stagePdf("scan.pdf", PdfFixtures.embeddedTextPdf("consume me"))
-                val scan = WatchedFolderImporter(rig.session, JvmWatchedFolder(watchDir), { true }).scanOnce()
-                scan.imported shouldBe 1
-                Files.exists(watchDir.resolve("scan.pdf")) shouldBe false
-            } finally {
-                rig.close()
-            }
+        appSessionTest { rig ->
+            stagePdf("scan.pdf", PdfFixtures.embeddedTextPdf("consume me"))
+            val scan = WatchedFolderImporter(rig.session, JvmWatchedFolder(watchDir), { true }).scanOnce()
+            scan.imported shouldBe 1
+            Files.exists(watchDir.resolve("scan.pdf")) shouldBe false
         }
 
     /**
@@ -177,42 +158,37 @@ class WatchedFolderImporterTest {
      */
     @Test
     fun aWatchedFolderInsideTheLibraryIsNeverSwept() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                val scans = rig.libRoot.resolve("scans")
-                rig.writePdf("scans/scan.pdf", PdfFixtures.embeddedTextPdf("a scan the library holds"))
-                Files.setLastModifiedTime(
-                    scans.resolve("scan.pdf"),
-                    FileTime.fromMillis(System.currentTimeMillis() - 60_000),
-                )
-                rig.session.rescan()
-                val id = rig.docId("scans/scan.pdf")
-                rig.writePdf("scans/new.pdf", PdfFixtures.embeddedTextPdf("a scan the rescan has not seen"))
-                Files.setLastModifiedTime(
-                    scans.resolve("new.pdf"),
-                    FileTime.fromMillis(System.currentTimeMillis() - 60_000),
+        appSessionTest { rig ->
+            val scans = rig.libRoot.resolve("scans")
+            rig.writePdf("scans/scan.pdf", PdfFixtures.embeddedTextPdf("a scan the library holds"))
+            Files.setLastModifiedTime(
+                scans.resolve("scan.pdf"),
+                FileTime.fromMillis(System.currentTimeMillis() - 60_000),
+            )
+            rig.session.rescan()
+            val id = rig.docId("scans/scan.pdf")
+            rig.writePdf("scans/new.pdf", PdfFixtures.embeddedTextPdf("a scan the rescan has not seen"))
+            Files.setLastModifiedTime(
+                scans.resolve("new.pdf"),
+                FileTime.fromMillis(System.currentTimeMillis() - 60_000),
+            )
+
+            val importer =
+                WatchedFolderImporter(
+                    rig.session,
+                    JvmWatchedFolder(scans),
+                    deleteAfterImport = { true },
+                    inLibrary = { liesInLibrary(scans.toString(), rig.libRoot.toString()) },
                 )
 
-                val importer =
-                    WatchedFolderImporter(
-                        rig.session,
-                        JvmWatchedFolder(scans),
-                        deleteAfterImport = { true },
-                        inLibrary = { liesInLibrary(scans.toString(), rig.libRoot.toString()) },
-                    )
-
-                importer.scanOnce() shouldBe ImportTally()
-                Files.exists(scans.resolve("scan.pdf")) shouldBe true
-                Files.exists(scans.resolve("new.pdf")) shouldBe true
-                rig.db
-                    .documentDao()
-                    .getByDocId(id)
-                    ?.relPath shouldBe "scans/scan.pdf"
-                rig.exists("inbox/new.pdf") shouldBe false
-            } finally {
-                rig.close()
-            }
+            importer.scanOnce() shouldBe ImportTally()
+            Files.exists(scans.resolve("scan.pdf")) shouldBe true
+            Files.exists(scans.resolve("new.pdf")) shouldBe true
+            rig.db
+                .documentDao()
+                .getByDocId(id)
+                ?.relPath shouldBe "scans/scan.pdf"
+            rig.exists("inbox/new.pdf") shouldBe false
         }
 
     /**
@@ -221,31 +197,26 @@ class WatchedFolderImporterTest {
      */
     @Test
     fun deleteAfterImportLeavesAFileWrittenUnderTheSourcesNameSince() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                stagePdf("scan.pdf", PdfFixtures.embeddedTextPdf("first scan"))
-                val next = PdfFixtures.embeddedTextPdf("the next scan, under the same name")
-                val rewriting =
-                    object : IngestFacade by rig.session {
-                        override suspend fun importPdf(
-                            source: ExternalSource,
-                            suggestedName: String,
-                        ): ImportOutcome =
-                            rig.session.importPdf(source, suggestedName).also {
-                                val scan = watchDir.resolve("scan.pdf")
-                                Files.write(scan, next)
-                                Files.setLastModifiedTime(scan, FileTime.fromMillis(System.currentTimeMillis() - 1_000))
-                            }
-                    }
+        appSessionTest { rig ->
+            stagePdf("scan.pdf", PdfFixtures.embeddedTextPdf("first scan"))
+            val next = PdfFixtures.embeddedTextPdf("the next scan, under the same name")
+            val rewriting =
+                object : IngestFacade by rig.session {
+                    override suspend fun importPdf(
+                        source: ExternalSource,
+                        suggestedName: String,
+                    ): ImportOutcome =
+                        rig.session.importPdf(source, suggestedName).also {
+                            val scan = watchDir.resolve("scan.pdf")
+                            Files.write(scan, next)
+                            Files.setLastModifiedTime(scan, FileTime.fromMillis(System.currentTimeMillis() - 1_000))
+                        }
+                }
 
-                val scan = WatchedFolderImporter(rewriting, JvmWatchedFolder(watchDir), { true }).scanOnce()
+            val scan = WatchedFolderImporter(rewriting, JvmWatchedFolder(watchDir), { true }).scanOnce()
 
-                scan.imported shouldBe 1
-                Files.readAllBytes(watchDir.resolve("scan.pdf")) shouldBe next
-            } finally {
-                rig.close()
-            }
+            scan.imported shouldBe 1
+            Files.readAllBytes(watchDir.resolve("scan.pdf")) shouldBe next
         }
 
     /**
@@ -256,39 +227,34 @@ class WatchedFolderImporterTest {
      */
     @Test
     fun withNoMtimeASourceGoesOnlyWhileItHoldsTheImportedBytes() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                val first = PdfFixtures.embeddedTextPdf("scan one")
-                val next = PdfFixtures.embeddedTextPdf("scan two")
-                next.size shouldBe first.size
-                stagePdf("scan.pdf", first)
-                stagePdf("other.pdf", PdfFixtures.embeddedTextPdf("left as it was"))
-                var rewritten = false
-                val rewriting =
-                    object : IngestFacade by rig.session {
-                        override suspend fun importPdf(
-                            source: ExternalSource,
-                            suggestedName: String,
-                        ): ImportOutcome =
-                            rig.session.importPdf(source, suggestedName).also {
-                                if (suggestedName == "scan.pdf" && !rewritten) {
-                                    rewritten = true
-                                    Files.write(watchDir.resolve("scan.pdf"), next)
-                                }
+        appSessionTest { rig ->
+            val first = PdfFixtures.embeddedTextPdf("scan one")
+            val next = PdfFixtures.embeddedTextPdf("scan two")
+            next.size shouldBe first.size
+            stagePdf("scan.pdf", first)
+            stagePdf("other.pdf", PdfFixtures.embeddedTextPdf("left as it was"))
+            var rewritten = false
+            val rewriting =
+                object : IngestFacade by rig.session {
+                    override suspend fun importPdf(
+                        source: ExternalSource,
+                        suggestedName: String,
+                    ): ImportOutcome =
+                        rig.session.importPdf(source, suggestedName).also {
+                            if (suggestedName == "scan.pdf" && !rewritten) {
+                                rewritten = true
+                                Files.write(watchDir.resolve("scan.pdf"), next)
                             }
-                    }
-                val importer = WatchedFolderImporter(rewriting, NoMtime(JvmWatchedFolder(watchDir)), { true })
+                        }
+                }
+            val importer = WatchedFolderImporter(rewriting, NoMtime(JvmWatchedFolder(watchDir)), { true })
 
-                importer.scanOnce().imported shouldBe 2
+            importer.scanOnce().imported shouldBe 2
 
-                Files.readAllBytes(watchDir.resolve("scan.pdf")) shouldBe next
-                Files.exists(watchDir.resolve("other.pdf")) shouldBe false
-                importer.scanOnce().imported shouldBe 1
-                Files.exists(watchDir.resolve("scan.pdf")) shouldBe false
-            } finally {
-                rig.close()
-            }
+            Files.readAllBytes(watchDir.resolve("scan.pdf")) shouldBe next
+            Files.exists(watchDir.resolve("other.pdf")) shouldBe false
+            importer.scanOnce().imported shouldBe 1
+            Files.exists(watchDir.resolve("scan.pdf")) shouldBe false
         }
 
     /**
@@ -297,28 +263,23 @@ class WatchedFolderImporterTest {
      */
     @Test
     fun withNoMtimeASourceThatStaysIsImportedOnce() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                stagePdf("scan.pdf", PdfFixtures.embeddedTextPdf("stays"))
-                var imports = 0
-                val counting =
-                    object : IngestFacade by rig.session {
-                        override suspend fun importPdf(
-                            source: ExternalSource,
-                            suggestedName: String,
-                        ): ImportOutcome = rig.session.importPdf(source, suggestedName).also { imports++ }
-                    }
-                val importer = WatchedFolderImporter(counting, NoMtime(JvmWatchedFolder(watchDir)), { false })
+        appSessionTest { rig ->
+            stagePdf("scan.pdf", PdfFixtures.embeddedTextPdf("stays"))
+            var imports = 0
+            val counting =
+                object : IngestFacade by rig.session {
+                    override suspend fun importPdf(
+                        source: ExternalSource,
+                        suggestedName: String,
+                    ): ImportOutcome = rig.session.importPdf(source, suggestedName).also { imports++ }
+                }
+            val importer = WatchedFolderImporter(counting, NoMtime(JvmWatchedFolder(watchDir)), { false })
 
-                importer.scanOnce().imported shouldBe 1
-                importer.scanOnce() shouldBe ImportTally()
+            importer.scanOnce().imported shouldBe 1
+            importer.scanOnce() shouldBe ImportTally()
 
-                imports shouldBe 1
-                Files.exists(watchDir.resolve("scan.pdf")) shouldBe true
-            } finally {
-                rig.close()
-            }
+            imports shouldBe 1
+            Files.exists(watchDir.resolve("scan.pdf")) shouldBe true
         }
 
     /** [folder] as a provider that reports no mtime lists it. */
@@ -347,16 +308,11 @@ class WatchedFolderImporterTest {
 
     @Test
     fun skipsFilesStillBeingWritten() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                // Fresh mtime = inside the quiet window; must not be touched this sweep.
-                Files.write(watchDir.resolve("hot.pdf"), PdfFixtures.embeddedTextPdf("still writing"))
-                val scan = WatchedFolderImporter(rig.session, JvmWatchedFolder(watchDir), { false }).scanOnce()
-                scan shouldBe ImportTally()
-            } finally {
-                rig.close()
-            }
+        appSessionTest { rig ->
+            // Fresh mtime = inside the quiet window; must not be touched this sweep.
+            Files.write(watchDir.resolve("hot.pdf"), PdfFixtures.embeddedTextPdf("still writing"))
+            val scan = WatchedFolderImporter(rig.session, JvmWatchedFolder(watchDir), { false }).scanOnce()
+            scan shouldBe ImportTally()
         }
 }
 
