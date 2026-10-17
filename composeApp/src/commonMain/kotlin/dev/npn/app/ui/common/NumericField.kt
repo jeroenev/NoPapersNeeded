@@ -18,7 +18,7 @@ import org.jetbrains.compose.resources.stringResource
 /**
  * Bounded integer entry field. Keeps its own text, so the user can clear it while typing, and
  * commits via [onValueChange] only a parse inside [range]; anything else stays on screen marked as
- * an error and is not committed. Input is filtered to at most [maxDigits] digits.
+ * an error and is not committed. Input is filtered to digits, no more than [range]'s top has.
  *
  * Re-seeds from [value] only when it changes to a number this field did not commit itself. A
  * persisted value round-trips asynchronously, so the echo of an earlier keystroke can arrive after
@@ -31,7 +31,6 @@ fun NumericField(
     onValueChange: (Int) -> Unit,
     range: IntRange,
     label: String,
-    maxDigits: Int,
     supportingText: String? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -42,7 +41,7 @@ fun NumericField(
     OutlinedTextField(
         value = text,
         onValueChange = { raw ->
-            text = raw.filter { it.isDigit() }.take(maxDigits)
+            text = raw.filter { it.isDigit() }.take(range.last.toString().length)
             text.toIntOrNull()?.takeIf { it in range }?.let {
                 echoes.typed(it)
                 onValueChange(it)

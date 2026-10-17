@@ -99,7 +99,6 @@ class NumericFieldTest {
                             onValueChange = { committed += it },
                             range = 1..50,
                             label = "Batch size",
-                            maxDigits = 3,
                         )
                     }
                 }

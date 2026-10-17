@@ -83,9 +83,6 @@ import org.jetbrains.compose.resources.stringResource
 /** Widest the setup form grows to; beyond this the two columns are centred instead of stretched. */
 private val SetupMaxWidth = 1_100.dp
 
-/** Digits a per-run cap can have; every range here is well under a thousand. */
-private const val CAP_MAX_DIGITS = 3
-
 /**
  * The Idle phase of the AI-edit page.
  *
@@ -402,7 +399,6 @@ private fun AdvancedSection(
                         AiTagging.MIN_TAGS_PER_DOC,
                         AiTagging.MAX_TAGS_PER_DOC,
                     ),
-                maxDigits = CAP_MAX_DIGITS,
             )
         }
         // The cap only means anything while brand-new tags are allowed at all.
@@ -419,7 +415,6 @@ private fun AdvancedSection(
                         AiTagging.MAX_NEW_TAGS_PER_DOC,
                         AiTagging.MIN_NEW_TAGS_PER_DOC,
                     ),
-                maxDigits = CAP_MAX_DIGITS,
             )
         }
         if (!plan.background) {
@@ -434,7 +429,6 @@ private fun AdvancedSection(
                         AiTagging.MIN_BATCH_DOCS,
                         AiTagging.MAX_BATCH_DOCS,
                     ),
-                maxDigits = CAP_MAX_DIGITS,
             )
         }
     }

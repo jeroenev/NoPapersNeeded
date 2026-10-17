@@ -93,8 +93,6 @@ import no_papers_needed.composeapp.generated.resources.common_settings_server_ur
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 
-private const val TAG_CAP_MAX_DIGITS = 2
-
 private val SelfTestSpacing = 8.dp
 private val CheckIconSize = 20.dp
 
@@ -513,7 +511,6 @@ private fun AiTagCapDefaults(
                 AiTagging.MIN_TAGS_PER_DOC,
                 AiTagging.MAX_TAGS_PER_DOC,
             ),
-        maxDigits = TAG_CAP_MAX_DIGITS,
     )
     NumericField(
         value = maxNewTagsPerDoc,
@@ -526,6 +523,5 @@ private fun AiTagCapDefaults(
                 AiTagging.MIN_NEW_TAGS_PER_DOC,
                 AiTagging.MAX_NEW_TAGS_PER_DOC,
             ),
-        maxDigits = TAG_CAP_MAX_DIGITS,
     )
 }

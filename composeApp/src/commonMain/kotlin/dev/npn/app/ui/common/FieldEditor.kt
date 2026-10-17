@@ -3,7 +3,6 @@ package dev.npn.app.ui.common
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material3.Icon
@@ -18,7 +17,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldLocale
@@ -83,7 +81,15 @@ fun FieldEditor(
         }
 
         FieldType.NUMBER, FieldType.DECIMAL -> {
-            NumberField(def, value.orEmpty(), hint, refused, locale, onCommit, modifier)
+            // Typed the way the locale writes numbers, stored canonically ([NumberInput]); an entry
+            // the type refuses is committed as refused, so the draft can block the save.
+            NumberInputField(
+                input = rememberNumberInput(def, value.orEmpty(), locale, refused),
+                label = def.label,
+                onInput = onCommit,
+                modifier = modifier,
+                hint = hint,
+            )
         }
 
         FieldType.DATE -> {
@@ -103,7 +109,7 @@ fun FieldEditor(
  * — still replaces what is on screen.
  */
 @Composable
-fun rememberFieldText(external: String): MutableState<String> {
+private fun rememberFieldText(external: String): MutableState<String> {
     val text = remember { mutableStateOf(external) }
     if (external.trim() != text.value.trim()) text.value = external
     return text
@@ -114,14 +120,13 @@ fun rememberFieldText(external: String): MutableState<String> {
  * local state — see [rememberFieldText].
  */
 @Composable
-fun CommitTextField(
+private fun CommitTextField(
     label: String,
     initial: String,
     placeholder: String? = null,
     modifier: Modifier = Modifier,
     isError: Boolean = false,
     supportingText: String? = null,
-    keyboardType: KeyboardType = KeyboardType.Text,
     onCommit: (String) -> Unit,
 ) {
     var text by rememberFieldText(initial)
@@ -135,7 +140,6 @@ fun CommitTextField(
         label = { Text(label) },
         placeholder = placeholder?.let { { Text(it, maxLines = 1) } },
         supportingText = supportingText?.let { { Text(it) } },
-        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         singleLine = true,
         modifier = modifier.fillMaxWidth(),
     )
@@ -189,29 +193,6 @@ private fun LongTextField(
         minLines = LONG_TEXT_MIN_LINES,
         maxLines = LONG_TEXT_MAX_LINES,
         modifier = modifier.fillMaxWidth(),
-    )
-}
-
-/**
- * Numbers are typed the way the locale writes them and stored canonically ([NumberInput]). An
- * entry the type refuses is committed as refused, so the draft can block the save.
- */
-@Composable
-private fun NumberField(
-    def: FieldDef,
-    value: String,
-    hint: String?,
-    refused: Boolean,
-    locale: FieldLocale,
-    onCommit: (FieldParse) -> Unit,
-    modifier: Modifier,
-) {
-    NumberInputField(
-        input = rememberNumberInput(def, value, locale, refused),
-        label = def.label,
-        onInput = onCommit,
-        modifier = modifier,
-        hint = hint,
     )
 }
 

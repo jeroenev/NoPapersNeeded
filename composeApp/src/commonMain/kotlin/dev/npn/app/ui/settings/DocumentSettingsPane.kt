@@ -30,9 +30,6 @@ import no_papers_needed.composeapp.generated.resources.common_settings_trash
 import no_papers_needed.composeapp.generated.resources.common_settings_trash_retention_days
 import org.jetbrains.compose.resources.stringResource
 
-/** Digits the trash-retention field takes: [TrashSettings.RETENTION_RANGE] has four at most. */
-private const val TRASH_RETENTION_MAX_DIGITS = 4
-
 /**
  * What a document looks like and how long it sticks around: which fields exist, whether new
  * documents need an explicit review pass, and how long the trash holds on to deletions.
@@ -66,7 +63,6 @@ internal fun DocumentSettingsPane(
             onValueChange = actions::setTrashRetentionDays,
             range = TrashSettings.RETENTION_RANGE,
             label = stringResource(Res.string.common_settings_trash_retention_days),
-            maxDigits = TRASH_RETENTION_MAX_DIGITS,
         )
         HelpText(stringResource(Res.string.common_settings_syncs_across_devices))
     }
