@@ -37,8 +37,7 @@ class SettingsRepositoryImpl internal constructor(
     constructor(file: File = defaultFile()) : this(file, { FileOutputStream(it) })
 
     private val props = Properties()
-    private val isWindows =
-        System.getProperty("os.name")?.startsWith("Windows", ignoreCase = true) ?: false
+    private val isWindows = PlatformDirs.isWindows
     private val persistMutex = Mutex()
 
     // Adapters that let the shared codec read from / write to the Properties file. Empty strings

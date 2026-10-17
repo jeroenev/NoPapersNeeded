@@ -83,8 +83,12 @@ internal class TolerantOpenAILLMClient(
         if (hasNoChoices(data)) return EMPTY_STREAM_RESPONSE
         return try {
             super.decodeStreamingResponse(data)
-        } catch (_: Exception) {
-            if (hasNoChoices(data)) EMPTY_STREAM_RESPONSE else throw ChunkDecodeException(data)
+        } catch (e: Exception) {
+            if (hasNoChoices(data)) {
+                EMPTY_STREAM_RESPONSE
+            } else {
+                throw IllegalStateException("Failed to decode streaming chunk: ${data.take(CHUNK_PREVIEW)}", e)
+            }
         }
     }
 
@@ -95,6 +99,9 @@ internal class TolerantOpenAILLMClient(
         }.getOrDefault(false)
 
     private companion object {
+        /** How much of an undecodable chunk its failure quotes. */
+        const val CHUNK_PREVIEW = 200
+
         val EMPTY_STREAM_RESPONSE =
             OpenAIChatCompletionStreamResponse(
                 choices = emptyList(),
@@ -108,8 +115,3 @@ internal class TolerantOpenAILLMClient(
             )
     }
 }
-
-/** Signals a streaming chunk that could not be decoded and did carry (malformed) choices. */
-internal class ChunkDecodeException(
-    chunk: String,
-) : IllegalStateException("Failed to decode streaming chunk: ${chunk.take(200)}")

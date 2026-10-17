@@ -182,9 +182,7 @@ internal object AiText {
                 .distinctBy { it.lowercase() }
                 .map { rawTag ->
                     val existing = canonical[rawTag.lowercase()]
-                    if (existing !=
-                        null
-                    ) {
+                    if (existing != null) {
                         TagSuggestion(existing, isNew = false)
                     } else {
                         TagSuggestion(rawTag, isNew = true)

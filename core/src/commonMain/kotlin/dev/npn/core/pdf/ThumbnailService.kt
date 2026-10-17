@@ -43,7 +43,6 @@ class ThumbnailService(
     suspend fun ensureThumbnail(
         docId: String,
         relPath: String,
-        maxDim: Int = 480,
     ): String? {
         thumbnailDao.get(docId)?.let { return it.cachePath }
 
@@ -56,7 +55,7 @@ class ThumbnailService(
                 renderGate.render {
                     engine.open(bytes).use { handle ->
                         // Render first: on Android the count then comes from the open renderer.
-                        handle.renderPagePngOrNull(0, maxDim)?.let { png -> png to handle.pageCount }
+                        handle.renderPagePngOrNull(0, MAX_DIM)?.let { png -> png to handle.pageCount }
                     }
                 }
             }.getOrNull() ?: return null
@@ -87,5 +86,10 @@ class ThumbnailService(
         all.forEach { runCatchingCancellable { store.delete(it.docId) } }
         thumbnailDao.deleteAll()
         return all.size
+    }
+
+    private companion object {
+        /** The longer side of a thumbnail, in pixels. */
+        const val MAX_DIM = 480
     }
 }

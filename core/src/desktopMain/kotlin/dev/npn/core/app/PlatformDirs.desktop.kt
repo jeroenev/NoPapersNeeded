@@ -7,7 +7,8 @@ package dev.npn.core.app
  * %LOCALAPPDATA%/%APPDATA%; on Unix they follow the XDG Base Directory spec.
  */
 object PlatformDirs {
-    private val isWindows =
+    /** Whether this JVM runs on Windows. */
+    val isWindows =
         System.getProperty("os.name")?.startsWith("Windows", ignoreCase = true) ?: false
 
     fun dataHome(): String =

@@ -19,7 +19,7 @@ package dev.npn.core.ocr
 class OcrEngineSelector(
     private val local: OcrEngine,
     private val ai: OcrEngine? = null,
-    val largeDocumentPages: Int = DEFAULT_LARGE_DOCUMENT_PAGES,
+    private val largeDocumentPages: Int = DEFAULT_LARGE_DOCUMENT_PAGES,
     private val aiAuto: suspend () -> Boolean = { false },
 ) {
     /** True when a vision endpoint is configured, i.e. an AI run can be asked for at all. */

@@ -14,7 +14,7 @@ import kotlinx.coroutines.withContext
  * - A [Semaphore] caps the number of renders running at once at [parallelism], which the platform
  *   picks for its CPUs and memory (`renderParallelism`), instead of launching one heavy render per
  *   visible item simultaneously.
- * - Work runs on the CPU-bound [dispatcher], limited to the same [parallelism], not on
+ * - Work runs on [Dispatchers.Default], limited to the same [parallelism], not on
  *   [kotlinx.coroutines.Dispatchers.IO]. PDFBox `renderImage`/`PdfRenderer` are CPU/native bound,
  *   not blocking IO; running them on IO starves the IO pool used by everything else.
  *
@@ -23,11 +23,10 @@ import kotlinx.coroutines.withContext
  */
 class RenderGate(
     parallelism: Int,
-    dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
     private val permits = parallelism.coerceAtLeast(1)
     private val semaphore = Semaphore(permits)
-    private val bounded: CoroutineDispatcher = dispatcher.limitedParallelism(permits)
+    private val bounded: CoroutineDispatcher = Dispatchers.Default.limitedParallelism(permits)
 
     /** Run [block] on the bounded CPU dispatcher, holding a permit for its duration. */
     suspend fun <T> render(block: suspend () -> T): T =
