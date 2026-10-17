@@ -143,7 +143,9 @@ object EventDecoderRegistry {
 
                 is JournalOp.Unknown -> null
 
-                else -> false
+                is JournalOp.FieldDefSet, is JournalOp.TagRename, is JournalOp.TagMerge, is JournalOp.TagStyle,
+                is JournalOp.SettingSet,
+                -> false
             }
         if (documentOperation != null) {
             require((event.doc != null) == documentOperation) { "Operation has invalid document scope" }
@@ -193,7 +195,7 @@ object EventDecoderRegistry {
                 element.joinToString(",", "[", "]") { canonicalJson(it) }
             }
 
-            else -> {
+            is JsonPrimitive -> {
                 element.toString()
             }
         }

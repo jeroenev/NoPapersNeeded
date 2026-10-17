@@ -219,9 +219,10 @@ private fun DocActionsMenu(
             TopBarAction(
                 icon = Icons.Filled.AutoAwesome,
                 label =
-                    when (aiOcr) {
-                        is AiOcrOffer.Large -> stringResource(Res.string.detail_ai_ocr_large, aiOcr.pages)
-                        else -> stringResource(Res.string.detail_ai_ocr)
+                    if (aiOcr is AiOcrOffer.Large) {
+                        stringResource(Res.string.detail_ai_ocr_large, aiOcr.pages)
+                    } else {
+                        stringResource(Res.string.detail_ai_ocr)
                     },
                 onClick = onAiOcr,
                 enabled = !reindexing,

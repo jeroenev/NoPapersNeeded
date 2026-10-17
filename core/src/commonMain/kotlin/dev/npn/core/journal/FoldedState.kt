@@ -142,7 +142,9 @@ class FoldedState {
             // Tolerant skip: an op from a newer build folds to nothing here.
             is JournalOp.Unknown -> Unit
 
-            else -> return false
+            is JournalOp.TagAdd, is JournalOp.PropSet, is JournalOp.FieldSet, is JournalOp.DocTrash,
+            JournalOp.DocRestore, JournalOp.DocDelete, JournalOp.DocUndelete, is JournalOp.Relink,
+            -> return false
         }
         return true
     }

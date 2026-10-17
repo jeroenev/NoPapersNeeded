@@ -115,6 +115,15 @@ coroutines:
     active: true
 
 potential-bugs:
+  ElseCaseInsteadOfExhaustiveWhen:
+    # A `when` over a sealed or enum type of ours names every case, so a new op, path or kind is a
+    # compile error at each place that must decide about it. Koog's types are left out: they grow
+    # with the library, and the code reads only the few cases it needs.
+    active: true
+    ignoredSubjectTypes:
+      - 'ai.koog.prompt.message.Message'
+      - 'ai.koog.prompt.message.MessagePart'
+      - 'ai.koog.prompt.streaming.StreamFrame'
   UnsafeCallOnNullableType:
     excludes: *testSources
 

@@ -554,8 +554,14 @@ private fun readSource(
 ): Pair<SourceKind, JournalSourceRead> =
     when (path) {
         is JournalPath.SnapshotV2 -> SourceKind.SNAPSHOT to SnapshotV2Reader.read(relPath, bytes, contentHash)
+
         is JournalPath.ObjectV2 -> SourceKind.OBJECT to StorageV2Reader.read(relPath, bytes, contentHash)
-        else -> SourceKind.LEGACY_SEGMENT to StorageV1Reader.read(bytes)
+
+        JournalPath.Legacy -> SourceKind.LEGACY_SEGMENT to StorageV1Reader.read(bytes)
+
+        // The caller stages only the three above.
+        is JournalPath.UnsupportedObjectStore, JournalPath.Staging, JournalPath.SyncTemp, JournalPath.Unknown,
+        -> error("Not a journal source: $relPath")
     }
 
 /** The row an event is stored as in `metadata_events`. */

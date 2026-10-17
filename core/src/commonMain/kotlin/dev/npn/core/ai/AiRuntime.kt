@@ -194,17 +194,13 @@ internal class AiRuntime(
          * than an unwanted thought.
          */
         fun ocrParams(config: AiConfig): LLMParams =
-            when (config.provider) {
-                AiProvider.ANTHROPIC -> {
-                    AnthropicParams(
-                        maxTokens = OCR_ANSWER_MAX_TOKENS,
-                        thinking = AnthropicThinking.Disabled(),
-                    )
-                }
-
-                else -> {
-                    LLMParams()
-                }
+            if (config.provider == AiProvider.ANTHROPIC) {
+                AnthropicParams(
+                    maxTokens = OCR_ANSWER_MAX_TOKENS,
+                    thinking = AnthropicThinking.Disabled(),
+                )
+            } else {
+                LLMParams()
             }
 
         /**

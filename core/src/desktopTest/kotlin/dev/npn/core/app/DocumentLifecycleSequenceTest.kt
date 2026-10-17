@@ -240,7 +240,7 @@ class DocumentLifecycleSequenceTest {
             when (this) {
                 IMPORT -> true
                 RESTORE, DELETE -> state == State.TRASHED
-                else -> state == State.LIVE
+                TRASH, RENAME, MOVE, EDIT, CLEAR, MISSING, BAKE -> state == State.LIVE
             }
     }
 

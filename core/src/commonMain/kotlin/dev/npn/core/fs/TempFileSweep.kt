@@ -49,8 +49,15 @@ internal class TempFileSweep(
             val deletable =
                 when (NpnPaths.Temp.kindOf(meta.relPath)) {
                     null -> false
+
                     NpnPaths.Temp.Kind.BAKE -> spareBake(meta, byPath)
-                    else -> true
+
+                    NpnPaths.Temp.Kind.WRITE,
+                    NpnPaths.Temp.Kind.MOVE,
+                    NpnPaths.Temp.Kind.RELOCATION,
+                    NpnPaths.Temp.Kind.IMPORT,
+                    NpnPaths.Temp.Kind.MARKER_STAGING,
+                    -> true
                 }
             if (deletable) {
                 log.runLogged(

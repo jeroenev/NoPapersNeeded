@@ -329,22 +329,18 @@ private fun AiBaseUrlField(
         supportingText = {
             Text(
                 text =
-                    when (provider) {
-                        AiProvider.OLLAMA -> {
-                            stringResource(
-                                Res.string.common_settings_server_url_ollama_help,
-                                provider.defaultBaseUrl.orEmpty(),
-                            )
-                        }
-
-                        else -> {
-                            stringResource(
-                                Res.string.common_settings_server_url_help,
-                                "https://api.openai.com",
-                                "http://localhost:11434",
-                                "/v1/chat/completions",
-                            )
-                        }
+                    if (provider == AiProvider.OLLAMA) {
+                        stringResource(
+                            Res.string.common_settings_server_url_ollama_help,
+                            provider.defaultBaseUrl.orEmpty(),
+                        )
+                    } else {
+                        stringResource(
+                            Res.string.common_settings_server_url_help,
+                            "https://api.openai.com",
+                            "http://localhost:11434",
+                            "/v1/chat/completions",
+                        )
                     },
             )
         },
