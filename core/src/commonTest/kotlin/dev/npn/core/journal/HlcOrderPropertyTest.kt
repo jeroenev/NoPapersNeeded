@@ -11,7 +11,6 @@ import io.kotest.property.arbitrary.bind
 import io.kotest.property.arbitrary.int
 import io.kotest.property.arbitrary.long
 import io.kotest.property.arbitrary.of
-import io.kotest.property.arbitrary.string
 import io.kotest.property.checkAll
 import kotlin.test.Test
 
