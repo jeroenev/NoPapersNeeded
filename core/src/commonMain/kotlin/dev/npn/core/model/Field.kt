@@ -127,6 +127,12 @@ data class FieldDef(
 }
 
 /**
+ * The display name of the field [key] names: its label, or the key itself once the registry no
+ * longer lists it (a saved sort, filter or rule that outlived its field).
+ */
+fun List<FieldDef>.labelFor(key: String): String = firstOrNull { it.key == key }?.label ?: key
+
+/**
  * The field keys other subsystems name directly. XMP writes `dc:title`, storage-path templates
  * resolve `{correspondent}`, auto-match rules write `docType`. This set is deliberately small and
  * deliberately load bearing: deleting it breaks file naming, not just a UI label.

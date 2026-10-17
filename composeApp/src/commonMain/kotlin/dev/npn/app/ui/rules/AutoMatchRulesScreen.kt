@@ -49,8 +49,8 @@ import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.model.FieldDef
+import dev.npn.core.model.labelFor
 import dev.npn.core.rules.AutoMatchRule
-import dev.npn.core.rules.AutoMatchRuleJson
 import dev.npn.core.rules.MatchAlgorithm
 import dev.npn.core.rules.RuleField
 import dev.npn.core.util.NpnJson
@@ -101,52 +101,69 @@ fun AutoMatchRulesScreen(
     val snackbar = remember { SnackbarHostState() }
     SnackbarMessages(vm.messages, snackbar)
 
-    // Saveable, like the form's own fields, so an open dialog is back after the screen is recreated.
-    var showForm by rememberSaveable { mutableStateOf(false) }
-    var editing by rememberSaveable(stateSaver = EditedRuleSaver) { mutableStateOf(null) }
-    var deleteTarget by rememberSaveable { mutableStateOf<String?>(null) }
+    // Saveable, form fields included, so an open dialog is back after the screen is recreated.
+    var dialog by rememberSaveable(stateSaver = RuleDialog.Saver) { mutableStateOf(null) }
 
     AutoMatchRulesScaffold(
         rules = rules,
         fields = fields,
         snackbar = snackbar,
         onBack = onBack,
-        onAdd = {
-            editing = null
-            showForm = true
-        },
-        onEdit = {
-            editing = it
-            showForm = true
-        },
-        onDelete = { deleteTarget = it.id },
+        onAdd = { dialog = RuleDialog.Form(RuleFormState()) },
+        onEdit = { dialog = RuleDialog.Form(RuleFormState.of(it)) },
+        onDelete = { dialog = RuleDialog.Delete(it.id) },
         onToggle = vm::setEnabled,
     )
 
-    if (showForm) {
-        RuleFormDialog(
-            rule = editing,
-            fields = fields,
-            onConfirm = { rule ->
-                vm.save(rule)
-                showForm = false
-                editing = null
-            },
-            onDismiss = {
-                showForm = false
-                editing = null
-            },
-        )
-    }
+    when (val open = dialog) {
+        is RuleDialog.Form -> {
+            RuleFormDialog(
+                state = open.form,
+                fields = fields,
+                onChange = { dialog = RuleDialog.Form(it) },
+                onConfirm = {
+                    vm.save(open.form.toRule())
+                    dialog = null
+                },
+                onDismiss = { dialog = null },
+            )
+        }
 
-    deleteTarget?.let { id ->
-        DeleteRuleDialog(
-            onConfirm = {
-                vm.delete(id)
-                deleteTarget = null
-            },
-            onDismiss = { deleteTarget = null },
-        )
+        is RuleDialog.Delete -> {
+            DeleteRuleDialog(
+                onConfirm = {
+                    vm.delete(open.id)
+                    dialog = null
+                },
+                onDismiss = { dialog = null },
+            )
+        }
+
+        null -> {
+            Unit
+        }
+    }
+}
+
+/** The one dialog the rules screen has open, or none; saved as JSON. */
+@Serializable
+private sealed interface RuleDialog {
+    @Serializable
+    data class Form(
+        val form: RuleFormState,
+    ) : RuleDialog
+
+    @Serializable
+    data class Delete(
+        val id: String,
+    ) : RuleDialog
+
+    companion object {
+        val Saver: Saver<RuleDialog?, String> =
+            Saver(
+                save = { dialog -> dialog?.let { NpnJson.Persisted.encodeToString(serializer(), it) } },
+                restore = { NpnJson.Persisted.decodeFromString(serializer(), it) },
+            )
     }
 }
 
@@ -277,62 +294,41 @@ private fun buildRuleSummary(
         rule.position,
     )
 
-/** The registry label for [key]; a key the registry no longer lists shows as itself. */
-private fun List<FieldDef>.labelFor(key: String): String = firstOrNull { it.key == key }?.label ?: key
-
 @Composable
 private fun RuleFormDialog(
-    rule: AutoMatchRule?,
+    state: RuleFormState,
     fields: List<FieldDef>,
-    onConfirm: (AutoMatchRule) -> Unit,
+    onChange: (RuleFormState) -> Unit,
+    onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var state by rememberSaveable(rule, stateSaver = RuleFormState.Saver) { mutableStateOf(rule.toFormState()) }
-    val regexValid = state.algorithm != MatchAlgorithm.REGEX || runCatching { Regex(state.pattern) }.isSuccess
-    val canSave = state.name.isNotBlank() && state.pattern.isNotBlank() && regexValid
-
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
                 stringResource(
-                    if (rule == null) Res.string.common_rules_new_title else Res.string.common_rules_edit_title,
+                    if (state.isNew) Res.string.common_rules_new_title else Res.string.common_rules_edit_title,
                 ),
             )
         },
         text = {
-            RuleFormFields(state, fields, regexValid) { state = it }
+            RuleFormFields(state, fields, onChange)
         },
         confirmButton = {
-            TextButton(
-                onClick = {
-                    onConfirm(
-                        AutoMatchRule(
-                            id = rule?.id ?: "",
-                            name = state.name.trim(),
-                            enabled = rule?.enabled ?: true,
-                            field = state.field,
-                            algorithm = state.algorithm,
-                            pattern = state.pattern.trim(),
-                            tags =
-                                state.tags
-                                    .split(',')
-                                    .map { it.trim() }
-                                    .filter { it.isNotEmpty() },
-                            sets = state.sets.mapValues { it.value.trim() }.filterValues { it.isNotEmpty() },
-                            position = state.position.toIntOrNull() ?: 0,
-                        ),
-                    )
-                },
-                enabled = canSave,
-            ) { Text(stringResource(Res.string.common_save)) }
+            TextButton(onClick = onConfirm, enabled = state.canSave) { Text(stringResource(Res.string.common_save)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) } },
     )
 }
 
+/**
+ * The rule form as the user edits it: text as typed, turned into a rule only on save ([toRule]).
+ * [id] is empty for a new rule.
+ */
 @Serializable
-private data class RuleFormState(
+internal data class RuleFormState(
+    val id: String = "",
+    val enabled: Boolean = true,
     val name: String = "",
     val field: RuleField = RuleField.Content,
     val algorithm: MatchAlgorithm = MatchAlgorithm.ANY_WORD,
@@ -342,41 +338,50 @@ private data class RuleFormState(
     val sets: Map<String, String> = emptyMap(),
     val position: String = "0",
 ) {
+    val isNew: Boolean get() = id.isEmpty()
+
+    /** False only for a regex pattern that does not compile. */
+    val patternValid: Boolean
+        get() = algorithm != MatchAlgorithm.REGEX || runCatching { Regex(pattern) }.isSuccess
+
+    val canSave: Boolean get() = name.isNotBlank() && pattern.isNotBlank() && patternValid
+
+    fun toRule(): AutoMatchRule =
+        AutoMatchRule(
+            id = id,
+            name = name.trim(),
+            enabled = enabled,
+            field = field,
+            algorithm = algorithm,
+            pattern = pattern.trim(),
+            tags = tags.split(',').map { it.trim() }.filter { it.isNotEmpty() },
+            sets = sets.mapValues { it.value.trim() }.filterValues { it.isNotEmpty() },
+            position = position.toIntOrNull() ?: 0,
+        )
+
     companion object {
-        val Saver: Saver<RuleFormState, String> =
-            Saver(
-                save = { NpnJson.Persisted.encodeToString(serializer(), it) },
-                restore = { NpnJson.Persisted.decodeFromString(serializer(), it) },
+        fun of(rule: AutoMatchRule): RuleFormState =
+            RuleFormState(
+                id = rule.id,
+                enabled = rule.enabled,
+                name = rule.name,
+                field = rule.field,
+                algorithm = rule.algorithm,
+                pattern = rule.pattern,
+                tags = rule.tags.joinToString(", "),
+                sets = rule.sets,
+                position = rule.position.toString(),
             )
     }
 }
-
-/** The rule the form edits, saved in its stored form; a new rule saves nothing. */
-private val EditedRuleSaver: Saver<AutoMatchRule?, String> =
-    Saver(save = { rule -> rule?.let(AutoMatchRuleJson::encode) }, restore = AutoMatchRuleJson::decode)
-
-private fun AutoMatchRule?.toFormState(): RuleFormState =
-    if (this == null) {
-        RuleFormState()
-    } else {
-        RuleFormState(
-            name = name,
-            field = field,
-            algorithm = algorithm,
-            pattern = pattern,
-            tags = tags.joinToString(", "),
-            sets = sets,
-            position = position.toString(),
-        )
-    }
 
 @Composable
 private fun RuleFormFields(
     state: RuleFormState,
     fields: List<FieldDef>,
-    regexValid: Boolean,
     onChange: (RuleFormState) -> Unit,
 ) {
+    val regexValid = state.patternValid
     Column(
         Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
