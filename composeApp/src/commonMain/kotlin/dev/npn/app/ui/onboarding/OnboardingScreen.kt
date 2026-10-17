@@ -2,6 +2,7 @@ package dev.npn.app.ui.onboarding
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
@@ -65,64 +66,50 @@ fun OnboardingScreen(
     var createParent by rememberSaveable { mutableStateOf<String?>(null) }
     val recommended = if (useSaf) null else defaultLibraryLocation()
 
-    Column(
-        modifier =
-            modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Column(
-            modifier = Modifier.widthIn(max = 520.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
+    CenteredPane(modifier) {
+        Text(
+            text = stringResource(Res.string.common_app_name),
+            style = MaterialTheme.typography.headlineMedium,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            text = stringResource(Res.string.common_onboarding_intro),
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        TextButton(onClick = { showSyncHelp = !showSyncHelp }) {
+            Text(stringResource(Res.string.ux_sync_help))
+        }
+        if (showSyncHelp) {
             Text(
-                text = stringResource(Res.string.common_app_name),
-                style = MaterialTheme.typography.headlineMedium,
+                text = stringResource(Res.string.common_onboarding_sync),
+                style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
             )
+        }
+        if (failure != null) {
             Text(
-                text = stringResource(Res.string.common_onboarding_intro),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                text = stringResource(Res.string.common_could_not_open_library),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.error,
                 textAlign = TextAlign.Center,
             )
-            TextButton(onClick = { showSyncHelp = !showSyncHelp }) {
-                Text(stringResource(Res.string.ux_sync_help))
-            }
-            if (showSyncHelp) {
-                Text(
-                    text = stringResource(Res.string.common_onboarding_sync),
-                    style = MaterialTheme.typography.bodyMedium,
-                    textAlign = TextAlign.Center,
-                )
-            }
-            if (failure != null) {
-                Text(
-                    text = stringResource(Res.string.common_could_not_open_library),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.error,
-                    textAlign = TextAlign.Center,
-                )
-                OpenFailureMessage(failure, color = MaterialTheme.colorScheme.error)
-            }
-            LibraryLocationChooser(
+            OpenFailureMessage(failure, color = MaterialTheme.colorScheme.error)
+        }
+        LibraryLocationChooser(
+            useSaf = useSaf,
+            onUseSafChange = onUseSafChange,
+            onPick = onOpen,
+            onPickParent = { createParent = it },
+        ) { pickLibrary, pickParent ->
+            LibraryChoices(
+                recommended = recommended,
                 useSaf = useSaf,
-                onUseSafChange = onUseSafChange,
-                onPick = onOpen,
-                onPickParent = { createParent = it },
-            ) { pickLibrary, pickParent ->
-                LibraryChoices(
-                    recommended = recommended,
-                    useSaf = useSaf,
-                    onPickLibrary = pickLibrary,
-                    onPickParent = pickParent,
-                    onUseRecommendedFolder = onUseRecommendedFolder,
-                )
-            }
+                onPickLibrary = pickLibrary,
+                onPickParent = pickParent,
+                onUseRecommendedFolder = onUseRecommendedFolder,
+            )
         }
     }
 
@@ -192,5 +179,32 @@ private fun LibraryChoices(
                 Text(stringResource(Res.string.common_create_new_library))
             }
         }
+    }
+}
+
+/**
+ * The library-location screens' frame: their content centred in a column of readable width, the
+ * whole scrolling when it outgrows the window.
+ */
+@Composable
+internal fun CenteredPane(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Column(
+            modifier = Modifier.widthIn(max = 520.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            content = content,
+        )
     }
 }

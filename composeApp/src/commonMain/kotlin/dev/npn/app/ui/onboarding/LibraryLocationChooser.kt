@@ -2,8 +2,10 @@ package dev.npn.app.ui.onboarding
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -15,10 +17,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import dev.npn.app.platform.supportsSafStorage
-import dev.npn.app.ui.common.SafStorageSwitch
+import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.StorageAccessState
 import dev.npn.app.ui.common.TestTags
 import dev.npn.app.ui.common.rememberLibraryFolderPicker
@@ -27,6 +30,8 @@ import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_folder_access_not_kept_library
 import no_papers_needed.composeapp.generated.resources.common_folder_not_on_device
 import no_papers_needed.composeapp.generated.resources.common_settings_advanced
+import no_papers_needed.composeapp.generated.resources.common_settings_use_saf
+import no_papers_needed.composeapp.generated.resources.common_settings_use_saf_help
 import no_papers_needed.composeapp.generated.resources.common_storage_access_grant
 import no_papers_needed.composeapp.generated.resources.common_storage_access_help
 import no_papers_needed.composeapp.generated.resources.common_storage_access_title
@@ -142,5 +147,30 @@ private fun StorageAccessStep(
         Button(onClick = storage.request, modifier = Modifier.testTag(TestTags.STORAGE_ACCESS_GRANT)) {
             Text(stringResource(Res.string.common_storage_access_grant))
         }
+    }
+}
+
+/**
+ * The SAF switch where a library folder is chosen, stacked and centred to sit under the folder
+ * buttons. Settings shows the same setting as a [SwitchRow]; like it, the whole block is the toggle.
+ */
+@Composable
+private fun SafStorageSwitch(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier.toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            text = stringResource(Res.string.common_settings_use_saf),
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center,
+        )
+        Switch(checked = checked, onCheckedChange = null)
+        HelpText(stringResource(Res.string.common_settings_use_saf_help), textAlign = TextAlign.Center)
     }
 }
