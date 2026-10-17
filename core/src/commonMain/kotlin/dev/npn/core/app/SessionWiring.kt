@@ -402,14 +402,14 @@ internal fun buildWork(
     deps: SessionDeps,
     lifetime: SessionLifetime,
     ocr: OcrFacadeImpl,
-    enrichment: QueueDrainer,
+    enrichment: DrainedQueue<AiAutoEnricher>,
     edits: DrainedQueue<AiEditQueue>,
     rescanned: CompletableDeferred<Unit>,
 ): SessionWork =
     SessionWork(
         lifetime = lifetime,
         ocr = ocr.worker,
-        enrichment = enrichment,
+        enrichment = enrichment.worker,
         edits = edits.worker,
         firstRescan = rescanned,
         reader =
