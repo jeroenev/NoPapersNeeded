@@ -623,9 +623,8 @@ class JournalCoordinator internal constructor(
      * Returns the resulting [ScanReport]. Refreshes the folded state from the store after the
      * rescan.
      */
-    suspend fun commitAndRescan(ops: List<PendingOp>): ScanReport {
-        require(ops.isNotEmpty()) { "A commit and rescan publishes at least one event" }
-        return locked {
+    suspend fun commitAndRescan(ops: List<PendingOp>): ScanReport =
+        locked {
             ensureWritable()
             val current = foldedState()
             withContext(NonCancellable) {
@@ -635,7 +634,6 @@ class JournalCoordinator internal constructor(
                 projectAndRescan(current, writeTransaction(ops))
             }
         }
-    }
 
     /**
      * Commit a filesystem change's relink. Once its transaction is durable, the change stands:
@@ -724,7 +722,7 @@ class JournalCoordinator internal constructor(
      * is transient, and a [dev.npn.core.fs.VerifiedPublicationUnavailableException] means the library
      * should never have opened (the open-time check publishes through the same primitive).
      */
-    private suspend fun writeTransaction(ops: List<PendingOp>): PublishedTransaction = checkNotNull(writer.commit(ops))
+    private suspend fun writeTransaction(ops: List<PendingOp>): PublishedTransaction = writer.commit(ops)
 
     private fun ensureWritable() {
         check(writeBlockReason == null) { "Metadata writes are disabled: $writeBlockReason" }

@@ -32,8 +32,9 @@ internal class ContentAddressedJournalWriter(
     val watermark: Pair<Long, Int>
         get() = allocator.physicalMillis to allocator.counter
 
-    suspend fun commit(ops: List<PendingOp>): PublishedTransaction? {
-        if (ops.isEmpty()) return null
+    /** Publish [ops], at least one, as one transaction object. */
+    suspend fun commit(ops: List<PendingOp>): PublishedTransaction {
+        require(ops.isNotEmpty()) { "A transaction publishes at least one event" }
         val actor = Uuid.random().toString()
         val events =
             ops.mapIndexed { index, pending ->
