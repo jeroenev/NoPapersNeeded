@@ -50,6 +50,12 @@ data class FieldDefFormState(
         return existing.any { it.key != own && FieldKeys.sameKey(it.key, key) }
     }
 
+    /** Whether the form describes a definition that can be saved beside [existing] (editing [own]). */
+    fun canSave(
+        existing: List<FieldDef>,
+        own: String? = null,
+    ): Boolean = label.isNotBlank() && normalizedKey != null && !collides(existing, own)
+
     /** The definition this form describes, or null while the key is unusable. */
     fun toDef(position: Int): FieldDef? {
         val key = normalizedKey ?: return null

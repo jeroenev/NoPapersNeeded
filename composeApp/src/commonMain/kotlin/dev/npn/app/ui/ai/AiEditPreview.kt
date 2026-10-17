@@ -18,8 +18,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.DocThumbnail
 import dev.npn.app.ui.common.ExpanderRow
+import dev.npn.app.ui.common.rememberFieldLocale
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.DocListItem
+import dev.npn.core.model.FieldDef
+import dev.npn.core.model.FieldValues
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_blocked_loading
 import org.jetbrains.compose.resources.stringResource
@@ -30,14 +33,17 @@ private val PreviewThumbnailSize = 36.dp
 /**
  * The scope summary line ("N documents, M in this batch") doubling as the toggle for a list of the
  * exact documents the next batch would process. Lets the user verify the scope before spending
- * model calls, which a bare count cannot.
+ * model calls, which a bare count cannot. Each row shows what the document holds in the run's
+ * [fields].
  */
 @Composable
 internal fun BatchPreview(
     preview: ScopePreview,
     batchSize: Int,
+    fields: List<FieldDef>,
     content: DocContentFacade,
 ) {
+    val locale = rememberFieldLocale()
     var expanded by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth()) {
         ExpanderRow(
@@ -59,16 +65,25 @@ internal fun BatchPreview(
         }
         if (expanded) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                preview.batch.forEach { item -> PreviewRow(item, content) }
+                preview.batch.forEach { item ->
+                    // What the run's fields hold now makes "missing a chosen field" scopes, and what
+                    // a run would replace, verifiable at a glance.
+                    val details =
+                        fields.mapNotNull { def ->
+                            item.doc.fields[def.key]?.let { FieldValues.display(def.type, it, locale) }
+                        }
+                    PreviewRow(item, details.joinToString(" · "), content)
+                }
             }
         }
     }
 }
 
-/** One document in the batch: thumbnail, display title and the metadata it currently carries. */
+/** One document in the batch: thumbnail, display title and the [details] it currently carries. */
 @Composable
 private fun PreviewRow(
     item: DocListItem,
+    details: String,
     content: DocContentFacade,
 ) {
     Row(
@@ -84,8 +99,6 @@ private fun PreviewRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            // Existing metadata makes "missing a chosen field" scopes verifiable at a glance.
-            val details = listOfNotNull(item.doc.correspondent, item.doc.docDate).joinToString(" · ")
             if (details.isNotBlank()) {
                 Text(
                     details,

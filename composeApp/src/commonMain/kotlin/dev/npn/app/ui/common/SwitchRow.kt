@@ -2,10 +2,13 @@ package dev.npn.app.ui.common
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -41,5 +44,35 @@ fun SwitchRow(
         }
         // Null callback: the row is the toggle, so the switch must not be a second target.
         Switch(checked = checked, enabled = enabled, onCheckedChange = null)
+    }
+}
+
+/**
+ * One choice of a radio group, labelled, with optional [supporting] content under the label. Like
+ * [SwitchRow], the whole row is the target and the button only shows the state, so a screen reader
+ * announces one radio button with its name.
+ */
+@Composable
+fun RadioRow(
+    label: String,
+    selected: Boolean,
+    onSelect: () -> Unit,
+    modifier: Modifier = Modifier,
+    supporting: (@Composable ColumnScope.() -> Unit)? = null,
+) {
+    Row(
+        modifier
+            .fillMaxWidth()
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onSelect),
+        // With supporting lines under the label, the button stays level with the label.
+        verticalAlignment = if (supporting == null) Alignment.CenterVertically else Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        // Null callback: the row is the target, so the button must not be a second one.
+        RadioButton(selected = selected, onClick = null)
+        Column(Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.bodyLarge)
+            supporting?.invoke(this)
+        }
     }
 }

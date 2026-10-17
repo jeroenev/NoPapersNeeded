@@ -51,6 +51,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.HighlightText
+import dev.npn.app.ui.common.RadioRow
 import dev.npn.app.ui.common.formatEpochDate
 import dev.npn.app.ui.common.parseQueryHighlight
 import dev.npn.core.app.OcrVersion
@@ -244,20 +245,18 @@ private fun FindBar(
         }
         // The find status changes as the user types; announce it politely so a screen reader
         // reports "3 / 12" or "No matches found" without the user leaving the field.
-        val findStatusSemantics = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
-        if (matchCount > 0) {
+        val status =
+            when {
+                matchCount > 0 -> stringResource(Res.string.detail_find_position, current + 1, matchCount)
+                searching -> stringResource(Res.string.detail_no_matches_found)
+                else -> null
+            }
+        status?.let {
             Text(
-                stringResource(Res.string.detail_find_position, current + 1, matchCount),
+                it,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = findStatusSemantics,
-            )
-        } else if (searching) {
-            Text(
-                stringResource(Res.string.detail_no_matches_found),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = findStatusSemantics,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
             )
         }
         IconButton(onClick = onClear, enabled = query.isNotEmpty()) {
@@ -305,9 +304,6 @@ private fun buildFindSegments(
     matchLength: Int,
     current: Int,
 ): List<FindSegment> {
-    if (matches.isEmpty() || matchLength <= 0) {
-        return listOf(FindSegment(text, false, false))
-    }
     val segments = mutableListOf<FindSegment>()
     var last = 0
     matches.forEachIndexed { index, start ->
@@ -467,23 +463,22 @@ private fun OcrEngineOption(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        RadioButton(selected = selected, onClick = null)
-        Column {
-            Text(label, style = MaterialTheme.typography.bodyMedium)
-            if (secondary != null) {
-                Text(
-                    secondary,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
+    RadioRow(
+        label = label,
+        selected = selected,
+        onSelect = onClick,
+        modifier = Modifier.padding(vertical = 8.dp),
+        supporting =
+            secondary?.let {
+                {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+    )
 }
 
 private const val MAX_OCR_DISPLAY_CHARS = 200_000

@@ -55,25 +55,6 @@ internal fun SetupColumn(
     content: @Composable ColumnScope.() -> Unit,
 ) = Column(modifier, verticalArrangement = Arrangement.spacedBy(16.dp), content = content)
 
-/** One radio choice whose whole row is the target; the button itself is decoration. */
-@Composable
-internal fun ScopeOption(
-    scope: EditScope,
-    label: String,
-    selected: EditScope,
-    onSelect: (EditScope) -> Unit,
-) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .selectable(selected = scope == selected, role = Role.RadioButton) { onSelect(scope) },
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        RadioButton(selected = scope == selected, onClick = null)
-        Text(label, Modifier.padding(start = 8.dp), style = MaterialTheme.typography.bodyLarge)
-    }
-}
-
 /**
  * One autofill field: an enable checkbox and, once enabled, what it may do to a value that is
  * already there.
