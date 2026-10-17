@@ -23,6 +23,8 @@ complexity:
     allowedFunctionsPerObject: 20
     allowedFunctionsPerEnum: 20
     ignoreOverridden: true
+    # A Room DAO is one method per query; splitting it by count would scatter one table's SQL.
+    ignoreAnnotated: ["Dao"]
   NestedBlockDepth:
     allowedDepth: 5
 
@@ -46,6 +48,20 @@ style:
         value: "FIXME"
 
 naming:
+  MatchingDeclarationName:
+    # The defaults plus `desktop`, the name of this build's JVM target (`Foo.desktop.kt`).
+    multiplatformTargets:
+      - 'ios'
+      - 'android'
+      - 'js'
+      - 'jvm'
+      - 'native'
+      - 'iosArm64'
+      - 'iosX64'
+      - 'macosX64'
+      - 'mingwX64'
+      - 'linuxX64'
+      - 'desktop'
   FunctionNaming:
     # Composable functions are PascalCase by convention; test functions use backtick names.
     ignoreAnnotated: ["Composable"]

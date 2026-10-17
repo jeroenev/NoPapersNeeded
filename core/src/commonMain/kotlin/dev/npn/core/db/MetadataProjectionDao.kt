@@ -70,7 +70,6 @@ private fun validateHlc(
 }
 
 @Dao
-@Suppress("TooManyFunctions")
 interface MetadataProjectionDao {
     @Query("SELECT * FROM metadata_events WHERE deviceId = :deviceId AND sequence = :sequence")
     suspend fun event(
