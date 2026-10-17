@@ -193,22 +193,6 @@ object NpnPaths {
         return norm == NPN_DIR || norm.startsWith("$NPN_DIR/")
     }
 
-    /**
-     * True when [relPath] is an OCR sidecar that [deviceId] wrote itself. The desktop watcher uses
-     * this to drop self-echo events — the writing code paths already index synchronously, so
-     * reacting to our own sidecars would turn every OCR run into a redundant pass. Other devices'
-     * sidecars (arriving via file sync) are NOT self-writes and must keep triggering a refresh.
-     */
-    fun isOwnDeviceWrite(
-        relPath: String,
-        deviceId: String,
-    ): Boolean {
-        val norm = joinSegments(relPath)
-        if (!norm.startsWith("$OCR_DIR/")) return false
-        val sidecar = OcrSidecarName.parse(fileName(norm)) ?: return false
-        return OcrSidecarName.isWrittenBy(sidecar.writerKey, deviceId)
-    }
-
     /** True when any path segment begins with a dot (hidden file/dir), e.g. `.npn`, `a/.b/c`. */
     fun isHidden(relPath: String): Boolean = segments(relPath).any { it.startsWith('.') }
 
@@ -350,7 +334,7 @@ object NpnPaths {
      *
      * Whatever reads a path seen on disk (a listing, a watcher event) uses this to *ignore* such a
      * path ([indexable], `JournalPaths.classify`, the session's `watchAction`) or reads it without
-     * the gate ([isInternal], [isHidden], [isOwnDeviceWrite]); only the I/O side ([normalize])
+     * the gate ([isInternal], [isHidden], [dev.npn.core.ocr.OcrSidecarName.isOwnWrite]); only the I/O side ([normalize])
      * refuses it. The split keeps a hostile or merely exotic name on disk from failing a rescan, a
      * journal reconcile or the watch.
      */
@@ -381,7 +365,7 @@ object NpnPaths {
     private fun segments(relPath: String): List<String> = relPath.split('/').filter { it.isNotEmpty() }
 
     /** [normalize] without the safety gate, for classifying paths observed on disk. */
-    private fun joinSegments(relPath: String): String = segments(relPath).joinToString("/")
+    internal fun joinSegments(relPath: String): String = segments(relPath).joinToString("/")
 
     /** A drive letter and colon (`C:`, `c:relative.pdf`), absolute or drive-relative on Windows. */
     private val drivePrefix = Regex("^[A-Za-z]:.*")

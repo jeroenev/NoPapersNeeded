@@ -1,6 +1,8 @@
 package dev.npn.core.fs
 
 import dev.npn.core.journal.JournalPaths
+import dev.npn.core.ocr.OcrSidecarFiles
+import dev.npn.core.ocr.OcrSidecarName
 import dev.npn.core.util.runCatchingCancellable
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.Dispatchers

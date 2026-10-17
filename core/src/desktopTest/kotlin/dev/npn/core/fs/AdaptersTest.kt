@@ -1,5 +1,6 @@
 package dev.npn.core.fs
 
+import dev.npn.core.ocr.OcrSidecarFiles
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe

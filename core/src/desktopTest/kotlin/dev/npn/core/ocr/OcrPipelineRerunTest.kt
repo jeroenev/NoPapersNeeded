@@ -4,7 +4,6 @@ import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.QueueState
 import dev.npn.core.db.documentEntity
 import dev.npn.core.db.searchDocIds
-import dev.npn.core.fs.OcrSidecarFiles
 import dev.npn.core.index.MutableClock
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldContainExactly

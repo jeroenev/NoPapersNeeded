@@ -1,4 +1,6 @@
-package dev.npn.core.fs
+package dev.npn.core.ocr
+
+import dev.npn.core.fs.NpnPaths
 
 /**
  * An OCR sidecar's name, `.npn/ocr/<sha256>.<writerKey>.json`, and the one place that reads one.
@@ -66,26 +68,35 @@ data class OcrSidecarName(
         ): String = "$deviceId.r$runMillis.$engine"
 
         /**
-         * The parts of [writerKey]. A key whose last part [isEngine] names is engine-qualified;
-         * anything else is a legacy key, all of it the device id, whose engine only its sidecar's
-         * content tells.
+         * The parts of [writerKey]. A key whose last part names an [OcrEngineId] is
+         * engine-qualified; anything else is a legacy key, all of it the device id, whose engine
+         * only its sidecar's content tells.
          */
-        fun writer(
-            writerKey: String,
-            isEngine: (String) -> Boolean,
-        ): Writer {
+        fun writer(writerKey: String): Writer {
             val engine = writerKey.substringAfterLast('.', "")
-            if (!isEngine(engine)) return Writer(writerKey, engine = null)
+            if (OcrEngineId.fromColumn(engine) == null) return Writer(writerKey, engine = null)
             val device = writerKey.removeSuffix(".$engine")
             val rerun = rerunWriter.matchEntire(device)?.groupValues
             val run = rerun?.get(2)?.toLongOrNull()
             return if (rerun == null || run == null) Writer(device, engine) else Writer(rerun[1], engine, run)
         }
 
-        /** Whether [writerKey] is one [deviceId] writes under: its legacy key, or any of its engine keys. */
-        fun isWrittenBy(
-            writerKey: String,
+        /**
+         * True when [relPath] is an OCR sidecar that [deviceId] wrote itself, under its legacy key or
+         * any of its engine keys. The desktop watcher uses this to drop self-echo events — the
+         * writing code paths already index synchronously, so reacting to our own sidecars would turn
+         * every OCR run into a redundant pass. Other devices' sidecars (arriving via file sync) are
+         * NOT self-writes and must keep triggering a refresh. Reads [relPath] without the path
+         * gate, as every observation-side check does ([NpnPaths.isSafe]).
+         */
+        fun isOwnWrite(
+            relPath: String,
             deviceId: String,
-        ): Boolean = writerKey == deviceId || writerKey.startsWith("$deviceId.")
+        ): Boolean {
+            val norm = NpnPaths.joinSegments(relPath)
+            if (!norm.startsWith("${NpnPaths.OCR_DIR}/")) return false
+            val writerKey = parse(NpnPaths.fileName(norm))?.writerKey ?: return false
+            return writerKey == deviceId || writerKey.startsWith("$deviceId.")
+        }
     }
 }

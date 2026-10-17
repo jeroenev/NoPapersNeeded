@@ -8,13 +8,13 @@ import dev.npn.core.db.isLive
 import dev.npn.core.db.searchDocIds
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
-import dev.npn.core.fs.OcrSidecarFiles
-import dev.npn.core.fs.OcrSidecarName
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.ocr.FakeOcrEngine
 import dev.npn.core.ocr.OcrEngineId
 import dev.npn.core.ocr.OcrSidecar
 import dev.npn.core.ocr.OcrSidecarCodec
+import dev.npn.core.ocr.OcrSidecarFiles
+import dev.npn.core.ocr.OcrSidecarName
 import dev.npn.core.ocr.OcrState
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pdf.PdfFixtures

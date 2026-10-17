@@ -1,8 +1,6 @@
 package dev.npn.core.ocr
 
 import dev.npn.core.fs.JvmLibraryFileSystem
-import dev.npn.core.fs.OcrSidecarFiles
-import dev.npn.core.fs.OcrSidecarName
 import dev.npn.core.fs.PathExternalIo
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe

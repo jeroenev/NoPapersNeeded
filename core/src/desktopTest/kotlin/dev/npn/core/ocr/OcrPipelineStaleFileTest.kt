@@ -5,7 +5,6 @@ import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.QueueState
 import dev.npn.core.db.queueState
 import dev.npn.core.fs.LibraryFileSystem
-import dev.npn.core.fs.OcrSidecarFiles
 import dev.npn.core.index.MutableClock
 import dev.npn.core.index.WriteSettle
 import dev.npn.core.pdf.PdfFixtures

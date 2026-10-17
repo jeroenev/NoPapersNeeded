@@ -10,7 +10,6 @@ import dev.npn.core.db.documentEntity
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.LibraryFileSystem
-import dev.npn.core.fs.OcrSidecarFiles
 import dev.npn.core.fs.PathExternalIo
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.SystemEpochClock

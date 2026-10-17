@@ -2,7 +2,6 @@ package dev.npn.core.ocr
 
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.NpnPaths
-import dev.npn.core.fs.OcrSidecarFiles
 import dev.npn.core.fs.PathExternalIo
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.shouldBe
@@ -109,7 +108,7 @@ class OcrSidecarNamesTest {
 
     @Test
     fun ownWritesAreThoseUnderThisDevicesKeys() {
-        fun own(name: String) = NpnPaths.isOwnDeviceWrite("${NpnPaths.OCR_DIR}/$name", "dev1")
+        fun own(name: String) = OcrSidecarName.isOwnWrite("${NpnPaths.OCR_DIR}/$name", "dev1")
 
         own("$hash.dev1.json") shouldBe true
         own("$hash.dev1.mlkit.json") shouldBe true

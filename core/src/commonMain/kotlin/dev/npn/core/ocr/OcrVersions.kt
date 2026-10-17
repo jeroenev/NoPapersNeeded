@@ -1,7 +1,5 @@
 package dev.npn.core.ocr
 
-import dev.npn.core.fs.OcrSidecarFiles
-import dev.npn.core.fs.OcrSidecarName
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -135,7 +133,7 @@ class OcrVersions internal constructor(
         hash: String,
         writerKey: String,
     ): Version? {
-        val writer = OcrSidecarName.writer(writerKey) { OcrEngineId.fromColumn(it) != null }
+        val writer = OcrSidecarName.writer(writerKey)
         val engine =
             writer.engine
                 ?: engineCache.getOrCompute("$hash.$writerKey") { read(hash, writerKey)?.engine }

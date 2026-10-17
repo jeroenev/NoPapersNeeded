@@ -12,8 +12,6 @@ import dev.npn.core.db.TagDao
 import dev.npn.core.db.isLive
 import dev.npn.core.db.queueState
 import dev.npn.core.fs.LibraryFileSystem
-import dev.npn.core.fs.OcrSidecarFiles
-import dev.npn.core.fs.OcrSidecarName
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.index.FtsRows
 import dev.npn.core.index.WriteSettle
@@ -589,7 +587,7 @@ class OcrPipeline(
                 fileName = doc?.fileName,
                 tags = tags,
                 fields = fields,
-                content = OcrSidecar.joinPages(sidecar.pages),
+                content = sidecar.fullText(),
             ),
         )
         val state = if (desired.deviceId == deviceId) OcrState.DONE else OcrState.ADOPTED

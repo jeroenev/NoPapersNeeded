@@ -1,4 +1,8 @@
-package dev.npn.core.fs
+package dev.npn.core.ocr
+
+import dev.npn.core.fs.FileMeta
+import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.fs.NpnPaths
 
 /**
  * File-level adapter for OCR sidecars, named as [OcrSidecarName] describes.

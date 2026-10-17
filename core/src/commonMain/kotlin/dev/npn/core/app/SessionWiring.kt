@@ -7,7 +7,6 @@ import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.LegacyIndexTables
 import dev.npn.core.db.defs
 import dev.npn.core.db.fieldTypes
-import dev.npn.core.fs.OcrSidecarFiles
 import dev.npn.core.fs.TrashOps
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
 import dev.npn.core.index.DeviceIdentity
@@ -26,6 +25,7 @@ import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.SystemProperty
 import dev.npn.core.ocr.OcrEngineSelector
 import dev.npn.core.ocr.OcrPipeline
+import dev.npn.core.ocr.OcrSidecarFiles
 import dev.npn.core.pathrules.StoragePathRuleApplicator
 import dev.npn.core.pdf.RenderGate
 import dev.npn.core.pdf.ThumbnailService

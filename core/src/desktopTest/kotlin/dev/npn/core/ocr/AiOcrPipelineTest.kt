@@ -3,7 +3,6 @@ package dev.npn.core.ocr
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.QueueState
 import dev.npn.core.db.searchDocIds
-import dev.npn.core.fs.OcrSidecarFiles
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldNotBeNull

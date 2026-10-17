@@ -4,6 +4,7 @@ import dev.npn.core.fs.FsEvent
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
+import dev.npn.core.ocr.OcrSidecarName
 import dev.npn.core.util.debounced
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -59,7 +60,7 @@ internal fun watchAction(
     deviceId: String,
 ): WatchAction {
     val rel = event.relPath ?: return WatchAction.Rescan
-    if (!NpnPaths.isSafe(rel) || NpnPaths.isOwnDeviceWrite(rel, deviceId)) return WatchAction.Ignore
+    if (!NpnPaths.isSafe(rel) || OcrSidecarName.isOwnWrite(rel, deviceId)) return WatchAction.Ignore
     return when (JournalPaths.classify(rel)) {
         is JournalPath.ObjectV2 -> {
             WatchAction.IngestObject(rel)

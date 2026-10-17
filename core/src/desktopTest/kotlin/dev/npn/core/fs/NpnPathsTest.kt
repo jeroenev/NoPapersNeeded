@@ -1,5 +1,6 @@
 package dev.npn.core.fs
 
+import dev.npn.core.ocr.OcrSidecarName
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
@@ -68,18 +69,18 @@ class NpnPathsTest {
     }
 
     @Test
-    fun isOwnDeviceWrite() {
+    fun isOwnWrite() {
         // Own OCR sidecar: self-echo. Both legacy and engine-qualified forms.
-        NpnPaths.isOwnDeviceWrite(".npn/ocr/abc123.dev1.json", "dev1").shouldBeTrue()
-        NpnPaths.isOwnDeviceWrite(".npn/ocr/abc123.dev1.tesseract.json", "dev1").shouldBeTrue()
+        OcrSidecarName.isOwnWrite(".npn/ocr/abc123.dev1.json", "dev1").shouldBeTrue()
+        OcrSidecarName.isOwnWrite(".npn/ocr/abc123.dev1.tesseract.json", "dev1").shouldBeTrue()
         // Another device's sidecar (arriving via sync) must keep triggering a refresh.
-        NpnPaths.isOwnDeviceWrite(".npn/ocr/abc123.dev2.json", "dev1").shouldBeFalse()
-        NpnPaths.isOwnDeviceWrite(".npn/ocr/abc123.dev2.tesseract.json", "dev1").shouldBeFalse()
+        OcrSidecarName.isOwnWrite(".npn/ocr/abc123.dev2.json", "dev1").shouldBeFalse()
+        OcrSidecarName.isOwnWrite(".npn/ocr/abc123.dev2.tesseract.json", "dev1").shouldBeFalse()
         // This build writes no v1 segments, so one under this device's id came from elsewhere.
-        NpnPaths.isOwnDeviceWrite(".npn/journal/dev1/0001.jsonl", "dev1").shouldBeFalse()
+        OcrSidecarName.isOwnWrite(".npn/journal/dev1/0001.jsonl", "dev1").shouldBeFalse()
         // Document-area and trash paths are never self-writes.
-        NpnPaths.isOwnDeviceWrite("inbox/x.pdf", "dev1").shouldBeFalse()
-        NpnPaths.isOwnDeviceWrite(".npn/trash/x__deadbeef.pdf", "dev1").shouldBeFalse()
+        OcrSidecarName.isOwnWrite("inbox/x.pdf", "dev1").shouldBeFalse()
+        OcrSidecarName.isOwnWrite(".npn/trash/x__deadbeef.pdf", "dev1").shouldBeFalse()
     }
 
     @Test
@@ -191,6 +192,6 @@ class NpnPathsTest {
         // classified as "not ours", not kill the loop.
         NpnPaths.isInternal("../.npn/x").shouldBeFalse()
         NpnPaths.isHidden("a\\.b").shouldBeFalse()
-        NpnPaths.isOwnDeviceWrite("../.npn/ocr/abc123.dev1.json", "dev1").shouldBeFalse()
+        OcrSidecarName.isOwnWrite("../.npn/ocr/abc123.dev1.json", "dev1").shouldBeFalse()
     }
 }

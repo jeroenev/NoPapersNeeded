@@ -3,7 +3,6 @@ package dev.npn.core.app
 import dev.npn.core.db.BIND_CHUNK
 import dev.npn.core.db.StatementLog
 import dev.npn.core.db.queryPlan
-import dev.npn.core.fs.OcrSidecarFiles
 import dev.npn.core.index.IndexRig
 import dev.npn.core.index.rowAtPath
 import dev.npn.core.model.FieldDef
@@ -11,6 +10,7 @@ import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
 import dev.npn.core.ocr.OcrEngineSelector
 import dev.npn.core.ocr.OcrPipeline
+import dev.npn.core.ocr.OcrSidecarFiles
 import dev.npn.core.pdf.PdfBoxEngine
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.assertions.withClue

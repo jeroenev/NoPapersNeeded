@@ -2,8 +2,8 @@ package dev.npn.core.app
 
 import dev.npn.core.fs.FsEvent
 import dev.npn.core.fs.NpnPaths
-import dev.npn.core.fs.OcrSidecarName
 import dev.npn.core.journal.JournalPaths
+import dev.npn.core.ocr.OcrSidecarName
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.delay
