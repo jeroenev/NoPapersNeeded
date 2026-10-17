@@ -21,14 +21,16 @@ complexity:
     ignoreSimpleWhenEntries: true
   TooManyFunctions:
     allowedFunctionsPerFile: 20
-    # 22, not 20: a private helper that removes a duplicate should not push a class over.
-    allowedFunctionsPerClass: 22
-    # An actions interface mirrors the viewmodel implementing it, so it gets the class's allowance
-    # rather than being split into sub-interfaces nothing else implements.
+    allowedFunctionsPerClass: 20
+    # An actions interface lists every public function of the viewmodel implementing it, which
+    # ignorePrivate does not shrink, so it is not split into sub-interfaces nothing else implements
+    # (LibraryActions has 21).
     allowedFunctionsPerInterface: 22
     allowedFunctionsPerObject: 20
     allowedFunctionsPerEnum: 20
     ignoreOverridden: true
+    # A class's size is its API: a private helper that removes a duplicate should not push it over.
+    ignorePrivate: true
     excludes: &testSources
       - '**/commonTest/**'
       - '**/desktopTest/**'
