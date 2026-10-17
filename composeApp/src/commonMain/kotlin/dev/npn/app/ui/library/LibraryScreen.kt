@@ -460,15 +460,13 @@ private fun LibraryContent(
             if (ui.selectionMode) {
                 SelectionTopBar(
                     count = ui.selected.size,
-                    total = allDocIds.size,
+                    allDocIds = allDocIds,
                     reviewMode = reviewMode,
                     wide = wide,
-                    onClose = actions::clearSelection,
-                    onSelectAll = { actions.selectAll(allDocIds) },
+                    actions = actions,
                     onAddTag = onAddTag,
                     onRemoveTag = onRemoveTag,
                     onAiEdit = aiEditSelection,
-                    onReviewedChange = actions::bulkSetReviewed,
                     onRequestTrash = onRequestTrash,
                 )
             } else {
@@ -788,15 +786,14 @@ private fun SortMenuButton(
 @Composable
 private fun SelectionTopBar(
     count: Int,
-    total: Int,
+    /** Every document in the results, for "select all". */
+    allDocIds: List<String>,
     reviewMode: ReviewMode,
     wide: Boolean,
-    onClose: () -> Unit,
-    onSelectAll: () -> Unit,
+    actions: LibraryActions,
     onAddTag: () -> Unit,
     onRemoveTag: () -> Unit,
     onAiEdit: (() -> Unit)?,
-    onReviewedChange: (Boolean) -> Unit,
     onRequestTrash: () -> Unit,
 ) {
     val addTag = TopBarAction(Icons.Filled.NewLabel, stringResource(Res.string.common_add_tag), onAddTag)
@@ -810,8 +807,8 @@ private fun SelectionTopBar(
         TopBarAction(
             icon = Icons.Filled.SelectAll,
             label = stringResource(Res.string.common_select_all),
-            onClick = onSelectAll,
-            enabled = total > 0,
+            onClick = { actions.selectAll(allDocIds) },
+            enabled = allDocIds.isNotEmpty(),
         )
     // Adding and removing tags and AI edit are all about the selection itself, so a wide bar shows
     // them beside add-tag and trash. A compact bar keeps just the two frequent actions and leaves
@@ -833,14 +830,14 @@ private fun SelectionTopBar(
                     TopBarAction(
                         icon = Icons.Filled.CheckCircle,
                         label = stringResource(Res.string.library_mark_reviewed),
-                        onClick = { onReviewedChange(true) },
+                        onClick = { actions.bulkSetReviewed(true) },
                     ),
                 )
                 add(
                     TopBarAction(
                         icon = Icons.Filled.RadioButtonUnchecked,
                         label = stringResource(Res.string.library_mark_needs_review),
-                        onClick = { onReviewedChange(false) },
+                        onClick = { actions.bulkSetReviewed(false) },
                     ),
                 )
             }
@@ -853,7 +850,7 @@ private fun SelectionTopBar(
                 overflow = TextOverflow.Ellipsis,
             )
         },
-        navigationIcon = { TooltipIconButton(Icons.Filled.Clear, stringResource(Res.string.common_cancel), onClose) },
+        navigationIcon = { TooltipIconButton(Icons.Filled.Clear, stringResource(Res.string.common_cancel), actions::clearSelection) },
         actions = {
             TopBarActions(
                 inline = inline,

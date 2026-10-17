@@ -20,7 +20,6 @@
     <ID>InjectDispatcher:PlatformHelpers.desktop.kt:IO</ID>
     <ID>LambdaParameterEventTrailing:FieldEditor.kt:onCommit: (String) -&gt; Unit</ID>
     <ID>LambdaParameterInRestartableEffect:PageViewer.kt:render: suspend (pageIndex: Int, maxDim: Int) -&gt; ByteArray?</ID>
-    <ID>LongParameterList:LibraryScreen.kt:@Composable private fun SelectionTopBar</ID>
     <ID>ModifierMissing:AiChatScreen.kt:@Composable fun AiChatScreen</ID>
     <ID>ModifierMissing:AiEditReviewScreen.kt:@Composable fun AiEditReviewScreen</ID>
     <ID>ModifierMissing:AiEditScreen.kt:@Composable fun AiEditScreen</ID>
