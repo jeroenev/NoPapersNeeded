@@ -17,13 +17,6 @@ class BakeRefusedException(
     cause: Throwable? = null,
 ) : IllegalStateException(message, cause)
 
-/** Outcome of [BakeService.bakeInPlace]. */
-data class BakeResult(
-    val oldSha256: String,
-    val newSha256: String,
-    val finalRelPath: String,
-)
-
 /**
  * Orchestrates XMP baking on top of a [LibraryFileSystem] and a [PdfXmpIO].
  *
@@ -90,13 +83,16 @@ class BakeService(
      *
      * A PDF that cannot carry the metadata, or a rewrite that does not verify, throws
      * [BakeRefusedException]: the temp file is removed and the original is left untouched.
+     *
+     * Returns the sha256 of the baked bytes now at [relPath], or null when the file there was not
+     * the document's (or stopped being it before the swap) and nothing was baked.
      */
     suspend fun bakeInPlace(
         relPath: String,
         docId: String,
         data: NpnXmpData,
         emitRelink: suspend (oldSha256: String, newSha256: String) -> Unit,
-    ): BakeResult? {
+    ): String? {
         val norm = NpnPaths.normalize(relPath)
         // Taken before the read, so a file written to during or after it no longer matches.
         val read = fs.stat(norm)?.takeIf { !it.isDirectory } ?: return null
@@ -143,7 +139,7 @@ class BakeService(
             } finally {
                 if (!standing) restoreOriginal(norm, src, docId, newSha, tmpPath)
             }
-            BakeResult(oldSha256 = docId, newSha256 = newSha, finalRelPath = norm)
+            newSha
         }
     }
 

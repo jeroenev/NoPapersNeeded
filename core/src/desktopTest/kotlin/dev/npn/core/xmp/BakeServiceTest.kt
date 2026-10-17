@@ -74,7 +74,7 @@ class BakeServiceTest {
             var relinkNew: String? = null
             val data = xmp(tags = listOf("filed", "acme"), reviewed = "true")
 
-            val result =
+            val newSha =
                 BakeService(fs, io)
                     .bakeInPlace("doc.pdf", oldSha, data) { old, new ->
                         relinkOld = old
@@ -83,14 +83,12 @@ class BakeServiceTest {
 
             // Relink called with correct shas.
             relinkOld shouldBe oldSha
-            relinkNew shouldBe result.newSha256
-            result.oldSha256 shouldBe oldSha
-            (result.newSha256 != oldSha).shouldBeTrue()
-            result.finalRelPath shouldBe "doc.pdf"
+            relinkNew shouldBe newSha
+            (newSha != oldSha).shouldBeTrue()
 
-            // File in place with new content parseable and carrying metadata + documentId=oldSha.
-            val nowSha = fs.sha256("doc.pdf")
-            nowSha shouldBe result.newSha256
+            // File in place, at its own path, with new content parseable and carrying metadata +
+            // documentId=oldSha.
+            fs.sha256("doc.pdf") shouldBe newSha
             io.readXmp(fs.readBytes("doc.pdf")) shouldBe XmpSerializer.serialize(data.copy(documentId = oldSha))
 
             // No temp litter.
@@ -108,7 +106,7 @@ class BakeServiceTest {
             val result =
                 BakeService(counting, io).bakeInPlace("doc.pdf", oldSha, xmp(tags = listOf("t"))) { _, _ -> }
 
-            result.shouldNotBeNull().newSha256 shouldBe fs.sha256("doc.pdf")
+            result.shouldNotBeNull() shouldBe fs.sha256("doc.pdf")
             counting.calls shouldBe listOf("read doc.pdf")
         }
 
