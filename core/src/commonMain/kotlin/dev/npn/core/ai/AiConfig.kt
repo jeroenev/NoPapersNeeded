@@ -69,10 +69,13 @@ data class AiConfig(
     val reasoningAssistant: AiReasoningLevel = AiReasoningLevel.DEFAULT,
     /** Reasoning effort for AI-edit suggestion calls. Default: LOW (cheap extraction tasks). */
     val reasoningEdit: AiReasoningLevel = AiReasoningLevel.LOW,
-    /** User-configured cap on tag suggestions produced per document (device-local, 1..15). */
-    val maxTagsPerDoc: Int = 8,
-    /** User-configured cap on genuinely-new (non-vocabulary) tags per document (device-local, 0..10). */
-    val maxNewTagsPerDoc: Int = 5,
+    /** User-configured cap on tag suggestions produced per document (device-local, [AiTagging.RANGE]). */
+    val maxTagsPerDoc: Int = AiTagging.DEFAULT_TAGS_PER_DOC,
+    /**
+     * User-configured cap on genuinely-new (non-vocabulary) tags per document (device-local,
+     * [AiTagging.NEW_TAGS_RANGE]).
+     */
+    val maxNewTagsPerDoc: Int = AiTagging.DEFAULT_NEW_TAGS_PER_DOC,
     /**
      * Whether a document is enriched automatically (existing-vocabulary tags + empty single-value
      * fields) when *this device* OCRs it. Device-local: it spends the user's own endpoint quota, so
