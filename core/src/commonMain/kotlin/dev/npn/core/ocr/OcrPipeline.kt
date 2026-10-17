@@ -405,11 +405,7 @@ class OcrPipeline(
     suspend fun reconcileSidecars() {
         for ((hash, writerKeys) in versions.writerKeysByHash()) {
             if (hash == EMPTY_SHA256) continue
-            val doc = documentDao.getByDocId(hash) ?: continue
-            val stored = versions.of(hash, writerKeys)
-            if (stored.isEmpty()) continue
-            applySelection(doc, stored)
-            maybeQueueUpgrade(doc, stored)
+            documentDao.getByDocId(hash)?.let { doc -> reselect(doc, versions.of(hash, writerKeys)) }
         }
     }
 
@@ -419,7 +415,14 @@ class OcrPipeline(
      */
     suspend fun reselect(docId: String) {
         val doc = documentDao.getByDocId(docId) ?: return
-        val stored = versions.of(docId)
+        reselect(doc, versions.of(docId))
+    }
+
+    /** Index [doc]'s selected version of [stored] and queue an upgrade run where one is due. */
+    private suspend fun reselect(
+        doc: DocumentEntity,
+        stored: List<OcrVersions.Version>,
+    ) {
         if (stored.isEmpty()) return
         applySelection(doc, stored)
         maybeQueueUpgrade(doc, stored)
@@ -439,8 +442,7 @@ class OcrPipeline(
         // A label this build does not know has no writer key of its own to go under.
         val engines = stored.map { it.engine }.distinct().filter { OcrEngineId.fromColumn(it) != null }
         for (engine in engines.sortedByDescending { OcrEngineId.rank(it) }) {
-            val version = versions.select(stored, engine) ?: continue
-            val sidecar = versions.read(from, version.writerKey) ?: continue
+            val sidecar = versions.select(stored, engine)?.let { versions.read(from, it.writerKey) } ?: continue
             val writerKey = OcrSidecarName.writerKey(deviceId, engine)
             val copy = OcrSidecarCodec.encode(sidecar.copy(doc = to, dev = deviceId))
             runCatchingCancellable { sidecars.writeOnce(to, writerKey, copy) }.getOrElse { failure ->
