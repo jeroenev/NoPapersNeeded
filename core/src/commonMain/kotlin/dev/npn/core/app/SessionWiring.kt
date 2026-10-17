@@ -41,6 +41,7 @@ import dev.npn.core.work.drainedQueue
 import dev.npn.core.xmp.BakeService
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 
 // The builders [LibrarySessionImpl.openSession] wires a session from, one per part, in the order it
@@ -327,8 +328,8 @@ internal fun buildOcr(
     ai: AiFacadeImpl,
     rescanned: Deferred<Unit>,
     onOcrProduced: suspend (docId: String) -> Unit,
-    onStaleFile: suspend (docId: String) -> Unit,
 ): OcrFacadeImpl {
+    val staleFiles = Channel<Unit>(Channel.CONFLATED)
     val engines =
         OcrEngineSelector(
             local = deps.ocrEngine,
@@ -352,7 +353,7 @@ internal fun buildOcr(
             // Deterministic local rules run on any newly indexed text, including a re-index.
             onTextIndexed = { docId, text -> library.ruleApplier.applyToDoc(docId, text) },
             onOcrProduced = onOcrProduced,
-            onStaleFile = onStaleFile,
+            onStaleFile = { staleFiles.trySend(Unit) },
         )
     return OcrFacadeImpl(
         lifetime = lifetime,
@@ -368,6 +369,7 @@ internal fun buildOcr(
                 pipeline.processNext()
             },
         clock = deps.clock,
+        staleFiles = staleFiles,
     )
 }
 

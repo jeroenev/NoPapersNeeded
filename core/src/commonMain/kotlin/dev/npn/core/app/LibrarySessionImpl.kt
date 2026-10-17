@@ -36,6 +36,7 @@ import dev.npn.core.xmp.PdfXmpIO
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -199,6 +200,8 @@ class LibrarySessionImpl private constructor(
         val scope = lifetime.scope
 
         ocrFacade.watchQueue(scope)
+        // A file the OCR drain read no longer matches its hash: rescan once it has settled.
+        scope.launch { ocrFacade.staleFiles.consumeEach { scheduleSettleRescan(WriteSettle.QUIET_MILLIS) } }
 
         // Automatic AI enrichment and queued edit runs are NOT driven by an observer of their
         // queue tables. Such an observer cannot distinguish new work from a failed row being
@@ -355,9 +358,6 @@ class LibrarySessionImpl private constructor(
             val rescanned = CompletableDeferred<Unit>()
             val enrichment = buildEnrichment(deps, lifetime, coordinator, library, ai, rescanned)
             val edits = buildEditQueue(deps, lifetime, library, ai, rescanned)
-            // The pipeline's stale-file hook asks the session for a follow-up rescan; the session is
-            // built last, and the hook only runs on a drain.
-            lateinit var session: LibrarySessionImpl
             val ocr =
                 buildOcr(
                     deps,
@@ -369,27 +369,23 @@ class LibrarySessionImpl private constructor(
                     // Only the *intent* is recorded here: this runs on the OCR queue-drain thread,
                     // where a network call would stall OCR of every remaining document.
                     onOcrProduced = { docId -> enrichment.queue.enqueue(docId) },
-                    // The file no longer matches its hash: rescan once it has settled.
-                    onStaleFile = { session.scheduleSettleRescan(WriteSettle.QUIET_MILLIS) },
                 )
             bakeRelink = BakeRelink(coordinator, ocr.pipeline, deps.deviceDb.aiEnrichQueueDao(), deps.log)
             val scanReports = MutableStateFlow<ScanReport?>(null)
-            session =
-                LibrarySessionImpl(
-                    deviceId = deviceId,
-                    deps = deps,
-                    lifetime = lifetime,
-                    coordinator = coordinator,
-                    indexer = indexer,
-                    library = library,
-                    scanReports = scanReports,
-                    ocrFacade = ocr,
-                    maintenance = buildMaintenance(deps, lifetime, coordinator, library, scanReports),
-                    aiEditQueue = edits.queue,
-                    queues = buildWork(deps, lifetime, ocr, enrichment.worker, edits, rescanned),
-                    aiFacade = ai,
-                )
-            return session
+            return LibrarySessionImpl(
+                deviceId = deviceId,
+                deps = deps,
+                lifetime = lifetime,
+                coordinator = coordinator,
+                indexer = indexer,
+                library = library,
+                scanReports = scanReports,
+                ocrFacade = ocr,
+                maintenance = buildMaintenance(deps, lifetime, coordinator, library, scanReports),
+                aiEditQueue = edits.queue,
+                queues = buildWork(deps, lifetime, ocr, enrichment.worker, edits, rescanned),
+                aiFacade = ai,
+            )
         }
     }
 }
