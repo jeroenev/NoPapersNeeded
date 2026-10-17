@@ -212,33 +212,16 @@ class StoragePathRuleIntegrationTest {
                 if (op != null && op.key == SystemProperty.STORAGE_PATH) event.doc to op.value else null
             }
 
-    /**
-     * A library filesystem whose first [LibraryFileSystem.exists] check of [path] says so on [reached],
-     * then waits for [release]. [realTime] runs [finishesWithin]'s wait on the wall clock.
-     */
+    /** A library filesystem whose first [LibraryFileSystem.exists] check of [path] pauses at its gate. */
     private class HeldExists(
         private val path: String,
-        private val realTime: CoroutineDispatcher = Dispatchers.Default,
-    ) {
-        val reached = CompletableDeferred<Unit>()
-        private val gate = CompletableDeferred<Unit>()
+    ) : FsGate() {
         private val armed = AtomicBoolean(true)
-
-        fun release() = gate.complete(Unit)
-
-        /** Whether [job] finishes within [millis] of real time, not the test's virtual time. */
-        suspend fun finishesWithin(
-            job: Job,
-            millis: Long,
-        ): Boolean = withContext(realTime) { withTimeoutOrNull(millis) { job.join() } != null }
 
         fun over(fs: LibraryFileSystem): LibraryFileSystem =
             object : LibraryFileSystem by fs {
                 override suspend fun exists(relPath: String): Boolean {
-                    if (relPath == path && armed.getAndSet(false)) {
-                        reached.complete(Unit)
-                        gate.await()
-                    }
+                    if (relPath == path && armed.getAndSet(false)) pause()
                     return fs.exists(relPath)
                 }
             }

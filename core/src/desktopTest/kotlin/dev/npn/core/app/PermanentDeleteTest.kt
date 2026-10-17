@@ -256,7 +256,7 @@ class PermanentDeleteTest {
      */
     @Test
     fun aFileThatCouldNotBeRemovedIsReportedAndTheDocumentStaysDeleted() =
-        appSessionTest(files = ::refusingTrashDeletes) { rig ->
+        appSessionTest(files = refusingTrashDeletes::over) { rig ->
             val names = listOf("a", "b", "c")
             names.forEach { rig.writePdf("$it.pdf", PdfFixtures.embeddedTextPdf("file of $it")) }
             rig.session.rescan()
@@ -278,14 +278,8 @@ class PermanentDeleteTest {
             rig.fs.listAllUnder(NpnPaths.TRASH_DIR).filter { !it.isDirectory } shouldHaveSize 3
         }
 
-    /** [fs], whose provider refuses to delete anything in the trash. */
-    private fun refusingTrashDeletes(fs: LibraryFileSystem): LibraryFileSystem =
-        object : LibraryFileSystem by fs {
-            override suspend fun delete(relPath: String) {
-                if (relPath.startsWith("${NpnPaths.TRASH_DIR}/")) throw IOException("Permission denied")
-                fs.delete(relPath)
-            }
-        }
+    /** A provider that refuses to delete anything in the trash. */
+    private val refusingTrashDeletes = FileSystemFaults().apply { refuseDeletesUnder = "${NpnPaths.TRASH_DIR}/" }
 
     /**
      * Index [path] and trash its document with its file left where it was, as another device's trash

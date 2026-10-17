@@ -113,15 +113,11 @@ class TrashDuringABakeTest {
     }
 }
 
-/**
- * A library filesystem over which, once [armed], a bake of [path] says so on [reached] at [moment]
- * of its swap, then waits until [release]. [realTime] runs [finishesWithin]'s wait on the wall clock.
- */
+/** A library filesystem over which, once [armed], a bake of [path] pauses at its gate at [moment] of its swap. */
 private class PausedBake(
     private val path: String,
     private val moment: Moment,
-    private val realTime: CoroutineDispatcher = Dispatchers.Default,
-) {
+) : FsGate() {
     enum class Moment {
         /** Once the bake checked the file is the one it read, right before it deletes it. */
         BEFORE_DELETE,
@@ -131,21 +127,11 @@ private class PausedBake(
     }
 
     val armed = AtomicBoolean(false)
-    val reached = CompletableDeferred<Unit>()
-    private val gate = CompletableDeferred<Unit>()
-
-    fun release() = gate.complete(Unit)
-
-    /** Whether [job] finishes within [millis] of real time, not the test's virtual time. */
-    suspend fun finishesWithin(
-        job: Job,
-        millis: Long,
-    ): Boolean = withContext(realTime) { withTimeoutOrNull(millis) { job.join() } != null }
 
     fun over(fs: LibraryFileSystem): LibraryFileSystem =
         object : LibraryFileSystem by fs {
             override suspend fun delete(relPath: String) {
-                if (moment == Moment.BEFORE_DELETE && relPath == path) pause()
+                if (moment == Moment.BEFORE_DELETE && relPath == path) pauseIfArmed()
                 fs.delete(relPath)
             }
 
@@ -155,13 +141,11 @@ private class PausedBake(
             ) {
                 fs.move(fromRelPath, toRelPath)
                 val swap = fromRelPath == NpnPaths.Temp.bakePath(path) && toRelPath == path
-                if (moment == Moment.AFTER_SWAP && swap) pause()
+                if (moment == Moment.AFTER_SWAP && swap) pauseIfArmed()
             }
         }
 
-    private suspend fun pause() {
-        if (!armed.getAndSet(false)) return
-        reached.complete(Unit)
-        gate.await()
+    private suspend fun pauseIfArmed() {
+        if (armed.getAndSet(false)) pause()
     }
 }

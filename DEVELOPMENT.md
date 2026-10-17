@@ -144,12 +144,16 @@ Regression coverage follows the failure modes from the code audit:
   An independent model checks two devices after each operation, then checks a new device and an
   index rebuild. A failure prints the seed and complete operation trace.
 - `LifecycleRecoveryTest` injects failures before and after publication or a file move, closes the
-  session, and checks recovery through another open. `FileSystemFaults` is the one-shot storage
-  adapter these tests use; it can also refuse deletion after a tombstone has landed.
-- Gated tests in `BakeInPlaceTest`, `TrashLifecycleTest`, `HiddenDocumentImportTest`,
-  `StoragePathRuleIntegrationTest`, `OcrPipelineRerunTest`, `DocumentDraftsTest` and
-  `AiChatViewModelTest` check operations while another operation is suspended at its storage or
-  save boundary. They assert the result after the gate opens, rather than relying on timing alone.
+  session, and checks recovery through another open. `FileSystemFaults` is the storage adapter
+  these tests use: it arms one failure at a publication, move or delete (including one that lands
+  before it reports failure, or a deletion refused after a tombstone has landed), and can keep
+  failing publications or refusing deletions under a path until a test lifts it.
+- Gated tests in `BakeInPlaceTest`, `TrashDuringABakeTest`, `BulkTrashTest`,
+  `LifecycleBehindARescanTest`, `HiddenDocumentImportTest`, `StoragePathRuleIntegrationTest`,
+  `IndexUpgradeTest`, `OcrPipelineRerunTest`, `DocumentDraftsTest` and `AiChatViewModelTest` check
+  operations while another operation is suspended at its storage or save boundary (`FsGate` holds
+  one at the library filesystem). They assert the result after the gate opens, rather than relying
+  on timing alone.
 - `LibrarySettingsTest` and `FieldRegistryTest` cover different devices and missing local index
   rows. `IndexUpgradeTest` starts a session over a dropped index, holds its initial rescan, and
   fails that rescan before retrying: OCR requests, paid pages, enrichment and edit jobs survive.

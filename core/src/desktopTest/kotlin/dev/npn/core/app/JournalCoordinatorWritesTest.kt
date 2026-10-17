@@ -65,18 +65,8 @@ class JournalCoordinatorWritesTest {
     @Test
     fun aTransientPublishFailureFailsOneCommitAndKeepsStorageV2() =
         runTest {
-            var failures = 1
-            val flaky =
-                object : LibraryFileSystem by rig.fs {
-                    override suspend fun publishVerifiedObjectOnce(
-                        stagingPath: String,
-                        canonicalPath: String,
-                        expectedHash: String,
-                    ) {
-                        if (failures-- > 0) throw VerifiedPublicationFailedException("rename failed")
-                        rig.fs.publishVerifiedObjectOnce(stagingPath, canonicalPath, expectedHash)
-                    }
-                }
+            val faults = FileSystemFaults().apply { publishFailures = 1 }
+            val flaky = faults.over(rig.fs)
             val coordinator =
                 rig.coordinator(rig.writer(files = flaky))
             coordinator.refreshState()
@@ -131,18 +121,8 @@ class JournalCoordinatorWritesTest {
     @Test
     fun aRestoreThatFailsToPublishLeavesTheRescanAndWritesAlone() =
         runTest {
-            var failures = 0
-            val flaky =
-                object : LibraryFileSystem by rig.fs {
-                    override suspend fun publishVerifiedObjectOnce(
-                        stagingPath: String,
-                        canonicalPath: String,
-                        expectedHash: String,
-                    ) {
-                        if (failures-- > 0) throw VerifiedPublicationFailedException("rename failed")
-                        rig.fs.publishVerifiedObjectOnce(stagingPath, canonicalPath, expectedHash)
-                    }
-                }
+            val faults = FileSystemFaults().apply { publishFailures = 0 }
+            val flaky = faults.over(rig.fs)
             val logged = ArrayList<Throwable?>()
             val coordinator =
                 JournalCoordinator(
@@ -161,7 +141,7 @@ class JournalCoordinatorWritesTest {
             rig.clock.advance(JournalCoordinator.RESTORE_SETTLE_MS + 1)
             rig.copyFile("b.pdf", "b-copy.pdf")
 
-            failures = 1
+            faults.publishFailures = 1
             val report = coordinator.rescan()
 
             report.duplicates.map { it.extraRelPath } shouldBe listOf("b-copy.pdf")

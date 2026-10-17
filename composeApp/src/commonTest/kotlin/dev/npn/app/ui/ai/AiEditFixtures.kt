@@ -21,7 +21,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 
 // Fixtures for the AiEditViewModel suites. The viewmodel drives an AiEditRun, which has its own
-// suite (AiEditRunTest), so these run it against a scripted one and check only what the viewmodel
+// suites (AiEditRun*Test in core), so these run it against a scripted one and check only what the viewmodel
 // asks of it and how it shows the answers.
 
 /**

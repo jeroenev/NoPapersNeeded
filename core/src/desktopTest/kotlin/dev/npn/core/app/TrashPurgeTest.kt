@@ -164,35 +164,26 @@ class TrashPurgeTest {
     @Test
     fun aFileADeleteForGoodLeftGoesWhenItsRetentionEnds() =
         runTest {
-            var refusing = true
-            AppSessionRig
-                .create(backgroundScope, files = { fs ->
-                    object : LibraryFileSystem by fs {
-                        override suspend fun delete(relPath: String) {
-                            if (refusing && relPath.startsWith("${NpnPaths.TRASH_DIR}/")) throw IOException("Refused")
-                            fs.delete(relPath)
-                        }
-                    }
-                })
-                .use { rig ->
-                    val now = 400 * DAY
-                    rig.clock.now = now - 10 * DAY
-                    rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("deleted for good, its file left"))
-                    rig.session.rescan()
-                    val id = rig.docId("a.pdf")
-                    rig.session.docLifecycle.trashDoc(id)
-                    rig.clock.now = now
-                    rig.session.docLifecycle.deleteDocPermanently(id) shouldBe PermanentDeleteOutcome.FILE_LEFT
-                    refusing = false
+            val faults = FileSystemFaults().apply { refuseDeletesUnder = "${NpnPaths.TRASH_DIR}/" }
+            AppSessionRig.create(backgroundScope, files = faults::over).use { rig ->
+                val now = 400 * DAY
+                rig.clock.now = now - 10 * DAY
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("deleted for good, its file left"))
+                rig.session.rescan()
+                val id = rig.docId("a.pdf")
+                rig.session.docLifecycle.trashDoc(id)
+                rig.clock.now = now
+                rig.session.docLifecycle.deleteDocPermanently(id) shouldBe PermanentDeleteOutcome.FILE_LEFT
+                faults.refuseDeletesUnder = null
 
-                    rig.clock.now = now + 25 * DAY
-                    rig.session.trashPurge.purge(olderThanDays = 30)
-                    rig.fs.trashEntries() shouldHaveSize 1
+                rig.clock.now = now + 25 * DAY
+                rig.session.trashPurge.purge(olderThanDays = 30)
+                rig.fs.trashEntries() shouldHaveSize 1
 
-                    rig.clock.now = now + 31 * DAY
-                    rig.session.trashPurge.purge(olderThanDays = 30)
-                    rig.fs.trashEntries().shouldBeEmpty()
-                }
+                rig.clock.now = now + 31 * DAY
+                rig.session.trashPurge.purge(olderThanDays = 30)
+                rig.fs.trashEntries().shouldBeEmpty()
+            }
         }
 
     /**

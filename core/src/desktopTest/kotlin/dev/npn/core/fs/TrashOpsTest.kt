@@ -295,7 +295,7 @@ class TrashOpsTest {
         return Trashed(trashed, id)
     }
 
-    /** Two documents whose hashes share their first 8 hex (ground; the pair TrashLifecycleTest clashes). */
+    /** Two documents whose hashes share their first 8 hex (ground; the pair TrashEntryTest clashes). */
     private companion object {
         const val CLASHING_FIRST = "trashed document 35434"
         const val CLASHING_SECOND = "trashed document 102888"

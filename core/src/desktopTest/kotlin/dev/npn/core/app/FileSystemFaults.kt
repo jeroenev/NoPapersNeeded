@@ -1,10 +1,14 @@
 package dev.npn.core.app
 
 import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.fs.VerifiedPublicationFailedException
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicReference
 
-/** One failure at a storage boundary, including a call that lands on disk before reporting failure. */
+/**
+ * Failures at a storage boundary. [failNext] arms one failure, including a call that lands on disk
+ * before reporting failure; [publishFailures] and [refuseDeletesUnder] hold until changed.
+ */
 class FileSystemFaults {
     enum class Point { BEFORE_PUBLISH, AFTER_PUBLISH, BEFORE_MOVE, AFTER_MOVE, DELETE }
 
@@ -14,6 +18,12 @@ class FileSystemFaults {
     )
 
     private val armed = AtomicReference<Failure?>()
+
+    /** How many of the next publications fail before publishing, as a rename that failed does. */
+    @Volatile var publishFailures = 0
+
+    /** While set, every delete of a path under this prefix is refused. */
+    @Volatile var refuseDeletesUnder: String? = null
 
     fun failNext(
         point: Point,
@@ -29,6 +39,10 @@ class FileSystemFaults {
                 canonicalPath: String,
                 expectedHash: String,
             ) {
+                if (publishFailures > 0) {
+                    publishFailures--
+                    throw VerifiedPublicationFailedException("rename failed")
+                }
                 failIfArmed(Point.BEFORE_PUBLISH, canonicalPath)
                 fs.publishVerifiedObjectOnce(stagingPath, canonicalPath, expectedHash)
                 failIfArmed(Point.AFTER_PUBLISH, canonicalPath)
@@ -44,6 +58,7 @@ class FileSystemFaults {
             }
 
             override suspend fun delete(relPath: String) {
+                refuseDeletesUnder?.let { if (relPath.startsWith(it)) throw IOException("Refused delete of $relPath") }
                 failIfArmed(Point.DELETE, relPath)
                 fs.delete(relPath)
             }

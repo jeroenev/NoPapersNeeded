@@ -394,26 +394,14 @@ class IndexUpgradeTest {
 }
 
 /**
- * A library filesystem whose rescan listing says so on [reached], then waits until [release]: a
- * rescan still listing and hashing the library. [realTime] runs [finishesWithin]'s wait on the wall
- * clock.
+ * A library filesystem whose rescan listing pauses at its gate: a rescan still listing and hashing
+ * the library. With [failFirst], the first listing fails instead, and says so on [failed].
  */
 private class HeldListing(
     failFirst: Boolean = false,
-    private val realTime: CoroutineDispatcher = Dispatchers.Default,
-) {
-    val reached = CompletableDeferred<Unit>()
+) : FsGate() {
     val failed = CompletableDeferred<Unit>()
-    private val gate = CompletableDeferred<Unit>()
     private val failure = AtomicBoolean(failFirst)
-
-    fun release() = gate.complete(Unit)
-
-    /** Whether [job] finishes within [millis] of real time, not the test's virtual time. */
-    suspend fun finishesWithin(
-        job: Job,
-        millis: Long,
-    ): Boolean = withContext(realTime) { withTimeoutOrNull(millis) { job.join() } != null }
 
     fun over(fs: LibraryFileSystem): LibraryFileSystem =
         object : LibraryFileSystem by fs {
@@ -422,8 +410,7 @@ private class HeldListing(
                     failed.complete(Unit)
                     throw IOException("Initial rescan listing failed")
                 }
-                reached.complete(Unit)
-                gate.await()
+                pause()
                 return fs.listAllIndexable()
             }
         }
