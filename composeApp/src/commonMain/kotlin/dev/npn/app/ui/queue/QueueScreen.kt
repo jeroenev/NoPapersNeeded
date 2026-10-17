@@ -207,11 +207,7 @@ private fun EditRunRow(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(
-                    formatEpochDateTime(run.createdAt),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                HelpText(formatEpochDateTime(run.createdAt))
                 StateBadge(run.state)
             }
             if (!ready) {
@@ -219,11 +215,7 @@ private fun EditRunRow(
                     progress = { if (run.total == 0) 0f else run.done.toFloat() / run.total },
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Text(
-                    stringResource(Res.string.queue_edit_run_progress, run.done, run.total),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                HelpText(stringResource(Res.string.queue_edit_run_progress, run.done, run.total))
             }
             EditRunTrouble(run)
         }
@@ -243,18 +235,10 @@ private fun EditRunRow(
 @Composable
 private fun EditRunTrouble(run: QueuedEditRun) {
     run.nextAttemptAt?.let {
-        Text(
-            stringResource(Res.string.queue_retry_after, formatEpochDateTime(it)),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        HelpText(stringResource(Res.string.queue_retry_after, formatEpochDateTime(it)))
     }
     if (run.failures > 0) {
-        Text(
-            pluralStringResource(Res.plurals.queue_edit_run_failures, run.failures, run.failures),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        HelpText(pluralStringResource(Res.plurals.queue_edit_run_failures, run.failures, run.failures))
     }
     run.lastError?.let {
         Text(
@@ -300,11 +284,7 @@ private fun QueueRow(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(
-                    stringResource(entry.stage.label),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                HelpText(stringResource(entry.stage.label))
                 StateBadge(entry.state)
             }
             QueueRowTrouble(entry)
@@ -321,17 +301,9 @@ private fun QueueRow(
 @Composable
 private fun QueueRowTrouble(entry: QueuedWork) {
     if (entry.attempts == 0) return
-    Text(
-        pluralStringResource(Res.plurals.queue_attempts, entry.attempts, entry.attempts),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+    HelpText(pluralStringResource(Res.plurals.queue_attempts, entry.attempts, entry.attempts))
     entry.nextAttemptAt?.let {
-        Text(
-            stringResource(Res.string.queue_retry_after, formatEpochDateTime(it)),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        HelpText(stringResource(Res.string.queue_retry_after, formatEpochDateTime(it)))
     }
     entry.lastError?.let {
         Text(

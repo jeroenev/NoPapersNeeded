@@ -57,17 +57,46 @@ fun TopBarActions(
             onClick = { expanded = true },
         )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            overflow.forEach { action ->
-                DropdownMenuItem(
-                    text = { Text(action.label) },
-                    leadingIcon = { Icon(action.icon, contentDescription = null) },
-                    enabled = action.enabled,
-                    onClick = {
-                        expanded = false
-                        action.onClick()
-                    },
-                )
-            }
+            ActionMenuItems(overflow, onDismiss = { expanded = false })
         }
+    }
+}
+
+/**
+ * Every one of [actions] as a direct icon on a [wide] bar, or all of them behind the overflow menu
+ * on a compact one.
+ */
+@Composable
+fun TopBarActions(
+    actions: List<TopBarAction>,
+    wide: Boolean,
+    overflowLabel: String,
+) {
+    if (wide) {
+        TopBarActions(inline = actions, overflowLabel = overflowLabel)
+    } else {
+        TopBarActions(inline = emptyList(), overflow = actions, overflowLabel = overflowLabel)
+    }
+}
+
+/**
+ * [actions] as the icon-plus-label rows of an open menu. Each closes the menu through [onDismiss]
+ * before it acts, so an action that opens a dialog never leaves the menu standing behind it.
+ */
+@Composable
+fun ActionMenuItems(
+    actions: List<TopBarAction>,
+    onDismiss: () -> Unit,
+) {
+    actions.forEach { action ->
+        DropdownMenuItem(
+            text = { Text(action.label) },
+            leadingIcon = { Icon(action.icon, contentDescription = null) },
+            enabled = action.enabled,
+            onClick = {
+                onDismiss()
+                action.onClick()
+            },
+        )
     }
 }

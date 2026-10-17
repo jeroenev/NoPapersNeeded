@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.ConfirmDialog
+import dev.npn.app.ui.common.HelpText
 import dev.npn.core.ai.AiEditRequest.Companion.MAX_FIELDS_PER_RUN
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_blocked_loading
@@ -131,11 +132,7 @@ private fun RunSummary(
                 color = MaterialTheme.colorScheme.error,
             )
         } else {
-            Text(
-                pluralStringResource(Res.plurals.ai_edit_summary_requests, plan.requests, plan.requests),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            HelpText(pluralStringResource(Res.plurals.ai_edit_summary_requests, plan.requests, plan.requests))
         }
     }
 }

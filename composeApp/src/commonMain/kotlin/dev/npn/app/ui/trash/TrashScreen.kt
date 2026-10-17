@@ -272,15 +272,9 @@ private fun TrashBulkActions(
         TopBarAction(Icons.Filled.Restore, stringResource(Res.string.common_restore_all), onRestoreAll)
     val emptyTrash =
         TopBarAction(Icons.Filled.DeleteSweep, stringResource(Res.string.common_empty_trash), onEmptyTrash)
-    val (inline, overflow) =
-        if (wide) {
-            listOf(restoreAll, emptyTrash) to emptyList()
-        } else {
-            emptyList<TopBarAction>() to listOf(restoreAll, emptyTrash)
-        }
     TopBarActions(
-        inline = inline,
-        overflow = overflow,
+        actions = listOf(restoreAll, emptyTrash),
+        wide = wide,
         overflowLabel = stringResource(Res.string.common_more_actions),
     )
 }
@@ -348,10 +342,8 @@ private fun TrashList(
                             overflow = TextOverflow.Ellipsis,
                         )
                         item.doc.trashedOrigPath?.let {
-                            Text(
+                            HelpText(
                                 stringResource(Res.string.common_trash_was_path, it),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -433,11 +425,7 @@ private fun MissingList(
                         doc.displayTitle,
                         style = MaterialTheme.typography.titleSmall,
                     )
-                    Text(
-                        stringResource(Res.string.common_trash_missing_from, doc.relPath),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    HelpText(stringResource(Res.string.common_trash_missing_from, doc.relPath))
                     val candidates = relinks[doc.docId].orEmpty()
                     if (candidates.isEmpty()) {
                         HelpText(stringResource(Res.string.common_trash_no_relink_candidates))

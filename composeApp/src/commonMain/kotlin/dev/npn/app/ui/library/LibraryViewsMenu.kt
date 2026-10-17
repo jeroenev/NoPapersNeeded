@@ -26,7 +26,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.ActionMenuItems
 import dev.npn.app.ui.common.TooltipIconButton
+import dev.npn.app.ui.common.TopBarAction
 import dev.npn.core.app.SavedView
 import dev.npn.core.model.ReviewMode
 import no_papers_needed.composeapp.generated.resources.Res
@@ -83,10 +85,11 @@ internal fun LibraryViewsMenuButton(
                 open = false
                 action()
             }
-            DropdownMenuItem(
-                text = { Text(stringResource(Res.string.library_all_documents)) },
-                leadingIcon = { Icon(Icons.Filled.Home, contentDescription = null) },
-                onClick = { dismissThen(onAllDocuments) },
+            ActionMenuItems(
+                listOf(
+                    TopBarAction(Icons.Filled.Home, stringResource(Res.string.library_all_documents), onAllDocuments),
+                ),
+                onDismiss = { open = false },
             )
             DropdownMenuItem(
                 text = {
@@ -124,10 +127,15 @@ internal fun LibraryViewsMenuButton(
                     onTogglePin = { onTogglePinSavedView(view) },
                 )
             }
-            DropdownMenuItem(
-                text = { Text(stringResource(Res.string.library_save_current_view_ellipsis)) },
-                leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                onClick = { dismissThen(onSaveCurrentView) },
+            ActionMenuItems(
+                listOf(
+                    TopBarAction(
+                        Icons.Filled.Add,
+                        stringResource(Res.string.library_save_current_view_ellipsis),
+                        onSaveCurrentView,
+                    ),
+                ),
+                onDismiss = { open = false },
             )
         }
     }
@@ -156,35 +164,17 @@ private fun SavedViewMenuItem(
                     Icon(Icons.Filled.MoreVert, contentDescription = stringResource(Res.string.library_view_actions))
                 }
                 DropdownMenu(expanded = actions, onDismissRequest = { actions = false }) {
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                stringResource(
-                                    if (view.pinned) Res.string.library_unpin else Res.string.library_pin,
-                                ),
-                            )
-                        },
-                        leadingIcon = { Icon(Icons.Filled.PushPin, contentDescription = null) },
-                        onClick = {
-                            actions = false
-                            onTogglePin()
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(Res.string.library_rename)) },
-                        leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
-                        onClick = {
-                            actions = false
-                            onRename()
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(Res.string.common_delete)) },
-                        leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
-                        onClick = {
-                            actions = false
-                            onDelete()
-                        },
+                    ActionMenuItems(
+                        listOf(
+                            TopBarAction(
+                                Icons.Filled.PushPin,
+                                stringResource(if (view.pinned) Res.string.library_unpin else Res.string.library_pin),
+                                onTogglePin,
+                            ),
+                            TopBarAction(Icons.Filled.Edit, stringResource(Res.string.library_rename), onRename),
+                            TopBarAction(Icons.Filled.Delete, stringResource(Res.string.common_delete), onDelete),
+                        ),
+                        onDismiss = { actions = false },
                     )
                 }
             }

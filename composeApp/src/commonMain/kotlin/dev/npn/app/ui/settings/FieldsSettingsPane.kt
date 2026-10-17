@@ -162,15 +162,13 @@ private fun FieldRow(
     ) {
         Column(Modifier.weight(1f)) {
             Text(def.label, style = MaterialTheme.typography.bodyLarge)
-            Text(
+            HelpText(
                 stringResource(
                     Res.string.common_settings_field_summary,
                     def.key,
                     fieldTypeLabel(def.type),
                     pluralStringResource(Res.plurals.common_settings_field_usage, count, count),
                 ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         IconButton(onClick = { onMove(-1) }, enabled = canMoveUp) {

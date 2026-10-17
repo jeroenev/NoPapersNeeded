@@ -18,6 +18,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.DocThumbnail
 import dev.npn.app.ui.common.ExpanderRow
+import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.rememberFieldLocale
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.DocListItem
@@ -100,13 +101,7 @@ private fun PreviewRow(
                 overflow = TextOverflow.Ellipsis,
             )
             if (details.isNotBlank()) {
-                Text(
-                    details,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                HelpText(details, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }

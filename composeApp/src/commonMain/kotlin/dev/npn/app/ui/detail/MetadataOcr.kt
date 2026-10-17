@@ -50,6 +50,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.HighlightText
 import dev.npn.app.ui.common.RadioRow
 import dev.npn.app.ui.common.formatEpochDate
@@ -252,12 +253,7 @@ private fun FindBar(
                 else -> null
             }
         status?.let {
-            Text(
-                it,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-            )
+            HelpText(it, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
         }
         IconButton(onClick = onClear, enabled = query.isNotEmpty()) {
             Icon(
@@ -373,12 +369,7 @@ internal fun OcrEngineRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            stringResource(Res.string.detail_engine),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(end = 4.dp),
-        )
+        HelpText(stringResource(Res.string.detail_engine), modifier = Modifier.padding(end = 4.dp))
         Text(
             indexedEngine?.let { engineLabel(it) } ?: stringResource(Res.string.detail_not_available),
             style = MaterialTheme.typography.bodySmall,
@@ -471,11 +462,7 @@ private fun OcrEngineOption(
         supporting =
             secondary?.let {
                 {
-                    Text(
-                        it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    HelpText(it)
                 }
             },
     )

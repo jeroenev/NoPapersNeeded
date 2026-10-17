@@ -45,6 +45,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.di.AppEnvironment
 import dev.npn.app.ui.common.BackTopBar
 import dev.npn.app.ui.common.ConfirmDialog
+import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.rememberLibraryFolderPicker
@@ -318,11 +319,7 @@ private fun SettingsCategoryRow(
             Column {
                 Text(text = entry.title)
                 if (matched != null) {
-                    Text(
-                        text = matched,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    HelpText(matched)
                 }
             }
         },

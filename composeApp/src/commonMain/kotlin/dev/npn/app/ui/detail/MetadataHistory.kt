@@ -32,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.formatEpochDateTime
 import dev.npn.app.ui.common.resolve
 import no_papers_needed.composeapp.generated.resources.Res
@@ -93,14 +94,12 @@ private fun HistoryRow(item: HistoryItem) {
         )
         Column(Modifier.weight(1f)) {
             Text(item.description.resolve(), style = MaterialTheme.typography.bodyMedium)
-            Text(
+            HelpText(
                 stringResource(
                     Res.string.detail_history_secondary,
                     formatEpochDateTime(item.timeMillis),
                     item.deviceId,
                 ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

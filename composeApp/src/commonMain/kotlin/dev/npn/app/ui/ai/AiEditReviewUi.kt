@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.DocThumbnail
 import dev.npn.app.ui.common.ExpanderRow
+import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.SuggestedFieldValue
 import dev.npn.app.ui.common.TagSuggestionLabel
 import dev.npn.core.app.ApplyResult
@@ -190,13 +191,7 @@ private fun ReviewRow(
                 }
             }
             doc.snippet?.let {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                HelpText(it, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             if (doc.chips.isNotEmpty()) {
                 AddChipsRow(doc, review::toggleChip)

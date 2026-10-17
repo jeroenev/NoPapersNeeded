@@ -32,7 +32,6 @@ import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -60,12 +59,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.npn.app.ui.common.ActionMenuItems
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.EmptyState
+import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.TagFormDialog
 import dev.npn.app.ui.common.TextInputDialog
 import dev.npn.app.ui.common.TooltipIconButton
+import dev.npn.app.ui.common.TopBarAction
 import dev.npn.app.ui.common.onSecondaryClick
 import dev.npn.app.ui.common.parseHexColor
 import dev.npn.core.app.LibrarySession
@@ -537,14 +539,12 @@ private fun TagCardLabel(
                 node.descendantCount,
                 node.descendantCount,
             )
-        Text(
+        HelpText(
             if (node.info == null) {
                 stringResource(Res.string.common_tags_namespace_only, documentCount)
             } else {
                 documentCount
             },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -563,61 +563,49 @@ private fun TagCardMenu(
 ) {
     val single = targets.singleOrNull()
     val count = targets.size
-    val choose = { dialog: TagDialog ->
-        onDismiss()
-        onOpen(dialog)
-    }
+    val actions =
+        listOfNotNull(
+            single?.let {
+                TopBarAction(
+                    Icons.Filled.Edit,
+                    stringResource(Res.string.common_rename),
+                    { onOpen(TagDialog.Rename(it)) },
+                )
+            },
+            TopBarAction(
+                Icons.AutoMirrored.Filled.CallMerge,
+                if (single != null) {
+                    stringResource(Res.string.common_tags_merge_into)
+                } else {
+                    pluralStringResource(Res.plurals.common_tags_merge_many_title, count, count)
+                },
+                { onOpen(TagDialog.Merge(targets)) },
+            ),
+            TopBarAction(
+                Icons.Filled.Palette,
+                if (single != null) {
+                    stringResource(Res.string.common_tags_color_style)
+                } else {
+                    pluralStringResource(Res.plurals.common_tags_color_many_title, count, count)
+                },
+                { onOpen(TagDialog.Style(targets)) },
+            ),
+            TopBarAction(
+                Icons.Filled.Delete,
+                if (single != null) {
+                    stringResource(Res.string.common_delete)
+                } else {
+                    pluralStringResource(Res.plurals.common_tags_delete_many_title, count, count)
+                },
+                { onOpen(TagDialog.Delete(targets)) },
+            ),
+        )
     Box {
         IconButton(onClick = onExpand) {
             Icon(Icons.Filled.MoreVert, contentDescription = stringResource(Res.string.common_tags_actions))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
-            if (single != null) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(Res.string.common_rename)) },
-                    leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
-                    onClick = { choose(TagDialog.Rename(single)) },
-                )
-            }
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        if (single != null) {
-                            stringResource(Res.string.common_tags_merge_into)
-                        } else {
-                            pluralStringResource(Res.plurals.common_tags_merge_many_title, count, count)
-                        },
-                    )
-                },
-                leadingIcon = { Icon(Icons.AutoMirrored.Filled.CallMerge, contentDescription = null) },
-                onClick = { choose(TagDialog.Merge(targets)) },
-            )
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        if (single != null) {
-                            stringResource(Res.string.common_tags_color_style)
-                        } else {
-                            pluralStringResource(Res.plurals.common_tags_color_many_title, count, count)
-                        },
-                    )
-                },
-                leadingIcon = { Icon(Icons.Filled.Palette, contentDescription = null) },
-                onClick = { choose(TagDialog.Style(targets)) },
-            )
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        if (single != null) {
-                            stringResource(Res.string.common_delete)
-                        } else {
-                            pluralStringResource(Res.plurals.common_tags_delete_many_title, count, count)
-                        },
-                    )
-                },
-                leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
-                onClick = { choose(TagDialog.Delete(targets)) },
-            )
+            ActionMenuItems(actions, onDismiss)
         }
     }
 }

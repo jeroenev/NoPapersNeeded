@@ -45,6 +45,7 @@ import dev.npn.app.ui.common.BackTopBar
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.Dropdown
 import dev.npn.app.ui.common.EmptyState
+import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.model.FieldDef
@@ -224,11 +225,7 @@ private fun RuleCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(rule.name, style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        buildRuleSummary(rule, fields),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    HelpText(buildRuleSummary(rule, fields))
                 }
                 Switch(
                     checked = rule.enabled,
@@ -236,11 +233,7 @@ private fun RuleCard(
                 )
             }
             if (rule.tags.isNotEmpty() || rule.sets.isNotEmpty()) {
-                Text(
-                    buildActionsLabel(rule, fields),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                HelpText(buildActionsLabel(rule, fields))
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 IconButton(onClick = { onEdit(rule) }) {

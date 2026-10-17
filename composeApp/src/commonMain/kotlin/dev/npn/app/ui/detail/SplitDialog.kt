@@ -13,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.HelpText
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.detail_split
@@ -71,7 +72,7 @@ fun SplitDialog(
                     isError = input.isNotBlank() && segments == null,
                 )
                 if (segments != null) {
-                    Text(
+                    HelpText(
                         segments
                             .mapIndexed { i, range ->
                                 val pages =
@@ -83,8 +84,6 @@ fun SplitDialog(
                                     )
                                 stringResource(Res.string.detail_split_part, i + 1, pages)
                             }.joinToString("\n"),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }

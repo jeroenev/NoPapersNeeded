@@ -48,6 +48,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.EmptyState
+import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.ReviewedBadge
 import dev.npn.app.ui.common.SuggestedFieldValue
 import dev.npn.app.ui.common.TagEditor
@@ -459,12 +460,7 @@ private fun FactRow(
     value: String,
 ) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(end = 4.dp),
-        )
+        HelpText(label, modifier = Modifier.padding(end = 4.dp))
         Text(value, style = MaterialTheme.typography.bodySmall)
     }
 }

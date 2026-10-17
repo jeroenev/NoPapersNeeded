@@ -29,8 +29,6 @@ import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -54,10 +52,13 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.ActionMenuItems
 import dev.npn.app.ui.common.DocThumbnail
+import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.HighlightText
 import dev.npn.app.ui.common.ReviewedBadge
 import dev.npn.app.ui.common.TagChip
+import dev.npn.app.ui.common.TopBarAction
 import dev.npn.app.ui.common.formatEpochDate
 import dev.npn.app.ui.common.formatSize
 import dev.npn.app.ui.common.onSecondaryClick
@@ -139,56 +140,28 @@ private fun DocContextMenu(
     // Zero-size anchor at the press position; the menu opens right at the pointer.
     Box(Modifier.offset { IntOffset(position.x.roundToInt(), position.y.roundToInt()) }) {
         DropdownMenu(expanded = true, onDismissRequest = onDismiss) {
-            DropdownMenuItem(
-                text = { Text(stringResource(Res.string.library_open)) },
-                leadingIcon = { Icon(Icons.Filled.OpenInNew, contentDescription = null) },
-                onClick = {
-                    onDismiss()
-                    wiring.onOpen(docId)
-                },
-            )
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        stringResource(
-                            if (selected) Res.string.library_deselect else Res.string.library_select,
+            ActionMenuItems(
+                actions =
+                    listOf(
+                        TopBarAction(Icons.Filled.OpenInNew, stringResource(Res.string.library_open), {
+                            wiring.onOpen(docId)
+                        }),
+                        TopBarAction(
+                            if (selected) Icons.Filled.CheckBox else Icons.Filled.CheckBoxOutlineBlank,
+                            stringResource(if (selected) Res.string.library_deselect else Res.string.library_select),
+                            { wiring.onToggleSelect(docId) },
                         ),
-                    )
-                },
-                leadingIcon = {
-                    Icon(
-                        if (selected) Icons.Filled.CheckBox else Icons.Filled.CheckBoxOutlineBlank,
-                        contentDescription = null,
-                    )
-                },
-                onClick = {
-                    onDismiss()
-                    wiring.onToggleSelect(docId)
-                },
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(Res.string.common_add_tag)) },
-                leadingIcon = { Icon(Icons.Filled.NewLabel, contentDescription = null) },
-                onClick = {
-                    onDismiss()
-                    wiring.onAddTag(docId)
-                },
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(Res.string.library_remove_tag)) },
-                leadingIcon = { Icon(Icons.Filled.LabelOff, contentDescription = null) },
-                onClick = {
-                    onDismiss()
-                    wiring.onRemoveTag(docId)
-                },
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(Res.string.library_trash)) },
-                leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
-                onClick = {
-                    onDismiss()
-                    wiring.onTrash(docId)
-                },
+                        TopBarAction(Icons.Filled.NewLabel, stringResource(Res.string.common_add_tag), {
+                            wiring.onAddTag(docId)
+                        }),
+                        TopBarAction(Icons.Filled.LabelOff, stringResource(Res.string.library_remove_tag), {
+                            wiring.onRemoveTag(docId)
+                        }),
+                        TopBarAction(Icons.Filled.Delete, stringResource(Res.string.library_trash), {
+                            wiring.onTrash(docId)
+                        }),
+                    ),
+                onDismiss = onDismiss,
             )
         }
     }
@@ -322,16 +295,8 @@ private fun DocListRowDetails(
             if (reviewMode.reviewMarkerIsAuthoritative) {
                 ReviewedBadge(item.effectiveReviewed(reviewMode))
             }
-            Text(
-                text = item.doc.docDate ?: formatEpochDate(item.doc.addedAt),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = formatSize(item.doc.size),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            HelpText(item.doc.docDate ?: formatEpochDate(item.doc.addedAt))
+            HelpText(formatSize(item.doc.size))
         }
         item.snippet?.let { snip ->
             HighlightText(

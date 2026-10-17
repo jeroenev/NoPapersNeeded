@@ -46,11 +46,7 @@ fun TechnicalDetails(
             // Support often needs to copy the diagnostic verbatim, so make the revealed text
             // selectable rather than a read-only label.
             SelectionContainer {
-                Text(
-                    details,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                HelpText(details)
             }
         }
     }
