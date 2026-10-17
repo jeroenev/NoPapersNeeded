@@ -513,7 +513,7 @@ class MetadataAccumulator(
          * not match this build is wiped and rebuilt from the journal.
          *
          * BUMP THIS whenever a change alters what a fold produces from the same events — a new or
-         * differently-derived column in `Indexer.applyFold`, a changed OR-set/LWW rule, a fix to
+         * differently-derived column in `FoldProjection.apply`, a changed OR-set/LWW rule, a fix to
          * how an op projects. [reconcileOnOpen] reuses a stored projection whenever the source set
          * is unchanged, so without a bump an existing install keeps serving rows built by the OLD
          * fold and never notices.

@@ -236,7 +236,7 @@ live in `buildSrc`. Hot Reload via `mise hot`.
     judges trashed and deleted by the journal it folds as well as by the row, since
     another device's trash can arrive together with the file change.
 3. **Index is a cache**: `Indexer` folds journal state (OR-set tags, HLC LWW) into
-   the Room database (`FoldedState`, `MetadataAccumulator`). Field values land in
+   the Room database (`FoldedState`, `MetadataAccumulator`; `FoldProjection` writes the rows). Field values land in
    `document_fields` (one row per document × key, canonical string plus a numeric
    shadow for NUMBER/DECIMAL) and definitions in `field_defs`; the five typed
    columns on `documents` are written from the same map as a read cache for list

@@ -31,7 +31,7 @@ class IndexerTest {
         runTest {
             rig.db.close()
 
-            // A rescan against a closed DB fails inside applyFold; the FOLDING progress must clear.
+            // A rescan against a closed DB fails inside the fold; the FOLDING progress must clear.
             assertFails { rig.rescan() }
 
             rig.indexer.scanState.value shouldBe null

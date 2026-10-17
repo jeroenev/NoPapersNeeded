@@ -67,8 +67,12 @@ internal class DocumentPathReconciler(
         return result
     }
 
-    /** Where a fold leaves what it projected: the work of the [deferring] call around it. */
-    fun work(): PathWork = checkNotNull(open) { "A fold runs inside DocumentPathReconciler.deferring" }
+    /**
+     * Where a fold over [state] leaves what it projected: the work of the [deferring] call around
+     * it, which settles against the state of its last fold.
+     */
+    fun work(state: FoldedState): PathWork =
+        checkNotNull(open) { "A fold runs inside DocumentPathReconciler.deferring" }.also { it.state = state }
 
     /** Whether [row] sits somewhere other than where its winning path intent wants it. */
     fun pending(
