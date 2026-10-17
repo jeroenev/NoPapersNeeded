@@ -45,7 +45,9 @@ complexity:
 
 style:
   MagicNumber:
-    # Compose UI uses many dp/sp/weight literals; enforcing this everywhere is noise.
+    # Compose UI uses many dp/sp/weight literals; enforcing this everywhere is noise. Outside the UI
+    # it finds about 20 places (36 literals): bit and UTF-16 arithmetic, Room migration versions,
+    # syscall numbers, cursor columns, enum ranks, whose names would only restate the number.
     active: false
   ReturnCount:
     # Leading guard clauses are free; past them, a validator or parser may still exit early on each
@@ -146,9 +148,6 @@ exceptions:
     active: true
   ThrowingExceptionsWithoutMessageOrCause:
     active: false
-
-comments:
-  active: false
 
 config:
   # The Compose section below is read by the typed run, which loads the Compose ruleset; the
