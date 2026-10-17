@@ -20,17 +20,23 @@ object AppLanguages {
         val tesseractModel: String?,
     )
 
-    /** By subtag. Deliberately not exhaustive: a caller falls back for any language not listed. */
+    /**
+     * By subtag. Deliberately not exhaustive: a caller falls back for any language not listed. In
+     * the order the OCR language picker lists their models ([tesseractModels]).
+     */
     private val KNOWN: Map<String, Known> =
         mapOf(
             "en" to Known("English", "eng"),
             "nl" to Known("Dutch", "nld"),
-            "fr" to Known("French", "fra"),
             "de" to Known("German", "deu"),
+            "fr" to Known("French", "fra"),
             "es" to Known("Spanish", "spa"),
             "it" to Known("Italian", null),
             "pt" to Known("Portuguese", "por"),
         )
+
+    /** The Tesseract models of the languages the app is translated into, in [KNOWN]'s order. */
+    val tesseractModels: List<String> get() = KNOWN.values.mapNotNull(Known::tesseractModel)
 
     /** The language subtag of [tag] (`nl` for `nl`, `nl-NL` or `nl_NL`), lowercased; null when blank. */
     fun subtag(tag: String?): String? =

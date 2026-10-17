@@ -11,11 +11,12 @@ object OcrLanguages {
     const val ENGLISH = "eng"
 
     /**
-     * Models for the languages the app UI is translated into, in picker order. Windows builds and
-     * the Flatpak bundle exactly these (desktopApp/tessdata-fast.txt, which a desktopApp test holds
-     * this list to); other Linux installs have whichever the user installed.
+     * Models for the languages the app UI is translated into ([AppLanguages.tesseractModels]), in
+     * picker order, English first. Windows builds and the Flatpak bundle exactly these
+     * (desktopApp/tessdata-fast.txt, which a desktopApp test holds this list to); other Linux
+     * installs have whichever the user installed.
      */
-    val BUNDLED: List<String> = listOf(ENGLISH, "nld", "deu", "fra", "spa", "por")
+    val BUNDLED: List<String> = (listOf(ENGLISH) + AppLanguages.tesseractModels).distinct()
 
     /**
      * The automatic choice: the app language's model plus English, which most paperwork mixes in
