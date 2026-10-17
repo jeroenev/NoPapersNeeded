@@ -6,3 +6,5 @@ import java.nio.file.Path
 actual class ExternalSource(
     val path: Path,
 )
+
+actual fun externalSourceOfPath(path: Path): ExternalSource = ExternalSource(path)

@@ -1,10 +1,8 @@
 package dev.npn.core.fs
 
 import android.content.Context
-import android.net.Uri
 import java.io.IOException
 import java.io.InputStream
-import java.nio.file.Path
 
 /**
  * Android [ExternalIo] over a `ContentResolver`, so a direct-filesystem library can import from
@@ -20,5 +18,3 @@ class ContentResolverExternalIo(
         resolver.openInputStream(source.uri)
             ?: throw IOException("Cannot open external source: ${source.uri}")
 }
-
-actual fun externalSourceOfPath(path: Path): ExternalSource = ExternalSource(Uri.fromFile(path.toFile()))
