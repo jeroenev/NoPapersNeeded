@@ -13,6 +13,7 @@ import androidx.room3.migration.Migration
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.sqlite.execSQL
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 
 /**
@@ -201,12 +202,15 @@ abstract class NpnDatabase : RoomDatabase() {
             builder.addMigrations(SavedViewsLeave, DeviceStateLeaves)
 
         /**
-         * What every platform's index builder sets: the bundled driver, queries on [Dispatchers.IO],
+         * What every platform's index builder sets: the bundled driver, queries on [queryDispatcher],
          * [withMigrations], and the destructive fallback, which only the index has: it is a cache
          * the library folder rebuilds. [DeviceDatabase.configure] has none.
          */
-        fun configure(builder: Builder<NpnDatabase>): Builder<NpnDatabase> =
-            withMigrations(builder.setDriver(BundledSQLiteDriver()).setQueryCoroutineContext(Dispatchers.IO))
+        fun configure(
+            builder: Builder<NpnDatabase>,
+            queryDispatcher: CoroutineDispatcher = Dispatchers.IO,
+        ): Builder<NpnDatabase> =
+            withMigrations(builder.setDriver(BundledSQLiteDriver()).setQueryCoroutineContext(queryDispatcher))
                 .fallbackToDestructiveMigration(dropAllTables = true)
     }
 }

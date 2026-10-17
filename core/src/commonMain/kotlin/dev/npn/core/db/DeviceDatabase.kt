@@ -5,6 +5,7 @@ import androidx.room3.Database
 import androidx.room3.RoomDatabase
 import androidx.room3.RoomDatabaseConstructor
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 
 /**
@@ -48,12 +49,14 @@ abstract class DeviceDatabase : RoomDatabase() {
 
     companion object {
         /**
-         * What every platform's builder sets: the bundled driver and queries on [Dispatchers.IO].
+         * What every platform's builder sets: the bundled driver and queries on [queryDispatcher].
          * Never a destructive fallback, unlike [NpnDatabase.configure]: what this database holds
          * cannot be rebuilt, so a schema change without a migration fails to open instead.
          */
-        fun configure(builder: Builder<DeviceDatabase>): Builder<DeviceDatabase> =
-            builder.setDriver(BundledSQLiteDriver()).setQueryCoroutineContext(Dispatchers.IO)
+        fun configure(
+            builder: Builder<DeviceDatabase>,
+            queryDispatcher: CoroutineDispatcher = Dispatchers.IO,
+        ): Builder<DeviceDatabase> = builder.setDriver(BundledSQLiteDriver()).setQueryCoroutineContext(queryDispatcher)
     }
 }
 

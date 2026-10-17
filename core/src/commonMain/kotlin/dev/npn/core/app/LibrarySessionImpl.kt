@@ -7,6 +7,7 @@ import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.fs.TrashOps
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
 import dev.npn.core.index.DeviceIdentity
 import dev.npn.core.index.EmptyImportException
@@ -69,7 +70,6 @@ class LibrarySessionImpl private constructor(
 ) : LibrarySession,
     IngestFacade {
     private val fs get() = deps.fs
-    private val db get() = deps.db
     private val log get() = deps.log
     private val importService = library.imports
     private val writer = library.ownedWriter
@@ -82,10 +82,11 @@ class LibrarySessionImpl private constructor(
     override val fieldRegistry: FieldRegistry = library.fieldRegistry
     override val content: DocContentFacade = library.content
     override val reviewConfig: ReviewConfigFacade = library.reviewConfig
-    override val trashRetention: TrashRetentionFacade = library.trashRetention
+    private val retention = JournalTrashRetention(coordinator, lifetime)
+    override val trashRetention: TrashRetentionFacade get() = retention
 
     /** The trash auto-purge, run after each watch-triggered rescan. */
-    internal val trashPurge: TrashPurge = library.trashPurge
+    internal val trashPurge = TrashPurge(coordinator, deps.db, TrashOps(deps.fs), retention, deps.clock, deps.log)
 
     // The facet properties only narrow the type a consumer sees: the session is the ingest facet,
     // [OwnedWriter] backs all three write facets, and [AiFacadeImpl] both AI facets.
@@ -444,8 +445,6 @@ internal class Library(
     /** [writer] for a caller outside the session: each call owned by its lifetime. */
     val ownedWriter: OwnedWriter,
     val reviewConfig: ReviewConfigFacade,
-    val trashRetention: TrashRetentionFacade,
-    val trashPurge: TrashPurge,
     val content: DocContentFacade,
     val imports: ImportService,
 )
