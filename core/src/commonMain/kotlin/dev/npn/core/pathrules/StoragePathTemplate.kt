@@ -147,9 +147,9 @@ object StoragePathTemplate {
         context: StoragePathContext,
     ): String {
         val value = context.fields[key]
-        if (format.isNullOrBlank()) return sanitizeSegment(value ?: "")
+        if (format.isNullOrBlank()) return NpnPaths.sanitizeSegment(value ?: "")
         ensure(context.fieldTypes[key]?.isDate == true) { StoragePathError.NotADateField(key) }
-        return sanitizeSegment(resolveDate(value, format))
+        return NpnPaths.sanitizeSegment(resolveDate(value, format))
     }
 
     private inline fun formatless(
@@ -190,20 +190,16 @@ object StoragePathTemplate {
             context.title?.ifBlank { null }
                 ?: context.originalFileName?.let(NpnPaths::stripPdfExtension)?.ifBlank { null }
                 ?: DEFAULT_FALLBACK_TITLE
-        return sanitizeSegment(raw)
+        return NpnPaths.sanitizeSegment(raw)
     }
 
     private fun resolveDate(
         isoDate: String?,
-        format: String?,
+        format: String,
     ): String {
         if (isoDate.isNullOrBlank()) return ""
         val date = runCatching { LocalDate.parse(isoDate) }.getOrNull() ?: return isoDate
-        return if (format.isNullOrBlank()) {
-            isoDate
-        } else {
-            formatDate(date, format)
-        }
+        return formatDate(date, format)
     }
 
     private fun resolveTags(tags: List<String>): String =
@@ -212,15 +208,9 @@ object StoragePathTemplate {
             .map { it.trim() }
             .filter { it.isNotEmpty() }
             .sorted()
-            .map { sanitizeSegment(it) }
+            .map { NpnPaths.sanitizeSegment(it) }
             .filter { it.isNotEmpty() }
             .joinToString(", ")
-
-    /**
-     * Sanitize a single path segment. Delegates to [NpnPaths.sanitizeSegment], which replaces
-     * directory separators and Windows-reserved characters with '_' and trims edge whitespace/dots.
-     */
-    fun sanitizeSegment(input: String): String = NpnPaths.sanitizeSegment(input)
 
     /** Format [date] using a tiny subset of Java date-pattern symbols. */
     @Suppress("CyclomaticComplexMethod")
