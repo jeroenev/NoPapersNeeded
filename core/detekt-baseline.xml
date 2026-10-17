@@ -10,8 +10,6 @@
     <ID>ReturnCount:FoldedState.kt:FoldedState$fun apply</ID>
     <ID>ReturnCount:NpnPaths.kt:NpnPaths$fun indexable: Boolean</ID>
     <ID>SwallowedException:JvmLibraryFileSystem.kt:JvmLibraryFileSystem$e: java.nio.file.FileAlreadyExistsException</ID>
-    <ID>TooGenericExceptionThrown:OcrPipelineTest.kt:ThrowingOcrEngine$throw RuntimeException("boom")</ID>
     <ID>TooManyFunctions:DocumentDao.kt:DocumentDao</ID>
-    <ID>TooManyFunctions:NpnDatabaseTest.kt:NpnDatabaseTest</ID>
   </CurrentIssues>
 </SmellBaseline>

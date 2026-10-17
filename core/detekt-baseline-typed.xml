@@ -5,11 +5,6 @@
     <ID>AbstractClassCanBeInterface:JournalOp.kt:JournalOp$JournalOp</ID>
     <ID>CyclomaticComplexMethod:FoldedState.kt:FoldedState$fun apply</ID>
     <ID>EmptyWhileBlock:DocumentFilterTest.kt:DocumentFilterTest${}</ID>
-    <ID>IgnoredReturnValue:AiEditRunTest.kt:AiEditRunScopeTest$docsFor(key(scope = EditScope.ALL))</ID>
-    <ID>IgnoredReturnValue:AiEditRunTest.kt:AiEditRunScopeTest$docsFor(key(scope = EditScope.MISSING_FIELDS, missing = missing))</ID>
-    <ID>IgnoredReturnValue:AiEditRunTest.kt:AiEditRunScopeTest$docsFor(key(scope = EditScope.REVIEW_QUEUE))</ID>
-    <ID>IgnoredReturnValue:AiEditRunTest.kt:AiEditRunScopeTest$docsFor(key(scope = EditScope.SAVED_VIEW, savedView = view))</ID>
-    <ID>IgnoredReturnValue:AiEditRunTest.kt:AiEditRunScopeTest$docsFor(key(scope = EditScope.UNTAGGED))</ID>
     <ID>ImplicitDefaultLocale:JvmLibraryFileSystemTest.kt:JvmLibraryFileSystemTest$"%02x".format(it)</ID>
     <ID>InjectDispatcher:DocumentRepositoryImpl.kt:DocumentRepositoryImpl$Default</ID>
     <ID>InjectDispatcher:Indexer.kt:Indexer$Default</ID>
@@ -26,80 +21,29 @@
     <ID>InjectDispatcher:SettingsRepositoryImpl.kt:SettingsRepositoryImpl$IO</ID>
     <ID>LoopWithTooManyJumpStatements:Indexer.kt:Indexer$for</ID>
     <ID>LoopWithTooManyJumpStatements:OcrPipeline.kt:OcrPipeline$for</ID>
-    <ID>MapGetWithNotNullAssertionOperator:NpnDatabaseTest.kt:NpnDatabaseTest$counts["empty"]!!</ID>
-    <ID>MapGetWithNotNullAssertionOperator:NpnDatabaseTest.kt:NpnDatabaseTest$counts["invoice"]!!</ID>
     <ID>MatchingDeclarationName:ExternalSource.desktop.kt:ExternalSource</ID>
     <ID>ReturnCount:FoldedState.kt:FoldedState$fun apply</ID>
     <ID>ReturnCount:NpnPaths.kt:NpnPaths$fun indexable: Boolean</ID>
-    <ID>SpreadOperator:DebouncedTest.kt:DebouncedTest$(*churn, gapMillis = 20)</ID>
     <ID>SpreadOperator:IndexerWriteSettleTest.kt:IndexerWriteSettleTest$(p, content.encodeToByteArray(), *options)</ID>
     <ID>SwallowedException:JvmLibraryFileSystem.kt:JvmLibraryFileSystem$e: java.nio.file.FileAlreadyExistsException</ID>
-    <ID>TooGenericExceptionThrown:OcrPipelineTest.kt:ThrowingOcrEngine$throw RuntimeException("boom")</ID>
     <ID>TooManyFunctions:DocumentDao.kt:DocumentDao</ID>
-    <ID>TooManyFunctions:NpnDatabaseTest.kt:NpnDatabaseTest</ID>
-    <ID>UnsafeCallOnNullableType:AiAutoEnricherRig.kt:Rig$db.documentDao().getByDocId(docId)!!</ID>
-    <ID>UnsafeCallOnNullableType:AiOcrPipelineTest.kt:AiOcrPipelineTest$db.documentDao().getByDocId(docId)!!</ID>
-    <ID>UnsafeCallOnNullableType:CompactionReconcileTest.kt:CompactionReconcileTest$db.documentDao().rowAtPath("a.pdf")!!</ID>
     <ID>UnsafeCallOnNullableType:CompactionReconcileTest.kt:CompactionReconcileTest$db.metadataProjectionDao().state()!!</ID>
-    <ID>UnsafeCallOnNullableType:DocumentPathReplicationTest.kt:DocumentPathReplicationTest$a.db .documentDao() .getByDocId(hash)!!</ID>
-    <ID>UnsafeCallOnNullableType:DocumentPathReplicationTest.kt:DocumentPathReplicationTest$b.db .documentDao() .getByDocId(hash)!!</ID>
-    <ID>UnsafeCallOnNullableType:DocumentPathReplicationTest.kt:DocumentPathReplicationTest$rebuilt.db .documentDao() .getByDocId(hash)!!</ID>
-    <ID>UnsafeCallOnNullableType:DocumentPathReplicationTest.kt:DocumentPathReplicationTest$rig.db .documentDao() .getByDocId(blocker)!!</ID>
-    <ID>UnsafeCallOnNullableType:DocumentPathReplicationTest.kt:DocumentPathReplicationTest$rig.db .documentDao() .getByDocId(hash)!!</ID>
-    <ID>UnsafeCallOnNullableType:ExternalDocumentMovesTest.kt:ExternalDocumentMovesTest$a.db .documentDao() .getByDocId(hash)!!</ID>
-    <ID>UnsafeCallOnNullableType:ExternalDocumentMovesTest.kt:ExternalDocumentMovesTest$b.db .documentDao() .getByDocId(hash)!!</ID>
-    <ID>UnsafeCallOnNullableType:ExternalDocumentMovesTest.kt:ExternalDocumentMovesTest$rig.db .documentDao() .getByDocId(hash)!!</ID>
     <ID>UnsafeCallOnNullableType:FieldModelAcceptanceTest.kt:FieldModelAcceptanceTest$rig.session.documents .observeDoc(a) .first()!!</ID>
-    <ID>UnsafeCallOnNullableType:HlcSeedingTest.kt:HlcSeedingTest$db2.documentDao().getByDocId(id)!!</ID>
-    <ID>UnsafeCallOnNullableType:HlcSeedingTest.kt:HlcSeedingTest$rig.db .documentDao() .getByDocId(id)!!</ID>
     <ID>UnsafeCallOnNullableType:HlcSeedingTest.kt:HlcSeedingTest$rig.session.documents .observeDoc(id) .first()!!</ID>
     <ID>UnsafeCallOnNullableType:HlcSeedingTest.kt:HlcSeedingTest$session2.documents .observeDoc(id) .first()!!</ID>
-    <ID>UnsafeCallOnNullableType:IndexerTest.kt:IndexerTest$rig.db .documentDao() .getByDocId(docId)!!</ID>
-    <ID>UnsafeCallOnNullableType:IndexerTest.kt:IndexerTest$rig.db .documentDao() .getByDocId(oldId)!!</ID>
-    <ID>UnsafeCallOnNullableType:IndexerTest.kt:IndexerTest$rig.db .documentDao() .getByDocId(pm.docId)!!</ID>
-    <ID>UnsafeCallOnNullableType:IndexerTest.kt:IndexerTest$rig.db .documentDao() .rowAtPath("a.pdf")!!</ID>
-    <ID>UnsafeCallOnNullableType:IndexerTest.kt:IndexerTest$rig.db.documentDao().getByDocId(docId)!!</ID>
-    <ID>UnsafeCallOnNullableType:IndexerTest.kt:IndexerTest$rig.db.documentDao().rowAtPath("archive/a.pdf")!!</ID>
     <ID>UnsafeCallOnNullableType:JournalEventSerializer.kt:JournalEventSerializer$obj["dev"]!!</ID>
     <ID>UnsafeCallOnNullableType:JournalEventSerializer.kt:JournalEventSerializer$obj["hlc"]!!</ID>
     <ID>UnsafeCallOnNullableType:JournalEventSerializer.kt:JournalEventSerializer$obj["op"]!!</ID>
     <ID>UnsafeCallOnNullableType:JournalEventSerializer.kt:JournalEventSerializer$obj["seq"]!!</ID>
     <ID>UnsafeCallOnNullableType:JournalEventSerializer.kt:JournalEventSerializer$this[name]!!</ID>
     <ID>UnsafeCallOnNullableType:JvmLibraryFileSystemNoReplaceTest.kt:JvmLibraryFileSystemNoReplaceTest$runCatching { Files.createLink(b, c) }.exceptionOrNull()!!</ID>
-    <ID>UnsafeCallOnNullableType:MetadataWriterBatchTest.kt:MetadataWriterBatchTest$rig.db.documentDao().getByDocId(a)!!</ID>
-    <ID>UnsafeCallOnNullableType:MetadataWriterBatchTest.kt:MetadataWriterBatchTest$rig.db.documentDao().getByDocId(b)!!</ID>
-    <ID>UnsafeCallOnNullableType:MetadataWriterBatchTest.kt:MetadataWriterBatchTest$rig.db.documentDao().getByDocId(id)!!</ID>
-    <ID>UnsafeCallOnNullableType:MetadataWriterTest.kt:MetadataWriterTest$db2.documentDao().getByDocId(id)!!</ID>
-    <ID>UnsafeCallOnNullableType:MetadataWriterTest.kt:MetadataWriterTest$db2.metadataProjectionDao().state()!!</ID>
-    <ID>UnsafeCallOnNullableType:MetadataWriterTest.kt:MetadataWriterTest$rig.db .documentDao() .getByDocId(id)!!</ID>
-    <ID>UnsafeCallOnNullableType:MetadataWriterTest.kt:MetadataWriterTest$rig.db .metadataProjectionDao() .state()!!</ID>
-    <ID>UnsafeCallOnNullableType:MetadataWriterTest.kt:MetadataWriterTest$rig.db.documentDao().getByDocId(id)!!</ID>
     <ID>UnsafeCallOnNullableType:MetadataWriterTest.kt:MetadataWriterTest$rig.session.documents .observeDoc(id) .first()!!</ID>
-    <ID>UnsafeCallOnNullableType:NpnDatabaseTest.kt:NpnDatabaseTest$counts["empty"]!!</ID>
-    <ID>UnsafeCallOnNullableType:NpnDatabaseTest.kt:NpnDatabaseTest$counts["invoice"]!!</ID>
-    <ID>UnsafeCallOnNullableType:NpnDatabaseTest.kt:NpnDatabaseTest$dao.getByDocId("a".repeat(64))!!</ID>
-    <ID>UnsafeCallOnNullableType:OcrPipelineForeignEmbeddedTest.kt:OcrPipelineForeignEmbeddedTest$rig.db .documentDao() .getByDocId(docId)!!</ID>
-    <ID>UnsafeCallOnNullableType:OcrPipelineHookTest.kt:OcrPipelineHookTest$rig.db .documentDao() .getByDocId(docId)!!</ID>
-    <ID>UnsafeCallOnNullableType:OcrPipelineStaleFileTest.kt:OcrPipelineStaleFileTest$rig.db .documentDao() .getByDocId(realId)!!</ID>
-    <ID>UnsafeCallOnNullableType:OcrPipelineTest.kt:OcrPipelineTest$db.documentDao().getByDocId(docId)!!</ID>
-    <ID>UnsafeCallOnNullableType:OcrPipelineTest.kt:OcrPipelineTest$dbB.documentDao().getByDocId(docId)!!</ID>
     <ID>UnsafeCallOnNullableType:OcrPipelineTest.kt:OcrPipelineTest$repo .observeDoc(docId) .first()!!</ID>
     <ID>UnsafeCallOnNullableType:OcrPipelineTest.kt:OcrPipelineTest$repo.observeDoc(docId).first()!!</ID>
-    <ID>UnsafeCallOnNullableType:OcrQueueRecoveryTest.kt:OcrQueueRecoveryTest$db.documentDao().getByDocId(docId)!!</ID>
-    <ID>UnsafeCallOnNullableType:ReconcilePerfTest.kt:ReconcilePerfTest$db.documentDao().getByDocId(a)!!</ID>
-    <ID>UnsafeCallOnNullableType:ReconcilePerfTest.kt:ReconcilePerfTest$db.documentDao().getByDocId(b)!!</ID>
-    <ID>UnsafeCallOnNullableType:ReconcilePerfTest.kt:ReconcilePerfTest$db.documentDao().rowAtPath("a.pdf")!!</ID>
-    <ID>UnsafeCallOnNullableType:ReconcilePerfTest.kt:ReconcilePerfTest$db.documentDao().rowAtPath("b.pdf")!!</ID>
     <ID>UnsafeCallOnNullableType:ReconcilePerfTest.kt:ReconcilePerfTest$db.metadataProjectionDao().state()!!</ID>
     <ID>UnsafeCallOnNullableType:SplitPdfTest.kt:SplitPdfTest$rig.session.documents .observeDoc(done.partDocIds[0]) .first()!!</ID>
-    <ID>UnsafeCallOnNullableType:StoragePathRuleIntegrationTest.kt:StoragePathRuleIntegrationTest$rig.db .documentDao() .getByDocId(imported.docId)!!</ID>
-    <ID>UnsafeCallOnNullableType:StoragePathRuleIntegrationTest.kt:StoragePathRuleIntegrationTest$rig.db.documentDao().getByDocId(imported.docId)!!</ID>
-    <ID>UnsafeCallOnNullableType:ThumbnailServiceTest.kt:ThumbnailServiceTest$db.documentDao().getByDocId(docId)!!</ID>
     <ID>UnsafeCallOnNullableType:ThumbnailServiceTest.kt:ThumbnailServiceTest$db.thumbnailDao().get(docId)!!</ID>
     <ID>UnsafeCallOnNullableType:ThumbnailServiceTest.kt:ThumbnailServiceTest$store.lastPng!!</ID>
-    <ID>UnsafeCallOnNullableType:TrashLifecycleTest.kt:TrashLifecycleTest$rig.db .documentDao() .getByDocId(id)!!</ID>
-    <ID>UnsafeCallOnNullableType:TrashLifecycleTest.kt:TrashLifecycleTest$rig.db.documentDao().getByDocId(id)!!</ID>
-    <ID>UseOrEmpty:AiEditQueueTest.kt:title?.let { mapOf(FieldKeys.TITLE to it) } ?: emptyMap()</ID>
     <ID>UseOrEmpty:AiText.kt:AiText$(this[key] as? JsonArray) ?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -&gt; p.isString }?.contentOrNull } ?.map { it.trim() } ?.filter { it.isNotEmpty() } ?: emptyList()</ID>
     <ID>UseOrEmpty:StoragePathTemplate.kt:StoragePathTemplate$value ?: ""</ID>
     <ID>UseRequireNotNull:SnapshotFormat.kt:SnapshotCodec$require(supersedes != null) { "Snapshot manifest supersedes must be an array" }</ID>
