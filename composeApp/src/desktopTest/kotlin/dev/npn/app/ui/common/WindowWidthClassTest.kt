@@ -4,6 +4,12 @@ package dev.npn.app.ui.common
 
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
@@ -58,6 +64,36 @@ class WindowWidthClassTest {
             }
 
             screenClass shouldBe WindowWidthClass.COMPACT
+        }
+
+    @Test
+    fun crossingTheBreakpointKeepsWhatTheContentRemembers() =
+        onUiThread {
+            var widthClass by mutableStateOf(WindowWidthClass.WIDE)
+            var created = 0
+            var seenClass: WindowWidthClass? = null
+            val scene =
+                ImageComposeScene(880, HEIGHT, Density(1f)) {
+                    CompositionLocalProvider(LocalWindowWidthClass provides widthClass) {
+                        Shell {
+                            remember { ++created }
+                            seenClass = LocalWindowWidthClass.current
+                        }
+                    }
+                }
+            try {
+                scene.render()
+                widthClass = WindowWidthClass.COMPACT
+                Snapshot.sendApplyNotifications()
+                scene.render()
+            } finally {
+                scene.close()
+            }
+
+            // The content moved from beside the rail to above the bottom bar...
+            seenClass shouldBe WindowWidthClass.COMPACT
+            // ...and kept its state, as a NavHost keeps its back stack.
+            created shouldBe 1
         }
 
     @Composable

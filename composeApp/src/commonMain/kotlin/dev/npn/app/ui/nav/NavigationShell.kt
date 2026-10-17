@@ -27,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -77,14 +78,18 @@ fun NavigationShell(
             onEdit = onAiEdit,
         )
     val shellShown = current != null || aiCurrent != null
+    // One movable slot for both layouts: crossing the breakpoint (a resize, a rotation) moves the
+    // content into the other layout instead of composing it afresh, so the NavHost and everything
+    // it remembers survive.
+    val slot = remember(content) { movableContentOf(content) }
     if (LocalWindowWidthClass.current.isWide) {
         Row(Modifier.fillMaxSize()) {
             if (shellShown) ShellRail(current = current, ai = ai, queue = queue, onNavigate = onNavigate)
-            Box(Modifier.weight(1f)) { content() }
+            Box(Modifier.weight(1f)) { slot() }
         }
     } else {
         Column(Modifier.fillMaxSize()) {
-            Box(Modifier.weight(1f)) { content() }
+            Box(Modifier.weight(1f)) { slot() }
             if (shellShown) ShellBottomBar(current = current, ai = ai, queue = queue, onNavigate = onNavigate)
         }
     }
