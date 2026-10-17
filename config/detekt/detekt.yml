@@ -55,6 +55,26 @@ style:
     active: true
   UnusedPrivateProperty:
     active: true
+  ForbiddenMethodCall:
+    # Needs type resolution, so only the typed run checks it. Tests may block and print.
+    active: true
+    excludes: *testSources
+    methods:
+      - reason: 'Report through NpnLog (`log.runLogged`), which the app can route and tests can read.'
+        value: 'kotlin.io.print'
+      - reason: 'Report through NpnLog (`log.runLogged`), which the app can route and tests can read.'
+        value: 'kotlin.io.println'
+      - reason: 'Blocks the calling thread, which may be the main thread; suspend or launch instead.'
+        value: 'kotlinx.coroutines.runBlocking'
+      - reason: 'Blocks the calling thread; use delay in a coroutine.'
+        value: 'java.lang.Thread.sleep'
+      # detekt's defaults, which a methods list replaces.
+      - reason: 'using `BigDecimal(Double)` can result in unexpected floating point precision behavior. Use `BigDecimal.valueOf(Double)` or `String.toBigDecimalOrNull()` instead.'
+        value: 'java.math.BigDecimal.<init>(kotlin.Double)'
+      - reason: 'using `BigDecimal(String)` can result in a `NumberFormatException`. Use `String.toBigDecimalOrNull()`'
+        value: 'java.math.BigDecimal.<init>(kotlin.String)'
+      - reason: 'It is marked as obsolete. Use `kotlin.time.measureTime` instead.'
+        value: 'kotlin.system.measureTimeMillis'
   ForbiddenComment:
     # Flag leftover FIXME so they are tracked.
     active: true
@@ -83,6 +103,9 @@ naming:
     excludes: ["**/commonTest/**", "**/desktopTest/**", "**/androidUnitTest/**", "**/test/**"]
 
 coroutines:
+  GlobalCoroutineUsage:
+    # Work outlives its owner and escapes structured cancellation; use the app or session scope.
+    active: true
   InjectDispatcher:
     # A test picks the real dispatcher it needs on the spot; nothing would ever inject another.
     excludes: *testSources

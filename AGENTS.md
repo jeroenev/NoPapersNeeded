@@ -188,7 +188,9 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   `catch (Throwable)`: cancellation must propagate, not be recorded as a failure. Typed detekt's
   `SuspendFunSwallowedCancellation` enforces it. Error text is `Throwable.reason()`.
 - Background work nobody awaits reports failures through `NpnLog` (`SessionDeps.log`) with
-  `log.runLogged("what") { … }`, never `println` or a silent `runCatching`.
+  `log.runLogged("what") { … }`, never `println` or a silent `runCatching`. Outside tests, typed
+  detekt forbids `print`/`println`, `runBlocking`, `Thread.sleep` (`ForbiddenMethodCall`) and
+  `GlobalScope` (`GlobalCoroutineUsage`).
 - A viewmodel reports to the user through `MessagesViewModel`: `message(text, action)`, and every
   write through `launchReporting(failed)` (or `reporting` inside a coroutine it launched), where
   `failed` is the whole failure sentence with the reason as `%1$s`. Never raise a snackbar from a
