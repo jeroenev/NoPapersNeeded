@@ -8,13 +8,13 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import dev.npn.app.EnglishLocaleTest
-import dev.npn.app.platform.FolderPick
+import dev.npn.app.NoSettingsPaneActions
+import dev.npn.app.paneState
 import dev.npn.app.ui.nodes
 import dev.npn.app.ui.onUiThread
 import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.app.ui.type
 import dev.npn.core.ai.AiProvider
-import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.settings.SettingsSnapshot
 import io.kotest.matchers.shouldBe
@@ -44,7 +44,7 @@ class SettingsSearchCoverageTest : EnglishLocaleTest() {
             ImageComposeScene(WIDTH, HEIGHT) {
                 NpnTheme(darkTheme = false) {
                     search = settingsCategoryLabels().single { it.category.id == category.id }
-                    Column { category.content(EVERYTHING_SHOWN, NoActions) }
+                    Column { category.content(EVERYTHING_SHOWN, NoSettingsPaneActions()) }
                 }
             }
         try {
@@ -76,77 +76,22 @@ class SettingsSearchCoverageTest : EnglishLocaleTest() {
             }.filter { it.isNotBlank() && it !in NOT_SETTINGS }
             .distinct()
 
-    private object NoActions : SettingsPaneActions {
-        override fun edit(transform: (SettingsSnapshot) -> SettingsSnapshot) = Unit
-
-        override fun setStoragePathTemplate(template: String) = Unit
-
-        override fun setStoragePathEnabled(enabled: Boolean) = Unit
-
-        override fun setTrashRetentionDays(days: Int) = Unit
-
-        override fun type(
-            setting: TextSetting,
-            value: String,
-        ) = Unit
-
-        override fun doneTyping(setting: TextSetting) = Unit
-
-        override fun setAiProvider(provider: AiProvider) = Unit
-
-        override fun loadAiModels() = Unit
-
-        override fun runAiSelfTest() = Unit
-
-        override fun clearThumbnailCache() = Unit
-
-        override fun saveField(def: FieldDef) = Unit
-
-        override fun removeField(
-            key: String,
-            clearValues: Boolean,
-        ) = Unit
-
-        override fun moveField(
-            key: String,
-            delta: Int,
-        ) = Unit
-
-        override fun setUntaggedOnlyMode() = Unit
-
-        override fun setInboxWorkflowMode(migration: ReviewMigration) = Unit
-
-        override fun watchedFolderPicked(pick: FolderPick) = Unit
-
-        override fun changeLibrary() = Unit
-
-        override fun openAutoMatchRules() = Unit
-    }
-
     private companion object {
         const val WIDTH = 900
         const val HEIGHT = 4_000
 
         /** Every pane at its fullest: AI on with an editable endpoint, a watched folder, manual OCR languages. */
         val EVERYTHING_SHOWN =
-            SettingsPaneState(
-                settings =
-                    SettingsUiState(
-                        snapshot =
-                            SettingsSnapshot(
-                                installationId = "test",
-                                libraryLocation = "/library",
-                                watchedFolder = "/inbox",
-                                ocrLanguage = "eng",
-                                aiEnabled = true,
-                                aiProvider = AiProvider.CUSTOM,
-                            ),
-                    ),
-                aiModels = AiModelListState(),
-                aiSelfTest = AiSelfTestState(),
+            paneState(
+                SettingsSnapshot(
+                    installationId = "test",
+                    libraryLocation = "/library",
+                    watchedFolder = "/inbox",
+                    ocrLanguage = "eng",
+                    aiEnabled = true,
+                    aiProvider = AiProvider.CUSTOM,
+                ),
                 reviewMode = ReviewMode.INBOX_WORKFLOW,
-                fields = emptyList(),
-                fieldUsage = emptyMap(),
             )
 
         /** Shown, but not the name of a setting: the button that adds a typed OCR language code. */

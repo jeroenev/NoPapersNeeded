@@ -13,14 +13,13 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.text.AnnotatedString
 import dev.npn.app.EnglishLocaleTest
-import dev.npn.app.platform.FolderPick
+import dev.npn.app.NoSettingsPaneActions
+import dev.npn.app.paneState
 import dev.npn.app.ui.nodes
 import dev.npn.app.ui.onUiThread
 import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.app.ui.type
 import dev.npn.core.ai.AiProvider
-import dev.npn.core.model.FieldDef
-import dev.npn.core.model.ReviewMode
 import dev.npn.core.settings.SettingsSnapshot
 import io.kotest.assertions.withClue
 import io.kotest.matchers.shouldBe
@@ -91,7 +90,7 @@ class AiEndpointFieldsTest : EnglishLocaleTest() {
         MODEL("Model", "qwen3:8", TextSetting.AI_MODEL),
     }
 
-    private inner class Pane : SettingsPaneActions {
+    private inner class Pane : NoSettingsPaneActions() {
         /** The settings as saved; never caught up here, as a slow write would not be yet. */
         var persisted by mutableStateOf(
             SettingsSnapshot(
@@ -108,7 +107,7 @@ class AiEndpointFieldsTest : EnglishLocaleTest() {
         val scene =
             ImageComposeScene(WIDTH, HEIGHT) {
                 NpnTheme(darkTheme = false) {
-                    Column { AiSettingsPane(state(persisted), this@Pane) }
+                    Column { AiSettingsPane(paneState(persisted), this@Pane) }
                 }
             }
 
@@ -150,44 +149,6 @@ class AiEndpointFieldsTest : EnglishLocaleTest() {
         override fun doneTyping(setting: TextSetting) {
             done += setting
         }
-
-        override fun edit(transform: (SettingsSnapshot) -> SettingsSnapshot) = Unit
-
-        override fun setStoragePathTemplate(template: String) = Unit
-
-        override fun setStoragePathEnabled(enabled: Boolean) = Unit
-
-        override fun setTrashRetentionDays(days: Int) = Unit
-
-        override fun setAiProvider(provider: AiProvider) = Unit
-
-        override fun loadAiModels() = Unit
-
-        override fun runAiSelfTest() = Unit
-
-        override fun clearThumbnailCache() = Unit
-
-        override fun saveField(def: FieldDef) = Unit
-
-        override fun removeField(
-            key: String,
-            clearValues: Boolean,
-        ) = Unit
-
-        override fun moveField(
-            key: String,
-            delta: Int,
-        ) = Unit
-
-        override fun setUntaggedOnlyMode() = Unit
-
-        override fun setInboxWorkflowMode(migration: ReviewMigration) = Unit
-
-        override fun watchedFolderPicked(pick: FolderPick) = Unit
-
-        override fun changeLibrary() = Unit
-
-        override fun openAutoMatchRules() = Unit
     }
 
     private fun pane(block: Pane.() -> Unit) {
@@ -203,15 +164,5 @@ class AiEndpointFieldsTest : EnglishLocaleTest() {
     private companion object {
         const val WIDTH = 900
         const val HEIGHT = 3_000
-
-        fun state(snapshot: SettingsSnapshot) =
-            SettingsPaneState(
-                settings = SettingsUiState(snapshot = snapshot),
-                aiModels = AiModelListState(),
-                aiSelfTest = AiSelfTestState(),
-                reviewMode = ReviewMode.DEFAULT,
-                fields = emptyList(),
-                fieldUsage = emptyMap(),
-            )
     }
 }
