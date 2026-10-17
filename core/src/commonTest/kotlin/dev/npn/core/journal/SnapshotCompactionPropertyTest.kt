@@ -24,6 +24,8 @@ import kotlin.test.assertEquals
 private object NoPublishFs : LibraryFileSystem {
     override suspend fun listAll(): List<FileMeta> = emptyList()
 
+    override suspend fun listAllIndexable(): List<FileMeta> = emptyList()
+
     override suspend fun listAllUnder(relPath: String): List<FileMeta> = emptyList()
 
     override suspend fun exists(relPath: String): Boolean = false
@@ -31,6 +33,11 @@ private object NoPublishFs : LibraryFileSystem {
     override suspend fun stat(relPath: String): FileMeta? = null
 
     override suspend fun readBytes(relPath: String): ByteArray = ByteArray(0)
+
+    override suspend fun readTail(
+        relPath: String,
+        maxBytes: Int,
+    ): ByteArray = ByteArray(0)
 
     override suspend fun writeBytesOnce(
         relPath: String,

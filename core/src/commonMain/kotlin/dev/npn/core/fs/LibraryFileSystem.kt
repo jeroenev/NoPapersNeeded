@@ -88,11 +88,10 @@ interface LibraryFileSystem {
 
     /**
      * Recursive walk of the whole library excluding the `.npn/` metadata subtree (journal, OCR
-     * sidecars, trash), for indexing/rescan walks. Platforms override this to prune the subtree in
-     * the walk itself; the default filters the full listing (correct, but still traverses `.npn/`).
+     * sidecars, trash), for indexing/rescan walks. Each platform prunes the subtree in the walk
+     * itself rather than traversing `.npn/`.
      */
-    suspend fun listAllIndexable(): List<FileMeta> =
-        listAll().filter { it.relPath != NpnPaths.NPN_DIR && !it.relPath.startsWith("${NpnPaths.NPN_DIR}/") }
+    suspend fun listAllIndexable(): List<FileMeta>
 
     /** Recursive walk below [relPath], excluding [relPath] itself. */
     suspend fun listAllUnder(relPath: String): List<FileMeta>
@@ -104,14 +103,11 @@ interface LibraryFileSystem {
 
     suspend fun readBytes(relPath: String): ByteArray
 
-    /**
-     * Up to the last [maxBytes] bytes of [relPath]. Platforms override this to seek instead of
-     * reading the whole file.
-     */
+    /** Up to the last [maxBytes] bytes of [relPath], seeking rather than reading the whole file. */
     suspend fun readTail(
         relPath: String,
         maxBytes: Int,
-    ): ByteArray = readBytes(relPath).let { it.copyOfRange(maxOf(0, it.size - maxBytes), it.size) }
+    ): ByteArray
 
     /**
      * Create [relPath] with [bytes], creating parent directories as needed. Fails with an

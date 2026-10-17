@@ -40,6 +40,8 @@ private class CountingFileSystem(
 
     override suspend fun listAll(): List<FileMeta> = delegate.listAll()
 
+    override suspend fun listAllIndexable(): List<FileMeta> = delegate.listAllIndexable()
+
     override suspend fun listAllUnder(relPath: String): List<FileMeta> = delegate.listAllUnder(relPath)
 
     override suspend fun exists(relPath: String): Boolean = delegate.exists(relPath)
@@ -49,6 +51,14 @@ private class CountingFileSystem(
     override suspend fun readBytes(relPath: String): ByteArray {
         reads.add(relPath)
         return delegate.readBytes(relPath)
+    }
+
+    override suspend fun readTail(
+        relPath: String,
+        maxBytes: Int,
+    ): ByteArray {
+        reads.add(relPath)
+        return delegate.readTail(relPath, maxBytes)
     }
 
     override suspend fun writeBytesOnce(
