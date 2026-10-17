@@ -103,9 +103,6 @@ internal class OcrFacadeImpl(
         engine: String?,
     ) = lifetime.owned { pin(docId, engine) }
 
-    /** Ask for a drain, for rows another writer queued (an import, a split's parts). */
-    fun kick() = worker.kick()
-
     /** Kick the drain on every change to the queue while it owes anything, on [scope]. */
     fun watchQueue(scope: CoroutineScope) {
         scope.launch {

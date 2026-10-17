@@ -170,7 +170,7 @@ class LibrarySessionImpl private constructor(
         import: () -> ImportResult,
     ): ImportOutcome =
         runCatchingCancellable(import).fold(
-            onSuccess = { map(it).also(::afterImport) },
+            onSuccess = ::map,
             onFailure = { failure ->
                 when (failure) {
                     is EmptyImportException -> {
@@ -298,12 +298,6 @@ class LibrarySessionImpl private constructor(
             is ImportResult.Duplicate -> ImportOutcome.Duplicate(result.existingDocId, result.existingPath)
         }
 
-    private fun afterImport(outcome: ImportOutcome) {
-        if (outcome is ImportOutcome.Imported) {
-            ocrFacade.kick()
-        }
-    }
-
     companion object {
         private const val METADATA_RECONCILIATION_INTERVAL_MS = 15L * 60L * 1000L
 
@@ -387,7 +381,7 @@ class LibrarySessionImpl private constructor(
                     library = library,
                     scanReports = scanReports,
                     ocrFacade = ocr,
-                    maintenance = buildMaintenance(deps, lifetime, coordinator, library, ocr, scanReports),
+                    maintenance = buildMaintenance(deps, lifetime, coordinator, library, scanReports),
                     aiEditQueue = edits.queue,
                     queues = buildWork(deps, lifetime, ocr, enrichment.worker, edits, rescanned),
                     aiFacade = ai,

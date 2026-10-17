@@ -369,7 +369,6 @@ internal fun buildMaintenance(
     lifetime: SessionLifetime,
     coordinator: JournalCoordinator,
     library: Library,
-    ocr: OcrFacadeImpl,
     scanReports: MutableStateFlow<ScanReport?>,
 ): MaintenanceFacadeImpl =
     MaintenanceFacadeImpl(
@@ -386,7 +385,6 @@ internal fun buildMaintenance(
         coordinator = coordinator,
         splitter = SplitService(deps.fs, deps.pdfEngine, library.imports, deps.db.documentDao(), deps.log),
         writer = library.writer,
-        ocr = ocr,
         scanReports = scanReports,
         log = deps.log,
     )

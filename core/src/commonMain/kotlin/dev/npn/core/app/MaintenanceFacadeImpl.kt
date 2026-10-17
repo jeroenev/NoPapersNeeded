@@ -25,7 +25,6 @@ internal class MaintenanceFacadeImpl(
     private val coordinator: JournalCoordinator,
     private val splitter: SplitService,
     private val writer: MetadataWriterImpl,
-    private val ocr: OcrFacadeImpl,
     private val scanReports: MutableStateFlow<ScanReport?>,
     private val log: NpnLog,
 ) : MaintenanceFacade {
@@ -87,7 +86,6 @@ internal class MaintenanceFacadeImpl(
         } finally {
             if (!finished) splitter.rollBack(parts)
         }
-        ocr.kick()
         return SplitOutcome.Done(partIds)
     }
 
