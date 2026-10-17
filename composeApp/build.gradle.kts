@@ -30,8 +30,6 @@ kotlin {
         // Share commonTest's session fakes through the test hierarchy, including the shared suite.
         withDeviceTestBuilder {
             sourceSetTreeName = "test"
-        }.configure {
-            instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         }
     }
 
@@ -65,13 +63,6 @@ kotlin {
 
             implementation(libs.filekit.dialogs.compose)
         }
-        commonTest.dependencies {
-            implementation(projects.coreTesting)
-            implementation(kotlin("test"))
-            implementation(libs.kotlinx.coroutines.test)
-            implementation(libs.kotest.assertions)
-            implementation(libs.kotest.property)
-        }
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)
             implementation(libs.androidx.core.ktx)
@@ -104,12 +95,6 @@ kotlin {
                         .dir("generated/assets/copyAndroidMainComposeResourcesToAndroidAssets"),
                 ) { builtBy("copyAndroidMainComposeResourcesToAndroidAssets") },
             )
-        }
-        getByName("androidDeviceTest") {
-            dependencies {
-                implementation(libs.androidx.test.junit)
-                implementation(libs.androidx.test.runner)
-            }
         }
     }
 }

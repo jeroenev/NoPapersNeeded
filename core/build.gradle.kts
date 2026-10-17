@@ -26,9 +26,7 @@ kotlin {
         // (SAF, MLKit wrappers) a test source set it never had. Without it, everything in
         // commonTest is only ever verified through the `desktop` target.
         withHostTest {}
-        withDeviceTest {
-            instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        }
+        withDeviceTest {}
     }
 
     sourceSets {
@@ -61,15 +59,6 @@ kotlin {
             implementation(libs.koog.prompt.executor.openrouter)
             implementation(libs.koog.http.client.ktor)
         }
-        commonTest.dependencies {
-            implementation(kotlin("test"))
-            implementation(libs.kotlinx.coroutines.test)
-            // commonTest asserts through kotest matchers, so they belong to every test target that
-            // compiles it, not just `desktopTest`.
-            implementation(libs.kotest.assertions)
-            implementation(libs.kotest.property)
-            implementation(projects.coreTesting)
-        }
         androidMain.dependencies {
             implementation("net.java.dev.jna:jna:${libs.versions.jna.get()}@aar")
             implementation(libs.androidx.core.ktx)
@@ -77,12 +66,6 @@ kotlin {
             implementation(libs.pdfbox.android)
             implementation(libs.mlkit.text.recognition)
             implementation(libs.ktor.client.okhttp)
-        }
-        getByName("androidDeviceTest") {
-            dependencies {
-                implementation(libs.androidx.test.junit)
-                implementation(libs.androidx.test.runner)
-            }
         }
         getByName("desktopMain") {
             dependencies {

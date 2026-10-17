@@ -10,11 +10,7 @@ plugins {
 android {
     namespace = "dev.npn.baselineprofile"
 
-    // compileSdk, minSdk and targetSdk come from the catalog through npn.toolchain.
-    defaultConfig {
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-    }
-
+    // compileSdk, minSdk, targetSdk and the test runner come from npn.toolchain.
     targetProjectPath = ":androidApp"
 }
 

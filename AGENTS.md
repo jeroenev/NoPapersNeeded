@@ -29,8 +29,9 @@ design, build/packaging/release details, and the library folder layout.
 - `buildSrc` — build logic: every task class the build scripts register (packaging, `BuildInfo`,
   `checkLocalization`), and convention plugins that read the catalog: `npn.toolchain` (the JDK and
   bytecode target, applied by every module, plus the SDK levels of `androidApp` and
-  `baselineprofile`), `npn.kmp-module` (the `desktop` and Android
-  library targets and their SDK levels, for `core`, `core-testing` and `composeApp`) and
+  `baselineprofile` and every Android module's device-test runner), `npn.kmp-module` (the
+  `desktop` and Android library targets and their SDK levels, and the test libraries every
+  `commonTest` shares, `core-testing` included, for `core`, `core-testing` and `composeApp`) and
   `npn.detekt` (both detekt runs and their baselines; the root build applies it to every project,
   and its map of typed compilations is where a new module gets its typed run). Kotlin, the
   Android Gradle plugin and detekt are on buildSrc's classpath, so modules apply them by id, never
