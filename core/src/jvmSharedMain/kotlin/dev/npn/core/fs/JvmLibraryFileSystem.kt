@@ -221,7 +221,7 @@ class JvmLibraryFileSystem internal constructor(
             try {
                 atomicMoveNoReplace(tmp, target)
             } catch (e: java.nio.file.FileAlreadyExistsException) {
-                error("Target already exists: $relPath")
+                throw IllegalStateException("Target already exists: $relPath", e)
             }
         } finally {
             // Clean up the temp file if it survived (move failed).
@@ -317,7 +317,7 @@ class JvmLibraryFileSystem internal constructor(
         try {
             atomicMoveNoReplace(from, to)
         } catch (e: java.nio.file.FileAlreadyExistsException) {
-            error("Target already exists: $toRelPath")
+            throw IllegalStateException("Target already exists: $toRelPath", e)
         }
         Unit
     }
