@@ -6,7 +6,6 @@ import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.settings.ReviewMigration
 import dev.npn.app.ui.settings.SettingsViewModel
 import dev.npn.app.ui.settings.TextSetting
-import dev.npn.app.ui.settings.evaluateStoragePath
 import dev.npn.app.ui.settings.text
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiReasoningLevel
@@ -19,8 +18,12 @@ import dev.npn.core.model.FieldType
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.pathrules.StoragePathContext
 import dev.npn.core.pathrules.StoragePathError
+import dev.npn.core.pathrules.StoragePathExpansion
+import dev.npn.core.pathrules.StoragePathTemplate
+import dev.npn.core.pathrules.pathOrNull
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -191,16 +194,17 @@ class SettingsViewModelTest : MainDispatcherTest() {
 
     @Test
     fun storagePathErrorsAreProjectedAsLocalizableData() {
-        val result = evaluateStoragePath("{unknown}/{title}.pdf", PREVIEW_CONTEXT)
-        result.error shouldBe StoragePathError.UnknownVariable("unknown")
+        val result = StoragePathTemplate.expand("{unknown}/{title}.pdf", PREVIEW_CONTEXT)
+        result shouldBe StoragePathExpansion.Invalid(StoragePathError.UnknownVariable("unknown"))
     }
 
     @Test
     fun aDatePatternOnANonDateFieldSaysSo() {
-        val result = evaluateStoragePath("{field:amount:yyyy}/{title}.pdf", PREVIEW_CONTEXT)
+        val result = StoragePathTemplate.expand("{field:amount:yyyy}/{title}.pdf", PREVIEW_CONTEXT)
 
-        result.error shouldBe StoragePathError.NotADateField("amount")
-        result.error?.text() shouldBe uiText(Res.string.common_settings_storage_error_not_a_date, "amount")
+        val error = (result as StoragePathExpansion.Invalid).error
+        error shouldBe StoragePathError.NotADateField("amount")
+        error.text() shouldBe uiText(Res.string.common_settings_storage_error_not_a_date, "amount")
     }
 
     /**
@@ -230,7 +234,7 @@ class SettingsViewModelTest : MainDispatcherTest() {
                 session.fieldRegistry.defs.value
                     .associate { it.key to it.type }
 
-            evaluateStoragePath(template, PREVIEW_CONTEXT.copy(fieldTypes = types)).error shouldBe null
+            StoragePathTemplate.expand(template, PREVIEW_CONTEXT.copy(fieldTypes = types)).pathOrNull shouldNotBe null
             model.setStoragePathEnabled(true)
             advanceUntilIdle()
 
@@ -239,8 +243,8 @@ class SettingsViewModelTest : MainDispatcherTest() {
 
     @Test
     fun storagePathPreviewUsesProvidedLocalizedSamples() {
-        val result = evaluateStoragePath("{docType}/{correspondent}/{tags}/{title}.pdf", PREVIEW_CONTEXT)
-        result.preview shouldBe
+        val result = StoragePathTemplate.expand("{docType}/{correspondent}/{tags}/{title}.pdf", PREVIEW_CONTEXT)
+        result.pathOrNull shouldBe
             "Factuur/Voorbeeld Energie/nutsvoorzieningen, thuis/Elektriciteitsrekening.pdf"
     }
 
@@ -621,18 +625,13 @@ class SettingsViewModelTest : MainDispatcherTest() {
         const val TREE = "content://com.example.documents/tree/primary%3AInbox"
 
         val PREVIEW_CONTEXT =
-            StoragePathContext(
-                fields =
-                    mapOf(
-                        FieldKeys.TITLE to "Elektriciteitsrekening",
-                        FieldKeys.DOC_DATE to "2026-07-20",
-                        FieldKeys.DOC_TYPE to "Factuur",
-                        FieldKeys.CORRESPONDENT to "Voorbeeld Energie",
-                    ),
-                tags = listOf("thuis", "nutsvoorzieningen"),
-                originalFileName = "scan.pdf",
+            StoragePathContext.sample(
                 fieldTypes =
                     FieldKeys.seedDefinitions().associate { it.key to it.type } + ("amount" to FieldType.DECIMAL),
+                title = "Elektriciteitsrekening",
+                docType = "Factuur",
+                correspondent = "Voorbeeld Energie",
+                tags = listOf("thuis", "nutsvoorzieningen"),
             )
     }
 

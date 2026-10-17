@@ -16,6 +16,8 @@ import dev.npn.core.app.LibraryLocations
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
 import dev.npn.core.pathrules.StoragePathContext
+import dev.npn.core.pathrules.StoragePathExpansion
+import dev.npn.core.pathrules.StoragePathTemplate
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_settings_advanced
 import no_papers_needed.composeapp.generated.resources.common_settings_change_library
@@ -124,12 +126,26 @@ internal fun StoragePathRuleEditor(
     onTemplateChange: (String) -> Unit,
     onEnabledChange: (Boolean) -> Unit,
 ) {
-    val evaluation = evaluateStoragePath(template, sampleStoragePathContext(fieldTypes))
+    // Rendered against a fictional document in the app's language.
+    val sample =
+        StoragePathContext.sample(
+            fieldTypes = fieldTypes,
+            title = stringResource(Res.string.common_settings_storage_sample_title),
+            docType = stringResource(Res.string.common_settings_storage_sample_type),
+            correspondent = stringResource(Res.string.common_settings_storage_sample_correspondent),
+            tags =
+                listOf(
+                    stringResource(Res.string.common_settings_storage_sample_tag_home),
+                    stringResource(Res.string.common_settings_storage_sample_tag_utilities),
+                ),
+        )
+    val expansion = StoragePathTemplate.expand(template, sample)
+    val error = (expansion as? StoragePathExpansion.Invalid)?.error
     SwitchRow(
         label = stringResource(Res.string.common_settings_storage_organize_paths),
         help = stringResource(Res.string.common_settings_storage_organize_help),
         checked = enabled,
-        enabled = enabled || evaluation.error == null,
+        enabled = enabled || error == null,
         onCheckedChange = onEnabledChange,
     )
     TypedTextField(
@@ -140,32 +156,19 @@ internal fun StoragePathRuleEditor(
         supportingText = {
             Text(
                 text =
-                    evaluation.error?.text()?.resolve()
-                        ?: stringResource(Res.string.common_settings_storage_preview, evaluation.preview.orEmpty()),
+                    when (expansion) {
+                        is StoragePathExpansion.Path -> {
+                            stringResource(Res.string.common_settings_storage_preview, expansion.path)
+                        }
+
+                        is StoragePathExpansion.Invalid -> {
+                            expansion.error.text().resolve()
+                        }
+                    },
             )
         },
-        isError = evaluation.error != null,
+        isError = error != null,
         modifier = Modifier.fillMaxWidth(),
     )
     HelpText(stringResource(Res.string.common_settings_storage_variables, STORAGE_PATH_VARIABLES))
 }
-
-/** The fictional document the template preview is rendered against. */
-@Composable
-private fun sampleStoragePathContext(fieldTypes: Map<String, FieldType>): StoragePathContext =
-    StoragePathContext(
-        fields =
-            mapOf(
-                FieldKeys.TITLE to stringResource(Res.string.common_settings_storage_sample_title),
-                FieldKeys.DOC_DATE to "2026-07-20",
-                FieldKeys.DOC_TYPE to stringResource(Res.string.common_settings_storage_sample_type),
-                FieldKeys.CORRESPONDENT to stringResource(Res.string.common_settings_storage_sample_correspondent),
-            ),
-        tags =
-            listOf(
-                stringResource(Res.string.common_settings_storage_sample_tag_home),
-                stringResource(Res.string.common_settings_storage_sample_tag_utilities),
-            ),
-        originalFileName = "scan.pdf",
-        fieldTypes = fieldTypes,
-    )

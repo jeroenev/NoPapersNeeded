@@ -342,7 +342,7 @@ class SettingsViewModel(
                         ?: storagePath.storagePath.first().template
                         ?: DEFAULT_STORAGE_PATH_TEMPLATE
                 val types = fieldRegistry.current().associate { it.key to it.type }
-                val expansion = StoragePathTemplate.expand(template, validationContext(types))
+                val expansion = StoragePathTemplate.expand(template, StoragePathContext.sample(types))
                 if (expansion is StoragePathExpansion.Invalid) {
                     message(uiText(Res.string.common_settings_storage_rule_stays_off, expansion.error.text()))
                     return@launchReporting
@@ -483,39 +483,8 @@ class SettingsViewModel(
             }
             reviewConfig.setReviewMode(ReviewMode.INBOX_WORKFLOW)
         }
-
-    private companion object {
-        /** A document carrying every seed field, judged against the library's own field types. */
-        fun validationContext(fieldTypes: Map<String, FieldType>) =
-            StoragePathContext(
-                fields =
-                    mapOf(
-                        FieldKeys.TITLE to "sample-title",
-                        FieldKeys.DOC_DATE to "2026-07-20",
-                        FieldKeys.DOC_TYPE to "sample-type",
-                        FieldKeys.CORRESPONDENT to "sample-correspondent",
-                    ),
-                tags = listOf("sample-tag"),
-                originalFileName = "scan.pdf",
-                fieldTypes = fieldTypes,
-            )
-    }
 }
 
 /** This snapshot with each typed value of [drafts] in place of the saved one. */
 private fun SettingsSnapshot.withTyped(drafts: List<Pair<TextSetting, String?>>): SettingsSnapshot =
     drafts.fold(this) { snapshot, (setting, typed) -> typed?.let { setting.with(snapshot, it) } ?: snapshot }
-
-internal data class StoragePathEvaluation(
-    val preview: String?,
-    val error: StoragePathError?,
-)
-
-internal fun evaluateStoragePath(
-    template: String,
-    context: StoragePathContext,
-): StoragePathEvaluation =
-    when (val expansion = StoragePathTemplate.expand(template, context)) {
-        is StoragePathExpansion.Path -> StoragePathEvaluation(preview = expansion.path, error = null)
-        is StoragePathExpansion.Invalid -> StoragePathEvaluation(preview = null, error = expansion.error)
-    }

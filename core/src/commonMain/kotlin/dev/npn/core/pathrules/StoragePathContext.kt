@@ -19,4 +19,33 @@ data class StoragePathContext(
     val fieldTypes: Map<String, FieldType>,
 ) {
     val title: String? get() = fields[FieldKeys.TITLE]
+
+    companion object {
+        /**
+         * A fictional document carrying every seeded field, for validating a template against the
+         * library's [fieldTypes] or previewing it. The texts are placeholders unless a preview
+         * passes its own (translated) ones.
+         */
+        fun sample(
+            fieldTypes: Map<String, FieldType>,
+            title: String = "sample-title",
+            docType: String = "sample-type",
+            correspondent: String = "sample-correspondent",
+            tags: List<String> = listOf("sample-tag"),
+        ): StoragePathContext =
+            StoragePathContext(
+                fields =
+                    mapOf(
+                        FieldKeys.TITLE to title,
+                        FieldKeys.DOC_DATE to SAMPLE_DATE,
+                        FieldKeys.DOC_TYPE to docType,
+                        FieldKeys.CORRESPONDENT to correspondent,
+                    ),
+                tags = tags,
+                originalFileName = "scan.pdf",
+                fieldTypes = fieldTypes,
+            )
+
+        private const val SAMPLE_DATE = "2026-07-20"
+    }
 }
