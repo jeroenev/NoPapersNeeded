@@ -69,7 +69,7 @@ fun jvmSessionDeps(
  * (`XDG_DATA_HOME` on Unix, `LOCALAPPDATA` on Windows): `no-papers-needed/<libraryKey>/`.
  */
 fun AppDirs.Companion.desktop(location: String): AppDirs {
-    val base = "${PlatformDirs.dataHome()}/no-papers-needed/${AppDirs.libraryKey(location)}"
+    val base = "${PlatformDirs.appDataDir()}/${AppDirs.libraryKey(location)}"
     return AppDirs(dbDir = "$base/db", thumbsDir = "$base/thumbs")
 }
 
@@ -78,4 +78,4 @@ fun AppDirs.Companion.desktop(location: String): AppDirs {
  * app's directory under the platform data home, beside every library's own directory, so a user
  * report has one file to attach whichever library was open.
  */
-object DesktopLog : NpnLog by JvmLog(Path.of(PlatformDirs.dataHome(), "no-papers-needed", "npn.log"))
+object DesktopLog : NpnLog by JvmLog(Path.of(PlatformDirs.appDataDir(), "npn.log"))

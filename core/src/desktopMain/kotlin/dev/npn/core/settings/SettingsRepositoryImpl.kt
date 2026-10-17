@@ -150,9 +150,6 @@ class SettingsRepositoryImpl internal constructor(
         private val OWNER_ONLY = PosixFilePermissions.asFileAttribute(OWNER_ONLY_PERMISSIONS)
         private const val TEMP_SUFFIX = ".tmp"
 
-        fun defaultFile(): File {
-            val configHome = PlatformDirs.configHome()
-            return File("$configHome/no-papers-needed/settings.properties")
-        }
+        fun defaultFile(): File = File(PlatformDirs.appConfigDir(), "settings.properties")
     }
 }

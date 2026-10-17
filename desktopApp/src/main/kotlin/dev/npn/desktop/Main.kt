@@ -55,7 +55,7 @@ private val SESSION_CLOSE_TIMEOUT = 10.seconds
 private fun log(message: String) = DesktopLog.info(message)
 
 /** Held by the running instance; see [SingleInstance]. Per user, so beside every library's data. */
-private fun instanceLockFile(): Path = Path.of(PlatformDirs.dataHome(), "no-papers-needed", "instance.lock")
+private fun instanceLockFile(): Path = Path.of(PlatformDirs.appDataDir(), "instance.lock")
 
 fun main() {
     if (SingleInstance.claim(instanceLockFile(), ::log)) runApp() else showAlreadyRunning()
