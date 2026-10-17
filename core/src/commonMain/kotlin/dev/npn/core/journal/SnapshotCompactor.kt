@@ -82,7 +82,7 @@ class SnapshotCompactor(
                 if (seen.add(event.dot)) out.add(event)
             }
         }
-        return out.sortedWith(compareBy({ it.hlc.physicalMillis }, { it.hlc.counter }, { it.hlc.deviceId }))
+        return out.sortedBy { it.hlc }
     }
 
     /** Encode + verify-publish one snapshot superseding [candidates]. Returns null for empty input. */

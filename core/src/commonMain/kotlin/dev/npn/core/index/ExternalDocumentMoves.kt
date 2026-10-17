@@ -93,11 +93,7 @@ internal class ExternalDocumentMoves(
         ) {
             return false
         }
-        if (state.isDeleted(old.docId) || state.isTrashed(old.docId) ||
-            state.resolveDocId(old.docId) != old.docId
-        ) {
-            return false
-        }
+        if (!state.isCurrent(old.docId)) return false
         if (kv.get(key(old.docId)) != encode(old.docId, old.relPath, state)) return false
         // An omitted listing entry is not evidence of a move. Recheck both endpoints before writing.
         return !fs.exists(old.relPath) && fs.sha256(target) == old.docId
