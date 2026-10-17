@@ -67,7 +67,8 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   (scanner, share intents, WorkManager) need a device: `mise deploy`.
 - CI (`.github/workflows/ci.yml`) runs: shellcheck (hooks, mise tasks, `.github/scripts`) →
   spotlessCheck → checkLocalization → detekt → tests+coverage (kover drives both desktop test
-  suites) → Android-target host tests → compile android+desktop + `detektTyped` → assembleDebug →
+  suites) → Android-target host tests → compile android+desktop + `compileDeviceTests` (the root task
+  that builds every device test without a device; add a new module's there) + `detektTyped` → assembleDebug →
   desktopApp build → packageAppImage. Match that order when verifying larger changes. Actions
   minutes and artifact storage are metered (private repo): PRs stop after compile, packaging runs
   on `main` only, the coverage report uploads only on `main` or after a failure, binaries upload

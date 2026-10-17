@@ -41,6 +41,24 @@ tasks.named("check") {
     dependsOn(checkLocalization)
 }
 
+// Device tests only run on a device, so CI only builds them: it compiles each module's and runs the
+// packaging steps an install would fail at (duplicate classes, merged Java resources).
+tasks.register("compileDeviceTests") {
+    group = "verification"
+    description = "Compiles every module's device tests and checks they package, without a device."
+    dependsOn(
+        ":core:compileAndroidDeviceTest",
+        ":composeApp:compileAndroidDeviceTest",
+        ":androidApp:compileDebugAndroidTestKotlin",
+        ":core:checkAndroidDeviceTestDuplicateClasses",
+        ":composeApp:checkAndroidDeviceTestDuplicateClasses",
+        ":androidApp:checkDebugAndroidTestDuplicateClasses",
+        ":core:mergeAndroidDeviceTestJavaResource",
+        ":composeApp:mergeAndroidDeviceTestJavaResource",
+        ":androidApp:mergeDebugAndroidTestJavaResource",
+    )
+}
+
 // Static analysis, configured by config/detekt/detekt.yml, in two runs:
 // - `detekt`: source-only (no type resolution) over every module's source sets. It needs no
 //   compile classpath, so it is fast and runs before the tests. Baseline: detekt-baseline.xml.
