@@ -298,16 +298,14 @@ object NpnPaths {
      * hidden, not a sync-conflict file, not a sync temp file, and at a path this app can address
      * ([isSafe]) — a name no replica could hold is left alone rather than half-managed.
      */
-    fun indexable(meta: FileMeta): Boolean {
-        if (meta.isDirectory) return false
-        if (!isPdf(meta.name)) return false
-        if (!isSafe(meta.relPath)) return false
-        if (isInternal(meta.relPath)) return false
-        if (isHidden(meta.relPath)) return false
-        if (isSyncConflict(meta.name)) return false
-        if (isSyncTemp(meta.name)) return false
-        return true
-    }
+    fun indexable(meta: FileMeta): Boolean =
+        !meta.isDirectory &&
+            isPdf(meta.name) &&
+            isSafe(meta.relPath) &&
+            !isInternal(meta.relPath) &&
+            !isHidden(meta.relPath) &&
+            !isSyncConflict(meta.name) &&
+            !isSyncTemp(meta.name)
 
     /**
      * Normalize a library-relative path: strip leading/trailing slashes, collapse repeats.
