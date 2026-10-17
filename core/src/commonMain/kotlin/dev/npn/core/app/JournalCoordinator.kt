@@ -327,7 +327,7 @@ class JournalCoordinator internal constructor(
                 var refold = false
                 if (staged != null) {
                     indexer.projection {
-                        val recorded = accumulator.ingestObject(staged)
+                        val recorded = accumulator.record(staged)
                         events = recorded.events
                         refold = recorded.refold
                         if (refold || events.isEmpty()) return@projection

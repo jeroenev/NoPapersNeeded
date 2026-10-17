@@ -136,9 +136,6 @@ class MetadataAccumulator(
         val refold: Boolean,
     )
 
-    /** Record the object [staged] read. */
-    suspend fun ingestObject(staged: StagedSource): RecordedSource = record(staged)
-
     /**
      * Read the source [meta] describes, classified as [path], unless it was applied before and is
      * unchanged since: null then. The cheap gate is the stat, an exact match on size and mtime
@@ -164,13 +161,14 @@ class MetadataAccumulator(
         val contentHash = sha256Bytes(bytes)
         val fingerprint = SourceFingerprint(meta.size, meta.mtimeMillis, contentHash)
         if (applied && existing.fingerprint == fingerprint) return null
+        val (kind, read) = readSource(meta.relPath, path, bytes, contentHash)
         return StagedSource(
             relPath = meta.relPath,
-            kind = kindOf(path),
+            kind = kind,
             previouslyApplied = applied,
             fingerprint = fingerprint,
             contentHash = contentHash,
-            read = readSource(meta.relPath, path, bytes, contentHash),
+            read = read,
         )
     }
 
@@ -178,7 +176,7 @@ class MetadataAccumulator(
      * Record [staged]: its events when it read as valid, else why not, failing the pass. A source
      * applied before that no longer reads as valid fails without being recorded.
      */
-    private suspend fun record(staged: StagedSource): RecordedSource =
+    suspend fun record(staged: StagedSource): RecordedSource =
         when (val result = staged.read) {
             is JournalSourceRead.Accepted -> {
                 val source =
@@ -322,7 +320,6 @@ class MetadataAccumulator(
             !pass.projectionCleared &&
                 stored != null &&
                 stored.migrationState == ProjectionStatus.READY &&
-                stored.sourceSetFingerprint != null &&
                 stored.sourceSetFingerprint == sourceSetFingerprint()
         if (reusable) {
             return OpenReconciliation.ProjectionCurrent(
@@ -370,20 +367,12 @@ class MetadataAccumulator(
     }
 
     /**
-     * Fold ONLY the events of [operations]: a slice of the state that is needed without the
-     * whole journal. The library settings are one, read at open time (the review mode and
-     * standard-field choices drive the UI); the trash lifecycle is another, read by the trash
-     * auto-purge for documents with no row. Either is a handful of events against a table holding
-     * every event ever recorded, so the reuse path need not materialize the whole state for them.
+     * Fold ONLY the events of [operation]: a slice of the state that is needed without the whole
+     * journal. The library settings are one, read at open time (the review mode and standard-field
+     * choices drive the UI): a handful of events against a table holding every event ever recorded,
+     * so the reuse path need not materialize the whole state for them.
      */
-    suspend fun loadStateOf(vararg operations: String): FoldedState =
-        FoldedState().also { state ->
-            for (operation in operations) {
-                dao.eventsForOperation(operation).forEach { stored ->
-                    state.apply(EventDecoderRegistry.decodeStored(stored.canonicalJson))
-                }
-            }
-        }
+    suspend fun loadStateOf(operation: String): FoldedState = fold(dao.eventsForOperation(operation))
 
     suspend fun persistAllocator(
         physicalMillis: Long,
@@ -484,9 +473,11 @@ class MetadataAccumulator(
         dao.ingest(local.source, local.events, local.actor)
     }
 
-    suspend fun loadState(): FoldedState =
+    suspend fun loadState(): FoldedState = fold(dao.allEvents())
+
+    private fun fold(events: List<MetadataEventEntity>): FoldedState =
         FoldedState().also { state ->
-            dao.allEvents().forEach { stored -> state.apply(EventDecoderRegistry.decodeStored(stored.canonicalJson)) }
+            events.forEach { stored -> state.apply(EventDecoderRegistry.decodeStored(stored.canonicalJson)) }
         }
 
     private suspend fun fail(message: String): Nothing {
@@ -545,31 +536,26 @@ private fun unseen(
     return read.filter { (it.event.dev to it.event.seq) in keys }.map { it.event }
 }
 
-/** What kind of source a journal file classified as [path] is. */
-private fun kindOf(path: JournalPath): SourceKind =
-    when (path) {
-        is JournalPath.SnapshotV2 -> SourceKind.SNAPSHOT
-        is JournalPath.ObjectV2 -> SourceKind.OBJECT
-        else -> SourceKind.LEGACY_SEGMENT
-    }
-
 /** The lines a tolerant read skipped, one per line, or null when it skipped none. */
 private fun diagnosticOf(read: JournalSourceRead.Accepted): String? =
     read.diagnostics
         .joinToString("\n") { item -> item.line?.let { "line $it: ${item.message}" } ?: item.message }
         .ifEmpty { null }
 
-/** Read a source whose bytes the accumulator loaded and hashed; the v2 readers take that hash. */
+/**
+ * Read a source whose bytes the accumulator loaded and hashed, with the kind of source a journal
+ * file classified as [path] is; the v2 readers take that hash.
+ */
 private fun readSource(
     relPath: String,
     path: JournalPath,
     bytes: ByteArray,
     contentHash: String,
-): JournalSourceRead =
+): Pair<SourceKind, JournalSourceRead> =
     when (path) {
-        is JournalPath.SnapshotV2 -> SnapshotV2Reader.read(relPath, bytes, contentHash)
-        is JournalPath.ObjectV2 -> StorageV2Reader.read(relPath, bytes, contentHash)
-        else -> StorageV1Reader.read(bytes)
+        is JournalPath.SnapshotV2 -> SourceKind.SNAPSHOT to SnapshotV2Reader.read(relPath, bytes, contentHash)
+        is JournalPath.ObjectV2 -> SourceKind.OBJECT to StorageV2Reader.read(relPath, bytes, contentHash)
+        else -> SourceKind.LEGACY_SEGMENT to StorageV1Reader.read(bytes)
     }
 
 /** The row an event is stored as in `metadata_events`. */

@@ -66,8 +66,7 @@ interface FtsDao {
             if (rowid != null) {
                 updateMetadata(rowid, row.fileName, row.tags, row.fields)
             } else {
-                // insertNew's two statements inline: this method is already one transaction, and
-                // calling the @Transaction method would open a savepoint per new document.
+                // A new document's first FTS row, under a newly allocated key.
                 val newRowid = insertKey(FtsKeyEntity(docId = row.docId))
                 insertRow(newRowid, row.docId, row.fileName, row.content, row.tags, row.fields)
                 rowids[row.docId] = newRowid
@@ -82,15 +81,12 @@ interface FtsDao {
     @Transaction
     suspend fun upsertContent(row: FtsDocumentEntity) {
         val rowid = rowidFor(row.docId)
-        if (rowid != null) updateContent(rowid, row.content) else insertNew(row)
-    }
-
-    /** Insert [row] as its document's first FTS row, under a newly allocated key; returns the rowid. */
-    @Transaction
-    suspend fun insertNew(row: FtsDocumentEntity): Long {
-        val rowid = insertKey(FtsKeyEntity(docId = row.docId))
-        insertRow(rowid, row.docId, row.fileName, row.content, row.tags, row.fields)
-        return rowid
+        if (rowid != null) {
+            updateContent(rowid, row.content)
+        } else {
+            val newRowid = insertKey(FtsKeyEntity(docId = row.docId))
+            insertRow(newRowid, row.docId, row.fileName, row.content, row.tags, row.fields)
+        }
     }
 
     @Query("SELECT ftsRowid FROM fts_keys WHERE docId = :docId")
