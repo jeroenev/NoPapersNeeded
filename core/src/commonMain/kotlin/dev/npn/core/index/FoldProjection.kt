@@ -32,48 +32,60 @@ internal sealed interface FoldScope {
         val docs: Set<String>,
         val styledTags: Set<String>,
         val preserveLifecycleDocs: Set<String>,
-        ) : FoldScope {
-            companion object {
-                /**
-                 * The scope of [events], already reduced into [state]: their documents and styled
-                 * tags, plus what a rename, merge, relink or field definition fans out to, and the
-                 * relink predecessors of each document, whose metadata it shows, as a full fold
-                 * projects them.
-                 */
-                fun of(
-                    state: FoldedState,
-                    events: List<JournalEvent>,
-                    preserveLifecycleDocs: Set<String>,
-                ): Events {
-                    val documents = LinkedHashSet<String>()
-                    val styledTags = LinkedHashSet<String>()
-                    for (event in events) {
-                        event.doc?.let(documents::add)
-                        // TagRemove needs no extra scope: its affected document is already added via
-                        // event.doc above. Rename/merge/relink/style fan out to more docs/tags.
-                        when (val op = event.op) {
-                            is JournalOp.TagRename, is JournalOp.TagMerge -> documents.addAll(state.taggedDocs())
-                            is JournalOp.TagStyle -> styledTags += op.tag
-                            is JournalOp.Relink -> {
-                                documents.addAll(state.docsWithMetadata())
-                                documents += op.newDoc
-                            }
-                            // A definition change is library-wide: every document's projection of that
-                            // field depends on its type (the numeric shadow), so all docs with metadata
-                            // are reprojected rather than only the event's own document (there is none).
-                            is JournalOp.FieldDefSet -> documents.addAll(state.docsWithMetadata())
-                            else -> Unit
+    ) : FoldScope {
+        companion object {
+            /**
+             * The scope of [events], already reduced into [state]: their documents and styled
+             * tags, plus what a rename, merge, relink or field definition fans out to, and the
+             * relink predecessors of each document, whose metadata it shows, as a full fold
+             * projects them.
+             */
+            fun of(
+                state: FoldedState,
+                events: List<JournalEvent>,
+                preserveLifecycleDocs: Set<String>,
+            ): Events {
+                val documents = LinkedHashSet<String>()
+                val styledTags = LinkedHashSet<String>()
+                for (event in events) {
+                    event.doc?.let(documents::add)
+                    // TagRemove needs no extra scope: its affected document is already added via
+                    // event.doc above. Rename/merge/relink/style fan out to more docs/tags.
+                    when (val op = event.op) {
+                        is JournalOp.TagRename, is JournalOp.TagMerge -> {
+                            documents.addAll(state.taggedDocs())
+                        }
+
+                        is JournalOp.TagStyle -> {
+                            styledTags += op.tag
+                        }
+
+                        is JournalOp.Relink -> {
+                            documents.addAll(state.docsWithMetadata())
+                            documents += op.newDoc
+                        }
+
+                        // A definition change is library-wide: every document's projection of that
+                        // field depends on its type (the numeric shadow), so all docs with metadata
+                        // are reprojected rather than only the event's own document (there is none).
+                        is JournalOp.FieldDefSet -> {
+                            documents.addAll(state.docsWithMetadata())
+                        }
+
+                        else -> {
+                            Unit
                         }
                     }
-                    for (doc in documents.toList()) {
-                        val current = state.resolveDocId(doc)
-                        documents += current
-                        documents += state.predecessorsOf(current)
-                    }
-                    return Events(documents, styledTags, preserveLifecycleDocs)
                 }
+                for (doc in documents.toList()) {
+                    val current = state.resolveDocId(doc)
+                    documents += current
+                    documents += state.predecessorsOf(current)
+                }
+                return Events(documents, styledTags, preserveLifecycleDocs)
             }
         }
+    }
 
     /** Every document the journal or the index knows. */
     data object WholeDb : FoldScope

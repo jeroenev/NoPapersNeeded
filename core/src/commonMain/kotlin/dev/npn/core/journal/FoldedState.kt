@@ -25,8 +25,7 @@ import dev.npn.core.model.SystemProperty
  * Instances are mutable accumulators; [copy]-style snapshotting is not needed because folding
  * is deterministic regardless of the order events were applied.
  */
-// One accumulator answers every view of the fold; splitting it would split state the views share.
-@Suppress("TooManyFunctions")
+@Suppress("TooManyFunctions") // One accumulator answers every view; a split would split the state they share.
 class FoldedState {
     // --- raw tag data ---
     // doc -> literal tag name -> (dot -> hlc) of live adds
@@ -129,13 +128,20 @@ class FoldedState {
     ): Boolean {
         when (op) {
             is JournalOp.TagRemove -> removedDots.addAll(op.dots)
+
             is JournalOp.TagRename -> addRename(RenameOp(op.from, op.to, hlc, isMerge = false))
+
             is JournalOp.TagMerge -> addRename(RenameOp(op.from, op.to, hlc, isMerge = true))
+
             is JournalOp.TagStyle -> tagStyles.putIfNewerHlc(op.tag, hlc) { StyleVal(op.color, op.icon, hlc) }
+
             is JournalOp.SettingSet -> settings.putIfNewerHlc(op.key, hlc) { PropVal(op.value, hlc) }
+
             is JournalOp.FieldDefSet -> fieldDefs.putIfNewerHlc(op.key, hlc) { DefVal(op.def, hlc) }
+
             // Tolerant skip: an op from a newer build folds to nothing here.
             is JournalOp.Unknown -> Unit
+
             else -> return false
         }
         return true
@@ -153,23 +159,43 @@ class FoldedState {
     ) {
         val hlc = event.hlc
         when (val op = event.op) {
-            is JournalOp.TagAdd -> tagAdds.getOrPut(doc) { HashMap() }.getOrPut(op.tag) { HashMap() }[event.dot] = hlc
-            is JournalOp.PropSet ->
+            is JournalOp.TagAdd -> {
+                tagAdds.getOrPut(doc) { HashMap() }.getOrPut(op.tag) { HashMap() }[event.dot] = hlc
+            }
+
+            is JournalOp.PropSet -> {
                 props.getOrPut(doc) { HashMap() }.putIfNewerHlc(op.key, hlc) { PropVal(op.value, hlc) }
-            is JournalOp.FieldSet ->
+            }
+
+            is JournalOp.FieldSet -> {
                 fields.getOrPut(doc) { HashMap() }.putIfNewerHlc(op.key, hlc) { PropVal(op.value, hlc) }
-            is JournalOp.DocTrash -> trash.putIfNewerHlc(doc, hlc) { TrashVal(trashed = true, op.origPath, hlc) }
-            JournalOp.DocRestore -> trash.putIfNewerHlc(doc, hlc) { TrashVal(trashed = false, null, hlc) }
-            JournalOp.DocDelete -> deleted.keepLatest(doc, hlc)
+            }
+
+            is JournalOp.DocTrash -> {
+                trash.putIfNewerHlc(doc, hlc) { TrashVal(trashed = true, op.origPath, hlc) }
+            }
+
+            JournalOp.DocRestore -> {
+                trash.putIfNewerHlc(doc, hlc) { TrashVal(trashed = false, null, hlc) }
+            }
+
+            JournalOp.DocDelete -> {
+                deleted.keepLatest(doc, hlc)
+            }
+
             JournalOp.DocUndelete -> {
                 undeleted.keepLatest(doc, hlc)
                 trash.putIfNewerHlc(doc, hlc) { TrashVal(trashed = false, null, hlc) }
             }
+
             is JournalOp.Relink -> {
                 relinks.getOrPut(doc) { ArrayList() }.add(RelinkClaim(op.newDoc, hlc))
                 predecessorsCache = null
             }
-            else -> Unit
+
+            else -> {
+                Unit
+            }
         }
     }
 

@@ -132,7 +132,7 @@ internal class Compaction(
  * `core` can obtain the raw writer and skip the mutex, the live [FoldedState] refresh, or the DB
  * projection. Expose new capabilities as named members here rather than widening [writer].
  */
-@Suppress("TooManyFunctions")
+@Suppress("TooManyFunctions") // The one write path: each kind of write is its own named member (see above).
 class JournalCoordinator internal constructor(
     private val writer: ContentAddressedJournalWriter,
     private val indexer: Indexer,
