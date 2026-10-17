@@ -3,6 +3,8 @@ package dev.npn.core.settings
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiReasoningLevel
 import dev.npn.core.ai.AiTagging
+import dev.npn.core.util.NpnLog
+import dev.npn.core.util.RecordingLog
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -29,7 +31,7 @@ class SettingsRepositoryImplTest {
     fun settingsFileIsOwnerOnly() =
         runTest {
             val file = directory.resolve("settings.properties").toFile()
-            SettingsRepositoryImpl(file).edit { it.copy(aiApiKey = "secret") }
+            SettingsRepositoryImpl(NpnLog.None, file).edit { it.copy(aiApiKey = "secret") }
 
             if (supportsPosixView(file)) {
                 Files.getPosixFilePermissions(file.toPath()) shouldBe
@@ -40,6 +42,20 @@ class SettingsRepositoryImplTest {
             }
         }
 
+    @Test
+    fun aSettingsFileThatDoesNotReadIsReportedAndTheDefaultsApply() =
+        runTest {
+            val file = directory.resolve("settings.properties").toFile()
+            // A malformed \u escape is the one thing Properties.load refuses.
+            file.writeText("appLanguage=\\uZZZZ\n")
+            val log = RecordingLog()
+
+            SettingsRepositoryImpl(log, file).settings.first().appLanguage shouldBe null
+
+            log.entries.map { it.message } shouldBe
+                listOf("Reading the settings in $file failed; starting from the defaults")
+        }
+
     private fun supportsPosixView(file: java.io.File): Boolean =
         runCatching { Files.getFileStore(file.toPath()).supportsFileAttributeView("posix") }
             .getOrDefault(false)
@@ -48,7 +64,7 @@ class SettingsRepositoryImplTest {
     fun concurrentUpdatesPersistOneCombinedSnapshot() =
         runTest {
             val file = directory.resolve("settings.properties").toFile()
-            val repository = SettingsRepositoryImpl(file)
+            val repository = SettingsRepositoryImpl(NpnLog.None, file)
 
             listOf(
                 async { repository.edit { it.copy(aiBaseUrl = "https://example.test") } },
@@ -56,7 +72,7 @@ class SettingsRepositoryImplTest {
                 async { repository.edit { it.copy(aiModel = "model") } },
             ).awaitAll()
 
-            val reloaded = SettingsRepositoryImpl(file)
+            val reloaded = SettingsRepositoryImpl(NpnLog.None, file)
             val snapshot = reloaded.settings.first()
             snapshot.aiBaseUrl shouldBe "https://example.test"
             snapshot.aiApiKey shouldBe "secret"
@@ -68,7 +84,7 @@ class SettingsRepositoryImplTest {
         runTest {
             // A directory where the file belongs: every write fails.
             val file = Files.createDirectory(directory.resolve("settings.properties")).toFile()
-            val repository = SettingsRepositoryImpl(file)
+            val repository = SettingsRepositoryImpl(NpnLog.None, file)
             val before = repository.settings.first()
 
             assertFailsWith<IOException> { repository.edit { it.copy(aiModel = "model") } }
@@ -84,14 +100,17 @@ class SettingsRepositoryImplTest {
     fun aWriteCutShortKeepsTheSavedSettings() =
         runTest {
             val file = directory.resolve("settings.properties").toFile()
-            SettingsRepositoryImpl(file).edit { it.copy(aiModel = "model", aiApiKey = "secret") }
-            val saved = SettingsRepositoryImpl(file).settings.first()
+            SettingsRepositoryImpl(NpnLog.None, file).edit { it.copy(aiModel = "model", aiApiKey = "secret") }
+            val saved = SettingsRepositoryImpl(NpnLog.None, file).settings.first()
             val diskFull =
-                SettingsRepositoryImpl(file) { target -> FailingAfter(FileOutputStream(target), bytes = 16) }
+                SettingsRepositoryImpl(
+                    file,
+                    NpnLog.None,
+                ) { target -> FailingAfter(FileOutputStream(target), bytes = 16) }
 
             assertFailsWith<IOException> { diskFull.edit { it.copy(aiModel = "other") } }
 
-            SettingsRepositoryImpl(file).settings.first() shouldBe saved
+            SettingsRepositoryImpl(NpnLog.None, file).settings.first() shouldBe saved
         }
 
     /** Writes [bytes] bytes through to [out], then fails as a full disk does. */
@@ -111,12 +130,12 @@ class SettingsRepositoryImplTest {
     fun aiProviderAndReasoningPersist() =
         runTest {
             val file = directory.resolve("settings.properties").toFile()
-            val repository = SettingsRepositoryImpl(file)
+            val repository = SettingsRepositoryImpl(NpnLog.None, file)
             repository.edit { it.copy(aiProvider = AiProvider.ANTHROPIC) }
             repository.edit { it.copy(aiReasoningAssistant = AiReasoningLevel.MEDIUM) }
             repository.edit { it.copy(aiReasoningEdit = AiReasoningLevel.NONE) }
 
-            val snapshot = SettingsRepositoryImpl(file).settings.first()
+            val snapshot = SettingsRepositoryImpl(NpnLog.None, file).settings.first()
             snapshot.aiProvider shouldBe AiProvider.ANTHROPIC
             snapshot.aiReasoningAssistant shouldBe AiReasoningLevel.MEDIUM
             snapshot.aiReasoningEdit shouldBe AiReasoningLevel.NONE
@@ -128,10 +147,10 @@ class SettingsRepositoryImplTest {
             // Default off matters more than persistence here: this switch bills per page, so a
             // settings file that predates it must never load as "on".
             val file = directory.resolve("settings.properties").toFile()
-            SettingsRepositoryImpl(file).settings.first().aiOcrAuto shouldBe false
+            SettingsRepositoryImpl(NpnLog.None, file).settings.first().aiOcrAuto shouldBe false
 
-            SettingsRepositoryImpl(file).edit { it.copy(aiOcrAuto = true) }
-            val snapshot = SettingsRepositoryImpl(file).settings.first()
+            SettingsRepositoryImpl(NpnLog.None, file).edit { it.copy(aiOcrAuto = true) }
+            val snapshot = SettingsRepositoryImpl(NpnLog.None, file).settings.first()
             snapshot.aiOcrAuto shouldBe true
             snapshot.toAiConfig().ocrAuto shouldBe true
         }
@@ -144,7 +163,7 @@ class SettingsRepositoryImplTest {
             val file = directory.resolve("settings.properties").toFile()
             file.writeText("aiEnabled=true\naiBaseUrl=http\\://localhost\\:11434\naiModel=qwen3\\:8b\n")
 
-            val snapshot = SettingsRepositoryImpl(file).settings.first()
+            val snapshot = SettingsRepositoryImpl(NpnLog.None, file).settings.first()
             snapshot.aiProvider shouldBe AiProvider.CUSTOM
             snapshot.aiReasoningAssistant shouldBe AiReasoningLevel.DEFAULT
             snapshot.aiReasoningEdit shouldBe AiReasoningLevel.LOW
@@ -154,7 +173,7 @@ class SettingsRepositoryImplTest {
     fun freshSettingsDefaultToFirstProvider() =
         runTest {
             val file = directory.resolve("settings.properties").toFile()
-            SettingsRepositoryImpl(file).settings.first().aiProvider shouldBe AiProvider.OPENAI
+            SettingsRepositoryImpl(NpnLog.None, file).settings.first().aiProvider shouldBe AiProvider.OPENAI
         }
 
     @Test
@@ -163,11 +182,11 @@ class SettingsRepositoryImplTest {
             val file = directory.resolve("settings.properties").toFile()
             // Caller passes values outside the allowed ranges; the repository (via SettingsCodec)
             // coerces them, so neither a write nor a reload can hold an out-of-range value.
-            SettingsRepositoryImpl(file).edit {
+            SettingsRepositoryImpl(NpnLog.None, file).edit {
                 it.copy(aiMaxTagsPerDoc = 999, aiMaxNewTagsPerDoc = -5, gridColumnWidth = 10)
             }
 
-            val snapshot = SettingsRepositoryImpl(file).settings.first()
+            val snapshot = SettingsRepositoryImpl(NpnLog.None, file).settings.first()
             snapshot.aiMaxTagsPerDoc shouldBe AiTagging.MAX_TAGS_PER_DOC
             snapshot.aiMaxNewTagsPerDoc shouldBe AiTagging.MIN_NEW_TAGS_PER_DOC
             snapshot.gridColumnWidth shouldBe GridSizing.MIN_COLUMN_WIDTH
@@ -177,13 +196,13 @@ class SettingsRepositoryImplTest {
     fun appLanguagePersistsAndClears() =
         runTest {
             val file = directory.resolve("settings.properties").toFile()
-            SettingsRepositoryImpl(file).edit { it.copy(appLanguage = "nl") }
+            SettingsRepositoryImpl(NpnLog.None, file).edit { it.copy(appLanguage = "nl") }
 
-            var reloaded = SettingsRepositoryImpl(file)
+            var reloaded = SettingsRepositoryImpl(NpnLog.None, file)
             reloaded.settings.first().appLanguage shouldBe "nl"
 
-            SettingsRepositoryImpl(file).edit { it.copy(appLanguage = null) }
-            reloaded = SettingsRepositoryImpl(file)
+            SettingsRepositoryImpl(NpnLog.None, file).edit { it.copy(appLanguage = null) }
+            reloaded = SettingsRepositoryImpl(NpnLog.None, file)
             reloaded.settings.first().appLanguage shouldBe null
         }
 
@@ -191,17 +210,17 @@ class SettingsRepositoryImplTest {
     fun ocrLanguagesDefaultToAutomaticAndPersistAChoice() =
         runTest {
             val file = directory.resolve("settings.properties").toFile()
-            SettingsRepositoryImpl(file).settings.first().ocrLanguage shouldBe null
+            SettingsRepositoryImpl(NpnLog.None, file).settings.first().ocrLanguage shouldBe null
 
             // A choice of English only is still a choice, not the automatic default.
-            SettingsRepositoryImpl(file).edit { it.copy(ocrLanguage = "eng") }
-            SettingsRepositoryImpl(file).settings.first().ocrLanguage shouldBe "eng"
+            SettingsRepositoryImpl(NpnLog.None, file).edit { it.copy(ocrLanguage = "eng") }
+            SettingsRepositoryImpl(NpnLog.None, file).settings.first().ocrLanguage shouldBe "eng"
 
-            SettingsRepositoryImpl(file).edit { it.copy(ocrLanguage = "nld + eng") }
-            SettingsRepositoryImpl(file).settings.first().ocrLanguage shouldBe "nld+eng"
+            SettingsRepositoryImpl(NpnLog.None, file).edit { it.copy(ocrLanguage = "nld + eng") }
+            SettingsRepositoryImpl(NpnLog.None, file).settings.first().ocrLanguage shouldBe "nld+eng"
 
-            SettingsRepositoryImpl(file).edit { it.copy(ocrLanguage = null) }
-            SettingsRepositoryImpl(file).settings.first().ocrLanguage shouldBe null
+            SettingsRepositoryImpl(NpnLog.None, file).edit { it.copy(ocrLanguage = null) }
+            SettingsRepositoryImpl(NpnLog.None, file).settings.first().ocrLanguage shouldBe null
         }
 
     @Test
@@ -210,15 +229,15 @@ class SettingsRepositoryImplTest {
             // Every install before the language picker stored a single code, "eng" by default.
             val file = directory.resolve("settings.properties").toFile()
             file.writeText("ocrLanguage=eng\n")
-            SettingsRepositoryImpl(file).settings.first().ocrLanguage shouldBe null
+            SettingsRepositoryImpl(NpnLog.None, file).settings.first().ocrLanguage shouldBe null
 
             file.writeText("ocrLanguage=fra\n")
-            SettingsRepositoryImpl(file).settings.first().ocrLanguage shouldBe "fra"
+            SettingsRepositoryImpl(NpnLog.None, file).settings.first().ocrLanguage shouldBe "fra"
 
             // The next write moves it to the new key and drops the old one.
-            SettingsRepositoryImpl(file).edit { it.copy(appLanguage = "fr") }
+            SettingsRepositoryImpl(NpnLog.None, file).edit { it.copy(appLanguage = "fr") }
             file.readText().lines().none { it.startsWith("ocrLanguage=") } shouldBe true
-            SettingsRepositoryImpl(file).settings.first().ocrLanguage shouldBe "fra"
+            SettingsRepositoryImpl(NpnLog.None, file).settings.first().ocrLanguage shouldBe "fra"
         }
 
     /**
@@ -229,11 +248,11 @@ class SettingsRepositoryImplTest {
     fun aStoredTrashRetentionIsKeptForLibrariesToAdopt() =
         runTest {
             val file = directory.resolve("settings.properties").toFile()
-            SettingsRepositoryImpl(file).legacyLibrarySettings().trashRetentionDays shouldBe null
+            SettingsRepositoryImpl(NpnLog.None, file).legacyLibrarySettings().trashRetentionDays shouldBe null
 
             file.writeText("trashRetentionDays=7\n")
-            SettingsRepositoryImpl(file).edit { it.copy(appLanguage = "fr") }
+            SettingsRepositoryImpl(NpnLog.None, file).edit { it.copy(appLanguage = "fr") }
 
-            SettingsRepositoryImpl(file).legacyLibrarySettings().trashRetentionDays shouldBe 7
+            SettingsRepositoryImpl(NpnLog.None, file).legacyLibrarySettings().trashRetentionDays shouldBe 7
         }
 }

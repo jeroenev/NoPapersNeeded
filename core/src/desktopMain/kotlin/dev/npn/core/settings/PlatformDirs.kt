@@ -7,6 +7,7 @@ package dev.npn.core.settings
 object PlatformDirs {
     /** The app's directory name under the platform data and config homes. */
     private const val APP_DIR = "no-papers-needed"
+
     /** Whether this JVM runs on Windows. */
     val isWindows =
         System.getProperty("os.name")?.startsWith("Windows", ignoreCase = true) ?: false

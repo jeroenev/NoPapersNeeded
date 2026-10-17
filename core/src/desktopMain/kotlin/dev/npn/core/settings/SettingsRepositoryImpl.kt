@@ -1,5 +1,7 @@
 package dev.npn.core.settings
 
+import dev.npn.core.util.NpnLog
+import dev.npn.core.util.warn
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,10 +33,12 @@ import kotlin.uuid.Uuid
  */
 class SettingsRepositoryImpl internal constructor(
     private val file: File,
+    /** Where a settings file that cannot be read or saved at load is reported. */
+    private val log: NpnLog,
     /** Opens the stream a write goes to: a file's own stream, but a test hands one that fails partway. */
     private val openForWrite: (File) -> OutputStream,
 ) : SettingsRepository {
-    constructor(file: File = defaultFile()) : this(file, { FileOutputStream(it) })
+    constructor(log: NpnLog, file: File = defaultFile()) : this(file, log, { FileOutputStream(it) })
 
     private val props = Properties()
     private val isWindows = PlatformDirs.isWindows
@@ -85,13 +89,17 @@ class SettingsRepositoryImpl internal constructor(
     private fun load(): SettingsSnapshot {
         if (file.exists()) {
             restrictFilePermissions()
+            // A file that does not read is reported, and the app starts on the defaults rather than
+            // not at all.
             runCatching { file.inputStream().use { props.load(it) } }
+                .onFailure { log.warn("Reading the settings in $file failed; starting from the defaults", it) }
         }
         val installationId =
             props.getProperty(SettingsKeys.INSTALLATION_ID)
                 ?: Uuid.random().toString().also { fresh ->
                     props.setProperty(SettingsKeys.INSTALLATION_ID, fresh)
                     runCatching { storeProperties() }
+                        .onFailure { log.warn("Saving this installation's new id in $file failed", it) }
                 }
         return SettingsCodec.load(reader, installationId)
     }

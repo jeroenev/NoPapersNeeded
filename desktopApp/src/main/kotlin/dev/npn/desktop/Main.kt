@@ -64,7 +64,7 @@ fun main() {
 /** The second instance's whole life: say the app is already open, then exit. */
 private fun showAlreadyRunning() =
     application {
-        val settings = remember { SettingsRepositoryImpl() }
+        val settings = remember { SettingsRepositoryImpl(DesktopLog) }
         DialogWindow(
             onCloseRequest = ::exitApplication,
             title = stringResource(Res.string.common_app_name),

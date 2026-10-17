@@ -19,7 +19,7 @@ import java.nio.file.Path
  * repository.
  */
 fun createAppEnvironment(): AppEnvironment {
-    val settings = SettingsRepositoryImpl()
+    val settings = SettingsRepositoryImpl(DesktopLog)
     return DefaultAppEnvironment(
         settings,
         watchedFolder = { location -> JvmWatchedFolder(Path.of(location)) },

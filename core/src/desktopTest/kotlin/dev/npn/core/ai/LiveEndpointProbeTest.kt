@@ -3,6 +3,7 @@ package dev.npn.core.ai
 import dev.npn.core.db.TempIndexDb
 import dev.npn.core.settings.SettingsRepositoryImpl
 import dev.npn.core.settings.toAiConfig
+import dev.npn.core.util.NpnLog
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -127,7 +128,7 @@ class LiveEndpointProbeTest {
      * would be the wrong answer.
      */
     private fun liveConfig(): AiConfig {
-        val stored = runBlocking { SettingsRepositoryImpl().settings.first() }.toAiConfig()
+        val stored = runBlocking { SettingsRepositoryImpl(NpnLog.None).settings.first() }.toAiConfig()
         val config =
             stored.copy(
                 enabled = true,
