@@ -36,12 +36,16 @@ jobs:
 
       # Only the packages whose behaviour depends on the OS: the real filesystem (paths,
       # no-replace publication, trash, moves), the bundled SQLite, the file watcher, Tesseract
-      # and PDFBox file I/O. Domain logic, AI and viewmodel tests behave identically on every
-      # JVM and already run in ci.yml.
+      # and PDFBox file I/O. That includes the library session's suites (app), which drive
+      # imports, bakes, trash, renames and moves through real files, and the device settings
+      # file. Domain logic, AI and viewmodel tests behave identically on every JVM and already
+      # run in ci.yml.
       - name: Tests (platform-specific)
         shell: bash
         run: >-
           ./gradlew.bat :core:desktopTest
+          --tests 'dev.npn.core.app.*'
+          --tests 'dev.npn.core.settings.*'
           --tests 'dev.npn.core.fs.*'
           --tests 'dev.npn.core.db.*'
           --tests 'dev.npn.core.index.*'
