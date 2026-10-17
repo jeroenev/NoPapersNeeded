@@ -16,9 +16,15 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
+import dev.npn.app.EnglishLocaleTest
 import dev.npn.app.resourcesIn
+import dev.npn.app.ui.click
 import dev.npn.app.ui.common.LocalAppLocale
+import dev.npn.app.ui.nodes
+import dev.npn.app.ui.onUiThread
+import dev.npn.app.ui.texts
 import dev.npn.app.ui.theme.NpnTheme
+import dev.npn.app.ui.type
 import dev.npn.core.app.FieldRange
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.model.FieldDef
@@ -33,29 +39,13 @@ import no_papers_needed.composeapp.generated.resources.library_clear_all
 import no_papers_needed.composeapp.generated.resources.library_from
 import org.jetbrains.compose.resources.getString
 import java.util.Locale
-import javax.swing.SwingUtilities
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /**
  * A number range bound typed key by key into the filter panel, the bound coming back from the draft
  * the way the panel feeds it: only an entry that parses is committed, in canonical form.
  */
-class FilterNumberBoundTest {
-    private var previousLocale: Locale? = null
-
-    @BeforeTest
-    fun pinEnglishLocale() {
-        previousLocale = Locale.getDefault()
-        Locale.setDefault(Locale.ENGLISH)
-    }
-
-    @AfterTest
-    fun restoreLocale() {
-        previousLocale?.let { Locale.setDefault(it) }
-    }
-
+class FilterNumberBoundTest : EnglishLocaleTest() {
     @Test
     fun aDecimalBoundIsKeptAsTypedAndApplied() {
         val words = Words.of(Locale.ENGLISH)
@@ -262,29 +252,6 @@ class FilterNumberBoundTest {
         } finally {
             panel.scene.close()
         }
-    }
-
-    private fun SemanticsNode.texts(): List<String> =
-        config.getOrNull(SemanticsProperties.Text).orEmpty().map { it.text }
-
-    private fun ImageComposeScene.nodes(): List<SemanticsNode> {
-        fun descendants(node: SemanticsNode): List<SemanticsNode> = listOf(node) + node.children.flatMap(::descendants)
-        return semanticsOwners.flatMap { descendants(it.rootSemanticsNode) }
-    }
-
-    /** Click the nearest clickable node at or above the first node [match] finds. */
-    private fun ImageComposeScene.click(match: (SemanticsNode) -> Boolean) {
-        generateSequence(nodes().first(match)) { it.parent }
-            .first { it.config.getOrNull(SemanticsActions.OnClick) != null }
-            .config[SemanticsActions.OnClick]
-            .action
-            ?.invoke()
-    }
-
-    private fun onUiThread(block: () -> Unit) {
-        var failure: Throwable? = null
-        SwingUtilities.invokeAndWait { runCatching(block).onFailure { failure = it } }
-        failure?.let { throw it }
     }
 
     private companion object {

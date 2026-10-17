@@ -7,10 +7,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.ImageComposeScene
-import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.semantics.SemanticsNode
-import androidx.compose.ui.semantics.SemanticsProperties
-import androidx.compose.ui.semantics.getOrNull
+import dev.npn.app.EnglishLocaleTest
+import dev.npn.app.ui.click
+import dev.npn.app.ui.contentDescription
+import dev.npn.app.ui.onUiThread
 import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySort
@@ -20,31 +20,14 @@ import dev.npn.core.testing.FakeDocContentFacade
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
-import java.util.Locale
 import java.util.concurrent.CopyOnWriteArrayList
-import javax.swing.SwingUtilities
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /**
  * [DocGrid]'s zoom against a real composition, with a persisted width that comes back on its own
  * schedule, the way a settings write does.
  */
-class DocGridZoomTest {
-    private var previousLocale: Locale? = null
-
-    @BeforeTest
-    fun pinEnglishLocale() {
-        previousLocale = Locale.getDefault()
-        Locale.setDefault(Locale.ENGLISH)
-    }
-
-    @AfterTest
-    fun restoreLocale() {
-        previousLocale?.let { Locale.setDefault(it) }
-    }
-
+class DocGridZoomTest : EnglishLocaleTest() {
     @Test
     fun aLateEchoOfAnEarlierCommitDoesNotUndoALaterZoom() =
         onUiThread {
@@ -101,13 +84,7 @@ class DocGridZoomTest {
         )
 
     private fun ImageComposeScene.zoomIn() {
-        nodes()
-            .first { it.config.getOrNull(SemanticsProperties.ContentDescription)?.firstOrNull() == "Larger grid items" }
-            .let { generateSequence(it) { node -> node.parent } }
-            .first { it.config.getOrNull(SemanticsActions.OnClick) != null }
-            .config[SemanticsActions.OnClick]
-            .action
-            ?.invoke()
+        click { it.contentDescription() == "Larger grid items" }
         render()
     }
 
@@ -121,17 +98,6 @@ class DocGridZoomTest {
             Thread.sleep(POLL_MS)
             render()
         }
-    }
-
-    private fun ImageComposeScene.nodes(): List<SemanticsNode> {
-        fun descendants(node: SemanticsNode): List<SemanticsNode> = listOf(node) + node.children.flatMap(::descendants)
-        return semanticsOwners.flatMap { descendants(it.rootSemanticsNode) }
-    }
-
-    private fun onUiThread(block: () -> Unit) {
-        var failure: Throwable? = null
-        SwingUtilities.invokeAndWait { runCatching(block).onFailure { failure = it } }
-        failure?.let { throw it }
     }
 
     private companion object {

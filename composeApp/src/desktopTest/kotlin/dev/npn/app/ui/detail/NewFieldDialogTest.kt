@@ -10,9 +10,18 @@ import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.text.AnnotatedString
+import dev.npn.app.EnglishLocaleTest
 import dev.npn.app.resourcesIn
+import dev.npn.app.ui.click
 import dev.npn.app.ui.common.LocalAppLocale
+import dev.npn.app.ui.hasError
+import dev.npn.app.ui.isEditable
+import dev.npn.app.ui.isEnabled
+import dev.npn.app.ui.nodes
+import dev.npn.app.ui.onUiThread
+import dev.npn.app.ui.texts
 import dev.npn.app.ui.theme.NpnTheme
+import dev.npn.app.ui.type
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.runBlocking
 import no_papers_needed.composeapp.generated.resources.Res
@@ -22,28 +31,13 @@ import no_papers_needed.composeapp.generated.resources.common_field_type_text
 import no_papers_needed.composeapp.generated.resources.common_save
 import org.jetbrains.compose.resources.getString
 import java.util.Locale
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /**
  * The document panel's "New field" dialog in Dutch, where a comma is the decimal point: what it
  * confirms is what its value editor shows and reads, never a canonical reading of refused text.
  */
-class NewFieldDialogTest {
-    private var previousLocale: Locale? = null
-
-    @BeforeTest
-    fun pinEnglishLocale() {
-        previousLocale = Locale.getDefault()
-        Locale.setDefault(Locale.ENGLISH)
-    }
-
-    @AfterTest
-    fun restoreLocale() {
-        previousLocale?.let { Locale.setDefault(it) }
-    }
-
+class NewFieldDialogTest : EnglishLocaleTest() {
     @Test
     fun aDotDecimalCannotBeConfirmed() {
         val words = Words.dutch()

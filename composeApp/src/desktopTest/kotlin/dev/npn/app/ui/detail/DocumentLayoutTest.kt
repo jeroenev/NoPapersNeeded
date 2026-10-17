@@ -4,7 +4,6 @@ package dev.npn.app.ui.detail
 
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
@@ -12,11 +11,13 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.Density
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.LifecycleRegistry
-import androidx.lifecycle.compose.LocalLifecycleOwner
+import dev.npn.app.EnglishLocaleTest
 import dev.npn.app.ui.common.ProvideWindowWidthClass
+import dev.npn.app.ui.editableText
+import dev.npn.app.ui.hostedScene
+import dev.npn.app.ui.nodes
+import dev.npn.app.ui.onUiThread
+import dev.npn.app.ui.texts
 import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.app.DocListItem
@@ -28,33 +29,12 @@ import dev.npn.core.testing.doc
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import java.io.File
-import java.util.Locale
-import javax.swing.SwingUtilities
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /** Render real Compose layouts at phone and desktop widths without a window or external service. */
-class DocumentLayoutTest {
-    private var previousLocale: Locale? = null
-
-    /**
-     * Compose resources resolve against the JVM default locale, and the assertions below name
-     * strings from `values/`. Pin English so the test does not depend on the machine's locale.
-     */
-    @BeforeTest
-    fun pinEnglishLocale() {
-        previousLocale = Locale.getDefault()
-        Locale.setDefault(Locale.ENGLISH)
-    }
-
-    @AfterTest
-    fun restoreLocale() {
-        previousLocale?.let { Locale.setDefault(it) }
-    }
-
+class DocumentLayoutTest : EnglishLocaleTest() {
     @Test
     fun desktopShowsPdfBesideEditableDetails() =
         onUiThread {
@@ -152,73 +132,56 @@ class DocumentLayoutTest {
         fontScale: Float = 1f,
         ai: AiPanelState = AiPanelState(),
     ): ImageComposeScene {
-        val owner =
-            object : LifecycleOwner {
-                override val lifecycle =
-                    LifecycleRegistry
-                        .createUnsafe(
-                            this,
-                        ).apply { currentState = Lifecycle.State.RESUMED }
-            }
         val store = DocumentDrafts(FakeMetadataWriter(), CoroutineScope(Dispatchers.Unconfined))
         // An actual change, so the scene renders the save bar in its unsaved state.
         store.field("invoice", FieldKeys.TITLE, "Electricity invoice 2026", persisted = "Electricity invoice")
-        return ImageComposeScene(width, height, density = Density(1f, fontScale)) {
-            CompositionLocalProvider(LocalLifecycleOwner provides owner, LocalDocumentDrafts provides store) {
-                // The scene is the window: wide or compact from its width, as the app root decides.
-                ProvideWindowWidthClass {
-                    NpnTheme(darkTheme = false) {
-                        Surface {
-                            DocumentEditor(
-                                state =
-                                    MetadataUiState(
-                                        document =
-                                            DocumentSection(
-                                                loadState =
-                                                    DocLoadState.Present(
-                                                        DocListItem(
-                                                            doc("invoice", title = "Electricity invoice"),
-                                                            listOf("Utilities"),
-                                                        ),
+        return hostedScene(width, height, LocalDocumentDrafts provides store, density = Density(1f, fontScale)) {
+            // The scene is the window: wide or compact from its width, as the app root decides.
+            ProvideWindowWidthClass {
+                NpnTheme(darkTheme = false) {
+                    Surface {
+                        DocumentEditor(
+                            state =
+                                MetadataUiState(
+                                    document =
+                                        DocumentSection(
+                                            loadState =
+                                                DocLoadState.Present(
+                                                    DocListItem(
+                                                        doc("invoice", title = "Electricity invoice"),
+                                                        listOf("Utilities"),
                                                     ),
-                                                reviewMode = ReviewMode.INBOX_WORKFLOW,
-                                                // The panel renders fields from the registry; seed it as a
-                                                // library would.
-                                                fieldDefs =
-                                                    FieldKeys.seedDefinitions {
-                                                        FieldKeys.SEED_LABELS.getValue(
-                                                            it,
-                                                        )
-                                                    },
-                                            ),
-                                        ai = ai,
-                                    ),
-                                writes = NoWrites,
-                                preview = { Text("PDF preview", modifier = it) },
-                                onReviewNext = {},
-                                hasNext = true,
-                            )
-                        }
+                                                ),
+                                            reviewMode = ReviewMode.INBOX_WORKFLOW,
+                                            // The panel renders fields from the registry; seed it as a
+                                            // library would.
+                                            fieldDefs =
+                                                FieldKeys.seedDefinitions {
+                                                    FieldKeys.SEED_LABELS.getValue(
+                                                        it,
+                                                    )
+                                                },
+                                        ),
+                                    ai = ai,
+                                ),
+                            writes = NoWrites,
+                            preview = { Text("PDF preview", modifier = it) },
+                            onReviewNext = {},
+                            hasNext = true,
+                        )
                     }
                 }
             }
         }
     }
 
-    private fun ImageComposeScene.nodes(): List<SemanticsNode> {
-        fun descendants(node: SemanticsNode): List<SemanticsNode> = listOf(node) + node.children.flatMap(::descendants)
-        return semanticsOwners.flatMap { descendants(it.rootSemanticsNode) }
-    }
-
-    private fun ImageComposeScene.text(value: String): SemanticsNode? =
-        nodes().firstOrNull { node ->
-            node.config.getOrNull(SemanticsProperties.Text)?.any { it.text == value } == true
-        }
+    private fun ImageComposeScene.text(value: String): SemanticsNode? = nodes().firstOrNull { value in it.texts() }
 
     /** The text field currently holding [value], by its editable content rather than its label. */
     private fun ImageComposeScene.editable(value: String): SemanticsNode? =
-        nodes().firstOrNull { node ->
-            node.config.getOrNull(SemanticsProperties.EditableText)?.text == value
+        nodes().firstOrNull {
+            it.editableText() ==
+                value
         }
 
     private fun save(
@@ -228,12 +191,6 @@ class DocumentLayoutTest {
         val target = File("build/reports/ui/$name.png")
         target.parentFile.mkdirs()
         scene.render().use { image -> image.encodeToData()?.use { target.writeBytes(it.bytes) } }
-    }
-
-    private fun onUiThread(block: () -> Unit) {
-        var failure: Throwable? = null
-        SwingUtilities.invokeAndWait { runCatching(block).onFailure { failure = it } }
-        failure?.let { throw it }
     }
 }
 

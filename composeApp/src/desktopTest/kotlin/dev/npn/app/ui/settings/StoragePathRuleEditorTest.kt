@@ -9,11 +9,11 @@ import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.text.AnnotatedString
-import dev.npn.app.ui.detail.click
-import dev.npn.app.ui.detail.isEnabled
-import dev.npn.app.ui.detail.node
-import dev.npn.app.ui.detail.nodes
-import dev.npn.app.ui.detail.onUiThread
+import dev.npn.app.ui.click
+import dev.npn.app.ui.isEnabled
+import dev.npn.app.ui.node
+import dev.npn.app.ui.nodes
+import dev.npn.app.ui.onUiThread
 import dev.npn.app.ui.theme.NpnTheme
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe

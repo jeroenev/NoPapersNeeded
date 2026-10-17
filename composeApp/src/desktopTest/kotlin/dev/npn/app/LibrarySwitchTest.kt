@@ -4,7 +4,6 @@ package dev.npn.app
 
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -12,19 +11,14 @@ import androidx.compose.runtime.saveable.LocalSaveableStateRegistry
 import androidx.compose.runtime.saveable.SaveableStateRegistry
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.ImageComposeScene
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelStore
-import androidx.lifecycle.ViewModelStoreOwner
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import dev.npn.app.ui.detail.onUiThread
+import dev.npn.app.ui.hostedScene
+import dev.npn.app.ui.onUiThread
+import dev.npn.app.ui.viewModelStoreOwner
 import dev.npn.core.app.LibrarySession
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeSameInstanceAs
@@ -32,17 +26,14 @@ import io.kotest.matchers.types.shouldNotBeSameInstanceAs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
-import java.util.Locale
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /**
  * A library's screens belong to its session: switching to another library, straight or through
  * none, leaves nothing of them running, while a change of the app's language keeps them as they are.
  */
-class LibrarySwitchTest {
-    private var previousLocale: Locale? = null
+class LibrarySwitchTest : EnglishLocaleTest() {
     private val scope = CoroutineScope(Job())
     private val settings = FakeSettingsRepository()
     private val first = FakeLibrarySession()
@@ -57,16 +48,9 @@ class LibrarySwitchTest {
         }
     }
 
-    @BeforeTest
-    fun pinEnglishLocale() {
-        previousLocale = Locale.getDefault()
-        Locale.setDefault(Locale.ENGLISH)
-    }
-
     @AfterTest
     fun restore() {
         scope.cancel()
-        previousLocale?.let { Locale.setDefault(it) }
     }
 
     @Test
@@ -158,10 +142,7 @@ class LibrarySwitchTest {
     private inner class Window {
         var shown: LibraryUi? = null
         val probes = mutableListOf<Probe>()
-        private val viewModels =
-            object : ViewModelStoreOwner {
-                override val viewModelStore = ViewModelStore()
-            }
+        private val viewModels = viewModelStoreOwner()
         private var registry = SaveableStateRegistry(null) { true }
         private var scene = compose()
 
@@ -179,18 +160,9 @@ class LibrarySwitchTest {
         fun close() = scene.close()
 
         private fun compose(): ImageComposeScene {
-            val lifecycle =
-                object : LifecycleOwner {
-                    override val lifecycle =
-                        LifecycleRegistry.createUnsafe(this).apply { currentState = Lifecycle.State.RESUMED }
-                }
             val registry = registry
-            return ImageComposeScene(WIDTH, HEIGHT) {
-                CompositionLocalProvider(
-                    LocalLifecycleOwner provides lifecycle,
-                    LocalViewModelStoreOwner provides viewModels,
-                    LocalSaveableStateRegistry provides registry,
-                ) { LibraryScreens() }
+            return hostedScene(WIDTH, HEIGHT, LocalSaveableStateRegistry provides registry, viewModels = viewModels) {
+                LibraryScreens()
             }
         }
 

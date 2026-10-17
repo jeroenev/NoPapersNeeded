@@ -15,6 +15,9 @@ import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.state.ToggleableState
+import dev.npn.app.EnglishLocaleTest
+import dev.npn.app.ui.nodes
+import dev.npn.app.ui.onUiThread
 import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySort
@@ -23,27 +26,10 @@ import dev.npn.core.app.SortField
 import dev.npn.core.model.ReviewMode
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
-import java.util.Locale
-import javax.swing.SwingUtilities
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /** The library's open dialog, and the filter draft inside it, survive the screen being recreated. */
-class LibraryDialogTest {
-    private var previousLocale: Locale? = null
-
-    @BeforeTest
-    fun pinEnglishLocale() {
-        previousLocale = Locale.getDefault()
-        Locale.setDefault(Locale.ENGLISH)
-    }
-
-    @AfterTest
-    fun restoreLocale() {
-        previousLocale?.let { Locale.setDefault(it) }
-    }
-
+class LibraryDialogTest : EnglishLocaleTest() {
     @Test
     fun everyDialogSavesAndRestores() {
         val view = SavedView("v1", "Invoices", LibraryFilter(tagsAll = listOf("invoice")), LibrarySort(SortField.Name))
@@ -182,17 +168,6 @@ class LibraryDialogTest {
 
     private fun ImageComposeScene.untaggedSwitch(): SemanticsNode? =
         nodes().firstOrNull { it.config.getOrNull(SemanticsProperties.ToggleableState) != null }
-
-    private fun ImageComposeScene.nodes(): List<SemanticsNode> {
-        fun descendants(node: SemanticsNode): List<SemanticsNode> = listOf(node) + node.children.flatMap(::descendants)
-        return semanticsOwners.flatMap { descendants(it.rootSemanticsNode) }
-    }
-
-    private fun onUiThread(block: () -> Unit) {
-        var failure: Throwable? = null
-        SwingUtilities.invokeAndWait { runCatching(block).onFailure { failure = it } }
-        failure?.let { throw it }
-    }
 
     private companion object {
         const val WIDTH = 480

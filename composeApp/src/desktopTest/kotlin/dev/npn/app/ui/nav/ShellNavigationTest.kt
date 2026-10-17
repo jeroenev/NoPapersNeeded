@@ -3,24 +3,16 @@
 package dev.npn.app.ui.nav
 
 import androidx.compose.material3.Text
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
-import androidx.compose.ui.ImageComposeScene
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelStore
-import androidx.lifecycle.ViewModelStoreOwner
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import dev.npn.app.ui.detail.onUiThread
+import dev.npn.app.ui.hostedScene
+import dev.npn.app.ui.onUiThread
 import io.kotest.assertions.withClue
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
@@ -133,35 +125,21 @@ class ShellNavigationTest {
         lateinit var nav: NavHostController
         val probes = mutableListOf<Probe>()
         private var time = 0L
-        private val viewModels =
-            object : ViewModelStoreOwner {
-                override val viewModelStore = ViewModelStore()
-            }
-        private val lifecycle =
-            object : LifecycleOwner {
-                override val lifecycle =
-                    LifecycleRegistry.createUnsafe(this).apply { currentState = Lifecycle.State.RESUMED }
-            }
         private val scene =
-            ImageComposeScene(WIDTH, HEIGHT) {
-                CompositionLocalProvider(
-                    LocalLifecycleOwner provides lifecycle,
-                    LocalViewModelStoreOwner provides viewModels,
-                ) {
-                    val controller = rememberNavController()
-                    nav = controller
-                    NavHost(controller, startDestination = Route.Library) {
-                        composable<Route.Library> { Text("Library") }
-                        composable<Route.TagManagement> { Text("Tags") }
-                        composable<Route.Trash> { Text("Trash") }
-                        composable<Route.Queue> { Text("Queue") }
-                        composable<Route.Settings> { Text("Settings") }
-                        composable<Route.AiChat> { Text("AiChat") }
-                        composable<Route.AiEdit> {
-                            val probe = viewModel { Probe() }
-                            remember(probe) { probes += probe }
-                            Text("AiEdit")
-                        }
+            hostedScene(WIDTH, HEIGHT) {
+                val controller = rememberNavController()
+                nav = controller
+                NavHost(controller, startDestination = Route.Library) {
+                    composable<Route.Library> { Text("Library") }
+                    composable<Route.TagManagement> { Text("Tags") }
+                    composable<Route.Trash> { Text("Trash") }
+                    composable<Route.Queue> { Text("Queue") }
+                    composable<Route.Settings> { Text("Settings") }
+                    composable<Route.AiChat> { Text("AiChat") }
+                    composable<Route.AiEdit> {
+                        val probe = viewModel { Probe() }
+                        remember(probe) { probes += probe }
+                        Text("AiEdit")
                     }
                 }
             }

@@ -11,10 +11,10 @@ import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.nav.NavigationShell
 import dev.npn.app.ui.nav.QueueStatus
 import dev.npn.app.ui.nav.TopLevelDestination
+import dev.npn.app.ui.onUiThread
 import io.kotest.matchers.comparables.shouldBeLessThan
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
-import javax.swing.SwingUtilities
 import kotlin.test.Test
 
 /** One width class for the whole window, decided by the window and read by everything in it. */
@@ -83,12 +83,6 @@ class WindowWidthClassTest {
         } finally {
             scene.close()
         }
-    }
-
-    private fun onUiThread(block: () -> Unit) {
-        var failure: Throwable? = null
-        SwingUtilities.invokeAndWait { runCatching(block).onFailure { failure = it } }
-        failure?.let { throw it }
     }
 
     private companion object {

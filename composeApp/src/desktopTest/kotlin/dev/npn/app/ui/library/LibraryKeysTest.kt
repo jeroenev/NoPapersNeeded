@@ -11,12 +11,12 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.nodes
+import dev.npn.app.ui.onUiThread
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
-import javax.swing.SwingUtilities
 import kotlin.test.Test
 
 /** The library's shortcuts on a focused node, as the library screen's content column wears them. */
@@ -104,17 +104,6 @@ class LibraryKeysTest {
         } finally {
             scene.close()
         }
-    }
-
-    private fun ImageComposeScene.nodes(): List<SemanticsNode> {
-        fun descendants(node: SemanticsNode): List<SemanticsNode> = listOf(node) + node.children.flatMap(::descendants)
-        return semanticsOwners.flatMap { descendants(it.rootSemanticsNode) }
-    }
-
-    private fun onUiThread(block: () -> Unit) {
-        var failure: Throwable? = null
-        SwingUtilities.invokeAndWait { runCatching(block).onFailure { failure = it } }
-        failure?.let { throw it }
     }
 
     private companion object {

@@ -5,20 +5,19 @@ package dev.npn.app.ui.settings
 import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
+import dev.npn.app.EnglishLocaleTest
 import dev.npn.app.platform.FolderPick
+import dev.npn.app.ui.nodes
+import dev.npn.app.ui.onUiThread
 import dev.npn.app.ui.theme.NpnTheme
+import dev.npn.app.ui.type
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.settings.SettingsSnapshot
 import io.kotest.matchers.shouldBe
-import java.util.Locale
-import javax.swing.SwingUtilities
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /**
@@ -26,20 +25,7 @@ import kotlin.test.Test
  * Those lists are kept by hand, so this renders every pane with everything it can show switched on
  * and checks that each label a user can see there finds its own pane.
  */
-class SettingsSearchCoverageTest {
-    private var previousLocale: Locale? = null
-
-    @BeforeTest
-    fun pinEnglishLocale() {
-        previousLocale = Locale.getDefault()
-        Locale.setDefault(Locale.ENGLISH)
-    }
-
-    @AfterTest
-    fun restoreLocale() {
-        previousLocale?.let { Locale.setDefault(it) }
-    }
-
+class SettingsSearchCoverageTest : EnglishLocaleTest() {
     @Test
     fun everyVisibleSettingLabelFindsItsPane() =
         onUiThread {
@@ -89,17 +75,6 @@ class SettingsSearchCoverageTest {
                     ?: config.getOrNull(SemanticsProperties.ContentDescription)?.firstOrNull()
             }.filter { it.isNotBlank() && it !in NOT_SETTINGS }
             .distinct()
-
-    private fun ImageComposeScene.nodes(): List<SemanticsNode> {
-        fun descendants(node: SemanticsNode): List<SemanticsNode> = listOf(node) + node.children.flatMap(::descendants)
-        return semanticsOwners.flatMap { descendants(it.rootSemanticsNode) }
-    }
-
-    private fun onUiThread(block: () -> Unit) {
-        var failure: Throwable? = null
-        SwingUtilities.invokeAndWait { runCatching(block).onFailure { failure = it } }
-        failure?.let { throw it }
-    }
 
     private object NoActions : SettingsPaneActions {
         override fun edit(transform: (SettingsSnapshot) -> SettingsSnapshot) = Unit

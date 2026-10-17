@@ -4,10 +4,11 @@ package dev.npn.app.ui.common
 
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.ui.ImageComposeScene
+import dev.npn.app.ui.onUiThread
+import dev.npn.app.ui.text
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
-import javax.swing.SwingUtilities
 import kotlin.test.Test
 
 /**
@@ -81,12 +82,6 @@ class SnackbarMessagesTest {
         } finally {
             scene.close()
         }
-    }
-
-    private fun onUiThread(block: () -> Unit) {
-        var failure: Throwable? = null
-        SwingUtilities.invokeAndWait { runCatching(block).onFailure { failure = it } }
-        failure?.let { throw it }
     }
 
     private companion object {

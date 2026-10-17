@@ -15,14 +15,23 @@ import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.text.AnnotatedString
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.LifecycleRegistry
-import androidx.lifecycle.compose.LocalLifecycleOwner
+import dev.npn.app.EnglishLocaleTest
 import dev.npn.app.resourcesIn
+import dev.npn.app.ui.click
 import dev.npn.app.ui.common.LocalAppLocale
 import dev.npn.app.ui.common.ProvideWindowWidthClass
+import dev.npn.app.ui.contentDescription
+import dev.npn.app.ui.has
+import dev.npn.app.ui.hasError
+import dev.npn.app.ui.hostedScene
+import dev.npn.app.ui.isEditable
+import dev.npn.app.ui.isEnabled
+import dev.npn.app.ui.node
+import dev.npn.app.ui.nodes
+import dev.npn.app.ui.onUiThread
+import dev.npn.app.ui.texts
 import dev.npn.app.ui.theme.NpnTheme
+import dev.npn.app.ui.type
 import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.app.Doc
 import dev.npn.core.app.DocListItem
@@ -40,28 +49,13 @@ import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ux_save_changes
 import org.jetbrains.compose.resources.getString
 import java.util.Locale
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /**
  * A number typed key by key into the document panel, each keystroke coming back through the draft
  * store as the screen feeds it: canonical, so `12.0` returns as `12` and `-0` as `0`.
  */
-class NumberFieldEntryTest {
-    private var previousLocale: Locale? = null
-
-    @BeforeTest
-    fun pinEnglishLocale() {
-        previousLocale = Locale.getDefault()
-        Locale.setDefault(Locale.ENGLISH)
-    }
-
-    @AfterTest
-    fun restoreLocale() {
-        previousLocale?.let { Locale.setDefault(it) }
-    }
-
+class NumberFieldEntryTest : EnglishLocaleTest() {
     @Test
     fun aDecimalIsKeptAsTypedWhileItsCanonicalFormDiffers() =
         onUiThread {
@@ -267,11 +261,6 @@ class NumberFieldEntryTest {
         writes: DocumentWrites = NoWrites,
         block: Editor.() -> Unit,
     ) {
-        val owner =
-            object : LifecycleOwner {
-                override val lifecycle =
-                    LifecycleRegistry.createUnsafe(this).apply { currentState = Lifecycle.State.RESUMED }
-            }
         val editor = Editor(amount)
         val defs = FieldKeys.seedDefinitions { FieldKeys.SEED_LABELS.getValue(it) } + AMOUNT + COUNT
         val content: @Composable () -> Unit = {
@@ -299,19 +288,12 @@ class NumberFieldEntryTest {
             }
         }
         editor.scene =
-            ImageComposeScene(WIDTH, HEIGHT) {
-                CompositionLocalProvider(
-                    LocalLifecycleOwner provides owner,
-                    LocalDocumentDrafts provides editor.store,
-                ) {
-                    // Only when asked: the app-language local sets the JVM's locale as it is provided.
-                    if (language ==
-                        null
-                    ) {
-                        content()
-                    } else {
-                        CompositionLocalProvider(LocalAppLocale provides language, content)
-                    }
+            hostedScene(WIDTH, HEIGHT, LocalDocumentDrafts provides editor.store) {
+                // Only when asked: the app-language local sets the JVM's locale as it is provided.
+                if (language == null) {
+                    content()
+                } else {
+                    CompositionLocalProvider(LocalAppLocale provides language, content)
                 }
             }
         try {

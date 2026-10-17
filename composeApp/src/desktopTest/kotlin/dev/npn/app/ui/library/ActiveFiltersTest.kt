@@ -5,10 +5,10 @@ package dev.npn.app.ui.library
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.ImageComposeScene
-import androidx.compose.ui.semantics.SemanticsNode
-import androidx.compose.ui.semantics.SemanticsProperties
-import androidx.compose.ui.semantics.getOrNull
 import dev.npn.app.ui.common.LocalAppLocale
+import dev.npn.app.ui.nodes
+import dev.npn.app.ui.onUiThread
+import dev.npn.app.ui.texts
 import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.core.app.FieldRange
 import dev.npn.core.app.LibraryFilter
@@ -16,7 +16,6 @@ import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldType
 import io.kotest.matchers.string.shouldContain
 import java.util.Locale
-import javax.swing.SwingUtilities
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -57,23 +56,7 @@ class ActiveFiltersTest {
             }
         }
 
-    private fun ImageComposeScene.texts(): List<String> {
-        fun descendants(node: SemanticsNode): List<SemanticsNode> = listOf(node) + node.children.flatMap(::descendants)
-        return semanticsOwners
-            .flatMap { descendants(it.rootSemanticsNode) }
-            .flatMap { node ->
-                node.config
-                    .getOrNull(SemanticsProperties.Text)
-                    .orEmpty()
-                    .map { it.text }
-            }
-    }
-
-    private fun onUiThread(block: () -> Unit) {
-        var failure: Throwable? = null
-        SwingUtilities.invokeAndWait { runCatching(block).onFailure { failure = it } }
-        failure?.let { throw it }
-    }
+    private fun ImageComposeScene.texts(): List<String> = nodes().flatMap { it.texts() }
 
     private companion object {
         const val WIDTH = 600

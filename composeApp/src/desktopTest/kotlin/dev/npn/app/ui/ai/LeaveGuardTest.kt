@@ -11,8 +11,8 @@ import androidx.navigationevent.DirectNavigationEventInput
 import androidx.navigationevent.NavigationEventDispatcher
 import androidx.navigationevent.NavigationEventDispatcherOwner
 import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
+import dev.npn.app.ui.onUiThread
 import io.kotest.matchers.shouldBe
-import javax.swing.SwingUtilities
 import kotlin.test.Test
 
 /**
@@ -53,12 +53,6 @@ class LeaveGuardTest {
                 scene.close()
             }
         }
-
-    private fun onUiThread(block: () -> Unit) {
-        var failure: Throwable? = null
-        SwingUtilities.invokeAndWait { runCatching(block).onFailure { failure = it } }
-        failure?.let { throw it }
-    }
 
     private companion object {
         const val WIDTH = 100

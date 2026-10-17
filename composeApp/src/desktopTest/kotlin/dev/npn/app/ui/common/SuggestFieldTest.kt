@@ -20,29 +20,19 @@ import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.text.AnnotatedString
+import dev.npn.app.EnglishLocaleTest
+import dev.npn.app.ui.has
+import dev.npn.app.ui.isEditable
+import dev.npn.app.ui.nodes
+import dev.npn.app.ui.onUiThread
+import dev.npn.app.ui.text
+import dev.npn.app.ui.texts
 import dev.npn.app.ui.theme.NpnTheme
 import io.kotest.matchers.shouldBe
-import java.util.Locale
-import javax.swing.SwingUtilities
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /** [SuggestField] against a real composition: the field-definition form's key autocomplete and the menu's keys. */
-class SuggestFieldTest {
-    private var previousLocale: Locale? = null
-
-    @BeforeTest
-    fun pinEnglishLocale() {
-        previousLocale = Locale.getDefault()
-        Locale.setDefault(Locale.ENGLISH)
-    }
-
-    @AfterTest
-    fun restoreLocale() {
-        previousLocale?.let { Locale.setDefault(it) }
-    }
-
+class SuggestFieldTest : EnglishLocaleTest() {
     /** The menu answers the key as typed now, not the key one keystroke earlier. */
     @Test
     fun keySuggestionsFollowTheKeystrokeJustTyped() =
@@ -50,9 +40,9 @@ class SuggestFieldTest {
             val scene = keyForm(suggestions = listOf("invoice_no", "iban"))
             try {
                 scene.render()
-                scene.type("q")
+                scene.typeKey("q")
                 scene.render()
-                scene.type("i")
+                scene.typeKey("i")
                 scene.render()
                 scene.has { it.text() == "invoice_no" } shouldBe true
             } finally {
@@ -73,7 +63,7 @@ class SuggestFieldTest {
                     .action
                     ?.invoke()
                 scene.render()
-                scene.type("in")
+                scene.typeKey("in")
                 scene.render()
                 scene.has { it.text() == "invoice_no" } shouldBe true
                 scene.pressBackspace()
@@ -98,7 +88,7 @@ class SuggestFieldTest {
             try {
                 scene.render()
                 scene.focusKeyField()
-                scene.type("item")
+                scene.typeKey("item")
                 scene.render()
                 repeat(5) {
                     scene.press(Key.DirectionDown)
@@ -129,7 +119,7 @@ class SuggestFieldTest {
             try {
                 scene.render()
                 scene.focusKeyField()
-                scene.type("zz")
+                scene.typeKey("zz")
                 scene.render()
                 scene.press(Key.Enter)
                 scene.render()
@@ -184,13 +174,9 @@ class SuggestFieldTest {
             }
         }
 
-    private fun ImageComposeScene.keyField(): SemanticsNode =
-        nodes().first { node ->
-            node.config.getOrNull(SemanticsProperties.EditableText) != null &&
-                node.config.getOrNull(SemanticsProperties.Text)?.any { it.text == "Key" } == true
-        }
+    private fun ImageComposeScene.keyField(): SemanticsNode = nodes().first { it.isEditable() && "Key" in it.texts() }
 
-    private fun ImageComposeScene.type(text: String) {
+    private fun ImageComposeScene.typeKey(text: String) {
         keyField().config[SemanticsActions.SetText].action?.invoke(AnnotatedString(text))
     }
 
@@ -208,25 +194,6 @@ class SuggestFieldTest {
     private fun ImageComposeScene.press(key: Key) {
         sendKeyEvent(KeyEvent(key, KeyEventType.KeyDown))
         sendKeyEvent(KeyEvent(key, KeyEventType.KeyUp))
-    }
-
-    private fun SemanticsNode.text(): String? =
-        config
-            .getOrNull(SemanticsProperties.Text)
-            ?.firstOrNull()
-            ?.text
-
-    private fun ImageComposeScene.has(match: (SemanticsNode) -> Boolean): Boolean = nodes().any(match)
-
-    private fun ImageComposeScene.nodes(): List<SemanticsNode> {
-        fun descendants(node: SemanticsNode): List<SemanticsNode> = listOf(node) + node.children.flatMap(::descendants)
-        return semanticsOwners.flatMap { descendants(it.rootSemanticsNode) }
-    }
-
-    private fun onUiThread(block: () -> Unit) {
-        var failure: Throwable? = null
-        SwingUtilities.invokeAndWait { runCatching(block).onFailure { failure = it } }
-        failure?.let { throw it }
     }
 
     private companion object {

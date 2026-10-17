@@ -15,6 +15,8 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.node
+import dev.npn.app.ui.onUiThread
 import io.kotest.matchers.collections.shouldContainExactly
 import kotlin.test.Test
 

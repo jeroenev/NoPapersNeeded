@@ -4,24 +4,17 @@ package dev.npn.app
 
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.ImageComposeScene
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.LifecycleRegistry
-import androidx.lifecycle.ViewModelStore
-import androidx.lifecycle.ViewModelStoreOwner
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import dev.npn.app.ui.detail.DocumentDraftHost
 import dev.npn.app.ui.detail.DocumentDrafts
 import dev.npn.app.ui.detail.LocalDocumentDrafts
-import dev.npn.app.ui.detail.has
-import dev.npn.app.ui.detail.onUiThread
-import dev.npn.app.ui.detail.texts
+import dev.npn.app.ui.has
+import dev.npn.app.ui.hostedScene
+import dev.npn.app.ui.onUiThread
+import dev.npn.app.ui.texts
 import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeSameInstanceAs
@@ -29,28 +22,18 @@ import io.kotest.matchers.types.shouldNotBeSameInstanceAs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
-import java.util.Locale
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /** A change of the app's language re-renders the app in it, and loses nothing the user has not saved. */
-class LanguageChangeTest {
-    private var previousLocale: Locale? = null
+class LanguageChangeTest : EnglishLocaleTest() {
     private val scope = CoroutineScope(Job())
     private val settings = FakeSettingsRepository()
     private val session = FakeLibrarySession()
 
-    @BeforeTest
-    fun pinEnglishLocale() {
-        previousLocale = Locale.getDefault()
-        Locale.setDefault(Locale.ENGLISH)
-    }
-
     @AfterTest
     fun restore() {
         scope.cancel()
-        previousLocale?.let { Locale.setDefault(it) }
     }
 
     @Test
@@ -127,23 +110,8 @@ class LanguageChangeTest {
             }
         }
 
-    private fun scene(content: @Composable () -> Unit): ImageComposeScene {
-        val lifecycle =
-            object : LifecycleOwner {
-                override val lifecycle =
-                    LifecycleRegistry.createUnsafe(this).apply { currentState = Lifecycle.State.RESUMED }
-            }
-        val viewModels =
-            object : ViewModelStoreOwner {
-                override val viewModelStore = ViewModelStore()
-            }
-        return ImageComposeScene(WIDTH, HEIGHT) {
-            CompositionLocalProvider(
-                LocalLifecycleOwner provides lifecycle,
-                LocalViewModelStoreOwner provides viewModels,
-            ) { content() }
-        }
-    }
+    private fun scene(content: @Composable () -> Unit): ImageComposeScene =
+        hostedScene(WIDTH, HEIGHT, content = content)
 
     private fun ImageComposeScene.settle() = repeat(FRAMES) { render() }
 

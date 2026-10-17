@@ -16,37 +16,23 @@ import androidx.compose.ui.input.pointer.PointerId
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.scene.ComposeScenePointer
-import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import dev.npn.app.EnglishLocaleTest
+import dev.npn.app.ui.click
+import dev.npn.app.ui.contentDescription
+import dev.npn.app.ui.nodes
+import dev.npn.app.ui.onUiThread
 import dev.npn.app.ui.theme.NpnTheme
 import io.kotest.matchers.floats.plusOrMinus
 import io.kotest.matchers.shouldBe
 import org.jetbrains.skia.EncodedImageFormat
-import java.util.Locale
-import javax.swing.SwingUtilities
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /** [PageViewer] against a real composition, with the page index fed back the way the viewmodel does. */
-class PageViewerTest {
-    private var previousLocale: Locale? = null
-
-    @BeforeTest
-    fun pinEnglishLocale() {
-        previousLocale = Locale.getDefault()
-        Locale.setDefault(Locale.ENGLISH)
-    }
-
-    @AfterTest
-    fun restoreLocale() {
-        previousLocale?.let { Locale.setDefault(it) }
-    }
-
+class PageViewerTest : EnglishLocaleTest() {
     /** Paging forward and back again must leave the viewmodel on the page the viewer shows. */
     @Test
     fun everySettledPageReachesTheViewModel() =
@@ -191,28 +177,8 @@ class PageViewerTest {
         }
     }
 
-    private fun ImageComposeScene.click(description: String) {
-        val node =
-            nodes().first { node ->
-                node.config.getOrNull(SemanticsProperties.ContentDescription)?.contains(description) == true
-            }
-        generateSequence(node) { it.parent }
-            .first { it.config.getOrNull(SemanticsActions.OnClick) != null }
-            .config[SemanticsActions.OnClick]
-            .action
-            ?.invoke()
-    }
-
-    private fun ImageComposeScene.nodes(): List<SemanticsNode> {
-        fun descendants(node: SemanticsNode): List<SemanticsNode> = listOf(node) + node.children.flatMap(::descendants)
-        return semanticsOwners.flatMap { descendants(it.rootSemanticsNode) }
-    }
-
-    private fun onUiThread(block: () -> Unit) {
-        var failure: Throwable? = null
-        SwingUtilities.invokeAndWait { runCatching(block).onFailure { failure = it } }
-        failure?.let { throw it }
-    }
+    private fun ImageComposeScene.click(description: String) =
+        click { it.config.getOrNull(SemanticsProperties.ContentDescription)?.contains(description) == true }
 
     private companion object {
         const val WIDTH = 600

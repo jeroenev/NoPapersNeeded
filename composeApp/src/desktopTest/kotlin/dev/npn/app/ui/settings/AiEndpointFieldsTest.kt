@@ -12,19 +12,18 @@ import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.text.AnnotatedString
+import dev.npn.app.EnglishLocaleTest
 import dev.npn.app.platform.FolderPick
-import dev.npn.app.ui.detail.nodes
-import dev.npn.app.ui.detail.onUiThread
+import dev.npn.app.ui.nodes
+import dev.npn.app.ui.onUiThread
 import dev.npn.app.ui.theme.NpnTheme
+import dev.npn.app.ui.type
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.settings.SettingsSnapshot
 import io.kotest.assertions.withClue
 import io.kotest.matchers.shouldBe
-import java.util.Locale
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /**
@@ -32,20 +31,7 @@ import kotlin.test.Test
  * their own schedule, the way a settings file written out whole does: what is typed shows at once
  * and is what gets saved, whatever the saved value says meanwhile.
  */
-class AiEndpointFieldsTest {
-    private var previousLocale: Locale? = null
-
-    @BeforeTest
-    fun pinEnglishLocale() {
-        previousLocale = Locale.getDefault()
-        Locale.setDefault(Locale.ENGLISH)
-    }
-
-    @AfterTest
-    fun restoreLocale() {
-        previousLocale?.let { Locale.setDefault(it) }
-    }
-
+class AiEndpointFieldsTest : EnglishLocaleTest() {
     @Test
     fun keysTypedBeforeTheSavedValueCatchesUpAreKept() =
         onUiThread {
