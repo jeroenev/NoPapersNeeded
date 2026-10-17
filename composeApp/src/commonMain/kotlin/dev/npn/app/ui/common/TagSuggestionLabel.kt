@@ -20,8 +20,9 @@ import org.jetbrains.compose.resources.stringResource
 fun TagSuggestionLabel(
     tag: String,
     isNew: Boolean,
+    modifier: Modifier = Modifier,
 ) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         Text(tag)
         if (isNew) {
             Text(

@@ -47,8 +47,8 @@ fun List<TagInfo>.colorsByName(): Map<String, String?> = associate { it.name to 
 @Composable
 fun TagChip(
     name: String,
-    color: String? = null,
     modifier: Modifier = Modifier,
+    color: String? = null,
 ) {
     val dot = parseHexColor(color) ?: MaterialTheme.colorScheme.primary
     Row(

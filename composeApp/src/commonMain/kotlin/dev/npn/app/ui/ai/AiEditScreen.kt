@@ -58,6 +58,9 @@ import org.jetbrains.compose.resources.stringResource
  * The bulk AI-edit page: configure a run, then either watch it suggest and review the result here,
  * or hand it to the background queue and pick the result up from the processing queue later.
  */
+@Suppress("ViewModelForwarding")
+// The setup and the batch get the viewmodel only as its AiEditSetupActions and ReviewController
+// interfaces, the hand-down the conventions prescribe.
 @Composable
 fun AiEditScreen(
     session: LibrarySession,
@@ -65,9 +68,10 @@ fun AiEditScreen(
     onBack: () -> Unit,
     onOpenQueue: () -> Unit,
     onOpenDoc: (String) -> Unit,
+    modifier: Modifier = Modifier,
     selection: List<String> = emptyList(),
+    vm: AiEditViewModel = viewModel { AiEditViewModel(session, settings, selection) },
 ) {
-    val vm: AiEditViewModel = viewModel { AiEditViewModel(session, settings, selection) }
     val ui by vm.ui.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     SnackbarMessages(vm.messages, snackbar)
@@ -81,6 +85,7 @@ fun AiEditScreen(
     LeaveGuard(guarding = leavingCostsSuggestions, onBack = { confirmingLeave = true })
 
     Scaffold(
+        modifier = modifier,
         topBar = { BackTopBar(title = stringResource(Res.string.ai_edit_title), onBack = requestBack) },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->

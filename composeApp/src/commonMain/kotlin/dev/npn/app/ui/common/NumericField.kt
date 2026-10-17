@@ -31,8 +31,8 @@ fun NumericField(
     onValueChange: (Int) -> Unit,
     range: IntRange,
     label: String,
-    supportingText: String? = null,
     modifier: Modifier = Modifier,
+    supportingText: String? = null,
 ) {
     var text by remember { mutableStateOf(value.toString()) }
     val echoes = remember { EchoTracker(value) }

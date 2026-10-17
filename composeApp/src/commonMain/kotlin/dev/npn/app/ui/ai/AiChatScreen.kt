@@ -110,6 +110,7 @@ fun AiChatScreen(
     onAiEditDocs: (List<String>) -> Unit,
     /** Hands off to the AI-edit page without preselection; null where the top bar offers no such action. */
     onAiEdit: (() -> Unit)?,
+    modifier: Modifier = Modifier,
     vm: AiChatViewModel = viewModel { AiChatViewModel(session, settings) },
 ) {
     val ui by vm.ui.collectAsStateWithLifecycle()
@@ -136,6 +137,7 @@ fun AiChatScreen(
     }
 
     Scaffold(
+        modifier = modifier,
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             AiChatTopBar(

@@ -1,6 +1,7 @@
 package dev.npn.app.ui.common
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
@@ -12,6 +13,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
@@ -37,23 +40,33 @@ data class TopBarAction(
 @Composable
 fun TopBarActions(
     inline: List<TopBarAction>,
-    overflow: List<TopBarAction> = emptyList(),
     overflowLabel: String,
+    modifier: Modifier = Modifier,
+    overflow: List<TopBarAction> = emptyList(),
 ) {
-    inline.forEach { action ->
-        TooltipIconButton(
-            icon = action.icon,
-            label = action.label,
-            onClick = action.onClick,
-            enabled = action.enabled,
-        )
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        inline.forEach { action ->
+            TooltipIconButton(
+                icon = action.icon,
+                label = action.label,
+                onClick = action.onClick,
+                enabled = action.enabled,
+            )
+        }
+        if (overflow.isNotEmpty()) OverflowButton(overflow, overflowLabel)
     }
-    if (overflow.isEmpty()) return
+}
+
+@Composable
+private fun OverflowButton(
+    overflow: List<TopBarAction>,
+    label: String,
+) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         TooltipIconButton(
             icon = Icons.Filled.MoreVert,
-            label = overflowLabel,
+            label = label,
             onClick = { expanded = true },
         )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -71,11 +84,12 @@ fun TopBarActions(
     actions: List<TopBarAction>,
     wide: Boolean,
     overflowLabel: String,
+    modifier: Modifier = Modifier,
 ) {
     if (wide) {
-        TopBarActions(inline = actions, overflowLabel = overflowLabel)
+        TopBarActions(inline = actions, overflowLabel = overflowLabel, modifier = modifier)
     } else {
-        TopBarActions(inline = emptyList(), overflow = actions, overflowLabel = overflowLabel)
+        TopBarActions(inline = emptyList(), overflow = actions, overflowLabel = overflowLabel, modifier = modifier)
     }
 }
 

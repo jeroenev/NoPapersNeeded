@@ -42,9 +42,9 @@ import org.jetbrains.compose.resources.stringResource
 internal fun WithUpdateBanner(
     settings: SettingsRepository,
     snackbar: SnackbarHostState,
+    vm: UpdateNoticeViewModel = viewModel { UpdateNoticeViewModel(settings, GitHubLatestRelease()) },
     content: @Composable () -> Unit,
 ) {
-    val vm: UpdateNoticeViewModel = viewModel { UpdateNoticeViewModel(settings, GitHubLatestRelease()) }
     SnackbarMessages(vm.messages, snackbar)
     val release by vm.notice.collectAsStateWithLifecycle()
     val shown = release

@@ -94,14 +94,16 @@ fun QueueScreen(
     session: LibrarySession,
     onOpenDoc: (String) -> Unit,
     onOpenEditRun: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    vm: QueueViewModel = viewModel { QueueViewModel(session) },
 ) {
-    val vm: QueueViewModel = viewModel { QueueViewModel(session) }
     val items by vm.items.collectAsStateWithLifecycle()
     val editRuns by vm.editRuns.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     SnackbarMessages(vm.messages, snackbar)
 
     Scaffold(
+        modifier = modifier,
         topBar = {
             // No back arrow: the queue is a top-level destination (rail / settings / banners), not a
             // pushed screen.

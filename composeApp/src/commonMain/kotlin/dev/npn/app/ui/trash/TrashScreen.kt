@@ -116,9 +116,13 @@ private val TrashTab.labelResource: StringResource
             TrashTab.MISSING -> Res.string.common_trash_missing_tab
         }
 
+// The trash gets the viewmodel only as its TrashWrites interface, the hand-down the conventions prescribe.
+@Suppress("ViewModelForwarding")
 @Composable
-fun TrashScreen(session: LibrarySession) {
-    val vm: TrashViewModel = viewModel { TrashViewModel(session) }
+fun TrashScreen(
+    session: LibrarySession,
+    vm: TrashViewModel = viewModel { TrashViewModel(session) },
+) {
     val state by vm.state.collectAsStateWithLifecycle()
 
     var tab by rememberSaveable(stateSaver = enumNameSaver()) { mutableStateOf(TrashTab.TRASH) }

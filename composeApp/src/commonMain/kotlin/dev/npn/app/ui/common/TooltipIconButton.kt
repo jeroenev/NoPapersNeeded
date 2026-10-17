@@ -13,6 +13,7 @@ import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
@@ -24,6 +25,7 @@ fun TooltipIconButton(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     enabled: Boolean = true,
     badge: (@Composable () -> Unit)? = null,
 ) {
@@ -31,6 +33,7 @@ fun TooltipIconButton(
         positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Below),
         tooltip = { PlainTooltip { Text(label) } },
         state = rememberTooltipState(),
+        modifier = modifier,
     ) {
         IconButton(onClick = onClick, enabled = enabled) {
             if (badge == null) {

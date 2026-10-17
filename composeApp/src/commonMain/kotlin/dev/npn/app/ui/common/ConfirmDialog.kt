@@ -15,11 +15,11 @@ import org.jetbrains.compose.resources.stringResource
 fun ConfirmDialog(
     title: String,
     message: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
     confirmLabel: String? = null,
     dismissLabel: String? = null,
     destructive: Boolean = false,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,

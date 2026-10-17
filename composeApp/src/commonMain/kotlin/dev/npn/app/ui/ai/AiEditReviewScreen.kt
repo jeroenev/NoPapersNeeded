@@ -31,19 +31,23 @@ import org.jetbrains.compose.resources.stringResource
  * queue. Renders the same batch widgets as the interactive run — the only difference is where the
  * suggestions came from.
  */
+@Suppress("ViewModelForwarding")
+// The batch gets the viewmodel only as its ReviewController interface, the hand-down the conventions prescribe.
 @Composable
 fun AiEditReviewScreen(
     session: LibrarySession,
     jobId: String,
     onBack: () -> Unit,
     onOpenDoc: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    vm: AiEditReviewViewModel = viewModel(key = jobId) { AiEditReviewViewModel(session, jobId) },
 ) {
-    val vm: AiEditReviewViewModel = viewModel(key = jobId) { AiEditReviewViewModel(session, jobId) }
     val phase by vm.phase.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     SnackbarMessages(vm.messages, snackbar)
 
     Scaffold(
+        modifier = modifier,
         topBar = { BackTopBar(title = stringResource(Res.string.ai_edit_queued_review_title), onBack = onBack) },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->

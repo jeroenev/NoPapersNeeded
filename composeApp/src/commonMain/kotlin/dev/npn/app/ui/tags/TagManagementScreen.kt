@@ -169,9 +169,13 @@ private sealed interface TagDialog {
     }
 }
 
+// The dialogs get the viewmodel only as its TagWrites interface, the hand-down the conventions prescribe.
+@Suppress("ViewModelForwarding")
 @Composable
-fun TagManagementScreen(session: LibrarySession) {
-    val vm: TagManagementViewModel = viewModel { TagManagementViewModel(session) }
+fun TagManagementScreen(
+    session: LibrarySession,
+    vm: TagManagementViewModel = viewModel { TagManagementViewModel(session) },
+) {
     val tags by vm.tags.collectAsStateWithLifecycle()
     val rows by vm.rows.collectAsStateWithLifecycle()
 

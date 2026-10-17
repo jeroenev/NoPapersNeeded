@@ -68,6 +68,7 @@ fun NavigationShell(
     onNavigate: (TopLevelDestination) -> Unit,
     onAiChat: () -> Unit,
     onAiEdit: () -> Unit,
+    modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
     val ai =
@@ -83,12 +84,12 @@ fun NavigationShell(
     // it remembers survive.
     val slot = remember(content) { movableContentOf(content) }
     if (LocalWindowWidthClass.current.isWide) {
-        Row(Modifier.fillMaxSize()) {
+        Row(modifier.fillMaxSize()) {
             if (shellShown) ShellRail(current = current, ai = ai, queue = queue, onNavigate = onNavigate)
             Box(Modifier.weight(1f)) { slot() }
         }
     } else {
-        Column(Modifier.fillMaxSize()) {
+        Column(modifier.fillMaxSize()) {
             Box(Modifier.weight(1f)) { slot() }
             if (shellShown) ShellBottomBar(current = current, ai = ai, queue = queue, onNavigate = onNavigate)
         }
@@ -332,19 +333,15 @@ private fun MoreSheetRow(
 }
 
 /**
- * Wraps [content] in a [QueueBadge] for [badge], or renders it bare when the queue has nothing to
- * report.
+ * Wraps [content] in a [QueueBadge] for [badge], which stays empty while the queue has nothing to
+ * report. One box either way, so the icon is not composed afresh when the badge comes and goes.
  */
 @Composable
 private fun BadgedIcon(
     badge: QueueStatus,
     content: @Composable () -> Unit,
 ) {
-    if (badge.isEmpty) {
-        content()
-        return
-    }
-    BadgedBox(badge = { QueueBadge(badge) }) { content() }
+    BadgedBox(badge = { if (!badge.isEmpty) QueueBadge(badge) }) { content() }
 }
 
 /**

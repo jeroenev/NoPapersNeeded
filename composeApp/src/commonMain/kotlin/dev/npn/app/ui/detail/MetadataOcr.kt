@@ -99,8 +99,8 @@ internal fun OcrTextTab(
     ocrState: OcrState,
     highlightTerms: List<String>,
     focusRequester: FocusRequester,
-    focusRequest: Int = 0,
     modifier: Modifier = Modifier,
+    focusRequest: Int = 0,
 ) {
     if (text == null) {
         Column(modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {

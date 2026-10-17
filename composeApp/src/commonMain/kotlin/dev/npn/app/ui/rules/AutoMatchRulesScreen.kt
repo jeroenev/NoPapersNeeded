@@ -94,8 +94,8 @@ import org.jetbrains.compose.resources.stringResource
 fun AutoMatchRulesScreen(
     session: LibrarySession,
     onBack: () -> Unit,
+    vm: AutoMatchRulesViewModel = viewModel { AutoMatchRulesViewModel(session) },
 ) {
-    val vm: AutoMatchRulesViewModel = viewModel { AutoMatchRulesViewModel(session) }
     val rules by vm.rules.collectAsStateWithLifecycle()
     val fields by vm.fields.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }

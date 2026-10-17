@@ -100,6 +100,7 @@ fun FieldDefForm(
     state: FieldDefFormState,
     onChange: (FieldDefFormState) -> Unit,
     existing: List<FieldDef>,
+    modifier: Modifier = Modifier,
     ownKey: String? = null,
     lockKey: Boolean = false,
     lockType: Boolean = false,
@@ -107,7 +108,7 @@ fun FieldDefForm(
     typeWarning: String? = null,
 ) {
     val taken = state.collides(existing, ownKey)
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         OutlinedTextField(
             value = state.label,
             onValueChange = {
