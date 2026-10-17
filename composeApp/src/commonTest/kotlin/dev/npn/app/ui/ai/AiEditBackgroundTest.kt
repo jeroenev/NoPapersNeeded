@@ -6,7 +6,7 @@ import dev.npn.app.FakeLibrarySession
 import dev.npn.app.MainDispatcherTest
 import dev.npn.app.collecting
 import dev.npn.app.failure
-import dev.npn.core.app.AiTagging
+import dev.npn.core.ai.AiTagging
 import dev.npn.core.app.aiedit.EditScope
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly

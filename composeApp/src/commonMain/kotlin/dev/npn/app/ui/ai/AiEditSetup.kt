@@ -38,7 +38,7 @@ import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.NumericField
 import dev.npn.app.ui.common.RadioRow
 import dev.npn.app.ui.common.SwitchRow
-import dev.npn.core.app.AiTagging
+import dev.npn.core.ai.AiTagging
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.aiedit.EditScope
 import dev.npn.core.model.FieldDef

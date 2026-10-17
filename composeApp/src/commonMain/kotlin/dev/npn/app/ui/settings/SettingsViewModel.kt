@@ -13,7 +13,7 @@ import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiReasoningLevel
 import dev.npn.core.ai.AiSelfTest
 import dev.npn.core.ai.AiSelfTestReport
-import dev.npn.core.app.AiTagging
+import dev.npn.core.ai.AiTagging
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.SettingsRepository
 import dev.npn.core.app.SettingsSnapshot

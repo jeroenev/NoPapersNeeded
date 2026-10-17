@@ -142,3 +142,11 @@ private fun holdsRules(json: String): Boolean =
     } catch (_: IllegalArgumentException) {
         true
     }
+
+object TrashSettings {
+    /** Days a trashed document is kept before an automatic purge removes it. */
+    const val DEFAULT_TRASH_RETENTION_DAYS = 30
+
+    /** The retentions a library may set: 0 purges at the next chance, four digits at most. */
+    val RETENTION_RANGE = 0..9999
+}

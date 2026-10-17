@@ -7,7 +7,7 @@ import dev.npn.app.FakeSettingsRepository
 import dev.npn.app.MainDispatcherTest
 import dev.npn.app.collecting
 import dev.npn.core.ai.AiFieldMode
-import dev.npn.core.app.AiTagging
+import dev.npn.core.ai.AiTagging
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType

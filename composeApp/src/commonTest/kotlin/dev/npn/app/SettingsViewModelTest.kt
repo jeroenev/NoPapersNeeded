@@ -9,7 +9,7 @@ import dev.npn.app.ui.settings.TextSetting
 import dev.npn.app.ui.settings.text
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiReasoningLevel
-import dev.npn.core.app.AiTagging
+import dev.npn.core.ai.AiTagging
 import dev.npn.core.app.StoragePathSetting
 import dev.npn.core.app.ViewType
 import dev.npn.core.model.FieldDef

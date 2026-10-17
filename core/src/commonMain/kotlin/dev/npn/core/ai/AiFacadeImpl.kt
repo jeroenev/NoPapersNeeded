@@ -2,7 +2,6 @@ package dev.npn.core.ai
 
 import ai.koog.prompt.Prompt
 import ai.koog.prompt.dsl.prompt
-import dev.npn.core.app.AiTagging
 import dev.npn.core.db.KeyValueDao
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.defs

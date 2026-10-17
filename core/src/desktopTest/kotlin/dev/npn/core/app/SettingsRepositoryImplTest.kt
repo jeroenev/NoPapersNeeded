@@ -2,6 +2,7 @@ package dev.npn.core.app
 
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiReasoningLevel
+import dev.npn.core.ai.AiTagging
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll

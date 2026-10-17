@@ -8,7 +8,7 @@ import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiFieldConfig
 import dev.npn.core.ai.AiFieldMode
-import dev.npn.core.app.AiTagging
+import dev.npn.core.ai.AiTagging
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.SavedView

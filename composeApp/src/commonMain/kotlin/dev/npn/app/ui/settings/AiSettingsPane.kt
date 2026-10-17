@@ -40,7 +40,7 @@ import dev.npn.core.ai.AiCheckOutcome
 import dev.npn.core.ai.AiCheckStatus
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiReasoningLevel
-import dev.npn.core.app.AiTagging
+import dev.npn.core.ai.AiTagging
 import dev.npn.core.ocr.OcrEngineSelector
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_auto_on_ocr
