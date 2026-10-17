@@ -100,18 +100,10 @@ internal class DocumentPaths(
     }
 
     /** Atomically take [source]'s name away under a fresh recovery name in the same folder. */
-    private suspend fun claim(source: String): String {
-        val directory = NpnPaths.parentDir(source)
-        val name = NpnPaths.Temp.recoveryName(Uuid.random().toString())
-        val recovery = if (directory.isEmpty()) name else "$directory/$name"
-        fs.claimDocument(source, recovery)
-        return recovery
-    }
+    private suspend fun claim(source: String): String =
+        NpnPaths.Temp.recoveryPath(beside = source).also { fs.claimDocument(source, it) }
 
     companion object {
-        /** Names a document file claimed mid-move; never mistaken for a move the user made. */
-        const val RECOVERY_PREFIX = "npn-recovery-"
-
         fun isDocumentPath(path: String): Boolean =
             NpnPaths.isSafe(path) && NpnPaths.normalize(path) == path &&
                 NpnPaths.indexable(FileMeta(path, NpnPaths.fileName(path), 0, 0, false))

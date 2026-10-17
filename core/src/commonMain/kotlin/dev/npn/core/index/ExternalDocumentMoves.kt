@@ -5,7 +5,6 @@ import dev.npn.core.db.KeyValueDao
 import dev.npn.core.db.KeyValueEntity
 import dev.npn.core.db.PathMeta
 import dev.npn.core.db.isLive
-import dev.npn.core.fs.DocumentPaths
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
@@ -91,7 +90,7 @@ internal class ExternalDocumentMoves(
         paths: Set<String>,
     ): Boolean {
         if (old.relPath in paths || old.relPath == target ||
-            NpnPaths.fileName(target).startsWith(DocumentPaths.RECOVERY_PREFIX)
+            NpnPaths.fileName(target).startsWith(NpnPaths.Temp.RECOVERY_PREFIX)
         ) {
             return false
         }

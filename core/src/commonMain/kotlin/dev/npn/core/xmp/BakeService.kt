@@ -10,7 +10,6 @@ import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
-import kotlin.uuid.Uuid
 
 /** The PDF cannot carry baked metadata, or the rewrite did not verify; the library file is untouched. */
 class BakeRefusedException(
@@ -211,9 +210,7 @@ class BakeService(
         norm: String,
         src: ByteArray,
     ): String {
-        val parent = NpnPaths.parentDir(norm)
-        val name = NpnPaths.Temp.recoveryName(Uuid.random().toString())
-        val recovery = if (parent.isEmpty()) name else "$parent/$name"
+        val recovery = NpnPaths.Temp.recoveryPath(beside = norm)
         fs.writeBytesOnce(recovery, src)
         return recovery
     }

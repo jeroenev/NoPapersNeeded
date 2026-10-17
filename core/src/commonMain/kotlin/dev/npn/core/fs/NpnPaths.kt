@@ -1,5 +1,7 @@
 package dev.npn.core.fs
 
+import kotlin.uuid.Uuid
+
 /**
  * Layout constants and pure path helpers for the library folder. No I/O here; everything is
  * string manipulation on library-relative, '/'-separated paths.
@@ -106,6 +108,9 @@ object NpnPaths {
         private const val BAKE_SUFFIX = ".npnbake.tmp"
         private val relocationPattern = Regex("\\.npn-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\\.tmp$")
 
+        /** Names a document file claimed mid-move ([recoveryName]); never mistaken for a move the user made. */
+        const val RECOVERY_PREFIX = "npn-recovery-"
+
         /** The kinds [kindOf] tells apart. */
         enum class Kind { WRITE, MOVE, RELOCATION, BAKE, IMPORT, MARKER_STAGING }
 
@@ -138,7 +143,14 @@ object NpnPaths {
          * a temporary file ([kindOf] is null): it is an ordinary indexable PDF, because a move
          * interrupted mid-way leaves the only copy of the document there.
          */
-        fun recoveryName(nonce: String): String = "${DocumentPaths.RECOVERY_PREFIX}$nonce.pdf"
+        fun recoveryName(nonce: String): String = "$RECOVERY_PREFIX$nonce.pdf"
+
+        /** A fresh [recoveryName] in the folder of [beside]. */
+        fun recoveryPath(beside: String): String {
+            val directory = parentDir(beside)
+            val name = recoveryName(Uuid.random().toString())
+            return if (directory.isEmpty()) name else "$directory/$name"
+        }
 
         /** Which kind of temporary file [relPath] names, or null for a file that is none of them. */
         fun kindOf(relPath: String): Kind? {

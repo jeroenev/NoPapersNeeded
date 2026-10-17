@@ -2,6 +2,7 @@ package dev.npn.core.index
 
 import dev.npn.core.fs.DocumentPaths
 import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.fs.NpnPaths
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.SystemProperty
 import io.kotest.matchers.shouldBe
@@ -196,7 +197,7 @@ class DocumentPathReplicationTest {
                 DocumentPaths(racing).reconcile(hash, "old.pdf", "new.pdf") shouldBe "old.pdf"
                 rig.exists("new.pdf") shouldBe false
                 rig.fs.readBytes("old.pdf").decodeToString() shouldBe "replacement"
-                rig.fs.listAll().filter { it.name.startsWith(DocumentPaths.RECOVERY_PREFIX) } shouldBe emptyList()
+                rig.fs.listAll().filter { it.name.startsWith(NpnPaths.Temp.RECOVERY_PREFIX) } shouldBe emptyList()
             } finally {
                 rig.close()
             }
@@ -224,7 +225,7 @@ class DocumentPathReplicationTest {
                 assertFailsWith<IllegalStateException> { DocumentPaths(failing).reconcile(hash, "old.pdf", "new.pdf") }
                 rig.fs.sha256("old.pdf") shouldBe hash
                 rig.exists("new.pdf") shouldBe false
-                rig.fs.listAll().filter { it.name.startsWith(DocumentPaths.RECOVERY_PREFIX) } shouldBe emptyList()
+                rig.fs.listAll().filter { it.name.startsWith(NpnPaths.Temp.RECOVERY_PREFIX) } shouldBe emptyList()
             } finally {
                 rig.close()
             }
@@ -248,7 +249,7 @@ class DocumentPathReplicationTest {
                 DocumentPaths(otherVolume).reconcile(hash, "old.pdf", "archive/new.pdf") shouldBe "archive/new.pdf"
                 rig.fs.sha256("archive/new.pdf") shouldBe hash
                 rig.exists("old.pdf") shouldBe false
-                rig.fs.listAll().filter { it.name.startsWith(DocumentPaths.RECOVERY_PREFIX) } shouldBe emptyList()
+                rig.fs.listAll().filter { it.name.startsWith(NpnPaths.Temp.RECOVERY_PREFIX) } shouldBe emptyList()
             } finally {
                 rig.close()
             }
