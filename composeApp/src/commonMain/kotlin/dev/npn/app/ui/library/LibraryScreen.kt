@@ -110,7 +110,6 @@ import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.OcrStatus
 import dev.npn.core.app.SavedView
-import dev.npn.core.app.SettingsRepository
 import dev.npn.core.app.SortField
 import dev.npn.core.app.ViewType
 import dev.npn.core.index.IndexProgress
@@ -119,6 +118,7 @@ import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.model.labelFor
 import dev.npn.core.model.reviewMarkerIsAuthoritative
+import dev.npn.core.settings.SettingsRepository
 import io.github.vinceglb.filekit.dialogs.FileKitMode
 import io.github.vinceglb.filekit.dialogs.FileKitType
 import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher

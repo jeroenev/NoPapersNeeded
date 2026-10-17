@@ -27,6 +27,7 @@ import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.ThumbnailStore
 import dev.npn.core.rules.RuleApplier
+import dev.npn.core.settings.SessionSettings
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged

@@ -2,7 +2,7 @@ package dev.npn.core.watch
 
 import android.content.Context
 import androidx.core.net.toUri
-import dev.npn.core.app.LibraryLocations
+import dev.npn.core.settings.LibraryLocations
 import java.nio.file.Paths
 
 /** The watched folder a persisted Android [location] names: a SAF tree uri, or a plain path. */

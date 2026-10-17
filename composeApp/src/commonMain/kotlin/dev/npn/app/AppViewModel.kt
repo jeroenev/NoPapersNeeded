@@ -11,10 +11,10 @@ import dev.npn.app.ui.common.asUiText
 import dev.npn.app.ui.common.clearThumbCache
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.LibrarySession
-import dev.npn.core.app.aiConfigured
 import dev.npn.core.app.importAll
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
+import dev.npn.core.settings.aiConfigured
 import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.CoroutineDispatcher

@@ -1,8 +1,8 @@
 package dev.npn.core.ai
 
-import dev.npn.core.app.SettingsRepositoryImpl
-import dev.npn.core.app.toAiConfig
 import dev.npn.core.db.TempIndexDb
+import dev.npn.core.settings.SettingsRepositoryImpl
+import dev.npn.core.settings.toAiConfig
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain

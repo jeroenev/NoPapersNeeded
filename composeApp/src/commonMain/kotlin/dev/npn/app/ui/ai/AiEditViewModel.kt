@@ -12,7 +12,6 @@ import dev.npn.core.ai.AiTagging
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.SavedView
-import dev.npn.core.app.SettingsRepository
 import dev.npn.core.app.aiedit.AiEditRun
 import dev.npn.core.app.aiedit.AiEditRunImpl
 import dev.npn.core.app.aiedit.ApplyOutcome
@@ -25,6 +24,7 @@ import dev.npn.core.app.aiedit.ScopeKey
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.model.reviewMarkerIsAuthoritative
+import dev.npn.core.settings.SettingsRepository
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job

@@ -1,4 +1,4 @@
-package dev.npn.core.app
+package dev.npn.core.settings
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow

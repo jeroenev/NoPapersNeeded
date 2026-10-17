@@ -4,6 +4,7 @@ import dev.npn.core.index.MutableClock
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.pdf.PdfBoxEngine
 import dev.npn.core.pdf.PdfFixtures
+import dev.npn.core.settings.SessionSettings
 import dev.npn.core.util.NpnLog
 import dev.npn.core.xmp.PdfBoxXmpIO
 import io.kotest.matchers.shouldBe

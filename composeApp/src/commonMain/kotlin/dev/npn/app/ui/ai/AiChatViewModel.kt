@@ -8,8 +8,8 @@ import dev.npn.core.ai.AiChatEvent
 import dev.npn.core.ai.AiChatHistoryItem
 import dev.npn.core.ai.AiChatSession
 import dev.npn.core.app.LibrarySession
-import dev.npn.core.app.SettingsRepository
-import dev.npn.core.app.aiConfigured
+import dev.npn.core.settings.SettingsRepository
+import dev.npn.core.settings.aiConfigured
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow

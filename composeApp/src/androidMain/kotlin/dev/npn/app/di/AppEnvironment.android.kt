@@ -2,10 +2,10 @@ package dev.npn.app.di
 
 import android.content.Context
 import dev.npn.app.platform.hasDirectStorageAccess
-import dev.npn.core.app.LibraryLocations
-import dev.npn.core.app.SessionSettings
-import dev.npn.core.app.SettingsRepositoryImpl
 import dev.npn.core.app.androidSessionDeps
+import dev.npn.core.settings.LibraryLocations
+import dev.npn.core.settings.SessionSettings
+import dev.npn.core.settings.SettingsRepositoryImpl
 import dev.npn.core.util.AndroidLog
 import dev.npn.core.watch.androidWatchedFolder
 import kotlinx.coroutines.flow.first

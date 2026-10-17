@@ -1,9 +1,12 @@
-package dev.npn.core.app
+package dev.npn.core.settings
 
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiReasoningLevel
 import dev.npn.core.ai.AiTagging
+import dev.npn.core.app.LibrarySort
+import dev.npn.core.app.SortField
+import dev.npn.core.app.ViewType
 import dev.npn.core.ocr.OcrLanguages
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -91,8 +94,9 @@ fun SettingsRepository.aiConfigured(): Flow<Boolean> =
  * Device-local, app-global settings (never per library, never synced through the journal — the
  * API key, watched-folder path and UI preferences are meaningless on another device). How a library
  * behaves is not here: its storage-path rule, auto-match rules and trash retention are library
- * settings in its journal ([StoragePathFacade], [AutoMatchRuleRepository], [TrashRetentionFacade]),
- * which every device reads the same.
+ * settings in its journal ([dev.npn.core.app.StoragePathFacade],
+ * [dev.npn.core.app.AutoMatchRuleRepository], [dev.npn.core.app.TrashRetentionFacade]), which
+ * every device reads the same.
  *
  * The seam is deliberately narrow: one [settings] snapshot flow to read and one [edit] mutation
  * to write, so the interface is not the storage schema: a new setting is one field on
@@ -137,7 +141,7 @@ data class LegacyLibrarySettings(
 /**
  * The single home for how a [SettingsSnapshot] maps to and from stored key/value strings, and for
  * the clamping/defaults that keep stored values in range. Both platform implementations
- * ([dev.npn.core.app.SettingsRepositoryImpl] on android and desktop) drive this object, so the key
+ * ([dev.npn.core.settings.SettingsRepositoryImpl] on android and desktop) drive this object, so the key
  * names, parsing quirks (enum fallbacks, empty-string-as-null, the pre-provider CUSTOM migration)
  * and range clamps are defined once instead of re-derived per target. The only thing the platforms
  * own is the storage primitive (SharedPreferences vs a properties file) and how a key is read,

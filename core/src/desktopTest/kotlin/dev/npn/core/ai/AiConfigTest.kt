@@ -1,7 +1,7 @@
 package dev.npn.core.ai
 
-import dev.npn.core.app.SettingsSnapshot
-import dev.npn.core.app.toAiConfig
+import dev.npn.core.settings.SettingsSnapshot
+import dev.npn.core.settings.toAiConfig
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 

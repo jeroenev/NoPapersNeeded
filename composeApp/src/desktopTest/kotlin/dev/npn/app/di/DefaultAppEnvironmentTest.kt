@@ -1,10 +1,10 @@
 package dev.npn.app.di
 
 import dev.npn.app.FakeSettingsRepository
-import dev.npn.core.app.AppDirs
 import dev.npn.core.app.SessionDeps
-import dev.npn.core.app.SessionSettings
 import dev.npn.core.app.jvmSessionDeps
+import dev.npn.core.settings.AppDirs
+import dev.npn.core.settings.SessionSettings
 import dev.npn.core.util.runCatchingCancellable
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull

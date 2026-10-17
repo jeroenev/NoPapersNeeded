@@ -17,9 +17,9 @@ import dev.npn.app.ui.detail.nodes
 import dev.npn.app.ui.detail.onUiThread
 import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.core.ai.AiProvider
-import dev.npn.core.app.SettingsSnapshot
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.settings.SettingsSnapshot
 import io.kotest.assertions.withClue
 import io.kotest.matchers.shouldBe
 import java.util.Locale

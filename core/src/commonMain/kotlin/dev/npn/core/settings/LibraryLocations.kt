@@ -1,4 +1,4 @@
-package dev.npn.core.app
+package dev.npn.core.settings
 
 /**
  * The persisted library location string is one of two shapes, and the platform wiring picks the

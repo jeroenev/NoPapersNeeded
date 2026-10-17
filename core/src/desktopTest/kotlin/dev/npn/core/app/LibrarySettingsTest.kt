@@ -10,6 +10,7 @@ import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.rules.AutoMatchRule
 import dev.npn.core.rules.AutoMatchRuleJson
 import dev.npn.core.rules.MatchAlgorithm
+import dev.npn.core.settings.LegacyLibrarySettings
 import dev.npn.core.util.RecordingLog
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.shouldBe

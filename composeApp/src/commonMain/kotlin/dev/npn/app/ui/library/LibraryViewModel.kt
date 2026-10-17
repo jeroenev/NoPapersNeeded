@@ -19,13 +19,11 @@ import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.OcrStatus
 import dev.npn.core.app.SavedView
-import dev.npn.core.app.SettingsRepository
 import dev.npn.core.app.SortField
 import dev.npn.core.app.TagInfo
 import dev.npn.core.app.TrashReceipt
 import dev.npn.core.app.ViewType
 import dev.npn.core.app.WorkStage
-import dev.npn.core.app.aiConfigured
 import dev.npn.core.app.importAll
 import dev.npn.core.app.textFieldValues
 import dev.npn.core.fs.ExternalSource
@@ -33,6 +31,8 @@ import dev.npn.core.index.IndexProgress
 import dev.npn.core.index.ScanReport
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.settings.SettingsRepository
+import dev.npn.core.settings.aiConfigured
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview

@@ -3,6 +3,7 @@ package dev.npn.core.app
 import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.rules.AutoMatchRuleJson
+import dev.npn.core.settings.LegacyLibrarySettings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map

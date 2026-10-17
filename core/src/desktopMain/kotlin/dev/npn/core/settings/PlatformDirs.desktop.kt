@@ -1,6 +1,6 @@
 @file:Suppress("MatchingDeclarationName")
 
-package dev.npn.core.app
+package dev.npn.core.settings
 
 /**
  * Resolves platform app-local data/config directories. On Windows these follow

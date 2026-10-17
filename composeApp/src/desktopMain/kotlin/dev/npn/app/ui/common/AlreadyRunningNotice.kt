@@ -14,7 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.theme.NpnTheme
-import dev.npn.core.app.SettingsRepository
+import dev.npn.core.settings.SettingsRepository
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_already_running
 import no_papers_needed.composeapp.generated.resources.common_ok

@@ -31,8 +31,8 @@ import dev.npn.app.ui.common.BackTopBar
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.core.app.LibrarySession
-import dev.npn.core.app.SettingsRepository
 import dev.npn.core.app.aiedit.EditProgress
+import dev.npn.core.settings.SettingsRepository
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_applying
 import no_papers_needed.composeapp.generated.resources.ai_edit_cancel_confirm

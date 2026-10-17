@@ -11,7 +11,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
-import dev.npn.core.app.SettingsRepository
+import dev.npn.core.settings.SettingsRepository
 
 /**
  * One document as both the detail screen and the library's side panel show it, wired to its [vm]:

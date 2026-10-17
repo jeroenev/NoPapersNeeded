@@ -31,7 +31,7 @@ import dev.npn.app.ui.common.WindowWidthClass
 import dev.npn.app.ui.detail.DocumentView
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
-import dev.npn.core.app.SettingsRepository
+import dev.npn.core.settings.SettingsRepository
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.library_preview_close
 import no_papers_needed.composeapp.generated.resources.ux_expand_document

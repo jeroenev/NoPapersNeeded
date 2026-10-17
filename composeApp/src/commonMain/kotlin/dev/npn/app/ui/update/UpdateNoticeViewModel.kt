@@ -5,7 +5,7 @@ import dev.npn.app.BuildInfo
 import dev.npn.app.platform.checksForUpdates
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.WhileSubscribedTimeout
-import dev.npn.core.app.SettingsRepository
+import dev.npn.core.settings.SettingsRepository
 import dev.npn.core.update.AppRelease
 import dev.npn.core.update.AppVersions
 import dev.npn.core.update.LatestReleaseSource

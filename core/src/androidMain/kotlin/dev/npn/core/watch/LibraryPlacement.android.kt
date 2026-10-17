@@ -2,8 +2,8 @@ package dev.npn.core.watch
 
 import android.net.Uri
 import android.provider.DocumentsContract
-import dev.npn.core.app.LibraryLocations
 import dev.npn.core.fs.ExternalStorageTreePaths
+import dev.npn.core.settings.LibraryLocations
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import java.nio.file.Paths

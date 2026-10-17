@@ -6,8 +6,8 @@ import androidx.compose.runtime.ProvidedValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dev.npn.core.app.SettingsRepository
-import dev.npn.core.app.SettingsSnapshot
+import dev.npn.core.settings.SettingsRepository
+import dev.npn.core.settings.SettingsSnapshot
 
 /**
  * CompositionLocal used to override the locale that Compose resource lookups

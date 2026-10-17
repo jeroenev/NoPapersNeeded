@@ -80,7 +80,7 @@ import dev.npn.app.ui.trash.TrashScreen
 import dev.npn.app.ui.update.WithUpdateBanner
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
-import dev.npn.core.app.SettingsRepository
+import dev.npn.core.settings.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.receiveAsFlow
 import no_papers_needed.composeapp.generated.resources.Res

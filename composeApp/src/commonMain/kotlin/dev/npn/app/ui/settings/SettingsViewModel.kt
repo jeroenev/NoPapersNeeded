@@ -15,10 +15,7 @@ import dev.npn.core.ai.AiSelfTest
 import dev.npn.core.ai.AiSelfTestReport
 import dev.npn.core.ai.AiTagging
 import dev.npn.core.app.LibrarySession
-import dev.npn.core.app.SettingsRepository
-import dev.npn.core.app.SettingsSnapshot
 import dev.npn.core.app.TrashSettings
-import dev.npn.core.app.toAiConfig
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
@@ -27,6 +24,9 @@ import dev.npn.core.pathrules.StoragePathContext
 import dev.npn.core.pathrules.StoragePathError
 import dev.npn.core.pathrules.StoragePathExpansion
 import dev.npn.core.pathrules.StoragePathTemplate
+import dev.npn.core.settings.SettingsRepository
+import dev.npn.core.settings.SettingsSnapshot
+import dev.npn.core.settings.toAiConfig
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.watch.liesInLibrary
 import kotlinx.coroutines.Job

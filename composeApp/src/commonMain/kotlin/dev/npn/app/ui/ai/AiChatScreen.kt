@@ -73,7 +73,7 @@ import dev.npn.app.ui.common.previewKeyShortcuts
 import dev.npn.core.ai.AiChatSession
 import dev.npn.core.ai.ChatTools
 import dev.npn.core.app.LibrarySession
-import dev.npn.core.app.SettingsRepository
+import dev.npn.core.settings.SettingsRepository
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_ask_documents
 import no_papers_needed.composeapp.generated.resources.ai_assistant_title

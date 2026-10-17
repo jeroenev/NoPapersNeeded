@@ -38,7 +38,7 @@ import dev.npn.app.ui.common.VerticalScrollbar
 import dev.npn.app.ui.common.ctrlScrollZoom
 import dev.npn.app.ui.common.pinchToZoom
 import dev.npn.core.app.DocListItem
-import dev.npn.core.app.GridSizing
+import dev.npn.core.settings.GridSizing
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
 import no_papers_needed.composeapp.generated.resources.Res

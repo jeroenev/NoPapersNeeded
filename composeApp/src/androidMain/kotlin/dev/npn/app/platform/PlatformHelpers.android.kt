@@ -7,11 +7,11 @@ import android.os.Environment
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.content.FileProvider
-import dev.npn.core.app.LibraryLocations
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.ExternalStorageTreePaths
 import dev.npn.core.fs.LocalLibraryFolders
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.settings.LibraryLocations
 import io.github.vinceglb.filekit.AndroidFile
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.PlatformFile

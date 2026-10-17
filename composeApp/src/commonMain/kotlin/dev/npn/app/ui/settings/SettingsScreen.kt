@@ -51,7 +51,7 @@ import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.rememberLibraryFolderPicker
 import dev.npn.app.ui.detail.LocalDocumentDrafts
 import dev.npn.core.app.LibrarySession
-import dev.npn.core.app.SettingsRepository
+import dev.npn.core.settings.SettingsRepository
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_clear_search
 import no_papers_needed.composeapp.generated.resources.common_settings_search

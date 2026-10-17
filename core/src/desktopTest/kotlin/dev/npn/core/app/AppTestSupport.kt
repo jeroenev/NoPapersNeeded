@@ -16,6 +16,9 @@ import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.ThumbnailStore
+import dev.npn.core.settings.AppDirs
+import dev.npn.core.settings.LegacyLibrarySettings
+import dev.npn.core.settings.SessionSettings
 import dev.npn.core.util.JvmLog
 import dev.npn.core.util.NpnLog
 import kotlinx.coroutines.CoroutineScope

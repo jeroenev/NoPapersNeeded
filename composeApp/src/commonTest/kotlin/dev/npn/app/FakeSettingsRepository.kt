@@ -1,10 +1,10 @@
 package dev.npn.app
 
 import dev.npn.core.ai.AiProvider
-import dev.npn.core.app.SettingsCodec
-import dev.npn.core.app.SettingsRepository
-import dev.npn.core.app.SettingsSnapshot
 import dev.npn.core.app.ViewType
+import dev.npn.core.settings.SettingsCodec
+import dev.npn.core.settings.SettingsRepository
+import dev.npn.core.settings.SettingsSnapshot
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow

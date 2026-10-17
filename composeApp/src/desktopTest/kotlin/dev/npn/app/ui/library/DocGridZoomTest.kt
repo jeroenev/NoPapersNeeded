@@ -12,10 +12,10 @@ import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import dev.npn.app.ui.theme.NpnTheme
-import dev.npn.core.app.GridSizing
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySort
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.settings.GridSizing
 import dev.npn.core.testing.FakeDocContentFacade
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.ints.shouldBeGreaterThan

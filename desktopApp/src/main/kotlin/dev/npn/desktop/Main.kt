@@ -30,9 +30,9 @@ import dev.npn.app.di.createAppEnvironment
 import dev.npn.app.ui.common.AlreadyRunningNotice
 import dev.npn.app.ui.common.DesktopBridge
 import dev.npn.core.app.DesktopLog
-import dev.npn.core.app.PlatformDirs
-import dev.npn.core.app.SettingsRepositoryImpl
 import dev.npn.core.fs.ExternalSource
+import dev.npn.core.settings.PlatformDirs
+import dev.npn.core.settings.SettingsRepositoryImpl
 import dev.npn.core.util.info
 import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res

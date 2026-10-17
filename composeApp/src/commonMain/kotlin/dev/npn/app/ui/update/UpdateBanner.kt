@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.SnackbarMessages
-import dev.npn.core.app.SettingsRepository
+import dev.npn.core.settings.SettingsRepository
 import dev.npn.core.update.AppRelease
 import dev.npn.core.update.GitHubLatestRelease
 import no_papers_needed.composeapp.generated.resources.Res

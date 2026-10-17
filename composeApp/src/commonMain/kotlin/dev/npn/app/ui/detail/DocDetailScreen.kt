@@ -32,7 +32,7 @@ import dev.npn.app.ui.common.BackTopBar
 import dev.npn.app.ui.common.DesktopBridge
 import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.core.app.LibrarySession
-import dev.npn.core.app.SettingsRepository
+import dev.npn.core.settings.SettingsRepository
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.detail_document
 import no_papers_needed.composeapp.generated.resources.detail_document_position

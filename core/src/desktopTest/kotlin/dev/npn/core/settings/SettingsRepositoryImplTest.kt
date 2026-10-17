@@ -1,4 +1,4 @@
-package dev.npn.core.app
+package dev.npn.core.settings
 
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiReasoningLevel

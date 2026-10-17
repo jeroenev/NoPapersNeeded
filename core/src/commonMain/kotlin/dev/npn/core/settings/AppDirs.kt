@@ -1,4 +1,4 @@
-package dev.npn.core.app
+package dev.npn.core.settings
 
 /**
  * App-local storage locations for one opened library. Both are absolute paths to plain

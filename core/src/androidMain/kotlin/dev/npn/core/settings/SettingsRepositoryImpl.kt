@@ -1,4 +1,4 @@
-package dev.npn.core.app
+package dev.npn.core.settings
 
 import android.content.Context
 import android.content.SharedPreferences

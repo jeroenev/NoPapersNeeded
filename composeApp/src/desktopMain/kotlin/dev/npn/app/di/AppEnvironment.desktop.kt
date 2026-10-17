@@ -1,12 +1,12 @@
 package dev.npn.app.di
 
-import dev.npn.core.app.AppDirs
 import dev.npn.core.app.DesktopLog
-import dev.npn.core.app.SessionSettings
-import dev.npn.core.app.SettingsRepositoryImpl
 import dev.npn.core.app.desktop
 import dev.npn.core.app.jvmSessionDeps
 import dev.npn.core.ocr.TesseractCliEngine
+import dev.npn.core.settings.AppDirs
+import dev.npn.core.settings.SessionSettings
+import dev.npn.core.settings.SettingsRepositoryImpl
 import dev.npn.core.watch.JvmWatchedFolder
 import kotlinx.coroutines.flow.first
 import java.io.File

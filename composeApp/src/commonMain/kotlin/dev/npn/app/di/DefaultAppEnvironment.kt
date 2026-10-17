@@ -3,7 +3,7 @@ package dev.npn.app.di
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.LibrarySessionImpl
 import dev.npn.core.app.SessionDeps
-import dev.npn.core.app.SettingsRepository
+import dev.npn.core.settings.SettingsRepository
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
