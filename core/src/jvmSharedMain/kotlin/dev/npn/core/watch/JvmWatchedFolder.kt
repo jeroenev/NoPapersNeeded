@@ -1,5 +1,6 @@
 package dev.npn.core.watch
 
+import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.externalSourceOfPath
 import dev.npn.core.fs.sha256Hex
 import dev.npn.core.fs.watchDirs
@@ -30,8 +31,7 @@ class JvmWatchedFolder(
                     stream
                         .asSequence()
                         .filter {
-                            Files.isRegularFile(it) &&
-                                it.fileName.toString().endsWith(".pdf", ignoreCase = true)
+                            Files.isRegularFile(it) && NpnPaths.isPdf(it.fileName.toString())
                         }.map { path ->
                             val mtime =
                                 runCatching {
