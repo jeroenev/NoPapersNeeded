@@ -2,7 +2,7 @@ package dev.npn.app
 
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.tags.TagManagementViewModel
-import dev.npn.app.ui.tags.buildTree
+import dev.npn.app.ui.tags.tagRows
 import dev.npn.core.app.TagInfo
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -29,49 +29,37 @@ class TagManagementViewModelTest : MainDispatcherTest() {
     ) = TagInfo(name, null, null, count)
 
     @Test
-    fun buildTreeFlatTags() =
-        runTest(dispatcher) {
-            val tree = buildTree(listOf(tag("finance", 3), tag("travel", 1)))
-            tree.map { it.path } shouldContainExactly listOf("finance", "travel")
-            tree.all { it.children.isEmpty() } shouldBe true
-            tree.first().descendantCount shouldBe 3
-        }
+    fun flatTagsAreRowsOfTheirOwn() {
+        val rows = tagRows(listOf(tag("finance", 3), tag("travel", 1)))
+        rows.map { it.path } shouldContainExactly listOf("finance", "travel")
+        rows.first().descendantCount shouldBe 3
+    }
 
     @Test
-    fun buildTreeCreatesIntermediateNamespaceNodes() =
-        runTest(dispatcher) {
-            // "finance.tax" exists but "finance" has no tag of its own.
-            val tree = buildTree(listOf(tag("finance.tax", 2)))
-            tree.map { it.path } shouldContainExactly listOf("finance")
-            val finance = tree.first()
-            finance.info shouldBe null // intermediate, not a real tag
-            finance.descendantCount shouldBe 2 // rolled up from child
-            finance.children.map { it.path } shouldContainExactly listOf("finance.tax")
-            finance.children.first().segment shouldBe "tax"
-        }
+    fun aNamespaceWithoutATagOfItsOwnStillGetsARow() {
+        // "finance.tax" exists but "finance" has no tag of its own.
+        val rows = tagRows(listOf(tag("finance.tax", 2)))
+        rows.map { it.path } shouldContainExactly listOf("finance", "finance.tax")
+        val finance = rows.first()
+        finance.info shouldBe null // intermediate, not a real tag
+        finance.descendantCount shouldBe 2 // rolled up from its child
+        rows.last().segment shouldBe "tax"
+    }
 
     @Test
-    fun buildTreeRollsUpDescendantCounts() =
-        runTest(dispatcher) {
-            val tree =
-                buildTree(
-                    listOf(tag("a", 1), tag("a.b", 2), tag("a.b.c", 4)),
-                )
-            val a = tree.single()
-            a.descendantCount shouldBe 7 // 1 + 2 + 4
-            val b = a.children.single()
-            b.descendantCount shouldBe 6 // 2 + 4
-            val c = b.children.single()
-            c.descendantCount shouldBe 4
-            c.info.shouldNotBeNull()
-        }
+    fun descendantCountsRollUp() {
+        val rows = tagRows(listOf(tag("a", 1), tag("a.b", 2), tag("a.b.c", 4)))
+        rows.map { it.descendantCount } shouldContainExactly listOf(7, 6, 4) // a, a.b, a.b.c
+        rows.last().info.shouldNotBeNull()
+    }
 
     @Test
-    fun buildTreeSortsSiblingsAlphabetically() =
-        runTest(dispatcher) {
-            val tree = buildTree(listOf(tag("z"), tag("a"), tag("m")))
-            tree.map { it.segment } shouldContainExactly listOf("a", "m", "z")
-        }
+    fun siblingsAreAlphabeticalAndChildrenFollowTheirParent() {
+        // Depth-first, not plain string order: "a-c" sorts before "a.b" as a string, but "a.b" is
+        // a's child and comes right after it.
+        val rows = tagRows(listOf(tag("z"), tag("a.b"), tag("a-c"), tag("m"), tag("a")))
+        rows.map { it.path } shouldContainExactly listOf("a", "a.b", "a-c", "m", "z")
+    }
 
     @Test
     fun mergeAllMergesEverythingIntoPrimaryExceptItself() =

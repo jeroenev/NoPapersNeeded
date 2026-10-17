@@ -9,6 +9,7 @@ import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.TagInfo
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
@@ -23,17 +24,48 @@ import org.jetbrains.compose.resources.PluralStringResource
 import org.jetbrains.compose.resources.StringResource
 
 /**
- * A node in the hierarchical tag tree. Dot-separated tag paths ("a.b.c") form a namespace tree.
- * Intermediate nodes may not be real tags (no [TagInfo]); [descendantCount] is the number of
- * documents carrying this exact path or any path under it.
+ * One card of the tags screen. Dot-separated tag paths ("a.b.c") form a namespace tree, which the
+ * screen shows flattened depth-first ([tagRows]). An intermediate namespace need not be a real tag
+ * (no [info]); [descendantCount] is the number of documents carrying this exact path or any path
+ * under it.
  */
-data class TagNode(
+data class TagRow(
     val path: String,
     val segment: String,
     val info: TagInfo?,
     val descendantCount: Int,
-    val children: List<TagNode>,
 )
+
+/**
+ * The namespace tree of [tags], depth-first with siblings in alphabetical order: every tag, plus a
+ * row for each namespace prefix one of them implies.
+ */
+internal fun tagRows(tags: List<TagInfo>): List<TagRow> {
+    val byPath = tags.associateBy { it.name }
+    // Every path (real tags plus the prefixes they imply), sorted, with the documents on or under it.
+    val paths = sortedSetOf<String>()
+    val totals = HashMap<String, Int>()
+    for (tag in tags) {
+        var end = -1
+        do {
+            end = tag.name.indexOf('.', end + 1).let { if (it < 0) tag.name.length else it }
+            val prefix = tag.name.substring(0, end)
+            paths.add(prefix)
+            totals[prefix] = (totals[prefix] ?: 0) + tag.count
+        } while (end < tag.name.length)
+    }
+    val childrenByParent = paths.groupBy { it.substringBeforeLast('.', "") }
+    val rows = ArrayList<TagRow>(paths.size)
+
+    fun walk(parent: String) {
+        for (path in childrenByParent[parent].orEmpty()) {
+            rows += TagRow(path, path.substringAfterLast('.'), byPath[path], totals.getValue(path))
+            walk(path)
+        }
+    }
+    walk("")
+    return rows
+}
 
 /**
  * What the tags screen writes. Every action but rename takes a list of tags: a card's own menu
@@ -74,6 +106,10 @@ class TagManagementViewModel(
         session.tags
             .observeTags()
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
+
+    /** [tags] as the screen's cards: the namespace tree, flattened depth-first. */
+    val rows: StateFlow<List<TagRow>> =
+        tags.map(::tagRows).stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     override fun rename(
         from: String,

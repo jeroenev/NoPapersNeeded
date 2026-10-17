@@ -173,7 +173,7 @@ private sealed interface TagDialog {
 fun TagManagementScreen(session: LibrarySession) {
     val vm: TagManagementViewModel = viewModel { TagManagementViewModel(session) }
     val tags by vm.tags.collectAsStateWithLifecycle()
-    val tree = remember(tags) { buildTree(tags) }
+    val rows by vm.rows.collectAsStateWithLifecycle()
 
     var dialog by rememberSaveable(stateSaver = TagDialog.Saver) { mutableStateOf(null) }
     val selection = rememberSaveable(saver = TagSelection.Saver) { TagSelection() }
@@ -182,7 +182,7 @@ fun TagManagementScreen(session: LibrarySession) {
     SnackbarMessages(vm.messages, snackbar)
 
     TagListScaffold(
-        tree = tree,
+        rows = rows,
         isEmpty = tags.isEmpty(),
         snackbar = snackbar,
         selection = selection,
@@ -205,15 +205,14 @@ fun TagManagementScreen(session: LibrarySession) {
 
 @Composable
 private fun TagListScaffold(
-    tree: List<TagNode>,
+    rows: List<TagRow>,
     isEmpty: Boolean,
     snackbar: SnackbarHostState,
     selection: TagSelection,
     onOpen: (TagDialog) -> Unit,
 ) {
-    val flatTree = remember(tree) { flatten(tree) }
     // Tags can disappear underneath a selection (another device, auto-pruning after edits).
-    val selected = flatTree.mapNotNull { node -> node.info?.name?.takeIf { it in selection.selected } }
+    val selected = rows.mapNotNull { node -> node.info?.name?.takeIf { it in selection.selected } }
     Scaffold(
         topBar = {
             if (selection.active) {
@@ -221,7 +220,7 @@ private fun TagListScaffold(
                     selected = selected,
                     onClose = selection::clear,
                     onSelectAll = {
-                        selection.selected = flatTree.mapNotNull { it.info?.name }.toSet()
+                        selection.selected = rows.mapNotNull { it.info?.name }.toSet()
                     },
                     onOpen = onOpen,
                 )
@@ -251,7 +250,7 @@ private fun TagListScaffold(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                items(flatTree, key = { it.path }) { node ->
+                items(rows, key = { it.path }) { node ->
                     val isSelected = node.path in selection.selected
                     TagCard(
                         node = node,
@@ -443,7 +442,7 @@ private val TagCardMinWidth = 240.dp
 
 @Composable
 private fun TagCard(
-    node: TagNode,
+    node: TagRow,
     selectionMode: Boolean,
     selected: Boolean,
     /** The tags this card's menu acts on: this one, or the selection it is part of. */
@@ -514,7 +513,7 @@ private fun TagCard(
 
 @Composable
 private fun TagCardLabel(
-    node: TagNode,
+    node: TagRow,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier) {
@@ -609,55 +608,4 @@ private fun TagCardMenu(
             ActionMenuItems(actions, onDismiss)
         }
     }
-}
-
-/** Build the namespace tree from the flat tag list. */
-internal fun buildTree(flat: List<TagInfo>): List<TagNode> {
-    val byPath = flat.associateBy { it.name }
-    // Collect every distinct path (real tags plus the intermediate namespace prefixes they imply),
-    // already sorted. Grouping by immediate parent prefix below keeps the tree build linear, rather
-    // than filtering the whole path set once per node.
-    val allPaths = sortedSetOf<String>()
-    for (t in flat) {
-        val parts = t.name.split('.')
-        val acc = StringBuilder()
-        for ((i, p) in parts.withIndex()) {
-            if (i > 0) acc.append('.')
-            acc.append(p)
-            allPaths.add(acc.toString())
-        }
-    }
-    val childrenByParent = HashMap<String, MutableList<String>>()
-    for (path in allPaths) {
-        val parent = path.substringBeforeLast('.', "")
-        childrenByParent.getOrPut(parent) { mutableListOf() }.add(path)
-    }
-
-    fun childrenOf(prefix: String): List<TagNode> =
-        childrenByParent[prefix].orEmpty().map { path ->
-            val kids = childrenOf(path)
-            val info = byPath[path]
-            TagNode(
-                path = path,
-                segment = path.substringAfterLast('.'),
-                info = info,
-                descendantCount = (info?.count ?: 0) + kids.sumOf { it.descendantCount },
-                children = kids,
-            )
-        }
-
-    return childrenOf("")
-}
-
-private fun flatten(nodes: List<TagNode>): List<TagNode> {
-    val out = ArrayList<TagNode>()
-
-    fun walk(list: List<TagNode>) {
-        for (n in list) {
-            out.add(n)
-            walk(n.children)
-        }
-    }
-    walk(nodes)
-    return out
 }
