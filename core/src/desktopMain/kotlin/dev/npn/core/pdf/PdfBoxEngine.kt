@@ -27,14 +27,13 @@ import javax.imageio.ImageIO
  */
 class PdfBoxEngine : PdfEngine {
     override suspend fun open(bytes: ByteArray): PdfDocumentHandle =
-        withContext(Dispatchers.IO) {
-            val doc =
-                try {
-                    Loader.loadPDF(bytes)
-                } catch (t: Throwable) {
-                    throw PdfOpenException("Failed to load PDF", t)
-                }
-            PdfBoxDocumentHandle(doc)
+        withContext(Dispatchers.IO) { PdfBoxDocumentHandle(loadOrThrow(bytes)) }
+
+    private fun loadOrThrow(bytes: ByteArray): PDDocument =
+        try {
+            Loader.loadPDF(bytes)
+        } catch (t: Throwable) {
+            throw PdfOpenException("Failed to load PDF", t)
         }
 
     override suspend fun imagesToPdf(images: List<ByteArray>): ByteArray =
@@ -73,13 +72,7 @@ class PdfBoxEngine : PdfEngine {
     ): ByteArray =
         withContext(Dispatchers.IO) {
             require(pageIndices.isNotEmpty()) { "pageIndices must not be empty" }
-            val source =
-                try {
-                    Loader.loadPDF(bytes)
-                } catch (t: Throwable) {
-                    throw PdfOpenException("Failed to load PDF", t)
-                }
-            source.use { src ->
+            loadOrThrow(bytes).use { src ->
                 require(pageIndices.all { it in 0 until src.numberOfPages }) {
                     "page index out of range (pages: ${src.numberOfPages})"
                 }

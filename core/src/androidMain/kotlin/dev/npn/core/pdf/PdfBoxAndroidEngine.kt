@@ -40,15 +40,15 @@ class PdfBoxAndroidEngine(
     override suspend fun open(bytes: ByteArray): PdfDocumentHandle =
         LazyPdfDocumentHandle(openText = { openText(bytes) }, openPages = { openPages(bytes) })
 
-    private fun openText(bytes: ByteArray): PdfTextBackend {
+    private fun openText(bytes: ByteArray): PdfTextBackend = PdfBoxTextBackend(loadOrThrow(bytes))
+
+    private fun loadOrThrow(bytes: ByteArray): PDDocument {
         PdfBoxAndroidInit.ensure(context)
-        val document =
-            try {
-                PDDocument.load(bytes)
-            } catch (t: Throwable) {
-                throw PdfOpenException("Failed to load PDF", t)
-            }
-        return PdfBoxTextBackend(document)
+        return try {
+            PDDocument.load(bytes)
+        } catch (t: Throwable) {
+            throw PdfOpenException("Failed to load PDF", t)
+        }
     }
 
     /** Stage [bytes] in the cache directory, where `PdfRenderer` can seek, and open the renderer. */
@@ -72,8 +72,7 @@ class PdfBoxAndroidEngine(
     override suspend fun imagesToPdf(images: List<ByteArray>): ByteArray =
         withContext(Dispatchers.IO) {
             PdfBoxAndroidInit.ensure(context)
-            val doc = PDDocument()
-            try {
+            PDDocument().use { doc ->
                 for (imageBytes in images) {
                     val image: PDImageXObject =
                         if (isJpeg(imageBytes)) {
@@ -94,8 +93,6 @@ class PdfBoxAndroidEngine(
                 val out = ByteArrayOutputStream()
                 doc.save(out)
                 out.toByteArray()
-            } finally {
-                doc.close()
             }
         }
 
@@ -104,29 +101,17 @@ class PdfBoxAndroidEngine(
         pageIndices: List<Int>,
     ): ByteArray =
         withContext(Dispatchers.IO) {
-            PdfBoxAndroidInit.ensure(context)
             require(pageIndices.isNotEmpty()) { "pageIndices must not be empty" }
-            val source =
-                try {
-                    PDDocument.load(bytes)
-                } catch (t: Throwable) {
-                    throw PdfOpenException("Failed to load PDF", t)
-                }
-            try {
+            loadOrThrow(bytes).use { source ->
                 require(pageIndices.all { it in 0 until source.numberOfPages }) {
                     "page index out of range (pages: ${source.numberOfPages})"
                 }
-                val dst = PDDocument()
-                try {
+                PDDocument().use { dst ->
                     for (index in pageIndices) dst.importPage(source.getPage(index))
                     val out = ByteArrayOutputStream()
                     dst.save(out)
                     out.toByteArray()
-                } finally {
-                    dst.close()
                 }
-            } finally {
-                source.close()
             }
         }
 }
