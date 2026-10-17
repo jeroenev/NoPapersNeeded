@@ -234,7 +234,7 @@ class PathIdentityTest {
                     }
                 }
             val imports =
-                ImportService(racing, rig.db, rig.deviceDb.ocrQueueDao(), rig.clock, fieldTypes = { emptyMap() })
+                ImportService(racing, rig.db, rig.deviceDb.ocrQueueDao(), rig.clock, serialize = unserialized)
 
             assertFailsWith<IllegalStateException> { imports.importBytes("bravo".encodeToByteArray(), "scan.pdf") }
 

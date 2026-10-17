@@ -20,7 +20,7 @@ class ImportDuplicateTest {
     private val rig = IndexRig.create()
     private val watched = WatchedFileSystem(rig.fs).also { it.db = rig.db }
     private val imports =
-        ImportService(watched, rig.db, rig.deviceDb.ocrQueueDao(), rig.clock, fieldTypes = { emptyMap() })
+        ImportService(watched, rig.db, rig.deviceDb.ocrQueueDao(), rig.clock, serialize = unserialized)
 
     @AfterTest
     fun teardown() = rig.close()

@@ -2,7 +2,6 @@ package dev.npn.core.index
 
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.documentEntity
-import dev.npn.core.db.fieldTypes
 import dev.npn.core.db.isLive
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.libraryPdfs
@@ -218,7 +217,7 @@ class SplitServiceTest {
                 rig.db,
                 rig.deviceDb.ocrQueueDao(),
                 rig.clock,
-                fieldTypes = { rig.db.fieldDefDao().fieldTypes() },
+                serialize = unserialized,
             )
         return SplitService(fs, PdfBoxEngine(), imports, rig.db.documentDao())
     }

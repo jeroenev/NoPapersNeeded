@@ -38,21 +38,4 @@ interface LockedJournal {
      * ([dev.npn.core.journal.FoldedState.trashTimes]).
      */
     suspend fun trashTimes(): Map<String, Long?>
-
-    companion object {
-        /** For a library whose journal holds no relink and hides no document. */
-        val EMPTY: LockedJournal =
-            object : LockedJournal {
-                override suspend fun successorOf(docId: String): String = docId
-
-                override suspend fun isDeleted(docId: String): Boolean = false
-
-                override suspend fun restoreReturned(
-                    docId: String,
-                    relPath: String,
-                ): Boolean = false
-
-                override suspend fun trashTimes(): Map<String, Long?> = emptyMap()
-            }
-    }
 }

@@ -6,7 +6,6 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.StatementLog
 import dev.npn.core.db.TempIndexDb
-import dev.npn.core.db.fieldTypes
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.db.recordingDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
@@ -57,7 +56,7 @@ class IndexRig private constructor(
             db,
             deviceDb.ocrQueueDao(),
             clock,
-            fieldTypes = { db.fieldDefDao().fieldTypes() },
+            serialize = unserialized,
         )
 
     val maintenance =
@@ -259,4 +258,25 @@ class MutableClock(
     fun advance(by: Long = 1L) {
         now += by
     }
+}
+
+/**
+ * [ImportService]'s serialize where no coordinator holds a lock: each step runs at once, against a
+ * journal that holds no relink and hides no document.
+ */
+val unserialized: suspend (suspend (LockedJournal) -> Unit) -> Unit = { step ->
+    step(
+        object : LockedJournal {
+            override suspend fun successorOf(docId: String): String = docId
+
+            override suspend fun isDeleted(docId: String): Boolean = false
+
+            override suspend fun restoreReturned(
+                docId: String,
+                relPath: String,
+            ): Boolean = false
+
+            override suspend fun trashTimes(): Map<String, Long?> = emptyMap()
+        },
+    )
 }

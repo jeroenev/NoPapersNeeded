@@ -5,6 +5,7 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.OcrQueueDao
 import dev.npn.core.db.OcrQueueEntity
+import dev.npn.core.db.fieldTypes
 import dev.npn.core.db.isLive
 import dev.npn.core.db.missingSentinel
 import dev.npn.core.fs.ExternalSource
@@ -16,7 +17,6 @@ import dev.npn.core.fs.holds
 import dev.npn.core.fs.uniquifyPath
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.SystemEpochClock
-import dev.npn.core.model.FieldType
 import dev.npn.core.ocr.OcrState
 import dev.npn.core.pathrules.StoragePathContext
 import dev.npn.core.pathrules.StoragePathRule
@@ -104,9 +104,7 @@ class ImportService(
     private val ocrQueueDao: OcrQueueDao,
     private val clock: EpochClock = SystemEpochClock,
     private val ruleProvider: suspend () -> StoragePathRule? = { null },
-    /** The registry's field types by key, which decide where a template accepts a date pattern. */
-    private val fieldTypes: suspend () -> Map<String, FieldType>,
-    private val serialize: suspend (suspend (LockedJournal) -> Unit) -> Unit = { it(LockedJournal.EMPTY) },
+    private val serialize: suspend (suspend (LockedJournal) -> Unit) -> Unit,
     /** Where clearing a returned document's trashed copy, best effort, reports a failure. */
     private val log: NpnLog = NpnLog.None,
 ) {
@@ -442,18 +440,18 @@ class ImportService(
         toDir: String,
     ): String {
         val rule = ruleProvider()
-        if (rule?.enabled != true || rule.template.isBlank()) {
-            return uniqueTargetPath(toDir, cleanName)
-        }
+        // A blank template expands to no path, as does any template that cannot expand.
+        if (rule?.enabled != true) return uniqueTargetPath(toDir, cleanName)
         val context =
             StoragePathContext(
                 fields = emptyMap(),
                 tags = emptyList(),
                 originalFileName = cleanName,
-                fieldTypes = fieldTypes(),
+                // The registry's types decide where a template accepts a date pattern.
+                fieldTypes = db.fieldDefDao().fieldTypes(),
             )
         val expanded = StoragePathTemplate.expand(rule.template, context).pathOrNull
-        return if (expanded.isNullOrBlank()) {
+        return if (expanded == null) {
             uniqueTargetPath(toDir, cleanName)
         } else {
             resolveUniqueTarget(fs, documentDao, currentDocId = null, target = expanded)

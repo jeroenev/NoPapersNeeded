@@ -37,7 +37,6 @@ class ImportTakeBackTest {
                     rig.db,
                     rig.deviceDb.ocrQueueDao(),
                     rig.clock,
-                    fieldTypes = { emptyMap() },
                     serialize = { step ->
                         step(
                             object : LockedJournal {

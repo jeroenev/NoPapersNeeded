@@ -8,7 +8,6 @@ import dev.npn.core.app.aiedit.AiEditQueue
 import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.LegacyIndexTables
 import dev.npn.core.db.defs
-import dev.npn.core.db.fieldTypes
 import dev.npn.core.fs.TrashOps
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
 import dev.npn.core.index.Compaction
@@ -205,7 +204,6 @@ internal suspend fun buildLibrary(
                 ocrQueueDao = deps.deviceDb.ocrQueueDao(),
                 clock = deps.clock,
                 ruleProvider = storagePath::rule,
-                fieldTypes = { db.fieldDefDao().fieldTypes() },
                 serialize = { coordinator.serialized(it) },
                 log = deps.log,
             ),
