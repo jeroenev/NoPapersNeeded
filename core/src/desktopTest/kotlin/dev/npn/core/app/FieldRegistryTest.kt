@@ -32,7 +32,7 @@ class FieldRegistryTest {
 
             // A second device opening the same library must not seed again: the marker, not the
             // presence of definitions, is the guard.
-            val (second, db2) = rig.secondSession(backgroundScope)
+            val (second, _) = rig.secondSession(backgroundScope)
             second.fieldRegistry.fields
                 .first { it.isNotEmpty() }
                 .size shouldBe 5
@@ -48,7 +48,7 @@ class FieldRegistryTest {
             rig.session.fieldRegistry.fields
                 .first { it.isEmpty() }
 
-            val (second, db2) = rig.secondSession(backgroundScope)
+            val (second, _) = rig.secondSession(backgroundScope)
             second.fieldRegistry.current() shouldBe emptyList()
         }
 

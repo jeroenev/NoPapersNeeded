@@ -183,9 +183,4 @@ class MetadataWriterBatchTest {
                 .shouldNotBeNull()
                 .title shouldBe "Mine"
         }
-
-    private fun tagsOf(
-        items: List<DocListItem>,
-        docId: String,
-    ): List<String> = items.first { it.doc.docId == docId }.tags
 }

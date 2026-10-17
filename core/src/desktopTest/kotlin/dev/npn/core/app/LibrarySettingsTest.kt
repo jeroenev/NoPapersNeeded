@@ -66,7 +66,7 @@ class LibrarySettingsTest {
                 // A value the library already holds is never replaced, a cleared one included.
                 rig.session.storagePath.setStoragePathTemplate(null)
                 val other = LegacyLibrarySettings("other/{title}.pdf", autoMatchRulesJson = "[]")
-                val (second, secondDb) = rig.secondSession(backgroundScope, legacyLibrarySettings = { other })
+                val (second, _) = rig.secondSession(backgroundScope, legacyLibrarySettings = { other })
                 second.storagePath.storagePath.first() shouldBe StoragePathSetting(null, enabled = true)
                 second.rules
                     .observeRules()
@@ -85,7 +85,7 @@ class LibrarySettingsTest {
             val first = LegacyLibrarySettings("{title}.pdf", storagePathEnabled = false)
             AppSessionRig.create(backgroundScope, legacyLibrarySettings = { first }).use { rig ->
                 val other = LegacyLibrarySettings("archive/{title}.pdf", storagePathEnabled = true)
-                val (second, secondDb) = rig.secondSession(backgroundScope, legacyLibrarySettings = { other })
+                val (second, _) = rig.secondSession(backgroundScope, legacyLibrarySettings = { other })
                 second.storagePath.storagePath.first() shouldBe StoragePathSetting("{title}.pdf", enabled = false)
                 rig.session.rescan()
                 rig.session.storagePath.storagePath
@@ -102,7 +102,7 @@ class LibrarySettingsTest {
                 rig.session.storagePath.storagePath
                     .first() shouldBe StoragePathSetting()
                 val other = LegacyLibrarySettings("archive/{title}.pdf", storagePathEnabled = false)
-                val (second, secondDb) = rig.secondSession(backgroundScope, legacyLibrarySettings = { other })
+                val (second, _) = rig.secondSession(backgroundScope, legacyLibrarySettings = { other })
                 second.storagePath.storagePath.first() shouldBe
                     StoragePathSetting("archive/{title}.pdf", enabled = false)
             }
@@ -165,7 +165,7 @@ class LibrarySettingsTest {
             rig.session.trashRetention.setTrashRetentionDays(20)
             val objects = rig.journalObjectCount()
 
-            val (second, secondDb) = rig.secondSession(backgroundScope, deviceTrashRetentionDays = 3)
+            val (second, _) = rig.secondSession(backgroundScope, deviceTrashRetentionDays = 3)
             second.trashRetention.trashRetentionDays.first() shouldBe 20
             rig.journalObjectCount() shouldBe objects
         }

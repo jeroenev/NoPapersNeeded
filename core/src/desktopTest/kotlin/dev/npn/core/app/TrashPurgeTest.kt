@@ -102,7 +102,7 @@ class TrashPurgeTest {
             rig.session.docLifecycle.trashDoc(rig.docId("old.pdf"))
 
             // A device that joins now indexes only the PDFs on disk: the trashed one has no row.
-            val (second, secondDb) = rig.secondSession(backgroundScope, clock = MutableClock(now + 1))
+            val (second, _) = rig.secondSession(backgroundScope, clock = MutableClock(now + 1))
             second.trashPurge.purge(olderThanDays = 30)
 
             rig.fs
@@ -129,7 +129,7 @@ class TrashPurgeTest {
             val entry = NpnPaths.trashPath("old.pdf", id, now - 90 * DAY)
             rig.fs.move("old.pdf", entry)
 
-            val (second, secondDb) = rig.secondSession(backgroundScope, clock = MutableClock(now + 1))
+            val (second, _) = rig.secondSession(backgroundScope, clock = MutableClock(now + 1))
             second.rescan()
             second.trashPurge.purge(olderThanDays = 30)
 

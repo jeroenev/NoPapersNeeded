@@ -257,6 +257,12 @@ internal fun IndexRig.metadataWriter(
         clock,
     )
 
+/** The tags of [docId] among [items]. */
+fun tagsOf(
+    items: List<DocListItem>,
+    docId: String,
+): List<String> = items.first { it.doc.docId == docId }.tags
+
 /** A journal store from a newer build makes the rescan refuse, which blocks metadata writes. */
 suspend fun AppSessionRig.blockMetadataWrites() {
     Files.createDirectories(libRoot.resolve(NEWER_STORE))
