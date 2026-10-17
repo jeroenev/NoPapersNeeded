@@ -43,7 +43,12 @@ internal fun AutoMatchRuleEntity.toRule(): AutoMatchRule =
         field = RuleField.fromWire(field) ?: RuleField.Content,
         algorithm = MatchAlgorithm.entries.firstOrNull { it.name == algorithm } ?: MatchAlgorithm.ANY_WORD,
         pattern = pattern,
-        tags = tags?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList(),
+        tags =
+            tags
+                ?.split(',')
+                ?.map { it.trim() }
+                ?.filter { it.isNotEmpty() }
+                .orEmpty(),
         sets = runCatching { setsJson.decodeFromString<Map<String, String>>(sets) }.getOrDefault(emptyMap()),
         position = position,
     )

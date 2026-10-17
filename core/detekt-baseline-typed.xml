@@ -101,7 +101,6 @@
     <ID>UnsafeCallOnNullableType:TrashLifecycleTest.kt:TrashLifecycleTest$rig.db.documentDao().getByDocId(id)!!</ID>
     <ID>UseOrEmpty:AiEditQueueTest.kt:title?.let { mapOf(FieldKeys.TITLE to it) } ?: emptyMap()</ID>
     <ID>UseOrEmpty:AiText.kt:AiText$(this[key] as? JsonArray) ?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -&gt; p.isString }?.contentOrNull } ?.map { it.trim() } ?.filter { it.isNotEmpty() } ?: emptyList()</ID>
-    <ID>UseOrEmpty:AutoMatchRuleEntity.kt:tags?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()</ID>
     <ID>UseOrEmpty:StoragePathTemplate.kt:StoragePathTemplate$value ?: ""</ID>
     <ID>UseRequireNotNull:SnapshotFormat.kt:SnapshotCodec$require(supersedes != null) { "Snapshot manifest supersedes must be an array" }</ID>
     <ID>UseRequireNotNull:SnapshotFormat.kt:SnapshotCodec$require(version != null) { "Snapshot manifest version must be an integer" }</ID>

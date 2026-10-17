@@ -125,18 +125,26 @@ class ImportService(
         toDir: String = NpnPaths.DEFAULT_INBOX,
     ): ImportResult = staged(suggestedName, toDir) { tmpPath -> fs.writeBytesOnce(tmpPath, bytes) }
 
-    /** Import what [stage] writes to a fresh staging path, which is cleaned up either way. */
+    /**
+     * Import what [stage] writes to a fresh staging path. The staging file is deleted after, best
+     * effort: one left behind is never indexed (it lives under `.npn/`), and a rescan sweeps it away
+     * once it is old (TempFileSweep). That delete is neither cancellable nor failing, so a caller
+     * cancelled while the import placed its file still gets the result, and records it (a split, to
+     * take the part back) before it sees the cancellation.
+     */
     private suspend inline fun staged(
         suggestedName: String,
         toDir: String,
         stage: (tmpPath: String) -> Unit,
     ): ImportResult {
-        val tmpPath = freshTmpPath()
+        val tmpPath = NpnPaths.Temp.importPath(Uuid.random().toString())
         try {
             stage(tmpPath)
             return finishImport(tmpPath, suggestedName, toDir)
         } finally {
-            cleanup(tmpPath)
+            withContext(NonCancellable) {
+                runCatchingCancellable { if (fs.exists(tmpPath)) fs.delete(tmpPath) }
+            }
         }
     }
 
@@ -426,20 +434,6 @@ class ImportService(
                 if (row == null || !row.isLive || !fs.holdsDocument(row)) return@serialize
                 for (path in trash.copiesOf(docId, hashed)) fs.delete(path)
             }
-        }
-    }
-
-    private fun freshTmpPath(): String = NpnPaths.Temp.importPath(Uuid.random().toString())
-
-    /**
-     * Delete the staging file, best effort: one left behind is never indexed (it lives under
-     * `.npn/`), and a rescan sweeps it away once it is old (TempFileSweep). Neither cancellable nor
-     * failing, so a caller cancelled while the import placed its file still gets the result, and
-     * records it (a split, to take the part back) before it sees the cancellation.
-     */
-    private suspend fun cleanup(tmpPath: String) {
-        withContext(NonCancellable) {
-            runCatchingCancellable { if (fs.exists(tmpPath)) fs.delete(tmpPath) }
         }
     }
 
