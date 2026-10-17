@@ -9,8 +9,8 @@ design, build/packaging/release details, and the library folder layout.
 - `core` — platform-agnostic domain: journal, index, fs, pdf, ocr, xmp, Room db.
   Room 3 via KSP, two databases per library: the index (`NpnDatabase`, `index.db`) and the
   device's own state (`DeviceDatabase`, `device.db`); schemas in `core/schemas/<database>/`.
-- `core-testing` — fakes of `core`'s facets shared by `core`'s desktopTest and `composeApp`'s
-  commonTest (`dev.npn.core.testing`). Only test source sets depend on it; a fake both suites need
+- `core-testing` — fakes of `core`'s facets shared by the commonTest of `core` and `composeApp`
+  (`dev.npn.core.testing`). Only test source sets depend on it; a fake both suites need
   goes here rather than into either module's tests.
 - `composeApp` — shared Compose UI + viewmodels (`dev.npn.app.ui.*`, `di`, and `platform` for the
   `expect` hooks each platform answers).

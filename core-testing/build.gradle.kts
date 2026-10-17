@@ -1,4 +1,4 @@
-// Test doubles of core's facets, shared by core's desktopTest and composeApp's commonTest so the
+// Test doubles of core's facets, shared by the commonTest of core and composeApp so the
 // two suites fake the same interfaces the same way. Only test source sets depend on it, so it never
 // reaches a release artifact.
 plugins {

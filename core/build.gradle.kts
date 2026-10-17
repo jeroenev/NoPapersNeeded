@@ -67,6 +67,8 @@ kotlin {
             // commonTest asserts through kotest matchers, so they belong to every test target that
             // compiles it, not just `desktopTest`.
             implementation(libs.kotest.assertions)
+            implementation(libs.kotest.property)
+            implementation(projects.coreTesting)
         }
         androidMain.dependencies {
             implementation("net.java.dev.jna:jna:${libs.versions.jna.get()}@aar")
@@ -92,8 +94,6 @@ kotlin {
         }
         getByName("desktopTest") {
             dependencies {
-                implementation(projects.coreTesting)
-                implementation(libs.kotest.property)
                 implementation(libs.pdfbox)
             }
         }
