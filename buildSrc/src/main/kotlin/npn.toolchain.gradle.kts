@@ -1,5 +1,7 @@
+import com.android.build.api.dsl.ApplicationExtension
 import com.android.build.api.dsl.CommonExtension
 import com.android.build.api.dsl.KotlinMultiplatformAndroidLibraryTarget
+import com.android.build.api.dsl.TestExtension
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinAndroidProjectExtension
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
@@ -43,9 +45,18 @@ pluginManager.withPlugin("org.jetbrains.kotlin.jvm") {
     }
 }
 
+// The app and the baseline-profile test app also get the catalog's SDK levels here; the
+// multiplatform libraries get theirs from npn.kmp-module.
 listOf("com.android.application", "com.android.test").forEach { android ->
     pluginManager.withPlugin(android) {
-        extensions.getByType<CommonExtension>().compileOptions.apply {
+        val extension = extensions.getByType<CommonExtension>()
+        extension.compileSdk = levels.compileSdk
+        extension.defaultConfig.minSdk = levels.minSdk
+        when (extension) {
+            is ApplicationExtension -> extension.defaultConfig.targetSdk = levels.targetSdk
+            is TestExtension -> extension.defaultConfig.targetSdk = levels.targetSdk
+        }
+        extension.compileOptions.apply {
             sourceCompatibility = JavaVersion.toVersion(levels.jvmTarget)
             targetCompatibility = JavaVersion.toVersion(levels.jvmTarget)
         }

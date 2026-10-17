@@ -73,9 +73,10 @@ Gradle downloads it via the foojay resolver if no matching JDK is installed. All
 compiles to Java 17 bytecode (`jvm-target`): Android only provides newer Java library APIs on
 newer OS versions, and the app supports API 30. Desktop compilations also pass
 `-Xjdk-release=17`, so they cannot call a newer API either. Both levels are applied in one
-place, the `npn.toolchain` convention plugin in `buildSrc`, which every module applies; the
+place, the `npn.toolchain` convention plugin in `buildSrc`, which every module applies and
+which also sets the Android SDK levels of `androidApp` and `baselineprofile`; the
 multiplatform modules (`core`, `core-testing`, `composeApp`) also share their `desktop` and
-Android targets through `npn.kmp-module`. Both plugins read `gradle/libs.versions.toml`. The
+Android targets, SDK levels included, through `npn.kmp-module`. Both plugins read `gradle/libs.versions.toml`. The
 Android SDK is located via `local.properties` (`sdk.dir`) or the `ANDROID_HOME` /
 `ANDROID_SDK_ROOT` environment variable.
 

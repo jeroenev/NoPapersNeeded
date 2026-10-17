@@ -9,20 +9,9 @@ plugins {
 
 android {
     namespace = "dev.npn.baselineprofile"
-    compileSdk =
-        libs.versions.android.compileSdk
-            .get()
-            .toInt()
 
+    // compileSdk, minSdk and targetSdk come from the catalog through npn.toolchain.
     defaultConfig {
-        minSdk =
-            libs.versions.android.minSdk
-                .get()
-                .toInt()
-        targetSdk =
-            libs.versions.android.targetSdk
-                .get()
-                .toInt()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

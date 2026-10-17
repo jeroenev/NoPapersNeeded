@@ -28,21 +28,10 @@ val releaseKeystore = providers.environmentVariable("NPN_KEYSTORE_FILE").orNull
 
 android {
     namespace = "dev.npn"
-    compileSdk =
-        libs.versions.android.compileSdk
-            .get()
-            .toInt()
 
+    // compileSdk, minSdk and targetSdk come from the catalog through npn.toolchain.
     defaultConfig {
         applicationId = "dev.npn"
-        minSdk =
-            libs.versions.android.minSdk
-                .get()
-                .toInt()
-        targetSdk =
-            libs.versions.android.targetSdk
-                .get()
-                .toInt()
         versionCode = npnVersion.code
         versionName = npnVersion.name
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

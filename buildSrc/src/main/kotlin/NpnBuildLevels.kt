@@ -20,6 +20,9 @@ class NpnBuildLevels private constructor(
 
     val minSdk: Int = catalog.version("android-minSdk").toInt()
 
+    /** Only apps and test apps have one; a library takes its app's. */
+    val targetSdk: Int = catalog.version("android-targetSdk").toInt()
+
     companion object {
         fun of(project: Project): NpnBuildLevels =
             NpnBuildLevels(project.extensions.getByType<VersionCatalogsExtension>().named("libs"))

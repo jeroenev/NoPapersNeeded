@@ -28,7 +28,8 @@ design, build/packaging/release details, and the library folder layout.
   target; raising the target is a separate, Android-driven decision.
 - `buildSrc` — build logic: every task class the build scripts register (packaging, `BuildInfo`,
   `checkLocalization`), and convention plugins that read the catalog: `npn.toolchain` (the JDK and
-  bytecode target, applied by every module) and `npn.kmp-module` (the `desktop` and Android
+  bytecode target, applied by every module, plus the SDK levels of `androidApp` and
+  `baselineprofile`) and `npn.kmp-module` (the `desktop` and Android
   library targets and their SDK levels, for `core`, `core-testing` and `composeApp`). Kotlin and
   the Android Gradle plugin are on buildSrc's classpath, so modules apply them by id, never with
   `alias(...)`: Gradle refuses a version for a plugin that is already there.
