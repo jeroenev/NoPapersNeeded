@@ -54,7 +54,6 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 class OcrPipeline(
     private val fs: LibraryFileSystem,
-    private val sidecars: OcrSidecarFiles,
     private val pdfEngine: PdfEngine,
     private val engines: OcrEngineSelector,
     private val documentDao: DocumentDao,
@@ -100,6 +99,7 @@ class OcrPipeline(
     private val retry = QueueRetryPolicy(MAX_ATTEMPTS)
 
     /** What is stored for each document, and which version of it to index. */
+    private val sidecars = OcrSidecarFiles(fs)
     private val versions = OcrVersions(sidecars, MIN_EMBEDDED_CHARS_PER_PAGE)
 
     private val _inFlight = MutableStateFlow<String?>(null)

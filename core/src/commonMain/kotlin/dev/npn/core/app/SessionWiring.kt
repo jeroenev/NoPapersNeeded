@@ -28,7 +28,6 @@ import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.SystemProperty
 import dev.npn.core.ocr.OcrEngineSelector
 import dev.npn.core.ocr.OcrPipeline
-import dev.npn.core.ocr.OcrSidecarFiles
 import dev.npn.core.pathrules.StoragePathRuleApplicator
 import dev.npn.core.pdf.RenderGate
 import dev.npn.core.pdf.ThumbnailService
@@ -339,7 +338,6 @@ internal fun buildOcr(
     val pipeline =
         OcrPipeline(
             fs = deps.fs,
-            sidecars = OcrSidecarFiles(deps.fs),
             pdfEngine = deps.pdfEngine,
             engines = engines,
             documentDao = deps.db.documentDao(),

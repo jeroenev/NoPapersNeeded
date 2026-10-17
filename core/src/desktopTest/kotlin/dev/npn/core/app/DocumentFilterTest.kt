@@ -11,7 +11,6 @@ import dev.npn.core.model.FieldType
 import dev.npn.core.ocr.FakeOcrEngine
 import dev.npn.core.ocr.OcrEngineSelector
 import dev.npn.core.ocr.OcrPipeline
-import dev.npn.core.ocr.OcrSidecarFiles
 import dev.npn.core.pdf.PdfBoxEngine
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.assertions.withClue
@@ -445,7 +444,6 @@ class DocumentFilterTest {
     private fun buildPipeline(rig: AppSessionRig): OcrPipeline =
         OcrPipeline(
             fs = rig.fs,
-            sidecars = OcrSidecarFiles(rig.fs),
             pdfEngine = PdfBoxEngine(),
             engines = OcrEngineSelector(local = FakeOcrEngine.unavailable()),
             documentDao = rig.db.documentDao(),

@@ -46,7 +46,6 @@ internal class OcrPipelineRig {
         onStaleFile: suspend (docId: String) -> Unit = {},
     ) = OcrPipeline(
         fs = files,
-        sidecars = OcrSidecarFiles(files),
         pdfEngine = PdfBoxEngine(),
         engines = engines,
         documentDao = database.documentDao(),
