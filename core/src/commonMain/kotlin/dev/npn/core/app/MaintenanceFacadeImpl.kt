@@ -111,12 +111,7 @@ internal class MaintenanceFacadeImpl(
         val tags = db.tagDao().tagsForDocument(docId)
         // Every field carries onto the parts except the ones that describe the whole document
         // (title, notes): a part is not "the" invoice, and its notes would be misleading.
-        val fields =
-            db
-                .documentFieldDao()
-                .fieldsForDocs(listOf(docId))
-                .filter { it.fieldKey !in FieldKeys.NOT_INHERITED_ON_SPLIT }
-                .associate<_, String, String?> { it.fieldKey to it.fieldValue }
+        val fields = db.documentFieldDao().valuesOf(docId).filterKeys { it !in FieldKeys.NOT_INHERITED_ON_SPLIT }
         writer.copyAsStored(partIds, addTags = tags, fields = fields)
     }
 }

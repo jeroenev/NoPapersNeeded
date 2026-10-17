@@ -6,7 +6,6 @@ import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.LegacyIndexTables
 import dev.npn.core.db.fieldTypes
-import dev.npn.core.db.toFieldDef
 import dev.npn.core.fs.OcrSidecarFiles
 import dev.npn.core.fs.TrashOps
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
@@ -39,6 +38,7 @@ import dev.npn.core.xmp.BakeService
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.MutableStateFlow
+import dev.npn.core.db.defs
 
 // The builders [LibrarySessionImpl.openSession] wires a session from, one per part, in the order it
 // calls them. [Library] is what the first of them hands the rest.
@@ -115,12 +115,7 @@ internal suspend fun foldJournal(
         deps.upgradeAtOpen("Upgrading the seeded field definitions") { coordinator.seedFieldRegistryIfNeeded(seeds) }
     }
     deps.upgradeAtOpen("Restoring the seeded fields' per-document flag") {
-        val projected =
-            deps.db
-                .fieldDefDao()
-                .all()
-                .mapNotNull { it.toFieldDef() }
-        coordinator.restoreSeededPerDocument(seeds, projected)
+        coordinator.restoreSeededPerDocument(seeds, projected = deps.db.fieldDefDao().defs())
     }
     deps.upgradeAtOpen("Adopting this device's library settings") {
         coordinator.adoptSettings(deps.settings.legacyLibrarySettings().journalSettings())

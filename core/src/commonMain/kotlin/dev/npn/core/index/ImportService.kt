@@ -403,7 +403,7 @@ class ImportService(
      */
     private suspend fun indexFileName(row: DocumentEntity) {
         val tags = db.tagDao().tagsForDocument(row.docId)
-        val fields = db.documentFieldDao().fieldsForDocs(listOf(row.docId)).associate { it.fieldKey to it.fieldValue }
+        val fields = db.documentFieldDao().valuesOf(row.docId)
         db.ftsDao().upsertMetadata(listOf(FtsRows.row(row.docId, row.fileName, tags, fields, content = null)))
     }
 

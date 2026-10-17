@@ -8,7 +8,6 @@ import dev.npn.core.db.FtsQuery
 import dev.npn.core.db.LIVE_DOCUMENT
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.isLive
-import dev.npn.core.db.toFieldDef
 import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.JournalCodec
 import dev.npn.core.model.FieldKeys
@@ -22,6 +21,7 @@ import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
+import dev.npn.core.db.defs
 
 /**
  * The single translation from the disposable index row to the [Doc] the rest of the app sees.
@@ -157,8 +157,7 @@ class DocumentRepositoryImpl(
         val textFields =
             db
                 .fieldDefDao()
-                .all()
-                .mapNotNull { it.toFieldDef() }
+                .defs()
                 .filter { it.sharesVocabulary }
                 .map { fieldDao.valuesForPrefix(it.key, likePrefix, sourceLimit) }
         val sources = listOf(contentTerms, tagDao.tagsForPrefix(likePrefix, sourceLimit)) + textFields

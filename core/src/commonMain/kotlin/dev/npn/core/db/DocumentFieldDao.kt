@@ -20,6 +20,10 @@ interface DocumentFieldDao {
     suspend fun fieldsForDocs(docIds: List<String>): List<DocumentFieldEntity> =
         docIds.chunkedBind { fieldsForDocsChunk(it) }
 
+    /** [docId]'s field values by key, in their canonical form. */
+    suspend fun valuesOf(docId: String): Map<String, String> =
+        fieldsForDocs(listOf(docId)).associate { it.fieldKey to it.fieldValue }
+
     /** All custom-field rows, for the AI's field search tools. */
     @Query("SELECT * FROM document_fields")
     suspend fun all(): List<DocumentFieldEntity>

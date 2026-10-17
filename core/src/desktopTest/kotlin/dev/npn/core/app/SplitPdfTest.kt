@@ -386,7 +386,7 @@ private suspend fun AppSessionRig.splitInTwo(docId: String): SplitOutcome {
 /** [docId]'s tags and its fields by key, as the index has them. */
 private suspend fun AppSessionRig.metadataOf(docId: String): Pair<List<String>, Map<String, String>> =
     db.tagDao().tagsForDocument(docId) to
-        db.documentFieldDao().fieldsForDocs(listOf(docId)).associate { it.fieldKey to it.fieldValue }
+        db.documentFieldDao().valuesOf(docId)
 
 /** Make every move into the trash fail, as a refused SAF move would: the trash folder is a file. */
 private fun AppSessionRig.blockTrash() {

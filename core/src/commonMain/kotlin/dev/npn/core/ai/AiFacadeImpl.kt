@@ -5,7 +5,6 @@ import ai.koog.prompt.dsl.prompt
 import dev.npn.core.app.AiTagging
 import dev.npn.core.db.KeyValueDao
 import dev.npn.core.db.NpnDatabase
-import dev.npn.core.db.toFieldDef
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.ocr.OcrEngine
@@ -19,6 +18,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
+import dev.npn.core.db.defs
 
 /**
  * Koog-backed implementation of the AI facets ([AiChat], [AiSuggest]) and of the vision OCR engine
@@ -68,7 +68,7 @@ class AiFacadeImpl(
             val config = configProvider()
             val runtime = runtimes.runtimeFor(config)
             // The field vocabulary is read per turn so a field defined a minute ago is already known.
-            val fields = db.fieldDefDao().all().mapNotNull { it.toFieldDef() }
+            val fields = db.fieldDefDao().defs()
             emitAll(
                 KoogChatAgent(
                     executor = runtime.executor,
@@ -157,12 +157,7 @@ class AiFacadeImpl(
         val currentTags = db.tagDao().tagsForDocument(docId)
         val vocabulary = db.tagDao().all().map { it.name }
         val fields = fieldSpecs(request)
-        val currentFields =
-            db
-                .documentFieldDao()
-                .fieldsForDocs(
-                    listOf(docId),
-                ).associate { it.fieldKey to it.fieldValue }
+        val currentFields = db.documentFieldDao().valuesOf(docId)
         val maxTags = (request.maxTags ?: config.maxTagsPerDoc).coerceIn(AiTagging.RANGE)
         val maxNew = (request.maxNewTags ?: config.maxNewTagsPerDoc).coerceIn(AiTagging.NEW_TAGS_RANGE)
         val thePrompt =
@@ -200,12 +195,7 @@ class AiFacadeImpl(
      * was deleted still gets an answer for it.
      */
     private suspend fun fieldSpecs(request: AiEditRequest): List<AiFieldSpec> {
-        val defs =
-            db
-                .fieldDefDao()
-                .all()
-                .mapNotNull { it.toFieldDef() }
-                .associateBy { it.key }
+        val defs = db.fieldDefDao().defs().associateBy { it.key }
         return request.fields.map { cfg ->
             val def = defs[cfg.key] ?: AiFieldSpec.unregistered(cfg.key)
             val vocabulary =

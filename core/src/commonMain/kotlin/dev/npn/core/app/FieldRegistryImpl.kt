@@ -10,6 +10,7 @@ import dev.npn.core.model.FieldKeys
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import dev.npn.core.db.defs
 
 /**
  * Registry reads come from the `field_defs` projection; writes are `field-def` journal ops
@@ -38,7 +39,7 @@ class FieldRegistryImpl internal constructor(
         limit: Int,
     ): Flow<List<String>> = fieldDao.observeDistinctValues(key, limit)
 
-    override suspend fun current(): List<FieldDef> = defDao.all().mapNotNull { it.toFieldDef() }
+    override suspend fun current(): List<FieldDef> = defDao.defs()
 
     override suspend fun upsert(def: FieldDef) =
         owned {

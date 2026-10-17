@@ -346,8 +346,7 @@ class IndexerTest {
             val fields =
                 rig.db
                     .documentFieldDao()
-                    .fieldsForDocs(listOf(docId))
-                    .associate { it.fieldKey to it.fieldValue }
+                    .valuesOf(docId)
 
             row.title shouldBe fields[FieldKeys.TITLE]
             row.correspondent shouldBe fields[FieldKeys.CORRESPONDENT]

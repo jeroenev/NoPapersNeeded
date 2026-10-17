@@ -50,7 +50,7 @@ class StoragePathRuleApplicator(
         val tags = db.tagDao().tagsForDocument(docId)
         val context =
             StoragePathContext(
-                fields = db.documentFieldDao().fieldsForDocs(listOf(docId)).associate { it.fieldKey to it.fieldValue },
+                fields = db.documentFieldDao().valuesOf(docId),
                 tags = tags,
                 originalFileName = doc.fileName,
                 fieldTypes = db.fieldDefDao().fieldTypes(),

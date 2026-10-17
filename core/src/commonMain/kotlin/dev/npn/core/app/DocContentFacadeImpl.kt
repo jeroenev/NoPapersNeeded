@@ -133,11 +133,7 @@ class DocContentFacadeImpl internal constructor(
     private suspend fun buildXmpData(docId: String): NpnXmpData {
         val doc = documentDao.getByDocId(docId)
         val tags = db.tagDao().tagsForDocument(docId)
-        val fields =
-            db
-                .documentFieldDao()
-                .fieldsForDocs(listOf(docId))
-                .associate { it.fieldKey to it.fieldValue }
+        val fields = db.documentFieldDao().valuesOf(docId)
         return NpnXmpData(
             documentId = docId,
             tags = tags,
