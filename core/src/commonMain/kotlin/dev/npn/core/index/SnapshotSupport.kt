@@ -188,6 +188,53 @@ class SnapshotSupport(
             (it.event.dev to it.event.seq) to it.canonicalJson
         }
     }
+
+    /**
+     * What the files in [listed] carry, for a pass that read them; [sources] is the source table after
+     * the read. A source's events are on disk when the source is listed, when a listed snapshot carries
+     * them, or, for a snapshot that is gone, when every hash it superseded is
+     * carried in turn: a snapshot holds the events of what it replaced and nothing else
+     * ([dev.npn.core.journal.SnapshotCompactor.publish]), so a folder put back from before a compaction
+     * lost none of them.
+     *
+     * Such a gone snapshot that no applied snapshot supersedes is [ListedCarriage.undone]: the index is
+     * to forget it, as a rebuild from the folder would never have known it, or compaction keeps choosing
+     * it and leaves out the objects it replaced although they are back. One that another gone snapshot
+     * supersedes still explains that one, so it is forgotten only after it.
+     */
+    internal suspend fun carriedByListed(
+        listed: Set<String>,
+        sources: List<MetadataSourceEntity>,
+    ): ListedCarriage {
+        val supersessions = dao.appliedSupersessions()
+        val graph = SupersessionGraph(sources, supersessions)
+        // What a listed snapshot carries: the hashes it supersedes, and in turn those each superseded
+        // snapshot among them superseded. A snapshot that is gone vouches for nothing, whatever its
+        // source row says: the folder is the truth, and the index only a cache of it. The graph maps a
+        // superseded snapshot's hash to its path; one gone from the folder was read in an earlier pass,
+        // so the table holds it from before this one. A claim a pass found false is no longer among the
+        // graph's ([deleteSupersededLeftovers]).
+        val hashes = HashSet(graph.reach(graph.snapshots.filter { it in listed }).hashes)
+        sources.filter { it.status == SourceStatus.APPLIED && it.path in listed }.mapNotNullTo(
+            hashes,
+        ) { it.contentHash }
+        // Gone snapshots by content hash.
+        val gone =
+            sources
+                .filter { it.kind == SourceKind.SNAPSHOT && it.status == SourceStatus.APPLIED && it.path !in listed }
+                .mapNotNull { source -> source.contentHash?.let { it to source.path } }
+        do {
+            val unpacked =
+                gone.filter { (hash, path) ->
+                    val replaced = graph.inputsOf(path)
+                    hash !in hashes && replaced.isNotEmpty() && hashes.containsAll(replaced)
+                }
+            unpacked.mapTo(hashes) { (hash, _) -> hash }
+        } while (unpacked.isNotEmpty())
+        val superseded = supersessions.mapTo(HashSet()) { it.supersededHash }
+        val undone = gone.filter { (hash, _) -> hash in hashes && hash !in superseded }.map { (_, path) -> path }
+        return ListedCarriage(hashes, undone)
+    }
 }
 
 /** An event's identity in the index: its device and sequence. */
@@ -235,60 +282,10 @@ private class SupersessionGraph(
     )
 }
 
-/**
- * The content hashes whose events an applied snapshot in [listed] carries: the ones it supersedes,
- * and in turn the ones each snapshot among those superseded. A snapshot that is gone vouches for
- * nothing, whatever its source row says: the folder is the truth, and the index only a cache of it.
- * The graph maps a superseded snapshot's hash to its path; one gone from the folder was read in an
- * earlier pass, so the table holds it from before this one. A claim a pass found false is no longer
- * among the graph's ([SnapshotSupport.deleteSupersededLeftovers]).
- */
-private fun SupersessionGraph.supersededByListed(listed: Set<String>): Set<String> =
-    reach(snapshots.filter { it in listed }).hashes
-
-/** What the journal files one reconcile pass listed and read hold; see [carriedByListed]. */
+/** What the journal files one reconcile pass listed and read hold; see [SnapshotSupport.carriedByListed]. */
 internal class ListedCarriage(
     /** The content hashes whose events are on disk in the listed files. */
     val hashes: Set<String>,
     /** The paths of the gone snapshots a restore undid: nothing supersedes them, and their inputs carry them. */
     val undone: List<String>,
 )
-
-/**
- * What the files in [listed] carry, for a pass that read them; [sources] is the source table after
- * the read. A source's events are on disk when the source is listed, when a listed snapshot carries
- * them ([supersededByListed]), or, for a snapshot that is gone, when every hash it superseded is
- * carried in turn: a snapshot holds the events of what it replaced and nothing else
- * ([dev.npn.core.journal.SnapshotCompactor.publish]), so a folder put back from before a compaction
- * lost none of them.
- *
- * Such a gone snapshot that no applied snapshot supersedes is [ListedCarriage.undone]: the index is
- * to forget it, as a rebuild from the folder would never have known it, or compaction keeps choosing
- * it and leaves out the objects it replaced although they are back. One that another gone snapshot
- * supersedes still explains that one, so it is forgotten only after it.
- */
-internal suspend fun MetadataProjectionDao.carriedByListed(
-    listed: Set<String>,
-    sources: List<MetadataSourceEntity>,
-): ListedCarriage {
-    val supersessions = appliedSupersessions()
-    val graph = SupersessionGraph(sources, supersessions)
-    val hashes = HashSet(graph.supersededByListed(listed))
-    sources.filter { it.status == SourceStatus.APPLIED && it.path in listed }.mapNotNullTo(hashes) { it.contentHash }
-    // Gone snapshots by content hash.
-    val gone =
-        sources
-            .filter { it.kind == SourceKind.SNAPSHOT && it.status == SourceStatus.APPLIED && it.path !in listed }
-            .mapNotNull { source -> source.contentHash?.let { it to source.path } }
-    do {
-        val unpacked =
-            gone.filter { (hash, path) ->
-                val replaced = graph.inputsOf(path)
-                hash !in hashes && replaced.isNotEmpty() && hashes.containsAll(replaced)
-            }
-        unpacked.mapTo(hashes) { (hash, _) -> hash }
-    } while (unpacked.isNotEmpty())
-    val superseded = supersessions.mapTo(HashSet()) { it.supersededHash }
-    val undone = gone.filter { (hash, _) -> hash in hashes && hash !in superseded }.map { (_, path) -> path }
-    return ListedCarriage(hashes, undone)
-}

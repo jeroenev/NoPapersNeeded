@@ -329,9 +329,16 @@ class CompactionReconcileTest {
             val lost = listOf(checkNotNull(dao.source(objectPath)))
             val snapshotOnDisk = mapOf(snapshotPath to FileMeta(snapshotPath, "$snapshotHash.jsonl", 1, 1, false))
 
+            val snapshots = SnapshotSupport(fs, dao)
+
             suspend fun SourceSetValidator.judge(files: Map<String, FileMeta>): String? {
                 val current = dao.allSources()
-                return unexplainedSourceLoss(lost, current, files, dao.carriedByListed(files.keys, current).hashes)
+                return unexplainedSourceLoss(
+                    lost,
+                    current,
+                    files,
+                    snapshots.carriedByListed(files.keys, current).hashes,
+                )
             }
             val withSnapshot = SourceSetValidator(dao)
             repeat(SourceSetValidator.PENDING_SUPERSESSION_LIMIT + 1) {

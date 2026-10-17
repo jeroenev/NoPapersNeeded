@@ -53,7 +53,7 @@ class SourceSetValidator(
      * A reason to reject the set because a previously-applied source vanished without a validated
      * replacement, or null when every loss is explained (or still inside its grace window). [files]
      * is what the pass listed and read, [previous] the source table before it and [current] after
-     * it, and [carried] the content hashes whose events [files] hold ([carriedByListed]).
+     * it, and [carried] the content hashes whose events [files] hold ([SnapshotSupport.carriedByListed]).
      */
     suspend fun unexplainedSourceLoss(
         previous: List<MetadataSourceEntity>,

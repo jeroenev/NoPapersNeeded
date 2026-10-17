@@ -502,8 +502,8 @@ data class MetadataTransactionActorEntity(
  * object (or older snapshot) whose content hash is [supersededHash]. Rows are keyed by the pair so
  * two concurrent snapshots superseding the same object are both idempotently recorded. A missing
  * previously-applied source is tolerated iff its content hash appears here for an applied snapshot
- * still on disk, directly or through a snapshot that one superseded (see `supersededByListed`), or,
- * for a missing snapshot, when what it superseded is on disk (see `carriedByListed`). A claim on a
+ * still on disk, directly or through a snapshot that one superseded, or, for a missing snapshot,
+ * when what it superseded is on disk (see `SnapshotSupport.carriedByListed`). A claim on a
  * source still on disk whose events the snapshot does not hold is dropped by the reconcile that finds
  * it (see `SnapshotSupport.deleteSupersededLeftovers`), so it vouches for nothing after.
  */
