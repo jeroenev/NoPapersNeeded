@@ -117,24 +117,23 @@ class ImportService(
         source: ExternalSource,
         suggestedName: String,
         toDir: String = NpnPaths.DEFAULT_INBOX,
-    ): ImportResult {
-        val tmpPath = freshTmpPath()
-        try {
-            fs.importExternal(source, tmpPath)
-            return finishImport(tmpPath, suggestedName, toDir)
-        } finally {
-            cleanup(tmpPath)
-        }
-    }
+    ): ImportResult = staged(suggestedName, toDir) { tmpPath -> fs.importExternal(source, tmpPath) }
 
     suspend fun importBytes(
         bytes: ByteArray,
         suggestedName: String,
         toDir: String = NpnPaths.DEFAULT_INBOX,
+    ): ImportResult = staged(suggestedName, toDir) { tmpPath -> fs.writeBytesOnce(tmpPath, bytes) }
+
+    /** Import what [stage] writes to a fresh staging path, which is cleaned up either way. */
+    private suspend inline fun staged(
+        suggestedName: String,
+        toDir: String,
+        stage: (tmpPath: String) -> Unit,
     ): ImportResult {
         val tmpPath = freshTmpPath()
         try {
-            fs.writeBytesOnce(tmpPath, bytes)
+            stage(tmpPath)
             return finishImport(tmpPath, suggestedName, toDir)
         } finally {
             cleanup(tmpPath)

@@ -143,7 +143,8 @@ class FoldedState {
 
             is JournalOp.DocTrash -> {
                 val doc = event.doc ?: return
-                trash.putIfNewerHlc(doc, event.hlc) { TrashVal(trashed = true, origPath = op.origPath, hlc = event.hlc) }
+                val trashed = TrashVal(trashed = true, origPath = op.origPath, hlc = event.hlc)
+                trash.putIfNewerHlc(doc, event.hlc) { trashed }
             }
 
             JournalOp.DocRestore -> {
@@ -441,8 +442,7 @@ class FoldedState {
     fun liveTagDots(
         doc: String,
         effectiveName: String,
-    ): List<Dot> =
-        ArrayList<Dot>().apply { forEachLiveAdd(doc) { name, dot -> if (name == effectiveName) add(dot) } }
+    ): List<Dot> = ArrayList<Dot>().apply { forEachLiveAdd(doc) { name, dot -> if (name == effectiveName) add(dot) } }
 
     /**
      * Build the OR-set `tag-remove` [PendingOp]s for [tag] over [docIds] from THIS state's live

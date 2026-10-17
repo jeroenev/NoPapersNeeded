@@ -7,8 +7,8 @@ import dev.npn.core.db.FtsDao
 import dev.npn.core.db.FtsQuery
 import dev.npn.core.db.LIVE_DOCUMENT
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.db.defs
 import dev.npn.core.db.isLive
-import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.JournalCodec
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.ocr.OcrEngineRef
@@ -21,7 +21,6 @@ import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
-import dev.npn.core.db.defs
 
 /**
  * The single translation from the disposable index row to the [Doc] the rest of the app sees.
@@ -142,7 +141,7 @@ class DocumentRepositoryImpl(
         val prefix = query.trim().takeIf { it.length >= MIN_SUGGESTION_LENGTH } ?: return emptyList()
         val sourceLimit = limit.coerceAtLeast(1)
         val likePrefix = escapeLike(prefix) + "%"
-        val rows = ftsDao.rowsForPrefix("\"${prefix.replace("\"", "\"\"")}\"*", sourceLimit)
+        val rows = ftsDao.rowsForPrefix(FtsQuery.prefix(prefix), sourceLimit)
         val contentTerms =
             rows
                 .asSequence()
@@ -210,9 +209,9 @@ class DocumentRepositoryImpl(
 
     override suspend fun history(docId: String): List<DocumentHistoryRecord> {
         val dao = db.metadataProjectionDao()
+        // In HLC order, as the query sorts them.
         return dao
             .eventsForDocument(docId)
-            .sortedBy { Hlc(it.hlcPhysical, it.hlcCounter, it.hlcDevice) }
             .map { row ->
                 val event = JournalCodec.decodeLineOrNull(row.canonicalJson)
                 DocumentHistoryRecord(

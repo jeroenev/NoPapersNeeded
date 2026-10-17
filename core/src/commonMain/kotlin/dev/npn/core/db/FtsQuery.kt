@@ -25,4 +25,10 @@ object FtsQuery {
             .joinToString(" ")
             .ifEmpty { "\"\"" }
     }
+
+    /**
+     * A MATCH expression for terms starting with [term], taken whole: one quoted string (its quotes
+     * doubled, as FTS5 escapes them) with a trailing `*`.
+     */
+    fun prefix(term: String): String = "\"${term.replace("\"", "\"\"")}\"*"
 }

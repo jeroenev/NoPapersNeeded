@@ -5,6 +5,7 @@ import ai.koog.prompt.dsl.prompt
 import dev.npn.core.app.AiTagging
 import dev.npn.core.db.KeyValueDao
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.db.defs
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.ocr.OcrEngine
@@ -18,7 +19,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
-import dev.npn.core.db.defs
 
 /**
  * Koog-backed implementation of the AI facets ([AiChat], [AiSuggest]) and of the vision OCR engine

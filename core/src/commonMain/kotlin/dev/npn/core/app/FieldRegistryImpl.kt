@@ -2,6 +2,7 @@ package dev.npn.core.app
 
 import dev.npn.core.db.FieldKeyCount
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.db.defs
 import dev.npn.core.db.toFieldDef
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.PendingOp
@@ -10,7 +11,6 @@ import dev.npn.core.model.FieldKeys
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
-import dev.npn.core.db.defs
 
 /**
  * Registry reads come from the `field_defs` projection; writes are `field-def` journal ops

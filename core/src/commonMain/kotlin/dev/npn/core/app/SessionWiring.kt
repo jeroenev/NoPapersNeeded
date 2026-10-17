@@ -5,6 +5,7 @@ import dev.npn.core.ai.RoomChatHistoryProvider
 import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.LegacyIndexTables
+import dev.npn.core.db.defs
 import dev.npn.core.db.fieldTypes
 import dev.npn.core.fs.OcrSidecarFiles
 import dev.npn.core.fs.TrashOps
@@ -38,7 +39,6 @@ import dev.npn.core.xmp.BakeService
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.MutableStateFlow
-import dev.npn.core.db.defs
 
 // The builders [LibrarySessionImpl.openSession] wires a session from, one per part, in the order it
 // calls them. [Library] is what the first of them hands the rest.
