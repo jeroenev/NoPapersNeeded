@@ -112,19 +112,19 @@ class PermanentDeleteTest {
             val importing = BeforeTrashListing()
             val files = importing.over(recorded)
             val coordinator = rig.coordinator()
-            val writer =
-                rig.metadataWriter(coordinator, files)
+            val lifecycle =
+                rig.docLifecycle(coordinator, files)
             rig.writePdf("inbox/x.pdf", "deleted for good")
             coordinator.rescan()
             val deleted = rig.fs.sha256("inbox/x.pdf")
-            writer.trashDoc(deleted)
+            lifecycle.trashDoc(deleted)
             importing.next = {
                 rig.writePdf("inbox/x.pdf", "imported since")
                 coordinator.rescan()
                 recorded.clear()
             }
 
-            writer.deleteDocPermanently(deleted)
+            lifecycle.deleteDocPermanently(deleted)
 
             recorded.calls("sha256").filterNot { it.contains(NpnPaths.TRASH_DIR) }.shouldBeEmpty()
             rig.fs.readBytes("inbox/x.pdf").decodeToString() shouldBe "imported since"

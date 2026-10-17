@@ -1,14 +1,15 @@
 package dev.npn.core.app
 
 /**
- * The session's three write facets: every call on [writer] runs whole as work the session owns
- * ([SessionLifetime.owned]), its reads and file checks outside the writer lock and its follow-ups
- * (storage-path rules, auto-match) included, so closing the session cancels and waits for it before
- * the host closes the databases. Work that already runs as the session's (the queue drains, an owned
- * split or OCR request) calls [writer] itself.
+ * The session's three write facets: every call on [writer] or [lifecycle] runs whole as work the
+ * session owns ([SessionLifetime.owned]), its reads and file checks outside the writer lock and its
+ * follow-ups (storage-path rules, auto-match) included, so closing the session cancels and waits for
+ * it before the host closes the databases. Work that already runs as the session's (the queue drains, an owned
+ * split or OCR request) calls them itself.
  */
 internal class OwnedWriter(
     private val writer: MetadataWriterImpl,
+    private val lifecycle: DocLifecycleImpl,
     private val lifetime: SessionLifetime,
 ) : MetadataWriter,
     TagAdmin,
@@ -67,27 +68,27 @@ internal class OwnedWriter(
         icon: String?,
     ) = owned { writer.setTagStyle(tag, color, icon) }
 
-    override suspend fun trashDoc(docId: String): TrashReceipt? = owned { writer.trashDoc(docId) }
+    override suspend fun trashDoc(docId: String): TrashReceipt? = owned { lifecycle.trashDoc(docId) }
 
-    override suspend fun restoreDoc(docId: String) = owned { writer.restoreDoc(docId) }
+    override suspend fun restoreDoc(docId: String) = owned { lifecycle.restoreDoc(docId) }
 
-    override suspend fun restoreDocs(docIds: List<String>): Int = owned { writer.restoreDocs(docIds) }
+    override suspend fun restoreDocs(docIds: List<String>): Int = owned { lifecycle.restoreDocs(docIds) }
 
-    override suspend fun undoTrash(trashes: List<TrashReceipt>): Int = owned { writer.undoTrash(trashes) }
+    override suspend fun undoTrash(trashes: List<TrashReceipt>): Int = owned { lifecycle.undoTrash(trashes) }
 
     override suspend fun deleteDocPermanently(docId: String): PermanentDeleteOutcome =
-        owned { writer.deleteDocPermanently(docId) }
+        owned { lifecycle.deleteDocPermanently(docId) }
 
     override suspend fun deleteDocsPermanently(docIds: List<String>): PermanentDeleteTally =
-        owned { writer.deleteDocsPermanently(docIds) }
+        owned { lifecycle.deleteDocsPermanently(docIds) }
 
     override suspend fun renameFile(
         docId: String,
         newFileName: String,
-    ): RelocationOutcome = owned { writer.renameFile(docId, newFileName) }
+    ): RelocationOutcome = owned { lifecycle.renameFile(docId, newFileName) }
 
     override suspend fun moveFile(
         docId: String,
         newDirRelPath: String,
-    ): RelocationOutcome = owned { writer.moveFile(docId, newDirRelPath) }
+    ): RelocationOutcome = owned { lifecycle.moveFile(docId, newDirRelPath) }
 }

@@ -439,7 +439,9 @@ internal class Library(
     val ruleApplier: RuleApplier,
     /** The writer itself, for work that already runs as the session's: the drains, owned facet calls. */
     val writer: MetadataWriterImpl,
-    /** [writer] for a caller outside the session: each call owned by its lifetime. */
+    /** The document lifecycle itself, for work that already runs as the session's (a split's trash). */
+    val lifecycle: DocLifecycleImpl,
+    /** [writer] and [lifecycle] for a caller outside the session: each call owned by its lifetime. */
     val ownedWriter: OwnedWriter,
     val reviewConfig: ReviewConfigFacade,
     val content: DocContentFacade,

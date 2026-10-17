@@ -28,8 +28,8 @@ class TrashEntryTest {
         val rig: IndexRig,
     ) {
         val coordinator = rig.coordinator()
-        val writer =
-            rig.metadataWriter(coordinator)
+        val lifecycle =
+            rig.docLifecycle(coordinator)
 
         /** Write [content] at [path], index it and trash it. */
         suspend fun trash(
@@ -39,7 +39,7 @@ class TrashEntryTest {
             rig.writePdf(path, content)
             coordinator.rescan()
             val id = rig.fs.sha256(path)
-            writer.trashDoc(id)
+            lifecycle.trashDoc(id)
             return Trashed(id, path)
         }
 
@@ -89,12 +89,12 @@ class TrashEntryTest {
     @Test
     fun eachOfTwoDocumentsWhoseEntriesShareAPrefixIsRestoredFromItsOwn() =
         withClashingEntries { first, second ->
-            writer.restoreDoc(first.id)
+            lifecycle.restoreDoc(first.id)
 
             rig.fs.sha256(first.path) shouldBe first.id
             inTrash(second).shouldBeTrue()
 
-            writer.restoreDoc(second.id)
+            lifecycle.restoreDoc(second.id)
 
             rig.fs.sha256(second.path) shouldBe second.id
             rig.fs.trashEntries().shouldBeEmpty()
@@ -103,11 +103,11 @@ class TrashEntryTest {
     @Test
     fun deletingForGoodOneOfTwoDocumentsWhoseEntriesShareAPrefixLeavesTheOthers() =
         withClashingEntries { deleted, kept ->
-            writer.deleteDocPermanently(deleted.id)
+            lifecycle.deleteDocPermanently(deleted.id)
 
             inTrash(deleted).shouldBeFalse()
             inTrash(kept).shouldBeTrue()
-            writer.restoreDoc(kept.id)
+            lifecycle.restoreDoc(kept.id)
             rig.fs.sha256(kept.path) shouldBe kept.id
         }
 
@@ -122,7 +122,7 @@ class TrashEntryTest {
                 val doc = trash("inbox/invoice.pdf", "the document")
                 val entry = misfile(doc)
 
-                writer.restoreDoc(doc.id)
+                lifecycle.restoreDoc(doc.id)
 
                 rig.fs.readBytes(entry).decodeToString() shouldBe "another file"
                 rig.exists(doc.path).shouldBeFalse()
@@ -143,7 +143,7 @@ class TrashEntryTest {
                 val doc = trash("inbox/invoice.pdf", "the document")
                 val entry = misfile(doc)
 
-                writer.deleteDocPermanently(doc.id)
+                lifecycle.deleteDocPermanently(doc.id)
 
                 rig.fs.readBytes(entry).decodeToString() shouldBe "another file"
                 rig.db

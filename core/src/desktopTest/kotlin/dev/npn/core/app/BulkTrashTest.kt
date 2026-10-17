@@ -35,8 +35,8 @@ class BulkTrashTest {
     private val files = TrashListings(rig.fs, underTheLock)
     private val coordinator =
         rig.coordinator(dispatcher = underTheLock)
-    private val writer =
-        rig.metadataWriter(coordinator, files)
+    private val lifecycle =
+        rig.docLifecycle(coordinator, files)
 
     @AfterTest
     fun teardown() = rig.close()
@@ -46,7 +46,7 @@ class BulkTrashTest {
         runTest {
             val docs = trashed()
 
-            writer.restoreDocs(docs.keys.toList()) shouldBe 0
+            lifecycle.restoreDocs(docs.keys.toList()) shouldBe 0
 
             files.listings shouldBe listOf(false)
             docs.forEach { (id, path) -> rig.fs.sha256(path) shouldBe id }
@@ -58,7 +58,7 @@ class BulkTrashTest {
         runTest {
             val docs = trashed()
 
-            writer.deleteDocsPermanently(docs.keys.toList()) shouldBe PermanentDeleteTally()
+            lifecycle.deleteDocsPermanently(docs.keys.toList()) shouldBe PermanentDeleteTally()
 
             files.listings shouldBe listOf(false)
             docs.keys.forEach {
@@ -82,9 +82,9 @@ class BulkTrashTest {
         runTest {
             val docs = trashed()
             val (first, second) = docs.keys.take(2)
-            files.afterNextListing = { writer.restoreDoc(second) }
+            files.afterNextListing = { lifecycle.restoreDoc(second) }
 
-            writer.deleteDocsPermanently(listOf(first, second)) shouldBe PermanentDeleteTally()
+            lifecycle.deleteDocsPermanently(listOf(first, second)) shouldBe PermanentDeleteTally()
 
             rig.fs.sha256(docs.getValue(second)) shouldBe second
             rig.db
@@ -119,7 +119,7 @@ class BulkTrashTest {
             rig.fs.move(entry, "elsewhere.bin")
             files.afterNextListing = { rig.fs.move("elsewhere.bin", entry) }
 
-            writer.restoreDoc(id)
+            lifecycle.restoreDoc(id)
 
             rig.fs.sha256(path) shouldBe id
             rig.fs.exists(entry).shouldBeFalse()
@@ -131,7 +131,7 @@ class BulkTrashTest {
         paths.forEach { rig.writePdf(it, "content of $it") }
         coordinator.rescan()
         val docs = paths.associateBy { rig.fs.sha256(it) }
-        docs.keys.forEach { writer.trashDoc(it) }
+        docs.keys.forEach { lifecycle.trashDoc(it) }
         files.listings.clear()
         return docs
     }

@@ -18,7 +18,6 @@ import dev.npn.core.journal.journalObjects
 import dev.npn.core.ocr.FakeOcrEngine
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.pathrules.StoragePathRule
-import dev.npn.core.pathrules.StoragePathRuleApplicator
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.ThumbnailStore
 import dev.npn.core.settings.AppDirs
@@ -233,19 +232,18 @@ class AppSessionRig private constructor(
 }
 
 /**
- * A [MetadataWriterImpl] over [coordinator] on this rig's index, which sees the library through
- * [files] and has no storage-path rule.
+ * A [DocLifecycleImpl] over [coordinator] on this rig's index, which sees the library through
+ * [files]; a rename or move sets nothing off.
  */
-internal fun IndexRig.metadataWriter(
+internal fun IndexRig.docLifecycle(
     coordinator: JournalCoordinator,
     files: LibraryFileSystem = fs,
-): MetadataWriterImpl =
-    MetadataWriterImpl(
+): DocLifecycleImpl =
+    DocLifecycleImpl(
         coordinator,
         db,
         files,
         TrashOps(files),
-        StoragePathRuleApplicator(files, db, { null }, { _, _ -> }),
         NpnLog.None,
         BakeLock(),
         clock,

@@ -43,8 +43,8 @@ class LifecycleBehindARescanTest {
             dispatcher = waiting,
         )
     private val files = WatchedFileSystem(rig.fs).also { it.db = rig.db }
-    private val writer =
-        rig.metadataWriter(coordinator, files)
+    private val lifecycle =
+        rig.docLifecycle(coordinator, files)
 
     @AfterTest
     fun teardown() = rig.close()
@@ -60,7 +60,7 @@ class LifecycleBehindARescanTest {
             coordinator.rescan()
             val id = rig.fs.sha256("inbox/a.pdf")
 
-            behindARescan({ writer.trashDoc(id) }) { rig.moveFile("inbox/a.pdf", "archive/a.pdf") }
+            behindARescan({ lifecycle.trashDoc(id) }) { rig.moveFile("inbox/a.pdf", "archive/a.pdf") }
 
             rig.exists("archive/a.pdf").shouldBeFalse()
             rig.fs.trashEntries().map { rig.fs.sha256(it.relPath) } shouldBe listOf(id)
@@ -91,14 +91,14 @@ class LifecycleBehindARescanTest {
             rig.writePdf("a.pdf", "alpha")
             coordinator.rescan()
             val id = rig.fs.sha256("a.pdf")
-            writer.trashDoc(id)
+            lifecycle.trashDoc(id)
             val entry =
                 rig.fs
                     .trashEntries()
                     .single()
                     .relPath
 
-            behindARescan({ writer.restoreDoc(id) }) {
+            behindARescan({ lifecycle.restoreDoc(id) }) {
                 rig
                     .writer("other-installation")
                     .commit(
@@ -129,11 +129,11 @@ class LifecycleBehindARescanTest {
             rig.writePdf("a.pdf", "alpha")
             coordinator.rescan()
             val id = rig.fs.sha256("a.pdf")
-            writer.trashDoc(id)
+            lifecycle.trashDoc(id)
             files.clear()
             var hashedBeforeTheLock = emptyList<String>()
 
-            behindARescan({ writer.restoreDoc(id) }) { hashedBeforeTheLock = files.calls("sha256") }
+            behindARescan({ lifecycle.restoreDoc(id) }) { hashedBeforeTheLock = files.calls("sha256") }
 
             hashedBeforeTheLock shouldHaveSize 1
             files.calls("sha256") shouldBe hashedBeforeTheLock

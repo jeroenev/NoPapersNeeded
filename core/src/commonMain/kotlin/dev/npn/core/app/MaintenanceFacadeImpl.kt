@@ -25,6 +25,7 @@ internal class MaintenanceFacadeImpl(
     private val coordinator: JournalCoordinator,
     private val splitter: SplitService,
     private val writer: MetadataWriterImpl,
+    private val lifecycle: DocLifecycleImpl,
     private val scanReports: MutableStateFlow<ScanReport?>,
     private val log: NpnLog,
 ) : MaintenanceFacade {
@@ -77,7 +78,7 @@ internal class MaintenanceFacadeImpl(
                 copyMetadataToParts(docId, made)
                 // Null for an original trashed or deleted meanwhile: it is out of the library, as
                 // the split wants it, so the split is done.
-                writer.trashDoc(docId)
+                lifecycle.trashDoc(docId)
             }.getOrElse {
                 log.warn("Finishing the split of $docId failed; taking its parts back", it)
                 return SplitOutcome.Failed(SplitFailure.NOT_COMPLETED)

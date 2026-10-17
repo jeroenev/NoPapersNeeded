@@ -177,13 +177,20 @@ internal suspend fun buildLibrary(
         MetadataWriterImpl(
             coordinator,
             db,
+            pathRules,
+            deps.log,
+            applyAutoMatch = { ruleApplier.applyToDoc(it, organize = false) },
+        )
+    val lifecycle =
+        DocLifecycleImpl(
+            coordinator,
+            db,
             deps.fs,
             TrashOps(deps.fs),
-            pathRules,
             deps.log,
             bakes,
             clock = deps.clock,
-            applyAutoMatch = { ruleApplier.applyToDoc(it, organize = false) },
+            followUp = writer::followUpRelocation,
         )
     return Library(
         documents = DocumentRepositoryImpl(db),
@@ -194,7 +201,8 @@ internal suspend fun buildLibrary(
         rules = rules,
         ruleApplier = ruleApplier,
         writer = writer,
-        ownedWriter = OwnedWriter(writer, lifetime),
+        lifecycle = lifecycle,
+        ownedWriter = OwnedWriter(writer, lifecycle, lifetime),
         reviewConfig = JournalReviewConfig(coordinator, db.documentDao(), lifetime),
         content = buildContent(deps, lifetime, coordinator, relinkBake, bakes),
         imports =
@@ -385,6 +393,7 @@ internal fun buildMaintenance(
         coordinator = coordinator,
         splitter = SplitService(deps.fs, deps.pdfEngine, library.imports, deps.db.documentDao(), deps.log),
         writer = library.writer,
+        lifecycle = library.lifecycle,
         scanReports = scanReports,
         log = deps.log,
     )

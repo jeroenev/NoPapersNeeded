@@ -20,8 +20,8 @@ class TrashOwnFileTest {
     private val rig = IndexRig.create()
     private val files = WatchedFileSystem(rig.fs).also { it.db = rig.db }
     private val coordinator = rig.coordinator()
-    private val writer =
-        rig.metadataWriter(coordinator, files)
+    private val lifecycle =
+        rig.docLifecycle(coordinator, files)
 
     @AfterTest
     fun teardown() = rig.close()
@@ -44,7 +44,7 @@ class TrashOwnFileTest {
                 FileTime.fromMillis(indexed.mtimeMillis + 60_000L),
             )
 
-            writer.trashDoc(trashed)
+            lifecycle.trashDoc(trashed)
 
             rig.fs.readBytes("inbox/invoice.pdf").decodeToString() shouldBe "another file, written over it"
             rig.fs.trashEntries().shouldBeEmpty()
@@ -71,7 +71,7 @@ class TrashOwnFileTest {
                 ?.docId shouldBe other
 
             // With no copy in the trash, a restore leaves that file alone and puts the document beside it.
-            writer.restoreDoc(trashed)
+            lifecycle.restoreDoc(trashed)
 
             rig.fs.sha256("inbox/invoice.pdf") shouldBe other
             rig.db
@@ -91,7 +91,7 @@ class TrashOwnFileTest {
             val ids = names.map { rig.fs.sha256("$it.pdf") }
             files.clear()
 
-            ids.forEach { writer.trashDoc(it) }
+            ids.forEach { lifecycle.trashDoc(it) }
 
             files.calls("sha256").shouldBeEmpty()
             names.forEach { rig.exists("$it.pdf").shouldBeFalse() }

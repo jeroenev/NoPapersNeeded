@@ -36,13 +36,13 @@ class LifecycleCommitFailureTest {
             val before = rig.db.documentDao().getByDocId(id)
 
             lifecycle.failures = 1
-            assertFailsWith<VerifiedPublicationFailedException> { lifecycle.writer.trashDoc(id) }
+            assertFailsWith<VerifiedPublicationFailedException> { lifecycle.docs.trashDoc(id) }
 
             rig.exists("a.pdf").shouldBeTrue()
             rig.fs.trashEntries().shouldBeEmpty()
             rig.db.documentDao().getByDocId(id) shouldBe before
 
-            lifecycle.writer.trashDoc(id)
+            lifecycle.docs.trashDoc(id)
             rig.exists("a.pdf").shouldBeFalse()
             rig.db
                 .documentDao()
@@ -60,17 +60,17 @@ class LifecycleCommitFailureTest {
             rig.writePdf("a.pdf", "alpha")
             lifecycle.coordinator.rescan()
             val id = rig.fs.sha256("a.pdf")
-            lifecycle.writer.trashDoc(id)
+            lifecycle.docs.trashDoc(id)
             val before = rig.db.documentDao().getByDocId(id)
 
             lifecycle.failures = 1
-            assertFailsWith<VerifiedPublicationFailedException> { lifecycle.writer.restoreDoc(id) }
+            assertFailsWith<VerifiedPublicationFailedException> { lifecycle.docs.restoreDoc(id) }
 
             rig.exists("a.pdf").shouldBeFalse()
             rig.fs.trashEntries() shouldHaveSize 1
             rig.db.documentDao().getByDocId(id) shouldBe before
 
-            lifecycle.writer.restoreDoc(id)
+            lifecycle.docs.restoreDoc(id)
             rig.exists("a.pdf").shouldBeTrue()
             rig.fs.trashEntries().shouldBeEmpty()
             rig.db
@@ -89,16 +89,16 @@ class LifecycleCommitFailureTest {
             rig.writePdf("a.pdf", "alpha")
             lifecycle.coordinator.rescan()
             val id = rig.fs.sha256("a.pdf")
-            lifecycle.writer.trashDoc(id)
+            lifecycle.docs.trashDoc(id)
             val before = rig.db.documentDao().getByDocId(id)
 
             lifecycle.failures = 1
-            assertFailsWith<VerifiedPublicationFailedException> { lifecycle.writer.deleteDocPermanently(id) }
+            assertFailsWith<VerifiedPublicationFailedException> { lifecycle.docs.deleteDocPermanently(id) }
 
             rig.fs.trashEntries() shouldHaveSize 1
             rig.db.documentDao().getByDocId(id) shouldBe before
 
-            lifecycle.writer.deleteDocPermanently(id)
+            lifecycle.docs.deleteDocPermanently(id)
             rig.fs.trashEntries().shouldBeEmpty()
             rig.db
                 .documentDao()
@@ -120,7 +120,7 @@ class LifecycleCommitFailureTest {
             lifecycle.coordinator.rescan()
             val id = rig.fs.sha256("a.pdf")
 
-            lifecycle.writer.trashDoc(id)
+            lifecycle.docs.trashDoc(id)
 
             rig.exists("a.pdf").shouldBeFalse()
             rig.fs.trashEntries() shouldHaveSize 1
@@ -134,7 +134,7 @@ class LifecycleCommitFailureTest {
         }
 
     /**
-     * A [MetadataWriterImpl] and its coordinator over an [IndexRig] whose next [failures] journal
+     * A [DocLifecycleImpl] and its coordinator over an [IndexRig] whose next [failures] journal
      * publishes fail; with [statFailuresOfObjects], that many reads of a published object's metadata
      * fail too, which fails projecting a commit after its publish.
      */
@@ -170,8 +170,8 @@ class LifecycleCommitFailureTest {
                 MetadataAccumulator(journalFs, rig.db, installationId = "test-installation"),
             )
 
-        val writer =
-            rig.metadataWriter(coordinator)
+        val docs =
+            rig.docLifecycle(coordinator)
     }
 
     private fun withLifecycle(
