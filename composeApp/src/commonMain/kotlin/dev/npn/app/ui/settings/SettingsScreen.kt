@@ -96,12 +96,7 @@ fun SettingsScreen(
     onAutoMatchRules: () -> Unit,
     vm: SettingsViewModel = viewModel { SettingsViewModel(settings, session) },
 ) {
-    val state by vm.state.collectAsStateWithLifecycle()
-    val aiModels by vm.aiModels.collectAsStateWithLifecycle()
-    val aiSelfTest by vm.aiSelfTest.collectAsStateWithLifecycle()
-    val reviewMode by vm.reviewMode.collectAsStateWithLifecycle()
-    val fields by vm.fields.collectAsStateWithLifecycle()
-    val fieldUsage by vm.fieldUsage.collectAsStateWithLifecycle()
+    val paneState by vm.paneState.collectAsStateWithLifecycle()
 
     val snackbar = remember { SnackbarHostState() }
     SnackbarMessages(vm.messages, snackbar)
@@ -110,7 +105,7 @@ fun SettingsScreen(
     var draftToResume by remember { mutableStateOf<String?>(null) }
     val pickLibrary =
         rememberLibraryFolderPicker(
-            useSaf = state.snapshot.useSafStorage,
+            useSaf = paneState.settings.snapshot.useSafStorage,
             onPick = onOpenLibrary,
             onUnusable = vm::folderNotOnDevice,
             onTemporaryAccess = vm::libraryAccessNotKept,
@@ -122,10 +117,6 @@ fun SettingsScreen(
         if (pending != null) draftToResume = pending.key else pickLibrary()
     }
 
-    val paneState =
-        remember(state, aiModels, aiSelfTest, reviewMode, fields, fieldUsage) {
-            SettingsPaneState(state, aiModels, aiSelfTest, reviewMode, fields, fieldUsage)
-        }
     // The viewmodel's writes, plus the two ways out of a pane; one object for the screen's life,
     // calling whichever callbacks the latest composition passed.
     val currentChangeLibrary by rememberUpdatedState(onChangeLibrary)

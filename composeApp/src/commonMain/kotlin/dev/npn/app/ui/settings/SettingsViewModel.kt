@@ -281,7 +281,7 @@ class SettingsViewModel(
             )
         }.stateIn(viewModelScope, WhileSubscribedTimeout, SettingsUiState())
 
-    val reviewMode: StateFlow<ReviewMode> =
+    private val reviewMode: StateFlow<ReviewMode> =
         reviewConfig.reviewMode.stateIn(viewModelScope, WhileSubscribedTimeout, ReviewMode.DEFAULT)
 
     private val _aiModels = MutableStateFlow(AiModelListState())
@@ -299,12 +299,35 @@ class SettingsViewModel(
     private var aiSelfTestJob: Job? = null
 
     /** The field registry in display order (synced via the journal, like [reviewMode]). */
-    val fields: StateFlow<List<FieldDef>> =
+    private val fields: StateFlow<List<FieldDef>> =
         fieldRegistry.fields.stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     /** Documents carrying a value per field key, for the field manager's usage column and delete warning. */
-    val fieldUsage: StateFlow<Map<String, Int>> =
+    private val fieldUsage: StateFlow<Map<String, Int>> =
         fieldRegistry.usageCounts().stateIn(viewModelScope, WhileSubscribedTimeout, emptyMap())
+
+    /** Everything a settings pane shows, as one value. */
+    internal val paneState: StateFlow<SettingsPaneState> =
+        combine(state, aiModels, aiSelfTest, reviewMode, combine(fields, fieldUsage, ::Pair)) {
+            ui,
+            models,
+            selfTest,
+            mode,
+            (defs, usage),
+            ->
+            SettingsPaneState(ui, models, selfTest, mode, defs, usage)
+        }.stateIn(
+            viewModelScope,
+            WhileSubscribedTimeout,
+            SettingsPaneState(
+                state.value,
+                aiModels.value,
+                aiSelfTest.value,
+                reviewMode.value,
+                fields.value,
+                fieldUsage.value,
+            ),
+        )
 
     override fun saveField(def: FieldDef) =
         launchReporting(Res.string.common_save_field_failed) { fieldRegistry.upsert(def) }
