@@ -10,7 +10,6 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /**
@@ -19,14 +18,9 @@ import kotlin.test.Test
  * engine adds: it outranks everything, so *nothing but a deliberate choice* may start it.
  */
 class AiOcrPipelineTest {
-    private lateinit var rig: OcrPipelineRig
+    private val rig = OcrPipelineRig()
     private val fs get() = rig.fs
     private val db get() = rig.db
-
-    @BeforeTest
-    fun setup() {
-        rig = OcrPipelineRig()
-    }
 
     @AfterTest
     fun teardown() {

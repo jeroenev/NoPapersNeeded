@@ -14,17 +14,11 @@ import io.kotest.matchers.string.shouldMatch
 import kotlinx.coroutines.test.runTest
 import java.io.IOException
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /** A re-OCR the user asked for: runs when this device's engine is at least as good as the indexed one. */
 class OcrPipelineRerunTest {
-    private lateinit var rig: OcrPipelineRig
-
-    @BeforeTest
-    fun setup() {
-        rig = OcrPipelineRig()
-    }
+    private val rig = OcrPipelineRig()
 
     @AfterTest
     fun teardown() {

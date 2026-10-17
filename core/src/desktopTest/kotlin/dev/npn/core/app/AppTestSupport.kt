@@ -317,6 +317,24 @@ fun appSessionTest(
     }
 
 /**
+ * A library folder and the app-local [data] directory one device keeps for it, as [openSession]
+ * takes them; [close] deletes both.
+ */
+class LibraryDirs : AutoCloseable {
+    val library: Path = Files.createTempDirectory("npn-lib")
+    val data: File = Files.createTempDirectory("npn-data").toFile()
+
+    operator fun component1(): Path = library
+
+    operator fun component2(): File = data
+
+    override fun close() {
+        library.toFile().deleteRecursively()
+        data.deleteRecursively()
+    }
+}
+
+/**
  * A session over [library] whose app-local state lives in [data], as one device opens it, and
  * again after the last one closed: the index and device databases stay in [data] between opens.
  */

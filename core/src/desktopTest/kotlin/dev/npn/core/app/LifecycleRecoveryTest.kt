@@ -20,12 +20,10 @@ class LifecycleRecoveryTest {
     fun trashAndRestoreRecoverBeforeAndAfterJournalPublication() =
         runTest {
             for (point in listOf(FileSystemFaults.Point.BEFORE_PUBLISH, FileSystemFaults.Point.AFTER_PUBLISH)) {
-                val library = Files.createTempDirectory("npn-lifecycle-recovery")
-                val data = Files.createTempDirectory("npn-lifecycle-data").toFile()
-                val faults = FileSystemFaults()
-                val bytes = PdfFixtures.embeddedTextPdf("a paid bill")
-                var id = ""
-                try {
+                LibraryDirs().use { (library, data) ->
+                    val faults = FileSystemFaults()
+                    val bytes = PdfFixtures.embeddedTextPdf("a paid bill")
+                    var id = ""
                     openSession(backgroundScope, library, data, files = faults::over).use { session, _ ->
                         session.rescan()
                         val imported =
@@ -87,9 +85,6 @@ class LifecycleRecoveryTest {
                             .first()
                             .shouldBeEmpty()
                     }
-                } finally {
-                    library.toFile().deleteRecursively()
-                    data.deleteRecursively()
                 }
             }
         }
@@ -97,12 +92,10 @@ class LifecycleRecoveryTest {
     @Test
     fun aDeleteThatLeavesBytesStaysDeletedAfterRestartAndAnExplicitImportBringsItBack() =
         runTest {
-            val library = Files.createTempDirectory("npn-delete-recovery")
-            val data = Files.createTempDirectory("npn-delete-data").toFile()
-            val faults = FileSystemFaults()
-            val bytes = PdfFixtures.embeddedTextPdf("delete recovery")
-            var id = ""
-            try {
+            LibraryDirs().use { (library, data) ->
+                val faults = FileSystemFaults()
+                val bytes = PdfFixtures.embeddedTextPdf("delete recovery")
+                var id = ""
                 openSession(backgroundScope, library, data, files = faults::over).use { session, deps ->
                     session.rescan()
                     id = session.importPdfBytes(bytes, "scan.pdf").shouldBeInstanceOf<ImportOutcome.Imported>().docId
@@ -141,9 +134,6 @@ class LifecycleRecoveryTest {
                         .first()
                         .shouldBeEmpty()
                 }
-            } finally {
-                library.toFile().deleteRecursively()
-                data.deleteRecursively()
             }
         }
 
@@ -151,12 +141,10 @@ class LifecycleRecoveryTest {
     fun aBakeWhoseSwapFailsBeforeOrAfterLandingRestoresTheOriginalAcrossRestart() =
         runTest {
             for (point in listOf(FileSystemFaults.Point.BEFORE_MOVE, FileSystemFaults.Point.AFTER_MOVE)) {
-                val library = Files.createTempDirectory("npn-bake-recovery")
-                val data = Files.createTempDirectory("npn-bake-data").toFile()
-                val faults = FileSystemFaults()
-                val bytes = PdfFixtures.embeddedTextPdf("bake recovery")
-                var id = ""
-                try {
+                LibraryDirs().use { (library, data) ->
+                    val faults = FileSystemFaults()
+                    val bytes = PdfFixtures.embeddedTextPdf("bake recovery")
+                    var id = ""
                     openSession(backgroundScope, library, data, files = faults::over).use { session, _ ->
                         session.rescan()
                         val imported =
@@ -182,9 +170,6 @@ class LifecycleRecoveryTest {
                         deps.fs.sha256(document.relPath) shouldBe id
                         session.content.bakeInPlace(id) shouldBe BakeOutcome.Baked
                     }
-                } finally {
-                    library.toFile().deleteRecursively()
-                    data.deleteRecursively()
                 }
             }
         }

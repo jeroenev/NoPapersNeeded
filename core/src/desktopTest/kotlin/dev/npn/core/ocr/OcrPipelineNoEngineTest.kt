@@ -8,7 +8,6 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /**
@@ -16,14 +15,9 @@ import kotlin.test.Test
  * layer as it is, blank pages and all. Once it has an engine, it reads those pages.
  */
 class OcrPipelineNoEngineTest {
-    private lateinit var rig: OcrPipelineRig
+    private val rig = OcrPipelineRig()
     private val fs get() = rig.fs
     private val db get() = rig.db
-
-    @BeforeTest
-    fun setup() {
-        rig = OcrPipelineRig()
-    }
 
     @AfterTest
     fun teardown() {

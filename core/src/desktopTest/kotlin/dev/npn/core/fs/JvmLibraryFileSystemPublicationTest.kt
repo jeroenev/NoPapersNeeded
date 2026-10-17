@@ -11,7 +11,6 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlin.io.path.name
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 
@@ -21,14 +20,9 @@ import kotlin.test.assertFailsWith
  * hard links. Publication then falls back to the exclusive rename, never to a replacing one.
  */
 class JvmLibraryFileSystemPublicationTest {
-    private lateinit var root: Path
+    private val root: Path = Files.createTempDirectory("npn-publication-test")
 
     private val noLinks = NoReplaceLinker { _, _ -> false }
-
-    @BeforeTest
-    fun setup() {
-        root = Files.createTempDirectory("npn-publication-test")
-    }
 
     @AfterTest
     fun teardown() {

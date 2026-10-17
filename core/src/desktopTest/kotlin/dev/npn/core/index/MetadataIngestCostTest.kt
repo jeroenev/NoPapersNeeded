@@ -11,7 +11,6 @@ import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /**
@@ -20,12 +19,7 @@ import kotlin.test.Test
  */
 class MetadataIngestCostTest {
     private val log = StatementLog()
-    private lateinit var rig: IndexRig
-
-    @BeforeTest
-    fun setup() {
-        rig = IndexRig.create(log)
-    }
+    private val rig = IndexRig.create(log)
 
     @AfterTest
     fun teardown() {

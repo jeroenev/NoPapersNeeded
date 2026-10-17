@@ -195,9 +195,7 @@ class LibrarySettingsTest {
     @Test
     fun rulesSurviveACorruptCache() =
         runTest {
-            val library = Files.createTempDirectory("npn-rules-lib")
-            val data = Files.createTempDirectory("npn-rules-data").toFile()
-            try {
+            LibraryDirs().use { (library, data) ->
                 openSession(backgroundScope, library, data).use { session, deps ->
                     session.rules.save(rule("r1", "Invoice rule"))
                     // Rows the journal never held, in place of the ones it does.
@@ -222,9 +220,6 @@ class LibrarySettingsTest {
                         .first()
                         .map { it.name } shouldBe listOf("Invoice rule")
                 }
-            } finally {
-                library.toFile().deleteRecursively()
-                data.deleteRecursively()
             }
         }
 

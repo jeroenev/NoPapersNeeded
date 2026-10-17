@@ -7,16 +7,10 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 class RuleApplierTest {
-    private lateinit var rig: IndexRig
-
-    @BeforeTest
-    fun setup() {
-        rig = IndexRig.create()
-    }
+    private val rig = IndexRig.create()
 
     @AfterTest
     fun teardown() {

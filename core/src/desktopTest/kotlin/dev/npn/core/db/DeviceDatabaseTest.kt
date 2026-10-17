@@ -5,18 +5,11 @@ import kotlinx.coroutines.test.runTest
 import java.io.File
 import java.nio.file.Files
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 class DeviceDatabaseTest {
-    private lateinit var dir: File
-    private lateinit var db: DeviceDatabase
-
-    @BeforeTest
-    fun setup() {
-        dir = Files.createTempDirectory("npn-device-db").toFile()
-        db = deviceDatabase(File(dir, "device.db"))
-    }
+    private val dir: File = Files.createTempDirectory("npn-device-db").toFile()
+    private val db: DeviceDatabase = deviceDatabase(File(dir, "device.db"))
 
     @AfterTest
     fun teardown() {

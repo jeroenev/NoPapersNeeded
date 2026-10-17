@@ -18,19 +18,12 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 
 class JvmLibraryFileSystemTest {
-    private lateinit var root: Path
-    private lateinit var fs: JvmLibraryFileSystem
-
-    @BeforeTest
-    fun setup() {
-        root = Files.createTempDirectory("npn-fs-test")
-        fs = JvmLibraryFileSystem(root, PathExternalIo)
-    }
+    private val root: Path = Files.createTempDirectory("npn-fs-test")
+    private val fs = JvmLibraryFileSystem(root, PathExternalIo)
 
     @AfterTest
     fun teardown() {

@@ -13,7 +13,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /**
@@ -21,12 +20,7 @@ import kotlin.test.Test
  * work (auto-match rules, then queueing automatic AI enrichment).
  */
 class OcrPipelineHookTest {
-    private lateinit var rig: OcrPipelineRig
-
-    @BeforeTest
-    fun setup() {
-        rig = OcrPipelineRig()
-    }
+    private val rig = OcrPipelineRig()
 
     @AfterTest
     fun teardown() {

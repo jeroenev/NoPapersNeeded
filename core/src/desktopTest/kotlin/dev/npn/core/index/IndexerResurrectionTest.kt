@@ -10,16 +10,11 @@ import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /** A rescan that finds a trashed or deleted document's own bytes in place brings that document back. */
 class IndexerResurrectionTest {
-    private lateinit var rig: IndexRig
-
-    @BeforeTest fun setup() {
-        rig = IndexRig.create()
-    }
+    private val rig = IndexRig.create()
 
     @AfterTest fun teardown() {
         rig.close()

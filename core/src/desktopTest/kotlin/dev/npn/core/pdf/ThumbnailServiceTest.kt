@@ -16,20 +16,13 @@ import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 class ThumbnailServiceTest {
-    private lateinit var libRoot: Path
-    private lateinit var fs: JvmLibraryFileSystem
+    private val libRoot: Path = Files.createTempDirectory("npn-thumb-lib")
+    private val fs = JvmLibraryFileSystem(libRoot, PathExternalIo)
     private val temp = TempIndexDb("npn-thumb-db")
     private val db = temp.db
-
-    @BeforeTest
-    fun setup() {
-        libRoot = Files.createTempDirectory("npn-thumb-lib")
-        fs = JvmLibraryFileSystem(libRoot, PathExternalIo)
-    }
 
     @AfterTest
     fun teardown() {

@@ -13,17 +13,12 @@ import java.nio.file.Files
 import java.nio.file.StandardOpenOption
 import java.nio.file.attribute.FileTime
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 
 /** A PDF written in place is indexed only once its bytes have settled (see [WriteSettle]). */
 class IndexerWriteSettleTest {
-    private lateinit var rig: IndexRig
-
-    @BeforeTest fun setup() {
-        rig = IndexRig.create()
-    }
+    private val rig = IndexRig.create()
 
     @AfterTest fun teardown() {
         rig.close()

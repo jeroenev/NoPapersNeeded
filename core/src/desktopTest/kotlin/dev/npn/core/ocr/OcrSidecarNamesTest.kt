@@ -9,7 +9,6 @@ import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /**
@@ -18,19 +17,12 @@ import kotlin.test.Test
  * watcher's test for this device's own writes.
  */
 class OcrSidecarNamesTest {
-    private lateinit var root: Path
-    private lateinit var fs: JvmLibraryFileSystem
-    private lateinit var versions: OcrVersions
+    private val root: Path = Files.createTempDirectory("npn-sidecar-names")
+    private val fs = JvmLibraryFileSystem(root, PathExternalIo)
+    private val versions = OcrVersions(OcrSidecarFiles(fs), minEmbeddedCharsPerPage = 1)
 
     private val hash = "ab" + "0".repeat(62)
     private val otherHash = "cd" + "0".repeat(62)
-
-    @BeforeTest
-    fun setup() {
-        root = Files.createTempDirectory("npn-sidecar-names")
-        fs = JvmLibraryFileSystem(root, PathExternalIo)
-        versions = OcrVersions(OcrSidecarFiles(fs), minEmbeddedCharsPerPage = 1)
-    }
 
     @AfterTest
     fun teardown() {

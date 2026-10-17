@@ -13,7 +13,6 @@ import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
 import java.io.IOException
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /**
@@ -21,13 +20,8 @@ import kotlin.test.Test
  * pages 0 until k again when the queue retries it.
  */
 class OcrPageResumeTest {
-    private lateinit var rig: OcrPipelineRig
+    private val rig = OcrPipelineRig()
     private val db get() = rig.db
-
-    @BeforeTest
-    fun setup() {
-        rig = OcrPipelineRig()
-    }
 
     @AfterTest
     fun teardown() {

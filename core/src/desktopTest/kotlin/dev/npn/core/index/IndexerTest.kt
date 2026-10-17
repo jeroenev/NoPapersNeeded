@@ -16,16 +16,11 @@ import org.junit.Assume.assumeTrue
 import java.io.File
 import java.nio.file.Files
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertFails
 
 class IndexerTest {
-    private lateinit var rig: IndexRig
-
-    @BeforeTest fun setup() {
-        rig = IndexRig.create()
-    }
+    private val rig = IndexRig.create()
 
     @AfterTest fun teardown() {
         rig.close()

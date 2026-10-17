@@ -17,17 +17,11 @@ import java.nio.file.Path
 import java.nio.file.StandardWatchEventKinds.ENTRY_CREATE
 import java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /** [watchDirs] over a real [java.nio.file.WatchService], so each test waits on real time, bounded. */
 class WatchDirsTest {
-    private lateinit var root: Path
-
-    @BeforeTest
-    fun setup() {
-        root = Files.createTempDirectory("npn-watch-test")
-    }
+    private val root: Path = Files.createTempDirectory("npn-watch-test")
 
     @AfterTest
     fun teardown() {

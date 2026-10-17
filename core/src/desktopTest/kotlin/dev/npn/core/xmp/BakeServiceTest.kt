@@ -25,20 +25,13 @@ import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 
 class BakeServiceTest {
-    private lateinit var root: Path
-    private lateinit var fs: JvmLibraryFileSystem
+    private val root: Path = Files.createTempDirectory("npn-bake-test")
+    private val fs = JvmLibraryFileSystem(root, PathExternalIo)
     private val io = PdfBoxXmpIO()
-
-    @BeforeTest
-    fun setup() {
-        root = Files.createTempDirectory("npn-bake-test")
-        fs = JvmLibraryFileSystem(root, PathExternalIo)
-    }
 
     @AfterTest
     fun teardown() {

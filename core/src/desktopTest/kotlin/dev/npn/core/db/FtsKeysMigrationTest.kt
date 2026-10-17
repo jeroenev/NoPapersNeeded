@@ -8,7 +8,6 @@ import kotlinx.coroutines.test.runTest
 import java.io.File
 import java.nio.file.Files
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /**
@@ -16,14 +15,8 @@ import kotlin.test.Test
  * output is not refolded from the journal), so the migration keys the rows that are already there.
  */
 class FtsKeysMigrationTest {
-    private lateinit var dir: File
-    private lateinit var file: File
-
-    @BeforeTest
-    fun setup() {
-        dir = Files.createTempDirectory("npn-fts-migration").toFile()
-        file = File(dir, "index.db")
-    }
+    private val dir: File = Files.createTempDirectory("npn-fts-migration").toFile()
+    private val file = File(dir, "index.db")
 
     @AfterTest
     fun teardown() {

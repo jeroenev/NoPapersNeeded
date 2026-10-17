@@ -12,7 +12,6 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 
@@ -26,13 +25,8 @@ import kotlin.test.assertFailsWith
  * be running with no one alive to take the claim back.
  */
 class OcrQueueRecoveryTest {
-    private lateinit var rig: OcrPipelineRig
+    private val rig = OcrPipelineRig()
     private val db get() = rig.db
-
-    @BeforeTest
-    fun setup() {
-        rig = OcrPipelineRig()
-    }
 
     @AfterTest
     fun teardown() {

@@ -8,18 +8,11 @@ import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 class AdaptersTest {
-    private lateinit var root: Path
-    private lateinit var fs: JvmLibraryFileSystem
-
-    @BeforeTest
-    fun setup() {
-        root = Files.createTempDirectory("npn-adapters-test")
-        fs = JvmLibraryFileSystem(root, PathExternalIo)
-    }
+    private val root: Path = Files.createTempDirectory("npn-adapters-test")
+    private val fs = JvmLibraryFileSystem(root, PathExternalIo)
 
     @AfterTest
     fun teardown() {

@@ -16,7 +16,6 @@ import java.nio.file.StandardCopyOption
 import java.util.concurrent.CyclicBarrier
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /**
@@ -24,14 +23,8 @@ import kotlin.test.Test
  * replaced by a second writer racing the first.
  */
 class JvmLibraryFileSystemNoReplaceTest {
-    private lateinit var root: Path
-    private lateinit var fs: JvmLibraryFileSystem
-
-    @BeforeTest
-    fun setup() {
-        root = Files.createTempDirectory("npn-noreplace-test")
-        fs = JvmLibraryFileSystem(root, PathExternalIo)
-    }
+    private val root: Path = Files.createTempDirectory("npn-noreplace-test")
+    private val fs = JvmLibraryFileSystem(root, PathExternalIo)
 
     @AfterTest
     fun teardown() {

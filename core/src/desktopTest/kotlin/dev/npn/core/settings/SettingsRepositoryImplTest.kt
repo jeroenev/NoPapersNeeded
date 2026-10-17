@@ -13,27 +13,30 @@ import java.io.IOException
 import java.io.OutputStream
 import java.nio.file.Files
 import java.nio.file.attribute.PosixFilePermission
+import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 
 class SettingsRepositoryImplTest {
+    private val directory = Files.createTempDirectory("npn-settings-test")
+
+    @AfterTest
+    fun cleanup() {
+        directory.toFile().deleteRecursively()
+    }
+
     @Test
     fun settingsFileIsOwnerOnly() =
         runTest {
-            val directory = Files.createTempDirectory("npn-settings-test")
-            try {
-                val file = directory.resolve("settings.properties").toFile()
-                SettingsRepositoryImpl(file).edit { it.copy(aiApiKey = "secret") }
+            val file = directory.resolve("settings.properties").toFile()
+            SettingsRepositoryImpl(file).edit { it.copy(aiApiKey = "secret") }
 
-                if (supportsPosixView(file)) {
-                    Files.getPosixFilePermissions(file.toPath()) shouldBe
-                        setOf(
-                            PosixFilePermission.OWNER_READ,
-                            PosixFilePermission.OWNER_WRITE,
-                        )
-                }
-            } finally {
-                directory.toFile().deleteRecursively()
+            if (supportsPosixView(file)) {
+                Files.getPosixFilePermissions(file.toPath()) shouldBe
+                    setOf(
+                        PosixFilePermission.OWNER_READ,
+                        PosixFilePermission.OWNER_WRITE,
+                    )
             }
         }
 
@@ -44,43 +47,33 @@ class SettingsRepositoryImplTest {
     @Test
     fun concurrentUpdatesPersistOneCombinedSnapshot() =
         runTest {
-            val directory = Files.createTempDirectory("npn-settings-test")
-            try {
-                val file = directory.resolve("settings.properties").toFile()
-                val repository = SettingsRepositoryImpl(file)
+            val file = directory.resolve("settings.properties").toFile()
+            val repository = SettingsRepositoryImpl(file)
 
-                listOf(
-                    async { repository.edit { it.copy(aiBaseUrl = "https://example.test") } },
-                    async { repository.edit { it.copy(aiApiKey = "secret") } },
-                    async { repository.edit { it.copy(aiModel = "model") } },
-                ).awaitAll()
+            listOf(
+                async { repository.edit { it.copy(aiBaseUrl = "https://example.test") } },
+                async { repository.edit { it.copy(aiApiKey = "secret") } },
+                async { repository.edit { it.copy(aiModel = "model") } },
+            ).awaitAll()
 
-                val reloaded = SettingsRepositoryImpl(file)
-                val snapshot = reloaded.settings.first()
-                snapshot.aiBaseUrl shouldBe "https://example.test"
-                snapshot.aiApiKey shouldBe "secret"
-                snapshot.aiModel shouldBe "model"
-            } finally {
-                directory.toFile().deleteRecursively()
-            }
+            val reloaded = SettingsRepositoryImpl(file)
+            val snapshot = reloaded.settings.first()
+            snapshot.aiBaseUrl shouldBe "https://example.test"
+            snapshot.aiApiKey shouldBe "secret"
+            snapshot.aiModel shouldBe "model"
         }
 
     @Test
     fun aFailedWriteLeavesTheSettingsAsTheyAreOnDisk() =
         runTest {
-            val directory = Files.createTempDirectory("npn-settings-test")
-            try {
-                // A directory where the file belongs: every write fails.
-                val file = Files.createDirectory(directory.resolve("settings.properties")).toFile()
-                val repository = SettingsRepositoryImpl(file)
-                val before = repository.settings.first()
+            // A directory where the file belongs: every write fails.
+            val file = Files.createDirectory(directory.resolve("settings.properties")).toFile()
+            val repository = SettingsRepositoryImpl(file)
+            val before = repository.settings.first()
 
-                assertFailsWith<IOException> { repository.edit { it.copy(aiModel = "model") } }
+            assertFailsWith<IOException> { repository.edit { it.copy(aiModel = "model") } }
 
-                repository.settings.first() shouldBe before
-            } finally {
-                directory.toFile().deleteRecursively()
-            }
+            repository.settings.first() shouldBe before
         }
 
     /**
@@ -90,20 +83,15 @@ class SettingsRepositoryImplTest {
     @Test
     fun aWriteCutShortKeepsTheSavedSettings() =
         runTest {
-            val directory = Files.createTempDirectory("npn-settings-test")
-            try {
-                val file = directory.resolve("settings.properties").toFile()
-                SettingsRepositoryImpl(file).edit { it.copy(aiModel = "model", aiApiKey = "secret") }
-                val saved = SettingsRepositoryImpl(file).settings.first()
-                val diskFull =
-                    SettingsRepositoryImpl(file) { target -> FailingAfter(FileOutputStream(target), bytes = 16) }
+            val file = directory.resolve("settings.properties").toFile()
+            SettingsRepositoryImpl(file).edit { it.copy(aiModel = "model", aiApiKey = "secret") }
+            val saved = SettingsRepositoryImpl(file).settings.first()
+            val diskFull =
+                SettingsRepositoryImpl(file) { target -> FailingAfter(FileOutputStream(target), bytes = 16) }
 
-                assertFailsWith<IOException> { diskFull.edit { it.copy(aiModel = "other") } }
+            assertFailsWith<IOException> { diskFull.edit { it.copy(aiModel = "other") } }
 
-                SettingsRepositoryImpl(file).settings.first() shouldBe saved
-            } finally {
-                directory.toFile().deleteRecursively()
-            }
+            SettingsRepositoryImpl(file).settings.first() shouldBe saved
         }
 
     /** Writes [bytes] bytes through to [out], then fails as a full disk does. */
@@ -122,155 +110,115 @@ class SettingsRepositoryImplTest {
     @Test
     fun aiProviderAndReasoningPersist() =
         runTest {
-            val directory = Files.createTempDirectory("npn-settings-test")
-            try {
-                val file = directory.resolve("settings.properties").toFile()
-                val repository = SettingsRepositoryImpl(file)
-                repository.edit { it.copy(aiProvider = AiProvider.ANTHROPIC) }
-                repository.edit { it.copy(aiReasoningAssistant = AiReasoningLevel.MEDIUM) }
-                repository.edit { it.copy(aiReasoningEdit = AiReasoningLevel.NONE) }
+            val file = directory.resolve("settings.properties").toFile()
+            val repository = SettingsRepositoryImpl(file)
+            repository.edit { it.copy(aiProvider = AiProvider.ANTHROPIC) }
+            repository.edit { it.copy(aiReasoningAssistant = AiReasoningLevel.MEDIUM) }
+            repository.edit { it.copy(aiReasoningEdit = AiReasoningLevel.NONE) }
 
-                val snapshot = SettingsRepositoryImpl(file).settings.first()
-                snapshot.aiProvider shouldBe AiProvider.ANTHROPIC
-                snapshot.aiReasoningAssistant shouldBe AiReasoningLevel.MEDIUM
-                snapshot.aiReasoningEdit shouldBe AiReasoningLevel.NONE
-            } finally {
-                directory.toFile().deleteRecursively()
-            }
+            val snapshot = SettingsRepositoryImpl(file).settings.first()
+            snapshot.aiProvider shouldBe AiProvider.ANTHROPIC
+            snapshot.aiReasoningAssistant shouldBe AiReasoningLevel.MEDIUM
+            snapshot.aiReasoningEdit shouldBe AiReasoningLevel.NONE
         }
 
     @Test
     fun aiOcrEngineToggleDefaultsOffAndPersists() =
         runTest {
-            val directory = Files.createTempDirectory("npn-settings-test")
-            try {
-                // Default off matters more than persistence here: this switch bills per page, so a
-                // settings file that predates it must never load as "on".
-                val file = directory.resolve("settings.properties").toFile()
-                SettingsRepositoryImpl(file).settings.first().aiOcrAuto shouldBe false
+            // Default off matters more than persistence here: this switch bills per page, so a
+            // settings file that predates it must never load as "on".
+            val file = directory.resolve("settings.properties").toFile()
+            SettingsRepositoryImpl(file).settings.first().aiOcrAuto shouldBe false
 
-                SettingsRepositoryImpl(file).edit { it.copy(aiOcrAuto = true) }
-                val snapshot = SettingsRepositoryImpl(file).settings.first()
-                snapshot.aiOcrAuto shouldBe true
-                snapshot.toAiConfig().ocrAuto shouldBe true
-            } finally {
-                directory.toFile().deleteRecursively()
-            }
+            SettingsRepositoryImpl(file).edit { it.copy(aiOcrAuto = true) }
+            val snapshot = SettingsRepositoryImpl(file).settings.first()
+            snapshot.aiOcrAuto shouldBe true
+            snapshot.toAiConfig().ocrAuto shouldBe true
         }
 
     @Test
     fun preProviderSettingsWithBaseUrlMigrateToCustom() =
         runTest {
-            val directory = Files.createTempDirectory("npn-settings-test")
-            try {
-                // A settings file written before provider selection existed: base URL set, no
-                // provider key. That was the free-form OpenAI-compatible endpoint = CUSTOM.
-                val file = directory.resolve("settings.properties").toFile()
-                file.writeText("aiEnabled=true\naiBaseUrl=http\\://localhost\\:11434\naiModel=qwen3\\:8b\n")
+            // A settings file written before provider selection existed: base URL set, no
+            // provider key. That was the free-form OpenAI-compatible endpoint = CUSTOM.
+            val file = directory.resolve("settings.properties").toFile()
+            file.writeText("aiEnabled=true\naiBaseUrl=http\\://localhost\\:11434\naiModel=qwen3\\:8b\n")
 
-                val snapshot = SettingsRepositoryImpl(file).settings.first()
-                snapshot.aiProvider shouldBe AiProvider.CUSTOM
-                snapshot.aiReasoningAssistant shouldBe AiReasoningLevel.DEFAULT
-                snapshot.aiReasoningEdit shouldBe AiReasoningLevel.LOW
-            } finally {
-                directory.toFile().deleteRecursively()
-            }
+            val snapshot = SettingsRepositoryImpl(file).settings.first()
+            snapshot.aiProvider shouldBe AiProvider.CUSTOM
+            snapshot.aiReasoningAssistant shouldBe AiReasoningLevel.DEFAULT
+            snapshot.aiReasoningEdit shouldBe AiReasoningLevel.LOW
         }
 
     @Test
     fun freshSettingsDefaultToFirstProvider() =
         runTest {
-            val directory = Files.createTempDirectory("npn-settings-test")
-            try {
-                val file = directory.resolve("settings.properties").toFile()
-                SettingsRepositoryImpl(file).settings.first().aiProvider shouldBe AiProvider.OPENAI
-            } finally {
-                directory.toFile().deleteRecursively()
-            }
+            val file = directory.resolve("settings.properties").toFile()
+            SettingsRepositoryImpl(file).settings.first().aiProvider shouldBe AiProvider.OPENAI
         }
 
     @Test
     fun outOfRangeValuesAreClampedByTheRepository() =
         runTest {
-            val directory = Files.createTempDirectory("npn-settings-test")
-            try {
-                val file = directory.resolve("settings.properties").toFile()
-                // Caller passes values outside the allowed ranges; the repository (via SettingsCodec)
-                // coerces them, so neither a write nor a reload can hold an out-of-range value.
-                SettingsRepositoryImpl(file).edit {
-                    it.copy(aiMaxTagsPerDoc = 999, aiMaxNewTagsPerDoc = -5, gridColumnWidth = 10)
-                }
-
-                val snapshot = SettingsRepositoryImpl(file).settings.first()
-                snapshot.aiMaxTagsPerDoc shouldBe AiTagging.MAX_TAGS_PER_DOC
-                snapshot.aiMaxNewTagsPerDoc shouldBe AiTagging.MIN_NEW_TAGS_PER_DOC
-                snapshot.gridColumnWidth shouldBe GridSizing.MIN_COLUMN_WIDTH
-            } finally {
-                directory.toFile().deleteRecursively()
+            val file = directory.resolve("settings.properties").toFile()
+            // Caller passes values outside the allowed ranges; the repository (via SettingsCodec)
+            // coerces them, so neither a write nor a reload can hold an out-of-range value.
+            SettingsRepositoryImpl(file).edit {
+                it.copy(aiMaxTagsPerDoc = 999, aiMaxNewTagsPerDoc = -5, gridColumnWidth = 10)
             }
+
+            val snapshot = SettingsRepositoryImpl(file).settings.first()
+            snapshot.aiMaxTagsPerDoc shouldBe AiTagging.MAX_TAGS_PER_DOC
+            snapshot.aiMaxNewTagsPerDoc shouldBe AiTagging.MIN_NEW_TAGS_PER_DOC
+            snapshot.gridColumnWidth shouldBe GridSizing.MIN_COLUMN_WIDTH
         }
 
     @Test
     fun appLanguagePersistsAndClears() =
         runTest {
-            val directory = Files.createTempDirectory("npn-settings-test")
-            try {
-                val file = directory.resolve("settings.properties").toFile()
-                SettingsRepositoryImpl(file).edit { it.copy(appLanguage = "nl") }
+            val file = directory.resolve("settings.properties").toFile()
+            SettingsRepositoryImpl(file).edit { it.copy(appLanguage = "nl") }
 
-                var reloaded = SettingsRepositoryImpl(file)
-                reloaded.settings.first().appLanguage shouldBe "nl"
+            var reloaded = SettingsRepositoryImpl(file)
+            reloaded.settings.first().appLanguage shouldBe "nl"
 
-                SettingsRepositoryImpl(file).edit { it.copy(appLanguage = null) }
-                reloaded = SettingsRepositoryImpl(file)
-                reloaded.settings.first().appLanguage shouldBe null
-            } finally {
-                directory.toFile().deleteRecursively()
-            }
+            SettingsRepositoryImpl(file).edit { it.copy(appLanguage = null) }
+            reloaded = SettingsRepositoryImpl(file)
+            reloaded.settings.first().appLanguage shouldBe null
         }
 
     @Test
     fun ocrLanguagesDefaultToAutomaticAndPersistAChoice() =
         runTest {
-            val directory = Files.createTempDirectory("npn-settings-test")
-            try {
-                val file = directory.resolve("settings.properties").toFile()
-                SettingsRepositoryImpl(file).settings.first().ocrLanguage shouldBe null
+            val file = directory.resolve("settings.properties").toFile()
+            SettingsRepositoryImpl(file).settings.first().ocrLanguage shouldBe null
 
-                // A choice of English only is still a choice, not the automatic default.
-                SettingsRepositoryImpl(file).edit { it.copy(ocrLanguage = "eng") }
-                SettingsRepositoryImpl(file).settings.first().ocrLanguage shouldBe "eng"
+            // A choice of English only is still a choice, not the automatic default.
+            SettingsRepositoryImpl(file).edit { it.copy(ocrLanguage = "eng") }
+            SettingsRepositoryImpl(file).settings.first().ocrLanguage shouldBe "eng"
 
-                SettingsRepositoryImpl(file).edit { it.copy(ocrLanguage = "nld + eng") }
-                SettingsRepositoryImpl(file).settings.first().ocrLanguage shouldBe "nld+eng"
+            SettingsRepositoryImpl(file).edit { it.copy(ocrLanguage = "nld + eng") }
+            SettingsRepositoryImpl(file).settings.first().ocrLanguage shouldBe "nld+eng"
 
-                SettingsRepositoryImpl(file).edit { it.copy(ocrLanguage = null) }
-                SettingsRepositoryImpl(file).settings.first().ocrLanguage shouldBe null
-            } finally {
-                directory.toFile().deleteRecursively()
-            }
+            SettingsRepositoryImpl(file).edit { it.copy(ocrLanguage = null) }
+            SettingsRepositoryImpl(file).settings.first().ocrLanguage shouldBe null
         }
 
     @Test
     fun legacyOcrLanguageMigrates() =
         runTest {
-            val directory = Files.createTempDirectory("npn-settings-test")
-            try {
-                // Every install before the language picker stored a single code, "eng" by default.
-                val file = directory.resolve("settings.properties").toFile()
-                file.writeText("ocrLanguage=eng\n")
-                SettingsRepositoryImpl(file).settings.first().ocrLanguage shouldBe null
+            // Every install before the language picker stored a single code, "eng" by default.
+            val file = directory.resolve("settings.properties").toFile()
+            file.writeText("ocrLanguage=eng\n")
+            SettingsRepositoryImpl(file).settings.first().ocrLanguage shouldBe null
 
-                file.writeText("ocrLanguage=fra\n")
-                SettingsRepositoryImpl(file).settings.first().ocrLanguage shouldBe "fra"
+            file.writeText("ocrLanguage=fra\n")
+            SettingsRepositoryImpl(file).settings.first().ocrLanguage shouldBe "fra"
 
-                // The next write moves it to the new key and drops the old one.
-                SettingsRepositoryImpl(file).edit { it.copy(appLanguage = "fr") }
-                file.readText().lines().none { it.startsWith("ocrLanguage=") } shouldBe true
-                SettingsRepositoryImpl(file).settings.first().ocrLanguage shouldBe "fra"
-            } finally {
-                directory.toFile().deleteRecursively()
-            }
+            // The next write moves it to the new key and drops the old one.
+            SettingsRepositoryImpl(file).edit { it.copy(appLanguage = "fr") }
+            file.readText().lines().none { it.startsWith("ocrLanguage=") } shouldBe true
+            SettingsRepositoryImpl(file).settings.first().ocrLanguage shouldBe "fra"
         }
 
     /**
@@ -280,17 +228,12 @@ class SettingsRepositoryImplTest {
     @Test
     fun aStoredTrashRetentionIsKeptForLibrariesToAdopt() =
         runTest {
-            val directory = Files.createTempDirectory("npn-settings-test")
-            try {
-                val file = directory.resolve("settings.properties").toFile()
-                SettingsRepositoryImpl(file).legacyLibrarySettings().trashRetentionDays shouldBe null
+            val file = directory.resolve("settings.properties").toFile()
+            SettingsRepositoryImpl(file).legacyLibrarySettings().trashRetentionDays shouldBe null
 
-                file.writeText("trashRetentionDays=7\n")
-                SettingsRepositoryImpl(file).edit { it.copy(appLanguage = "fr") }
+            file.writeText("trashRetentionDays=7\n")
+            SettingsRepositoryImpl(file).edit { it.copy(appLanguage = "fr") }
 
-                SettingsRepositoryImpl(file).legacyLibrarySettings().trashRetentionDays shouldBe 7
-            } finally {
-                directory.toFile().deleteRecursively()
-            }
+            SettingsRepositoryImpl(file).legacyLibrarySettings().trashRetentionDays shouldBe 7
         }
 }

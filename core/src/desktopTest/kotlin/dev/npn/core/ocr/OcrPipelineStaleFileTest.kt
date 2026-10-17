@@ -18,7 +18,6 @@ import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /**
@@ -26,12 +25,7 @@ import kotlin.test.Test
  * bytes that hash to that docId.
  */
 class OcrPipelineStaleFileTest {
-    private lateinit var rig: OcrPipelineRig
-
-    @BeforeTest
-    fun setup() {
-        rig = OcrPipelineRig()
-    }
+    private val rig = OcrPipelineRig()
 
     @AfterTest
     fun teardown() {

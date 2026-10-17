@@ -12,20 +12,12 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.FileTime
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 class TrashOpsTest {
-    private lateinit var root: Path
-    private lateinit var fs: JvmLibraryFileSystem
-    private lateinit var trash: TrashOps
-
-    @BeforeTest
-    fun setup() {
-        root = Files.createTempDirectory("npn-trash-test")
-        fs = JvmLibraryFileSystem(root, PathExternalIo)
-        trash = TrashOps(fs)
-    }
+    private val root: Path = Files.createTempDirectory("npn-trash-test")
+    private val fs = JvmLibraryFileSystem(root, PathExternalIo)
+    private val trash = TrashOps(fs)
 
     @AfterTest
     fun teardown() {

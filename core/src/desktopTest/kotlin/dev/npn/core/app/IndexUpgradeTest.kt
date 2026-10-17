@@ -50,20 +50,12 @@ import kotlin.test.Test
  * rebuild reaches its new home before the index forgets it.
  */
 class IndexUpgradeTest {
-    private lateinit var library: Path
-    private lateinit var data: File
-
-    @BeforeTest
-    fun setup() {
-        library = Files.createTempDirectory("npn-upgrade-lib")
-        data = Files.createTempDirectory("npn-upgrade-data").toFile()
-    }
+    private val dirs = LibraryDirs()
+    private val library = dirs.library
+    private val data = dirs.data
 
     @AfterTest
-    fun teardown() {
-        library.toFile().deleteRecursively()
-        data.deleteRecursively()
-    }
+    fun teardown() = dirs.close()
 
     @Test
     fun savedViewsInTheIndexMoveIntoTheJournal() =
