@@ -33,6 +33,12 @@ import no_papers_needed.composeapp.generated.resources.ux_show_suggestions
 import org.jetbrains.compose.resources.stringResource
 
 /**
+ * Maximum entries shown in an inline autocomplete list (tag / correspondent / doc-type / field-key
+ * suggestions), so every editor field caps its dropdown identically.
+ */
+private const val MAX_INLINE_SUGGESTIONS = 8
+
+/**
  * A single-line text field that offers the [suggestions] matching what is typed ([suggestionsFor]).
  *
  * The matches are worked out from the value being shown, never from the keystroke before it, and

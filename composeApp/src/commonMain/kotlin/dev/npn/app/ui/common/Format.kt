@@ -4,12 +4,6 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
 
-/**
- * Maximum entries shown in an inline autocomplete list (tag / correspondent / doc-type / field-key
- * suggestions). Shared so the various editor fields cap their dropdowns identically.
- */
-const val MAX_INLINE_SUGGESTIONS = 8
-
 /** Human-readable file size. */
 fun formatSize(bytes: Long): String {
     if (bytes < 1024) return "$bytes B"
@@ -29,16 +23,13 @@ private fun Double.roundTo(decimals: Int): String {
     return if (s.endsWith(".0")) s.dropLast(2) else s
 }
 
-/** Epoch millis -> yyyy-MM-dd local date. */
-fun formatEpochDate(epochMillis: Long): String {
-    val dt =
-        Instant
-            .fromEpochMilliseconds(epochMillis)
-            .toLocalDateTime(TimeZone.currentSystemDefault())
-    val m = (dt.month.ordinal + 1).toString().padStart(2, '0')
-    val d = dt.day.toString().padStart(2, '0')
-    return "${dt.year}-$m-$d"
-}
+/** Epoch millis -> yyyy-MM-dd local date (ISO, which is what [kotlinx.datetime.LocalDate] prints). */
+fun formatEpochDate(epochMillis: Long): String =
+    Instant
+        .fromEpochMilliseconds(epochMillis)
+        .toLocalDateTime(TimeZone.currentSystemDefault())
+        .date
+        .toString()
 
 /** Epoch millis -> yyyy-MM-dd HH:mm:ss in the current local time zone. */
 fun formatEpochDateTime(epochMillis: Long): String {
