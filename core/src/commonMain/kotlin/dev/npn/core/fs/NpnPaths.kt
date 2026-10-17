@@ -334,9 +334,9 @@ object NpnPaths {
      *
      * Whatever reads a path seen on disk (a listing, a watcher event) uses this to *ignore* such a
      * path ([indexable], `JournalPaths.classify`, the session's `watchAction`) or reads it without
-     * the gate ([isInternal], [isHidden], [dev.npn.core.ocr.OcrSidecarName.isOwnWrite]); only the I/O side ([normalize])
-     * refuses it. The split keeps a hostile or merely exotic name on disk from failing a rescan, a
-     * journal reconcile or the watch.
+     * the gate ([isInternal], [isHidden], [dev.npn.core.ocr.OcrSidecarName.isOwnWrite]); only the
+     * I/O side ([normalize]) refuses it. The split keeps a hostile or merely exotic name on disk
+     * from failing a rescan, a journal reconcile or the watch.
      */
     fun isSafe(relPath: String): Boolean = unsafeReason(relPath) == null
 
