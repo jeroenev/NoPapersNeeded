@@ -17,8 +17,6 @@ import kotlinx.coroutines.flow.flow
  * [clearGate] holds a clear the same way.
  */
 class FakeAiChat : AiChat {
-    var configuredValue: Boolean = true
-
     var askScripts: List<List<AiChatEvent>> = emptyList()
     var askResponses: List<String> = emptyList()
     var askDelayMillis: Long = 0
@@ -38,8 +36,6 @@ class FakeAiChat : AiChat {
     var sessionsGate: CompletableDeferred<Unit>? = null
     var deleteGate: CompletableDeferred<Unit>? = null
     var failChatSessions: (() -> Nothing)? = null
-
-    override suspend fun configured(): Boolean = configuredValue
 
     override suspend fun chatSessions(): List<AiChatSession> {
         sessionsGate?.await()

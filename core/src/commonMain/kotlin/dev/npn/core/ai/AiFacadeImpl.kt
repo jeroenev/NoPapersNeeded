@@ -15,10 +15,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
 
 /**
  * Koog-backed implementation of the AI facets ([AiChat], [AiSuggest]) and of the vision OCR engine
@@ -47,21 +43,16 @@ class AiFacadeImpl(
     val endpointHealth = EndpointHealth()
 
     private val chatHistoryStore = RoomChatHistoryProvider(chats, ownWrite)
-    private val chatSessionStore = RoomChatSessionStore(chats, ownWrite, chatHistoryStore)
-
-    /** Serializes the read-modify-write of the session list across ask, create, clear and delete. */
-    private val sessionsMutex = Mutex()
+    private val sessions = ChatSessions(chats, ownWrite, chatHistoryStore, clock)
 
     private val runtimes = AiRuntimeCache()
-
-    override suspend fun configured(): Boolean = configProvider().configured
 
     override fun ask(
         sessionId: String,
         question: String,
     ): Flow<AiChatEvent> =
         flow {
-            touchChatSession(sessionId, question)
+            sessions.touch(sessionId, question)
             // One config read for the whole turn, so the client, prompt and parameters agree. Inside
             // the cold flow, so config errors surface on collection (as flow exceptions), matching
             // the "throws on endpoint errors" contract.
@@ -89,59 +80,13 @@ class AiFacadeImpl(
     override suspend fun chatTranscriptFor(sessionId: String): List<AiChatHistoryItem> =
         KoogChatHistoryMapper.map(chatHistoryStore.load(sessionId))
 
-    override suspend fun chatSessions(): List<AiChatSession> {
-        // Every stored session is listed: one is stored once asked in, and stays (untitled once
-        // cleared) until it is deleted.
-        val stored = chatSessionStore.load()
-        // The one conversation of a build from before sessions existed, listed untitled beside the
-        // others while it has history, until it is deleted or asked in (ask stores it then).
-        val legacy =
-            if (stored.none { it.id == LEGACY_CONVERSATION_ID } && chatHistoryStore.has(LEGACY_CONVERSATION_ID)) {
-                listOf(AiChatSession(LEGACY_CONVERSATION_ID, title = null, updatedAt = 0L))
-            } else {
-                emptyList()
-            }
-        return (stored + legacy).sortedByDescending { it.updatedAt }
-    }
+    override suspend fun chatSessions(): List<AiChatSession> = sessions.list()
 
-    @OptIn(ExperimentalUuidApi::class)
-    override suspend fun createChatSession(): AiChatSession = AiChatSession(Uuid.random().toString(), null, now())
+    override suspend fun createChatSession(): AiChatSession = sessions.create()
 
-    override suspend fun deleteChatSession(sessionId: String) {
-        chatHistoryStore.delete(sessionId)
-        editSessions { sessions -> sessions.filterNot { it.id == sessionId } }
-    }
+    override suspend fun deleteChatSession(sessionId: String) = sessions.delete(sessionId)
 
-    override suspend fun clearChatSession(sessionId: String) {
-        // Stored untitled, so it stays listed; that includes the pre-sessions conversation, which
-        // is listed by its history alone until now.
-        val hadConversation = chatHistoryStore.has(sessionId)
-        chatHistoryStore.delete(sessionId)
-        editSessions { sessions ->
-            if (!hadConversation && sessions.none { it.id == sessionId }) {
-                sessions
-            } else {
-                sessions.filterNot { it.id == sessionId } + AiChatSession(sessionId, title = null, updatedAt = now())
-            }
-        }
-    }
-
-    /** Store [sessionId] as just used, titled by its first question while it has no title yet. */
-    private suspend fun touchChatSession(
-        sessionId: String,
-        question: String,
-    ) = editSessions { sessions ->
-        val title = sessions.firstOrNull { it.id == sessionId }?.title ?: AiChatSession.titleFrom(question)
-        sessions.filterNot { it.id == sessionId } + AiChatSession(sessionId, title, now())
-    }
-
-    /** Read, change and store the session list as one step, newest first. */
-    private suspend fun editSessions(change: (List<AiChatSession>) -> List<AiChatSession>) =
-        sessionsMutex.withLock {
-            chatSessionStore.save(change(chatSessionStore.load()).sortedByDescending { it.updatedAt })
-        }
-
-    private fun now(): Long = clock.nowMillis()
+    override suspend fun clearChatSession(sessionId: String) = sessions.clear(sessionId)
 
     override suspend fun suggestEdits(
         docId: String,
@@ -230,21 +175,24 @@ class AiFacadeImpl(
         object : OcrEngine {
             override val name: String = OcrEngineId.AI.column
 
-            override suspend fun available(): Boolean = configured()
+            override suspend fun available(): Boolean = configProvider().configured
 
             override suspend fun recognizePng(
                 png: ByteArray,
                 lang: String,
             ): String {
-                val thePrompt = pagePrompt(png, lang, configProvider())
-                return transcribeWithRetry(PAGE_ATTEMPTS) { executePage(thePrompt) }
+                // One config read for the page, so its prompt and the client that sends it agree.
+                val config = configProvider()
+                val thePrompt = pagePrompt(png, lang, config)
+                val runtime = runtimes.runtimeFor(config)
+                return transcribeWithRetry(PAGE_ATTEMPTS) { executePage(runtime, thePrompt) }
             }
         }
 
-    private suspend fun executePage(thePrompt: Prompt): String? {
-        val runtime = runtime()
-        return AiText.parseTranscription(runtime.executor.execute(thePrompt, runtime.model).textContent())
-    }
+    private suspend fun executePage(
+        runtime: AiRuntime,
+        thePrompt: Prompt,
+    ): String? = AiText.parseTranscription(runtime.executor.execute(thePrompt, runtime.model).textContent())
 
     private fun pagePrompt(
         png: ByteArray,
@@ -259,8 +207,6 @@ class AiFacadeImpl(
             }
         }
 
-    private suspend fun runtime(): AiRuntime = runtimes.runtimeFor(configProvider())
-
     /** Release the cached endpoint client; see [AiRuntimeCache.close]. */
     suspend fun close() = runtimes.close()
 
@@ -273,9 +219,6 @@ class AiFacadeImpl(
 
     private companion object {
         const val MAX_AGENT_ITERATIONS = 15
-
-        /** The conversation id builds from before sessions existed stored their one chat under. */
-        const val LEGACY_CONVERSATION_ID = "main"
 
         /**
          * Calls one page may cost per attempt at its document: the call plus a single retry (see

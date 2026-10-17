@@ -175,6 +175,6 @@ exactly one public home:
   handing a bulk AI edit to the background and picking it back up:
   `enqueueEditRun`, `openEditRun`, `discardEditRun`.
 
-Both AI facets extend **`AiAvailability`** (`configured()`): the only piece of
-the endpoint configuration that crosses the seam is that boolean — `AiConfig`
-itself belongs to settings.
+No endpoint configuration crosses the AI facets: `AiConfig` belongs to settings,
+and a screen that hides or disables AI features until the endpoint is configured
+reads that from the settings it already observes.

@@ -47,7 +47,7 @@ class ChatStorageFailureTest {
     @Test
     fun anUnreadableConversationBehindAPlaceholderTitleLeavesTheOthersUsable() =
         runTest {
-            RoomChatSessionStore(chats).save(
+            ChatSessions(chats).save(
                 listOf(AiChatSession("broken", "New chat", 2L), AiChatSession("ok", "Something", 1L)),
             )
             val brokenKey = "${RoomChatHistoryProvider.KEY_PREFIX}broken"

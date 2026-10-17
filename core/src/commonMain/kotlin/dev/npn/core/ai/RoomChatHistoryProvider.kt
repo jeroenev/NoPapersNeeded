@@ -77,7 +77,7 @@ internal class RoomChatHistoryProvider(
         }
 
     companion object {
-        /** Every chat key starts with this, the session list's included ([RoomChatSessionStore]). */
+        /** Every chat key starts with this, the session list's included ([ChatSessions]). */
         const val KEY_PREFIX = "ai-chat:"
     }
 }

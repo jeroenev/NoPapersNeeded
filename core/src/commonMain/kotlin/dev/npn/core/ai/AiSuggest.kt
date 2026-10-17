@@ -113,7 +113,7 @@ data class AiEditSuggestion(
  * normal MetadataWriter/journal path, so nothing here writes. Callers surface failures as UI
  * messages ([suggestEdits] throws on network/endpoint errors).
  */
-interface AiSuggest : AiAvailability {
+interface AiSuggest {
     /**
      * The single suggestion primitive: propose edits for [docId] from its indexed text and
      * current metadata, honouring [request]'s field selection/modes, tag-add/removal flags and

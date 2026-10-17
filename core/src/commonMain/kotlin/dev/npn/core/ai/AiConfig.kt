@@ -127,14 +127,3 @@ data class AiConfig(
         val DISABLED = AiConfig()
     }
 }
-
-/**
- * Whether AI features can run at all right now. Shared by both AI facets ([AiChat], [AiSuggest])
- * because every consumer gates the same way: features are hidden or disabled until the endpoint
- * is configured. Only the boolean crosses this seam — [AiConfig] itself belongs to settings, and
- * no consumer of an AI facet needs its values.
- */
-interface AiAvailability {
-    /** True when the configured endpoint is complete enough to make model calls. */
-    suspend fun configured(): Boolean
-}

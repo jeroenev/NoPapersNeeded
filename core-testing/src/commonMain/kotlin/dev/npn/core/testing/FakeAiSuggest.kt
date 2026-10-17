@@ -16,8 +16,6 @@ import kotlinx.coroutines.delay
  * progress, concurrency and cancellation.
  */
 class FakeAiSuggest : AiSuggest {
-    var configured: Boolean = true
-
     /** Backs [suggestEdits] for docs without an [editByDoc] entry. */
     var edit: AiEditSuggestion = AiEditSuggestion.EMPTY
 
@@ -44,8 +42,6 @@ class FakeAiSuggest : AiSuggest {
      * test can hold a drain mid-model-call and exercise what the user does meanwhile.
      */
     var gate: CompletableDeferred<Unit>? = null
-
-    override suspend fun configured(): Boolean = configured
 
     override suspend fun suggestEdits(
         docId: String,

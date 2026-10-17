@@ -79,7 +79,7 @@ sealed interface AiChatEvent {
  * All model calls go to the user-configured endpoint; nothing here writes to the journal.
  * Callers surface failures as UI messages ([ask] throws on network/endpoint errors).
  */
-interface AiChat : AiAvailability {
+interface AiChat {
     /**
      * Answer [question] within the persisted session [sessionId] with a tool-calling agent that
      * can search the library index (OCR text, tags, filenames, metadata). Conversation history is

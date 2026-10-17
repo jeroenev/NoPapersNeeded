@@ -39,7 +39,7 @@ class AiChatSessionTest {
                     AiChatSession("cleared", null, 2L),
                     AiChatSession("full", "Saved chat", 1L),
                 )
-            RoomChatSessionStore(chats).save(stored)
+            ChatSessions(chats).save(stored)
             RoomChatHistoryProvider(chats).store(
                 "full",
                 listOf(Message.Assistant("answer", ResponseMetaInfo.Empty)),
@@ -107,7 +107,7 @@ class AiChatSessionTest {
     @Test
     fun aStoredEnglishPlaceholderTitleReadsAsUntitled() =
         runTest {
-            RoomChatSessionStore(chats).save(
+            ChatSessions(chats).save(
                 listOf(
                     AiChatSession("a", "New chat", 2L),
                     AiChatSession("b", "Assistant chat", 1L),
@@ -130,7 +130,7 @@ class AiChatSessionTest {
     @Test
     fun aSessionAskedInWithATitleLikeAPlaceholderKeepsIt() =
         runTest {
-            RoomChatSessionStore(chats).save(
+            ChatSessions(chats).save(
                 listOf(
                     AiChatSession("a", "New chat", 2L),
                     AiChatSession("b", "Assistant chat", 1L),
@@ -167,7 +167,7 @@ class AiChatSessionTest {
 
             created.title shouldBe null
             facade.chatSessions() shouldBe emptyList()
-            RoomChatSessionStore(chats).load() shouldBe emptyList()
+            ChatSessions(chats).load() shouldBe emptyList()
         }
 
     /** The question titles the session before the endpoint is asked, so even a failed ask names it. */
@@ -216,7 +216,7 @@ class AiChatSessionTest {
             assertFails { facade.ask(LEGACY_ID, "And last year?").collect() }
 
             facade.chatSessions().map { it.id to it.title } shouldContainExactly listOf(LEGACY_ID to "And last year?")
-            RoomChatSessionStore(chats).load().map { it.id } shouldContainExactly listOf(LEGACY_ID)
+            ChatSessions(chats).load().map { it.id } shouldContainExactly listOf(LEGACY_ID)
         }
 
     @Test
