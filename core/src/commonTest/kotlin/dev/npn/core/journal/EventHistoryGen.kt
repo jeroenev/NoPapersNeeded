@@ -66,12 +66,13 @@ class EventHistoryGen(
         val hlc = clock.next(dev)
         val doc = docs[rng.nextInt(docs.size)]
         val choice = rng.nextInt(100)
-        val op: JournalOp =
+        // A library-wide op is addressed to no document.
+        val (target, op) =
             when {
                 choice < 30 -> { // tag-add
                     val tag = tagVocab[rng.nextInt(tagVocab.size)]
                     liveDots.getOrPut(doc to tag) { ArrayList() }.add(Dot(dev, seq))
-                    JournalOp.TagAdd(tag)
+                    doc to JournalOp.TagAdd(tag)
                 }
 
                 choice < 45 -> { // tag-remove of existing dots
@@ -79,66 +80,60 @@ class EventHistoryGen(
                     val existing = liveDots[doc to tag]?.toList().orEmpty()
                     val chosen = existing.filter { rng.nextBoolean() }
                     chosen.forEach { liveDots[doc to tag]?.remove(it) }
-                    JournalOp.TagRemove(tag, chosen)
+                    doc to JournalOp.TagRemove(tag, chosen)
                 }
 
                 choice < 60 -> { // prop-set
                     val key = SystemProperty.entries[rng.nextInt(SystemProperty.entries.size)]
                     val value = if (rng.nextInt(5) == 0) null else "v${rng.nextInt(1000)}"
-                    JournalOp.PropSet(key, value)
+                    doc to JournalOp.PropSet(key, value)
                 }
 
                 choice < 68 -> {
-                    JournalOp.DocTrash("/path/${rng.nextInt(100)}.pdf")
+                    doc to JournalOp.DocTrash("/path/${rng.nextInt(100)}.pdf")
                 }
 
                 choice < 74 -> {
-                    JournalOp.DocRestore
+                    doc to JournalOp.DocRestore
                 }
 
                 choice < 76 -> {
-                    JournalOp.DocDelete
+                    doc to JournalOp.DocDelete
                 }
 
                 choice < 77 -> {
-                    JournalOp.DocUndelete
+                    doc to JournalOp.DocUndelete
                 }
 
                 choice < 82 -> { // relink to another doc id
-                    val target = docs[rng.nextInt(docs.size)]
-                    return@produceOne addEvent(dev, seq, hlc, doc, JournalOp.Relink(target))
+                    val relinked = docs[rng.nextInt(docs.size)]
+                    doc to JournalOp.Relink(relinked)
                 }
 
                 choice < 88 -> { // library-wide rename
                     val from = tagVocab[rng.nextInt(tagVocab.size)]
                     val to = tagVocab[rng.nextInt(tagVocab.size)]
-                    return@produceOne addEvent(dev, seq, hlc, null, JournalOp.TagRename(from, to))
+                    null to JournalOp.TagRename(from, to)
                 }
 
                 choice < 92 -> {
                     val from = tagVocab[rng.nextInt(tagVocab.size)]
                     val to = tagVocab[rng.nextInt(tagVocab.size)]
-                    return@produceOne addEvent(dev, seq, hlc, null, JournalOp.TagMerge(from, to))
+                    null to JournalOp.TagMerge(from, to)
                 }
 
                 choice < 96 -> {
                     // library-wide synced setting (reviewMode) LWW
                     val value = if (rng.nextBoolean()) "inbox-workflow" else "untagged-only"
-                    return@produceOne addEvent(dev, seq, hlc, null, JournalOp.SettingSet("reviewMode", value))
+                    null to JournalOp.SettingSet("reviewMode", value)
                 }
 
                 else -> {
                     val tag = tagVocab[rng.nextInt(tagVocab.size)]
-                    return@produceOne addEvent(
-                        dev,
-                        seq,
-                        hlc,
-                        null,
-                        JournalOp.TagStyle(tag, if (rng.nextBoolean()) "#abc" else null, null),
-                    )
+                    null to JournalOp.TagStyle(tag, if (rng.nextBoolean()) "#abc" else null, null)
                 }
             }
-        addEvent(dev, seq, hlc, doc, op)
+        addEvent(dev, seq, hlc, target, op)
     }
 
     private fun addEvent(

@@ -48,7 +48,10 @@ style:
     # Compose UI uses many dp/sp/weight literals; enforcing this everywhere is noise.
     active: false
   ReturnCount:
-    max: 5
+    # Leading guard clauses are free; past them, a validator or parser may still exit early on each
+    # failure it finds (3 rejected half a dozen of those, which read worse as one exit).
+    max: 4
+    excludeGuardClauses: true
   MaxLineLength:
     maxLineLength: 120
   UnusedPrivateFunction:
