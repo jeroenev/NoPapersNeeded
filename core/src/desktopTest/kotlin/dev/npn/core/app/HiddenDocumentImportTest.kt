@@ -8,8 +8,6 @@ import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.libraryPdfs
 import dev.npn.core.fs.trashEntries
 import dev.npn.core.journal.JournalOp
-import dev.npn.core.journal.JournalPath
-import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.journalObjectTexts
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.pdf.PdfFixtures
@@ -30,7 +28,6 @@ import kotlinx.coroutines.currentCoroutineContext
 import java.nio.file.Files
 import kotlin.coroutines.ContinuationInterceptor
 import kotlin.test.Test
-import kotlin.test.assertFailsWith
 
 /**
  * Importing the bytes of a document the library does not show (missing, trashed) brings that

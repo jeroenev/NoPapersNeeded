@@ -1,44 +1,15 @@
 package dev.npn.core.app
 
-import dev.npn.core.ai.AiConfig
-import dev.npn.core.ai.AiProvider
-import dev.npn.core.ai.FakeSseGateway
-import dev.npn.core.db.AiEnrichedEntity
 import dev.npn.core.db.isLive
-import dev.npn.core.db.searchDocIds
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
-import dev.npn.core.fs.libraryPdfs
-import dev.npn.core.model.FieldKeys
-import dev.npn.core.ocr.FakeOcrEngine
-import dev.npn.core.ocr.OcrEngineId
-import dev.npn.core.ocr.OcrSidecar
-import dev.npn.core.ocr.OcrSidecarCodec
-import dev.npn.core.ocr.OcrSidecarFiles
-import dev.npn.core.ocr.OcrSidecarName
-import dev.npn.core.ocr.OcrState
-import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pdf.PdfFixtures
-import dev.npn.core.util.RecordingLog
-import dev.npn.core.xmp.BakeRefusedException
-import io.kotest.matchers.collections.shouldBeEmpty
-import io.kotest.matchers.collections.shouldContain
-import io.kotest.matchers.collections.shouldContainExactly
-import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 
 /**

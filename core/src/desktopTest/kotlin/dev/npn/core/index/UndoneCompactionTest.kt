@@ -1,33 +1,14 @@
 package dev.npn.core.index
 
-import dev.npn.core.db.MetadataSourceEntity
 import dev.npn.core.db.ProjectionStatus
-import dev.npn.core.db.SourceFingerprint
-import dev.npn.core.db.SourceKind
-import dev.npn.core.db.SourceStatus
 import dev.npn.core.db.TempIndexDb
-import dev.npn.core.fs.FileMeta
-import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.NpnPaths
-import dev.npn.core.fs.PathExternalIo
-import dev.npn.core.fs.sha256Bytes
-import dev.npn.core.journal.ContentAddressedJournalWriter
-import dev.npn.core.journal.HlcWatermarkAllocator
-import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.PendingOp
-import dev.npn.core.journal.PublishedTransaction
-import dev.npn.core.journal.SnapshotCodec
-import dev.npn.core.journal.SnapshotCompactor
-import dev.npn.core.journal.SnapshotManifest
-import dev.npn.core.model.FieldKeys
-import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContain
-import io.kotest.matchers.collections.shouldContainExactly
-import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -35,10 +16,8 @@ import io.kotest.matchers.string.shouldContain
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.StandardCopyOption
 import java.nio.file.StandardCopyOption.COPY_ATTRIBUTES
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 

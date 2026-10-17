@@ -1,16 +1,12 @@
 package dev.npn.core.index
 
 import dev.npn.core.db.ProjectionStatus
-import dev.npn.core.db.TempIndexDb
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.FsEvent
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
-import dev.npn.core.fs.PathExternalIo
-import dev.npn.core.journal.ContentAddressedJournalWriter
-import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
@@ -25,9 +21,7 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
-import java.nio.file.Path
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 

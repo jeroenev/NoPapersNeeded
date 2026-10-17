@@ -14,8 +14,6 @@ import dev.npn.core.index.MutableClock
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.JournalOp
-import dev.npn.core.journal.JournalPath
-import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.journalObjects
 import dev.npn.core.ocr.FakeOcrEngine
 import dev.npn.core.ocr.OcrEngine

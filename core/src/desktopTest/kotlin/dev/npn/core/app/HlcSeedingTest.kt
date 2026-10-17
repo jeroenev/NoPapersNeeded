@@ -11,7 +11,6 @@ import dev.npn.core.util.NpnLog
 import dev.npn.core.xmp.PdfBoxXmpIO
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.runTest
 import java.io.File
 import kotlin.test.Test
 

@@ -3,8 +3,6 @@ package dev.npn.core.app
 import dev.npn.core.db.AutoMatchRuleEntity
 import dev.npn.core.fs.TrashOps
 import dev.npn.core.index.MutableClock
-import dev.npn.core.journal.ContentAddressedJournalWriter
-import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.rules.AutoMatchRule
@@ -16,7 +14,6 @@ import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
-import java.io.File
 import java.nio.file.Files
 import java.nio.file.attribute.FileTime
 import kotlin.test.Test

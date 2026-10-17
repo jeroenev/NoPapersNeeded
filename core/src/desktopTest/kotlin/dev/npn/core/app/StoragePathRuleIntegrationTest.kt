@@ -1,12 +1,8 @@
 package dev.npn.core.app
 
 import dev.npn.core.fs.LibraryFileSystem
-import dev.npn.core.fs.NpnPaths
 import dev.npn.core.index.requireByDocId
-import dev.npn.core.journal.JournalCodec
 import dev.npn.core.journal.JournalOp
-import dev.npn.core.journal.JournalPath
-import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.journalObjectEvents
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
@@ -17,14 +13,8 @@ import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.test.Test
 

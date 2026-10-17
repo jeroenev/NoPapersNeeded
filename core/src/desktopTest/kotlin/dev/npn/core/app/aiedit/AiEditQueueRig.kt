@@ -4,7 +4,6 @@ package dev.npn.core.app.aiedit
 
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiEditRequest
-import dev.npn.core.ai.AiEditSuggestion
 import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.db.AiEditJobDocEntity
@@ -18,23 +17,11 @@ import dev.npn.core.testing.FakeDocumentRepository
 import dev.npn.core.testing.FakeFieldRegistry
 import dev.npn.core.testing.FakeMetadataWriter
 import dev.npn.core.testing.FakeTagRepository
-import dev.npn.core.testing.doc
 import dev.npn.core.testing.edit
 import dev.npn.core.testing.listItem
 import dev.npn.core.work.EndpointHealth
-import dev.npn.core.work.backoffMs
-import io.kotest.matchers.collections.shouldContainExactly
-import io.kotest.matchers.collections.shouldHaveSize
-import io.kotest.matchers.nulls.shouldNotBeNull
-import io.kotest.matchers.shouldBe
-import io.kotest.matchers.types.shouldBeInstanceOf
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.runTest
-import kotlin.test.Test
 
 /**
  * Real device database (the queue owns job and document rows) + the shared AI-edit fakes for the

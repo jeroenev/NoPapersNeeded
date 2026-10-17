@@ -1,22 +1,7 @@
 package dev.npn.core.app
 
-import dev.npn.core.db.ProjectionStatus
 import dev.npn.core.fs.LibraryFileSystem
-import dev.npn.core.fs.NpnPaths
-import dev.npn.core.fs.sha256Bytes
-import dev.npn.core.index.MetadataWriteBlocked
 import dev.npn.core.index.requireByDocId
-import dev.npn.core.journal.CompactionCandidate
-import dev.npn.core.journal.Hlc
-import dev.npn.core.journal.JournalCodec
-import dev.npn.core.journal.JournalEvent
-import dev.npn.core.journal.JournalEventVersions
-import dev.npn.core.journal.JournalOp
-import dev.npn.core.journal.JournalPath
-import dev.npn.core.journal.JournalPaths
-import dev.npn.core.journal.JournalSourceRead
-import dev.npn.core.journal.SnapshotCompactor
-import dev.npn.core.journal.StorageV2Reader
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.SystemProperty
 import dev.npn.core.pathrules.StoragePathRule
@@ -32,10 +17,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import java.io.IOException
-import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
-import kotlin.test.assertIs
 
 class MetadataWriterTest {
     @Test

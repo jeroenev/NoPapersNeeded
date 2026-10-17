@@ -1,10 +1,7 @@
 package dev.npn.core.app
 
 import dev.npn.core.db.toFieldDef
-import dev.npn.core.fs.NpnPaths
 import dev.npn.core.index.IndexRig
-import dev.npn.core.journal.JournalPath
-import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.journalObjects
 import dev.npn.core.model.FieldDef

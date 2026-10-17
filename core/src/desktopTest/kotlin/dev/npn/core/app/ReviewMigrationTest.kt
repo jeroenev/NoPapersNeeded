@@ -1,10 +1,6 @@
 package dev.npn.core.app
 
-import dev.npn.core.fs.NpnPaths
-import dev.npn.core.journal.JournalCodec
 import dev.npn.core.journal.JournalOp
-import dev.npn.core.journal.JournalPath
-import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.journalObjectEvents
 import dev.npn.core.model.SystemProperty
 import dev.npn.core.pdf.PdfFixtures

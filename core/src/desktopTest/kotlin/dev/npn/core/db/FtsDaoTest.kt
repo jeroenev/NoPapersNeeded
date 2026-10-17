@@ -1,20 +1,15 @@
 package dev.npn.core.db
 
-import androidx.room3.RoomRawQuery
 import dev.npn.core.app.DocumentRepositoryImpl
 import dev.npn.core.index.FtsRows
-import dev.npn.core.index.requireByDocId
 import dev.npn.core.model.FieldKeys
-import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
-import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
 import kotlin.test.Test
-import kotlin.test.assertFailsWith
 
 /** FTS5 over the bundled SQLite driver: matching, snippets, prefixes, and what writes each column. */
 class FtsDaoTest {

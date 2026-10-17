@@ -2,10 +2,7 @@ package dev.npn.core.app
 
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
-import dev.npn.core.journal.ContentAddressedJournalWriter
-import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.JournalOp
-import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.journalObjectTexts

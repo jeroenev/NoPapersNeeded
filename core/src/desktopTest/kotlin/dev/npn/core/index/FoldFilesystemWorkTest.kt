@@ -1,13 +1,7 @@
 package dev.npn.core.index
 
 import dev.npn.core.db.StatementLog
-import dev.npn.core.db.TempIndexDb
-import dev.npn.core.db.recordingDatabase
 import dev.npn.core.db.searchDocIds
-import dev.npn.core.fs.JvmLibraryFileSystem
-import dev.npn.core.fs.PathExternalIo
-import dev.npn.core.journal.ContentAddressedJournalWriter
-import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.SystemProperty
 import io.kotest.matchers.collections.shouldBeEmpty
@@ -15,9 +9,7 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
-import java.nio.file.Path
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /**
