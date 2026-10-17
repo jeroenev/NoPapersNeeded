@@ -3,12 +3,13 @@
 #USAGE flag "--release" help="Deploy the release build instead of debug"
 set -euo pipefail
 
-ACTIVITY="${ANDROID_ACTIVITY:-dev.npn.MainActivity}"
+# The package ids and the activity come from mise.toml's [env].
+: "${ANDROID_ACTIVITY:?run this through mise, which sets it in mise.toml}"
 # Debug and release are separate packages (debug has the .debug applicationId suffix).
 if [ "${usage_release:-false}" = "true" ]; then
-    LAUNCHER="${ANDROID_APP_ID:-dev.npn}/$ACTIVITY"
+    LAUNCHER="$ANDROID_APP_ID/$ANDROID_ACTIVITY"
 else
-    LAUNCHER="${ANDROID_APP_ID_DEBUG:-dev.npn.debug}/$ACTIVITY"
+    LAUNCHER="$ANDROID_APP_ID_DEBUG/$ANDROID_ACTIVITY"
 fi
 
 # Collect serials of online devices (state == "device"). A single wireless phone
