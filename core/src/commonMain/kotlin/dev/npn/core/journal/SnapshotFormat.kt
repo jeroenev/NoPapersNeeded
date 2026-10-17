@@ -56,10 +56,14 @@ object SnapshotCodec {
         val obj =
             json.parseToJsonElement(line.trim()) as? JsonObject
                 ?: throw IllegalArgumentException("Snapshot manifest is not a JSON object")
-        val version = (obj[SnapshotManifest.FIELD_SNAP] as? JsonPrimitive)?.content?.toIntOrNull()
-        val supersedes = (obj[SnapshotManifest.FIELD_SUPERSEDES] as? JsonArray)?.map { it.jsonPrimitive.content }
-        require(version != null) { "Snapshot manifest version must be an integer" }
-        require(supersedes != null) { "Snapshot manifest supersedes must be an array" }
+        val version =
+            requireNotNull((obj[SnapshotManifest.FIELD_SNAP] as? JsonPrimitive)?.content?.toIntOrNull()) {
+                "Snapshot manifest version must be an integer"
+            }
+        val supersedes =
+            requireNotNull((obj[SnapshotManifest.FIELD_SUPERSEDES] as? JsonArray)?.map { it.jsonPrimitive.content }) {
+                "Snapshot manifest supersedes must be an array"
+            }
         require(supersedes.all { SHA256_HEX.matches(it) }) { "Superseded hash is not a SHA-256" }
         return SnapshotManifest(version, supersedes)
     }

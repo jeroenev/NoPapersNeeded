@@ -63,11 +63,15 @@ object JournalEventSerializer : KSerializer<JournalEvent> {
             obj["v"]?.jsonPrimitive?.content?.toIntOrNull()
                 ?: error("Missing event version")
         require(version == JournalEventVersions.V1) { "Unsupported event version: $version" }
-        val seq = obj["seq"]!!.jsonPrimitive.content.toLong()
-        val hlc = json.json.decodeFromJsonElement(hlcSerializer, obj["hlc"]!!)
-        val dev = obj["dev"]!!.jsonPrimitive.content
+        val seq =
+            obj
+                .required("seq")
+                .jsonPrimitive.content
+                .toLong()
+        val hlc = json.json.decodeFromJsonElement(hlcSerializer, obj.required("hlc"))
+        val dev = obj.required("dev").jsonPrimitive.content
         val doc = obj["doc"]?.let { if (it is JsonNull) null else it.jsonPrimitive.content }
-        val opWire = obj["op"]!!.jsonPrimitive.content
+        val opWire = obj.required("op").jsonPrimitive.content
         val payload = obj["p"] as? JsonObject ?: JsonObject(emptyMap())
         val op = decodePayload(opWire, payload)
         return JournalEvent(version, seq, hlc, dev, doc, op)
@@ -273,7 +277,10 @@ object JournalEventSerializer : KSerializer<JournalEvent> {
         }
 
     /** A required string payload member; a malformed line fails fast and is skipped by the codec. */
-    private fun JsonObject.string(name: String): String = this[name]!!.jsonPrimitive.content
+    private fun JsonObject.string(name: String): String = required(name).jsonPrimitive.content
+
+    /** A required member; a line without it fails fast and is skipped by the codec. */
+    private fun JsonObject.required(name: String): JsonElement = requireNotNull(this[name]) { "Missing member: $name" }
 
     private fun JsonObject.stringOrNull(name: String): String? = this[name]?.jsonPrimitive?.content
 
