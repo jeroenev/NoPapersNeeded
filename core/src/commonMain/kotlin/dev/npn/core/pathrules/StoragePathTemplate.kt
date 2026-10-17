@@ -147,7 +147,7 @@ object StoragePathTemplate {
         context: StoragePathContext,
     ): String {
         val value = context.fields[key]
-        if (format.isNullOrBlank()) return NpnPaths.sanitizeSegment(value ?: "")
+        if (format.isNullOrBlank()) return NpnPaths.sanitizeSegment(value.orEmpty())
         ensure(context.fieldTypes[key]?.isDate == true) { StoragePathError.NotADateField(key) }
         return NpnPaths.sanitizeSegment(resolveDate(value, format))
     }
@@ -212,8 +212,27 @@ object StoragePathTemplate {
             .filter { it.isNotEmpty() }
             .joinToString(", ")
 
-    /** Format [date] using a tiny subset of Java date-pattern symbols. */
-    @Suppress("CyclomaticComplexMethod")
+    /**
+     * The date-pattern symbols [formatDate] knows, a tiny subset of Java's, longest first so a
+     * longer run of one letter wins over its prefix. A lone `y` is no symbol and stays literal.
+     */
+    private val DATE_TOKENS: List<Pair<String, (LocalDate) -> String>> =
+        listOf(
+            "yyyy" to { it.year.toString().padStart(4, '0') },
+            "yy" to { (it.year % 100).toString().padStart(2, '0') },
+            "MMMM" to { monthName(it.month) },
+            "MMM" to { monthName(it.month).take(3) },
+            "MM" to {
+                it.month.number
+                    .toString()
+                    .padStart(2, '0')
+            },
+            "M" to { it.month.number.toString() },
+            "dd" to { it.day.toString().padStart(2, '0') },
+            "d" to { it.day.toString() },
+        )
+
+    /** Format [date] with [pattern]: each [DATE_TOKENS] symbol is replaced, anything else is literal. */
     private fun formatDate(
         date: LocalDate,
         pattern: String,
@@ -221,57 +240,13 @@ object StoragePathTemplate {
         val out = StringBuilder()
         var index = 0
         while (index < pattern.length) {
-            val char = pattern[index]
-            val remaining = pattern.length - index
-            when {
-                char == 'y' && remaining >= 4 && pattern.startsWith("yyyy", index) -> {
-                    out.append(date.year.toString().padStart(4, '0'))
-                    index += 4
-                }
-
-                char == 'y' && remaining >= 2 && pattern.startsWith("yy", index) -> {
-                    out.append((date.year % 100).toString().padStart(2, '0'))
-                    index += 2
-                }
-
-                char == 'M' && remaining >= 4 && pattern.startsWith("MMMM", index) -> {
-                    out.append(monthName(date.month))
-                    index += 4
-                }
-
-                char == 'M' && remaining >= 3 && pattern.startsWith("MMM", index) -> {
-                    out.append(monthName(date.month).take(3))
-                    index += 3
-                }
-
-                char == 'M' && remaining >= 2 && pattern.startsWith("MM", index) -> {
-                    out.append(
-                        date.month.number
-                            .toString()
-                            .padStart(2, '0'),
-                    )
-                    index += 2
-                }
-
-                char == 'M' -> {
-                    out.append(date.month.number)
-                    index++
-                }
-
-                char == 'd' && remaining >= 2 && pattern.startsWith("dd", index) -> {
-                    out.append(date.day.toString().padStart(2, '0'))
-                    index += 2
-                }
-
-                char == 'd' -> {
-                    out.append(date.day)
-                    index++
-                }
-
-                else -> {
-                    out.append(char)
-                    index++
-                }
+            val token = DATE_TOKENS.firstOrNull { (symbol, _) -> pattern.startsWith(symbol, index) }
+            if (token == null) {
+                out.append(pattern[index])
+                index++
+            } else {
+                out.append(token.second(date))
+                index += token.first.length
             }
         }
         return out.toString()
