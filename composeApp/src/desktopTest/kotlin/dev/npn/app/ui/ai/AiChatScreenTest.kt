@@ -185,8 +185,7 @@ class AiChatScreenTest {
                         onOpenDoc = {},
                         onOpenFiltered = {},
                         onAiEditDocs = {},
-                        showAiEdit = false,
-                        onAiEdit = {},
+                        onAiEdit = null,
                     )
                 }
             }

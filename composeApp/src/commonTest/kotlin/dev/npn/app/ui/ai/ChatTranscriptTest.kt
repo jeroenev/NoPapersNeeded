@@ -67,7 +67,7 @@ class ChatTranscriptTest {
         transcript.items shouldContainExactly
             listOf(
                 TranscriptItem.UserTurn(0, "find tax"),
-                TranscriptItem.ToolUse(1, "search_documents", "{}", "found one", running = false),
+                TranscriptItem.ToolUse(1, "search_documents", emptyMap(), "found one", running = false),
             )
     }
 
