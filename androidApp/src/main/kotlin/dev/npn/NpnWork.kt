@@ -12,11 +12,11 @@ import androidx.work.WorkerParameters
 import dev.npn.app.di.AppEnvironment
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.util.AndroidLog
+import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
 import dev.npn.core.util.warn
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.TimeUnit
-import kotlin.coroutines.cancellation.CancellationException
 
 /** 8 min: how long a worker waits on the queues, under WorkManager's 10 min limit. */
 private const val DRAIN_TIMEOUT_MS = 8L * 60L * 1000L
@@ -38,7 +38,7 @@ class RescanOcrWorker(
     override suspend fun doWork(): Result {
         val env = NpnApplication.environment(applicationContext)
         val session = env.openedLibrary() ?: return Result.success() // no library to maintain
-        return try {
+        return runCatchingCancellable {
             // Sweep the watched folder first so freshly scanned PDFs are part of this run's
             // rescan + OCR drain (no-op when no watched folder is configured).
             AndroidLog.runLogged("Watched-folder sweep") { env.scanWatchedFolder() }
@@ -57,13 +57,13 @@ class RescanOcrWorker(
                 session.work.drainEnrichment()
                 session.work.drainEditRuns()
             }
-            Result.success()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            AndroidLog.warn("Background rescan and OCR failed; retrying", e)
-            Result.retry()
-        }
+        }.fold(
+            onSuccess = { Result.success() },
+            onFailure = {
+                AndroidLog.warn("Background rescan and OCR failed; retrying", it)
+                Result.retry()
+            },
+        )
     }
 }
 
