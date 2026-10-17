@@ -208,8 +208,7 @@ private fun FieldDefDialog(
     // existing values are not converted, so this is the one edit in the pane that can leave
     // off-type data behind.
     var pendingTypeChange by remember { mutableStateOf<FieldDef?>(null) }
-    val position = def?.position ?: ((existing.maxOfOrNull { it.position } ?: -1) + 1)
-    val result = form.toDef(position)
+    val result = form.toDef(def?.position ?: FieldDef.PLACE_LAST)
     val canSave = form.canSave(existing, own = def?.key)
     val changesTypeOfUsedField = def != null && usage > 0 && result != null && result.type != def.type
 

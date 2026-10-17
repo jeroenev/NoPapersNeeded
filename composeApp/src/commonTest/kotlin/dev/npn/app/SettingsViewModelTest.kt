@@ -334,8 +334,10 @@ class SettingsViewModelTest : MainDispatcherTest() {
             model.moveField(seeded[1], -1)
             model.moveField(seeded[1], -1)
             advanceUntilIdle()
-            session.fieldRegistry.reorders shouldContainExactly
-                listOf(listOf(seeded[1], seeded[0]) + seeded.drop(2))
+            session.fieldRegistry.moves shouldContainExactly listOf(seeded[1] to -1, seeded[1] to -1)
+            session.fieldRegistry.defs.value
+                .map { it.key } shouldContainExactly
+                listOf(seeded[1], seeded[0]) + seeded.drop(2)
 
             val def =
                 FieldDef("amount", "Amount", FieldType.DECIMAL, showByDefault = true, aiEnabled = true, position = 9)

@@ -53,7 +53,13 @@ class FieldRegistryImpl internal constructor(
                 val previous = state.effectiveFieldDef(key)
                 // Well-known keys keep their seeded type: templates like {docDate:yyyy} rely on it.
                 val type = if (key in FieldKeys.WELL_KNOWN && previous != null) previous.type else def.type
-                val position = if (previous != null) def.position else def.position.takeIf { it >= 0 } ?: existing.size
+                val position =
+                    when {
+                        previous != null || def.position >= 0 -> def.position
+
+                        // After the last one, whatever gaps removals left in the positions.
+                        else -> existing.maxOfOrNull { it.position }?.plus(1) ?: 0
+                    }
                 val next =
                     def
                         .copy(
@@ -90,11 +96,28 @@ class FieldRegistryImpl internal constructor(
         docsWithMetadata().map(::resolveDocId).distinct().filter { key in inheritedFields(it) }
 
     override suspend fun reorder(keys: List<String>) =
+        commitOrder { defs ->
+            val byKey = defs.associateBy { it.key }
+            keys.mapNotNull { byKey[it] } + defs.filter { it.key !in keys }
+        }
+
+    override suspend fun move(
+        key: String,
+        delta: Int,
+    ) = commitOrder { defs ->
+        val from = defs.indexOfFirst { it.key == key }
+        val to = from + delta
+        if (from < 0 || to !in defs.indices) null else defs.toMutableList().apply { add(to, removeAt(from)) }
+    }
+
+    /**
+     * Number the registry 0, 1, 2... in the order [order] makes of it, under the coordinator lock so
+     * the order is computed from the registry it rewrites. [order] answering null changes nothing.
+     */
+    private suspend fun commitOrder(order: (List<FieldDef>) -> List<FieldDef>?) =
         lifetime.owned<Unit> {
             coordinator.commitBuilt { state ->
-                val byKey = state.effectiveFieldDefs().associateBy { it.key }
-                val ordered = keys.mapNotNull { byKey[it] } + byKey.values.filter { it.key !in keys }
-                ordered.mapIndexedNotNull { index, def ->
+                order(state.effectiveFieldDefs()).orEmpty().mapIndexedNotNull { index, def ->
                     if (def.position == index) null else PendingOp.fieldDefSet(def.copy(position = index))
                 }
             }

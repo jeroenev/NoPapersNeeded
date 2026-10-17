@@ -21,6 +21,7 @@ class FakeFieldRegistry : FieldRegistry {
     val upserts = mutableListOf<FieldDef>()
     val removals = mutableListOf<Pair<String, Boolean>>()
     val reorders = mutableListOf<List<String>>()
+    val moves = mutableListOf<Pair<String, Int>>()
 
     override val fields: Flow<List<FieldDef>> get() = defs
 
@@ -37,7 +38,15 @@ class FakeFieldRegistry : FieldRegistry {
 
     override suspend fun upsert(def: FieldDef) {
         upserts += def
-        defs.value = (defs.value.filter { it.key != def.key } + def).sortedWith(compareBy({ it.position }, { it.key }))
+        val previous = defs.value.firstOrNull { it.key == def.key }
+        val placed =
+            if (previous == null && def.position < 0) {
+                def.copy(position = (defs.value.maxOfOrNull { it.position } ?: -1) + 1)
+            } else {
+                def
+            }
+        defs.value =
+            (defs.value.filter { it.key != def.key } + placed).sortedWith(compareBy({ it.position }, { it.key }))
     }
 
     override suspend fun remove(
@@ -53,5 +62,18 @@ class FakeFieldRegistry : FieldRegistry {
         val byKey = defs.value.associateBy { it.key }
         val ordered = keys.mapNotNull { byKey[it] } + defs.value.filter { it.key !in keys }
         defs.value = ordered.mapIndexed { i, d -> d.copy(position = i) }
+    }
+
+    override suspend fun move(
+        key: String,
+        delta: Int,
+    ) {
+        moves += key to delta
+        val list = defs.value.toMutableList()
+        val from = list.indexOfFirst { it.key == key }
+        val to = from + delta
+        if (from < 0 || to !in list.indices) return
+        list.add(to, list.removeAt(from))
+        defs.value = list.mapIndexed { i, d -> d.copy(position = i) }
     }
 }

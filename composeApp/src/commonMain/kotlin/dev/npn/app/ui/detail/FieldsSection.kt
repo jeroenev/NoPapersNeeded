@@ -221,7 +221,7 @@ internal fun NewFieldDialog(
     // it can tell that `12.34` is none where a comma is the decimal point. [value] is then as typed.
     var refused by remember { mutableStateOf(false) }
     val locale = rememberFieldLocale()
-    val draftDef = form.toDef(position = (existing.maxOfOrNull { it.position } ?: -1) + 1)
+    val draftDef = form.toDef()
     val valueValid = !refused && (value.isBlank() || FieldValues.canonicalize(form.type, value) is FieldParse.Ok)
     val canSave = form.canSave(existing) && valueValid
     // Switching type can strand the typed value. The new type's editor shows it the locale's way and

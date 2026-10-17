@@ -197,4 +197,35 @@ class FieldRegistryTest {
                 listOf("notes", "title", "correspondent", "docType", "docDate")
             ordered.map { it.position } shouldContainExactly (0 until 5).toList()
         }
+
+    @Test
+    fun moveShiftsOneFieldAndIgnoresAMovePastTheEnd() =
+        appSessionTest { rig ->
+            val registry = rig.session.fieldRegistry
+            registry.fields.first { it.isNotEmpty() }
+            registry.move("docType", -2)
+            val ordered = registry.fields.first { it.first().key == "docType" }
+            ordered.map { it.key } shouldContainExactly
+                listOf("docType", "title", "correspondent", "docDate", "notes")
+            ordered.map { it.position } shouldContainExactly (0 until 5).toList()
+
+            registry.move("docType", -1)
+            registry.move("notes", 1)
+            registry.move("missing", 1)
+            registry.current().map { it.key } shouldContainExactly ordered.map { it.key }
+        }
+
+    @Test
+    fun aNewFieldGoesAfterTheLastEvenWhenRemovalsLeftGaps() =
+        appSessionTest { rig ->
+            val registry = rig.session.fieldRegistry
+            registry.fields.first { it.isNotEmpty() }
+            // title..notes sit at 0..4; removing two leaves three fields, the last still at 4.
+            registry.remove(FieldKeys.CORRESPONDENT)
+            registry.remove(FieldKeys.DOC_TYPE)
+            registry.upsert(def("amount"))
+            val defs = registry.fields.first { defs -> defs.any { it.key == "amount" } }
+            defs.single { it.key == "amount" }.position shouldBe 5
+            defs.last().key shouldBe "amount"
+        }
 }

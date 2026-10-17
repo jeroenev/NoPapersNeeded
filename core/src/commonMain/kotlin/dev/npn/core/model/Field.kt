@@ -106,7 +106,7 @@ data class FieldDef(
     val showByDefault: Boolean,
     /** Offered to AI edit runs and followed by automatic enrichment. A cost/quality decision. */
     val aiEnabled: Boolean,
-    /** Display order. */
+    /** Display order; [PLACE_LAST] on a new definition lets the registry put it after every other. */
     val position: Int,
     /** Helper text in the UI and guidance in the AI prompt. */
     val hint: String? = null,
@@ -124,6 +124,11 @@ data class FieldDef(
 
     /** Whether other documents' values of this field are worth offering for reuse. */
     val sharesVocabulary: Boolean get() = type.hasVocabulary && !perDocument
+
+    companion object {
+        /** The position of a new definition that leaves its place to the registry: after the last. */
+        const val PLACE_LAST = -1
+    }
 }
 
 /**

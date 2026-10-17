@@ -317,14 +317,7 @@ class SettingsViewModel(
     override fun moveField(
         key: String,
         delta: Int,
-    ) = launchReporting(Res.string.common_settings_move_field_failed) {
-        val keys = fieldRegistry.current().map { it.key }.toMutableList()
-        val from = keys.indexOf(key)
-        val to = from + delta
-        if (from < 0 || to !in keys.indices) return@launchReporting
-        keys.add(to, keys.removeAt(from))
-        fieldRegistry.reorder(keys)
-    }
+    ) = launchReporting(Res.string.common_settings_move_field_failed) { fieldRegistry.move(key, delta) }
 
     override fun edit(transform: (SettingsSnapshot) -> SettingsSnapshot) =
         launchReporting(Res.string.common_save_setting_failed) { settings.edit(transform) }

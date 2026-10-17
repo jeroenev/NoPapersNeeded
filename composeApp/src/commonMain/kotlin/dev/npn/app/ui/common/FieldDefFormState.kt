@@ -56,8 +56,11 @@ data class FieldDefFormState(
         own: String? = null,
     ): Boolean = label.isNotBlank() && normalizedKey != null && !collides(existing, own)
 
-    /** The definition this form describes, or null while the key is unusable. */
-    fun toDef(position: Int): FieldDef? {
+    /**
+     * The definition this form describes, or null while the key is unusable. A new definition keeps
+     * [FieldDef.PLACE_LAST], so the registry puts it after the last.
+     */
+    fun toDef(position: Int = FieldDef.PLACE_LAST): FieldDef? {
         val key = normalizedKey ?: return null
         return FieldDef(
             key = key,
