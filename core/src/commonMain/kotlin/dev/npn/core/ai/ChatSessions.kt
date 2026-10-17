@@ -20,7 +20,7 @@ import kotlin.uuid.Uuid
 internal class ChatSessions(
     private val kv: KeyValueDao,
     private val ownWrite: suspend (suspend () -> Unit) -> Unit = { it() },
-    private val conversations: RoomChatHistoryProvider = RoomChatHistoryProvider(kv),
+    private val conversations: RoomChatHistoryProvider = RoomChatHistoryProvider(kv, ownWrite),
     private val clock: EpochClock = SystemEpochClock,
 ) {
     private val json = NpnJson.Persisted
