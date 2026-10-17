@@ -25,6 +25,7 @@ import dev.npn.core.model.SystemProperty
  * Instances are mutable accumulators; [copy]-style snapshotting is not needed because folding
  * is deterministic regardless of the order events were applied.
  */
+// One accumulator answers every view of the fold; splitting it would split state the views share.
 @Suppress("TooManyFunctions")
 class FoldedState {
     // --- raw tag data ---
@@ -115,84 +116,60 @@ class FoldedState {
     /** Apply one event. Commutative: final state is identical regardless of apply order. */
     fun apply(event: JournalEvent) {
         if (event.hlc > maxHlc) maxHlc = event.hlc
+        if (applyLibraryWide(event.op, event.hlc)) return
+        // Every remaining op is addressed to a document; one without a doc folds to nothing.
+        val doc = event.doc ?: return
+        applyToDoc(doc, event)
+    }
+
+    /** Apply [op] when it is library-wide (it ignores the event's doc); false for a per-document op. */
+    private fun applyLibraryWide(
+        op: JournalOp,
+        hlc: Hlc,
+    ): Boolean {
+        when (op) {
+            is JournalOp.TagRemove -> removedDots.addAll(op.dots)
+            is JournalOp.TagRename -> addRename(RenameOp(op.from, op.to, hlc, isMerge = false))
+            is JournalOp.TagMerge -> addRename(RenameOp(op.from, op.to, hlc, isMerge = true))
+            is JournalOp.TagStyle -> tagStyles.putIfNewerHlc(op.tag, hlc) { StyleVal(op.color, op.icon, hlc) }
+            is JournalOp.SettingSet -> settings.putIfNewerHlc(op.key, hlc) { PropVal(op.value, hlc) }
+            is JournalOp.FieldDefSet -> fieldDefs.putIfNewerHlc(op.key, hlc) { DefVal(op.def, hlc) }
+            // Tolerant skip: an op from a newer build folds to nothing here.
+            is JournalOp.Unknown -> Unit
+            else -> return false
+        }
+        return true
+    }
+
+    private fun addRename(rename: RenameOp) {
+        renames.add(rename)
+        sortedRenamesCache = null
+    }
+
+    /** Apply a per-document op to [doc]; library-wide ops never reach here ([applyLibraryWide]). */
+    private fun applyToDoc(
+        doc: String,
+        event: JournalEvent,
+    ) {
+        val hlc = event.hlc
         when (val op = event.op) {
-            is JournalOp.TagAdd -> {
-                val doc = event.doc ?: return
-                val byTag = tagAdds.getOrPut(doc) { HashMap() }
-                val dots = byTag.getOrPut(op.tag) { HashMap() }
-                dots[event.dot] = event.hlc
-            }
-
-            is JournalOp.TagRemove -> {
-                op.dots.forEach { removedDots.add(it) }
-            }
-
-            is JournalOp.PropSet -> {
-                val doc = event.doc ?: return
-                props
-                    .getOrPut(doc) { HashMap() }
-                    .putIfNewerHlc(op.key, event.hlc) { PropVal(op.value, event.hlc) }
-            }
-
-            is JournalOp.FieldSet -> {
-                val doc = event.doc ?: return
-                fields
-                    .getOrPut(doc) { HashMap() }
-                    .putIfNewerHlc(op.key, event.hlc) { PropVal(op.value, event.hlc) }
-            }
-
-            is JournalOp.DocTrash -> {
-                val doc = event.doc ?: return
-                val trashed = TrashVal(trashed = true, origPath = op.origPath, hlc = event.hlc)
-                trash.putIfNewerHlc(doc, event.hlc) { trashed }
-            }
-
-            JournalOp.DocRestore -> {
-                val doc = event.doc ?: return
-                trash.putIfNewerHlc(doc, event.hlc) { TrashVal(trashed = false, origPath = null, hlc = event.hlc) }
-            }
-
-            JournalOp.DocDelete -> {
-                val doc = event.doc ?: return
-                deleted.keepLatest(doc, event.hlc)
-            }
-
+            is JournalOp.TagAdd -> tagAdds.getOrPut(doc) { HashMap() }.getOrPut(op.tag) { HashMap() }[event.dot] = hlc
+            is JournalOp.PropSet ->
+                props.getOrPut(doc) { HashMap() }.putIfNewerHlc(op.key, hlc) { PropVal(op.value, hlc) }
+            is JournalOp.FieldSet ->
+                fields.getOrPut(doc) { HashMap() }.putIfNewerHlc(op.key, hlc) { PropVal(op.value, hlc) }
+            is JournalOp.DocTrash -> trash.putIfNewerHlc(doc, hlc) { TrashVal(trashed = true, op.origPath, hlc) }
+            JournalOp.DocRestore -> trash.putIfNewerHlc(doc, hlc) { TrashVal(trashed = false, null, hlc) }
+            JournalOp.DocDelete -> deleted.keepLatest(doc, hlc)
             JournalOp.DocUndelete -> {
-                val doc = event.doc ?: return
-                undeleted.keepLatest(doc, event.hlc)
-                trash.putIfNewerHlc(doc, event.hlc) { TrashVal(trashed = false, origPath = null, hlc = event.hlc) }
+                undeleted.keepLatest(doc, hlc)
+                trash.putIfNewerHlc(doc, hlc) { TrashVal(trashed = false, null, hlc) }
             }
-
             is JournalOp.Relink -> {
-                val doc = event.doc ?: return
-                relinks.getOrPut(doc) { ArrayList() }.add(RelinkClaim(op.newDoc, event.hlc))
+                relinks.getOrPut(doc) { ArrayList() }.add(RelinkClaim(op.newDoc, hlc))
                 predecessorsCache = null
             }
-
-            is JournalOp.TagRename -> {
-                renames.add(RenameOp(op.from, op.to, event.hlc, isMerge = false))
-                sortedRenamesCache = null
-            }
-
-            is JournalOp.TagMerge -> {
-                renames.add(RenameOp(op.from, op.to, event.hlc, isMerge = true))
-                sortedRenamesCache = null
-            }
-
-            is JournalOp.TagStyle -> {
-                tagStyles.putIfNewerHlc(op.tag, event.hlc) { StyleVal(op.color, op.icon, event.hlc) }
-            }
-
-            is JournalOp.SettingSet -> {
-                settings.putIfNewerHlc(op.key, event.hlc) { PropVal(op.value, event.hlc) }
-            }
-
-            is JournalOp.FieldDefSet -> {
-                fieldDefs.putIfNewerHlc(op.key, event.hlc) { DefVal(op.def, event.hlc) }
-            }
-
-            // Tolerant skip: an op from a newer build folds to nothing here.
-            is JournalOp.Unknown -> {}
+            else -> Unit
         }
     }
 
@@ -330,7 +307,7 @@ class FoldedState {
     fun isTrashed(doc: String): Boolean = !isDeleted(doc) && trash[doc]?.trashed == true
 
     /** Whether [doc] is one the library shows: neither trashed nor deleted, nor superseded by a relink. */
-    fun isCurrent(doc: String): Boolean = !isTrashed(doc) && !isDeleted(doc) && resolveDocId(doc) == doc
+    fun isCurrent(doc: String): Boolean = hiddenBy(doc) == null && resolveDocId(doc) == doc
 
     /**
      * Where [doc]'s file is meant to be: its storage path with what it inherited ([inheritedProp]),
@@ -439,7 +416,7 @@ class FoldedState {
      * The literal add name is rewritten through the same rename chain as [effectiveTags], so
      * removing a tag by its current (renamed) name still targets the original add dots.
      */
-    fun liveTagDots(
+    private fun liveTagDots(
         doc: String,
         effectiveName: String,
     ): List<Dot> = ArrayList<Dot>().apply { forEachLiveAdd(doc) { name, dot -> if (name == effectiveName) add(dot) } }
