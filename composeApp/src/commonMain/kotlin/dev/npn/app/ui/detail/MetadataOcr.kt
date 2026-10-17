@@ -43,14 +43,11 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.HelpText
+import dev.npn.app.ui.common.HighlightSegment
 import dev.npn.app.ui.common.HighlightText
 import dev.npn.app.ui.common.RadioRow
 import dev.npn.app.ui.common.formatEpochDate
@@ -178,7 +175,7 @@ internal fun OcrTextTab(
         ) {
             SelectionContainer {
                 if (matches.isNotEmpty()) {
-                    FindHighlightText(
+                    HighlightText(
                         segments = buildFindSegments(visibleText, matches, activeQuery.length, effectiveCurrent),
                         style = MaterialTheme.typography.bodySmall,
                         onTextLayout = { layout = it },
@@ -283,76 +280,26 @@ private fun findMatchStarts(
     return matches
 }
 
-/** One text segment with a find-match flag; [current] marks the active match. */
-private data class FindSegment(
-    val text: String,
-    val match: Boolean,
-    val current: Boolean,
-)
-
 /**
- * Splits [text] into segments so each match in [matches] (start indices) is flagged; the match at
- * [current] is marked separately so it can be drawn distinctly.
+ * Splits [text] into segments so each match in [matches] (start indices) is highlighted; the match
+ * at [current] is marked separately so it can be drawn distinctly.
  */
 private fun buildFindSegments(
     text: String,
     matches: List<Int>,
     matchLength: Int,
     current: Int,
-): List<FindSegment> {
-    val segments = mutableListOf<FindSegment>()
+): List<HighlightSegment> {
+    val segments = mutableListOf<HighlightSegment>()
     var last = 0
     matches.forEachIndexed { index, start ->
-        if (start > last) segments += FindSegment(text.substring(last, start), false, false)
+        if (start > last) segments += HighlightSegment(text.substring(last, start), highlight = false)
         val end = (start + matchLength).coerceAtMost(text.length)
-        segments += FindSegment(text.substring(start, end), true, index == current)
+        segments += HighlightSegment(text.substring(start, end), highlight = true, current = index == current)
         last = end
     }
-    if (last < text.length) segments += FindSegment(text.substring(last), false, false)
+    if (last < text.length) segments += HighlightSegment(text.substring(last), highlight = false)
     return segments
-}
-
-/**
- * Renders [segments] with the current match on the primary color and every other match on the
- * container color used by [HighlightText].
- */
-@Composable
-private fun FindHighlightText(
-    segments: List<FindSegment>,
-    style: TextStyle,
-    onTextLayout: (TextLayoutResult) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val matchColor = MaterialTheme.colorScheme.primaryContainer
-    val currentColor = MaterialTheme.colorScheme.primary
-    val onCurrentColor = MaterialTheme.colorScheme.onPrimary
-    Text(
-        text =
-            buildAnnotatedString {
-                segments.forEach { segment ->
-                    when {
-                        segment.current -> {
-                            withStyle(SpanStyle(background = currentColor, color = onCurrentColor)) {
-                                append(segment.text)
-                            }
-                        }
-
-                        segment.match -> {
-                            withStyle(SpanStyle(background = matchColor)) {
-                                append(segment.text)
-                            }
-                        }
-
-                        else -> {
-                            append(segment.text)
-                        }
-                    }
-                }
-            },
-        style = style,
-        onTextLayout = onTextLayout,
-        modifier = modifier,
-    )
 }
 
 @Composable

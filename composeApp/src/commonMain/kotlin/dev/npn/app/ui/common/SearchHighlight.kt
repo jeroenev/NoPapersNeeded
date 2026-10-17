@@ -7,6 +7,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
@@ -14,11 +15,13 @@ import androidx.compose.ui.text.withStyle
 
 /**
  * One segment of text with an associated highlight flag. Produced by parsing FTS5 snippet
- * markers or matching query terms against plain text.
+ * markers or matching query terms against plain text. [current] marks the one match a find bar is
+ * on, drawn apart from the others.
  */
 data class HighlightSegment(
     val text: String,
     val highlight: Boolean,
+    val current: Boolean = false,
 )
 
 /**
@@ -122,8 +125,8 @@ fun parseQueryHighlight(
 }
 
 /**
- * Render [segments] as a single [Text] with highlighted spans using the current theme's
- * primary container color.
+ * Render [segments] as a single [Text] with highlighted spans on the current theme's primary
+ * container color, and the [HighlightSegment.current] match on its primary color.
  */
 @Composable
 fun HighlightText(
@@ -132,18 +135,19 @@ fun HighlightText(
     modifier: Modifier = Modifier,
     maxLines: Int = Int.MAX_VALUE,
     overflow: TextOverflow = TextOverflow.Clip,
+    onTextLayout: (TextLayoutResult) -> Unit = {},
 ) {
-    val highlightColor = MaterialTheme.colorScheme.primaryContainer
+    val highlight = SpanStyle(background = MaterialTheme.colorScheme.primaryContainer)
+    val current =
+        SpanStyle(background = MaterialTheme.colorScheme.primary, color = MaterialTheme.colorScheme.onPrimary)
     Text(
         text =
             buildAnnotatedString {
                 segments.forEach { segment ->
-                    if (segment.highlight) {
-                        withStyle(SpanStyle(background = highlightColor)) {
-                            append(segment.text)
-                        }
-                    } else {
-                        append(segment.text)
+                    when {
+                        segment.current -> withStyle(current) { append(segment.text) }
+                        segment.highlight -> withStyle(highlight) { append(segment.text) }
+                        else -> append(segment.text)
                     }
                 }
             },
@@ -151,5 +155,6 @@ fun HighlightText(
         modifier = modifier,
         maxLines = maxLines,
         overflow = overflow,
+        onTextLayout = onTextLayout,
     )
 }
