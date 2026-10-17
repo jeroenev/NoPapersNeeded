@@ -3,9 +3,9 @@ package dev.npn.core.app
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.index.ImportResult
 import dev.npn.core.index.MaintenanceService
-import dev.npn.core.index.RelinkService
 import dev.npn.core.index.ScanReport
 import dev.npn.core.index.SplitService
+import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
@@ -20,7 +20,7 @@ internal class MaintenanceFacadeImpl(
     private val lifetime: SessionLifetime,
     private val db: NpnDatabase,
     private val maintenance: MaintenanceService,
-    private val relink: RelinkService,
+    private val coordinator: JournalCoordinator,
     private val splitter: SplitService,
     private val writer: MetadataWriterImpl,
     private val ocr: OcrFacadeImpl,
@@ -36,8 +36,9 @@ internal class MaintenanceFacadeImpl(
         oldDocId: String,
         newDocId: String,
     ) = lifetime.owned {
-        // commitAndRescan already refreshes the coordinator's folded state under the lock.
-        scanReports.value = relink.applyRelink(oldDocId, newDocId)
+        // The relink's fold carries the old document's metadata onto the new id and marks the old
+        // one superseded, which only a rescan projects; commitAndRescan runs both under the lock.
+        scanReports.value = coordinator.commitAndRescan(listOf(PendingOp.relink(oldDocId, newDocId)))
     }
 
     override suspend fun splitPdf(

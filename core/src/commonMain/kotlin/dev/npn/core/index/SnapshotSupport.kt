@@ -82,14 +82,7 @@ class SnapshotSupport(
             dao.eventsOfSources(chosen.map { it.relPath }).groupBy({ it.sourcePath }) { stored ->
                 EventDecoderRegistry.decodeStored(stored.canonicalJson)
             }
-        return chosen.map {
-            CompactionCandidate(
-                it.relPath,
-                it.contentHash,
-                events[it.relPath].orEmpty(),
-                it.mtimeMillis,
-            )
-        }
+        return chosen.map { CompactionCandidate(it.relPath, it.contentHash, events[it.relPath].orEmpty()) }
     }
 
     private fun encodedSize(published: PublishedSnapshot): Long =

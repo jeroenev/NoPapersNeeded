@@ -14,14 +14,11 @@ data class CompactionSource(
     val mtimeMillis: Long,
 )
 
-/**
- * One object considered for compaction: its content hash, the events it contributes, and its mtime.
- */
+/** One object considered for compaction: its path, its content hash and the events it contributes. */
 data class CompactionCandidate(
     val relPath: String,
     val contentHash: String,
     val events: List<JournalEvent>,
-    val mtimeMillis: Long,
 )
 
 /** A published snapshot: its path, hash, the hashes it supersedes, and the surviving events. */

@@ -502,7 +502,6 @@ class MetadataWriterTest {
                                 .let { it as JournalSourceRead.Accepted }
                                 .events
                                 .map { c -> c.event },
-                            file.mtimeMillis,
                         )
                     }
                 val compactor = SnapshotCompactor(rig.fs, "test-installation")

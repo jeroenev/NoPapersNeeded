@@ -1,5 +1,6 @@
 package dev.npn.core.index
 
+import dev.npn.core.app.Compaction
 import dev.npn.core.app.JournalCoordinator
 import dev.npn.core.db.MetadataSourceEntity
 import dev.npn.core.db.ProjectionStatus
@@ -86,10 +87,13 @@ class CompactionReconcileTest {
             writer = writer,
             indexer = indexer,
             accumulator = accumulator,
-            compactor = SnapshotCompactor(fs, "test-installation"),
-            snapshots = SnapshotSupport(fs, db.metadataProjectionDao()),
-            compactionThreshold = threshold,
-            compactionStabilityWindowMs = window,
+            compaction =
+                Compaction(
+                    SnapshotCompactor(fs, "test-installation"),
+                    SnapshotSupport(fs, db.metadataProjectionDao()),
+                    threshold = threshold,
+                    stabilityWindowMs = window,
+                ),
         )
     }
 
@@ -509,10 +513,13 @@ class UndoneCompactionTest {
             writer = rig.writer(),
             indexer = rig.indexer,
             accumulator = rig.accumulator,
-            compactor = SnapshotCompactor(rig.fs, "test-installation"),
-            snapshots = SnapshotSupport(rig.fs, rig.db.metadataProjectionDao()),
-            compactionThreshold = 3,
-            compactionStabilityWindowMs = 1_000L,
+            compaction =
+                Compaction(
+                    SnapshotCompactor(rig.fs, "test-installation"),
+                    SnapshotSupport(rig.fs, rig.db.metadataProjectionDao()),
+                    threshold = 3,
+                    stabilityWindowMs = 1_000L,
+                ),
         )
 
     // A large "now" so that files (real JVM mtimes near epoch-now) are older than the window.
@@ -818,10 +825,13 @@ class SnapshotClaimTest {
             writer = rig.writer(),
             indexer = rig.indexer,
             accumulator = rig.accumulator,
-            compactor = SnapshotCompactor(rig.fs, "test-installation"),
-            snapshots = SnapshotSupport(rig.fs, rig.db.metadataProjectionDao()),
-            compactionThreshold = 3,
-            compactionStabilityWindowMs = 1_000L,
+            compaction =
+                Compaction(
+                    SnapshotCompactor(rig.fs, "test-installation"),
+                    SnapshotSupport(rig.fs, rig.db.metadataProjectionDao()),
+                    threshold = 3,
+                    stabilityWindowMs = 1_000L,
+                ),
         )
 
     @AfterTest

@@ -15,7 +15,6 @@ import dev.npn.core.index.ImportService
 import dev.npn.core.index.Indexer
 import dev.npn.core.index.MaintenanceService
 import dev.npn.core.index.MetadataAccumulator
-import dev.npn.core.index.RelinkService
 import dev.npn.core.index.ScanReport
 import dev.npn.core.index.SnapshotSupport
 import dev.npn.core.index.SplitService
@@ -88,8 +87,7 @@ internal suspend fun createCoordinator(
         writer = createObjectWriter(deps),
         indexer = indexer,
         accumulator = MetadataAccumulator(deps.fs, deps.db, deps.installationId, deps.clock, snapshots),
-        compactor = SnapshotCompactor(deps.fs, deps.installationId),
-        snapshots = snapshots,
+        compaction = Compaction(SnapshotCompactor(deps.fs, deps.installationId), snapshots),
         clock = deps.clock,
         log = deps.log,
         writeUndelete = writeUndelete,
@@ -380,7 +378,6 @@ internal fun buildMaintenance(
     lifetime: SessionLifetime,
     coordinator: JournalCoordinator,
     library: Library,
-    relink: RelinkService,
     ocr: OcrFacadeImpl,
     scanReports: MutableStateFlow<ScanReport?>,
 ): MaintenanceFacadeImpl =
@@ -395,7 +392,7 @@ internal fun buildMaintenance(
                 importService = library.imports,
                 serialize = { step -> coordinator.serialized { step() } },
             ),
-        relink = relink,
+        coordinator = coordinator,
         splitter = SplitService(deps.fs, deps.pdfEngine, library.imports, deps.db.documentDao(), deps.log),
         writer = library.writer,
         ocr = ocr,

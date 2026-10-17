@@ -62,62 +62,6 @@ class SupersededImportException :
     IllegalArgumentException("The file is an earlier version of a document in the library")
 
 /**
- * The journal as an import's step reads and writes it, under the writer lock that step holds
- * ([ImportService]), as do a delete for good's removal of the bytes and the trash purge's deletes.
- * Its calls take no lock of their own, so they are for that step alone.
- */
-interface ImportJournal {
-    /** The document [docId]'s bytes became, its relink chain followed to the end; [docId] when none superseded it. */
-    suspend fun successorOf(docId: String): String
-
-    /**
-     * Whether the journal has [docId] deleted: its latest delete is newer than any undelete. An
-     * import that brings it back writes one ([restoreReturned]) once this build writes
-     * `doc-undelete` ([dev.npn.core.journal.JournalOp.DocUndelete.WRITTEN]), and until then none,
-     * so false too for a document an import brought back in this session unrecorded, until its next
-     * lifecycle change; a rescan showing its file again soon after the delete writes none, and
-     * leaves it deleted.
-     */
-    suspend fun isDeleted(docId: String): Boolean
-
-    /**
-     * Record that [docId]'s bytes are in the library again, at [relPath], when the journal still has
-     * it deleted or trashed. Writes nothing, and needs no write access, for a document nothing hides,
-     * nor for a deleted one while this build writes no `doc-undelete`: the import then stands as
-     * builds before that op left it, shown until a fold of the journal hides it again. Returns
-     * whether it wrote the return; throws only when it did not.
-     */
-    suspend fun restoreReturned(
-        docId: String,
-        relPath: String,
-    ): Boolean
-
-    /**
-     * For the trash purge: every document the journal knows that is deleted, or else not superseded,
-     * mapped to when it was deleted for good or trashed, or to null while it is neither
-     * ([dev.npn.core.journal.FoldedState.trashTimes]).
-     */
-    suspend fun trashTimes(): Map<String, Long?>
-
-    companion object {
-        /** For a library whose journal holds no relink and hides no document. */
-        val NONE: ImportJournal =
-            object : ImportJournal {
-                override suspend fun successorOf(docId: String): String = docId
-
-                override suspend fun isDeleted(docId: String): Boolean = false
-
-                override suspend fun restoreReturned(
-                    docId: String,
-                    relPath: String,
-                ): Boolean = false
-
-                override suspend fun trashTimes(): Map<String, Long?> = emptyMap()
-            }
-    }
-}
-
-/**
  * Imports external PDFs or byte payloads into the library, deduplicating by content hash.
  *
  * Because [LibraryFileSystem.sha256] hashes a library-relative path (there is no stream-hash of an
@@ -140,12 +84,12 @@ interface ImportJournal {
  *
  * The dedup check, the move into place and the row write run as one step through [serialize],
  * which the session points at the journal coordinator's lock, handing the step the journal
- * ([ImportJournal]) as it stands under it. Without it two imports of the same bytes both pass the
+ * ([LockedJournal]) as it stands under it. Without it two imports of the same bytes both pass the
  * check and place two files for one hash, and a rescan listing the library between the move and the
  * row write inserts a row of its own that the import then overwrites (or that overwrites the
  * import's).
  *
- * Bytes the journal had deleted or trashed are recorded as back ([ImportJournal.restoreReturned])
+ * Bytes the journal had deleted or trashed are recorded as back ([LockedJournal.restoreReturned])
  * in that same step, deleted ones only once this build writes `doc-undelete`; without that record,
  * the next fold would hide the document again. One step,
  * so no trash, rescan or other lifecycle change lands between the row turning live and the journal
@@ -162,7 +106,7 @@ class ImportService(
     private val ruleProvider: suspend () -> StoragePathRule? = { null },
     /** The registry's field types by key, which decide where a template accepts a date pattern. */
     private val fieldTypes: suspend () -> Map<String, FieldType>,
-    private val serialize: suspend (suspend (ImportJournal) -> Unit) -> Unit = { it(ImportJournal.NONE) },
+    private val serialize: suspend (suspend (LockedJournal) -> Unit) -> Unit = { it(LockedJournal.EMPTY) },
     /** Where clearing a returned document's trashed copy, best effort, reports a failure. */
     private val log: NpnLog = NpnLog.None,
 ) {
@@ -227,7 +171,7 @@ class ImportService(
      */
     private suspend fun recordReturn(
         placed: Placement,
-        journal: ImportJournal,
+        journal: LockedJournal,
         tmpPath: String,
     ): ImportResult {
         val imported = placed.result as? ImportResult.Imported ?: return placed.result
@@ -291,7 +235,7 @@ class ImportService(
         size: Long,
         suggestedName: String,
         toDir: String,
-        journal: ImportJournal,
+        journal: LockedJournal,
     ): Placement {
         val existing = documentDao.getByDocId(hash)
         // The document's own path, when its bytes are there. This runs under the writer lock, so

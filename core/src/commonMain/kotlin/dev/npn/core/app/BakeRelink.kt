@@ -2,7 +2,7 @@ package dev.npn.core.app
 
 import dev.npn.core.db.AiEnrichQueueDao
 import dev.npn.core.db.AiEnrichedEntity
-import dev.npn.core.index.RelinkService
+import dev.npn.core.journal.PendingOp
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runLogged
 
@@ -17,7 +17,7 @@ import dev.npn.core.util.runLogged
  * the baked document then gets its text as a new one does.
  */
 internal class BakeRelink(
-    private val relink: RelinkService,
+    private val coordinator: JournalCoordinator,
     private val ocr: OcrFacadeImpl,
     private val enrichment: AiEnrichQueueDao,
     private val log: NpnLog,
@@ -30,7 +30,8 @@ internal class BakeRelink(
         log.runLogged("Handing the enrichment mark of $original on to its bake") {
             enrichment.enrichedAt(original)?.let { enrichment.markEnriched(AiEnrichedEntity(baked, it)) }
         }
-        relink.applyBakeRelink(original, baked)
+        // The baked bytes stand once the relink is published, even if the disposable index fails.
+        coordinator.commitAndRescanStanding(listOf(PendingOp.relink(original, baked)))
         log.runLogged("Indexing the text of $baked") { ocr.reselect(baked) }
     }
 }

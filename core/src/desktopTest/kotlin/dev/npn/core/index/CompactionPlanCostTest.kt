@@ -1,5 +1,6 @@
 package dev.npn.core.index
 
+import dev.npn.core.app.Compaction
 import dev.npn.core.app.JournalCoordinator
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.ProjectionStatus
@@ -73,10 +74,13 @@ class CompactionPlanCostTest {
                     installationId = "test-installation",
                     allocator = HlcWatermarkAllocator(clock),
                 ),
-            compactor = SnapshotCompactor(fs, "test-installation"),
-            snapshots = SnapshotSupport(fs, db.metadataProjectionDao()),
-            compactionThreshold = threshold,
-            compactionStabilityWindowMs = 1_000L,
+            compaction =
+                Compaction(
+                    SnapshotCompactor(fs, "test-installation"),
+                    SnapshotSupport(fs, db.metadataProjectionDao()),
+                    threshold = threshold,
+                    stabilityWindowMs = 1_000L,
+                ),
         )
 
     /** A library with one document and [objects] published transactions, reconciled and idle. */
