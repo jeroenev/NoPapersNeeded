@@ -2,6 +2,7 @@ package dev.npn.app.ui.common
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ProvidedValue
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import java.util.Locale
@@ -15,6 +16,7 @@ actual object LocalAppLocale {
 
     @Suppress("DEPRECATION")
     @Composable
+    @ReadOnlyComposable
     actual infix fun provides(value: String?): ProvidedValue<*> {
         val configuration = LocalConfiguration.current
         val new =
