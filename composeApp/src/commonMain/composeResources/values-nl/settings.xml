@@ -137,6 +137,9 @@
     <string name="common_settings_ai_check_passed">Werkt</string>
     <string name="common_settings_ai_check_failed">Werkt niet</string>
     <string name="common_settings_ai_check_skipped">Niet getest</string>
+    <string name="common_settings_ai_check_passed_detail">Werkt — %1$s</string>
+    <string name="common_settings_ai_check_failed_detail">Werkt niet — %1$s</string>
+    <string name="common_settings_ai_check_skipped_detail">Niet getest — %1$s</string>
     <string name="common_settings_ai_test_ocr_disabled">"%1$s" is uitgezet: dit model kan geen pagina-afbeeldingen lezen, dus het zou een aanvraag per pagina kosten en niets opleveren.</string>
 
     <string name="common_settings_default_view">Standaardweergave: %1$s</string>

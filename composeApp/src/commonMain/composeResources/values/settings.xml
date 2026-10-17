@@ -138,6 +138,9 @@
     <string name="common_settings_ai_check_passed">Works</string>
     <string name="common_settings_ai_check_failed">Not working</string>
     <string name="common_settings_ai_check_skipped">Not tested</string>
+    <string name="common_settings_ai_check_passed_detail">Works — %1$s</string>
+    <string name="common_settings_ai_check_failed_detail">Not working — %1$s</string>
+    <string name="common_settings_ai_check_skipped_detail">Not tested — %1$s</string>
     <string name="common_settings_ai_test_ocr_disabled">"%1$s" has been switched off: this model cannot read page images, so it would spend a request per page and return nothing.</string>
 
     <string name="common_settings_default_view">Default view: %1$s</string>

@@ -137,6 +137,9 @@
     <string name="common_settings_ai_check_passed">Funciona</string>
     <string name="common_settings_ai_check_failed">No funciona</string>
     <string name="common_settings_ai_check_skipped">No probado</string>
+    <string name="common_settings_ai_check_passed_detail">Funciona — %1$s</string>
+    <string name="common_settings_ai_check_failed_detail">No funciona — %1$s</string>
+    <string name="common_settings_ai_check_skipped_detail">No probado — %1$s</string>
     <string name="common_settings_ai_test_ocr_disabled">"%1$s" se ha desactivado: este modelo no puede leer imágenes de páginas, así que gastaría una solicitud por página y no devolvería nada.</string>
 
     <string name="common_settings_default_view">Vista predeterminada: %1$s</string>

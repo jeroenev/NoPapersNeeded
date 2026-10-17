@@ -47,9 +47,12 @@ import no_papers_needed.composeapp.generated.resources.common_settings_ai_auto_o
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_auto_on_ocr_help
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_check_api
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_check_failed
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_check_failed_detail
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_check_messages
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_check_passed
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_check_passed_detail
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_check_skipped
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_check_skipped_detail
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_check_vision
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_help
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_ocr_auto
@@ -284,10 +287,8 @@ private fun AiCheckRow(outcome: AiCheckOutcome) {
         Column(Modifier.weight(1f)) {
             Text(text = stringResource(checkLabel(outcome.check)), style = MaterialTheme.typography.bodyMedium)
             HelpText(
-                buildString {
-                    append(stringResource(checkStatusLabel(outcome.status)))
-                    outcome.detail?.let { append(" — $it") }
-                },
+                outcome.detail?.let { stringResource(checkStatusDetail(outcome.status), it) }
+                    ?: stringResource(checkStatusLabel(outcome.status)),
             )
         }
     }
@@ -305,6 +306,14 @@ private fun checkStatusLabel(status: AiCheckStatus): StringResource =
         AiCheckStatus.PASSED -> Res.string.common_settings_ai_check_passed
         AiCheckStatus.FAILED -> Res.string.common_settings_ai_check_failed
         AiCheckStatus.SKIPPED -> Res.string.common_settings_ai_check_skipped
+    }
+
+/** The verdict together with the endpoint's own words for it, as one sentence. */
+private fun checkStatusDetail(status: AiCheckStatus): StringResource =
+    when (status) {
+        AiCheckStatus.PASSED -> Res.string.common_settings_ai_check_passed_detail
+        AiCheckStatus.FAILED -> Res.string.common_settings_ai_check_failed_detail
+        AiCheckStatus.SKIPPED -> Res.string.common_settings_ai_check_skipped_detail
     }
 
 @Composable
