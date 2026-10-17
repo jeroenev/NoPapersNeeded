@@ -1,7 +1,6 @@
 package dev.npn.app
 
 import dev.npn.app.ui.detail.DocDetailViewModel
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 
 // Fixtures for the DocDetailViewModel suites.
@@ -23,5 +22,5 @@ internal fun TestScope.liveDocDetailVm(
     settings: FakeSettingsRepository = aiConfiguredSettings(),
 ): DocDetailViewModel =
     docDetailVm(session, docId, settings).also { model ->
-        backgroundScope.launch { model.metadata.collect {} }
+        collecting(model.metadata)
     }

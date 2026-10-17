@@ -9,7 +9,6 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
@@ -33,7 +32,7 @@ class AppViewModelTest : MainDispatcherTest() {
                 created += Triple(parent, name, currentCoroutineContext()[ContinuationInterceptor])
                 createdLocation(parent, name)
             }
-        backgroundScope.launch { vm.state.collect {} }
+        collecting(vm.state)
         runCurrent()
         return vm
     }
@@ -252,7 +251,7 @@ class AppViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val env = env()
             val vm = model(env)
-            backgroundScope.launch { vm.useSafStorage.collect {} }
+            collecting(vm.useSafStorage)
 
             vm.setUseSafStorage(true)
             runCurrent()

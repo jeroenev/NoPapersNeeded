@@ -18,7 +18,6 @@ import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -223,7 +222,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val settings = FakeSettingsRepository()
             val model = vm(settings = settings)
-            backgroundScope.launch { model.aiConfigured.collect {} }
+            collecting(model.aiConfigured)
             runCurrent()
             model.aiConfigured.value shouldBe false
 
@@ -244,7 +243,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
             val session = FakeLibrarySession()
             session.tags.tags.value = listOf(TagInfo("finance", "#ff0000", null, 3))
             val model = vm(session = session)
-            backgroundScope.launch { model.tagColors.collect {} }
+            collecting(model.tagColors)
             runCurrent()
             model.tagColors.value shouldContainExactly mapOf("finance" to "#ff0000")
 
