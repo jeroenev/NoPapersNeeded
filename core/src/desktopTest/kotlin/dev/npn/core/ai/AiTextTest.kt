@@ -8,6 +8,15 @@ import io.kotest.matchers.shouldBe
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 
+private val seeds = FieldKeys.seedDefinitions().associateBy { it.key }
+
+/** The seeded field [key] as the model is asked to fill it. */
+private fun spec(
+    key: String,
+    mode: AiFieldMode = AiFieldMode.ALL,
+    vocabulary: List<String> = emptyList(),
+) = AiFieldSpec(seeds.getValue(key), mode, vocabulary)
+
 class AiTextTest {
     private val hashA = "a".repeat(64)
     private val hashB = "b".repeat(64)
@@ -80,14 +89,6 @@ class AiTextTest {
  * ever accepts what it asked for. Values now key on the registry key (`docDate`, not `date`).
  */
 class ParseFieldSuggestionTest {
-    private val seeds = FieldKeys.seedDefinitions().associateBy { it.key }
-
-    private fun spec(
-        key: String,
-        mode: AiFieldMode = AiFieldMode.ALL,
-        vocabulary: List<String> = emptyList(),
-    ) = AiFieldSpec(seeds.getValue(key), mode, vocabulary)
-
     private fun numberField(key: String) =
         AiFieldSpec(
             FieldDef(key, key, FieldType.NUMBER, showByDefault = false, aiEnabled = false, position = 9),
@@ -225,14 +226,6 @@ class ParseFieldSuggestionTest {
 
 /** Parsing/validation behavior for [AiText.parseEditSuggestion]. */
 class ParseEditSuggestionTest {
-    private val seeds = FieldKeys.seedDefinitions().associateBy { it.key }
-
-    private fun spec(
-        key: String,
-        mode: AiFieldMode = AiFieldMode.ALL,
-        vocabulary: List<String> = emptyList(),
-    ) = AiFieldSpec(seeds.getValue(key), mode, vocabulary)
-
     private fun parse(
         response: String,
         currentFields: Map<String, String> = emptyMap(),
