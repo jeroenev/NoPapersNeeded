@@ -28,6 +28,7 @@ kotlin {
 dependencies {
     implementation(plugin(libs.plugins.kotlinMultiplatform))
     implementation(plugin(libs.plugins.androidMultiplatformLibrary))
+    implementation(plugin(libs.plugins.detekt))
     testImplementation(kotlin("test"))
 }
 

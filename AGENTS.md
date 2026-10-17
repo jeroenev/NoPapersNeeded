@@ -29,10 +29,12 @@ design, build/packaging/release details, and the library folder layout.
 - `buildSrc` — build logic: every task class the build scripts register (packaging, `BuildInfo`,
   `checkLocalization`), and convention plugins that read the catalog: `npn.toolchain` (the JDK and
   bytecode target, applied by every module, plus the SDK levels of `androidApp` and
-  `baselineprofile`) and `npn.kmp-module` (the `desktop` and Android
-  library targets and their SDK levels, for `core`, `core-testing` and `composeApp`). Kotlin and
-  the Android Gradle plugin are on buildSrc's classpath, so modules apply them by id, never with
-  `alias(...)`: Gradle refuses a version for a plugin that is already there.
+  `baselineprofile`), `npn.kmp-module` (the `desktop` and Android
+  library targets and their SDK levels, for `core`, `core-testing` and `composeApp`) and
+  `npn.detekt` (both detekt runs and their baselines; the root build applies it to every project,
+  and its map of typed compilations is where a new module gets its typed run). Kotlin, the
+  Android Gradle plugin and detekt are on buildSrc's classpath, so modules apply them by id, never
+  with `alias(...)`: Gradle refuses a version for a plugin that is already there.
 - `baselineprofile` — generates androidApp's baseline profile on a device (`mise baseline-profile`);
   never runs in CI. The release build is R8-minified: reflective code or new native/reflection-heavy
   dependencies may need rules in `androidApp/proguard-rules.pro`, and need a check on a device
