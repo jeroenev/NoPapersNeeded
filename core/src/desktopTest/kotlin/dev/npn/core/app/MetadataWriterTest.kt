@@ -2,6 +2,7 @@ package dev.npn.core.app
 
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.index.requireByDocId
+import dev.npn.core.index.requireDoc
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.SystemProperty
 import dev.npn.core.pathrules.StoragePathRule
@@ -9,7 +10,6 @@ import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldNotContain
-import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
@@ -162,9 +162,7 @@ class MetadataWriterTest {
             // Projected into document_fields and surfaced via observeDoc.
             val item =
                 rig.session.documents
-                    .observeDoc(id)
-                    .first()
-                    .shouldNotBeNull()
+                    .requireDoc(id)
             item.doc.fields shouldBe mapOf("amount" to "42.50", "vendor" to "ACME")
 
             // Unregistered keys surface as orphans, with usage counts.
@@ -177,9 +175,7 @@ class MetadataWriterTest {
             // Clearing a field removes it.
             rig.session.meta.setField(id, "amount", null)
             rig.session.documents
-                .observeDoc(id)
-                .first()
-                .shouldNotBeNull()
+                .requireDoc(id)
                 .doc.fields shouldBe mapOf("vendor" to "ACME")
         }
 
@@ -211,9 +207,7 @@ class MetadataWriterTest {
                 .fieldsForDocs(listOf(id))
                 .map { it.fieldKey } shouldNotContain "title"
             rig.session.documents
-                .observeDoc(id)
-                .first()
-                .shouldNotBeNull()
+                .requireDoc(id)
                 .doc.title shouldBe null
         }
 
@@ -321,9 +315,7 @@ class MetadataWriterTest {
 
                     existsFails = false
                     rig.session.documents
-                        .observeDoc(id)
-                        .first()
-                        .shouldNotBeNull()
+                        .requireDoc(id)
                         .tags shouldBe listOf("invoice")
                     rig.journalObjectCount() shouldBe before + 1
                 }

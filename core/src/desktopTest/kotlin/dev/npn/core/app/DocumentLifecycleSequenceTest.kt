@@ -1,6 +1,7 @@
 package dev.npn.core.app
 
 import dev.npn.core.fs.sha256Bytes
+import dev.npn.core.index.requireDoc
 import dev.npn.core.journal.JournalOp
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.pdf.PdfFixtures
@@ -143,9 +144,7 @@ class DocumentLifecycleSequenceTest {
             Operation.MISSING -> {
                 rig.fs.delete(
                     session.documents
-                        .observeDoc(doc.id)
-                        .first()
-                        .shouldNotBeNull()
+                        .requireDoc(doc.id)
                         .doc.relPath,
                 )
                 doc.state = State.MISSING
@@ -154,9 +153,7 @@ class DocumentLifecycleSequenceTest {
             Operation.BAKE -> {
                 val path =
                     session.documents
-                        .observeDoc(doc.id)
-                        .first()
-                        .shouldNotBeNull()
+                        .requireDoc(doc.id)
                         .doc.relPath
                 session.content.bakeInPlace(doc.id) shouldBe BakeOutcome.Baked
                 val bytes = rig.fs.readBytes(path)

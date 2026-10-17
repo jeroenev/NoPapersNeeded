@@ -8,6 +8,7 @@ import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.app.appSessionTest
+import dev.npn.core.index.requireDoc
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
@@ -406,9 +407,7 @@ class AiAutoEnricherSessionTest {
             enriching.await() shouldBe true
             val fields =
                 rig.session.documents
-                    .observeDoc(id)
-                    .first()
-                    .shouldNotBeNull()
+                    .requireDoc(id)
                     .doc.fields
             fields[FieldKeys.TITLE] shouldBe "Mine"
             fields[FieldKeys.CORRESPONDENT] shouldBe "Acme"

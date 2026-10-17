@@ -3,6 +3,7 @@ package dev.npn.core.app
 import dev.npn.core.db.AutoMatchRuleEntity
 import dev.npn.core.fs.TrashOps
 import dev.npn.core.index.MutableClock
+import dev.npn.core.index.requireDoc
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.rules.AutoMatchRule
@@ -203,11 +204,7 @@ class LibrarySettingsTest {
                     session.rescan()
                     session.work.drainOcr()
                     val id = deps.fs.sha256("inv.pdf")
-                    session.documents
-                        .observeDoc(id)
-                        .first()
-                        ?.tags
-                        .orEmpty() shouldContain "t"
+                    session.documents.requireDoc(id).tags shouldContain "t"
                 }
 
                 // The next open puts the journal's list back.

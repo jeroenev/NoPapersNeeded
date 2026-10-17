@@ -2,6 +2,7 @@ package dev.npn.core.app
 
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
+import dev.npn.core.index.requireDoc
 import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.PendingOp
@@ -16,7 +17,6 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldStartWith
 import io.kotest.matchers.types.shouldBeInstanceOf
-import kotlinx.coroutines.flow.first
 import java.nio.file.Files
 import kotlin.test.Test
 
@@ -59,9 +59,7 @@ class DocumentRestoreTest {
 
             assertVisible(id)
             rig.session.documents
-                .observeDoc(id)
-                .first()
-                .shouldNotBeNull()
+                .requireDoc(id)
                 .doc.fields[FieldKeys.TITLE] shouldBe "Back again"
             // And a rescan agrees: the journal, not this scan, now says it is live.
             rig.session.rescan()
@@ -398,9 +396,7 @@ class DocumentRestoreTest {
         row.deleted.shouldBeFalse()
         row.trashed.shouldBeFalse()
         rig.session.documents
-            .observeDoc(id)
-            .first()
-            .shouldNotBeNull()
+            .requireDoc(id)
     }
 
     private companion object {

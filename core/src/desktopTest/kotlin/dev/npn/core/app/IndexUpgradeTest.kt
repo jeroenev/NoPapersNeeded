@@ -18,6 +18,7 @@ import dev.npn.core.db.queueState
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.index.DeviceIdentity
+import dev.npn.core.index.requireDoc
 import dev.npn.core.ocr.OcrEngineId
 import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.util.NpnJson
@@ -227,9 +228,7 @@ class IndexUpgradeTest {
                 session.rescan()
                 session.deviceId shouldBe deviceId
                 session.documents
-                    .observeDoc(docId)
-                    .first()
-                    .shouldNotBeNull()
+                    .requireDoc(docId)
                 session.work.editRuns
                     .first()
                     .single()

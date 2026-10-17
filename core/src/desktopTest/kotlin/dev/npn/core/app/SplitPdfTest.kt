@@ -5,6 +5,7 @@ import dev.npn.core.db.FieldKeyCount
 import dev.npn.core.db.isLive
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.index.SplitFailure
+import dev.npn.core.index.requireDoc
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
@@ -41,20 +42,14 @@ class SplitPdfTest {
 
             // Parts are live single-page documents next to the original, with metadata carried over.
             for (partId in done.partDocIds) {
-                val part =
-                    rig.session.documents
-                        .observeDoc(partId)
-                        .first()
-                checkNotNull(part)
+                val part = rig.session.documents.requireDoc(partId)
                 part.tags shouldBe listOf("invoice")
                 part.doc.correspondent shouldBe "acme"
                 part.doc.docDate shouldBe "2026-01-15"
                 rig.session.content.pageCount(partId) shouldBe 1
             }
             rig.session.documents
-                .observeDoc(done.partDocIds[0])
-                .first()
-                .shouldNotBeNull()
+                .requireDoc(done.partDocIds[0])
                 .doc.fileName shouldBe "contract (part 1).pdf"
 
             // Original is trashed, not deleted.
@@ -257,12 +252,7 @@ class SplitPdfTest {
             val split = rig.session.maintenance.splitPdf(imported.docId, listOf(0..0, 1..1))
             val done = split.shouldBeInstanceOf<SplitOutcome.Done>()
 
-            val part =
-                checkNotNull(
-                    rig.session.documents
-                        .observeDoc(done.partDocIds[0])
-                        .first(),
-                )
+            val part = rig.session.documents.requireDoc(done.partDocIds[0])
             part.doc.fileName shouldBe "Scan (part 1).pdf"
         }
 

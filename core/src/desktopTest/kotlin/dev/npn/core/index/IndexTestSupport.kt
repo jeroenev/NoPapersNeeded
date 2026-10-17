@@ -1,5 +1,7 @@
 package dev.npn.core.index
 
+import dev.npn.core.app.DocListItem
+import dev.npn.core.app.DocumentRepository
 import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.DocumentEntity
@@ -22,6 +24,7 @@ import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.SnapshotCompactor
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestResult
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
@@ -236,6 +239,10 @@ suspend fun DocumentDao.requireRowAtPath(relPath: String): DocumentEntity =
 /** The row of [docId], failing the test with the id when the index has none. */
 suspend fun DocumentDao.requireByDocId(docId: String): DocumentEntity =
     checkNotNull(getByDocId(docId)) { "No index row for document $docId" }
+
+/** What the library shows of [docId] now, failing the test with the id when it shows nothing. */
+suspend fun DocumentRepository.requireDoc(docId: String): DocListItem =
+    checkNotNull(observeDoc(docId).first()) { "No document $docId in the library" }
 
 /**
  * Hand-cranked test clock. With [autoTick] off (default) it returns [now] verbatim and only
