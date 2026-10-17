@@ -5,6 +5,7 @@ import dev.npn.core.journal.JournalCodec
 import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
+import dev.npn.core.journal.journalObjectEvents
 import dev.npn.core.model.SystemProperty
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
@@ -61,10 +62,7 @@ class ReviewMigrationTest {
     /** The documents of every `reviewed` event in the journal, one entry per event. */
     private suspend fun AppSessionRig.reviewedEvents(): List<String?> =
         fs
-            .listAllUnder(NpnPaths.JOURNAL_DIR)
-            .filter { JournalPaths.classify(it.relPath) is JournalPath.ObjectV2 }
-            .flatMap { fs.readBytes(it.relPath).decodeToString().lines() }
-            .mapNotNull(JournalCodec::decodeLineOrNull)
+            .journalObjectEvents()
             .filter { (it.op as? JournalOp.PropSet)?.key == SystemProperty.REVIEWED }
             .map { it.doc }
 }

@@ -14,6 +14,7 @@ import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.PendingOp
+import dev.npn.core.journal.journalObjects
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
@@ -109,9 +110,7 @@ class JournalCoordinatorWritesTest {
             coordinator.commitAndApply(listOf(PendingOp.tagAdd(doc, "kept"))).shouldBeTrue()
 
             rig.db.tagDao().tagsForDocument(doc) shouldBe listOf("kept")
-            rig.fs
-                .listAllUnder(NpnPaths.JOURNAL_DIR)
-                .filter { JournalPaths.classify(it.relPath) is JournalPath.ObjectV2 } shouldHaveSize 1
+            rig.fs.journalObjects() shouldHaveSize 1
         }
 
     /**

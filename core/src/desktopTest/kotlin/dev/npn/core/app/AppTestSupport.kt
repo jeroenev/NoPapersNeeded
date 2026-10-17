@@ -16,6 +16,7 @@ import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
+import dev.npn.core.journal.journalObjects
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pathrules.StoragePathRuleApplicator
@@ -120,10 +121,7 @@ class AppSessionRig private constructor(
         ContentAddressedJournalWriter(fs, installation, HlcWatermarkAllocator(clock))
 
     /** Published journal objects, for asserting that a write committed exactly once. */
-    suspend fun journalObjectCount(): Int =
-        fs
-            .listAllUnder(NpnPaths.JOURNAL_DIR)
-            .count { JournalPaths.classify(it.relPath) is JournalPath.ObjectV2 }
+    suspend fun journalObjectCount(): Int = fs.journalObjects().size
 
     /** The [secondSession]s and their databases, closed with this rig. */
     private val otherSessions = ArrayList<LibrarySessionImpl>()

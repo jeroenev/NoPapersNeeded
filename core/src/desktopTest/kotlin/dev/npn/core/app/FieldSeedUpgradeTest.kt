@@ -6,6 +6,7 @@ import dev.npn.core.index.IndexRig
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.PendingOp
+import dev.npn.core.journal.journalObjects
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.shouldBe
@@ -34,10 +35,7 @@ class FieldSeedUpgradeTest {
             .mapNotNull { it.toFieldDef() }
             .associateBy { it.key }
 
-    private suspend fun journalObjects(): Int =
-        rig.fs
-            .listAllUnder(NpnPaths.JOURNAL_DIR)
-            .count { JournalPaths.classify(it.relPath) is JournalPath.ObjectV2 }
+    private suspend fun journalObjects(): Int = rig.fs.journalObjects().size
 
     @Test
     fun aLibrarySeededEarlierGetsTheNewSeedOnceAndKeepsWhatItsUsersChanged() =

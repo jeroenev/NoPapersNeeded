@@ -7,6 +7,7 @@ import dev.npn.core.journal.JournalCodec
 import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
+import dev.npn.core.journal.journalObjectEvents
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
@@ -203,10 +204,7 @@ class StoragePathRuleIntegrationTest {
     /** Every `storagePath` event in the journal, as its document and the location it names. */
     private suspend fun AppSessionRig.storagePathEvents(): List<Pair<String?, String?>> =
         fs
-            .listAllUnder(NpnPaths.JOURNAL_DIR)
-            .filter { JournalPaths.classify(it.relPath) is JournalPath.ObjectV2 }
-            .flatMap { fs.readBytes(it.relPath).decodeToString().lines() }
-            .mapNotNull(JournalCodec::decodeLineOrNull)
+            .journalObjectEvents()
             .mapNotNull { event ->
                 val op = event.op as? JournalOp.PropSet
                 if (op != null && op.key == SystemProperty.STORAGE_PATH) event.doc to op.value else null

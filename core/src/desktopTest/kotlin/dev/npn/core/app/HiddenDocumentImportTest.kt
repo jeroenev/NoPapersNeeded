@@ -10,6 +10,7 @@ import dev.npn.core.fs.trashEntries
 import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
+import dev.npn.core.journal.journalObjectTexts
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.booleans.shouldBeFalse
@@ -120,7 +121,7 @@ class HiddenDocumentImportTest {
 
             imported.docId shouldBe id
             assertLive(id)
-            journalObjects().filter { it.contains(JournalOp.DocRestore.WIRE) } shouldHaveSize 1
+            rig.fs.journalObjectTexts().filter { it.contains(JournalOp.DocRestore.WIRE) } shouldHaveSize 1
             rig.fs.trashEntries().shouldBeEmpty()
             rig.fs.libraryPdfs() shouldBe listOf(imported.relPath)
             // Its text is indexed already, so OCR has nothing to redo.
@@ -267,13 +268,6 @@ class HiddenDocumentImportTest {
         row.deleted.shouldBeFalse()
         row.missing.shouldBeFalse()
     }
-
-    /** Every published journal object's text. */
-    private suspend fun journalObjects(): List<String> =
-        rig.fs
-            .listAllUnder(NpnPaths.JOURNAL_DIR)
-            .filter { JournalPaths.classify(it.relPath) is JournalPath.ObjectV2 }
-            .map { rig.fs.readBytes(it.relPath).decodeToString() }
 }
 
 /**

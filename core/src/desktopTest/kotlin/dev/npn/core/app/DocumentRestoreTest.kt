@@ -8,6 +8,7 @@ import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.PendingOp
+import dev.npn.core.journal.journalObjectTexts
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.SystemProperty
 import dev.npn.core.pdf.PdfFixtures
@@ -195,7 +196,10 @@ class DocumentRestoreTest {
             assertVisible(id)
             rig.session.rescan()
             assertVisible(id)
-            journalOps().filter { it.contains(JournalOp.DocUndelete.WIRE) }.shouldBeEmpty()
+            rig.fs
+                .journalObjectTexts()
+                .filter { it.contains(JournalOp.DocUndelete.WIRE) }
+                .shouldBeEmpty()
         }
 
     /** Nor does a rescan finding a deleted document's file long after the delete, by default. */
@@ -214,7 +218,10 @@ class DocumentRestoreTest {
             rig.session.rescan()
 
             rig.journalObjectCount() shouldBe objects
-            journalOps().filter { it.contains(JournalOp.DocUndelete.WIRE) }.shouldBeEmpty()
+            rig.fs
+                .journalObjectTexts()
+                .filter { it.contains(JournalOp.DocUndelete.WIRE) }
+                .shouldBeEmpty()
             assertVisible(id)
         }
 
@@ -285,7 +292,8 @@ class DocumentRestoreTest {
             rig.session.rescan()
             rig.session.rescan()
 
-            journalOps()
+            rig.fs
+                .journalObjectTexts()
                 .filter { it.contains(JournalOp.DocUndelete.WIRE) || it.contains(JournalOp.DocRestore.WIRE) }
                 .shouldBeEmpty()
             rig.db
@@ -363,7 +371,10 @@ class DocumentRestoreTest {
                 .getByDocId(id)
                 .shouldNotBeNull()
                 .relPath shouldBe "inbox/a.pdf"
-            journalOps().filter { NpnPaths.NPN_DIR in it && SystemProperty.STORAGE_PATH.wire in it }.shouldBeEmpty()
+            rig.fs
+                .journalObjectTexts()
+                .filter { NpnPaths.NPN_DIR in it && SystemProperty.STORAGE_PATH.wire in it }
+                .shouldBeEmpty()
         }
 
     /** Trash [id], then delete it for good from the trash, as the user does. */
@@ -380,13 +391,6 @@ class DocumentRestoreTest {
             .shouldBeInstanceOf<ImportOutcome.Imported>()
         return sha256Bytes(bytes)
     }
-
-    /** Every published journal object's text. */
-    private suspend fun journalOps(): List<String> =
-        rig.fs
-            .listAllUnder(NpnPaths.JOURNAL_DIR)
-            .filter { JournalPaths.classify(it.relPath) is JournalPath.ObjectV2 }
-            .map { rig.fs.readBytes(it.relPath).decodeToString() }
 
     private suspend fun assertVisible(id: String) {
         val row =

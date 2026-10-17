@@ -21,6 +21,7 @@ import dev.npn.core.journal.PublishedTransaction
 import dev.npn.core.journal.SnapshotCodec
 import dev.npn.core.journal.SnapshotCompactor
 import dev.npn.core.journal.SnapshotManifest
+import dev.npn.core.journal.journalObjects
 import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -104,9 +105,9 @@ class SnapshotClaimTest {
         coordinator.reconcileMetadata()
         val victim =
             rig.fs
-                .listAllUnder(NpnPaths.JOURNAL_DIR)
-                .map { it.relPath }
-                .first { JournalPaths.classify(it) is JournalPath.ObjectV2 }
+                .journalObjects()
+                .first()
+                .relPath
         val hash = (JournalPaths.classify(victim) as JournalPath.ObjectV2).expectedHash
         val bytes =
             SnapshotCodec.encodeSnapshot(

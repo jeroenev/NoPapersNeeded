@@ -17,6 +17,7 @@ import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.JournalSourceRead
 import dev.npn.core.journal.SnapshotCompactor
 import dev.npn.core.journal.StorageV2Reader
+import dev.npn.core.journal.journalObjects
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.SystemProperty
 import dev.npn.core.pathrules.StoragePathRule
@@ -96,9 +97,7 @@ class MetadataReplicationTest {
             ) shouldBe true
 
             val objects =
-                rig.fs
-                    .listAllUnder(NpnPaths.JOURNAL_DIR)
-                    .filter { JournalPaths.classify(it.relPath) is JournalPath.ObjectV2 }
+                rig.fs.journalObjects()
             // Two user transactions plus the one-time field-registry seed written on open.
             objects.size shouldBe 3
             objects.forEach { objectFile ->
@@ -151,9 +150,7 @@ class MetadataReplicationTest {
 
             // Build a snapshot over device 1's objects, publish it, and delete the objects.
             val objects =
-                rig.fs
-                    .listAllUnder(NpnPaths.JOURNAL_DIR)
-                    .filter { JournalPaths.classify(it.relPath) is JournalPath.ObjectV2 }
+                rig.fs.journalObjects()
             val candidates =
                 objects.map { file ->
                     val bytes = rig.fs.readBytes(file.relPath)
@@ -221,13 +218,7 @@ class MetadataReplicationTest {
                     .map { it.relPath }
                     .toSet()
             rig.session.meta.addTag(listOf(id), "kept")
-            val canonical =
-                rig.fs
-                    .listAllUnder(NpnPaths.JOURNAL_DIR)
-                    .single {
-                        it.relPath !in beforeTag &&
-                            JournalPaths.classify(it.relPath) is JournalPath.ObjectV2
-                    }
+            val canonical = rig.fs.journalObjects().single { it.relPath !in beforeTag }
             val conflictName = "${canonical.name.removeSuffix(".jsonl")} (conflicted copy laptop).jsonl"
             val conflictPath = canonical.relPath.substringBeforeLast('/') + "/" + conflictName
             rig.fs.move(canonical.relPath, conflictPath)
