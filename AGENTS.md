@@ -12,7 +12,8 @@ design, build/packaging/release details, and the library folder layout.
 - `core-testing` — fakes of `core`'s facets shared by `core`'s desktopTest and `composeApp`'s
   commonTest (`dev.npn.core.testing`). Only test source sets depend on it; a fake both suites need
   goes here rather than into either module's tests.
-- `composeApp` — shared Compose UI + viewmodels (`dev.npn.app.ui.*`, `di`).
+- `composeApp` — shared Compose UI + viewmodels (`dev.npn.app.ui.*`, `di`, and `platform` for the
+  `expect` hooks each platform answers).
 - `androidApp` — Android entrypoint (`dev.npn`, launcher `dev.npn/.MainActivity`). The debug
   build is a separate package, `dev.npn.debug`, so it installs next to the release build.
 - `desktopApp` — desktop entrypoint + packaging (deb/rpm/AppImage/uber-jar; Flatpak manifest
@@ -85,7 +86,7 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
 
 - One config, `config/detekt/detekt.yml`, two runs; `check` runs both:
   - `./gradlew detekt`: source-only (no type resolution) over every source set. Fast, needs no
-    compile. Baseline: per-module `detekt-baseline.xml`.
+    compile. Baseline: per-module `detekt-baseline.xml`, where present.
   - `./gradlew detektTyped`: the type-resolved per-compilation tasks (`detektMainDesktop`,
     `detektMainAndroid`, `detektTestDesktop`, `detektHostTestAndroid` in `core`/`composeApp`;
     `detektMainDesktop` in `core-testing`; `detektDebug` in `androidApp`; `detektMain` in
@@ -93,7 +94,7 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
     `UnusedPrivate*`, `UnusedVariable`, `SuspendFunSwallowedCancellation`, ...); the source-only
     run skips them silently. They also load the Compose ruleset (`io.nlopez.compose.rules:detekt`,
     its default config): viewmodels forwarded into child composables, composables without a
-    `modifier`, parameter order and naming. Baseline: per-module `detekt-baseline-typed.xml`.
+    `modifier`, parameter order and naming. Baseline: per-module `detekt-baseline-typed.xml`, where present.
     Device tests, release variants and `baselineprofile` only get the source-only run.
 - Baselines grandfather old findings; CI fails on NEW issues only. Do not add to baselines; fix
   findings in code you touch. Baselines should shrink: after a cleanup, regenerate with
@@ -174,8 +175,8 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
 - Read ARCHITECTURE.md for the module/package map, data flow, and where to look
   for common tasks before navigating the codebase.
 - Commit messages: `[main] Imperative summary` (branch name in brackets).
-- Shared Flow subscriptions use the named `WhileSubscribed(5_000)` constant instead of
-  inline timeouts.
+- Shared Flow subscriptions use `WhileSubscribedTimeout` (`WhileSubscribed(5_000)`, in
+  `composeApp`'s `ui/common/StateFlowConfig.kt`) instead of inline timeouts.
 - Use `material-icons-extended` for semantically correct icons (already a dependency).
 - Around suspend code use `runCatchingCancellable` (`core.util`), never `runCatching` or a bare
   `catch (Throwable)`: cancellation must propagate, not be recorded as a failure. Typed detekt's
