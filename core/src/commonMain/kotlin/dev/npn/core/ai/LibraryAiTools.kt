@@ -170,6 +170,14 @@ internal object LibraryAiTools {
      */
     const val OCR_ENGINE_FIELD = "ocrEngine"
 
+    /** The document columns searchable like fields, each with how a row's value is read. */
+    private val COLUMN_FIELDS: Map<String, (DocumentEntity) -> String?> =
+        linkedMapOf(
+            FILE_NAME_FIELD to { it.fileName },
+            PATH_FIELD to { it.relPath },
+            OCR_ENGINE_FIELD to { it.ocrEngine },
+        )
+
     /** The engine labels [DocumentEntity.ocrEngine] can carry, as told to the model. */
     private val OCR_ENGINE_LABELS: String = OcrEngineId.entries.joinToString(" | ") { it.column }
 
@@ -180,8 +188,7 @@ internal object LibraryAiTools {
      * chat system prompt instead, which are built at runtime.
      */
     fun fieldVocabulary(fields: List<FieldDef>): String =
-        (fields.map { "${it.key} (${it.label}, ${it.type.wire})" } + FILE_NAME_FIELD + PATH_FIELD + OCR_ENGINE_FIELD)
-            .joinToString(", ")
+        (fields.map { "${it.key} (${it.label}, ${it.type.wire})" } + COLUMN_FIELDS.keys).joinToString(", ")
 
     private val FIELD_ALIASES: Map<String, String> =
         mapOf(
@@ -208,7 +215,7 @@ internal object LibraryAiTools {
         val lc = f.lowercase()
         if (lc == SearchFieldsTool.ANY_FIELD) return SearchFieldsTool.ANY_FIELD
         return fields.firstOrNull { FieldKeys.sameKey(it.key, f) || it.label.equals(f, ignoreCase = true) }?.key
-            ?: listOf(FILE_NAME_FIELD, PATH_FIELD, OCR_ENGINE_FIELD).firstOrNull { it.equals(f, ignoreCase = true) }
+            ?: COLUMN_FIELDS.keys.firstOrNull { it.equals(f, ignoreCase = true) }
             ?: FIELD_ALIASES[lc]
             ?: lc
     }
@@ -419,9 +426,7 @@ internal object LibraryAiTools {
             val matches =
                 when (key) {
                     ANY_FIELD -> searchAnyField(value)
-                    FILE_NAME_FIELD -> searchColumn(FILE_NAME_FIELD, value) { it.fileName }
-                    PATH_FIELD -> searchColumn(PATH_FIELD, value) { it.relPath }
-                    OCR_ENGINE_FIELD -> searchColumn(OCR_ENGINE_FIELD, value) { it.ocrEngine }
+                    in COLUMN_FIELDS -> searchColumn(key, value, COLUMN_FIELDS.getValue(key))
                     else -> searchField(key, value, range)
                 }
             val lines = linesForMatches(matches)
@@ -439,8 +444,7 @@ internal object LibraryAiTools {
         }
 
         private fun isKnownField(key: String): Boolean =
-            key == ANY_FIELD || key == FILE_NAME_FIELD || key == PATH_FIELD || key == OCR_ENGINE_FIELD ||
-                fields.any { it.key == key }
+            key == ANY_FIELD || key in COLUMN_FIELDS || fields.any { it.key == key }
 
         /** Resolve docId -> matched (key, value) lines, deduped per document. */
         private suspend fun linesForMatches(matches: Map<String, Pair<String, String>>): List<String> {
