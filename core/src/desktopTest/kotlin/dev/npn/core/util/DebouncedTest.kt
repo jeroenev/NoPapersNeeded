@@ -1,5 +1,6 @@
-package dev.npn.core.fs
+package dev.npn.core.util
 
+import dev.npn.core.fs.FsEvent
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.ints.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.shouldBe
@@ -27,7 +28,10 @@ class DebouncedTest {
     private fun TestScope.debounce(
         events: Flow<FsEvent>,
         maxWaitMillis: Long = 10_000,
-    ) = events.debounced(quietMillis = QUIET, maxWaitMillis = maxWaitMillis, timeSource = testScheduler.timeSource)
+    ) = events.debounced(QUIET, maxWaitMillis, testScheduler.timeSource) { burst, next ->
+        // A burst over several paths becomes a pathless change, as the folder watch merges them.
+        if (next == burst) burst else FsEvent(null)
+    }
 
     @Test
     fun burstEmitsOnceAfterItGoesQuiet() =

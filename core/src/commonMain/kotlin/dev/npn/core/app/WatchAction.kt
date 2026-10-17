@@ -2,9 +2,9 @@ package dev.npn.core.app
 
 import dev.npn.core.fs.FsEvent
 import dev.npn.core.fs.NpnPaths
-import dev.npn.core.fs.debounced
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
+import dev.npn.core.util.debounced
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.buffer
