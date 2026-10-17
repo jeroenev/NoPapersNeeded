@@ -35,6 +35,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
+import androidx.navigation.NavOptionsBuilder
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -354,11 +355,26 @@ private fun NavHostController.resumeDraft(
     docId: String,
     browse: BrowseContext,
 ) {
-    browse.setOrder(listOf(docId), null)
-    navigate(Route.DocDetail(docId)) {
+    openDoc(docId, browse) {
         popUpTo(Route.Library)
         launchSingleTop = true
     }
+}
+
+/**
+ * Open [docId]'s detail, paging through [order] with [query] highlighted. A document opened on its
+ * own (from the queue, the assistant, an AI edit) gets an order of just itself, so the detail never
+ * shows the previous list's position, neighbours or search.
+ */
+private fun NavHostController.openDoc(
+    docId: String,
+    browse: BrowseContext,
+    order: List<String> = listOf(docId),
+    query: String? = null,
+    options: NavOptionsBuilder.() -> Unit = {},
+) {
+    browse.setOrder(order, query)
+    navigate(Route.DocDetail(docId), options)
 }
 
 @Composable
@@ -377,10 +393,7 @@ private fun MainNavHost(
             LibraryScreen(
                 session = session,
                 settings = settings,
-                onOpenDoc = { docId, order, query ->
-                    browse.setOrder(order, query)
-                    nav.navigate(Route.DocDetail(docId))
-                },
+                onOpenDoc = { docId, order, query -> nav.openDoc(docId, browse, order, query) },
                 onTrash = { nav.navigateTopLevel(TopLevelDestination.TRASH) },
                 onOpenQueue = { nav.navigateTopLevel(TopLevelDestination.QUEUE) },
                 onAiEdit = { docIds ->
@@ -417,17 +430,14 @@ private fun MainNavHost(
         composable<Route.Queue> {
             QueueScreen(
                 session = session,
-                onOpenDoc = { docId ->
-                    // A queued document is a real document; open it on its own, the way the resume
-                    // banner does, so Back from detail returns to the queue.
-                    browse.setOrder(listOf(docId), null)
-                    nav.navigate(Route.DocDetail(docId))
-                },
+                // A queued document is a real document; open it on its own, the way the resume banner
+                // does, so Back from detail returns to the queue.
+                onOpenDoc = { docId -> nav.openDoc(docId, browse) },
                 onOpenEditRun = { jobId -> nav.navigate(Route.AiEditReview(jobId)) },
             )
         }
         settingsRoutes(nav, settings, session, browse, onOpenLibrary)
-        aiRoutes(nav, session, settings, aiSelection, libraryFilterHandoff, showAiEditTopBar)
+        aiRoutes(nav, session, settings, browse, aiSelection, libraryFilterHandoff, showAiEditTopBar)
     }
 }
 
@@ -532,6 +542,7 @@ private fun NavGraphBuilder.aiRoutes(
     nav: NavHostController,
     session: LibrarySession,
     settings: SettingsRepository,
+    browse: BrowseContext,
     aiSelection: AiEditSelection,
     libraryFilterHandoff: LibraryFilterHandoff,
     showAiEditTopBar: Boolean,
@@ -541,7 +552,7 @@ private fun NavGraphBuilder.aiRoutes(
             session = session,
             settings = settings,
             onBack = { nav.popBackStack() },
-            onOpenDoc = { docId -> nav.navigate(Route.DocDetail(docId)) },
+            onOpenDoc = { docId -> nav.openDoc(docId, browse) },
             onOpenFiltered = { docIds ->
                 libraryFilterHandoff.set(
                     LibraryFilter(docIds = docIds),
@@ -573,7 +584,7 @@ private fun NavGraphBuilder.aiRoutes(
             onOpenQueue = { nav.navigateTopLevel(TopLevelDestination.QUEUE) },
             // Pushed on top of the review, so coming back finds the batch and its ticked boxes
             // exactly as they were.
-            onOpenDoc = { docId -> nav.navigate(Route.DocDetail(docId)) },
+            onOpenDoc = { docId -> nav.openDoc(docId, browse) },
             selection = selection,
         )
     }
@@ -582,7 +593,7 @@ private fun NavGraphBuilder.aiRoutes(
             session = session,
             jobId = entry.toRoute<Route.AiEditReview>().jobId,
             onBack = { nav.popBackStack() },
-            onOpenDoc = { docId -> nav.navigate(Route.DocDetail(docId)) },
+            onOpenDoc = { docId -> nav.openDoc(docId, browse) },
         )
     }
 }
