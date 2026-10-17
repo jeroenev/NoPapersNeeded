@@ -180,7 +180,8 @@ class LibrarySettingsTest {
             rig.session.rescan()
             val id = rig.docId("bill.pdf")
             rig.session.docLifecycle.trashDoc(id)
-            ContentAddressedJournalWriter(rig.fs, "newer-installation", HlcWatermarkAllocator(rig.clock))
+            rig
+                .writer("newer-installation")
                 .commit(listOf(PendingOp.settingSet(LibrarySettingKeys.TRASH_RETENTION_DAYS, "forever")))
             rig.session.rescan()
 
@@ -235,7 +236,8 @@ class LibrarySettingsTest {
     fun rulesTheJournalCannotDecodeKeepTheCacheAndAreNeverWrittenOver() =
         appSessionTest { rig ->
             rig.session.rules.save(rule("r1", "Invoice rule"))
-            ContentAddressedJournalWriter(rig.fs, "newer-installation", HlcWatermarkAllocator(rig.clock))
+            rig
+                .writer("newer-installation")
                 .commit(listOf(PendingOp.settingSet(LibrarySettingKeys.AUTO_MATCH_RULES, "{not json")))
             rig.session.rescan()
             rig.session.rules.mirror()
@@ -287,7 +289,7 @@ class LibrarySettingsTest {
 
     /** Store [rules] as the library's rule list, as a newer build on another device would. */
     private suspend fun AppSessionRig.storeRulesFromANewerBuild(rules: String) {
-        ContentAddressedJournalWriter(fs, "newer-installation", HlcWatermarkAllocator(clock))
+        writer("newer-installation")
             .commit(listOf(PendingOp.settingSet(LibrarySettingKeys.AUTO_MATCH_RULES, rules)))
         session.rescan()
     }

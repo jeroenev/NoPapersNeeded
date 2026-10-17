@@ -47,69 +47,22 @@ import kotlin.test.assertFailsWith
  * validation, deletion-before-snapshot ordering, concurrent snapshots, and ping-pong avoidance.
  */
 class CompactionReconcileTest {
-    private lateinit var libRoot: Path
-    private lateinit var fs: JvmLibraryFileSystem
-    private val temp = TempIndexDb("npn-compact-db")
-    private val db = temp.db
-    private lateinit var clock: MutableClock
-    private lateinit var indexer: Indexer
-    private lateinit var accumulator: MetadataAccumulator
+    private val rig = IndexRig.create()
+    private val libRoot = rig.libRoot
+    private val fs = rig.fs
+    private val db = rig.db
+    private val clock = rig.clock
+    private val accumulator = rig.accumulator
 
     // A large "now" so that files (real JVM mtimes near epoch-now) are older than the window.
     private val farFuture = 4_000_000_000_000L
     private val window = 1_000L
 
-    @BeforeTest
-    fun setup() {
-        libRoot = Files.createTempDirectory("npn-compact-lib")
-        fs = JvmLibraryFileSystem(libRoot, PathExternalIo)
-        clock = MutableClock(1_000L)
-        indexer = Indexer(fs, db, clock)
-        accumulator = MetadataAccumulator(fs, db, installationId = "test-installation")
-    }
-
     @AfterTest
-    fun teardown() {
-        libRoot.toFile().deleteRecursively()
-        temp.close()
-    }
+    fun teardown() = rig.close()
 
-    private fun coordinator(threshold: Int = 3): JournalCoordinator {
-        val writer =
-            ContentAddressedJournalWriter(
-                fs = fs,
-                installationId = "test-installation",
-                allocator = HlcWatermarkAllocator(clock),
-            )
-        return JournalCoordinator(
-            writer = writer,
-            indexer = indexer,
-            accumulator = accumulator,
-            compaction =
-                Compaction(
-                    SnapshotCompactor(fs, "test-installation"),
-                    SnapshotSupport(fs, db.metadataProjectionDao()),
-                    threshold = threshold,
-                    stabilityWindowMs = window,
-                ),
-        )
-    }
-
-    private fun writePdf(
-        relPath: String,
-        content: String,
-    ) {
-        val p = libRoot.resolve(relPath)
-        Files.createDirectories(p.parent)
-        Files.write(p, content.encodeToByteArray())
-    }
-
-    /** Index PDFs so rowAtPath resolves, mirroring a session's initial rescan. */
-    private suspend fun initialScan() {
-        val state = accumulator.reconcile().state ?: accumulator.loadState()
-        indexer.rescan(metadataState = state)
-        accumulator.markReady(state.maxHlc)
-    }
+    private fun coordinator(threshold: Int = 3): JournalCoordinator =
+        rig.coordinator(compaction = rig.compaction(threshold, stabilityWindowMs = window))
 
     private suspend fun v2Count() = journalFiles<JournalPath.ObjectV2>().size
 
@@ -122,9 +75,9 @@ class CompactionReconcileTest {
     @Test
     fun compactionPublishesSnapshotDeletesSupersededAndKeepsProjection() =
         runTest {
-            writePdf("a.pdf", "alpha")
+            rig.writePdf("a.pdf", "alpha")
             val coordinator = coordinator(threshold = 3)
-            initialScan()
+            rig.rescan()
             coordinator.refreshState()
             val docId = db.documentDao().requireRowAtPath("a.pdf").docId
 
@@ -156,9 +109,9 @@ class CompactionReconcileTest {
     @Test
     fun deletionBeforeSnapshotDoesNotBlockThenSnapshotArrivalCleansUp() =
         runTest {
-            writePdf("a.pdf", "alpha")
+            rig.writePdf("a.pdf", "alpha")
             val coordinator = coordinator(threshold = 3)
-            initialScan()
+            rig.rescan()
             coordinator.refreshState()
             val docId = db.documentDao().requireRowAtPath("a.pdf").docId
             repeat(5) { i ->
@@ -201,9 +154,9 @@ class CompactionReconcileTest {
     @Test
     fun aSupersededObjectLeftOnDiskIsDeletedByTheNextReconcile() =
         runTest {
-            writePdf("a.pdf", "alpha")
+            rig.writePdf("a.pdf", "alpha")
             val coordinator = coordinator(threshold = 3)
-            initialScan()
+            rig.rescan()
             coordinator.refreshState()
             val docId = checkNotNull(db.documentDao().rowAtPath("a.pdf")).docId
             repeat(6) { i ->
@@ -238,9 +191,9 @@ class CompactionReconcileTest {
     @Test
     fun aSupersededObjectLeftOnDiskWithOtherBytesIsDeletedByTheNextReconcile() =
         runTest {
-            writePdf("a.pdf", "alpha")
+            rig.writePdf("a.pdf", "alpha")
             val coordinator = coordinator(threshold = 3)
-            initialScan()
+            rig.rescan()
             coordinator.refreshState()
             val docId = checkNotNull(db.documentDao().rowAtPath("a.pdf")).docId
             repeat(6) { i ->
@@ -271,9 +224,9 @@ class CompactionReconcileTest {
     @Test
     fun objectsBackWithoutTheSnapshotThatReplacedThemAreKept() =
         runTest {
-            writePdf("a.pdf", "alpha")
+            rig.writePdf("a.pdf", "alpha")
             val coordinator = coordinator(threshold = 3)
-            initialScan()
+            rig.rescan()
             coordinator.refreshState()
             val docId = checkNotNull(db.documentDao().rowAtPath("a.pdf")).docId
             repeat(6) { i ->
@@ -314,9 +267,9 @@ class CompactionReconcileTest {
     @Test
     fun aChangedSnapshotFailsThePassBeforeAnythingIsDeleted() =
         runTest {
-            writePdf("a.pdf", "alpha")
+            rig.writePdf("a.pdf", "alpha")
             val coordinator = coordinator(threshold = 3)
-            initialScan()
+            rig.rescan()
             coordinator.refreshState()
             val docId = checkNotNull(db.documentDao().rowAtPath("a.pdf")).docId
             repeat(6) { i ->
@@ -345,9 +298,9 @@ class CompactionReconcileTest {
     @Test
     fun aSnapshotReplacedInTurnStillAccountsForTheObjectsItReplaced() =
         runTest {
-            writePdf("a.pdf", "alpha")
+            rig.writePdf("a.pdf", "alpha")
             val coordinator = coordinator(threshold = 3)
-            initialScan()
+            rig.rescan()
             coordinator.refreshState()
             val docId = checkNotNull(db.documentDao().rowAtPath("a.pdf")).docId
             repeat(6) { i ->
@@ -415,9 +368,9 @@ class CompactionReconcileTest {
     @Test
     fun unexplainedObjectLossEventuallyHardBlocks() =
         runTest {
-            writePdf("a.pdf", "alpha")
+            rig.writePdf("a.pdf", "alpha")
             val coordinator = coordinator(threshold = 3)
-            initialScan()
+            rig.rescan()
             coordinator.refreshState()
             val docId = db.documentDao().requireRowAtPath("a.pdf").docId
             repeat(4) { i ->
@@ -442,9 +395,9 @@ class CompactionReconcileTest {
     @Test
     fun repeatedReconcilesDoNotChurnSnapshots() =
         runTest {
-            writePdf("a.pdf", "alpha")
+            rig.writePdf("a.pdf", "alpha")
             val coordinator = coordinator(threshold = 3)
-            initialScan()
+            rig.rescan()
             coordinator.refreshState()
             val docId = db.documentDao().requireRowAtPath("a.pdf").docId
             repeat(6) { i ->
@@ -468,9 +421,9 @@ class CompactionReconcileTest {
     @Test
     fun chainCompactionCollapsesMultipleSnapshots() =
         runTest {
-            writePdf("a.pdf", "alpha")
+            rig.writePdf("a.pdf", "alpha")
             val coordinator = coordinator(threshold = 3)
-            initialScan()
+            rig.rescan()
             coordinator.refreshState()
             val docId = db.documentDao().requireRowAtPath("a.pdf").docId
 

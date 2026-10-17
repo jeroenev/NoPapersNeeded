@@ -33,63 +33,29 @@ import kotlin.test.Test
  */
 class CompactionPlanCostTest {
     private val log = StatementLog()
-    private lateinit var libRoot: Path
-    private lateinit var dbDir: File
-    private lateinit var fs: WatchedFileSystem
-    private lateinit var db: NpnDatabase
-    private val clock = MutableClock(1_000L)
-    private lateinit var indexer: Indexer
-    private lateinit var accumulator: MetadataAccumulator
+    private val rig = IndexRig.create(statements = log, files = ::WatchedFileSystem)
+    private val fs = (rig.fs as WatchedFileSystem).also { it.db = rig.db }
+    private val db = rig.db
+    private val clock = rig.clock
 
     // Far enough ahead that every file written now is older than the stability window.
     private val farFuture = 4_000_000_000_000L
 
-    @BeforeTest
-    fun setup() {
-        libRoot = Files.createTempDirectory("npn-compact-cost-lib")
-        dbDir = Files.createTempDirectory("npn-compact-cost-db").toFile()
-        fs = WatchedFileSystem(JvmLibraryFileSystem(libRoot, PathExternalIo))
-        db = recordingDatabase(File(dbDir, "index.db"), log)
-        fs.db = db
-        indexer = Indexer(fs, db, clock)
-        accumulator = MetadataAccumulator(fs, db, installationId = "test-installation")
-    }
-
     @AfterTest
-    fun teardown() {
-        db.close()
-        libRoot.toFile().deleteRecursively()
-        dbDir.deleteRecursively()
-    }
+    fun teardown() = rig.close()
 
     private fun coordinator(threshold: Int): JournalCoordinator =
-        JournalCoordinator(
-            indexer = indexer,
-            accumulator = accumulator,
-            writer =
-                ContentAddressedJournalWriter(
-                    fs = fs,
-                    installationId = "test-installation",
-                    allocator = HlcWatermarkAllocator(clock),
-                ),
-            compaction =
-                Compaction(
-                    SnapshotCompactor(fs, "test-installation"),
-                    SnapshotSupport(fs, db.metadataProjectionDao()),
-                    threshold = threshold,
-                    stabilityWindowMs = 1_000L,
-                ),
-        )
+        rig.coordinator(compaction = rig.compaction(threshold))
 
     /** A library with one document and [objects] published transactions, reconciled and idle. */
     private suspend fun libraryWithObjects(
         objects: Int,
         threshold: Int,
     ): JournalCoordinator {
-        Files.write(libRoot.resolve("a.pdf"), "alpha".encodeToByteArray())
+        rig.writePdf("a.pdf", "alpha")
         val coordinator = coordinator(threshold)
         coordinator.rescan()
-        val docId = checkNotNull(db.documentDao().rowAtPath("a.pdf")).docId
+        val docId = db.documentDao().requireRowAtPath("a.pdf").docId
         repeat(objects) { i ->
             clock.advance()
             coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "tag-$i")))

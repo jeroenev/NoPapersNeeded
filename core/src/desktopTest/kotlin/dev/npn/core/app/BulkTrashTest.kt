@@ -66,7 +66,7 @@ class BulkTrashTest {
     private val underTheLock = NamedDefault()
     private val files = TrashListings(rig.fs, underTheLock)
     private val coordinator =
-        JournalCoordinator(rig.writer(), rig.indexer, rig.accumulator, dispatcher = underTheLock)
+        rig.coordinator(dispatcher = underTheLock)
     private val writer =
         rig.metadataWriter(coordinator, files)
 

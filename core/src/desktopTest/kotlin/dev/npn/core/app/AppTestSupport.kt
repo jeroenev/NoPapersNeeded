@@ -11,6 +11,8 @@ import dev.npn.core.index.DeviceIdentity
 import dev.npn.core.index.IndexRig
 import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.index.MutableClock
+import dev.npn.core.journal.ContentAddressedJournalWriter
+import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
@@ -109,6 +111,13 @@ class AppSessionRig private constructor(
 
     /** A document's id is the hash of its bytes, so the library path is enough to name it. */
     suspend fun docId(relPath: String): String = fs.sha256(relPath)
+
+    /**
+     * A journal writer over this library for [installation], publishing as another device does:
+     * its writes bypass this session, which sees them at its next rescan.
+     */
+    internal fun writer(installation: String): ContentAddressedJournalWriter =
+        ContentAddressedJournalWriter(fs, installation, HlcWatermarkAllocator(clock))
 
     /** Published journal objects, for asserting that a write committed exactly once. */
     suspend fun journalObjectCount(): Int =

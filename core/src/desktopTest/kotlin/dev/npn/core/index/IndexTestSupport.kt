@@ -20,6 +20,9 @@ import dev.npn.core.journal.JournalCodec
 import dev.npn.core.journal.JournalEvent
 import dev.npn.core.journal.JournalEventVersions
 import dev.npn.core.journal.PendingOp
+import dev.npn.core.journal.SnapshotCompactor
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.TestResult
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
@@ -30,11 +33,14 @@ import java.nio.file.Path
  * A self-contained test rig: a temp library dir on the real JVM filesystem, a real Room database
  * in a separate temp file (the cache lives outside the library), and real journal pieces wired
  * over the same library. A mutable [MutableClock] gives deterministic times and monotonic HLCs.
+ * Every component reads and writes the library through [fs], the decorator [create] was handed
+ * over [raw], the real filesystem.
  */
 class IndexRig private constructor(
     val libRoot: Path,
     private val dbs: TempIndexDb,
-    val fs: JvmLibraryFileSystem,
+    val raw: JvmLibraryFileSystem,
+    val fs: LibraryFileSystem,
     val clock: MutableClock,
 ) {
     val db: NpnDatabase = dbs.db
@@ -75,12 +81,33 @@ class IndexRig private constructor(
      * [installation] only names its staging files. Writes through it bypass the rig's coordinator,
      * the way another device's writes arrive.
      */
-    internal fun writer(installation: String = "test-installation"): ContentAddressedJournalWriter =
-        ContentAddressedJournalWriter(fs, installation, HlcWatermarkAllocator(clock))
+    internal fun writer(
+        installation: String = "test-installation",
+        files: LibraryFileSystem = fs,
+    ): ContentAddressedJournalWriter = ContentAddressedJournalWriter(files, installation, HlcWatermarkAllocator(clock))
 
-    /** Build a [JournalCoordinator] over [writer] backed by this rig's accumulator + indexer. */
-    internal fun coordinator(writer: ContentAddressedJournalWriter = writer()): JournalCoordinator =
-        JournalCoordinator(writer, indexer, accumulator)
+    /**
+     * Build a [JournalCoordinator] over [writer] backed by this rig's indexer and [accumulator],
+     * compacting with [compaction] when one is given and running on [dispatcher].
+     */
+    internal fun coordinator(
+        writer: ContentAddressedJournalWriter = writer(),
+        accumulator: MetadataAccumulator = this.accumulator,
+        compaction: Compaction? = null,
+        dispatcher: CoroutineDispatcher = Dispatchers.Default,
+    ): JournalCoordinator = JournalCoordinator(writer, indexer, accumulator, compaction, dispatcher)
+
+    /** Compaction over this library once more than [threshold] objects have settled for [stabilityWindowMs]. */
+    internal fun compaction(
+        threshold: Int,
+        stabilityWindowMs: Long = 1_000L,
+    ): Compaction =
+        Compaction(
+            SnapshotCompactor(fs, "test-installation"),
+            SnapshotSupport(fs, db.metadataProjectionDao()),
+            threshold = threshold,
+            stabilityWindowMs = stabilityWindowMs,
+        )
 
     /** v1 segments for [deviceId] in this library, as builds before storage-v2 wrote them. */
     fun legacySegments(deviceId: String): LegacySegments = LegacySegments(fs, deviceId, clock)
@@ -144,14 +171,21 @@ class IndexRig private constructor(
     }
 
     companion object {
-        /** A fresh rig; with [statements], every SQL statement the index database runs is logged there. */
-        fun create(statements: StatementLog? = null): IndexRig {
+        /**
+         * A fresh rig; with [statements], every SQL statement the index database runs is logged there.
+         * Its components see the library through [files] over the real filesystem.
+         */
+        fun create(
+            statements: StatementLog? = null,
+            files: (JvmLibraryFileSystem) -> LibraryFileSystem = { it },
+        ): IndexRig {
             val libRoot = Files.createTempDirectory("npn-index-lib")
             val dbs =
                 TempIndexDb("npn-index-db") { file ->
                     if (statements == null) npnDatabase(file) else recordingDatabase(file, statements)
                 }
-            return IndexRig(libRoot, dbs, JvmLibraryFileSystem(libRoot, PathExternalIo), MutableClock(1_000L))
+            val raw = JvmLibraryFileSystem(libRoot, PathExternalIo)
+            return IndexRig(libRoot, dbs, raw, files(raw), MutableClock(1_000L))
         }
     }
 }

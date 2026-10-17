@@ -199,9 +199,8 @@ class LifecycleCommitFailureTest {
             }
 
         val coordinator =
-            JournalCoordinator(
-                ContentAddressedJournalWriter(journalFs, "test-installation", HlcWatermarkAllocator(rig.clock)),
-                rig.indexer,
+            rig.coordinator(
+                rig.writer(files = journalFs),
                 MetadataAccumulator(journalFs, rig.db, installationId = "test-installation"),
             )
 

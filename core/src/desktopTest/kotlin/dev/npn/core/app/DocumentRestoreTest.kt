@@ -230,7 +230,8 @@ class DocumentRestoreTest {
 
             rig.clock.advance(2 * DAY)
             rig.writePdf("a.pdf", bytes)
-            ContentAddressedJournalWriter(rig.fs, "other-installation", HlcWatermarkAllocator(rig.clock))
+            rig
+                .writer("other-installation")
                 .commit(listOf(PendingOp.docUndelete(id), PendingOp.propSet(id, SystemProperty.STORAGE_PATH, "a.pdf")))
             rig.session.rescan()
             rig.session.meta.setField(id, FieldKeys.TITLE, "Back again")
@@ -313,7 +314,8 @@ class DocumentRestoreTest {
             val trashed = rig.libRoot.resolve(NpnPaths.trashPath("a.pdf", id, rig.clock.nowMillis()))
             Files.createDirectories(trashed.parent)
             Files.move(rig.libRoot.resolve("a.pdf"), trashed)
-            ContentAddressedJournalWriter(rig.fs, "other-installation", HlcWatermarkAllocator(rig.clock))
+            rig
+                .writer("other-installation")
                 .commit(listOf(PendingOp.docTrash(id, bucketPath)))
             rig.session.rescan()
             rig.db

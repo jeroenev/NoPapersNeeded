@@ -49,18 +49,7 @@ import kotlin.test.assertFailsWith
 class SnapshotClaimTest {
     private val rig = IndexRig.create()
     private val coordinator =
-        JournalCoordinator(
-            writer = rig.writer(),
-            indexer = rig.indexer,
-            accumulator = rig.accumulator,
-            compaction =
-                Compaction(
-                    SnapshotCompactor(rig.fs, "test-installation"),
-                    SnapshotSupport(rig.fs, rig.db.metadataProjectionDao()),
-                    threshold = 3,
-                    stabilityWindowMs = 1_000L,
-                ),
-        )
+        rig.coordinator(compaction = rig.compaction(3))
 
     @AfterTest
     fun teardown() = rig.close()

@@ -64,10 +64,8 @@ class LifecycleBehindARescanTest {
     private val journal = PausingJournal(rig.fs)
     private val waiting = ParkedSignal()
     private val coordinator =
-        JournalCoordinator(
-            rig.writer(),
-            rig.indexer,
-            MetadataAccumulator(journal, rig.db, installationId = "test-installation"),
+        rig.coordinator(
+            accumulator = MetadataAccumulator(journal, rig.db, installationId = "test-installation"),
             dispatcher = waiting,
         )
     private val files = WatchedFileSystem(rig.fs).also { it.db = rig.db }

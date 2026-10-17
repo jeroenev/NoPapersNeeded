@@ -4,7 +4,6 @@ import androidx.room3.useWriterConnection
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.FileMeta
-import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.LibraryFileSystem
 
 /**
@@ -12,7 +11,7 @@ import dev.npn.core.fs.LibraryFileSystem
  * coroutine held an open index transaction at the time.
  */
 internal class WatchedFileSystem(
-    private val delegate: JvmLibraryFileSystem,
+    private val delegate: LibraryFileSystem,
 ) : LibraryFileSystem by delegate {
     lateinit var db: NpnDatabase
     private val calls = ArrayList<String>()

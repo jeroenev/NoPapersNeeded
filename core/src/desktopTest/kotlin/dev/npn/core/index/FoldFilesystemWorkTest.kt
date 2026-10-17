@@ -27,37 +27,19 @@ import kotlin.test.Test
  */
 class FoldFilesystemWorkTest {
     private val log = StatementLog()
-    private lateinit var libRoot: Path
-    private lateinit var fs: WatchedFileSystem
-    private val temp = TempIndexDb("npn-fold-fs-db") { recordingDatabase(it, log) }
-    private val db = temp.db
-    private val clock = MutableClock(1_000L)
-    private lateinit var indexer: Indexer
-    private lateinit var accumulator: MetadataAccumulator
-    private lateinit var coordinator: JournalCoordinator
-
-    @BeforeTest
-    fun setup() {
-        libRoot = Files.createTempDirectory("npn-fold-fs-lib")
-        fs = WatchedFileSystem(JvmLibraryFileSystem(libRoot, PathExternalIo))
-        fs.db = db
-        indexer = Indexer(fs, db, clock)
-        accumulator = MetadataAccumulator(fs, db, installationId = "test-installation")
-        val writer = ContentAddressedJournalWriter(fs, "test-installation", HlcWatermarkAllocator(clock))
-        coordinator = JournalCoordinator(writer, indexer, accumulator)
-    }
+    private val rig = IndexRig.create(statements = log, files = ::WatchedFileSystem)
+    private val libRoot = rig.libRoot
+    private val fs = (rig.fs as WatchedFileSystem).also { it.db = rig.db }
+    private val db = rig.db
+    private val indexer = rig.indexer
+    private val accumulator = rig.accumulator
+    private val coordinator = rig.coordinator()
 
     @AfterTest
-    fun teardown() {
-        libRoot.toFile().deleteRecursively()
-        temp.close()
-    }
+    fun teardown() = rig.close()
 
     private fun writePdfs(count: Int) {
-        repeat(count) { i ->
-            val p = libRoot.resolve("doc-$i.pdf")
-            Files.write(p, "document $i".encodeToByteArray())
-        }
+        repeat(count) { i -> rig.writePdf("doc-$i.pdf", "document $i") }
     }
 
     private fun baselineReadsOneByOne(): Int = log.statements.count { it.startsWith(BASELINE_BY_KEY) }

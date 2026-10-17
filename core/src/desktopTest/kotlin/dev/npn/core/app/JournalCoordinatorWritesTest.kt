@@ -78,11 +78,7 @@ class JournalCoordinatorWritesTest {
                     }
                 }
             val coordinator =
-                JournalCoordinator(
-                    ContentAddressedJournalWriter(flaky, "test-installation", HlcWatermarkAllocator(rig.clock)),
-                    rig.indexer,
-                    rig.accumulator,
-                )
+                rig.coordinator(rig.writer(files = flaky))
             coordinator.refreshState()
 
             assertFailsWith<VerifiedPublicationFailedException> {
@@ -115,11 +111,7 @@ class JournalCoordinatorWritesTest {
                     }
                 }
             val coordinator =
-                JournalCoordinator(
-                    ContentAddressedJournalWriter(failingLate, "test-installation", HlcWatermarkAllocator(rig.clock)),
-                    rig.indexer,
-                    rig.accumulator,
-                )
+                rig.coordinator(rig.writer(files = failingLate))
             rig.writePdf("a.pdf", "alpha")
             coordinator.rescan()
             val doc = rig.fs.sha256("a.pdf")
@@ -154,7 +146,7 @@ class JournalCoordinatorWritesTest {
             val logged = ArrayList<Throwable?>()
             val coordinator =
                 JournalCoordinator(
-                    ContentAddressedJournalWriter(flaky, "test-installation", HlcWatermarkAllocator(rig.clock)),
+                    rig.writer(files = flaky),
                     rig.indexer,
                     rig.accumulator,
                     clock = rig.clock,
@@ -197,11 +189,7 @@ class JournalCoordinatorWritesTest {
                     ): Unit = throw VerifiedPublicationUnavailableException("no link, no rename")
                 }
             val coordinator =
-                JournalCoordinator(
-                    ContentAddressedJournalWriter(noPrimitive, "test-installation", HlcWatermarkAllocator(rig.clock)),
-                    rig.indexer,
-                    rig.accumulator,
-                )
+                rig.coordinator(rig.writer(files = noPrimitive))
             coordinator.refreshState()
 
             repeat(2) {

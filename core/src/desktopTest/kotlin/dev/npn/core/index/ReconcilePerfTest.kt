@@ -93,46 +93,16 @@ private class CountingFileSystem(
  *     a full refold on mutation/removal/first-load).
  */
 class ReconcilePerfTest {
-    private lateinit var libRoot: Path
-    private lateinit var delegate: JvmLibraryFileSystem
-    private lateinit var fs: CountingFileSystem
-    private val temp = TempIndexDb("npn-reconcile-db")
-    private val db = temp.db
-    private lateinit var clock: MutableClock
-    private lateinit var indexer: Indexer
-    private lateinit var accumulator: MetadataAccumulator
-
-    @BeforeTest
-    fun setup() {
-        libRoot = Files.createTempDirectory("npn-reconcile-lib")
-        delegate = JvmLibraryFileSystem(libRoot, PathExternalIo)
-        fs = CountingFileSystem(delegate)
-        clock = MutableClock(1_000L)
-        indexer = Indexer(fs, db, clock)
-        accumulator = MetadataAccumulator(fs, db, installationId = "test-installation")
-    }
+    private val rig = IndexRig.create(files = ::CountingFileSystem)
+    private val libRoot = rig.libRoot
+    private val fs = rig.fs as CountingFileSystem
+    private val db = rig.db
+    private val clock = rig.clock
+    private val indexer = rig.indexer
+    private val accumulator = rig.accumulator
 
     @AfterTest
-    fun teardown() {
-        libRoot.toFile().deleteRecursively()
-        temp.close()
-    }
-
-    private fun writePdf(
-        relPath: String,
-        content: String,
-    ) {
-        val p = libRoot.resolve(relPath)
-        Files.createDirectories(p.parent)
-        Files.write(p, content.encodeToByteArray())
-    }
-
-    /** A journal writer for [installation], as another replica's writes arrive. */
-    private fun writer(installation: String): ContentAddressedJournalWriter =
-        ContentAddressedJournalWriter(fs, installation, HlcWatermarkAllocator(clock))
-
-    private fun coordinator(writer: ContentAddressedJournalWriter): JournalCoordinator =
-        JournalCoordinator(writer, indexer, accumulator)
+    fun teardown() = rig.close()
 
     /**
      * A coordinator over freshly-built engine pieces sharing the same library folder and index DB
@@ -140,28 +110,21 @@ class ReconcilePerfTest {
      * to test what opening an existing library costs and preserves.
      */
     private fun reopen(deviceId: String = "dev-main"): JournalCoordinator =
-        JournalCoordinator(writer(deviceId), Indexer(fs, db, clock), freshAccumulator())
+        JournalCoordinator(rig.writer(deviceId), Indexer(fs, db, clock), freshAccumulator())
 
     private fun freshAccumulator(): MetadataAccumulator =
         MetadataAccumulator(fs, db, installationId = "test-installation")
 
-    private suspend fun rescan(): dev.npn.core.index.ScanReport {
-        val state = accumulator.reconcile().state ?: accumulator.loadState()
-        val report = indexer.rescan(metadataState = state)
-        accumulator.markReady(state.maxHlc)
-        return report
-    }
-
     @Test
     fun secondReconcileDoesNotRereadUnchangedAppliedSources() =
         runTest {
-            writePdf("a.pdf", "alpha")
-            rescan()
+            rig.writePdf("a.pdf", "alpha")
+            rig.rescan()
             val docId = db.documentDao().requireRowAtPath("a.pdf").docId
 
             // A committed tag publishes a journal object; project it through the coordinator.
-            val writer = writer("dev-main")
-            val coordinator = coordinator(writer)
+            val writer = rig.writer("dev-main")
+            val coordinator = rig.coordinator(writer)
             coordinator.refreshState()
             clock.advance()
             coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "invoice")))
@@ -181,14 +144,14 @@ class ReconcilePerfTest {
     @Test
     fun mutatedV1SourceIsRereadAndShrinkStillFails() =
         runTest {
-            writePdf("a.pdf", "alpha")
-            rescan()
+            rig.writePdf("a.pdf", "alpha")
+            rig.rescan()
             val docId = db.documentDao().requireRowAtPath("a.pdf").docId
 
             // An older build's v1 segment, as libraries still hold them.
             clock.advance()
             val segment = LegacySegments(fs, "dev-main", clock).write(listOf(PendingOp.tagAdd(docId, "invoice")))
-            val coordinator = coordinator(writer("dev-main"))
+            val coordinator = rig.coordinator(rig.writer("dev-main"))
             coordinator.refreshState()
             coordinator.reconcileMetadata()
 
@@ -214,14 +177,14 @@ class ReconcilePerfTest {
     @Test
     fun incrementalReconcileMatchesFullRefreshProjection() =
         runTest {
-            writePdf("a.pdf", "alpha")
-            writePdf("b.pdf", "bravo")
-            rescan()
+            rig.writePdf("a.pdf", "alpha")
+            rig.writePdf("b.pdf", "bravo")
+            rig.rescan()
             val a = db.documentDao().requireRowAtPath("a.pdf").docId
             val b = db.documentDao().requireRowAtPath("b.pdf").docId
 
-            val writer = writer("dev-main")
-            val coordinator = coordinator(writer)
+            val writer = rig.writer("dev-main")
+            val coordinator = rig.coordinator(writer)
             coordinator.refreshState()
 
             // Commit some metadata locally (recorded directly, no reconcile read needed).
@@ -234,7 +197,7 @@ class ReconcilePerfTest {
             )
 
             // A SECOND device publishes an object that reconcile will discover as a brand-new source.
-            val remote = writer("device-two")
+            val remote = rig.writer("device-two")
             clock.advance()
             remote.commit(
                 listOf(
@@ -270,10 +233,10 @@ class ReconcilePerfTest {
      * in the ready state a clean shutdown would. Returns the document id.
      */
     private suspend fun seedReadyLibrary(): String {
-        writePdf("a.pdf", "alpha")
-        rescan()
+        rig.writePdf("a.pdf", "alpha")
+        rig.rescan()
         val docId = db.documentDao().requireRowAtPath("a.pdf").docId
-        val coordinator = coordinator(writer("dev-main"))
+        val coordinator = rig.coordinator(rig.writer("dev-main"))
         coordinator.refreshState()
         clock.advance()
         coordinator.commitAndApply(
@@ -299,7 +262,7 @@ class ReconcilePerfTest {
     @Test
     fun openOnAFreshIndexRefolds() =
         runTest {
-            writePdf("a.pdf", "alpha")
+            rig.writePdf("a.pdf", "alpha")
 
             // No projection state at all: nothing to reuse, so it must fold.
             freshAccumulator().reconcileOnOpen().shouldBeInstanceOf<OpenReconciliation.Refolded>()
@@ -311,7 +274,7 @@ class ReconcilePerfTest {
             val docId = seedReadyLibrary()
 
             clock.advance()
-            writer("device-two").commit(listOf(PendingOp.tagAdd(docId, "urgent")))
+            rig.writer("device-two").commit(listOf(PendingOp.tagAdd(docId, "urgent")))
 
             val outcome = freshAccumulator().reconcileOnOpen()
             outcome.shouldBeInstanceOf<OpenReconciliation.Refolded>()
@@ -395,13 +358,13 @@ class ReconcilePerfTest {
     @Test
     fun removedSourceTriggersFullReprojectionAndValidation() =
         runTest {
-            writePdf("a.pdf", "alpha")
-            rescan()
+            rig.writePdf("a.pdf", "alpha")
+            rig.rescan()
             val docId = db.documentDao().requireRowAtPath("a.pdf").docId
 
             clock.advance()
             val segment = LegacySegments(fs, "dev-main", clock).write(listOf(PendingOp.tagAdd(docId, "invoice")))
-            val coordinator = coordinator(writer("dev-main"))
+            val coordinator = rig.coordinator(rig.writer("dev-main"))
             coordinator.refreshState()
             coordinator.reconcileMetadata()
 
