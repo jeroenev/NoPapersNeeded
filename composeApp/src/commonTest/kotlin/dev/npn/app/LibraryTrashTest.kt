@@ -1,7 +1,5 @@
 package dev.npn.app
 
-import dev.npn.app.ui.common.UiMessage
-import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.library.LibraryViewModel
 import io.kotest.matchers.collections.shouldContainExactly
@@ -10,8 +8,6 @@ import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -27,13 +23,6 @@ import kotlin.test.Test
 class LibraryTrashTest : MainDispatcherTest() {
     private fun vm(session: FakeLibrarySession = FakeLibrarySession()) =
         LibraryViewModel(session, FakeSettingsRepository())
-
-    /** Collect the text of the messages [model] emits. */
-    private fun TestScope.collectMessages(model: LibraryViewModel): MutableList<UiText> {
-        val messages = mutableListOf<UiText>()
-        backgroundScope.launch { model.messages.collect { messages += it.text } }
-        return messages
-    }
 
     @Test
     fun bulkTrashAllSucceedClearsSelection() =
@@ -55,8 +44,7 @@ class LibraryTrashTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val model = vm(session = session)
-            val messages = mutableListOf<UiMessage>()
-            backgroundScope.launch { model.messages.collect { messages += it } }
+            val messages = collecting(model.messages)
             model.startSelection("d1")
             model.toggleSelection("d2")
             runCurrent()
@@ -76,8 +64,7 @@ class LibraryTrashTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { docLifecycle.failTrashDocIds = setOf("d2") }
             val model = vm(session = session)
-            val messages = mutableListOf<UiMessage>()
-            backgroundScope.launch { model.messages.collect { messages += it } }
+            val messages = collecting(model.messages)
             model.startSelection("d1")
             model.toggleSelection("d2")
             model.toggleSelection("d3")
@@ -104,8 +91,7 @@ class LibraryTrashTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { docLifecycle.goneDocIds = setOf("d2") }
             val model = vm(session = session)
-            val messages = mutableListOf<UiMessage>()
-            backgroundScope.launch { model.messages.collect { messages += it } }
+            val messages = collecting(model.messages)
             model.startSelection("d1")
             model.toggleSelection("d2")
             model.toggleSelection("d3")
@@ -128,7 +114,7 @@ class LibraryTrashTest : MainDispatcherTest() {
             val gate = CompletableDeferred<Unit>()
             val session = FakeLibrarySession().apply { docLifecycle.trashGate = gate }
             val model = vm(session = session)
-            val messages = collectMessages(model)
+            val messages = collecting(model.messages.map { it.text })
             model.startSelection("d1")
             runCurrent()
             model.bulkTrash()
@@ -242,8 +228,7 @@ class LibraryTrashTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { docLifecycle.failTrashDocIds = setOf("d1") }
             val model = vm(session = session)
-            val messages = mutableListOf<UiMessage>()
-            backgroundScope.launch { model.messages.collect { messages += it } }
+            val messages = collecting(model.messages)
             model.startSelection("d1")
             runCurrent()
             model.bulkTrash()
@@ -270,8 +255,7 @@ class LibraryTrashTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val model = vm(session = session)
-            val messages = mutableListOf<UiMessage>()
-            backgroundScope.launch { model.messages.collect { messages += it } }
+            val messages = collecting(model.messages)
             model.startSelection("d1")
             model.toggleSelection("d2")
             runCurrent()
@@ -294,7 +278,7 @@ class LibraryTrashTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { docLifecycle.failRestore = { error("path taken") } }
             val model = vm(session = session)
-            val messages = collectMessages(model)
+            val messages = collecting(model.messages.map { it.text })
             model.undoTrash(listOf("d1", "d2").mapNotNull { session.docLifecycle.trashDoc(it) })
             advanceUntilIdle()
             messages shouldContainExactly listOf(uiText(Res.plurals.common_restore_documents_failed, 2, 2, 2))

@@ -34,13 +34,13 @@ import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.app.ui.type
 import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.app.Doc
-import dev.npn.core.app.DocListItem
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.testing.FakeMetadataWriter
 import dev.npn.core.testing.doc
+import dev.npn.core.testing.listItem
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.runBlocking
@@ -98,7 +98,7 @@ class NumberFieldEntryTest : EnglishLocaleTest() {
         onUiThread {
             editor {
                 type("12.")
-                item = DocListItem(doc("other").withAmount("7"), emptyList())
+                item = listItem(doc("other").withAmount("7"))
                 scene.render()
                 shown() shouldBe "7"
             }
@@ -126,7 +126,7 @@ class NumberFieldEntryTest : EnglishLocaleTest() {
                 scene.click { it.contentDescription() == "Use suggested $LABEL" }
                 scene.render()
                 // What the view model writes comes back later, as the document's own value.
-                item = DocListItem(doc(DOC_ID).withAmount("7.25"), emptyList())
+                item = listItem(doc(DOC_ID).withAmount("7.25"))
                 ai = AiPanelState(available = true)
                 scene.render()
                 shown() shouldBe "7.25"
@@ -182,10 +182,10 @@ class NumberFieldEntryTest : EnglishLocaleTest() {
         onUiThread {
             editor(language = "nl") {
                 type("12.34")
-                item = DocListItem(doc("other").withAmount("7"), emptyList())
+                item = listItem(doc("other").withAmount("7"))
                 scene.render()
                 shown() shouldBe "7"
-                item = DocListItem(doc(DOC_ID).withAmount("3"), emptyList())
+                item = listItem(doc(DOC_ID).withAmount("3"))
                 scene.render()
                 shown() shouldBe "12.34"
                 field().hasError() shouldBe true
@@ -222,7 +222,7 @@ class NumberFieldEntryTest : EnglishLocaleTest() {
         /** Where saves run: only as far as [drain] takes them. */
         val saves = TestScope()
         val store = DocumentDrafts(writer, saves)
-        var item by mutableStateOf(DocListItem(doc(DOC_ID).withAmount(amount), emptyList()))
+        var item by mutableStateOf(listItem(doc(DOC_ID).withAmount(amount)))
         var ai by mutableStateOf(AiPanelState())
         lateinit var scene: ImageComposeScene
 

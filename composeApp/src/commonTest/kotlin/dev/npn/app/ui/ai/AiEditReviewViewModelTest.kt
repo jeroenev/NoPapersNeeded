@@ -29,7 +29,11 @@ import no_papers_needed.composeapp.generated.resources.ai_edit_review_open_faile
 import no_papers_needed.composeapp.generated.resources.ai_edit_review_queue_drop_failed
 import kotlin.test.Test
 
-private fun reviewDoc(
+/**
+ * A stored row as the review screen reopens it: one tag chip and a title value, both selected unless
+ * a test says otherwise. Unlike [reviewDoc], no pre-select policy decides.
+ */
+private fun selectedReviewDoc(
     docId: String,
     tag: String = "invoice",
     tagSelected: Boolean = true,
@@ -56,7 +60,7 @@ private fun reviewDoc(
 /** Serves a scripted review and records what the viewmodel asked it to do. */
 private class ScriptedReview(
     override val jobId: String = "job",
-    override val docs: List<ReviewDoc> = listOf(reviewDoc("a")),
+    override val docs: List<ReviewDoc> = listOf(selectedReviewDoc("a")),
     override val emptyDocs: List<ReviewDoc> = emptyList(),
     override val failures: Int = 0,
     private val outcome: ApplyOutcome = ApplyOutcome.Done(ApplyResult(2, 1, moreRemain = false)),
@@ -91,7 +95,7 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
     @Test
     fun theStoredSuggestionsAreLoadedIntoAReviewPhase() =
         runTest(dispatcher) {
-            val review = ScriptedReview(docs = listOf(reviewDoc("a"), reviewDoc("b")))
+            val review = ScriptedReview(docs = listOf(selectedReviewDoc("a"), selectedReviewDoc("b")))
             val model = AiEditReviewViewModel(sessionWith(review), "job")
             collecting(model.phase)
             advanceUntilIdle()
@@ -226,10 +230,10 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
     @Test
     fun aPartialFailureGoesBackToReviewWithOnlyTheFailedDocuments() =
         runTest(dispatcher) {
-            val retryRow = reviewDoc("b", tagSelected = false)
+            val retryRow = selectedReviewDoc("b", tagSelected = false)
             val review =
                 ScriptedReview(
-                    docs = listOf(reviewDoc("a"), reviewDoc("b")),
+                    docs = listOf(selectedReviewDoc("a"), selectedReviewDoc("b")),
                     outcome = ApplyOutcome.Retry(listOf(retryRow), failedDocs = 1, total = 2),
                 )
             val model = AiEditReviewViewModel(sessionWith(review), "job")
@@ -269,10 +273,10 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
     fun discardingAfterAPartlyFailedApplyReportsWhatLanded() =
         runTest(dispatcher) {
             val landed = ApplyResult(applied = 1, docsChanged = 1, moreRemain = false)
-            val titleOwed = reviewDoc("a", tagSelected = false)
+            val titleOwed = selectedReviewDoc("a", tagSelected = false)
             val review =
                 ScriptedReview(
-                    docs = listOf(reviewDoc("a")),
+                    docs = listOf(selectedReviewDoc("a")),
                     outcome = ApplyOutcome.Retry(listOf(titleOwed), failedDocs = 1, total = 1),
                     landed = landed,
                 )

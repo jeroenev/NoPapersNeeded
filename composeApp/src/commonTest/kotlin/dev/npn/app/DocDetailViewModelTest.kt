@@ -8,7 +8,6 @@ import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.AiOcrOffer
-import dev.npn.core.app.DocListItem
 import dev.npn.core.app.DocumentHistoryRecord
 import dev.npn.core.app.HistoryEntry
 import dev.npn.core.app.OcrVersion
@@ -29,8 +28,6 @@ import io.kotest.matchers.maps.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
@@ -45,25 +42,13 @@ import kotlin.test.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DocDetailViewModelTest : MainDispatcherTest() {
-    /**
-     * A viewmodel with its panel state kept live for the whole test: [DocDetailViewModel.metadata]
-     * shares while subscribed, so an assertion on `metadata.value` needs a standing collector.
-     */
-    private fun TestScope.vm(
-        session: FakeLibrarySession = FakeLibrarySession(),
-        docId: String = "doc-1",
-        settings: FakeSettingsRepository = aiConfiguredSettings(),
-    ) = DocDetailViewModel(docId, session, settings).also { model ->
-        backgroundScope.launch { model.metadata.collect {} }
-    }
-
     private fun tagSuggestions(vararg tags: String): List<TagSuggestion> = tags.map { TagSuggestion(it, isNew = false) }
 
     @Test
     fun goToPageIgnoresOutOfRange() =
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { content.pageCountValue = 3 }
-            val model = vm(session = session)
+            val model = liveDocDetailVm(session = session)
             advanceUntilIdle()
             model.goToPage(2)
             model.ui.value.pageIndex shouldBe 2
@@ -80,7 +65,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     fun defineFieldRegistersThenWritesTheValue() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
-            val model = vm(session = session)
+            val model = liveDocDetailVm(session = session)
             val def =
                 FieldDef("amount", "Amount", FieldType.DECIMAL, showByDefault = false, aiEnabled = false, position = 5)
             model.defineField(def, "12.50")
@@ -95,7 +80,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     fun addAndRemoveTagTargetThisDoc() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
-            val model = vm(session = session)
+            val model = liveDocDetailVm(session = session)
             model.addTag("finance")
             model.removeTag("draft")
             advanceUntilIdle()
@@ -107,7 +92,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     fun addTagFailureEmitsMessage() =
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { meta.failBatchOps = { error("journal write failed") } }
-            val model = vm(session = session)
+            val model = liveDocDetailVm(session = session)
             val messages = collecting(model.messages.map { it.text })
             advanceUntilIdle()
             model.addTag("finance")
@@ -128,7 +113,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
                     documents.singleDoc.value = listItem("doc-1")
                     documents.historyList = listOf(tagged)
                 }
-            val model = vm(session = session)
+            val model = liveDocDetailVm(session = session)
             model.loadHistory()
             advanceUntilIdle()
             (model.metadata.value.history as HistoryUiState.Loaded).items shouldHaveSize 1
@@ -156,7 +141,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
                     ocr.failOcrVersions = { error("index busy") }
                     ocr.failAiOcrOffer = { error("index busy") }
                 }
-            val model = DocDetailViewModel("doc-1", session, aiConfiguredSettings())
+            val model = docDetailVm(session)
             val messages = collecting(model.messages.map { it.text })
             collecting(model.metadata)
             advanceUntilIdle()
@@ -168,11 +153,11 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     @Test
     fun aiOcrActionIsOfferedOnlyWithAConfiguredEndpoint() =
         runTest(dispatcher) {
-            val without = vm(session = FakeLibrarySession())
+            val without = liveDocDetailVm(session = FakeLibrarySession())
             advanceUntilIdle()
             without.ui.value.aiOcr shouldBe AiOcrOffer.Unavailable
 
-            val with = vm(session = FakeLibrarySession().apply { ocr.aiOcr = AiOcrOffer.Ready })
+            val with = liveDocDetailVm(session = FakeLibrarySession().apply { ocr.aiOcr = AiOcrOffer.Ready })
             advanceUntilIdle()
             with.ui.value.aiOcr shouldBe AiOcrOffer.Ready
         }
@@ -183,7 +168,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             // Size is a warning the UI delivers, not a refusal: the state has to carry the number
             // so the confirmation can name it.
             val session = FakeLibrarySession().apply { ocr.aiOcr = AiOcrOffer.Large(pages = 214) }
-            val model = vm(session = session)
+            val model = liveDocDetailVm(session = session)
             advanceUntilIdle()
 
             model.ui.value.aiOcr shouldBe AiOcrOffer.Large(pages = 214)
@@ -193,7 +178,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     fun setOcrEnginePinsAndClears() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
-            val model = vm(session = session)
+            val model = liveDocDetailVm(session = session)
             model.setOcrEngine("tesseract")
             model.setOcrEngine(null)
             advanceUntilIdle()
@@ -208,7 +193,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     fun setOcrEngineFailureEmitsMessage() =
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { ocr.failSetOcrEngine = { error("reindex failed") } }
-            val model = vm(session = session)
+            val model = liveDocDetailVm(session = session)
             val messages = collecting(model.messages.map { it.text })
             advanceUntilIdle()
             model.setOcrEngine("mlkit")
@@ -225,7 +210,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
                     ocr.ocrVersionsList = listOf(OcrVersion("tesseract", "dev-a", "eng", 0L, active = true))
                     documents.singleDoc.value = listItem("doc-1")
                 }
-            val model = vm(session = session)
+            val model = liveDocDetailVm(session = session)
             advanceUntilIdle()
             model.metadata.value.document.ocrVersions shouldContainExactly session.ocr.ocrVersionsList
         }
@@ -235,16 +220,16 @@ class DocDetailViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session =
                 FakeLibrarySession().apply {
-                    documents.singleDoc.value = DocListItem(doc("doc-1", ocrState = OcrState.NONE), emptyList())
+                    documents.singleDoc.value = listItem(doc("doc-1", ocrState = OcrState.NONE))
                 }
-            val model = vm(session = session)
+            val model = liveDocDetailVm(session = session)
             advanceUntilIdle()
             model.metadata.value.document.ocrVersions shouldBe emptyList()
 
             // A newly-completed OCR run (state -> done) should trigger a reload with the fresh version.
             val fresh = listOf(OcrVersion("tesseract", "dev-a", "eng", 0L, active = true))
             session.ocr.ocrVersionsList = fresh
-            session.documents.singleDoc.value = DocListItem(doc("doc-1", ocrState = OcrState.DONE), emptyList())
+            session.documents.singleDoc.value = listItem(doc("doc-1", ocrState = OcrState.DONE))
             advanceUntilIdle()
             model.metadata.value.document.ocrVersions shouldContainExactly fresh
         }
@@ -262,7 +247,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
                     documents.singleDoc.value =
                         listItem(doc("doc-1", ocrState = OcrState.ADOPTED, ocrEngine = OcrEngineRef.of("tesseract")))
                 }
-            val model = vm(session = session)
+            val model = liveDocDetailVm(session = session)
             advanceUntilIdle()
             model.metadata.value.document.ocrText shouldBe "Tesseract text"
 
@@ -287,7 +272,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
                     content.extractedTextValue = "Text read on this desktop"
                     documents.singleDoc.value = readBy("desk.tesseract")
                 }
-            val model = vm(session = session)
+            val model = liveDocDetailVm(session = session)
             advanceUntilIdle()
 
             val versions = listOf(OcrVersion("tesseract", "laptop", "eng", 0L, active = true))
@@ -305,14 +290,14 @@ class DocDetailViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session =
                 FakeLibrarySession().apply {
-                    documents.singleDoc.value = DocListItem(doc("doc-1", reviewed = true), listOf("finance"))
+                    documents.singleDoc.value = listItem(doc("doc-1", reviewed = true), listOf("finance"))
                     fieldRegistry.values.value =
                         mapOf(FieldKeys.CORRESPONDENT to listOf("ACME"), FieldKeys.DOC_TYPE to listOf("invoice"))
                     fieldRegistry.orphans.value = listOf(FieldKeyCount("amount", 3))
                     tags.tags.value = listOf(TagInfo("finance", "#ff0000", null, 1))
                     reviewConfig.reviewModeFlow.value = ReviewMode.INBOX_WORKFLOW
                 }
-            val model = vm(session = session)
+            val model = liveDocDetailVm(session = session)
             advanceUntilIdle()
 
             val state = model.metadata.value
@@ -357,7 +342,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
                             "subject" to listOf("Meter reading"),
                         )
                 }
-            val model = vm(session = session)
+            val model = liveDocDetailVm(session = session)
             advanceUntilIdle()
 
             val values = model.metadata.value.vocabulary.fieldValues
@@ -373,7 +358,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             // The library's preview panel already holds the row and rebuilds this viewmodel per
             // document; the seed is what keeps the panel from blanking on every switch, so it must
             // be visible before anything is collected or dispatched.
-            val seed = DocListItem(doc("doc-1", title = "Seeded"), listOf("finance"))
+            val seed = listItem(doc("doc-1", title = "Seeded"), listOf("finance"))
             val model = DocDetailViewModel("doc-1", FakeLibrarySession(), aiConfiguredSettings(), initialItem = seed)
 
             model.metadata.value.document.item shouldBe seed
@@ -385,10 +370,10 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             val session =
                 FakeLibrarySession().apply {
                     // Stored flag false, but the doc carries a tag: UNTAGGED_ONLY treats it reviewed.
-                    documents.singleDoc.value = DocListItem(doc("doc-1", reviewed = false), listOf("finance"))
+                    documents.singleDoc.value = listItem(doc("doc-1", reviewed = false), listOf("finance"))
                     reviewConfig.reviewModeFlow.value = ReviewMode.UNTAGGED_ONLY
                 }
-            val model = vm(session = session)
+            val model = liveDocDetailVm(session = session)
             advanceUntilIdle()
 
             model.metadata.value.document.reviewed shouldBe true
@@ -401,7 +386,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
                 FakeLibrarySession().apply {
                     aiSuggest.edit = AiEditSuggestion(addTags = tagSuggestions("finance", "invoice"))
                 }
-            val model = vm(session = session)
+            val model = liveDocDetailVm(session = session)
             advanceUntilIdle()
             model.suggestAiTags()
             advanceUntilIdle()
@@ -417,7 +402,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
                 FakeLibrarySession().apply {
                     aiSuggest.edit = AiEditSuggestion(addTags = tagSuggestions("finance", "invoice"))
                 }
-            val model = vm(session = session)
+            val model = liveDocDetailVm(session = session)
             advanceUntilIdle()
             model.suggestAiTags()
             advanceUntilIdle()
@@ -435,7 +420,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
                     aiSuggest.edit = AiEditSuggestion(addTags = tagSuggestions("finance", "invoice"))
                     meta.failBatchOps = { error("disk full") }
                 }
-            val model = vm(session = session)
+            val model = liveDocDetailVm(session = session)
             advanceUntilIdle()
             model.suggestAiTags()
             advanceUntilIdle()
@@ -450,7 +435,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     fun suggestAiTagsEmptySurfacesMessage() =
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { aiSuggest.edit = AiEditSuggestion.EMPTY }
-            val model = vm(session = session)
+            val model = liveDocDetailVm(session = session)
             val messages = collecting(model.messages.map { it.text })
             advanceUntilIdle()
             model.suggestAiTags()
@@ -464,7 +449,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     fun suggestAiTagsFailureSurfacesErrorAndClearsBusy() =
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { aiSuggest.failWith = { error("network down") } }
-            val model = vm(session = session)
+            val model = liveDocDetailVm(session = session)
             val messages = collecting(model.messages.map { it.text })
             advanceUntilIdle()
             model.suggestAiTags()
@@ -479,7 +464,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     fun aiAvailabilityFollowsSettings() =
         runTest(dispatcher) {
             val settings = FakeSettingsRepository()
-            val model = vm(settings = settings)
+            val model = liveDocDetailVm(settings = settings)
             advanceUntilIdle()
             model.metadata.value.ai.available shouldBe false
 
@@ -504,7 +489,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
                     ),
                 )
             val session = FakeLibrarySession().apply { aiSuggest.edit = AiEditSuggestion(metadata = suggestion) }
-            val model = vm(session = session)
+            val model = liveDocDetailVm(session = session)
             advanceUntilIdle()
             model.suggestAiMetadata()
             advanceUntilIdle()
@@ -525,7 +510,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
                     ),
                 )
             val session = FakeLibrarySession().apply { aiSuggest.edit = AiEditSuggestion(metadata = suggestion) }
-            val model = vm(session = session)
+            val model = liveDocDetailVm(session = session)
             advanceUntilIdle()
             model.suggestAiMetadata()
             advanceUntilIdle()
@@ -556,7 +541,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
                     ),
                 )
             val session = FakeLibrarySession().apply { aiSuggest.edit = AiEditSuggestion(metadata = suggestion) }
-            val model = vm(session = session)
+            val model = liveDocDetailVm(session = session)
             advanceUntilIdle()
             model.suggestAiMetadata()
             advanceUntilIdle()
@@ -572,7 +557,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     fun suggestAiMetadataEmptySurfacesMessage() =
         runTest(dispatcher) {
             val session = FakeLibrarySession() // fake defaults to AiEditSuggestion.EMPTY
-            val model = vm(session = session)
+            val model = liveDocDetailVm(session = session)
             val messages = collecting(model.messages.map { it.text })
             advanceUntilIdle()
             model.suggestAiMetadata()
@@ -585,7 +570,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     fun suggestAiMetadataFailureSurfacesErrorAndClearsBusy() =
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { aiSuggest.failWith = { error("network down") } }
-            val model = vm(session = session)
+            val model = liveDocDetailVm(session = session)
             val messages = collecting(model.messages.map { it.text })
             advanceUntilIdle()
             model.suggestAiMetadata()
@@ -606,7 +591,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
                             TagInfo("draft", null, null, 1),
                         )
                 }
-            val model = vm(session = session)
+            val model = liveDocDetailVm(session = session)
             advanceUntilIdle()
             model.metadata.value.vocabulary.tagColors shouldContainExactly
                 mapOf("finance" to "#ff0000", "draft" to null)

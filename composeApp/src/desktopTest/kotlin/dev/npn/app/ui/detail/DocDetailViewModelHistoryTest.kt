@@ -4,6 +4,7 @@ import dev.npn.app.FakeLibrarySession
 import dev.npn.app.FakeSettingsRepository
 import dev.npn.app.MainDispatcherTest
 import dev.npn.app.collecting
+import dev.npn.app.liveDocDetailVm
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.DocumentHistoryRecord
 import dev.npn.core.app.HistoryEntry
@@ -12,7 +13,6 @@ import dev.npn.core.testing.listItem
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
@@ -54,9 +54,7 @@ class DocDetailViewModelHistoryTest : MainDispatcherTest() {
     fun loadHistoryDoesNotReloadWithoutRefreshAndExposesFailure() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
-            val model = DocDetailViewModel("doc-1", session, FakeSettingsRepository())
-            // metadata shares while subscribed, so keep a collector for the whole test.
-            backgroundScope.launch { model.metadata.collect {} }
+            val model = liveDocDetailVm(session, settings = FakeSettingsRepository())
 
             model.loadHistory()
             advanceUntilIdle()
@@ -77,8 +75,7 @@ class DocDetailViewModelHistoryTest : MainDispatcherTest() {
     fun aHistoryFailureWithoutAMessageNamesItsCause() =
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { documents.historyError = IllegalStateException() }
-            val model = DocDetailViewModel("doc-1", session, FakeSettingsRepository())
-            backgroundScope.launch { model.metadata.collect {} }
+            val model = liveDocDetailVm(session, settings = FakeSettingsRepository())
 
             model.loadHistory()
             advanceUntilIdle()

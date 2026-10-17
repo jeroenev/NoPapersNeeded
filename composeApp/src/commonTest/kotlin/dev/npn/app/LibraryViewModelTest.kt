@@ -1,7 +1,6 @@
 package dev.npn.app
 
 import dev.npn.app.platform.ScanResult
-import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.library.LibraryQuery
 import dev.npn.app.ui.library.LibraryViewModel
@@ -22,7 +21,6 @@ import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -41,13 +39,6 @@ class LibraryViewModelTest : MainDispatcherTest() {
         session: FakeLibrarySession = FakeLibrarySession(),
         settings: FakeSettingsRepository = FakeSettingsRepository(),
     ) = LibraryViewModel(session, settings)
-
-    /** Collect the text of the messages [model] emits. */
-    private fun TestScope.collectMessages(model: LibraryViewModel): MutableList<UiText> {
-        val messages = mutableListOf<UiText>()
-        backgroundScope.launch { model.messages.collect { messages += it.text } }
-        return messages
-    }
 
     @Test
     fun queryTextReflectsKeystrokesImmediately() =
@@ -189,7 +180,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
     fun scannerFailureSurfacesActionableMessage() =
         runTest(dispatcher) {
             val model = vm()
-            val messages = collectMessages(model)
+            val messages = collecting(model.messages.map { it.text })
 
             model.importScan(ScanResult.Failed)
             advanceUntilIdle()
@@ -201,7 +192,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
     fun scannerCancellationProducesNoError() =
         runTest(dispatcher) {
             val model = vm()
-            val messages = collectMessages(model)
+            val messages = collecting(model.messages.map { it.text })
 
             model.importScan(ScanResult.Cancelled)
             advanceUntilIdle()
@@ -214,7 +205,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { ingest.failRescan = { error("folder unavailable") } }
             val model = vm(session = session)
-            val messages = collectMessages(model)
+            val messages = collecting(model.messages.map { it.text })
 
             model.refresh()
             advanceUntilIdle()
@@ -446,7 +437,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val settings = FakeSettingsRepository().apply { failEdit = { error("read-only file system") } }
             val model = vm(settings = settings)
-            val messages = collectMessages(model)
+            val messages = collecting(model.messages.map { it.text })
 
             model.setSort(SortField.Size, ascending = true)
             model.setViewType(ViewType.GRID)
@@ -511,7 +502,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { savedViews.failSave = { error("disk full") } }
             val model = vm(session = session)
-            val messages = collectMessages(model)
+            val messages = collecting(model.messages.map { it.text })
             model.saveCurrentView("Taxes")
             advanceUntilIdle()
             messages shouldContainExactly listOf(failure(Res.string.library_save_view_failed, "disk full"))

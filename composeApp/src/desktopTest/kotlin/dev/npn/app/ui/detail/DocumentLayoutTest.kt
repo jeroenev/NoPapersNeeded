@@ -20,12 +20,12 @@ import dev.npn.app.ui.onUiThread
 import dev.npn.app.ui.texts
 import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.core.ai.FieldSuggestion
-import dev.npn.core.app.DocListItem
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.testing.FakeMetadataWriter
 import dev.npn.core.testing.doc
+import dev.npn.core.testing.listItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import java.io.File
@@ -147,7 +147,7 @@ class DocumentLayoutTest : EnglishLocaleTest() {
                                         DocumentSection(
                                             loadState =
                                                 DocLoadState.Present(
-                                                    DocListItem(
+                                                    listItem(
                                                         doc("invoice", title = "Electricity invoice"),
                                                         listOf("Utilities"),
                                                     ),

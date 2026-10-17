@@ -3,28 +3,21 @@ package dev.npn.app
 import dev.npn.app.ui.detail.DocDetailViewModel
 import dev.npn.app.ui.detail.DocLoadState
 import dev.npn.app.ui.detail.PageCountState
-import dev.npn.core.app.DocListItem
 import dev.npn.core.testing.doc
+import dev.npn.core.testing.listItem
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DocDetailLoadingViewModelTest : MainDispatcherTest() {
-    private fun TestScope.vm(session: FakeLibrarySession = FakeLibrarySession()) =
-        DocDetailViewModel("doc-1", session, aiConfiguredSettings()).also { model ->
-            backgroundScope.launch { model.metadata.collect {} }
-        }
-
     @Test
     fun pageCountResolvedOnInit() =
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { content.pageCountValue = 7 }
-            val model = vm(session)
+            val model = liveDocDetailVm(session)
             advanceUntilIdle()
             model.ui.value.pageCount shouldBe PageCountState.Ready(7)
         }
@@ -33,7 +26,7 @@ class DocDetailLoadingViewModelTest : MainDispatcherTest() {
     fun pageCountFailureIsModelledAsFailedNotZero() =
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { content.pageCountValue = null }
-            val model = vm(session)
+            val model = liveDocDetailVm(session)
             advanceUntilIdle()
             model.ui.value.pageCount shouldBe PageCountState.Failed
         }
@@ -42,7 +35,7 @@ class DocDetailLoadingViewModelTest : MainDispatcherTest() {
     fun pageCountZeroIsModelledAsEmpty() =
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { content.pageCountValue = 0 }
-            val model = vm(session)
+            val model = liveDocDetailVm(session)
             advanceUntilIdle()
             model.ui.value.pageCount shouldBe PageCountState.Empty
         }
@@ -51,7 +44,7 @@ class DocDetailLoadingViewModelTest : MainDispatcherTest() {
     fun retryPageCountReResolvesAfterAFailure() =
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { content.pageCountValue = null }
-            val model = vm(session)
+            val model = liveDocDetailVm(session)
             advanceUntilIdle()
             model.ui.value.pageCount shouldBe PageCountState.Failed
 
@@ -64,14 +57,14 @@ class DocDetailLoadingViewModelTest : MainDispatcherTest() {
     @Test
     fun loadStateIsLoadingBeforeTheFirstObserveDocEmission() =
         runTest(dispatcher) {
-            val model = DocDetailViewModel("doc-1", FakeLibrarySession(), aiConfiguredSettings())
+            val model = docDetailVm()
             model.metadata.value.document.loadState shouldBe DocLoadState.Loading
         }
 
     @Test
     fun loadStatePresentWhenSeededWithARow() =
         runTest(dispatcher) {
-            val seed = DocListItem(doc("doc-1", title = "Seeded"), listOf("finance"))
+            val seed = listItem(doc("doc-1", title = "Seeded"), listOf("finance"))
             val model = DocDetailViewModel("doc-1", FakeLibrarySession(), aiConfiguredSettings(), initialItem = seed)
             model.metadata.value.document.loadState shouldBe DocLoadState.Present(seed)
         }
@@ -79,7 +72,7 @@ class DocDetailLoadingViewModelTest : MainDispatcherTest() {
     @Test
     fun loadStateBecomesMissingOnceObservedAbsent() =
         runTest(dispatcher) {
-            val model = vm()
+            val model = liveDocDetailVm()
             advanceUntilIdle()
             model.metadata.value.document.loadState shouldBe DocLoadState.Missing
         }
@@ -88,8 +81,8 @@ class DocDetailLoadingViewModelTest : MainDispatcherTest() {
     fun loadStateBecomesPresentWhenTheRowArrives() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
-            val model = vm(session)
-            val row = DocListItem(doc("doc-1", title = "Arrived"), emptyList())
+            val model = liveDocDetailVm(session)
+            val row = listItem(doc("doc-1", title = "Arrived"))
             session.documents.singleDoc.value = row
             advanceUntilIdle()
             model.metadata.value.document.loadState shouldBe DocLoadState.Present(row)
@@ -99,9 +92,9 @@ class DocDetailLoadingViewModelTest : MainDispatcherTest() {
     fun aTrashedRowStopsBeingEditableAndRestoringItBringsItBack() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
-            val row = DocListItem(doc("doc-1"), emptyList())
+            val row = listItem("doc-1")
             session.documents.singleDoc.value = row
-            val model = vm(session)
+            val model = liveDocDetailVm(session)
             advanceUntilIdle()
             model.metadata.value.document.loadState shouldBe DocLoadState.Present(row)
 
@@ -119,9 +112,9 @@ class DocDetailLoadingViewModelTest : MainDispatcherTest() {
     fun aDeletedRowStopsBeingEditableAndUndeletingItBringsItBack() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
-            val row = DocListItem(doc("doc-1"), emptyList())
+            val row = listItem("doc-1")
             session.documents.singleDoc.value = row
-            val model = vm(session)
+            val model = liveDocDetailVm(session)
             advanceUntilIdle()
 
             session.documents.singleDoc.value = row.copy(doc = row.doc.copy(deleted = true))
@@ -137,7 +130,7 @@ class DocDetailLoadingViewModelTest : MainDispatcherTest() {
     @Test
     fun aLifecycleTombstoneSeedNeverShowsAnEditableDocument() =
         runTest(dispatcher) {
-            val row = DocListItem(doc("doc-1"), emptyList())
+            val row = listItem("doc-1")
             for (hidden in listOf(row.doc.copy(trashed = true), row.doc.copy(deleted = true))) {
                 val model =
                     DocDetailViewModel(
@@ -155,9 +148,9 @@ class DocDetailLoadingViewModelTest : MainDispatcherTest() {
     fun aMissingFileStillHasEditableMetadata() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
-            val row = DocListItem(doc("doc-1").copy(missing = true), emptyList())
+            val row = listItem(doc("doc-1").copy(missing = true))
             session.documents.singleDoc.value = row
-            val model = vm(session)
+            val model = liveDocDetailVm(session)
             advanceUntilIdle()
             model.metadata.value.document.loadState shouldBe DocLoadState.Present(row)
         }

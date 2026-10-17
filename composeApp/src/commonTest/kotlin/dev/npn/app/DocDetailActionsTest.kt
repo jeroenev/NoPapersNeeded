@@ -1,7 +1,6 @@
 package dev.npn.app
 
 import dev.npn.app.ui.common.uiText
-import dev.npn.app.ui.detail.DocDetailViewModel
 import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.AiOcrOutcome
 import dev.npn.core.app.BakeFailure
@@ -39,14 +38,11 @@ import kotlin.test.Test
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class DocDetailActionsTest : MainDispatcherTest() {
-    private fun vm(session: FakeLibrarySession = FakeLibrarySession()) =
-        DocDetailViewModel("doc-1", session, aiConfiguredSettings())
-
     @Test
     fun trashCallsSessionAndCallback() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
-            val model = vm(session = session)
+            val model = docDetailVm(session = session)
             var done = false
             model.trash { done = true }
             advanceUntilIdle()
@@ -58,7 +54,7 @@ class DocDetailActionsTest : MainDispatcherTest() {
     fun trashFailureSkipsCallbackAndEmitsMessage() =
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { docLifecycle.failTrashDocIds = setOf("doc-1") }
-            val model = vm(session = session)
+            val model = docDetailVm(session = session)
             val messages = collecting(model.messages.map { it.text })
             advanceUntilIdle()
             var done = false
@@ -72,7 +68,7 @@ class DocDetailActionsTest : MainDispatcherTest() {
     fun aRenameThatWorkedSaysNothing() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
-            val model = vm(session = session)
+            val model = docDetailVm(session = session)
             val messages = collecting(model.messages.map { it.text })
             advanceUntilIdle()
 
@@ -88,7 +84,7 @@ class DocDetailActionsTest : MainDispatcherTest() {
     fun aRenameTheLibraryCannotCarryOutSaysWhy() =
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { docLifecycle.relocation = RelocationOutcome.UNSUPPORTED }
-            val model = vm(session = session)
+            val model = docDetailVm(session = session)
             val messages = collecting(model.messages.map { it.text })
             advanceUntilIdle()
 
@@ -107,7 +103,7 @@ class DocDetailActionsTest : MainDispatcherTest() {
                 RelocationOutcome.INVALID_NAME to Res.string.detail_rename_invalid,
             )) {
                 val session = FakeLibrarySession().apply { docLifecycle.relocation = outcome }
-                val model = vm(session = session)
+                val model = docDetailVm(session = session)
                 val messages = collecting(model.messages.map { it.text })
                 advanceUntilIdle()
 
@@ -122,7 +118,7 @@ class DocDetailActionsTest : MainDispatcherTest() {
     fun reOcrTogglesReindexingFlag() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
-            val model = vm(session = session)
+            val model = docDetailVm(session = session)
             model.reOcr()
             advanceUntilIdle()
             session.ocr.reOcrIds shouldContainExactly listOf("doc-1")
@@ -133,7 +129,7 @@ class DocDetailActionsTest : MainDispatcherTest() {
     fun reOcrFailureClearsFlagAndEmitsMessage() =
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { ocr.failReOcr = { error("ocr engine missing") } }
-            val model = vm(session = session)
+            val model = docDetailVm(session = session)
             val messages = collecting(model.messages.map { it.text })
             advanceUntilIdle()
             model.reOcr()
@@ -146,7 +142,7 @@ class DocDetailActionsTest : MainDispatcherTest() {
     fun ocrWithAiQueuesTheDocumentAndClearsTheReindexingFlag() =
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { ocr.aiOcr = AiOcrOffer.Ready }
-            val model = vm(session = session)
+            val model = docDetailVm(session = session)
             model.ocrWithAi()
             advanceUntilIdle()
             session.ocr.aiOcrIds shouldContainExactly listOf("doc-1")
@@ -159,7 +155,7 @@ class DocDetailActionsTest : MainDispatcherTest() {
             // The confirmation lives in the UI, so the viewmodel must not add a second refusal
             // behind it: a confirmed long document queues like any other.
             val session = FakeLibrarySession().apply { ocr.aiOcr = AiOcrOffer.Large(pages = 214) }
-            val model = vm(session = session)
+            val model = docDetailVm(session = session)
             model.ocrWithAi()
             advanceUntilIdle()
 
@@ -177,7 +173,7 @@ class DocDetailActionsTest : MainDispatcherTest() {
                     ocr.aiOcr = AiOcrOffer.Ready
                     ocr.aiOcrOutcome = AiOcrOutcome.NO_ENDPOINT
                 }
-            val model = vm(session = session)
+            val model = docDetailVm(session = session)
             val messages = collecting(model.messages.map { it.text })
             advanceUntilIdle()
             model.ocrWithAi()
@@ -194,7 +190,7 @@ class DocDetailActionsTest : MainDispatcherTest() {
                     ocr.aiOcr = AiOcrOffer.Ready
                     ocr.failAiOcr = { error("Library session is closed") }
                 }
-            val model = vm(session = session)
+            val model = docDetailVm(session = session)
             val messages = collecting(model.messages.map { it.text })
             advanceUntilIdle()
             model.ocrWithAi()
@@ -215,7 +211,7 @@ class DocDetailActionsTest : MainDispatcherTest() {
                             listOf("p1", "p2"),
                         )
                 }
-            val model = vm(session = session)
+            val model = docDetailVm(session = session)
             val messages = collecting(model.messages.map { it.text })
             var left = false
 
@@ -235,7 +231,7 @@ class DocDetailActionsTest : MainDispatcherTest() {
                 FakeLibrarySession().apply {
                     maintenance.splitOutcome = SplitOutcome.Failed(SplitFailure.UNREADABLE_PDF)
                 }
-            val model = vm(session = session)
+            val model = docDetailVm(session = session)
             val messages = collecting(model.messages.map { it.text })
             var left = false
 
@@ -251,7 +247,7 @@ class DocDetailActionsTest : MainDispatcherTest() {
     fun aBakeThatWorkedSaysSo() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
-            val model = vm(session = session)
+            val model = docDetailVm(session = session)
             val messages = collecting(model.messages.map { it.text })
 
             model.bakeInPlace()
@@ -267,7 +263,7 @@ class DocDetailActionsTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session =
                 FakeLibrarySession().apply { content.bakeResult = BakeOutcome.Failed(BakeFailure.UNSUPPORTED_PDF) }
-            val model = vm(session = session)
+            val model = docDetailVm(session = session)
             val messages = collecting(model.messages.map { it.text })
 
             model.bakeInPlace()
@@ -281,7 +277,7 @@ class DocDetailActionsTest : MainDispatcherTest() {
     fun aBakeThatThrewIsReported() =
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { content.failBake = { error("Library session is closed") } }
-            val model = vm(session = session)
+            val model = docDetailVm(session = session)
             val messages = collecting(model.messages.map { it.text })
 
             model.bakeInPlace()
@@ -295,7 +291,7 @@ class DocDetailActionsTest : MainDispatcherTest() {
     fun anExportWritesTheBakedCopyAndSaysSo() =
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { content.bakedBytes = byteArrayOf(1, 2, 3) }
-            val model = vm(session = session)
+            val model = docDetailVm(session = session)
             val messages = collecting(model.messages.map { it.text })
             var written: ByteArray? = null
 
@@ -309,7 +305,7 @@ class DocDetailActionsTest : MainDispatcherTest() {
     @Test
     fun aCopyThatCannotBeBakedIsNotDelivered() =
         runTest(dispatcher) {
-            val model = vm()
+            val model = docDetailVm()
             val messages = collecting(model.messages.map { it.text })
             var delivered = false
 
@@ -324,7 +320,7 @@ class DocDetailActionsTest : MainDispatcherTest() {
     fun aFailedShareSaysWhy() =
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { content.bakedBytes = byteArrayOf(1) }
-            val model = vm(session = session)
+            val model = docDetailVm(session = session)
             val messages = collecting(model.messages.map { it.text })
 
             model.shareBakedCopy { error("no app can receive it") }
