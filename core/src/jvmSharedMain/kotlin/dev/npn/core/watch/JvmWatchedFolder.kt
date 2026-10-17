@@ -4,6 +4,7 @@ import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.externalSourceOfPath
 import dev.npn.core.fs.sha256Hex
 import dev.npn.core.fs.watchDirs
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -22,9 +23,10 @@ import kotlin.streams.asSequence
  */
 class JvmWatchedFolder(
     private val dir: Path,
+    private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : WatchedFolder {
     override suspend fun listPdfs(): List<WatchedFolderFile> =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             if (!Files.isDirectory(dir)) return@withContext emptyList()
             runCatching {
                 Files.list(dir).use { stream ->
@@ -53,7 +55,7 @@ class JvmWatchedFolder(
         file: WatchedFolderFile,
         docId: String,
     ): Boolean =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             runCatching {
                 // Paths.get, not Path.of: the latter is Java 11 and only reached Android at API 34.
                 val path = Paths.get(file.id)

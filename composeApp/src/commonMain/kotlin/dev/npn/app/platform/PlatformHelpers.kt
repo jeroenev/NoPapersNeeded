@@ -3,13 +3,18 @@ package dev.npn.app.platform
 import androidx.compose.ui.graphics.ImageBitmap
 import dev.npn.core.fs.ExternalSource
 import io.github.vinceglb.filekit.PlatformFile
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 
 /**
  * Decode an image file at [path] into an [ImageBitmap]. Returns null on failure.
  * commonMain cannot touch java.io, so actuals read the file in their own source set
  * (Android: BitmapFactory, desktop: skia Image.makeFromEncoded).
  */
-expect suspend fun loadImageBitmap(path: String): ImageBitmap?
+expect suspend fun loadImageBitmap(
+    path: String,
+    io: CoroutineDispatcher = Dispatchers.IO,
+): ImageBitmap?
 
 /**
  * Max entries in the process-wide in-memory decoded-thumbnail LRU. Android has a smaller memory
@@ -112,4 +117,5 @@ expect suspend fun createLibraryFolder(
 expect suspend fun sharePdfBytes(
     fileName: String,
     bytes: ByteArray,
+    io: CoroutineDispatcher = Dispatchers.IO,
 )

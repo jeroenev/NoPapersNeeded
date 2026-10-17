@@ -3,18 +3,6 @@
   <ManuallySuppressedIssues/>
   <CurrentIssues>
     <ID>ImplicitDefaultLocale:JvmLibraryFileSystemTest.kt:JvmLibraryFileSystemTest$"%02x".format(it)</ID>
-    <ID>InjectDispatcher:DocumentRepositoryImpl.kt:DocumentRepositoryImpl$Default</ID>
-    <ID>InjectDispatcher:Indexer.kt:Indexer$Default</ID>
-    <ID>InjectDispatcher:JvmLibraryFileSystem.kt:JvmLibraryFileSystem$IO</ID>
-    <ID>InjectDispatcher:JvmWatchedFolder.kt:JvmWatchedFolder$IO</ID>
-    <ID>InjectDispatcher:LocalLibraryFolders.kt:LocalLibraryFolders$IO</ID>
-    <ID>InjectDispatcher:PdfBoxAndroidEngine.kt:PdfBoxAndroidEngine$IO</ID>
-    <ID>InjectDispatcher:PdfBoxAndroidXmpIO.kt:PdfBoxAndroidXmpIO$IO</ID>
-    <ID>InjectDispatcher:PdfBoxEngine.kt:PdfBoxEngine$IO</ID>
-    <ID>InjectDispatcher:PdfBoxXmpIO.kt:PdfBoxXmpIO$IO</ID>
-    <ID>InjectDispatcher:SafLibraryFileSystem.kt:SafLibraryFileSystem$IO</ID>
-    <ID>InjectDispatcher:SafWatchedFolder.kt:SafWatchedFolder$IO</ID>
-    <ID>InjectDispatcher:SettingsRepositoryImpl.kt:SettingsRepositoryImpl$IO</ID>
     <ID>UseOrEmpty:AiText.kt:AiText$(this[key] as? JsonArray) ?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -&gt; p.isString }?.contentOrNull } ?.map { it.trim() } ?.filter { it.isNotEmpty() } ?: emptyList()</ID>
   </CurrentIssues>
 </SmellBaseline>

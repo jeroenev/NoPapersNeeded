@@ -2,6 +2,7 @@ package dev.npn.core.settings
 
 import android.content.Context
 import android.content.SharedPreferences
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,6 +27,7 @@ class SettingsRepositoryImpl internal constructor(
     private val prefs: SharedPreferences,
     /** Where this installation's id is kept, out of reach of Android's backups. */
     private val noBackupDir: File,
+    private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : SettingsRepository {
     constructor(context: Context) : this(
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE),
@@ -102,7 +104,7 @@ class SettingsRepositoryImpl internal constructor(
         persistMutex.withLock {
             val previous = state.value
             val next = SettingsCodec.normalise(transform(previous))
-            withContext(Dispatchers.IO) {
+            withContext(io) {
                 if (!commit(next)) {
                     // A commit that fails on disk has already put its values in memory, where this
                     // run would read them until the next start reads the disk again. Put back what

@@ -1,5 +1,6 @@
 package dev.npn.core.pdf
 
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.apache.pdfbox.Loader
@@ -25,9 +26,11 @@ import javax.imageio.ImageIO
  * `Loader.loadPDF(bytes)` (not `PDDocument.load`), and `PDFRenderer.renderImage` returns a
  * `BufferedImage`.
  */
-class PdfBoxEngine : PdfEngine {
+class PdfBoxEngine(
+    private val io: CoroutineDispatcher = Dispatchers.IO,
+) : PdfEngine {
     override suspend fun open(bytes: ByteArray): PdfDocumentHandle =
-        withContext(Dispatchers.IO) { PdfBoxDocumentHandle(loadOrThrow(bytes)) }
+        withContext(io) { PdfBoxDocumentHandle(loadOrThrow(bytes)) }
 
     private fun loadOrThrow(bytes: ByteArray): PDDocument =
         try {
@@ -37,7 +40,7 @@ class PdfBoxEngine : PdfEngine {
         }
 
     override suspend fun imagesToPdf(images: List<ByteArray>): ByteArray =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             PDDocument().use { doc ->
                 for (imageBytes in images) {
                     val image: PDImageXObject =
@@ -70,7 +73,7 @@ class PdfBoxEngine : PdfEngine {
         bytes: ByteArray,
         pageIndices: List<Int>,
     ): ByteArray =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             require(pageIndices.isNotEmpty()) { "pageIndices must not be empty" }
             loadOrThrow(bytes).use { src ->
                 require(pageIndices.all { it in 0 until src.numberOfPages }) {

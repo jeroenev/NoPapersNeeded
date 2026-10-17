@@ -6,6 +6,7 @@ import androidx.documentfile.provider.DocumentFile
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Hex
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
@@ -20,11 +21,12 @@ import kotlinx.coroutines.withContext
 class SafWatchedFolder(
     context: Context,
     private val treeUri: Uri,
+    private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : WatchedFolder {
     private val appContext = context.applicationContext
 
     override suspend fun listPdfs(): List<WatchedFolderFile> =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             val root = DocumentFile.fromTreeUri(appContext, treeUri) ?: return@withContext emptyList()
             runCatching {
                 root
@@ -46,7 +48,7 @@ class SafWatchedFolder(
         file: WatchedFolderFile,
         docId: String,
     ): Boolean =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             runCatching {
                 val uri = Uri.parse(file.id)
                 val doc = DocumentFile.fromSingleUri(appContext, uri) ?: return@runCatching false

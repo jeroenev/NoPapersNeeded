@@ -5,6 +5,7 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import androidx.documentfile.provider.DocumentFile
 import dev.npn.core.util.runCatchingCancellable
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
@@ -34,6 +35,7 @@ import kotlin.uuid.Uuid
 class SafLibraryFileSystem(
     private val context: Context,
     private val treeUri: Uri,
+    private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : LibraryFileSystem {
     // The provider's own rename publishes, which no remount takes away: an open need not try one,
     // and a cloud provider is spared syncing a file made and deleted at every open.
@@ -181,17 +183,17 @@ class SafLibraryFileSystem(
     }
 
     override suspend fun listAll(): List<FileMeta> =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             listAllFrom(treeDocId, "")
         }
 
     override suspend fun listAllIndexable(): List<FileMeta> =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             listAllFrom(treeDocId, "", skipNpn = true)
         }
 
     override suspend fun listAllUnder(relPath: String): List<FileMeta> =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             val norm = NpnPaths.normalize(relPath)
             val rootId = dirCache.refresh(splitSegments(norm))
             if (rootId == null) emptyList() else listAllFrom(rootId, norm)
@@ -233,12 +235,12 @@ class SafLibraryFileSystem(
     }
 
     override suspend fun exists(relPath: String): Boolean =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             resolveEntry(relPath) != null
         }
 
     override suspend fun stat(relPath: String): FileMeta? =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             val entry = resolveEntry(relPath) ?: return@withContext null
             val norm = NpnPaths.normalize(relPath)
             FileMeta(
@@ -251,7 +253,7 @@ class SafLibraryFileSystem(
         }
 
     override suspend fun readBytes(relPath: String): ByteArray =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             val entry = requireEntry(relPath)
             resolver.openInputStream(docUri(entry.docId))?.use { it.readBytes() }
                 ?: throw IOException("Cannot open for read: $relPath")
@@ -261,7 +263,7 @@ class SafLibraryFileSystem(
         relPath: String,
         maxBytes: Int,
     ): ByteArray =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             val entry = requireEntry(relPath)
             resolver.openInputStream(docUri(entry.docId))?.use { input ->
                 // Providers stream; skipping still avoids holding the whole file in memory.
@@ -288,7 +290,7 @@ class SafLibraryFileSystem(
     private suspend fun createNew(
         relPath: String,
         openInput: () -> InputStream,
-    ) = withContext(Dispatchers.IO) {
+    ) = withContext(io) {
         if (resolveEntry(relPath, fresh = true) != null) {
             error("Target already exists: $relPath")
         }
@@ -320,7 +322,7 @@ class SafLibraryFileSystem(
         stagingPath: String,
         canonicalPath: String,
         expectedHash: String,
-    ) = withContext(Dispatchers.IO) {
+    ) = withContext(io) {
         val stagingSegments = splitSegments(stagingPath)
         val canonicalSegments = splitSegments(canonicalPath)
         require(stagingSegments.dropLast(1) == canonicalSegments.dropLast(1)) {
@@ -397,7 +399,7 @@ class SafLibraryFileSystem(
     override suspend fun move(
         fromRelPath: String,
         toRelPath: String,
-    ) = withContext(Dispatchers.IO) {
+    ) = withContext(io) {
         if (resolveEntry(toRelPath, fresh = true) != null) {
             error("Target already exists: $toRelPath")
         }
@@ -598,7 +600,7 @@ class SafLibraryFileSystem(
     }
 
     override suspend fun delete(relPath: String) =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             val entry = resolveEntry(relPath, fresh = true) ?: return@withContext
             // DocumentsContract.deleteDocument removes directories recursively.
             DocumentsContract.deleteDocument(resolver, docUri(entry.docId))
@@ -609,7 +611,7 @@ class SafLibraryFileSystem(
         }
 
     override suspend fun mkdirs(relPath: String) =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             val segments = splitSegments(relPath)
             if (segments.isEmpty()) return@withContext
             createDirPath(segments, relPath)
@@ -617,7 +619,7 @@ class SafLibraryFileSystem(
         }
 
     override suspend fun sha256(relPath: String): String =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             digestSha256(docUri(requireEntry(relPath).docId), relPath)
         }
 

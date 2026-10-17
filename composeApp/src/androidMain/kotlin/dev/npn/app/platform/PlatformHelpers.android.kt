@@ -16,7 +16,7 @@ import io.github.vinceglb.filekit.AndroidFile
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.PlatformFile
 import io.github.vinceglb.filekit.context
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.nio.file.Files
@@ -28,8 +28,11 @@ private const val DEFAULT_LIBRARY_DIR = "NoPapersNeeded"
 /** The release build's applicationId; other builds append a suffix (see androidApp/build.gradle.kts). */
 private const val RELEASE_PACKAGE = "dev.npn"
 
-actual suspend fun loadImageBitmap(path: String): ImageBitmap? =
-    withContext(Dispatchers.IO) {
+actual suspend fun loadImageBitmap(
+    path: String,
+    io: CoroutineDispatcher,
+): ImageBitmap? =
+    withContext(io) {
         runCatching {
             val file = File(path)
             if (!file.exists()) return@runCatching null
@@ -133,10 +136,11 @@ actual suspend fun createLibraryFolder(
 actual suspend fun sharePdfBytes(
     fileName: String,
     bytes: ByteArray,
+    io: CoroutineDispatcher,
 ) {
     val context = FileKit.context.applicationContext
     val file =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             writeShareCopy(File(context.cacheDir, "share"), fileName, bytes, System.currentTimeMillis())
         }
     val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)

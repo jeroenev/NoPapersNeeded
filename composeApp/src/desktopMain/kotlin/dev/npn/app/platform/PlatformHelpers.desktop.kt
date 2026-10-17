@@ -6,14 +6,17 @@ import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.LocalLibraryFolders
 import io.github.vinceglb.filekit.PlatformFile
 import io.github.vinceglb.filekit.absolutePath
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import org.jetbrains.skia.Image
 import java.io.File
 import java.nio.file.Paths
 
-actual suspend fun loadImageBitmap(path: String): ImageBitmap? =
-    withContext(Dispatchers.IO) {
+actual suspend fun loadImageBitmap(
+    path: String,
+    io: CoroutineDispatcher,
+): ImageBitmap? =
+    withContext(io) {
         runCatching {
             val file = File(path)
             if (!file.exists()) return@runCatching null
@@ -55,6 +58,7 @@ actual suspend fun createLibraryFolder(
 actual suspend fun sharePdfBytes(
     fileName: String,
     bytes: ByteArray,
+    io: CoroutineDispatcher,
 ) {
     error("Sharing is not supported on desktop; export via the save-file dialog instead.")
 }

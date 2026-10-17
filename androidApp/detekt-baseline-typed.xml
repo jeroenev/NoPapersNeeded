@@ -2,7 +2,6 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>InjectDispatcher:IntentImport.kt:IntentImport$IO</ID>
     <ID>UseOrEmpty:IntentImport.kt:IntentImport$intent.getParcelableArrayListExtraCompat&lt;Uri&gt;(Intent.EXTRA_STREAM) ?: emptyList()</ID>
   </CurrentIssues>
 </SmellBaseline>

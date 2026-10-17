@@ -1,5 +1,6 @@
 package dev.npn.core.fs
 
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -49,7 +50,7 @@ internal object HardLinkLinker : NoReplaceLinker {
 
 /**
  * java.nio-backed [LibraryFileSystem] over a plain directory: the desktop library, and Android's
- * default (non-SAF) library. All suspend functions run on [Dispatchers.IO]. Writes stage a temp
+ * default (non-SAF) library. All suspend functions run on [io]. Writes stage a temp
  * file in the same directory and then install it under its final name with a primitive that
  * cannot replace an existing entry ([atomicMoveNoReplace]). Never appends or overwrites.
  *
@@ -59,6 +60,7 @@ class JvmLibraryFileSystem internal constructor(
     private val root: Path,
     private val externalIo: ExternalIo,
     private val linker: NoReplaceLinker,
+    private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : LibraryFileSystem {
     constructor(
         root: Path,
@@ -100,7 +102,7 @@ class JvmLibraryFileSystem internal constructor(
         start: Path,
         skipNpn: Boolean = false,
     ): List<FileMeta> =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             val out = ArrayList<FileMeta>()
             if (!Files.exists(start)) return@withContext out
             // followLinks = false: do not traverse symlink cycles.
@@ -155,12 +157,12 @@ class JvmLibraryFileSystem internal constructor(
         )
 
     override suspend fun exists(relPath: String): Boolean =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             Files.exists(resolve(relPath))
         }
 
     override suspend fun stat(relPath: String): FileMeta? =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             val p = resolve(relPath)
             try {
                 val attrs = Files.readAttributes(p, BasicFileAttributes::class.java)
@@ -173,7 +175,7 @@ class JvmLibraryFileSystem internal constructor(
         }
 
     override suspend fun readBytes(relPath: String): ByteArray =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             Files.readAllBytes(resolve(relPath))
         }
 
@@ -181,7 +183,7 @@ class JvmLibraryFileSystem internal constructor(
         relPath: String,
         maxBytes: Int,
     ): ByteArray =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             Files.newByteChannel(resolve(relPath)).use { channel ->
                 val start = maxOf(0L, channel.size() - maxBytes)
                 val buffer = ByteBuffer.allocate((channel.size() - start).toInt())
@@ -208,7 +210,7 @@ class JvmLibraryFileSystem internal constructor(
     private suspend fun installNew(
         relPath: String,
         fill: (tmp: Path) -> Unit,
-    ) = withContext(Dispatchers.IO) {
+    ) = withContext(io) {
         val target = resolve(relPath)
         if (Files.exists(target)) {
             error("Target already exists: $relPath")
@@ -237,7 +239,7 @@ class JvmLibraryFileSystem internal constructor(
         stagingPath: String,
         canonicalPath: String,
         expectedHash: String,
-    ) = withContext(Dispatchers.IO) {
+    ) = withContext(io) {
         val staging = resolve(stagingPath)
         val canonical = resolve(canonicalPath)
         require(staging.parent == canonical.parent) { "Object staging must be in the canonical bucket" }
@@ -281,7 +283,7 @@ class JvmLibraryFileSystem internal constructor(
     override suspend fun claimDocument(
         fromRelPath: String,
         toRelPath: String,
-    ) = withContext(Dispatchers.IO) {
+    ) = withContext(io) {
         NoReplaceMove.move(resolve(fromRelPath), resolve(toRelPath))
     }
 
@@ -289,14 +291,14 @@ class JvmLibraryFileSystem internal constructor(
         first: String,
         second: String,
     ): Boolean =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             Files.isSameFile(resolve(first), resolve(second))
         }
 
     override suspend fun copyOnce(
         fromRelPath: String,
         toRelPath: String,
-    ) = withContext(Dispatchers.IO) {
+    ) = withContext(io) {
         val to = resolve(toRelPath)
         Files.createDirectories(to.parent)
         Files.copy(resolve(fromRelPath), to)
@@ -306,7 +308,7 @@ class JvmLibraryFileSystem internal constructor(
     override suspend fun move(
         fromRelPath: String,
         toRelPath: String,
-    ) = withContext(Dispatchers.IO) {
+    ) = withContext(io) {
         val from = resolve(fromRelPath)
         val to = resolve(toRelPath)
         if (Files.exists(to)) {
@@ -364,7 +366,7 @@ class JvmLibraryFileSystem internal constructor(
     }
 
     override suspend fun delete(relPath: String) =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             val p = resolve(relPath)
             if (Files.isDirectory(p)) {
                 // Recursive delete, deepest first.
@@ -395,13 +397,13 @@ class JvmLibraryFileSystem internal constructor(
         }
 
     override suspend fun mkdirs(relPath: String) =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             Files.createDirectories(resolve(relPath))
             Unit
         }
 
     override suspend fun sha256(relPath: String): String =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             hashPath(resolve(relPath))
         }
 

@@ -43,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -54,6 +55,7 @@ import dev.npn.app.ui.common.detectDragWhenZoomed
 import dev.npn.app.ui.common.detectPinchTransform
 import dev.npn.app.ui.common.viewerScroll
 import dev.npn.core.util.runCatchingCancellable
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -345,11 +347,7 @@ private fun PageSlide(
         } else {
             // The content facade says a page it cannot render with null, never by throwing.
             val bytes = render(page, BASE_MAX_DIM * bucket)
-            // Decode the possibly-large PNG off the composition/main thread.
-            val bmp =
-                bytes?.let {
-                    runCatchingCancellable { withContext(Dispatchers.Default) { it.decodeToImageBitmap() } }.getOrNull()
-                }
+            val bmp = bytes?.let { decodePage(it) }
             if (bmp != null) {
                 cache.put(page, bucket, bmp)
                 state = PageState.Ready(bmp)
@@ -413,6 +411,12 @@ private fun PageSlide(
         }
     }
 }
+
+/** [png] as a bitmap, or null when it does not decode. Off the main thread: a page's PNG can be large. */
+private suspend fun decodePage(
+    png: ByteArray,
+    decoding: CoroutineDispatcher = Dispatchers.Default,
+): ImageBitmap? = runCatchingCancellable { withContext(decoding) { png.decodeToImageBitmap() } }.getOrNull()
 
 /**
  * Touch/mouse gestures for the current page: double-tap toggle zoom, multitouch pinch, and

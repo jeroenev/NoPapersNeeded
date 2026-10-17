@@ -16,6 +16,7 @@ import dev.npn.core.journal.JournalEvent
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.util.NpnLog
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
@@ -53,6 +54,8 @@ class Indexer(
     private val db: NpnDatabase,
     private val clock: EpochClock = SystemEpochClock,
     log: NpnLog = NpnLog.None,
+    /** Where files are hashed, [HASH_CONCURRENCY] at a time. */
+    private val hashing: CoroutineDispatcher = Dispatchers.Default,
 ) {
     private val externalMoves = ExternalDocumentMoves(fs, db.keyValueDao())
     private val documentPaths = DocumentPathReconciler(fs, db, externalMoves)
@@ -220,7 +223,7 @@ class Indexer(
             for (meta in toHash) pending.send(meta)
             pending.close()
             repeat(minOf(HASH_CONCURRENCY, toHash.size)) {
-                launch(Dispatchers.Default) {
+                launch(hashing) {
                     for (meta in pending) {
                         val hash = fs.sha256(meta.relPath)
                         val stable = settle.unchangedSince(meta)

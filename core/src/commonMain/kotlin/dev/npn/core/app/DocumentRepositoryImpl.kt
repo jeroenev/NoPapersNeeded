@@ -10,6 +10,7 @@ import dev.npn.core.journal.JournalCodec
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.ocr.OcrEngineRef
 import dev.npn.core.ocr.OcrState
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -73,6 +74,8 @@ private fun DocumentEntity.cachedFields(): Map<String, String> =
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class DocumentRepositoryImpl(
     private val db: NpnDatabase,
+    /** Where a query's rows are turned into list items. */
+    private val mapping: CoroutineDispatcher = Dispatchers.Default,
 ) : DocumentRepository {
     private val documentDao get() = db.documentDao()
     private val tagDao get() = db.tagDao()
@@ -105,7 +108,7 @@ class DocumentRepositoryImpl(
                         snippetById,
                     )
                 }
-            }.flowOn(Dispatchers.Default)
+            }.flowOn(mapping)
     }
 
     override fun observeDoc(docId: String): Flow<DocListItem?> =
@@ -191,7 +194,7 @@ class DocumentRepositoryImpl(
             .mapLatest { docs ->
                 val tags = tagsForDocuments(docs.map { it.docId })
                 docs.map { DocListItem(it.toDoc(), tags[it.docId].orEmpty()) }
-            }.flowOn(Dispatchers.Default)
+            }.flowOn(mapping)
 
     override fun observeMissing(): Flow<List<Doc>> =
         documentDao.observeMissing().map { docs -> docs.map { it.toDoc() } }

@@ -18,6 +18,7 @@ import com.tom_roush.pdfbox.pdmodel.graphics.image.JPEGFactory
 import com.tom_roush.pdfbox.pdmodel.graphics.image.LosslessFactory
 import com.tom_roush.pdfbox.pdmodel.graphics.image.PDImageXObject
 import com.tom_roush.pdfbox.text.PDFTextStripper
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
@@ -36,6 +37,7 @@ import java.io.File
  */
 class PdfBoxAndroidEngine(
     private val context: Context,
+    private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : PdfEngine {
     override suspend fun open(bytes: ByteArray): PdfDocumentHandle =
         LazyPdfDocumentHandle(openText = { openText(bytes) }, openPages = { openPages(bytes) })
@@ -70,7 +72,7 @@ class PdfBoxAndroidEngine(
     }
 
     override suspend fun imagesToPdf(images: List<ByteArray>): ByteArray =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             PdfBoxAndroidInit.ensure(context)
             PDDocument().use { doc ->
                 for (imageBytes in images) {
@@ -100,7 +102,7 @@ class PdfBoxAndroidEngine(
         bytes: ByteArray,
         pageIndices: List<Int>,
     ): ByteArray =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             require(pageIndices.isNotEmpty()) { "pageIndices must not be empty" }
             loadOrThrow(bytes).use { source ->
                 require(pageIndices.all { it in 0 until source.numberOfPages }) {

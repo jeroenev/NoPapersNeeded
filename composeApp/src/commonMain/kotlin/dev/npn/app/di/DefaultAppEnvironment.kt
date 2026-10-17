@@ -11,6 +11,7 @@ import dev.npn.core.util.warn
 import dev.npn.core.watch.WatchedFolder
 import dev.npn.core.watch.WatchedFolderImporter
 import dev.npn.core.watch.liesInLibrary
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -45,9 +46,11 @@ class DefaultAppEnvironment(
     override val settings: SettingsRepository,
     private val watchedFolder: (location: String) -> WatchedFolder?,
     private val log: NpnLog = NpnLog.None,
+    /** Where [appScope]'s coroutines run. */
+    appDispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val factory: suspend (location: String, scope: CoroutineScope) -> SessionDeps,
 ) : AppEnvironment {
-    override val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    override val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + appDispatcher)
 
     private val _session = MutableStateFlow<LibrarySessionImpl?>(null)
 

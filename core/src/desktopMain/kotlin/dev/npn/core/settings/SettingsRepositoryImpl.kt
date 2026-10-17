@@ -2,6 +2,7 @@ package dev.npn.core.settings
 
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.warn
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,7 +24,7 @@ import kotlin.uuid.Uuid
  * Desktop [SettingsRepository] persisted to a `settings.properties` file under
  * the platform config dir (`no-papers-needed/` in XDG_CONFIG_HOME on Unix,
  * %APPDATA% on Windows). Values are held in a [MutableStateFlow] loaded at init; a write
- * persists synchronously on [Dispatchers.IO], then updates the flow.
+ * persists synchronously on [io], then updates the flow.
  *
  * A plain properties file sidesteps okio/path
  * fiddling on desktop and is enough for a handful of app-global settings.
@@ -35,10 +36,11 @@ class SettingsRepositoryImpl internal constructor(
     private val file: File,
     /** Where a settings file that cannot be read or saved at load is reported. */
     private val log: NpnLog,
+    private val io: CoroutineDispatcher = Dispatchers.IO,
     /** Opens the stream a write goes to: a file's own stream, but a test hands one that fails partway. */
     private val openForWrite: (File) -> OutputStream,
 ) : SettingsRepository {
-    constructor(log: NpnLog, file: File = defaultFile()) : this(file, log, { FileOutputStream(it) })
+    constructor(log: NpnLog, file: File = defaultFile()) : this(file, log, openForWrite = { FileOutputStream(it) })
 
     private val props = Properties()
     private val isWindows = PlatformDirs.isWindows
@@ -105,7 +107,7 @@ class SettingsRepositoryImpl internal constructor(
     }
 
     private suspend fun persist(snapshot: SettingsSnapshot) =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             SettingsCodec.store(writer, snapshot)
             storeProperties()
         }

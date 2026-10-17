@@ -4,6 +4,7 @@ import android.content.Context
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.pdmodel.common.PDMetadata
 import dev.npn.core.pdf.PdfBoxAndroidInit
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
@@ -22,6 +23,7 @@ import java.io.ByteArrayOutputStream
  */
 class PdfBoxAndroidXmpIO(
     context: Context,
+    private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : PdfXmpIO {
     init {
         try {
@@ -32,7 +34,7 @@ class PdfBoxAndroidXmpIO(
     }
 
     override suspend fun readXmp(pdfBytes: ByteArray): String? =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             PDDocument.load(pdfBytes).use { doc ->
                 val meta = doc.documentCatalog?.metadata ?: return@withContext null
                 meta.exportXMPMetadata().use { input ->
@@ -48,7 +50,7 @@ class PdfBoxAndroidXmpIO(
         keywords: List<String>,
         title: String?,
     ): ByteArray =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             // PDDocument.load throws IOException on invalid input, satisfying the "must throw" contract.
             PDDocument.load(pdfBytes).use { doc ->
                 val xmpBytes = xmp.encodeToByteArray()

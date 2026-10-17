@@ -1,5 +1,6 @@
 package dev.npn.core.xmp
 
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.apache.pdfbox.Loader
@@ -12,9 +13,11 @@ import java.io.ByteArrayOutputStream
  * Only moves raw XMP bytes and doc-info fields; all XMP generation/parsing lives in commonMain
  * ([XmpSerializer]/[XmpParser]), so xmpbox is not used here.
  */
-class PdfBoxXmpIO : PdfXmpIO {
+class PdfBoxXmpIO(
+    private val io: CoroutineDispatcher = Dispatchers.IO,
+) : PdfXmpIO {
     override suspend fun readXmp(pdfBytes: ByteArray): String? =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             Loader.loadPDF(pdfBytes).use { doc ->
                 val meta = doc.documentCatalog?.metadata ?: return@withContext null
                 meta.exportXMPMetadata().use { input ->
@@ -30,7 +33,7 @@ class PdfBoxXmpIO : PdfXmpIO {
         keywords: List<String>,
         title: String?,
     ): ByteArray =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             // Loader.loadPDF throws IOException on invalid input, satisfying the "must throw" contract.
             Loader.loadPDF(pdfBytes).use { doc ->
                 val xmpBytes = xmp.encodeToByteArray()

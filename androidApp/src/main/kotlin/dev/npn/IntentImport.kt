@@ -11,6 +11,7 @@ import dev.npn.core.app.ImportTally
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.util.runCatchingCancellable
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -72,12 +73,13 @@ object IntentImport {
         context: Context,
         session: LibrarySession,
         intent: Intent,
+        io: CoroutineDispatcher = Dispatchers.IO,
     ): ImportTally {
         val uris = extractUris(intent)
         if (uris.isEmpty()) return ImportTally()
 
         val resolver = context.contentResolver
-        val (pdfUris, imageBytes, unreadableImages) = partitionUris(resolver, uris)
+        val (pdfUris, imageBytes, unreadableImages) = partitionUris(resolver, uris, io)
 
         // An image that cannot be read is left out of the PDF the others make: it failed to import.
         var tally = ImportTally(failed = unreadableImages)
@@ -114,6 +116,7 @@ object IntentImport {
     private suspend fun partitionUris(
         resolver: ContentResolver,
         uris: List<Uri>,
+        io: CoroutineDispatcher,
     ): SharedItems {
         val pdfUris = mutableListOf<Uri>()
         val imageBytes = mutableListOf<ByteArray>()
@@ -127,7 +130,7 @@ object IntentImport {
                 }
 
                 type?.startsWith(MIME_IMAGE_PREFIX) == true -> {
-                    val bytes = readBytes(resolver, uri)
+                    val bytes = readBytes(resolver, uri, io)
                     if (bytes != null) imageBytes.add(bytes) else unreadableImages++
                 }
 
@@ -146,8 +149,9 @@ object IntentImport {
     private suspend fun readBytes(
         resolver: ContentResolver,
         uri: Uri,
+        io: CoroutineDispatcher,
     ): ByteArray? =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             runCatching { resolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull()
         }
 

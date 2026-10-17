@@ -1,5 +1,6 @@
 package dev.npn.core.fs
 
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.nio.file.Files
@@ -15,8 +16,9 @@ object LocalLibraryFolders {
     suspend fun create(
         parent: String,
         name: String,
+        io: CoroutineDispatcher = Dispatchers.IO,
     ): String? =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             runCatching {
                 val safeName = name.filterNot { it == '/' || it == '\\' || it == '\u0000' }.ifBlank { "library" }
                 val parentPath = Paths.get(parent).toAbsolutePath().normalize()
