@@ -80,7 +80,10 @@ class LibrarySessionImpl private constructor(
     override val documents: DocumentRepository = library.documents
     override val tags: TagRepository = library.tags
     override val savedViews: SavedViewRepository = library.savedViews
-    override val rules: AutoMatchRuleRepositoryImpl = library.rules
+    override val rules: AutoMatchRuleRepository = library.rules
+
+    /** The rules' cache in the index, mirrored from the journal when another device's list arrives. */
+    internal val ruleSource: AutoMatchRuleSource = library.ruleSource
     override val storagePath: StoragePathFacade = library.storagePath
     override val fieldRegistry: FieldRegistry = library.fieldRegistry
     override val content: DocContentFacade = library.content
@@ -228,7 +231,7 @@ class LibrarySessionImpl private constructor(
         // Another device's rule list arrives as a journal setting; the rules table only caches it.
         scope.launch {
             coordinator.settingFlow(LibrarySettingKeys.AUTO_MATCH_RULES).collect {
-                log.runLogged("Caching the auto-match rules") { rules.mirror() }
+                log.runLogged("Caching the auto-match rules") { ruleSource.mirror() }
             }
         }
 
@@ -435,7 +438,8 @@ internal class Library(
     val savedViews: SavedViewRepository,
     val fieldRegistry: FieldRegistry,
     val storagePath: StoragePathFacade,
-    val rules: AutoMatchRuleRepositoryImpl,
+    val rules: AutoMatchRuleRepository,
+    val ruleSource: AutoMatchRuleSource,
     val ruleApplier: RuleApplier,
     /** The writer itself, for work that already runs as the session's: the drains, owned facet calls. */
     val writer: MetadataWriterImpl,

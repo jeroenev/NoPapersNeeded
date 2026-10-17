@@ -224,7 +224,7 @@ data class DuplicateEntity(
 
 /**
  * Cache of the library's rule list, whose master copy is a synced setting in the journal
- * (`dev.npn.core.app.AutoMatchRuleRepositoryImpl` keeps the two in step). Disposable like the
+ * (`dev.npn.core.app.AutoMatchRuleSource` keeps the two in step). Disposable like the
  * rest of the index.
  */
 @Entity(tableName = "auto_match_rules")

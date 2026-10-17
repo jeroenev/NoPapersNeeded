@@ -232,7 +232,7 @@ class LibrarySettingsTest {
                 .writer("newer-installation")
                 .commit(listOf(PendingOp.settingSet(LibrarySettingKeys.AUTO_MATCH_RULES, "{not json")))
             rig.session.rescan()
-            rig.session.rules.mirror()
+            rig.session.ruleSource.mirror()
 
             rig.session.rules
                 .observeRules()
@@ -263,7 +263,7 @@ class LibrarySettingsTest {
 
                 rig.storeRulesFromANewerBuild("{not json")
                 repeat(50) {
-                    rig.session.rules
+                    rig.session.ruleSource
                         .current()
                         .map(AutoMatchRule::name) shouldBe listOf("Invoice rule")
                 }
@@ -271,7 +271,7 @@ class LibrarySettingsTest {
 
                 rig.storeRulesFromANewerBuild("[{still not json")
                 repeat(50) {
-                    rig.session.rules
+                    rig.session.ruleSource
                         .current()
                         .map(AutoMatchRule::name) shouldBe listOf("Invoice rule")
                 }

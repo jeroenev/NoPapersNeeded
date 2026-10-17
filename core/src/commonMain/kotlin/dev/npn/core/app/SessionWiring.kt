@@ -160,18 +160,16 @@ internal suspend fun buildLibrary(
         }
     val savedViews = SavedViewRepositoryImpl(coordinator, lifetime)
     deps.upgradeAtOpen("Moving saved views into the journal") { savedViews.adoptIndexViews(db) }
-    lateinit var rules: AutoMatchRuleRepositoryImpl
+    val ruleSource = AutoMatchRuleSource(db.autoMatchRuleDao(), coordinator, deps.log)
     val ruleApplier =
         RuleApplier(
-            rules = { rules.current() },
+            rules = ruleSource::current,
             ftsDao = db.ftsDao(),
             documentDao = db.documentDao(),
             coordinator = coordinator,
             onMetadataApplied = pathRules::applyFor,
         )
-    rules =
-        AutoMatchRuleRepositoryImpl(db.autoMatchRuleDao(), ruleApplier, coordinator, deps.log, lifetime)
-    rules.mirror()
+    ruleSource.mirror()
     val bakes = BakeLock()
     val writer =
         MetadataWriterImpl(
@@ -198,7 +196,8 @@ internal suspend fun buildLibrary(
         savedViews = savedViews,
         fieldRegistry = FieldRegistryImpl(db, coordinator, lifetime),
         storagePath = storagePath,
-        rules = rules,
+        rules = AutoMatchRuleRepositoryImpl(db.autoMatchRuleDao(), ruleSource, ruleApplier, coordinator, lifetime),
+        ruleSource = ruleSource,
         ruleApplier = ruleApplier,
         writer = writer,
         lifecycle = lifecycle,
