@@ -7,7 +7,6 @@
     <ID>CompositionLocalAllowlist:LocalAppLocale.kt:LocalAppLocale$private val currentLocale = staticCompositionLocalOf { Locale.getDefault().toString() }</ID>
     <ID>CompositionLocalNaming:LocalAppLocale.kt:LocalAppLocale$private val currentLocale = staticCompositionLocalOf { Locale.getDefault().toString() }</ID>
     <ID>InjectDispatcher:DefaultAppEnvironment.kt:DefaultAppEnvironment$Default</ID>
-    <ID>InjectDispatcher:DocumentLayoutTest.kt:DocumentLayoutTest$Unconfined</ID>
     <ID>InjectDispatcher:PageViewer.kt:Default</ID>
     <ID>InjectDispatcher:PlatformHelpers.android.kt:IO</ID>
     <ID>InjectDispatcher:PlatformHelpers.desktop.kt:IO</ID>

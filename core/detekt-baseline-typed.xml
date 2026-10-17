@@ -6,7 +6,6 @@
     <ID>InjectDispatcher:DocumentRepositoryImpl.kt:DocumentRepositoryImpl$Default</ID>
     <ID>InjectDispatcher:Indexer.kt:Indexer$Default</ID>
     <ID>InjectDispatcher:JvmLibraryFileSystem.kt:JvmLibraryFileSystem$IO</ID>
-    <ID>InjectDispatcher:JvmLibraryFileSystemNoReplaceTest.kt:JvmLibraryFileSystemNoReplaceTest$IO</ID>
     <ID>InjectDispatcher:JvmWatchedFolder.kt:JvmWatchedFolder$IO</ID>
     <ID>InjectDispatcher:LocalLibraryFolders.kt:LocalLibraryFolders$IO</ID>
     <ID>InjectDispatcher:PdfBoxAndroidEngine.kt:PdfBoxAndroidEngine$IO</ID>
@@ -16,7 +15,6 @@
     <ID>InjectDispatcher:SafLibraryFileSystem.kt:SafLibraryFileSystem$IO</ID>
     <ID>InjectDispatcher:SafWatchedFolder.kt:SafWatchedFolder$IO</ID>
     <ID>InjectDispatcher:SettingsRepositoryImpl.kt:SettingsRepositoryImpl$IO</ID>
-    <ID>SpreadOperator:IndexerWriteSettleTest.kt:IndexerWriteSettleTest$(p, content.encodeToByteArray(), *options)</ID>
     <ID>UseOrEmpty:AiText.kt:AiText$(this[key] as? JsonArray) ?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -&gt; p.isString }?.contentOrNull } ?.map { it.trim() } ?.filter { it.isNotEmpty() } ?: emptyList()</ID>
   </CurrentIssues>
 </SmellBaseline>

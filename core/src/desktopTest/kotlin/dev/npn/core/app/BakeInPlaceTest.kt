@@ -15,7 +15,6 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
@@ -406,11 +405,10 @@ class BakeInPlaceTest {
     /**
      * A library filesystem over which each bake's read-back of its rewrite of [path] (the n-th) says so
      * on [reached], then waits until the n-th is [release]d: a bake held right after it verified its
-     * temporary file, before it swaps it in. [realTime] runs [nextWithin]'s wait on the wall clock.
+     * temporary file, before it swaps it in. [nextWithin] waits on the wall clock.
      */
     private class PausedReadBacks(
         private val path: String,
-        private val realTime: CoroutineDispatcher = Dispatchers.Default,
     ) {
         val reached = Channel<Unit>(Channel.UNLIMITED)
         private val gates = List(2) { CompletableDeferred<Unit>() }
@@ -418,7 +416,7 @@ class BakeInPlaceTest {
 
         /** Whether another read-back is [reached] within [millis] of real time, not the test's virtual time. */
         suspend fun nextWithin(millis: Long): Boolean =
-            withContext(realTime) { withTimeoutOrNull(millis) { reached.receive() } != null }
+            withContext(Dispatchers.Default) { withTimeoutOrNull(millis) { reached.receive() } != null }
 
         fun release(n: Int) = gates[n].complete(Unit)
 

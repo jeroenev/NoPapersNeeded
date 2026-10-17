@@ -99,6 +99,9 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
     its default config): viewmodels forwarded into child composables, composables without a
     `modifier`, parameter order and naming. Baseline: per-module `detekt-baseline-typed.xml`, where present.
     Device tests, release variants and `baselineprofile` only get the source-only run.
+- A rule that exempts tests lists `*testSources` (this build's test source sets) as its
+  `excludes`; detekt's own defaults name other builds' source sets and miss `desktopTest` and
+  the Android ones.
 - Baselines grandfather old findings; CI fails on NEW issues only. Do not add to baselines; fix
   findings in code you touch. Baselines should shrink: after a cleanup, regenerate with
   `./gradlew :<module>:detektBaseline` or `./gradlew detektTypedBaseline` and check that the diff

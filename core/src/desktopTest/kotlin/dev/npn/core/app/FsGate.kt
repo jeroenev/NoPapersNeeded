@@ -1,7 +1,6 @@
 package dev.npn.core.app
 
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.withContext
@@ -10,12 +9,10 @@ import kotlinx.coroutines.withTimeoutOrNull
 /**
  * Where a library filesystem decorator holds an operation at its storage boundary: the call that
  * [pause]s says so on [reached], then waits until [release]. A test asks whether another operation
- * finishes meanwhile with [finishesWithin], which waits on [realTime], the wall clock, not the
- * test's virtual time.
+ * finishes meanwhile with [finishesWithin], which waits on the wall clock, not the test's virtual
+ * time.
  */
-open class FsGate(
-    private val realTime: CoroutineDispatcher = Dispatchers.Default,
-) {
+open class FsGate {
     val reached = CompletableDeferred<Unit>()
     private val gate = CompletableDeferred<Unit>()
 
@@ -31,5 +28,5 @@ open class FsGate(
     suspend fun finishesWithin(
         job: Job,
         millis: Long,
-    ): Boolean = withContext(realTime) { withTimeoutOrNull(millis) { job.join() } != null }
+    ): Boolean = withContext(Dispatchers.Default) { withTimeoutOrNull(millis) { job.join() } != null }
 }

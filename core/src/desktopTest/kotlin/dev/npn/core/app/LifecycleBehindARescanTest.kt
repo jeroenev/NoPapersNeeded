@@ -185,19 +185,17 @@ class LifecycleBehindARescanTest {
     }
 
     /**
-     * The coordinator's dispatcher, over [threads], sending to [parked] each time a coroutine named
+     * The coordinator's dispatcher, over [Dispatchers.Default], sending to [parked] each time a coroutine named
      * [WAITER] has run there as far as it can. Dispatched there, a caller goes straight for the writer
      * lock, so the first such signal while another holds the lock says it waits for it.
      */
-    private class ParkedSignal(
-        private val threads: CoroutineDispatcher = Dispatchers.Default,
-    ) : CoroutineDispatcher() {
+    private class ParkedSignal : CoroutineDispatcher() {
         val parked = Channel<Unit>(Channel.UNLIMITED)
 
         override fun dispatch(
             context: CoroutineContext,
             block: Runnable,
-        ) = threads.dispatch(context) {
+        ) = Dispatchers.Default.dispatch(context) {
             block.run()
             if (context[CoroutineName]?.name == WAITER) parked.trySend(Unit)
         }

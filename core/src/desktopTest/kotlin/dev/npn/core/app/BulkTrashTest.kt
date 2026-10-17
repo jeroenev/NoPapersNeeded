@@ -136,14 +136,12 @@ class BulkTrashTest {
         return docs
     }
 
-    /** [threads] as a dispatcher instance of its own, so a coroutine can tell it runs there. */
-    private class NamedDefault(
-        private val threads: CoroutineDispatcher = Dispatchers.Default,
-    ) : CoroutineDispatcher() {
+    /** [Dispatchers.Default] as a dispatcher instance of its own, so a coroutine can tell it runs there. */
+    private class NamedDefault : CoroutineDispatcher() {
         override fun dispatch(
             context: CoroutineContext,
             block: Runnable,
-        ) = threads.dispatch(context, block)
+        ) = Dispatchers.Default.dispatch(context, block)
     }
 
     /**

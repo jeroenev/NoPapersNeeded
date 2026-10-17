@@ -1,5 +1,9 @@
 # detekt 2.0 configuration. Layered on top of the built-in defaults (buildUponDefaultConfig = true),
 # so only overrides are listed here. Tuned for a Kotlin Multiplatform + Compose codebase.
+#
+# The defaults exempt test code from some rules by path, but only the source sets of other builds
+# (jvmTest, androidUnitTest, ...). `&testSources` names this build's, and every rule that leaves tests
+# alone uses it (`*testSources`), so a test is held to the same rules whichever source set it is in.
 
 complexity:
   LongMethod:
@@ -25,6 +29,13 @@ complexity:
     allowedFunctionsPerObject: 20
     allowedFunctionsPerEnum: 20
     ignoreOverridden: true
+    excludes: &testSources
+      - '**/commonTest/**'
+      - '**/desktopTest/**'
+      - '**/androidHostTest/**'
+      - '**/androidDeviceTest/**'
+      - '**/androidTest/**'
+      - '**/test/**'
     # A Room DAO is one method per query; splitting it by count would scatter one table's SQL.
     ignoreAnnotated: ["Dao"]
   NestedBlockDepth:
@@ -70,12 +81,27 @@ naming:
     excludes: ["**/commonTest/**", "**/desktopTest/**", "**/androidUnitTest/**", "**/test/**"]
 
 coroutines:
+  InjectDispatcher:
+    # A test picks the real dispatcher it needs on the spot; nothing would ever inject another.
+    excludes: *testSources
   SuspendFunSwallowedCancellation:
     # A catch-all around a suspend call also catches CancellationException and so breaks
     # structured cancellation. Needs type resolution, so only the typed tasks run it.
     active: true
 
+potential-bugs:
+  UnsafeCallOnNullableType:
+    excludes: *testSources
+
+performance:
+  ForEachOnRange:
+    excludes: *testSources
+  SpreadOperator:
+    excludes: *testSources
+
 exceptions:
+  InstanceOfCheckForException:
+    excludes: *testSources
   TooGenericExceptionCaught:
     active: false
   SwallowedException:
