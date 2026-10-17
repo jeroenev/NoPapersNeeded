@@ -13,13 +13,13 @@ import io.github.vinceglb.filekit.PlatformFile
 @Composable
 internal actual fun rememberLibraryDirectoryPicker(
     localOnly: Boolean,
-    onPicked: (PlatformFile?) -> Unit,
+    onPick: (PlatformFile?) -> Unit,
 ): () -> Unit {
     // FileKit's Android directory picker does not expose intent extras.
     val contract = remember(localOnly) { LibraryDirectoryContract(localOnly) }
     val picker =
         rememberLauncherForActivityResult(contract) { uri ->
-            onPicked(uri?.let { PlatformFile(AndroidFile.UriWrapper(it)) })
+            onPick(uri?.let { PlatformFile(AndroidFile.UriWrapper(it)) })
         }
     return { picker.launch(null) }
 }

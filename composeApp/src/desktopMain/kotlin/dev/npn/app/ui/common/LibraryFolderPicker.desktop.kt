@@ -7,8 +7,8 @@ import io.github.vinceglb.filekit.dialogs.compose.rememberDirectoryPickerLaunche
 @Composable
 internal actual fun rememberLibraryDirectoryPicker(
     localOnly: Boolean,
-    onPicked: (PlatformFile?) -> Unit,
+    onPick: (PlatformFile?) -> Unit,
 ): () -> Unit {
-    val picker = rememberDirectoryPickerLauncher(onResult = onPicked)
+    val picker = rememberDirectoryPickerLauncher(onResult = onPick)
     return { picker.launch() }
 }

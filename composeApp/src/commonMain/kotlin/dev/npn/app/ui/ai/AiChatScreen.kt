@@ -106,7 +106,7 @@ fun AiChatScreen(
     settings: SettingsRepository,
     onBack: () -> Unit,
     onOpenDoc: (String) -> Unit,
-    onOpenFiltered: (List<String>) -> Unit,
+    onShowInLibrary: (List<String>) -> Unit,
     onAiEditDocs: (List<String>) -> Unit,
     /** Hands off to the AI-edit page without preselection; null where the top bar offers no such action. */
     onAiEdit: (() -> Unit)?,
@@ -174,7 +174,7 @@ fun AiChatScreen(
                 // Keyed by session and item, so a row's own state (an expanded tool row) stays with
                 // its item, and never carries over to whatever sits at that position in another chat.
                 items(items, key = { "${ui.currentSessionId}:${it.id}" }) { item ->
-                    TranscriptRow(item, ui.docTitles, onOpenDoc, onOpenFiltered, onAiEditDocs)
+                    TranscriptRow(item, ui.docTitles, onOpenDoc, onShowInLibrary, onAiEditDocs)
                 }
             }
 
@@ -214,7 +214,7 @@ private fun TranscriptRow(
     item: TranscriptItem,
     docTitles: Map<String, String>,
     onOpenDoc: (String) -> Unit,
-    onOpenFiltered: (List<String>) -> Unit,
+    onShowInLibrary: (List<String>) -> Unit,
     onAiEditDocs: (List<String>) -> Unit,
 ) {
     when (item) {
@@ -227,7 +227,7 @@ private fun TranscriptRow(
             // still-streaming turn may legitimately be empty before the first token
             // and keeps rendering so the in-progress bubble is visible.
             if (item.text.isNotEmpty() || item.streaming) {
-                AssistantBubble(item, onOpenDoc, onOpenFiltered, onAiEditDocs, docTitles)
+                AssistantBubble(item, onOpenDoc, onShowInLibrary, onAiEditDocs, docTitles)
             }
         }
 
@@ -335,7 +335,7 @@ private fun UserBubble(item: TranscriptItem.UserTurn) {
 private fun AssistantBubble(
     item: TranscriptItem.AssistantTurn,
     onOpenDoc: (String) -> Unit,
-    onOpenFiltered: (List<String>) -> Unit,
+    onShowInLibrary: (List<String>) -> Unit,
     onAiEditDocs: (List<String>) -> Unit,
     docTitles: Map<String, String>,
 ) {
@@ -350,7 +350,7 @@ private fun AssistantBubble(
         if (item.docRefs.isNotEmpty()) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 AssistChip(
-                    onClick = { onOpenFiltered(item.docRefs) },
+                    onClick = { onShowInLibrary(item.docRefs) },
                     label = { Text(stringResource(Res.string.ai_open_all_documents)) },
                     leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
                 )

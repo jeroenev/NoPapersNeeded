@@ -17,11 +17,5 @@
     <ID>LambdaParameterInRestartableEffect:PageViewer.kt:render: suspend (pageIndex: Int, maxDim: Int) -&gt; ByteArray?</ID>
     <ID>ModifierWithoutDefault:AiEditSetupControls.kt:modifier: Modifier</ID>
     <ID>ModifierWithoutDefault:FieldEditor.kt:modifier: Modifier</ID>
-    <ID>NoNameShadowing:FilterSheet.kt:{ onDraftChange(draft.withFieldBounds(def.key, from = it)) }</ID>
-    <ID>NoNameShadowing:FilterSheet.kt:{ onDraftChange(draft.withFieldBounds(def.key, to = it)) }</ID>
-    <ID>ParameterNaming:AiChatScreen.kt:onOpenFiltered: (List&lt;String&gt;) -&gt; Unit</ID>
-    <ID>ParameterNaming:LibraryFolderPicker.android.kt:onPicked: (PlatformFile?) -&gt; Unit</ID>
-    <ID>ParameterNaming:LibraryFolderPicker.desktop.kt:onPicked: (PlatformFile?) -&gt; Unit</ID>
-    <ID>ParameterNaming:LibraryFolderPicker.kt:onPicked: (PlatformFile?) -&gt; Unit</ID>
   </CurrentIssues>
 </SmellBaseline>

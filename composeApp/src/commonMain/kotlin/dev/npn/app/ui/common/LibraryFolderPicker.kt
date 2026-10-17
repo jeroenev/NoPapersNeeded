@@ -44,5 +44,5 @@ fun rememberLibraryFolderPicker(
 @Composable
 internal expect fun rememberLibraryDirectoryPicker(
     localOnly: Boolean,
-    onPicked: (PlatformFile?) -> Unit,
+    onPick: (PlatformFile?) -> Unit,
 ): () -> Unit

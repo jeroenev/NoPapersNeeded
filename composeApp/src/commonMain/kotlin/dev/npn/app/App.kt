@@ -549,7 +549,7 @@ private fun NavGraphBuilder.aiRoutes(
             settings = settings,
             onBack = { nav.popBackStack() },
             onOpenDoc = { docId -> nav.openDoc(docId, browse) },
-            onOpenFiltered = { docIds ->
+            onShowInLibrary = { docIds ->
                 libraryFilterHandoff.set(
                     LibraryFilter(docIds = docIds),
                 )

@@ -151,7 +151,7 @@ class AiChatScreenTest : EnglishLocaleTest() {
                     settings = aiConfiguredSettings(),
                     onBack = {},
                     onOpenDoc = {},
-                    onOpenFiltered = {},
+                    onShowInLibrary = {},
                     onAiEditDocs = {},
                     onAiEdit = null,
                 )

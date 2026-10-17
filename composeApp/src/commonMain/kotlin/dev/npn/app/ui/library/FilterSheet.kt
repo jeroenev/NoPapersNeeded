@@ -365,7 +365,7 @@ private fun FieldFilterRow(
                     DatePickerField(
                         value = draft.fieldRanges[def.key]?.from,
                         label = stringResource(Res.string.library_from),
-                        onCommit = { onDraftChange(draft.withFieldBounds(def.key, from = it)) },
+                        onCommit = { bound -> onDraftChange(draft.withFieldBounds(def.key, from = bound)) },
                         modifier = it,
                     )
                 },
@@ -373,7 +373,7 @@ private fun FieldFilterRow(
                     DatePickerField(
                         value = draft.fieldRanges[def.key]?.to,
                         label = stringResource(Res.string.library_to),
-                        onCommit = { onDraftChange(draft.withFieldBounds(def.key, to = it)) },
+                        onCommit = { bound -> onDraftChange(draft.withFieldBounds(def.key, to = bound)) },
                         modifier = it,
                     )
                 },
@@ -388,7 +388,7 @@ private fun FieldFilterRow(
                         def = def,
                         value = draft.fieldRanges[def.key]?.from,
                         label = stringResource(Res.string.library_from),
-                        onCommit = { onDraftChange(draft.withFieldBounds(def.key, from = it)) },
+                        onCommit = { bound -> onDraftChange(draft.withFieldBounds(def.key, from = bound)) },
                         onValidity = { valid -> editor.setBoundValidity("${def.key}:from", valid) },
                         modifier = it,
                     )
@@ -398,7 +398,7 @@ private fun FieldFilterRow(
                         def = def,
                         value = draft.fieldRanges[def.key]?.to,
                         label = stringResource(Res.string.library_to),
-                        onCommit = { onDraftChange(draft.withFieldBounds(def.key, to = it)) },
+                        onCommit = { bound -> onDraftChange(draft.withFieldBounds(def.key, to = bound)) },
                         onValidity = { valid -> editor.setBoundValidity("${def.key}:to", valid) },
                         modifier = it,
                     )
