@@ -11,13 +11,15 @@ import androidx.room3.RoomDatabaseConstructor
 import androidx.room3.migration.AutoMigrationSpec
 import androidx.room3.migration.Migration
 import androidx.sqlite.SQLiteConnection
+import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.sqlite.execSQL
+import kotlinx.coroutines.Dispatchers
 
 /**
  * Local index database. This is a disposable cache: a materialized view of the file library
  * plus the metadata journals. It lives in app-local storage, is never synced,
  * and is fully rebuildable from the folder alone. Because of that, destructive migration is the
- * correct fallback (see the platform builders): a schema bump without a migration drops it and
+ * correct fallback ([configure]): a schema bump without a migration drops it and
  * the next open rebuilds it. What this device knows that the folder does not lives in
  * [DeviceDatabase] instead, which is never dropped.
  */
@@ -193,10 +195,19 @@ abstract class NpnDatabase : RoomDatabase() {
     companion object {
         /**
          * Add the migrations Room cannot generate; every builder must. Without one for a version
-         * step, the builders' destructive fallback would drop the whole index instead.
+         * step, the destructive fallback of [configure] would drop the whole index instead.
          */
         fun withMigrations(builder: Builder<NpnDatabase>): Builder<NpnDatabase> =
             builder.addMigrations(SavedViewsLeave, DeviceStateLeaves)
+
+        /**
+         * What every platform's index builder sets: the bundled driver, queries on [Dispatchers.IO],
+         * [withMigrations], and the destructive fallback, which only the index has: it is a cache
+         * the library folder rebuilds. [DeviceDatabase.configure] has none.
+         */
+        fun configure(builder: Builder<NpnDatabase>): Builder<NpnDatabase> =
+            withMigrations(builder.setDriver(BundledSQLiteDriver()).setQueryCoroutineContext(Dispatchers.IO))
+                .fallbackToDestructiveMigration(dropAllTables = true)
     }
 }
 

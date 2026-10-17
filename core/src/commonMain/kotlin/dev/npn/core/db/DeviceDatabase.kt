@@ -4,12 +4,14 @@ import androidx.room3.ConstructedBy
 import androidx.room3.Database
 import androidx.room3.RoomDatabase
 import androidx.room3.RoomDatabaseConstructor
+import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import kotlinx.coroutines.Dispatchers
 
 /**
  * This device's own state for one library: what neither the library folder nor the journal holds,
  * so nothing could rebuild it. It lives next to [NpnDatabase] in app-local storage, is never
  * synced, and, unlike the index, is never dropped: every schema change ships a real migration, and
- * the builders have no destructive fallback.
+ * [configure] gives its builders no destructive fallback.
  *
  * - `kv`: the journal device id and the installation it belongs to, and the assistant's chat
  *   sessions and conversations ([KeyValueDao]);
@@ -43,6 +45,16 @@ abstract class DeviceDatabase : RoomDatabase() {
     abstract fun aiEnrichQueueDao(): AiEnrichQueueDao
 
     abstract fun ocrQueueDao(): OcrQueueDao
+
+    companion object {
+        /**
+         * What every platform's builder sets: the bundled driver and queries on [Dispatchers.IO].
+         * Never a destructive fallback, unlike [NpnDatabase.configure]: what this database holds
+         * cannot be rebuilt, so a schema change without a migration fails to open instead.
+         */
+        fun configure(builder: Builder<DeviceDatabase>): Builder<DeviceDatabase> =
+            builder.setDriver(BundledSQLiteDriver()).setQueryCoroutineContext(Dispatchers.IO)
+    }
 }
 
 /** KSP generates the platform actuals for this constructor; see [NpnDatabaseConstructor]. */
