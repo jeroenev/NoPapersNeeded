@@ -71,6 +71,35 @@ class FieldSeedUpgradeTest {
             journalObjects() shouldBe objects
         }
 
+    /**
+     * An older build's label edit writes a newer title definition without the per-document flag, as
+     * it drops every key it does not know. The next open gives the flag back and keeps the edit; an
+     * open that finds the flag in place writes nothing.
+     */
+    @Test
+    fun aDefinitionAnOlderBuildWroteWithoutTheFlagGetsItBackOnce() =
+        runTest {
+            val coordinator = rig.coordinator()
+            coordinator.refreshState()
+            coordinator.seedFieldRegistryIfNeeded(FieldKeys.seedDefinitions())
+            val olderEdit = seeds.getValue(FieldKeys.TITLE).copy(label = "Onderwerp", perDocument = false)
+            rig.clock.advance()
+            coordinator.commitAndApply(listOf(PendingOp.fieldDefSet(olderEdit)))
+            registry().getValue(FieldKeys.TITLE).perDocument shouldBe false
+
+            val before = journalObjects()
+            rig.clock.advance()
+            coordinator.restoreSeededPerDocument(FieldKeys.seedDefinitions(), registry().values.toList())
+
+            registry().getValue(FieldKeys.TITLE) shouldBe olderEdit.copy(perDocument = true)
+            registry().filterKeys { it != FieldKeys.TITLE } shouldBe seeds.filterKeys { it != FieldKeys.TITLE }
+            journalObjects() shouldBe before + 1
+
+            val reopened = rig.coordinator().apply { refreshState() }
+            reopened.restoreSeededPerDocument(FieldKeys.seedDefinitions(), registry().values.toList())
+            journalObjects() shouldBe before + 1
+        }
+
     @Test
     fun aFreshLibraryIsSeededAtTheCurrentVersion() =
         runTest {

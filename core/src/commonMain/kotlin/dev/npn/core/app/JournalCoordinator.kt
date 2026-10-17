@@ -256,6 +256,23 @@ class JournalCoordinator internal constructor(
         }
     }
 
+    /**
+     * Give the seeded definitions back the [FieldDef.perDocument] flag an older build dropped
+     * ([FieldKeys.lostPerDocument]), changing nothing else. [projected] is the registry as the index
+     * holds it: the cheap check, so an open where nothing was lost writes nothing and skips the fold.
+     * One write per loss: the older build only drops the flag again when its user edits the field.
+     */
+    suspend fun restoreSeededPerDocument(
+        seeds: List<FieldDef>,
+        projected: List<FieldDef>,
+    ) {
+        if (FieldKeys.lostPerDocument(projected, seeds).isEmpty()) return
+        if (writeBlockReason != null) return
+        commitBuilt { state ->
+            FieldKeys.lostPerDocument(state.effectiveFieldDefs(), seeds).map { PendingOp.fieldDefSet(it) }
+        }
+    }
+
     /** The seed version a [FieldKeys.SEEDED_SETTING] value records: 0 when absent, 1 for the first marker. */
     private fun seedVersion(marker: String?): Int = if (marker == null) 0 else marker.toIntOrNull() ?: 1
 

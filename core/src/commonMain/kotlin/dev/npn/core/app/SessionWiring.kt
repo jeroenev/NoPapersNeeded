@@ -6,6 +6,7 @@ import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.LegacyIndexTables
 import dev.npn.core.db.fieldTypes
+import dev.npn.core.db.toFieldDef
 import dev.npn.core.fs.OcrSidecarFiles
 import dev.npn.core.fs.TrashOps
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
@@ -97,8 +98,9 @@ internal suspend fun createCoordinator(
 
 /**
  * Fold the journal, so the documents are there before the caller's initial rescan, and bring the
- * library's own data up to what this build expects: the seeded fields, and the library settings
- * this device kept before they became library data.
+ * library's own data up to what this build expects: the seeded fields (with the per-document flag
+ * an older build may have dropped since), and the library settings this device kept before they
+ * became library data.
  *
  * A new library's first seeding is part of opening it: without it the library has no fields. Every
  * other step is an [upgradeAtOpen].
@@ -113,6 +115,14 @@ internal suspend fun foldJournal(
         coordinator.seedFieldRegistryIfNeeded(seeds)
     } else {
         deps.upgradeAtOpen("Upgrading the seeded field definitions") { coordinator.seedFieldRegistryIfNeeded(seeds) }
+    }
+    deps.upgradeAtOpen("Restoring the seeded fields' per-document flag") {
+        val projected =
+            deps.db
+                .fieldDefDao()
+                .all()
+                .mapNotNull { it.toFieldDef() }
+        coordinator.restoreSeededPerDocument(seeds, projected)
     }
     deps.upgradeAtOpen("Adopting this device's library settings") {
         coordinator.adoptSettings(deps.settings.legacyLibrarySettings().journalSettings())

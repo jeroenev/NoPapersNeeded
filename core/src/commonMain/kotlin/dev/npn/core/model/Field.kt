@@ -247,6 +247,20 @@ object FieldKeys {
         }
     }
 
+    /**
+     * The definitions under a seeded key that lack the [FieldDef.perDocument] their seed sets, with
+     * only that flag given back. A build from before the flag drops it from every definition it
+     * writes again (a label edit, a reorder), and no user can turn it off: it is not on the edit form.
+     * So a missing flag is always such a loss, never a decision. Empty when nothing lacks it.
+     */
+    fun lostPerDocument(
+        current: List<FieldDef>,
+        seeds: List<FieldDef>,
+    ): List<FieldDef> {
+        val perDocumentKeys = seeds.filter { it.perDocument }.map { it.key }.toSet()
+        return current.filter { !it.perDocument && it.key in perDocumentKeys }.map { it.copy(perDocument = true) }
+    }
+
     /** English seed labels; the UI re-labels through the registry, so these are only a fallback. */
     val SEED_LABELS: Map<String, String> =
         mapOf(

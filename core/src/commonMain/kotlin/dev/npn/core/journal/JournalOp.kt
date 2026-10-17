@@ -89,7 +89,9 @@ sealed class JournalOp {
      * `perDocument` is written only when true. Builds from before it ignore the key and drop it from
      * every definition they write again: a label edit there, or a compaction there, which re-encodes
      * the events it carries from its own index. Such a re-encoded copy is the same event, and the
-     * index keeps the copy with the flag ([EventCopies]).
+     * index keeps the copy with the flag ([EventCopies]). A label edit or reorder there is a newer
+     * definition without it; for a seeded field, this build's next open writes it back
+     * ([dev.npn.core.app.JournalCoordinator.restoreSeededPerDocument]).
      */
     data class FieldDefSet(
         val key: String,
