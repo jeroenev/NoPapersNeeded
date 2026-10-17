@@ -30,6 +30,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.Collections
 
 /**
  * A self-contained test rig: a temp library dir on the real JVM filesystem, a real Room database
@@ -152,15 +153,21 @@ class IndexRig private constructor(
         name: String,
         content: String,
     ): dev.npn.core.fs.ExternalSource {
-        val ext = Files.createTempDirectory("npn-ext").resolve(name)
+        val ext = scratchDir().resolve(name)
         Files.write(ext, content.encodeToByteArray())
         return dev.npn.core.fs
             .ExternalSource(ext)
     }
 
+    private val scratchDirs: MutableList<Path> = Collections.synchronizedList(mutableListOf())
+
+    /** A fresh directory outside the library, for files a test keeps aside; [close] deletes it. */
+    fun scratchDir(): Path = Files.createTempDirectory("npn-scratch").also { scratchDirs.add(it) }
+
     fun close() {
         dbs.close()
         libRoot.toFile().deleteRecursively()
+        scratchDirs.forEach { it.toFile().deleteRecursively() }
     }
 
     /** Run [block] over this rig, then close it, whether or not [block] threw. */

@@ -401,8 +401,7 @@ class DocumentFilterTest {
     fun anIdFilterOfAnyLengthIsOneBindLookedUpByPrimaryKey() =
         runTest {
             val statements = StatementLog()
-            val rig = IndexRig.create(statements)
-            try {
+            IndexRig.create(statements).use { rig ->
                 listOf("a", "b", "c", "d").forEach { rig.writePdf("$it.pdf", it) }
                 rig.rescan()
                 val dao = rig.db.documentDao()
@@ -428,8 +427,6 @@ class DocumentFilterTest {
                         }
                     }
                 }
-            } finally {
-                rig.close()
             }
         }
 

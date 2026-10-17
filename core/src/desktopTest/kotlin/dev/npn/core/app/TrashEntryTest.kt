@@ -60,14 +60,7 @@ class TrashEntryTest {
         }
     }
 
-    private suspend fun withLibrary(block: suspend Library.() -> Unit) {
-        val rig = IndexRig.create()
-        try {
-            Library(rig).block()
-        } finally {
-            rig.close()
-        }
-    }
+    private suspend fun withLibrary(block: suspend Library.() -> Unit) = IndexRig.create().use { Library(it).block() }
 
     /**
      * Run [block] over two trashed documents whose trash entries carry the same hash prefix, once in

@@ -103,7 +103,7 @@ class CompactionReconcileTest {
             // snapshot file has not arrived yet (sync reordering). Move the objects aside.
             val v2Files =
                 fs.journalObjects()
-            val stash = Files.createTempDirectory("npn-stash")
+            val stash = rig.scratchDir()
             val moved =
                 v2Files.map { file ->
                     val target = stash.resolve(file.name)
@@ -153,7 +153,7 @@ class CompactionReconcileTest {
             // had failed.
             val leftover =
                 fs.journalObjects().first()
-            val kept = Files.createTempDirectory("npn-leftover").resolve(leftover.name)
+            val kept = rig.scratchDir().resolve(leftover.name)
             Files.copy(libRoot.resolve(leftover.relPath), kept, StandardCopyOption.COPY_ATTRIBUTES)
             coordinator.compact(nowMillis = farFuture).shouldNotBeNull()
             Files.copy(kept, libRoot.resolve(leftover.relPath), StandardCopyOption.COPY_ATTRIBUTES)
@@ -185,7 +185,7 @@ class CompactionReconcileTest {
             }
             coordinator.reconcileMetadata()
             val leftover = fs.journalPaths<JournalPath.ObjectV2>().first()
-            val kept = Files.createTempDirectory("npn-leftover").resolve(NpnPaths.fileName(leftover))
+            val kept = rig.scratchDir().resolve(NpnPaths.fileName(leftover))
             Files.copy(libRoot.resolve(leftover), kept, StandardCopyOption.COPY_ATTRIBUTES)
             coordinator.compact(nowMillis = farFuture).shouldNotBeNull()
             Files.write(libRoot.resolve(leftover), Files.readAllBytes(kept) + "\n".encodeToByteArray())
@@ -217,7 +217,7 @@ class CompactionReconcileTest {
                 coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "tag$i")))
             }
             coordinator.reconcileMetadata()
-            val backup = Files.createTempDirectory("npn-backup")
+            val backup = rig.scratchDir()
             val objects = fs.journalPaths<JournalPath.ObjectV2>()
             objects.forEach {
                 Files.copy(
@@ -261,7 +261,7 @@ class CompactionReconcileTest {
             }
             coordinator.reconcileMetadata()
             val leftover = fs.journalPaths<JournalPath.ObjectV2>().first()
-            val kept = Files.createTempDirectory("npn-leftover").resolve(NpnPaths.fileName(leftover))
+            val kept = rig.scratchDir().resolve(NpnPaths.fileName(leftover))
             Files.copy(libRoot.resolve(leftover), kept, StandardCopyOption.COPY_ATTRIBUTES)
             coordinator.compact(nowMillis = farFuture).shouldNotBeNull()
             Files.copy(kept, libRoot.resolve(leftover), StandardCopyOption.COPY_ATTRIBUTES)
@@ -292,7 +292,7 @@ class CompactionReconcileTest {
             }
             coordinator.reconcileMetadata()
             val leftover = fs.journalPaths<JournalPath.ObjectV2>().first()
-            val kept = Files.createTempDirectory("npn-leftover").resolve(NpnPaths.fileName(leftover))
+            val kept = rig.scratchDir().resolve(NpnPaths.fileName(leftover))
             Files.copy(libRoot.resolve(leftover), kept, StandardCopyOption.COPY_ATTRIBUTES)
             coordinator.compact(nowMillis = farFuture).shouldNotBeNull()
             repeat(4) { i ->

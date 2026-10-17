@@ -59,41 +59,38 @@ class ExternalDocumentMovesTest {
     @Test
     fun manualMoveOverridesAppliedIntentAndReplicates() =
         runTest {
-            val a = IndexRig.create()
-            val b = IndexRig.create()
-            try {
-                a.writePdf("original.pdf", "document")
-                val hash = a.fs.sha256("original.pdf")
-                val coordinator = a.coordinator(a.writer("local"))
-                coordinator.rescan()
-                coordinator.commitAndApply(listOf(PendingOp.propSet(hash, SystemProperty.STORAGE_PATH, "app.pdf")))
-                a.moveFile("app.pdf", "manual.pdf")
-                coordinator.commitAndApply(listOf(PendingOp.propSet(hash, SystemProperty.REVIEWED, "true")))
-                coordinator.rescan()
-                a.db
-                    .documentDao()
-                    .requireByDocId(hash)
-                    .relPath shouldBe "manual.pdf"
-                a.accumulator.loadState().effectiveProp(hash, SystemProperty.STORAGE_PATH) shouldBe "manual.pdf"
-                a.exists("app.pdf") shouldBe false
-                for (entry in a.fs.listAll()) {
-                    if (!entry.isDirectory && entry.relPath.startsWith(".npn/journal/")) {
-                        b.fs.writeBytesOnce(entry.relPath, a.fs.readBytes(entry.relPath))
+            IndexRig.create().use { a ->
+                IndexRig.create().use { b ->
+                    a.writePdf("original.pdf", "document")
+                    val hash = a.fs.sha256("original.pdf")
+                    val coordinator = a.coordinator(a.writer("local"))
+                    coordinator.rescan()
+                    coordinator.commitAndApply(listOf(PendingOp.propSet(hash, SystemProperty.STORAGE_PATH, "app.pdf")))
+                    a.moveFile("app.pdf", "manual.pdf")
+                    coordinator.commitAndApply(listOf(PendingOp.propSet(hash, SystemProperty.REVIEWED, "true")))
+                    coordinator.rescan()
+                    a.db
+                        .documentDao()
+                        .requireByDocId(hash)
+                        .relPath shouldBe "manual.pdf"
+                    a.accumulator.loadState().effectiveProp(hash, SystemProperty.STORAGE_PATH) shouldBe "manual.pdf"
+                    a.exists("app.pdf") shouldBe false
+                    for (entry in a.fs.listAll()) {
+                        if (!entry.isDirectory && entry.relPath.startsWith(".npn/journal/")) {
+                            b.fs.writeBytesOnce(entry.relPath, a.fs.readBytes(entry.relPath))
+                        }
                     }
+                    b.writePdf("original.pdf", "document")
+                    b.coordinator(b.writer("replica")).rescan()
+                    b.db
+                        .documentDao()
+                        .requireByDocId(hash)
+                        .relPath shouldBe "manual.pdf"
+                    b.db
+                        .documentDao()
+                        .requireByDocId(hash)
+                        .reviewed shouldBe true
                 }
-                b.writePdf("original.pdf", "document")
-                b.coordinator(b.writer("replica")).rescan()
-                b.db
-                    .documentDao()
-                    .requireByDocId(hash)
-                    .relPath shouldBe "manual.pdf"
-                b.db
-                    .documentDao()
-                    .requireByDocId(hash)
-                    .reviewed shouldBe true
-            } finally {
-                a.close()
-                b.close()
             }
         }
 
