@@ -7,11 +7,11 @@ import dev.npn.app.di.OpenFailureReason
 import dev.npn.app.platform.createLibraryFolder
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.WhileSubscribedTimeout
-import dev.npn.app.ui.common.aiConfigured
 import dev.npn.app.ui.common.asUiText
 import dev.npn.app.ui.common.clearThumbCache
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.app.aiConfigured
 import dev.npn.core.app.importAll
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.VerifiedPublicationUnavailableException

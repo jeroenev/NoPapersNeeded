@@ -118,6 +118,7 @@ import dev.npn.core.index.ScanReport
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.model.labelFor
+import dev.npn.core.model.reviewMarkerIsAuthoritative
 import io.github.vinceglb.filekit.dialogs.FileKitMode
 import io.github.vinceglb.filekit.dialogs.FileKitType
 import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher

@@ -65,7 +65,9 @@ import dev.npn.app.ui.common.onSecondaryClick
 import dev.npn.app.ui.common.parseFtsSnippet
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.DocListItem
+import dev.npn.core.app.effectiveReviewed
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.model.reviewMarkerIsAuthoritative
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_add_tag
 import no_papers_needed.composeapp.generated.resources.library_deselect

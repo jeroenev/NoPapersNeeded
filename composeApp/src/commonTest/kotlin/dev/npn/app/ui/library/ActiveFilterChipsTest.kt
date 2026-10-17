@@ -1,13 +1,5 @@
-package dev.npn.app
+package dev.npn.app.ui.library
 
-import dev.npn.app.ui.library.ActiveFilterChip
-import dev.npn.app.ui.library.TagBucket
-import dev.npn.app.ui.library.activeChips
-import dev.npn.app.ui.library.matchIncludedTags
-import dev.npn.app.ui.library.rebased
-import dev.npn.app.ui.library.removeChip
-import dev.npn.app.ui.library.tagBucket
-import dev.npn.app.ui.library.withTag
 import dev.npn.core.app.FieldRange
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.model.FieldKeys
@@ -17,81 +9,10 @@ import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 
 /**
- * Pure tests for tag-bucket placement and the active-chip composition — value in, value out, no
- * Compose. These own the invariants that would otherwise live in untested private helpers in
- * FilterSheet and ActiveFilters: the strip-from-all-buckets-first rule, the whole-group match
- * mode, chip ordering, and per-chip removal clearing exactly the right facet.
+ * Pure tests for the active-chip composition: chip ordering, and per-chip removal clearing exactly
+ * the right facet.
  */
-class LibraryFilterEditsTest {
-    @Test
-    fun explicitExclusionRemovesTheTagFromIncludedGroups() {
-        val filter = LibraryFilter(tagsAll = listOf("a"), tagsAny = listOf("b"))
-        filter.withTag("a", TagBucket.NONE) shouldBe LibraryFilter(tagsAny = listOf("b"), tagsNone = listOf("a"))
-    }
-
-    @Test
-    fun changingMatchModePreservesExclusionsAndOtherFacets() {
-        val filter =
-            LibraryFilter(tagsAll = listOf("a"), tagsAny = listOf("b"), tagsNone = listOf("c"), query = "invoice")
-        filter.matchIncludedTags(false) shouldBe filter.copy(tagsAll = emptyList(), tagsAny = listOf("a", "b"))
-        filter.matchIncludedTags(true) shouldBe filter.copy(tagsAll = listOf("a", "b"), tagsAny = emptyList())
-    }
-
-    @Test
-    fun tagBucketReadsWhicheverBucketTheTagIsIn() {
-        val filter =
-            LibraryFilter(
-                tagsAll = listOf("a"),
-                tagsAny = listOf("b"),
-                tagsNone = listOf("c"),
-            )
-        tagBucket(filter, "a") shouldBe TagBucket.ALL
-        tagBucket(filter, "b") shouldBe TagBucket.ANY
-        tagBucket(filter, "c") shouldBe TagBucket.NONE
-        tagBucket(filter, "absent") shouldBe TagBucket.OFF
-    }
-
-    @Test
-    fun everyBucketPlacementLeavesTheTagInExactlyThatBucket() {
-        val tag = "finance"
-        var filter = LibraryFilter()
-        // Each placement must be absolute, whatever the tag's previous bucket was: the tag is
-        // never present in more than one of the three bucket lists at once.
-        listOf(TagBucket.ALL, TagBucket.ANY, TagBucket.NONE, TagBucket.OFF).forEach { bucket ->
-            filter = filter.withTag(tag, bucket)
-            tagBucket(filter, tag) shouldBe bucket
-            val presentIn = listOf(filter.tagsAll, filter.tagsAny, filter.tagsNone).count { tag in it }
-            presentIn shouldBe if (bucket == TagBucket.OFF) 0 else 1
-        }
-        // Clearing a tag leaves nothing behind in any of the three lists.
-        filter shouldBe LibraryFilter()
-    }
-
-    @Test
-    fun placingATagStripsItFromAllBucketsFirst() {
-        // A hand-corrupted filter with the SAME tag in two buckets at once. Placing it must not
-        // leave a stale copy behind: afterwards the tag lives in exactly one bucket.
-        val corrupt = LibraryFilter(tagsAll = listOf("dup"), tagsNone = listOf("dup"))
-        val placed = corrupt.withTag("dup", TagBucket.ANY)
-        placed.tagsAll shouldContainExactly emptyList()
-        placed.tagsNone shouldContainExactly emptyList()
-        placed.tagsAny shouldContainExactly listOf("dup")
-    }
-
-    @Test
-    fun placingOneTagLeavesOtherTagsInTheirBucketsUntouched() {
-        val filter =
-            LibraryFilter(
-                tagsAll = listOf("keep-all"),
-                tagsAny = listOf("keep-any"),
-                tagsNone = listOf("keep-none"),
-            )
-        val placed = filter.withTag("new", TagBucket.ALL)
-        placed.tagsAll shouldContainExactly listOf("keep-all", "new")
-        placed.tagsAny shouldContainExactly listOf("keep-any")
-        placed.tagsNone shouldContainExactly listOf("keep-none")
-    }
-
+class ActiveFilterChipsTest {
     @Test
     fun emptyFilterProducesNoChips() {
         LibraryFilter().activeChips() shouldBe emptyList()
@@ -237,50 +158,5 @@ class LibraryFilterEditsTest {
             )
         val emptied = full.activeChips().fold(full) { acc, chip -> acc.removeChip(chip) }
         emptied shouldBe LibraryFilter()
-    }
-
-    /** A search typed beside the panel replaces the draft's search and nothing it drafted. */
-    @Test
-    fun aDraftRebasedOnANewSearchKeepsItsEdits() {
-        val live = LibraryFilter(tagsAll = listOf("bills"))
-        val draft =
-            live.copy(
-                tagsAll = listOf("bills", "2024"),
-                fieldRanges = mapOf(FieldKeys.DOC_DATE to FieldRange(from = "2024-01-01")),
-            )
-
-        draft.rebased(live, live.copy(query = "electricity")) shouldBe draft.copy(query = "electricity")
-    }
-
-    /** A chip removed beside the panel takes only its own tag or bound out of the draft. */
-    @Test
-    fun aDraftRebasedOnARemovedChipLosesOnlyThatPart() {
-        val live =
-            LibraryFilter(
-                tagsAll = listOf("bills"),
-                fieldRanges = mapOf("amount" to FieldRange(from = "10")),
-            )
-        val draft =
-            live.copy(
-                tagsAll = listOf("bills", "2024"),
-                tagsNone = listOf("paid"),
-                fieldRanges = live.fieldRanges + (FieldKeys.DOC_DATE to FieldRange(from = "2024-01-01")),
-            )
-
-        draft.rebased(live, live.removeChip(ActiveFilterChip.TagAll("bills"))) shouldBe
-            draft.copy(tagsAll = listOf("2024"))
-        draft.rebased(live, live.removeChip(ActiveFilterChip.FieldFrom("amount", "10"))) shouldBe
-            draft.copy(fieldRanges = mapOf(FieldKeys.DOC_DATE to FieldRange(from = "2024-01-01")))
-    }
-
-    /** A part both changed takes the live value; an unchanged live filter leaves the draft as it is. */
-    @Test
-    fun theLiveChangeWinsWhereBothChangedAPart() {
-        val live = LibraryFilter()
-        val draft = LibraryFilter(tagsAll = listOf("2024"), reviewed = true)
-        val now = LibraryFilter(tagsNone = listOf("2024"), reviewed = false, untaggedOnly = true)
-
-        draft.rebased(live, now) shouldBe now
-        draft.rebased(live, live) shouldBe draft
     }
 }

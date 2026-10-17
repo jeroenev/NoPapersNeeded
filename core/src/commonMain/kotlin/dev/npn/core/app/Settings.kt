@@ -5,6 +5,8 @@ import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiReasoningLevel
 import dev.npn.core.ocr.OcrLanguages
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 
 // ---------- settings (app-global, not per library) ----------
 
@@ -75,6 +77,14 @@ fun SettingsSnapshot.toAiConfig(systemLanguage: String? = null): AiConfig =
         ocrAuto = aiOcrAuto,
         appLanguage = appLanguage ?: systemLanguage,
     )
+
+/**
+ * Whether the AI endpoint is configured, as it changes: what gates every AI entry point (the shell's
+ * AI entries, the library's and the document's AI actions, the chat). A local settings read, so it
+ * follows Settings the moment AI is configured or turned off, with no session or screen to reopen.
+ */
+fun SettingsRepository.aiConfigured(): Flow<Boolean> =
+    settings.map { it.toAiConfig().configured }.distinctUntilChanged()
 
 /**
  * Device-local, app-global settings (never per library, never synced through the journal — the

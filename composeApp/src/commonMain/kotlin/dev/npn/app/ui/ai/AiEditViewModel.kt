@@ -5,7 +5,6 @@ import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.reasonText
 import dev.npn.app.ui.common.uiText
-import dev.npn.app.ui.library.reviewMarkerIsAuthoritative
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiFieldConfig
 import dev.npn.core.ai.AiFieldMode
@@ -25,6 +24,7 @@ import dev.npn.core.app.ScopeKey
 import dev.npn.core.app.SettingsRepository
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.model.reviewMarkerIsAuthoritative
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job

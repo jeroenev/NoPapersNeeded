@@ -7,12 +7,10 @@ import dev.npn.app.ui.common.UiMessage
 import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.activeSearchToken
-import dev.npn.app.ui.common.aiConfigured
 import dev.npn.app.ui.common.asUiText
 import dev.npn.app.ui.common.colorsByName
 import dev.npn.app.ui.common.completeActiveSearchToken
 import dev.npn.app.ui.common.text
-import dev.npn.app.ui.common.textFieldValues
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.ImportOutcome
@@ -27,7 +25,9 @@ import dev.npn.core.app.TagInfo
 import dev.npn.core.app.TrashReceipt
 import dev.npn.core.app.ViewType
 import dev.npn.core.app.WorkStage
+import dev.npn.core.app.aiConfigured
 import dev.npn.core.app.importAll
+import dev.npn.core.app.textFieldValues
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.index.IndexProgress
 import dev.npn.core.index.ScanReport

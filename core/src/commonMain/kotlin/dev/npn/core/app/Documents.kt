@@ -1,6 +1,8 @@
 package dev.npn.core.app
 
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.ReviewMode
+import dev.npn.core.model.reviewMarkerIsAuthoritative
 import dev.npn.core.ocr.OcrEngineRef
 import dev.npn.core.ocr.OcrState
 import kotlinx.coroutines.flow.Flow
@@ -69,6 +71,14 @@ data class DocListItem(
     val tags: List<String>,
     val snippet: String? = null, // only set for FTS query results
 )
+
+/**
+ * Effective reviewed state for display. In [ReviewMode.UNTAGGED_ONLY] the marker is derived
+ * (reviewed == has any tag); in [ReviewMode.INBOX_WORKFLOW] the stored reviewed flag is
+ * authoritative (see [reviewMarkerIsAuthoritative]).
+ */
+fun DocListItem.effectiveReviewed(mode: ReviewMode): Boolean =
+    if (mode.reviewMarkerIsAuthoritative) doc.reviewed else tags.isNotEmpty()
 
 data class TagInfo(
     val name: String,

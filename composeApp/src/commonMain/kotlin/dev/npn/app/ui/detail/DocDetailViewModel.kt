@@ -4,13 +4,10 @@ import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.WhileSubscribedTimeout
-import dev.npn.app.ui.common.aiConfigured
 import dev.npn.app.ui.common.colorsByName
 import dev.npn.app.ui.common.queryTerms
 import dev.npn.app.ui.common.reasonText
-import dev.npn.app.ui.common.reusableFieldValues
 import dev.npn.app.ui.common.uiText
-import dev.npn.app.ui.library.effectiveReviewed
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiFieldConfig
 import dev.npn.core.ai.AiFieldMode
@@ -28,6 +25,9 @@ import dev.npn.core.app.RelocationOutcome
 import dev.npn.core.app.SettingsRepository
 import dev.npn.core.app.SplitFailure
 import dev.npn.core.app.SplitOutcome
+import dev.npn.core.app.aiConfigured
+import dev.npn.core.app.effectiveReviewed
+import dev.npn.core.app.reusableFieldValues
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.ocr.OcrEngineRef

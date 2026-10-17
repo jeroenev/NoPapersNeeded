@@ -31,6 +31,7 @@ import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.TopBarAction
 import dev.npn.core.app.SavedView
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.model.reviewMarkerIsAuthoritative
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_delete
 import no_papers_needed.composeapp.generated.resources.library_all_documents

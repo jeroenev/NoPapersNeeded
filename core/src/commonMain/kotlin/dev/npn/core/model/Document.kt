@@ -25,6 +25,30 @@ enum class ReviewMode(
 }
 
 /**
+ * Whether the stored `reviewed` marker is authoritative in this review mode.
+ *
+ * The one place the rule is spelled out; every screen asks this instead of comparing the mode. In
+ * [ReviewMode.INBOX_WORKFLOW] the user maintains an explicit reviewed flag, so the stored marker is
+ * real: the UI shows a reviewed badge, offers a reviewed filter and the mark-reviewed actions, and
+ * counts the review queue. In [ReviewMode.UNTAGGED_ONLY] review state is derived from tags
+ * (reviewed == tagged) and the stored marker is stale, so all of those are hidden — surfacing a
+ * stale flag would lie to the user. Callers that need the derived value use
+ * [DocListItem.effectiveReviewed].
+ *
+ * Deliberately an exhaustive `when` rather than an `== INBOX_WORKFLOW` comparison: a new
+ * [ReviewMode] must fail to compile here and be given an explicit answer, instead of silently
+ * inheriting [ReviewMode.UNTAGGED_ONLY]'s derived-from-tags semantics. Check
+ * [DocListItem.effectiveReviewed] too when adding one — a third mode may need a third derivation
+ * rather than one of these two.
+ */
+val ReviewMode.reviewMarkerIsAuthoritative: Boolean
+    get() =
+        when (this) {
+            ReviewMode.INBOX_WORKFLOW -> true
+            ReviewMode.UNTAGGED_ONLY -> false
+        }
+
+/**
  * Per-document system state settable via `prop-set` journal events. User-authored metadata (title,
  * correspondent, date, notes, anything the user adds) is NOT here: it is a registry field
  * ([FieldDef]) written as `field-set`. These properties describe app-owned state.

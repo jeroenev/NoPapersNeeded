@@ -29,9 +29,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.TechnicalDetails
-import dev.npn.app.ui.library.reviewMarkerIsAuthoritative
 import dev.npn.core.model.FieldParse
 import dev.npn.core.model.FieldType
+import dev.npn.core.model.reviewMarkerIsAuthoritative
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.detail_saved
 import no_papers_needed.composeapp.generated.resources.detail_saving

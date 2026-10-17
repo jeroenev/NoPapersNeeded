@@ -61,6 +61,112 @@ data class LibraryFilter(
     }
 }
 
+/**
+ * Which of the three tag buckets a tag currently sits in, or [OFF] when it is not filtered on.
+ *
+ * A [LibraryFilter] keeps three parallel tag lists — [LibraryFilter.tagsAll] (AND),
+ * [LibraryFilter.tagsAny] (OR) and [LibraryFilter.tagsNone] (NOT). A single tag must live in at
+ * most ONE of them: a filter that asks for "AND foo" and "NOT foo" at once is contradictory. This
+ * enum names the four resting states a tag can be in so both the edit side (picking a chip in the
+ * include or exclude group) and the display side (the removable chips) speak the same vocabulary
+ * instead of re-deriving it from the raw lists.
+ */
+enum class TagBucket { OFF, ALL, ANY, NONE }
+
+/**
+ * The bucket [tag] currently sits in within [filter].
+ *
+ * The lists are checked in a fixed order (ALL, then ANY, then NONE); because [withTag] guarantees
+ * a tag is only ever in one bucket, the order only matters for a hand-corrupted filter, where the
+ * first match wins deterministically.
+ */
+fun tagBucket(
+    filter: LibraryFilter,
+    tag: String,
+): TagBucket =
+    when (tag) {
+        in filter.tagsAll -> TagBucket.ALL
+        in filter.tagsAny -> TagBucket.ANY
+        in filter.tagsNone -> TagBucket.NONE
+        else -> TagBucket.OFF
+    }
+
+/**
+ * Place [tag] in [bucket], and only that bucket.
+ *
+ * Load-bearing invariant: the tag is stripped from ALL THREE lists first, then re-added to its
+ * chosen bucket (or, for [TagBucket.OFF], left out entirely). Without the strip-first step a tag
+ * could end up in two buckets at once — including and excluding the same tag — producing a
+ * contradictory filter. The strip is unconditional (cheap list subtractions that no-op when the
+ * tag is absent) so the single move is always "clear, then place".
+ */
+fun LibraryFilter.withTag(
+    tag: String,
+    bucket: TagBucket,
+): LibraryFilter {
+    val cleared = copy(tagsAll = tagsAll - tag, tagsAny = tagsAny - tag, tagsNone = tagsNone - tag)
+    return when (bucket) {
+        TagBucket.ALL -> cleared.copy(tagsAll = cleared.tagsAll + tag)
+        TagBucket.ANY -> cleared.copy(tagsAny = cleared.tagsAny + tag)
+        TagBucket.NONE -> cleared.copy(tagsNone = cleared.tagsNone + tag)
+        TagBucket.OFF -> cleared
+    }
+}
+
+/**
+ * Move every included tag into one match mode, so "match all" and "match any" are a property of
+ * the whole include group rather than of each individual tag.
+ */
+fun LibraryFilter.matchIncludedTags(matchAll: Boolean): LibraryFilter {
+    val included = (tagsAll + tagsAny).distinct()
+    return copy(tagsAll = if (matchAll) included else emptyList(), tagsAny = if (matchAll) emptyList() else included)
+}
+
+/**
+ * This draft, edited over the live filter [from], once the live filter has changed to [to]: each part
+ * the change touched takes its new value and every other part keeps the draft's, so an edit not
+ * applied yet survives a search or a chip removed beside it. A part is one single-value facet, one
+ * field's equality or range, or one tag's bucket.
+ */
+fun LibraryFilter.rebased(
+    from: LibraryFilter,
+    to: LibraryFilter,
+): LibraryFilter {
+    if (from == to) return this
+    val draft = this
+
+    fun <T> part(read: LibraryFilter.() -> T): T = if (from.read() == to.read()) draft.read() else to.read()
+    val tags = (from.tagsAll + from.tagsAny + from.tagsNone + to.tagsAll + to.tagsAny + to.tagsNone).distinct()
+    val tagged =
+        tags.fold(draft) { edited, tag ->
+            val now = tagBucket(to, tag)
+            if (tagBucket(from, tag) == now) edited else edited.withTag(tag, now)
+        }
+    return tagged.copy(
+        docIds = part { docIds },
+        query = part { query },
+        reviewed = part { reviewed },
+        fieldEquals = rebasedByKey(fieldEquals, from.fieldEquals, to.fieldEquals),
+        fieldRanges = rebasedByKey(fieldRanges, from.fieldRanges, to.fieldRanges),
+        addedFrom = part { addedFrom },
+        addedTo = part { addedTo },
+        folder = part { folder },
+        untaggedOnly = part { untaggedOnly },
+        unreviewedOrUntagged = part { unreviewedOrUntagged },
+        missingFields = part { missingFields },
+    )
+}
+
+/** [draft] with each key whose value changed from [from] to [to] taking its value in [to]. */
+private fun <V : Any> rebasedByKey(
+    draft: Map<String, V>,
+    from: Map<String, V>,
+    to: Map<String, V>,
+): Map<String, V> =
+    (from.keys + to.keys)
+        .filter { from[it] != to[it] }
+        .fold(draft) { edited, key -> to[key]?.let { edited + (key to it) } ?: (edited - key) }
+
 /** What the library list is ordered by. Fields sort through `document_fields`; the rest are document columns. */
 @Serializable
 sealed class SortField {

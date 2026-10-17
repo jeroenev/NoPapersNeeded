@@ -56,10 +56,10 @@ import dev.npn.app.ui.common.TagSuggestionLabel
 import dev.npn.app.ui.common.TestTags
 import dev.npn.app.ui.common.enumNameSaver
 import dev.npn.app.ui.common.formatEpochDate
-import dev.npn.app.ui.library.reviewMarkerIsAuthoritative
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.DocListItem
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.model.reviewMarkerIsAuthoritative
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.detail_added
 import no_papers_needed.composeapp.generated.resources.detail_dismiss_all
