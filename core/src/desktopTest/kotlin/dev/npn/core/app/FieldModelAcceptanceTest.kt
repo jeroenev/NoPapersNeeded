@@ -18,6 +18,7 @@ import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldNotContain
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.first
 import kotlin.test.Test
@@ -54,7 +55,8 @@ class FieldModelAcceptanceTest {
             // The document value, and the registry's vocabulary and usage.
             rig.session.documents
                 .observeDoc(a)
-                .first()!!
+                .first()
+                .shouldNotBeNull()
                 .doc.fields["amount"] shouldBe "4210"
             rig.session.fieldRegistry
                 .distinctValues("amount")

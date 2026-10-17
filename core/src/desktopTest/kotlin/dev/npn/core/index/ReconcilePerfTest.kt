@@ -14,6 +14,7 @@ import dev.npn.core.model.SystemProperty
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.flow.Flow
@@ -165,7 +166,11 @@ class ReconcilePerfTest {
             Files.write(libRoot.resolve(segment), "x".encodeToByteArray())
             clock.advance()
             assertFailsWith<MetadataWriteBlocked> { coordinator.reconcileMetadata() }
-            db.metadataProjectionDao().state()!!.migrationState shouldBe ProjectionStatus.FAILED
+            db
+                .metadataProjectionDao()
+                .state()
+                .shouldNotBeNull()
+                .migrationState shouldBe ProjectionStatus.FAILED
         }
 
     @Test
@@ -280,7 +285,7 @@ class ReconcilePerfTest {
     fun reusedProjectionKeepsTagsPropsAndSyncedSettings() =
         runTest {
             val docId = seedReadyLibrary()
-            val expectedHlc = db.metadataProjectionDao().state()!!
+            val expectedHlc = db.metadataProjectionDao().state().shouldNotBeNull()
 
             val reopened = reopen()
             reopened.refreshState()
@@ -292,7 +297,7 @@ class ReconcilePerfTest {
             reopened.settingFlow(ReviewMode.WIRE_KEY).first() shouldBe ReviewMode.UNTAGGED_ONLY.wire
             reopened.settingFlow("someLaterSetting").first() shouldBe "on"
             // ...and the ready marker (with its watermark) was left as the last session wrote it.
-            val after = db.metadataProjectionDao().state()!!
+            val after = db.metadataProjectionDao().state().shouldNotBeNull()
             after.migrationState shouldBe ProjectionStatus.READY
             after.sourceMaxPhysical shouldBe expectedHlc.sourceMaxPhysical
             after.sourceSetFingerprint shouldBe expectedHlc.sourceSetFingerprint
@@ -367,6 +372,10 @@ class ReconcilePerfTest {
             Files.delete(libRoot.resolve(segment))
             clock.advance()
             assertFailsWith<MetadataWriteBlocked> { coordinator.reconcileMetadata() }
-            db.metadataProjectionDao().state()!!.migrationState shouldBe ProjectionStatus.FAILED
+            db
+                .metadataProjectionDao()
+                .state()
+                .shouldNotBeNull()
+                .migrationState shouldBe ProjectionStatus.FAILED
         }
 }

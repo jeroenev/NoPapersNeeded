@@ -4,6 +4,7 @@ import dev.npn.core.journal.JournalPaths
 import dev.npn.core.ocr.OcrSidecarFiles
 import dev.npn.core.ocr.OcrSidecarName
 import dev.npn.core.util.runCatchingCancellable
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -41,7 +42,7 @@ class JvmLibraryFileSystemNoReplaceTest {
 
         // link(2) is the primitive that atomically refuses an existing target.
         val c = Files.write(root.resolve("c"), "CCC".encodeToByteArray())
-        runCatching { Files.createLink(b, c) }.exceptionOrNull()!!::class shouldBe
+        runCatching { Files.createLink(b, c) }.exceptionOrNull().shouldNotBeNull()::class shouldBe
             FileAlreadyExistsException::class
         Files.readAllBytes(b).decodeToString() shouldBe "AAA"
     }

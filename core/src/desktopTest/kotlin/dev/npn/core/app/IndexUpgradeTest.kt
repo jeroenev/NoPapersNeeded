@@ -167,7 +167,7 @@ class IndexUpgradeTest {
                 )
             }
 
-            data.listFiles { file -> file.name.startsWith("index.db") }!!.forEach { it.delete() }
+            data.listFiles { file -> file.name.startsWith("index.db") }.shouldNotBeNull().forEach { it.delete() }
             createFromSchema(File(data, "index.db"), version = 22) { connection ->
                 for ((key, value) in LEGACY_KV) connection.exec("INSERT INTO kv (key, value) VALUES (?, ?)", key, value)
                 connection.exec(
@@ -221,7 +221,7 @@ class IndexUpgradeTest {
                 deps.deviceDb.ocrQueueDao().upsert(queued.copy(attempts = 2, aiRequested = true))
             }
 
-            data.listFiles { file -> file.name.startsWith("index.db") }!!.forEach { it.delete() }
+            data.listFiles { file -> file.name.startsWith("index.db") }.shouldNotBeNull().forEach { it.delete() }
 
             openSession(backgroundScope, library, data).use { session, deps ->
                 session.rescan()

@@ -12,6 +12,7 @@ import dev.npn.core.work.QueueDrainer
 import dev.npn.core.work.backoffMs
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.ints.shouldBeGreaterThan
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -392,13 +393,19 @@ class OcrPipelineTest {
             val repo = DocumentRepositoryImpl(db)
             repo
                 .observeDoc(docId)
-                .first()!!
+                .first()
+                .shouldNotBeNull()
                 .doc.ocrEngine shouldBe OcrEngineRef.Unknown("mixed")
 
             // A pin on that same unknown engine stays visible and keeps its label, so re-applying
             // it writes back the identical column value instead of silently clearing the pin.
             setOverride(docId, "mixed")
-            val pinned = repo.observeDoc(docId).first()!!.doc
+            val pinned =
+                repo
+                    .observeDoc(docId)
+                    .first()
+                    .shouldNotBeNull()
+                    .doc
             pinned.ocrEngineOverride shouldBe OcrEngineRef.Unknown("mixed")
             pinned.ocrEngineOverride?.label shouldBe "mixed"
         }

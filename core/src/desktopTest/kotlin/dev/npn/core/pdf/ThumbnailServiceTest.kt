@@ -46,11 +46,15 @@ class ThumbnailServiceTest {
             val path = service.ensureThumbnail(docId, "doc.pdf")
             path shouldNotBe null
             store.writes[docId] shouldBe 1
-            isPng(store.lastPng!!).shouldBeTrue()
+            isPng(store.lastPng.shouldNotBeNull()).shouldBeTrue()
 
             // pageCount backfilled from the open handle.
             db.documentDao().requireByDocId(docId).pageCount shouldBe 2
-            db.thumbnailDao().get(docId)!!.cachePath shouldBe path
+            db
+                .thumbnailDao()
+                .get(docId)
+                .shouldNotBeNull()
+                .cachePath shouldBe path
         }
 
     /**

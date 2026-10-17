@@ -9,6 +9,7 @@ import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.settings.SessionSettings
 import dev.npn.core.util.NpnLog
 import dev.npn.core.xmp.PdfBoxXmpIO
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.first
 import java.io.File
@@ -50,7 +51,8 @@ class HlcSeedingTest {
                 .correspondent shouldBe "from-a"
             rig.session.documents
                 .observeDoc(id)
-                .first()!!
+                .first()
+                .shouldNotBeNull()
                 .doc.fields shouldBe mapOf(FieldKeys.CORRESPONDENT to "from-a", "amount" to "2")
 
             // Device 2 syncs back and converges to device 1's newer edits.
@@ -98,13 +100,15 @@ class HlcSeedingTest {
             session2.meta.setField(id, "amount", null)
             session2.documents
                 .observeDoc(id)
-                .first()!!
+                .first()
+                .shouldNotBeNull()
                 .doc.fields shouldBe mapOf(FieldKeys.TITLE to "second")
             // ...and so must re-adding it.
             session2.meta.setField(id, "amount", "43")
             session2.documents
                 .observeDoc(id)
-                .first()!!
+                .first()
+                .shouldNotBeNull()
                 .doc.fields shouldBe mapOf(FieldKeys.TITLE to "second", "amount" to "43")
 
             session2.close()

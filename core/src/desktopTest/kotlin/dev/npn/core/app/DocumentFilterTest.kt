@@ -437,8 +437,9 @@ class DocumentFilterTest {
     private suspend fun drainOcr(rig: AppSessionRig) {
         // Drive the pipeline synchronously through each pending queue entry.
         val pipeline = buildPipeline(rig)
-        @Suppress("ControlFlowWithEmptyBody")
-        while (pipeline.processNext()) {}
+        while (pipeline.processNext()) {
+            // processNext does the work; the loop only runs it until the queue is empty.
+        }
     }
 
     private fun buildPipeline(rig: AppSessionRig): OcrPipeline =

@@ -163,7 +163,8 @@ class MetadataWriterTest {
             val item =
                 rig.session.documents
                     .observeDoc(id)
-                    .first()!!
+                    .first()
+                    .shouldNotBeNull()
             item.doc.fields shouldBe mapOf("amount" to "42.50", "vendor" to "ACME")
 
             // Unregistered keys surface as orphans, with usage counts.
@@ -177,7 +178,8 @@ class MetadataWriterTest {
             rig.session.meta.setField(id, "amount", null)
             rig.session.documents
                 .observeDoc(id)
-                .first()!!
+                .first()
+                .shouldNotBeNull()
                 .doc.fields shouldBe mapOf("vendor" to "ACME")
         }
 
@@ -210,7 +212,8 @@ class MetadataWriterTest {
                 .map { it.fieldKey } shouldNotContain "title"
             rig.session.documents
                 .observeDoc(id)
-                .first()!!
+                .first()
+                .shouldNotBeNull()
                 .doc.title shouldBe null
         }
 

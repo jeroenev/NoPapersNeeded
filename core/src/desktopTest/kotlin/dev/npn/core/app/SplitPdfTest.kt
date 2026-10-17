@@ -53,7 +53,8 @@ class SplitPdfTest {
             }
             rig.session.documents
                 .observeDoc(done.partDocIds[0])
-                .first()!!
+                .first()
+                .shouldNotBeNull()
                 .doc.fileName shouldBe "contract (part 1).pdf"
 
             // Original is trashed, not deleted.
