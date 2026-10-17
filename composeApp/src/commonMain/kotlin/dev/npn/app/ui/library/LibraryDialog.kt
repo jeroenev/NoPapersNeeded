@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import dev.npn.app.ui.common.ConfirmDialog
+import dev.npn.app.ui.common.TagPickDialog
 import dev.npn.app.ui.common.TextInputDialog
 import dev.npn.core.app.SavedView
 import dev.npn.core.util.NpnJson
@@ -118,20 +119,21 @@ internal fun LibraryDialogHost(
         }
 
         LibraryDialog.AddTag -> {
-            TagPickerDialog(
+            TagPickDialog(
                 title = pluralStringResource(Res.plurals.library_add_tag_to_documents, selectedCount, selectedCount),
-                allTagNames = tagNames,
+                options = tagNames,
                 confirmLabel = stringResource(Res.string.library_add),
                 onConfirm = { tag -> confirmed { onAddTag(tag) } },
                 onDismiss = onDismiss,
+                allowNew = true,
             )
         }
 
         is LibraryDialog.RemoveTag -> {
-            TagPickerDialog(
+            TagPickDialog(
                 title =
                     pluralStringResource(Res.plurals.library_remove_tag_from_documents, selectedCount, selectedCount),
-                allTagNames = dialog.names,
+                options = dialog.names,
                 confirmLabel = stringResource(Res.string.library_remove),
                 onConfirm = { tag -> confirmed { onRemoveTag(tag) } },
                 onDismiss = onDismiss,
