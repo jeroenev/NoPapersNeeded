@@ -22,7 +22,6 @@ import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.OcrStatus
 import dev.npn.core.app.SavedView
-import dev.npn.core.app.ScanProgressUi
 import dev.npn.core.app.SettingsRepository
 import dev.npn.core.app.SortField
 import dev.npn.core.app.TagInfo
@@ -30,6 +29,7 @@ import dev.npn.core.app.TrashReceipt
 import dev.npn.core.app.ViewType
 import dev.npn.core.app.importAll
 import dev.npn.core.fs.ExternalSource
+import dev.npn.core.index.IndexProgress
 import dev.npn.core.index.ScanReport
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
@@ -270,7 +270,7 @@ class LibraryViewModel(
             .observeSavedViews()
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
-    val scanProgress: StateFlow<ScanProgressUi?> =
+    val scanProgress: StateFlow<IndexProgress?> =
         ingest.scanProgress
             .stateIn(viewModelScope, WhileSubscribedTimeout, null)
 

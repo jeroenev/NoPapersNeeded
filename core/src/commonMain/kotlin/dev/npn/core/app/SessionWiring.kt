@@ -146,7 +146,7 @@ internal suspend fun buildLibrary(
     relinkBake: suspend (original: String, baked: String) -> Unit,
 ): Library {
     val db = deps.db
-    val storagePath = JournalStoragePath(coordinator) { lifetime.owned(it) }
+    val storagePath = JournalStoragePath(coordinator, lifetime)
     val pathRules =
         StoragePathRuleApplicator(deps.fs, db, storagePath::rule) { docId, path ->
             coordinator.commitBuilt { state ->
@@ -159,7 +159,7 @@ internal suspend fun buildLibrary(
                 }
             }
         }
-    val savedViews = SavedViewRepositoryImpl(coordinator) { lifetime.owned(it) }
+    val savedViews = SavedViewRepositoryImpl(coordinator, lifetime)
     deps.upgradeAtOpen("Moving saved views into the journal") { savedViews.adoptIndexViews(db) }
     lateinit var rules: AutoMatchRuleRepositoryImpl
     val ruleApplier =
@@ -171,17 +171,17 @@ internal suspend fun buildLibrary(
             onMetadataApplied = pathRules::applyFor,
         )
     rules =
-        AutoMatchRuleRepositoryImpl(db.autoMatchRuleDao(), ruleApplier, coordinator, deps.log) {
-            lifetime.owned(it)
-        }
+        AutoMatchRuleRepositoryImpl(db.autoMatchRuleDao(), ruleApplier, coordinator, deps.log, lifetime)
     rules.mirror()
     val bakes = BakeLock()
+    val trash = TrashOps(deps.fs)
+    val retention = JournalTrashRetention(coordinator, lifetime)
     val writer =
         MetadataWriterImpl(
             coordinator,
             db,
             deps.fs,
-            TrashOps(deps.fs),
+            trash,
             pathRules,
             deps.log,
             bakes,
@@ -192,13 +192,15 @@ internal suspend fun buildLibrary(
         documents = DocumentRepositoryImpl(db),
         tags = TagRepositoryImpl(db.tagDao()),
         savedViews = savedViews,
-        fieldRegistry = FieldRegistryImpl(db, coordinator) { lifetime.owned(it) },
+        fieldRegistry = FieldRegistryImpl(db, coordinator, lifetime),
         storagePath = storagePath,
         rules = rules,
         ruleApplier = ruleApplier,
         writer = writer,
         ownedWriter = OwnedWriter(writer, lifetime),
-        reviewConfig = JournalReviewConfig(coordinator, db.documentDao()) { lifetime.owned(it) },
+        reviewConfig = JournalReviewConfig(coordinator, db.documentDao(), lifetime),
+        trashRetention = retention,
+        trashPurge = TrashPurge(coordinator, db, trash, retention, deps.clock, deps.log),
         content = buildContent(deps, lifetime, coordinator, relinkBake, bakes),
         imports =
             ImportService(

@@ -28,7 +28,8 @@ internal class OcrFacadeImpl(
     private val lifetime: SessionLifetime,
     private val documentDao: DocumentDao,
     private val queue: OcrQueueDao,
-    private val pipeline: OcrPipeline,
+    /** The pipeline the queue drains through, for the session's reconciles and a bake's relink. */
+    val pipeline: OcrPipeline,
     /** Same instance the pipeline runs on, so the AI-OCR offer answers from the real policy. */
     private val engines: OcrEngineSelector,
     private val writer: MetadataWriterImpl,
@@ -113,18 +114,6 @@ internal class OcrFacadeImpl(
             }
         }
     }
-
-    /** Re-select or adopt the sidecars on disk; see [OcrPipeline.reconcileSidecars]. */
-    suspend fun reconcileSidecars() = pipeline.reconcileSidecars()
-
-    /** Give [baked], a bake of [original], the text [original] has; see [OcrPipeline.copyText]. */
-    suspend fun copyText(
-        original: String,
-        baked: String,
-    ) = pipeline.copyText(original, baked)
-
-    /** Index the version [docId] selects now; see [OcrPipeline.reselect]. */
-    suspend fun reselect(docId: String) = pipeline.reselect(docId)
 
     /**
      * After a rescan: adopt or re-select the sidecars it picked up, then queue every live document

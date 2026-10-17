@@ -594,7 +594,7 @@ class TrashPurgeTest {
                 rig.clock.now = now
                 rig.session.docLifecycle.trashDoc(today)
 
-                rig.session.purgeTrash(olderThanDays = 30)
+                rig.session.trashPurge.purge(olderThanDays = 30)
 
                 val left =
                     rig.fs
@@ -625,7 +625,7 @@ class TrashPurgeTest {
                 // A device that joins now indexes only the PDFs on disk: the trashed one has no row.
                 val (second, secondDb) = rig.secondSession(backgroundScope, clock = MutableClock(now + 1))
                 try {
-                    second.purgeTrash(olderThanDays = 30)
+                    second.trashPurge.purge(olderThanDays = 30)
                 } finally {
                     second.close()
                     secondDb.close()
@@ -663,7 +663,7 @@ class TrashPurgeTest {
                 val (second, secondDb) = rig.secondSession(backgroundScope, clock = MutableClock(now + 1))
                 try {
                     second.rescan()
-                    second.purgeTrash(olderThanDays = 30)
+                    second.trashPurge.purge(olderThanDays = 30)
                 } finally {
                     second.close()
                     secondDb.close()
@@ -693,7 +693,7 @@ class TrashPurgeTest {
                 Files.setLastModifiedTime(rig.libRoot.resolve(entry), FileTime.fromMillis(now - 90 * DAY))
                 rig.session.rescan()
 
-                rig.session.purgeTrash(olderThanDays = 30)
+                rig.session.trashPurge.purge(olderThanDays = 30)
 
                 rig.exists(entry).shouldBeTrue()
             } finally {
@@ -730,11 +730,11 @@ class TrashPurgeTest {
                 refusing = false
 
                 rig.clock.now = now + 25 * DAY
-                rig.session.purgeTrash(olderThanDays = 30)
+                rig.session.trashPurge.purge(olderThanDays = 30)
                 trashEntries(rig.fs) shouldHaveSize 1
 
                 rig.clock.now = now + 31 * DAY
-                rig.session.purgeTrash(olderThanDays = 30)
+                rig.session.trashPurge.purge(olderThanDays = 30)
                 trashEntries(rig.fs).shouldBeEmpty()
             } finally {
                 rig.close()
@@ -774,7 +774,7 @@ class TrashPurgeTest {
                     rig.session.docLifecycle.trashDoc(id)
                 }
 
-                rig.session.purgeTrash(olderThanDays = 30)
+                rig.session.trashPurge.purge(olderThanDays = 30)
 
                 afterListing shouldBe null
                 // The re-trash is a new episode with its own entry name; the purge left it holding

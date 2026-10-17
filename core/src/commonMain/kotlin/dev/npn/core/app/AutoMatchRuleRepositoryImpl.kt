@@ -24,7 +24,7 @@ import kotlin.uuid.Uuid
  * keeps the last list that did decode, and every edit is refused rather than written over it,
  * since it could only write back what this build understood.
  *
- * Writes, and applying a saved or enabled rule to the documents, run through [owned], so the session
+ * Writes, and applying a saved or enabled rule to the documents, run through [SessionLifetime.owned], so the session
  * waits them out before it closes.
  */
 class AutoMatchRuleRepositoryImpl internal constructor(
@@ -32,7 +32,7 @@ class AutoMatchRuleRepositoryImpl internal constructor(
     private val applier: RuleApplier,
     private val coordinator: JournalCoordinator,
     private val log: NpnLog,
-    private val owned: suspend (suspend () -> Unit) -> Unit,
+    private val lifetime: SessionLifetime,
 ) : AutoMatchRuleRepository {
     /** One stored list and what it decoded to: [rules] null, and why in [failure], when it did not. */
     private class Decoded(
@@ -55,19 +55,19 @@ class AutoMatchRuleRepositoryImpl internal constructor(
     @OptIn(ExperimentalUuidApi::class)
     override suspend fun save(rule: AutoMatchRule): String {
         val saved = rule.copy(id = rule.id.ifBlank { Uuid.random().toString() }).toEntity().toRule()
-        owned {
+        lifetime.owned {
             edit { rules -> rules.filterNot { it.id == saved.id } + saved }
             applier.applyToExistingDocs()
         }
         return saved.id
     }
 
-    override suspend fun delete(id: String) = owned { edit { rules -> rules.filterNot { it.id == id } } }
+    override suspend fun delete(id: String) = lifetime.owned { edit { rules -> rules.filterNot { it.id == id } } }
 
     override suspend fun setEnabled(
         id: String,
         enabled: Boolean,
-    ) = owned {
+    ) = lifetime.owned {
         edit { rules -> rules.map { if (it.id == id) it.copy(enabled = enabled) else it } }
         if (enabled) applier.applyToExistingDocs()
     }
@@ -88,7 +88,7 @@ class AutoMatchRuleRepositoryImpl internal constructor(
 
     /**
      * Rewrite the journal's list through [change] against its live value, then refresh the cache.
-     * Its callers run it, and applying the rules after it, through [owned].
+     * Its callers run it, and applying the rules after it, through [SessionLifetime.owned].
      */
     private suspend fun edit(change: (List<AutoMatchRule>) -> List<AutoMatchRule>) {
         coordinator.commitBuilt { state ->

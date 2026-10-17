@@ -14,7 +14,6 @@ import dev.npn.core.app.OcrVersion
 import dev.npn.core.app.QueuedEditRun
 import dev.npn.core.app.QueuedWork
 import dev.npn.core.app.ReviewConfigFacade
-import dev.npn.core.app.ScanProgressUi
 import dev.npn.core.app.SplitOutcome
 import dev.npn.core.app.StoragePathFacade
 import dev.npn.core.app.StoragePathSetting
@@ -22,6 +21,7 @@ import dev.npn.core.app.TrashRetentionFacade
 import dev.npn.core.app.TrashSettings
 import dev.npn.core.app.WorkFacade
 import dev.npn.core.fs.ExternalSource
+import dev.npn.core.index.IndexProgress
 import dev.npn.core.index.ScanReport
 import dev.npn.core.model.ReviewMode
 import kotlinx.coroutines.flow.Flow
@@ -34,10 +34,10 @@ import kotlinx.coroutines.flow.update
 
 /** Imports and rescans. [FakeIngestFacade.importOutcomes] is consumed in order, repeating the last. */
 class FakeIngestFacade : IngestFacade {
-    val scanProgressFlow = MutableStateFlow<ScanProgressUi?>(null)
+    val scanProgressFlow = MutableStateFlow<IndexProgress?>(null)
     val lastScanReportFlow = MutableStateFlow<ScanReport?>(null)
 
-    override val scanProgress: Flow<ScanProgressUi?> get() = scanProgressFlow
+    override val scanProgress: Flow<IndexProgress?> get() = scanProgressFlow
     override val lastScanReport: Flow<ScanReport?> get() = lastScanReportFlow
 
     var rescanReport: ScanReport = emptyScanReport()

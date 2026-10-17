@@ -209,7 +209,7 @@ live in `buildSrc`. Hot Reload via `mise hot`.
     document its name's hash prefix ties it to was trashed, or deleted for good, longer
     ago than the retention by the journal and the rows as they stand there: a restore
     and a trash again in between reuse the entry's name (`TrashOps.purgeOlderThan`,
-    `LibrarySessionImpl.purgeTrash`). The retention is the library's
+    `TrashPurge`). The retention is the library's
     (`TrashRetentionFacade`, a synced setting), since the purge deletes from the trash every
     device shares; one this build cannot read purges nothing. An entry it cannot
     tie to such a document stays, however old its mtime: another device's trash whose

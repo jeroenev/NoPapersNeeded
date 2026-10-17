@@ -162,7 +162,7 @@ class LibrarySettingsTest {
                     )
                 try {
                     second.rescan()
-                    second.purgeExpiredTrash()
+                    second.trashPurge.purgeExpired()
                 } finally {
                     second.close()
                     secondDb.close()
@@ -239,7 +239,7 @@ class LibrarySettingsTest {
                 rig.session.rescan()
 
                 rig.clock.now = 800 * DAY
-                rig.session.purgeExpiredTrash()
+                rig.session.trashPurge.purgeExpired()
 
                 val entry = TrashOps(rig.fs).listTrash().map { it.relPath }.single()
                 rig.fs.sha256(entry) shouldBe id

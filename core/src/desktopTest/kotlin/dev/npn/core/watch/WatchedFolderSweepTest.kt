@@ -2,8 +2,8 @@ package dev.npn.core.watch
 
 import dev.npn.core.app.ImportOutcome
 import dev.npn.core.app.IngestFacade
-import dev.npn.core.app.ScanProgressUi
 import dev.npn.core.fs.ExternalSource
+import dev.npn.core.index.IndexProgress
 import dev.npn.core.index.ScanReport
 import dev.npn.core.journal.EpochClock
 import io.kotest.matchers.shouldBe
@@ -59,7 +59,7 @@ class WatchedFolderSweepTest {
     ) : IngestFacade {
         var imports = 0
 
-        override val scanProgress: Flow<ScanProgressUi?> = emptyFlow()
+        override val scanProgress: Flow<IndexProgress?> = emptyFlow()
         override val lastScanReport: Flow<ScanReport?> = emptyFlow()
 
         override suspend fun rescan(): ScanReport = error("not used")

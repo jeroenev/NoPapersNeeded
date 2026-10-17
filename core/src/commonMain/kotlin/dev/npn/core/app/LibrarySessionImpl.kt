@@ -7,12 +7,12 @@ import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.LibraryFileSystem
-import dev.npn.core.fs.TrashOps
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
 import dev.npn.core.index.DeviceIdentity
 import dev.npn.core.index.EmptyImportException
 import dev.npn.core.index.ImportResult
 import dev.npn.core.index.ImportService
+import dev.npn.core.index.IndexProgress
 import dev.npn.core.index.Indexer
 import dev.npn.core.index.ScanReport
 import dev.npn.core.index.SupersededImportException
@@ -36,7 +36,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -83,8 +82,10 @@ class LibrarySessionImpl private constructor(
     override val fieldRegistry: FieldRegistry = library.fieldRegistry
     override val content: DocContentFacade = library.content
     override val reviewConfig: ReviewConfigFacade = library.reviewConfig
-    private val retention = JournalTrashRetention(coordinator) { owned(it) }
-    override val trashRetention: TrashRetentionFacade get() = retention
+    override val trashRetention: TrashRetentionFacade = library.trashRetention
+
+    /** The trash auto-purge, run after each watch-triggered rescan. */
+    internal val trashPurge: TrashPurge = library.trashPurge
 
     // The facet properties only narrow the type a consumer sees: the session is the ingest facet,
     // [OwnedWriter] backs all three write facets, and [AiFacadeImpl] both AI facets.
@@ -99,10 +100,7 @@ class LibrarySessionImpl private constructor(
 
     override val lastScanReport: Flow<ScanReport?> = scanReports.asStateFlow()
 
-    override val scanProgress: Flow<ScanProgressUi?> =
-        indexer.scanState.map { p ->
-            p?.let { ScanProgressUi(it.phase, it.hashed, it.total) }
-        }
+    override val scanProgress: Flow<IndexProgress?> = indexer.scanState
 
     private var started = false
 
@@ -187,48 +185,6 @@ class LibrarySessionImpl private constructor(
             },
         )
 
-    /**
-     * Internal auto-purge, run after watch-triggered rescans; not part of any public facet.
-     *
-     * An entry goes once every document it may hold was trashed, or deleted for good, more than
-     * [olderThanDays] ago ([TrashOps.purgeOlderThan]); an entry no such document owns stays. The
-     * journal and the rows decide together ([keptLonger]): the journal covers documents with no row,
-     * which is every trashed or deleted one on a device whose index was just built (their PDFs keep
-     * an old mtime too), and a row can show a document the journal hides, its file found back in
-     * place by a rescan.
-     *
-     * The trash is listed before the writer lock; its entries are checked against the rows and the
-     * journal and deleted under it. An entry's name carries the trash episode it belongs to
-     * ([NpnPaths.trashPath]), so even a restore and a trash again whose events arrive after its
-     * entry cannot pass for the old episode's. A batch of [PURGE_BATCH] entries per hold: the check
-     * reads every document's trash time, so once per batch rather than per entry, and no hold lasts
-     * through a long run of deletes (binder calls under SAF) that every write waits on.
-     */
-    internal suspend fun purgeTrash(olderThanDays: Int) {
-        val cutoff = deps.clock.nowMillis() - olderThanDays.toLong() * MILLIS_PER_DAY
-        val trash = trashOps()
-        for (batch in trash.listTrash().chunked(PURGE_BATCH)) {
-            coordinator.serialized { journal ->
-                val rows = db.documentDao().trashTimes().associate { it.docId to it.trashedAt }
-                trash.purgeOlderThan(cutoff, keptLonger(journal.trashTimes(), rows), batch)
-            }
-        }
-    }
-
-    /**
-     * The [journal]'s trash times and the [rows]' as one, for a document both know the one that keeps
-     * its entries longer: null when either has it out of the trash, else the later time. A row that
-     * lags the journal (a projection that failed) then keeps an entry rather than delete it.
-     */
-    private fun keptLonger(
-        journal: Map<String, Long?>,
-        rows: Map<String, Long?>,
-    ): Map<String, Long?> =
-        journal +
-            rows.mapValues { (doc, row) ->
-                if (doc !in journal) row else journal[doc]?.let { trashed -> row?.let { maxOf(trashed, it) } }
-            }
-
     override fun start() {
         lifetime.checkOpen()
         if (started) return
@@ -298,16 +254,16 @@ class LibrarySessionImpl private constructor(
                 log.runLogged("Journal object ingest") { coordinator.ingestObject(action.relPath) }
                 // A remote OCR-engine override may have just folded in; re-select promptly
                 // instead of waiting for the next rescan.
-                log.runLogged("OCR sidecar reconcile") { ocrFacade.reconcileSidecars() }
+                log.runLogged("OCR sidecar reconcile") { ocrFacade.pipeline.reconcileSidecars() }
             }
 
             WatchAction.ReconcileJournal -> {
                 log.runLogged("Metadata reconcile") { coordinator.reconcileMetadata() }
-                log.runLogged("OCR sidecar reconcile") { ocrFacade.reconcileSidecars() }
+                log.runLogged("OCR sidecar reconcile") { ocrFacade.pipeline.reconcileSidecars() }
             }
 
             WatchAction.ReconcileOcr -> {
-                log.runLogged("OCR sidecar reconcile") { ocrFacade.reconcileSidecars() }
+                log.runLogged("OCR sidecar reconcile") { ocrFacade.pipeline.reconcileSidecars() }
             }
 
             WatchAction.Rescan -> {
@@ -320,17 +276,7 @@ class LibrarySessionImpl private constructor(
     private suspend fun doWatchTriggeredRescan() {
         rescan()
         queues.kickAll()
-        purgeExpiredTrash()
-    }
-
-    /** [purgeTrash] by the library's retention as it stands now; one this build cannot read purges nothing. */
-    internal suspend fun purgeExpiredTrash() {
-        val days = retention.current()
-        if (days == null) {
-            log.warn("The library's trash retention is not one this build reads; the trash is kept")
-            return
-        }
-        log.runLogged("Trash auto-purge") { purgeTrash(days) }
+        trashPurge.purgeExpired()
     }
 
     override suspend fun close() {
@@ -341,8 +287,6 @@ class LibrarySessionImpl private constructor(
         aiFacade.close()
         // DB ownership stays with the environment; it may close the DB after this shutdown barrier.
     }
-
-    private fun trashOps() = TrashOps(fs)
 
     private fun map(result: ImportResult): ImportOutcome =
         when (result) {
@@ -361,10 +305,6 @@ class LibrarySessionImpl private constructor(
 
         /** Slack past a deferred file's settle time, so the follow-up does not land just short. */
         private const val SETTLE_RESCAN_MARGIN_MS = 500L
-        private const val MILLIS_PER_DAY = 24L * 60L * 60L * 1000L
-
-        /** How many trash entries the purge checks and deletes per hold of the writer lock. */
-        private const val PURGE_BATCH = 32
 
         /**
          * Boot a session over [deps]: move device state an older index still holds into the device
@@ -431,7 +371,7 @@ class LibrarySessionImpl private constructor(
                     // The file no longer matches its hash: rescan once it has settled.
                     onStaleFile = { session.scheduleSettleRescan(WriteSettle.QUIET_MILLIS) },
                 )
-            bakeRelink = BakeRelink(coordinator, ocr, deps.deviceDb.aiEnrichQueueDao(), deps.log)
+            bakeRelink = BakeRelink(coordinator, ocr.pipeline, deps.deviceDb.aiEnrichQueueDao(), deps.log)
             val scanReports = MutableStateFlow<ScanReport?>(null)
             session =
                 LibrarySessionImpl(
@@ -504,6 +444,8 @@ internal class Library(
     /** [writer] for a caller outside the session: each call owned by its lifetime. */
     val ownedWriter: OwnedWriter,
     val reviewConfig: ReviewConfigFacade,
+    val trashRetention: TrashRetentionFacade,
+    val trashPurge: TrashPurge,
     val content: DocContentFacade,
     val imports: ImportService,
 )

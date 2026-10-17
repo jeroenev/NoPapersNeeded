@@ -26,23 +26,23 @@ interface ReviewConfigFacade {
 /**
  * [ReviewConfigFacade] over the journal: the review workflow is a library setting, and the switch
  * to the inbox workflow marks documents reviewed with the same `prop-set` events [MetadataWriterImpl]
- * writes. Writes run through [owned], so the session waits them out before it closes.
+ * writes. Writes run through [SessionLifetime.owned], so the session waits them out before it closes.
  */
 internal class JournalReviewConfig(
     private val coordinator: JournalCoordinator,
     private val documentDao: DocumentDao,
-    private val owned: suspend (suspend () -> Unit) -> Unit,
+    private val lifetime: SessionLifetime,
 ) : ReviewConfigFacade {
     override val reviewMode: Flow<ReviewMode> =
         coordinator.settingFlow(ReviewMode.WIRE_KEY).map(ReviewMode::fromWire)
 
     override suspend fun setReviewMode(mode: ReviewMode) =
-        owned { coordinator.putSetting(ReviewMode.WIRE_KEY, mode.wire) }
+        lifetime.owned<Unit> { coordinator.putSetting(ReviewMode.WIRE_KEY, mode.wire) }
 
     // Journal events are permanent, so only documents the projection does not show reviewed yet
     // get one: a second run, or a library already reviewed, writes nothing.
     override suspend fun markReviewedForMigration(onlyTagged: Boolean) =
-        owned {
+        lifetime.owned {
             val ops =
                 documentDao
                     .unreviewedLiveDocIds(taggedOnly = onlyTagged)

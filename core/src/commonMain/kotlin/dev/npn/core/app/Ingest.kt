@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.Flow
  * is closed.
  */
 interface IngestFacade {
-    val scanProgress: Flow<ScanProgressUi?> // null when idle
+    val scanProgress: Flow<IndexProgress?> // null when idle
 
     val lastScanReport: Flow<ScanReport?>
 
@@ -33,13 +33,6 @@ interface IngestFacade {
         suggestedName: String,
     ): ImportOutcome
 }
-
-/** Where a rescan is: its [phase], and while hashing, how many of [total] files are [done]. */
-data class ScanProgressUi(
-    val phase: IndexProgress.Phase,
-    val done: Int,
-    val total: Int,
-)
 
 sealed interface ImportOutcome {
     /**

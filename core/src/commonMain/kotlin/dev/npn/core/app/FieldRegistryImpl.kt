@@ -15,13 +15,13 @@ import kotlinx.coroutines.flow.map
 /**
  * Registry reads come from the `field_defs` projection; writes are `field-def` journal ops
  * validated against the live [FoldedState] under the coordinator mutex, so a key collision check
- * and the write it guards cannot be split by a concurrent commit. Writes run through [owned], so
+ * and the write it guards cannot be split by a concurrent commit. Writes run through [SessionLifetime.owned], so
  * the session waits them out before it closes.
  */
 class FieldRegistryImpl internal constructor(
     private val db: NpnDatabase,
     private val coordinator: JournalCoordinator,
-    private val owned: suspend (suspend () -> Unit) -> Unit,
+    private val lifetime: SessionLifetime,
 ) : FieldRegistry {
     private val defDao get() = db.fieldDefDao()
     private val fieldDao get() = db.documentFieldDao()
@@ -42,7 +42,7 @@ class FieldRegistryImpl internal constructor(
     override suspend fun current(): List<FieldDef> = defDao.defs()
 
     override suspend fun upsert(def: FieldDef) =
-        owned {
+        lifetime.owned<Unit> {
             val key = FieldKeys.normalize(def.key) ?: throw IllegalArgumentException("Field key is empty")
             val label = def.label.trim().ifEmpty { key }
             coordinator.commitBuilt { state ->
@@ -72,7 +72,7 @@ class FieldRegistryImpl internal constructor(
     override suspend fun remove(
         key: String,
         clearValues: Boolean,
-    ) = owned {
+    ) = lifetime.owned<Unit> {
         coordinator.commitBuilt { state ->
             val ops = ArrayList<PendingOp>()
             if (state.effectiveFieldDef(key) != null) ops += PendingOp.fieldDefRemove(key)
@@ -89,7 +89,7 @@ class FieldRegistryImpl internal constructor(
         docsWithMetadata().map(::resolveDocId).distinct().filter { key in inheritedFields(it) }
 
     override suspend fun reorder(keys: List<String>) =
-        owned {
+        lifetime.owned<Unit> {
             coordinator.commitBuilt { state ->
                 val byKey = state.effectiveFieldDefs().associateBy { it.key }
                 val ordered = keys.mapNotNull { byKey[it] } + byKey.values.filter { it.key !in keys }

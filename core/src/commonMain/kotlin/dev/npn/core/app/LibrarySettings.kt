@@ -54,10 +54,10 @@ internal object LibrarySettingKeys {
     const val TRASH_RETENTION_DAYS = "trashRetentionDays"
 }
 
-/** [StoragePathFacade] over the journal's settings; writes run through [owned]. */
+/** [StoragePathFacade] over the journal's settings; writes run through [SessionLifetime.owned]. */
 internal class JournalStoragePath(
     private val coordinator: JournalCoordinator,
-    private val owned: suspend (suspend () -> Unit) -> Unit,
+    private val lifetime: SessionLifetime,
 ) : StoragePathFacade {
     override val storagePath: Flow<StoragePathSetting> =
         combine(
@@ -81,13 +81,13 @@ internal class JournalStoragePath(
     private suspend fun set(
         key: String,
         value: String?,
-    ) = owned { coordinator.putSetting(key, value) }
+    ) = lifetime.owned<Unit> { coordinator.putSetting(key, value) }
 }
 
-/** [TrashRetentionFacade] over the journal's settings; writes run through [owned]. */
+/** [TrashRetentionFacade] over the journal's settings; writes run through [SessionLifetime.owned]. */
 internal class JournalTrashRetention(
     private val coordinator: JournalCoordinator,
-    private val owned: suspend (suspend () -> Unit) -> Unit,
+    private val lifetime: SessionLifetime,
 ) : TrashRetentionFacade {
     override val trashRetentionDays: Flow<Int> =
         coordinator.settingFlow(LibrarySettingKeys.TRASH_RETENTION_DAYS).map {
@@ -102,7 +102,7 @@ internal class JournalTrashRetention(
 
     override suspend fun setTrashRetentionDays(days: Int) {
         require(days in TrashSettings.RETENTION_RANGE) { "A retention of $days days is out of range" }
-        owned { coordinator.putSetting(LibrarySettingKeys.TRASH_RETENTION_DAYS, days.toString()) }
+        lifetime.owned { coordinator.putSetting(LibrarySettingKeys.TRASH_RETENTION_DAYS, days.toString()) }
     }
 
     private fun retentionDays(stored: String?): Int? =

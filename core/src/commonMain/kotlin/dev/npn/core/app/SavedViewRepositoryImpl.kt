@@ -11,11 +11,11 @@ import kotlinx.coroutines.flow.map
  * Saved views are library data: each is one synced setting in the journal, keyed by its id and
  * holding the whole [SavedView], so every device sees the same views and two devices saving
  * different views both keep theirs. Deleting one clears its setting. They read in name order.
- * Writes run through [owned], so the session waits them out before it closes.
+ * Writes run through [SessionLifetime.owned], so the session waits them out before it closes.
  */
 class SavedViewRepositoryImpl internal constructor(
     private val coordinator: JournalCoordinator,
-    private val owned: suspend (suspend () -> Unit) -> Unit,
+    private val lifetime: SessionLifetime,
 ) : SavedViewRepository {
     private val json = NpnJson.Persisted
 
@@ -27,9 +27,10 @@ class SavedViewRepositoryImpl internal constructor(
             .map { views -> views.sortedWith(compareBy(SavedView::name, SavedView::id)) }
 
     /** Save [view], writing nothing when the journal already holds it as it is. */
-    override suspend fun save(view: SavedView) = owned { coordinator.putSetting(key(view.id), encode(view)) }
+    override suspend fun save(view: SavedView) =
+        lifetime.owned<Unit> { coordinator.putSetting(key(view.id), encode(view)) }
 
-    override suspend fun delete(id: String) = owned { coordinator.putSetting(key(id), null) }
+    override suspend fun delete(id: String) = lifetime.owned<Unit> { coordinator.putSetting(key(id), null) }
 
     /**
      * Move the views older builds kept in the index into the journal, then drop their table. A view

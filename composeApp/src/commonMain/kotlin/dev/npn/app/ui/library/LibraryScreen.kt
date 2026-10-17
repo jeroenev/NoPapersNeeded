@@ -108,9 +108,9 @@ import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.OcrStatus
-import dev.npn.core.app.ScanProgressUi
 import dev.npn.core.app.SortField
 import dev.npn.core.app.ViewType
+import dev.npn.core.index.IndexProgress
 import dev.npn.core.index.ScanReport
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
@@ -828,7 +828,7 @@ private fun SelectionTopBar(
 
 @Composable
 private fun Banners(
-    scanProgress: ScanProgressUi?,
+    scanProgress: IndexProgress?,
     lastScan: ScanReport?,
     ocr: OcrStatus,
     queueCounts: QueueCounts,
@@ -852,12 +852,12 @@ private fun Banners(
 }
 
 @Composable
-private fun ScanProgressBanner(scanProgress: ScanProgressUi) {
+private fun ScanProgressBanner(scanProgress: IndexProgress) {
     Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Column(Modifier.padding(12.dp)) {
             Text(scanProgress.bannerText().resolve(), style = MaterialTheme.typography.bodyMedium)
             val fraction =
-                if (scanProgress.total > 0) scanProgress.done.toFloat() / scanProgress.total else 0f
+                if (scanProgress.total > 0) scanProgress.hashed.toFloat() / scanProgress.total else 0f
             LinearProgressIndicator(
                 progress = { fraction },
                 modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
