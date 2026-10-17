@@ -20,14 +20,14 @@ data class Dot(
  * that build blocks writes and stops opening the library until it updates. A new op therefore ships
  * in a build that reads it before any build writes it.
  */
-sealed class JournalOp {
+sealed interface JournalOp {
     /** The `op` wire string for this operation. */
-    abstract val wire: String
+    val wire: String
 
     /** {"tag": String}; doc required. */
     data class TagAdd(
         val tag: String,
-    ) : JournalOp() {
+    ) : JournalOp {
         override val wire get() = WIRE
 
         companion object {
@@ -39,7 +39,7 @@ sealed class JournalOp {
     data class TagRemove(
         val tag: String,
         val dots: List<Dot>,
-    ) : JournalOp() {
+    ) : JournalOp {
         override val wire get() = WIRE
 
         companion object {
@@ -55,7 +55,7 @@ sealed class JournalOp {
     data class PropSet(
         val key: SystemProperty,
         val value: String?,
-    ) : JournalOp() {
+    ) : JournalOp {
         override val wire get() = WIRE
 
         companion object {
@@ -72,7 +72,7 @@ sealed class JournalOp {
     data class FieldSet(
         val key: String,
         val value: String?,
-    ) : JournalOp() {
+    ) : JournalOp {
         override val wire get() = WIRE
 
         companion object {
@@ -96,7 +96,7 @@ sealed class JournalOp {
     data class FieldDefSet(
         val key: String,
         val def: FieldDef?,
-    ) : JournalOp() {
+    ) : JournalOp {
         init {
             require(def == null || def.key == key) { "FieldDefSet key must match its definition" }
         }
@@ -111,7 +111,7 @@ sealed class JournalOp {
     /** {"origPath": String}; doc required. */
     data class DocTrash(
         val origPath: String,
-    ) : JournalOp() {
+    ) : JournalOp {
         override val wire get() = WIRE
 
         companion object {
@@ -120,14 +120,14 @@ sealed class JournalOp {
     }
 
     /** {}; doc required. Takes the document out of the trash: last-writer-wins against [DocTrash]. */
-    data object DocRestore : JournalOp() {
+    data object DocRestore : JournalOp {
         override val wire get() = WIRE
 
         const val WIRE = "doc-restore"
     }
 
     /** {}; doc required. Deletes the document: last-writer-wins against [DocUndelete]. */
-    data object DocDelete : JournalOp() {
+    data object DocDelete : JournalOp {
         override val wire get() = WIRE
 
         const val WIRE = "doc-delete"
@@ -143,7 +143,7 @@ sealed class JournalOp {
      * do not know it yet. Until a later build turns [WRITTEN] on, a deleted document whose bytes
      * come back is shown again by the rescan that finds them, for that scan only.
      */
-    data object DocUndelete : JournalOp() {
+    data object DocUndelete : JournalOp {
         override val wire get() = WIRE
 
         const val WIRE = "doc-undelete"
@@ -158,7 +158,7 @@ sealed class JournalOp {
     /** {"newDoc": sha256}; doc = old id. */
     data class Relink(
         val newDoc: String,
-    ) : JournalOp() {
+    ) : JournalOp {
         override val wire get() = WIRE
 
         companion object {
@@ -170,7 +170,7 @@ sealed class JournalOp {
     data class TagRename(
         val from: String,
         val to: String,
-    ) : JournalOp() {
+    ) : JournalOp {
         override val wire get() = WIRE
 
         companion object {
@@ -182,7 +182,7 @@ sealed class JournalOp {
     data class TagMerge(
         val from: String,
         val to: String,
-    ) : JournalOp() {
+    ) : JournalOp {
         override val wire get() = WIRE
 
         companion object {
@@ -195,7 +195,7 @@ sealed class JournalOp {
         val tag: String,
         val color: String?,
         val icon: String?,
-    ) : JournalOp() {
+    ) : JournalOp {
         override val wire get() = WIRE
 
         companion object {
@@ -207,7 +207,7 @@ sealed class JournalOp {
     data class SettingSet(
         val key: String,
         val value: String?,
-    ) : JournalOp() {
+    ) : JournalOp {
         override val wire get() = WIRE
 
         companion object {
@@ -223,5 +223,5 @@ sealed class JournalOp {
     data class Unknown(
         override val wire: String,
         val payload: JsonObject = JsonObject(emptyMap()),
-    ) : JournalOp()
+    ) : JournalOp
 }
