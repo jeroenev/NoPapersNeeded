@@ -8,6 +8,7 @@ import dev.npn.core.db.isLive
 import dev.npn.core.db.searchDocIds
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.libraryPdfs
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.ocr.FakeOcrEngine
 import dev.npn.core.ocr.OcrEngineId
@@ -167,11 +168,11 @@ class BakeInPlaceTest {
 
             rig.session.ingest.importPdfBytes(original, "a.pdf") shouldBe ImportOutcome.Duplicate(after, "a.pdf")
 
-            libraryPdfs(rig) shouldContainExactly listOf("a.pdf")
+            rig.fs.libraryPdfs() shouldContainExactly listOf("a.pdf")
             rig.journalObjectCount() shouldBe objects
             rig.session.rescan().added shouldBe 0
             rig.db.documentDao().getByDocId(before) shouldBe superseded
-            libraryPdfs(rig) shouldContainExactly listOf("a.pdf")
+            rig.fs.libraryPdfs() shouldContainExactly listOf("a.pdf")
         }
 
     /** With the baked document in the trash, the library shows nothing those bytes stand for: the import is refused. */
@@ -187,7 +188,7 @@ class BakeInPlaceTest {
             rig.session.ingest.importPdfBytes(original, "a.pdf") shouldBe
                 ImportOutcome.Failed(ImportFailure.SUPERSEDED)
 
-            libraryPdfs(rig).shouldBeEmpty()
+            rig.fs.libraryPdfs().shouldBeEmpty()
             rig.journalObjectCount() shouldBe objects
             rig.session.rescan().added shouldBe 0
             rig.db.documentDao().getByDocId(before) shouldBe superseded
@@ -195,7 +196,7 @@ class BakeInPlaceTest {
                 .documentDao()
                 .getByDocId(after)
                 ?.trashed shouldBe true
-            libraryPdfs(rig).shouldBeEmpty()
+            rig.fs.libraryPdfs().shouldBeEmpty()
         }
 
     /**
@@ -318,7 +319,7 @@ class BakeInPlaceTest {
                     .documentDao()
                     .getByDocId(id)
                     ?.deleted shouldBe true
-                libraryPdfs(rig) shouldContainExactly listOf("a.pdf")
+                rig.fs.libraryPdfs() shouldContainExactly listOf("a.pdf")
             } finally {
                 readBacks.releaseAll()
                 rig.close()
@@ -374,12 +375,6 @@ class BakeInPlaceTest {
         rig.session.content.bakeInPlace(before) shouldBe BakeOutcome.Baked
         return before to rig.docId("a.pdf")
     }
-
-    private suspend fun libraryPdfs(rig: AppSessionRig) =
-        rig.fs
-            .listAllIndexable()
-            .filter { !it.isDirectory }
-            .map { it.relPath }
 
     /**
      * A library filesystem over which, once [armed], [bytes] replace the file at [path] once, at

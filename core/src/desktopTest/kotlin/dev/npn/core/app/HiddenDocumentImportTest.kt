@@ -5,6 +5,8 @@ import dev.npn.core.db.queueState
 import dev.npn.core.db.searchDocIds
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.libraryPdfs
+import dev.npn.core.fs.trashEntries
 import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
@@ -55,7 +57,7 @@ class HiddenDocumentImportTest {
         withDocument { id, bytes ->
             rig.session.ingest.importPdfBytes(bytes, "copy.pdf") shouldBe ImportOutcome.Duplicate(id, "a.pdf")
 
-            libraryPdfs() shouldBe listOf("a.pdf")
+            rig.fs.libraryPdfs() shouldBe listOf("a.pdf")
         }
 
     /** A document whose file went missing comes back with the file an import brings, metadata and all. */
@@ -119,8 +121,8 @@ class HiddenDocumentImportTest {
             imported.docId shouldBe id
             assertLive(id)
             journalObjects().filter { it.contains(JournalOp.DocRestore.WIRE) } shouldHaveSize 1
-            trashEntries().shouldBeEmpty()
-            libraryPdfs() shouldBe listOf(imported.relPath)
+            rig.fs.trashEntries().shouldBeEmpty()
+            rig.fs.libraryPdfs() shouldBe listOf(imported.relPath)
             // Its text is indexed already, so OCR has nothing to redo.
             rig.deviceDb
                 .ocrQueueDao()
@@ -148,7 +150,7 @@ class HiddenDocumentImportTest {
             importAgain(bytes).shouldBeInstanceOf<ImportOutcome.Imported>()
 
             row(id).trashed.shouldBeTrue()
-            trashEntries().map { rig.fs.sha256(it) } shouldContain id
+            rig.fs.trashEntries().map { rig.fs.sha256(it.relPath) } shouldContain id
             rig.session.docLifecycle.restoreDoc(id)
             assertLive(id)
             rig.fs.sha256(row(id).relPath) shouldBe id
@@ -173,8 +175,8 @@ class HiddenDocumentImportTest {
             placing.started.shouldNotBeNull().await()
 
             row(id).trashed.shouldBeTrue()
-            trashEntries().map { rig.fs.sha256(it) } shouldContain id
-            libraryPdfs().shouldBeEmpty()
+            rig.fs.trashEntries().map { rig.fs.sha256(it.relPath) } shouldContain id
+            rig.fs.libraryPdfs().shouldBeEmpty()
             rig.session.rescan()
             row(id).trashed.shouldBeTrue()
             row(id).missing.shouldBeFalse()
@@ -195,13 +197,13 @@ class HiddenDocumentImportTest {
             rig.session.work.drainOcr()
             rig.session.docLifecycle.trashDoc(id)
             val before = row(id)
-            blockMetadataWrites()
+            rig.blockMetadataWrites()
 
             importAgain(bytes) shouldBe ImportOutcome.Failed(ImportFailure.COPY_FAILED)
 
             row(id) shouldBe before
-            trashEntries() shouldHaveSize 1
-            libraryPdfs().shouldBeEmpty()
+            rig.fs.trashEntries() shouldHaveSize 1
+            rig.fs.libraryPdfs().shouldBeEmpty()
         }
 
     /**
@@ -216,17 +218,17 @@ class HiddenDocumentImportTest {
             rig.session.docLifecycle.trashDoc(id)
             val before = row(id)
             before.relPath shouldBe "inbox/a.pdf"
-            blockMetadataWrites()
+            rig.blockMetadataWrites()
 
             importAgain(bytes) shouldBe ImportOutcome.Failed(ImportFailure.COPY_FAILED)
 
             row(id) shouldBe before
-            trashEntries() shouldHaveSize 1
-            libraryPdfs().shouldBeEmpty()
-            unblockMetadataWrites()
+            rig.fs.trashEntries() shouldHaveSize 1
+            rig.fs.libraryPdfs().shouldBeEmpty()
+            rig.unblockMetadataWrites()
             rig.session.rescan()
             row(id).trashed.shouldBeTrue()
-            libraryPdfs().shouldBeEmpty()
+            rig.fs.libraryPdfs().shouldBeEmpty()
         }
 
     /**
@@ -237,14 +239,14 @@ class HiddenDocumentImportTest {
     fun anImportThatCannotBeRecordedKeepsTheOnlyCopy() =
         withDocument { id, bytes ->
             rig.session.docLifecycle.trashDoc(id)
-            trashEntries().forEach { rig.fs.delete(it) }
-            blockMetadataWrites()
+            rig.fs.trashEntries().forEach { rig.fs.delete(it.relPath) }
+            rig.blockMetadataWrites()
 
             repeat(2) {
                 importAgain(bytes) shouldBe ImportOutcome.Failed(ImportFailure.COPY_FAILED)
             }
 
-            val kept = libraryPdfs().single()
+            val kept = rig.fs.libraryPdfs().single()
             rig.fs.sha256(kept) shouldBe id
             row(id).trashed.shouldBeTrue()
             row(id).relPath shouldBe kept
@@ -266,40 +268,12 @@ class HiddenDocumentImportTest {
         row.missing.shouldBeFalse()
     }
 
-    /** A journal store from a newer build makes the rescan refuse, which blocks metadata writes. */
-    private suspend fun blockMetadataWrites() {
-        Files.createDirectories(rig.libRoot.resolve(NEWER_STORE))
-        assertFailsWith<IllegalStateException> { rig.session.rescan() }
-    }
-
-    /** Take away what [blockMetadataWrites] put there; the next rescan lets writes through again. */
-    private fun unblockMetadataWrites() {
-        Files.delete(rig.libRoot.resolve(NEWER_STORE))
-    }
-
     /** Every published journal object's text. */
     private suspend fun journalObjects(): List<String> =
         rig.fs
             .listAllUnder(NpnPaths.JOURNAL_DIR)
             .filter { JournalPaths.classify(it.relPath) is JournalPath.ObjectV2 }
             .map { rig.fs.readBytes(it.relPath).decodeToString() }
-
-    private suspend fun trashEntries() =
-        rig.fs
-            .listAllUnder(NpnPaths.TRASH_DIR)
-            .filter { !it.isDirectory }
-            .map { it.relPath }
-
-    private suspend fun libraryPdfs() =
-        rig.fs
-            .listAllIndexable()
-            .filter { !it.isDirectory }
-            .map { it.relPath }
-
-    private companion object {
-        /** An object store from a newer build. */
-        const val NEWER_STORE = "${NpnPaths.JOURNAL_DIR}/objects-v9-00"
-    }
 }
 
 /**

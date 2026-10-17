@@ -5,6 +5,7 @@ import dev.npn.core.db.documentEntity
 import dev.npn.core.db.fieldTypes
 import dev.npn.core.db.isLive
 import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.fs.libraryPdfs
 import dev.npn.core.pdf.PdfBoxEngine
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.PdfFixtures
@@ -62,12 +63,6 @@ class SplitServiceTest {
         return row
     }
 
-    private suspend fun libraryPdfs() =
-        rig.fs
-            .listAllIndexable()
-            .filter { !it.isDirectory }
-            .map { it.relPath }
-
     /** Move [part]'s file and row to [target], as a storage-path rule settling its metadata does. */
     private suspend fun IndexRig.movePart(
         part: ImportResult.Imported,
@@ -88,7 +83,7 @@ class SplitServiceTest {
             val result = split.split(original.docId, listOf(0..0, 1..1))
 
             result.shouldBeInstanceOf<SplitService.Result.Failed>().reason shouldBe SplitFailure.NOT_COMPLETED
-            libraryPdfs() shouldBe listOf("contract.pdf")
+            rig.fs.libraryPdfs() shouldBe listOf("contract.pdf")
             rig.db
                 .documentDao()
                 .getAllLive()
@@ -135,7 +130,7 @@ class SplitServiceTest {
 
             split.rollBack(parts)
 
-            libraryPdfs() shouldContainExactlyInAnyOrder listOf("contract.pdf", first.relPath)
+            rig.fs.libraryPdfs() shouldContainExactlyInAnyOrder listOf("contract.pdf", first.relPath)
             rig.db
                 .documentDao()
                 .getAllLive()
@@ -156,7 +151,7 @@ class SplitServiceTest {
 
             split.rollBack(parts)
 
-            libraryPdfs() shouldContainExactlyInAnyOrder listOf("contract.pdf", first.relPath)
+            rig.fs.libraryPdfs() shouldContainExactlyInAnyOrder listOf("contract.pdf", first.relPath)
             rig.db.documentDao().getByDocId(first.docId) shouldBe null
         }
 
@@ -196,7 +191,7 @@ class SplitServiceTest {
 
             assertFailsWith<CancellationException> { split.split(original.docId, listOf(0..0, 1..1)) }
 
-            libraryPdfs() shouldBe listOf("contract.pdf")
+            rig.fs.libraryPdfs() shouldBe listOf("contract.pdf")
         }
 
     /**
@@ -239,7 +234,7 @@ class SplitServiceTest {
             job = launch { split.split(original.docId, listOf(0..0, 1..1)) }
             job.join()
 
-            libraryPdfs() shouldBe listOf("contract.pdf")
+            rig.fs.libraryPdfs() shouldBe listOf("contract.pdf")
             rig.db
                 .documentDao()
                 .getAllLive()
@@ -266,6 +261,6 @@ class SplitServiceTest {
             val parts = result.shouldBeInstanceOf<SplitService.Result.Done>().parts
             parts shouldHaveSize 2
             split.rollBack(parts)
-            libraryPdfs() shouldBe listOf("contract.pdf")
+            rig.fs.libraryPdfs() shouldBe listOf("contract.pdf")
         }
 }

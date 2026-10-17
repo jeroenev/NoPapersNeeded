@@ -6,7 +6,9 @@ import dev.npn.core.db.NpnDatabase
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.TrashOps
 import dev.npn.core.index.DeviceIdentity
+import dev.npn.core.index.IndexRig
 import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.index.MutableClock
 import dev.npn.core.journal.JournalOp
@@ -14,6 +16,7 @@ import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.pathrules.StoragePathRule
+import dev.npn.core.pathrules.StoragePathRuleApplicator
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.ThumbnailStore
 import dev.npn.core.settings.AppDirs
@@ -28,6 +31,7 @@ import kotlinx.coroutines.test.runTest
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.test.assertFailsWith
 
 /** No-op OCR engine (unavailable) so the pipeline uses embedded text only. */
 class NoopOcrEngine : OcrEngine {
@@ -233,6 +237,39 @@ class AppSessionRig private constructor(
         return LibrarySessionImpl.openSession(deps, writeUndelete).also { otherSessions += it } to deps.db
     }
 }
+
+/**
+ * A [MetadataWriterImpl] over [coordinator] on this rig's index, which sees the library through
+ * [files] and has no storage-path rule.
+ */
+internal fun IndexRig.metadataWriter(
+    coordinator: JournalCoordinator,
+    files: LibraryFileSystem = fs,
+): MetadataWriterImpl =
+    MetadataWriterImpl(
+        coordinator,
+        db,
+        files,
+        TrashOps(files),
+        StoragePathRuleApplicator(files, db, { null }, { _, _ -> }),
+        NpnLog.None,
+        BakeLock(),
+        clock,
+    )
+
+/** A journal store from a newer build makes the rescan refuse, which blocks metadata writes. */
+suspend fun AppSessionRig.blockMetadataWrites() {
+    Files.createDirectories(libRoot.resolve(NEWER_STORE))
+    assertFailsWith<IllegalStateException> { session.rescan() }
+}
+
+/** Take away what [blockMetadataWrites] put there; the next rescan lets writes through again. */
+fun AppSessionRig.unblockMetadataWrites() {
+    Files.delete(libRoot.resolve(NEWER_STORE))
+}
+
+/** An object store from a newer build. */
+private const val NEWER_STORE = "${NpnPaths.JOURNAL_DIR}/objects-v9-00"
 
 /**
  * A test over a fresh [AppSessionRig], built in the test's background scope with these
