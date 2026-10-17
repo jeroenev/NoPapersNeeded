@@ -49,8 +49,6 @@
     <ID>ParameterNaming:LibraryFolderPicker.kt:onPicked: (PlatformFile?) -&gt; Unit</ID>
     <ID>UnsafeCallOnNullableType:LocalAppLocale.kt:LocalAppLocale$default!!</ID>
     <ID>UnsafeCallOnNullableType:PageViewer.kt:parsed!!</ID>
-    <ID>UseOrEmpty:LibraryViewModel.kt:LibraryViewModel$filter.query ?: ""</ID>
-    <ID>UseOrEmpty:LibraryViewModel.kt:LibraryViewModel$view.filter.query ?: ""</ID>
     <ID>VarCouldBeVal:LocalAppLocale.kt:LocalAppLocale$private var default: Locale? = null</ID>
     <ID>ViewModelInjection:AiEditReviewScreen.kt:val vm: AiEditReviewViewModel = viewModel(key = jobId) { AiEditReviewViewModel(session, jobId) }</ID>
     <ID>ViewModelInjection:AiEditScreen.kt:val vm: AiEditViewModel = viewModel { AiEditViewModel(session, settings, selection) }</ID>

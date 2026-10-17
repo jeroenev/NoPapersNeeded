@@ -483,8 +483,6 @@ private fun LibraryContent(
                             reviewBadge = state.reviewCount,
                             savedViews = state.savedViews,
                             actions = actions,
-                            onAllDocuments = actions::clearFilter,
-                            onReviewQueue = actions::applyReviewPreset,
                             onSaveCurrentView = { onDialog(LibraryDialog.SaveView) },
                             onRenameSavedView = { onDialog(LibraryDialog.RenameView(it)) },
                         )

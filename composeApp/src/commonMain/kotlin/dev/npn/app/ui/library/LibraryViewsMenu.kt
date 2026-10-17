@@ -57,9 +57,7 @@ internal fun LibraryViewsMenuButton(
     reviewMode: ReviewMode,
     reviewBadge: Int,
     savedViews: List<SavedView>,
-    actions: SavedViewActions,
-    onAllDocuments: () -> Unit,
-    onReviewQueue: () -> Unit,
+    actions: LibraryActions,
     onSaveCurrentView: () -> Unit,
     onRenameSavedView: (SavedView) -> Unit,
 ) {
@@ -86,7 +84,11 @@ internal fun LibraryViewsMenuButton(
             }
             ActionMenuItems(
                 listOf(
-                    TopBarAction(Icons.Filled.Home, stringResource(Res.string.library_all_documents), onAllDocuments),
+                    TopBarAction(
+                        Icons.Filled.Home,
+                        stringResource(Res.string.library_all_documents),
+                        actions::clearFilter,
+                    ),
                 ),
                 onDismiss = { open = false },
             )
@@ -107,7 +109,7 @@ internal fun LibraryViewsMenuButton(
                         ) { Text(reviewBadge.toString()) }
                     }
                 },
-                onClick = { dismissThen(onReviewQueue) },
+                onClick = { dismissThen(actions::applyReviewPreset) },
             )
             HorizontalDivider(Modifier.padding(vertical = 4.dp))
             Text(

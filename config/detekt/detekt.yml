@@ -19,7 +19,9 @@ complexity:
     allowedFunctionsPerFile: 20
     # 22, not 20: a private helper that removes a duplicate should not push a class over.
     allowedFunctionsPerClass: 22
-    allowedFunctionsPerInterface: 20
+    # An actions interface mirrors the viewmodel implementing it, so it gets the class's allowance
+    # rather than being split into sub-interfaces nothing else implements.
+    allowedFunctionsPerInterface: 22
     allowedFunctionsPerObject: 20
     allowedFunctionsPerEnum: 20
     ignoreOverridden: true

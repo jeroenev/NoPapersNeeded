@@ -106,22 +106,11 @@ data class LibraryUiState(
 /** The grid's minimum cell width (dp) until the settings have loaded. */
 internal const val DEFAULT_GRID_COLUMN_WIDTH = 160
 
-/** What the library's saved-views menu does to a saved view, implemented by [LibraryViewModel]. */
-interface SavedViewActions {
-    fun applySavedView(view: SavedView)
-
-    /** Flip the pinned state of [view] and persist it. */
-    fun toggleSavedViewPin(view: SavedView)
-
-    /** Delete [view] by id. */
-    fun deleteSavedView(view: SavedView)
-}
-
 /**
  * What the library list asks of its viewmodel, so the list composables take this and never the
  * viewmodel itself. Implemented by [LibraryViewModel]; each member's contract is documented there.
  */
-interface LibraryActions : SavedViewActions {
+interface LibraryActions {
     fun onQueryChange(text: String)
 
     fun acceptSuggestion(text: String)
@@ -160,10 +149,15 @@ interface LibraryActions : SavedViewActions {
     fun importScan(result: ScanResult)
 
     suspend fun tagsInSelection(): List<String>
+
+    fun applySavedView(view: SavedView)
+
+    fun toggleSavedViewPin(view: SavedView)
+
+    fun deleteSavedView(view: SavedView)
 }
 
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
-@Suppress("TooManyFunctions")
 class LibraryViewModel(
     session: LibrarySession,
     private val settings: SettingsRepository,
@@ -346,7 +340,7 @@ class LibraryViewModel(
 
     override fun setFilter(filter: LibraryFilter) {
         _ui.update { it.copy(filter = filter, bannerDismissed = false) }
-        queryInput.value = filter.query ?: ""
+        queryInput.value = filter.query.orEmpty()
     }
 
     override fun clearFilter() {
@@ -392,7 +386,7 @@ class LibraryViewModel(
         // Guards the seed only; a saved view's sort is part of the view, not a new default.
         sortOverridden = true
         _ui.update { it.copy(filter = view.filter, sort = view.sort, viewType = view.viewType) }
-        queryInput.value = view.filter.query ?: ""
+        queryInput.value = view.filter.query.orEmpty()
     }
 
     /**
@@ -401,13 +395,6 @@ class LibraryViewModel(
      */
     override fun setGridColumnWidth(dp: Int) =
         launchReporting(Res.string.common_save_setting_failed) { settings.edit { it.copy(gridColumnWidth = dp) } }
-
-    private companion object {
-        const val QUERY_DEBOUNCE_MS = 300L
-        const val SUGGESTION_DEBOUNCE_MS = 100L
-        const val SUGGESTION_LIMIT = 8
-        const val MIN_SUGGESTION_LENGTH = 2
-    }
 
     override fun toggleSelection(docId: String) {
         _ui.update { cur ->
@@ -618,6 +605,13 @@ class LibraryViewModel(
             sort = ui.sort,
             viewType = ui.viewType,
         )
+
+    private companion object {
+        const val QUERY_DEBOUNCE_MS = 300L
+        const val SUGGESTION_DEBOUNCE_MS = 100L
+        const val SUGGESTION_LIMIT = 8
+        const val MIN_SUGGESTION_LENGTH = 2
+    }
 }
 
 @OptIn(ExperimentalUuidApi::class)
