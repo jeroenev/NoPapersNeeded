@@ -7,7 +7,8 @@ import androidx.compose.ui.platform.LocalContext
 import java.util.Locale
 
 actual object LocalAppLocale {
-    private var default: Locale? = null
+    // The system locale, read when the object initializes: before the first provides replaces it.
+    private val default: Locale = Locale.getDefault()
 
     actual val current: String
         @Composable get() = Locale.getDefault().toString()
@@ -16,10 +17,9 @@ actual object LocalAppLocale {
     @Composable
     actual infix fun provides(value: String?): ProvidedValue<*> {
         val configuration = LocalConfiguration.current
-        if (default == null) default = Locale.getDefault()
         val new =
             when (value) {
-                null -> default!!
+                null -> default
                 else -> Locale(value)
             }
         Locale.setDefault(new)

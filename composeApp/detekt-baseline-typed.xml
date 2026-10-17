@@ -22,18 +22,11 @@
     <ID>MultipleEmitters:FilterSheet.kt:@Composable private fun TagFilterSection</ID>
     <ID>MultipleEmitters:ImportSettingsPane.kt:@Composable private fun OcrLanguageSettings</ID>
     <ID>MultipleEmitters:ImportSettingsPane.kt:@Composable private fun WatchedFolderSettings</ID>
-    <ID>MutableStateAutoboxing:DocResults.kt:mutableStateOf(0f)</ID>
-    <ID>MutableStateAutoboxing:MetadataOcr.kt:mutableStateOf(0)</ID>
-    <ID>MutableStateAutoboxing:PageViewer.kt:mutableStateOf(0)</ID>
-    <ID>MutableStateAutoboxing:PageViewer.kt:mutableStateOf(0f)</ID>
     <ID>NoNameShadowing:FilterSheet.kt:{ onDraftChange(draft.withFieldBounds(def.key, from = it)) }</ID>
     <ID>NoNameShadowing:FilterSheet.kt:{ onDraftChange(draft.withFieldBounds(def.key, to = it)) }</ID>
     <ID>ParameterNaming:AiChatScreen.kt:onOpenFiltered: (List&lt;String&gt;) -&gt; Unit</ID>
     <ID>ParameterNaming:LibraryFolderPicker.android.kt:onPicked: (PlatformFile?) -&gt; Unit</ID>
     <ID>ParameterNaming:LibraryFolderPicker.desktop.kt:onPicked: (PlatformFile?) -&gt; Unit</ID>
     <ID>ParameterNaming:LibraryFolderPicker.kt:onPicked: (PlatformFile?) -&gt; Unit</ID>
-    <ID>UnsafeCallOnNullableType:LocalAppLocale.kt:LocalAppLocale$default!!</ID>
-    <ID>UnsafeCallOnNullableType:PageViewer.kt:parsed!!</ID>
-    <ID>VarCouldBeVal:LocalAppLocale.kt:LocalAppLocale$private var default: Locale? = null</ID>
   </CurrentIssues>
 </SmellBaseline>

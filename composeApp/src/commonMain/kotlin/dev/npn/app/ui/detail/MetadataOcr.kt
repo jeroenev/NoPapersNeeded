@@ -32,6 +32,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -135,7 +136,7 @@ internal fun OcrTextTab(
             activeQuery = query
         }
     }
-    var current by remember { mutableStateOf(0) }
+    var current by remember { mutableIntStateOf(0) }
     val matches = remember(visibleText, activeQuery) { findMatchStarts(visibleText, activeQuery) }
     LaunchedEffect(matches) { current = 0 }
     val effectiveCurrent = if (matches.isEmpty()) 0 else current.coerceIn(0, matches.size - 1)

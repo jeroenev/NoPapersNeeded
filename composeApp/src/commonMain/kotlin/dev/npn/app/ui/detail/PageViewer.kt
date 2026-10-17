@@ -30,6 +30,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -138,7 +140,7 @@ fun PageViewer(
 
     // Accumulates fractional touchpad scroll toward one page flip when at 1x (a mouse wheel notch
     // arrives as a single event with |delta| >= 1 and flips immediately).
-    val pageScrollAccum = remember { mutableStateOf(0f) }
+    val pageScrollAccum = remember { mutableFloatStateOf(0f) }
 
     Box(
         modifier =
@@ -189,14 +191,14 @@ fun PageViewer(
                             )
                             true
                         } else {
-                            val acc = pageScrollAccum.value
+                            val acc = pageScrollAccum.floatValue
                             val sameDir = acc == 0f || (acc > 0f) == (delta > 0f)
                             val next = if (sameDir) acc + delta else delta
                             if (kotlin.math.abs(next) >= 1f) {
                                 goToPage(page + if (next > 0f) 1 else -1)
-                                pageScrollAccum.value = 0f
+                                pageScrollAccum.floatValue = 0f
                             } else {
-                                pageScrollAccum.value = next
+                                pageScrollAccum.floatValue = next
                             }
                             true
                         }
@@ -325,7 +327,7 @@ private fun PageSlide(
     var state by remember(page) { mutableStateOf<PageState>(PageState.Loading) }
     // Bumped by the retry action so a failed render re-runs the effect below without changing the
     // page or bucket.
-    var renderAttempt by remember(page) { mutableStateOf(0) }
+    var renderAttempt by remember(page) { mutableIntStateOf(0) }
 
     // Gesture detectors below are captured once by pointerInput and never refreshed, so they must
     // read the live transform and viewer size through these States rather than the captured
@@ -532,8 +534,7 @@ private fun GoToPageDialog(
     onDismiss: () -> Unit,
 ) {
     var text by remember { mutableStateOf((current + 1).toString()) }
-    val parsed = text.toIntOrNull()
-    val valid = parsed != null && parsed in 1..pageCount
+    val page = text.toIntOrNull()?.takeIf { it in 1..pageCount }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(Res.string.detail_go_to_page)) },
@@ -543,13 +544,13 @@ private fun GoToPageDialog(
                 onValueChange = { text = it.filter(Char::isDigit) },
                 label = { Text(stringResource(Res.string.detail_page_range, pageCount)) },
                 singleLine = true,
-                isError = text.isNotEmpty() && !valid,
+                isError = text.isNotEmpty() && page == null,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth(),
             )
         },
         confirmButton = {
-            TextButton(enabled = valid, onClick = { onGo(parsed!! - 1) }) {
+            TextButton(enabled = page != null, onClick = { page?.let { onGo(it - 1) } }) {
                 Text(stringResource(Res.string.detail_go))
             }
         },

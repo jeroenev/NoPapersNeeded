@@ -9,7 +9,8 @@ import java.util.Locale
 // positive of its plugin-less analysis next to an `actual` declaration.
 @Suppress("UnusedPrivateProperty")
 actual object LocalAppLocale {
-    private var default: Locale? = null
+    // The system locale, read when the object initializes: before the first provides replaces it.
+    private val default: Locale = Locale.getDefault()
     private val currentLocale = staticCompositionLocalOf { Locale.getDefault().toString() }
 
     actual val current: String
@@ -17,10 +18,9 @@ actual object LocalAppLocale {
 
     @Composable
     actual infix fun provides(value: String?): ProvidedValue<*> {
-        if (default == null) default = Locale.getDefault()
         val new =
             when (value) {
-                null -> default!!
+                null -> default
                 else -> Locale(value)
             }
         Locale.setDefault(new)

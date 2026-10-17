@@ -29,7 +29,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -165,22 +164,22 @@ internal fun DocGrid(
 
         // Accumulates fractional touchpad deltas up to one notch; a mouse wheel notch arrives as a
         // single event with |delta| >= 1 and steps exactly one column regardless of its magnitude.
-        val scrollAccumulated = remember { mutableStateOf(0f) }
+        val scrollAccumulated = remember { mutableFloatStateOf(0f) }
 
         Box(
             Modifier
                 .fillMaxSize()
                 .pinchToZoom(onZoom = ::pinchBy)
                 .ctrlScrollZoom { delta, _ ->
-                    val acc = scrollAccumulated.value
+                    val acc = scrollAccumulated.floatValue
                     val sameDirection = acc == 0f || (acc > 0f) == (delta > 0f)
                     val next = if (sameDirection) acc + delta else delta
                     if (abs(next) >= 1f) {
                         // Scroll up = zoom in = one column fewer; scroll down = one more.
                         stepColumns(if (next > 0f) 1 else -1)
-                        scrollAccumulated.value = 0f
+                        scrollAccumulated.floatValue = 0f
                     } else {
-                        scrollAccumulated.value = next
+                        scrollAccumulated.floatValue = next
                     }
                 },
         ) {
