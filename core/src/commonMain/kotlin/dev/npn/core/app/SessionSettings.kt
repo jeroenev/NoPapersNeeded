@@ -1,6 +1,7 @@
 package dev.npn.core.app
 
 import dev.npn.core.ai.AiConfig
+import dev.npn.core.model.systemLanguage
 import dev.npn.core.ocr.OcrLanguages
 import kotlinx.coroutines.flow.first
 
@@ -25,7 +26,7 @@ class SessionSettings(
          */
         fun from(
             settings: SettingsRepository,
-            systemLanguage: () -> String,
+            systemLanguage: () -> String = ::systemLanguage,
         ): SessionSettings =
             SessionSettings(
                 ocrLanguage = { OcrLanguages.effective(settings.settings.first().ocrLanguage, systemLanguage()) },

@@ -6,6 +6,7 @@ import dev.npn.core.app.SessionDeps
 import dev.npn.core.app.SettingsRepository
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
+import dev.npn.core.util.runLogged
 import dev.npn.core.util.warn
 import dev.npn.core.watch.WatchedFolder
 import dev.npn.core.watch.WatchedFolderImporter
@@ -34,7 +35,8 @@ import kotlinx.coroutines.withContext
  * open/close/swap logic lives here so both platforms behave identically.
  *
  * @param watchedFolder opens a [WatchedFolder] for a persisted location string (desktop: absolute
- *  path; Android: a path or a SAF tree uri), or null when the location cannot be resolved.
+ *  path; Android: a path or a SAF tree uri), or null when the location cannot be resolved; one that
+ *  throws is logged and treated as null.
  * @param factory builds the per-library pieces (fs, databases, engines) for a location, throwing
  *  [LibraryUnavailableException] when it can tell why the library cannot open. The environment
  *  drives them into [LibrarySessionImpl.openSession] and closes their databases on a swap.
@@ -78,6 +80,9 @@ class DefaultAppEnvironment(
 
     private val runningImporter = MutableStateFlow<RunningImporter?>(null)
 
+    private fun openWatchedFolder(location: String): WatchedFolder? =
+        log.runLogged("Opening the watched folder") { watchedFolder(location) }
+
     init {
         // Watched-folder auto-import: (re)start an importer whenever the open session or the
         // configured folder changes; collectLatest cancels the previous importer's loop.
@@ -86,7 +91,7 @@ class DefaultAppEnvironment(
             combine(_session, configuredFolder) { s, loc -> s to loc }
                 .collectLatest { (session, location) ->
                     if (session == null || location == null) return@collectLatest
-                    val folder = watchedFolder(location) ?: return@collectLatest
+                    val folder = openWatchedFolder(location) ?: return@collectLatest
                     val importer = buildImporter(session, folder, location)
                     runningImporter.value = RunningImporter(session, location, importer)
                     try {
@@ -124,7 +129,7 @@ class DefaultAppEnvironment(
         val location = settings.settings.first().watchedFolder ?: return 0
         val session = _session.value ?: return 0
         val running = runningImporter.value?.takeIf { it.session === session && it.location == location }
-        val importer = running?.importer ?: buildImporter(session, watchedFolder(location) ?: return 0, location)
+        val importer = running?.importer ?: buildImporter(session, openWatchedFolder(location) ?: return 0, location)
         return importer.scanOnce().imported
     }
 

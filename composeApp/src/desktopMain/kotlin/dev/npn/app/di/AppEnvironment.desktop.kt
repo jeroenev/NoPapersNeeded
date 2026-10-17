@@ -12,7 +12,6 @@ import kotlinx.coroutines.flow.first
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.Locale
 
 /**
  * Desktop [AppEnvironment] factory. Builds a [DefaultAppEnvironment] with a file-backed
@@ -24,19 +23,16 @@ fun createAppEnvironment(): AppEnvironment {
     val settings = SettingsRepositoryImpl()
     return DefaultAppEnvironment(
         settings,
-        watchedFolder = { location -> runCatching { JvmWatchedFolder(Path.of(location)) }.getOrNull() },
+        watchedFolder = { location -> JvmWatchedFolder(Path.of(location)) },
         log = DesktopLog,
     ) { location, scope ->
         val root = Path.of(location)
-        // An unplugged drive must not open as a library with every document gone.
-        if (!Files.isDirectory(root)) {
-            throw LibraryUnavailableException(OpenFailureReason.FOLDER_MISSING, "Library folder not found: $location")
-        }
+        if (!Files.isDirectory(root)) throw LibraryUnavailableException.folderMissing(location)
         jvmSessionDeps(
             libraryRoot = root,
             dirs = AppDirs.desktop(location),
             scope = scope,
-            settings = SessionSettings.from(settings) { Locale.getDefault().language },
+            settings = SessionSettings.from(settings),
             installationId = settings.settings.first().installationId,
             ocrEngine = bundledTesseract() ?: TesseractCliEngine(),
             log = DesktopLog,

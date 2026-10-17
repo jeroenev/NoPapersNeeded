@@ -1,6 +1,12 @@
 package dev.npn.core.model
 
 /**
+ * The platform's current language tag (the JVM's default locale on both apps). Read on every call:
+ * it changes while the app runs, and it is what the app's language picker sets.
+ */
+expect fun systemLanguage(): String
+
+/**
  * The app language as the layers below the UI see it: a platform language tag, reduced to its
  * ISO 639-1 subtag, and what is known about the languages the app plausibly runs in. The prompts
  * name the language to the model, and OCR picks the matching Tesseract model; both read it here.

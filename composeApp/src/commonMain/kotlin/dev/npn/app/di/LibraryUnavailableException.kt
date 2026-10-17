@@ -28,4 +28,13 @@ enum class OpenFailureReason {
 class LibraryUnavailableException(
     val reason: OpenFailureReason,
     message: String,
-) : Exception(message)
+) : Exception(message) {
+    companion object {
+        /**
+         * The library folder at [location] is not there. Thrown before anything lists it, so an
+         * unplugged drive or card never opens as a library whose every document was deleted.
+         */
+        fun folderMissing(location: String) =
+            LibraryUnavailableException(OpenFailureReason.FOLDER_MISSING, "Library folder not found: $location")
+    }
+}
