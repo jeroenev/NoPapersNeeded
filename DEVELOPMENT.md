@@ -125,8 +125,8 @@ and obvious hardcoded strings in shared Compose UI, are checked with
 `./gradlew checkLocalization` (its own tests: `./gradlew :buildSrc:test`). The task
 also runs as part of `./gradlew check`; intentional language-neutral literals must be
 listed in `config/localization-hardcoded-allowlist.txt`.
-Run `mise hooks-install` once per clone to enable the pre-commit formatting and
-fast-test checks; the hook never formats or stages files. Commit messages are
+Run `mise hooks-install` once per clone to enable the pre-commit formatting, source-only
+detekt, localization and fast-test checks; the hook never formats or stages files. Commit messages are
 prefixed with the current branch name when needed.
 
 ### Tests
