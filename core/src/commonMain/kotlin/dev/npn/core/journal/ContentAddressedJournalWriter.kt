@@ -1,7 +1,6 @@
 package dev.npn.core.journal
 
 import dev.npn.core.fs.LibraryFileSystem
-import dev.npn.core.fs.VerifiedPublicationCapability
 import dev.npn.core.fs.holds
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.util.runCatchingCancellable
@@ -28,9 +27,6 @@ internal class ContentAddressedJournalWriter(
     private val installationId: String,
     private val allocator: HlcWatermarkAllocator,
 ) {
-    val supported: Boolean
-        get() = fs.verifiedPublicationCapability == VerifiedPublicationCapability.ATOMIC_CREATE_NO_REPLACE
-
     fun observeHlc(remote: Hlc) = allocator.observe(remote)
 
     val watermark: Pair<Long, Int>
@@ -38,7 +34,6 @@ internal class ContentAddressedJournalWriter(
 
     suspend fun commit(ops: List<PendingOp>): PublishedTransaction? {
         if (ops.isEmpty()) return null
-        check(supported) { "Storage provider does not support verified object publication" }
         val actor = Uuid.random().toString()
         val events =
             ops.mapIndexed { index, pending ->

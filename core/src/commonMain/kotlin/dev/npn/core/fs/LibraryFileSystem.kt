@@ -26,11 +26,6 @@ data class FileMeta(
     val isDirectory: Boolean,
 )
 
-enum class VerifiedPublicationCapability {
-    ATOMIC_CREATE_NO_REPLACE,
-    UNSUPPORTED,
-}
-
 /**
  * This filesystem can never publish without replacement: the platform or mount has no primitive
  * for it. A capability, not an incident, so the library refuses to open rather than write.
@@ -150,9 +145,6 @@ expect class ExternalSource
  * - All paths are library-relative, '/'-separated, no leading slash.
  */
 interface LibraryFileSystem {
-    /** Whether this provider can atomically publish a complete staged object without replacement. */
-    val verifiedPublicationCapability: VerifiedPublicationCapability
-
     /**
      * Whether [publishVerifiedObjectOnce] rests on what the storage under the library offers (a hard
      * link, an exclusive rename), which a remount can take away, so every open tries a publication

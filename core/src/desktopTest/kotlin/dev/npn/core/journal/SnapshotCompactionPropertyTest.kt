@@ -8,7 +8,6 @@ import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.FsEvent
 import dev.npn.core.fs.LibraryFileSystem
-import dev.npn.core.fs.VerifiedPublicationCapability
 import dev.npn.core.fs.sha256Bytes
 import io.kotest.common.ExperimentalKotest
 import io.kotest.property.Arb
@@ -23,8 +22,6 @@ import kotlin.test.assertEquals
 
 /** Minimal FS stub for compactor unit tests that only exercise pure planning/survival logic. */
 private object NoPublishFs : LibraryFileSystem {
-    override val verifiedPublicationCapability = VerifiedPublicationCapability.ATOMIC_CREATE_NO_REPLACE
-
     override suspend fun listAll(): List<FileMeta> = emptyList()
 
     override suspend fun listAllUnder(relPath: String): List<FileMeta> = emptyList()

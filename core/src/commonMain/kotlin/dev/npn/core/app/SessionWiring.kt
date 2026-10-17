@@ -55,26 +55,22 @@ internal suspend fun moveDeviceState(deps: SessionDeps) =
 
 /**
  * The journal writer: storage-v2 content-addressed objects are the only format this build writes
- * (v1 segments are still read). A filesystem that does not report verified publication is refused
- * here rather than written in a weaker format.
+ * (v1 segments are still read). A filesystem that cannot publish without replacement throws
+ * [VerifiedPublicationUnavailableException] at its first publication, which [DeviceIdentity] makes
+ * before anything else is written, rather than be written in a weaker format.
  */
 private suspend fun createObjectWriter(deps: SessionDeps): ContentAddressedJournalWriter {
     val state = deps.db.metadataProjectionDao().state()
-    val writer =
-        ContentAddressedJournalWriter(
-            fs = deps.fs,
-            installationId = deps.installationId,
-            allocator =
-                HlcWatermarkAllocator(
-                    clock = deps.clock,
-                    initialPhysicalMillis = state?.allocatorPhysical ?: 0L,
-                    initialCounter = state?.allocatorCounter ?: 0,
-                ),
-        )
-    if (!writer.supported) {
-        throw VerifiedPublicationUnavailableException("This storage cannot publish journal objects safely")
-    }
-    return writer
+    return ContentAddressedJournalWriter(
+        fs = deps.fs,
+        installationId = deps.installationId,
+        allocator =
+            HlcWatermarkAllocator(
+                clock = deps.clock,
+                initialPhysicalMillis = state?.allocatorPhysical ?: 0L,
+                initialCounter = state?.allocatorCounter ?: 0,
+            ),
+    )
 }
 
 internal suspend fun createCoordinator(

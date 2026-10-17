@@ -35,13 +35,6 @@ class SafLibraryFileSystem(
     private val context: Context,
     private val treeUri: Uri,
 ) : LibraryFileSystem {
-    // SAF rename is not POSIX-atomic, but v2 objects are content-addressed: the staging file is
-    // written and hash-verified in full before the rename, so the published object can never be
-    // torn, and readers verify the content hash against the filename anyway (see
-    // StorageV2Reader / publishVerifiedObjectOnce below).
-    override val verifiedPublicationCapability: VerifiedPublicationCapability =
-        VerifiedPublicationCapability.ATOMIC_CREATE_NO_REPLACE
-
     // The provider's own rename publishes, which no remount takes away: an open need not try one,
     // and a cloud provider is spared syncing a file made and deleted at every open.
     override val publicationMayBeLost: Boolean = false

@@ -1,7 +1,6 @@
 package dev.npn.core.journal
 
 import dev.npn.core.fs.LibraryFileSystem
-import dev.npn.core.fs.VerifiedPublicationCapability
 import dev.npn.core.fs.sha256Bytes
 
 /**
@@ -41,9 +40,6 @@ class SnapshotCompactor(
     private val fs: LibraryFileSystem,
     private val installationId: String,
 ) {
-    val supported: Boolean
-        get() = fs.verifiedPublicationCapability == VerifiedPublicationCapability.ATOMIC_CREATE_NO_REPLACE
-
     /**
      * Decide whether to compact. Returns the candidates to fold into one snapshot, or null when the
      * threshold is not exceeded or nothing is stable enough. [nowMillis] and [stabilityWindowMs]
@@ -88,7 +84,6 @@ class SnapshotCompactor(
     /** Encode + verify-publish one snapshot superseding [candidates]. Returns null for empty input. */
     suspend fun publish(candidates: List<CompactionCandidate>): PublishedSnapshot? {
         if (candidates.isEmpty()) return null
-        check(supported) { "Storage provider does not support verified object publication" }
         val events = survivingEvents(candidates)
         val supersedes = candidates.map { it.contentHash }.sorted()
         val manifest = SnapshotManifest(SnapshotCodec.SNAPSHOT_MANIFEST_VERSION, supersedes)

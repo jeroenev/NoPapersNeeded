@@ -65,9 +65,6 @@ class JvmLibraryFileSystem internal constructor(
         externalIo: ExternalIo,
     ) : this(root, externalIo, HardLinkLinker)
 
-    override val verifiedPublicationCapability: VerifiedPublicationCapability =
-        VerifiedPublicationCapability.ATOMIC_CREATE_NO_REPLACE
-
     /**
      * Set once a same-bucket link in [publishObject] has come back false, meaning the filesystem
      * itself has no usable `link(2)` (checked there because those links never cross a mount point,

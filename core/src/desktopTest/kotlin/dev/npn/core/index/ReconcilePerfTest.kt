@@ -10,7 +10,6 @@ import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.PathExternalIo
-import dev.npn.core.fs.VerifiedPublicationCapability
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.PendingOp
@@ -44,9 +43,6 @@ private class CountingFileSystem(
     val reads = ArrayList<String>()
 
     fun journalReads(): List<String> = reads.filter { it.startsWith("${NpnPaths.JOURNAL_DIR}/") }
-
-    override val verifiedPublicationCapability: VerifiedPublicationCapability
-        get() = delegate.verifiedPublicationCapability
 
     override suspend fun listAll(): List<FileMeta> = delegate.listAll()
 
