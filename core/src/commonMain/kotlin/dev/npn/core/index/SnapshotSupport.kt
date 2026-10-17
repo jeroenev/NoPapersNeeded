@@ -55,7 +55,7 @@ class SnapshotSupport(
      * was applied: deciding whether to compact touches neither the event table nor the filesystem.
      */
     suspend fun compactionSources(): Pair<List<CompactionSource>, List<CompactionSource>> {
-        val superseded = dao.appliedSupersededHashes().toHashSet()
+        val superseded = dao.appliedSupersessions().mapTo(HashSet()) { it.supersededHash }
         val live =
             dao.allSources().filter { source ->
                 source.status == SourceStatus.APPLIED && source.contentHash !in superseded
@@ -82,14 +82,7 @@ class SnapshotSupport(
             dao.eventsOfSources(chosen.map { it.relPath }).groupBy({ it.sourcePath }) { stored ->
                 EventDecoderRegistry.decodeStored(stored.canonicalJson)
             }
-        return chosen.map {
-            CompactionCandidate(
-                it.relPath,
-                it.contentHash,
-                events[it.relPath].orEmpty(),
-                it.mtimeMillis,
-            )
-        }
+        return chosen.map { CompactionCandidate(it.relPath, it.contentHash, events[it.relPath].orEmpty()) }
     }
 
     private fun encodedSize(published: PublishedSnapshot): Long =
@@ -220,6 +213,9 @@ private class SupersessionGraph(
     /** The paths of the snapshots that claim anything. */
     val snapshots: Set<String> get() = bySnapshot.keys
 
+    /** The hashes the snapshot at [path] supersedes itself. */
+    fun inputsOf(path: String): List<String> = bySnapshot[path].orEmpty()
+
     /** What [roots] carry: every hash they supersede, in turn, and every snapshot on the way, theirs included. */
     fun reach(roots: Collection<String>): Reach {
         val hashes = HashSet<String>()
@@ -276,9 +272,9 @@ internal suspend fun MetadataProjectionDao.carriedByListed(
     sources: List<MetadataSourceEntity>,
 ): ListedCarriage {
     val supersessions = appliedSupersessions()
-    val hashes = HashSet(SupersessionGraph(sources, supersessions).supersededByListed(listed))
+    val graph = SupersessionGraph(sources, supersessions)
+    val hashes = HashSet(graph.supersededByListed(listed))
     sources.filter { it.status == SourceStatus.APPLIED && it.path in listed }.mapNotNullTo(hashes) { it.contentHash }
-    val inputs = supersessions.groupBy({ it.snapshotPath }, { it.supersededHash })
     // Gone snapshots by content hash.
     val gone =
         sources
@@ -287,7 +283,7 @@ internal suspend fun MetadataProjectionDao.carriedByListed(
     do {
         val unpacked =
             gone.filter { (hash, path) ->
-                val replaced = inputs[path].orEmpty()
+                val replaced = graph.inputsOf(path)
                 hash !in hashes && replaced.isNotEmpty() && hashes.containsAll(replaced)
             }
         unpacked.mapTo(hashes) { (hash, _) -> hash }

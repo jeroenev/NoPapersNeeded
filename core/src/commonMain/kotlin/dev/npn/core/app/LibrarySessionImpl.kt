@@ -14,7 +14,6 @@ import dev.npn.core.index.EmptyImportException
 import dev.npn.core.index.ImportResult
 import dev.npn.core.index.ImportService
 import dev.npn.core.index.Indexer
-import dev.npn.core.index.RelinkService
 import dev.npn.core.index.ScanReport
 import dev.npn.core.index.SupersededImportException
 import dev.npn.core.index.WriteSettle
@@ -394,7 +393,6 @@ class LibrarySessionImpl private constructor(
             val deviceId = DeviceIdentity(deps.deviceDb.keyValueDao(), deps.fs, deps.installationId, deps.log).resolve()
             foldJournal(deps, coordinator)
 
-            val relink = RelinkService(coordinator)
             // A bake's relink hands the document's text on through the OCR pipeline, built after the
             // library it belongs to; no bake runs before the session is open.
             lateinit var bakeRelink: BakeRelink
@@ -433,7 +431,7 @@ class LibrarySessionImpl private constructor(
                     // The file no longer matches its hash: rescan once it has settled.
                     onStaleFile = { session.scheduleSettleRescan(WriteSettle.QUIET_MILLIS) },
                 )
-            bakeRelink = BakeRelink(relink, ocr, deps.deviceDb.aiEnrichQueueDao(), deps.log)
+            bakeRelink = BakeRelink(coordinator, ocr, deps.deviceDb.aiEnrichQueueDao(), deps.log)
             val scanReports = MutableStateFlow<ScanReport?>(null)
             session =
                 LibrarySessionImpl(
@@ -445,7 +443,7 @@ class LibrarySessionImpl private constructor(
                     library = library,
                     scanReports = scanReports,
                     ocrFacade = ocr,
-                    maintenance = buildMaintenance(deps, lifetime, coordinator, library, relink, ocr, scanReports),
+                    maintenance = buildMaintenance(deps, lifetime, coordinator, library, ocr, scanReports),
                     aiEditQueue = edits.queue,
                     queues = buildWork(deps, lifetime, ocr, enrichment.worker, edits, rescanned),
                     aiFacade = ai,

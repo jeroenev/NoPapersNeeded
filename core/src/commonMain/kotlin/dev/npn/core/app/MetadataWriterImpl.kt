@@ -1,6 +1,5 @@
 package dev.npn.core.app
 
-import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.isLive
@@ -18,7 +17,6 @@ import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldParse
 import dev.npn.core.model.FieldValues
-import dev.npn.core.model.ReviewMode
 import dev.npn.core.model.SystemProperty
 import dev.npn.core.pathrules.StoragePathRuleApplicator
 import dev.npn.core.pathrules.pathTaken
@@ -26,8 +24,6 @@ import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
 import dev.npn.core.util.warn
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
 
 /**
  * Journal-backed write side. Every metadata change is one or more [PendingOp]s committed through
@@ -593,32 +589,4 @@ class MetadataWriterImpl internal constructor(
 
     /** Trim a system-property input, coercing null/blank to null (clears the property). */
     private fun String?.normalized(): String? = this?.trim()?.ifEmpty { null }
-}
-
-/**
- * [ReviewConfigFacade] over the journal: the review workflow is a library setting, and the switch
- * to the inbox workflow marks documents reviewed with the same `prop-set` events [MetadataWriterImpl]
- * writes. Writes run through [owned], so the session waits them out before it closes.
- */
-internal class JournalReviewConfig(
-    private val coordinator: JournalCoordinator,
-    private val documentDao: DocumentDao,
-    private val owned: suspend (suspend () -> Unit) -> Unit,
-) : ReviewConfigFacade {
-    override val reviewMode: Flow<ReviewMode> =
-        coordinator.settingFlow(ReviewMode.WIRE_KEY).map(ReviewMode::fromWire)
-
-    override suspend fun setReviewMode(mode: ReviewMode) =
-        owned { coordinator.commitAndApply(listOf(PendingOp.settingSet(ReviewMode.WIRE_KEY, mode.wire))) }
-
-    // Journal events are permanent, so only documents the projection does not show reviewed yet
-    // get one: a second run, or a library already reviewed, writes nothing.
-    override suspend fun markReviewedForMigration(onlyTagged: Boolean) =
-        owned {
-            val ops =
-                documentDao
-                    .unreviewedLiveDocIds(taggedOnly = onlyTagged)
-                    .map { PendingOp.propSet(it, SystemProperty.REVIEWED, "true") }
-            if (ops.isNotEmpty()) coordinator.commitAndApply(ops)
-        }
 }

@@ -5,8 +5,8 @@ import dev.npn.core.ai.RoomChatHistoryProvider
 import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.LegacyIndexTables
+import dev.npn.core.db.defs
 import dev.npn.core.db.fieldTypes
-import dev.npn.core.db.toFieldDef
 import dev.npn.core.fs.OcrSidecarFiles
 import dev.npn.core.fs.TrashOps
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
@@ -15,7 +15,6 @@ import dev.npn.core.index.ImportService
 import dev.npn.core.index.Indexer
 import dev.npn.core.index.MaintenanceService
 import dev.npn.core.index.MetadataAccumulator
-import dev.npn.core.index.RelinkService
 import dev.npn.core.index.ScanReport
 import dev.npn.core.index.SnapshotSupport
 import dev.npn.core.index.SplitService
@@ -88,8 +87,7 @@ internal suspend fun createCoordinator(
         writer = createObjectWriter(deps),
         indexer = indexer,
         accumulator = MetadataAccumulator(deps.fs, deps.db, deps.installationId, deps.clock, snapshots),
-        compactor = SnapshotCompactor(deps.fs, deps.installationId),
-        snapshots = snapshots,
+        compaction = Compaction(SnapshotCompactor(deps.fs, deps.installationId), snapshots),
         clock = deps.clock,
         log = deps.log,
         writeUndelete = writeUndelete,
@@ -117,12 +115,7 @@ internal suspend fun foldJournal(
         deps.upgradeAtOpen("Upgrading the seeded field definitions") { coordinator.seedFieldRegistryIfNeeded(seeds) }
     }
     deps.upgradeAtOpen("Restoring the seeded fields' per-document flag") {
-        val projected =
-            deps.db
-                .fieldDefDao()
-                .all()
-                .mapNotNull { it.toFieldDef() }
-        coordinator.restoreSeededPerDocument(seeds, projected)
+        coordinator.restoreSeededPerDocument(seeds, projected = deps.db.fieldDefDao().defs())
     }
     deps.upgradeAtOpen("Adopting this device's library settings") {
         coordinator.adoptSettings(deps.settings.legacyLibrarySettings().journalSettings())
@@ -380,7 +373,6 @@ internal fun buildMaintenance(
     lifetime: SessionLifetime,
     coordinator: JournalCoordinator,
     library: Library,
-    relink: RelinkService,
     ocr: OcrFacadeImpl,
     scanReports: MutableStateFlow<ScanReport?>,
 ): MaintenanceFacadeImpl =
@@ -395,7 +387,7 @@ internal fun buildMaintenance(
                 importService = library.imports,
                 serialize = { step -> coordinator.serialized { step() } },
             ),
-        relink = relink,
+        coordinator = coordinator,
         splitter = SplitService(deps.fs, deps.pdfEngine, library.imports, deps.db.documentDao(), deps.log),
         writer = library.writer,
         ocr = ocr,

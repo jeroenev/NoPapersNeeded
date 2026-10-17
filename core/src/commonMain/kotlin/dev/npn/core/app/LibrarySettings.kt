@@ -1,6 +1,5 @@
 package dev.npn.core.app
 
-import dev.npn.core.journal.PendingOp
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.rules.AutoMatchRuleJson
 import kotlinx.coroutines.flow.Flow
@@ -112,14 +111,6 @@ internal class JournalTrashRetention(
         } else {
             stored.toIntOrNull()?.takeIf { it in TrashSettings.RETENTION_RANGE }
         }
-}
-
-/** Write [value] under [key] unless the journal already holds it, so an unchanged value adds no event. */
-private suspend fun JournalCoordinator.putSetting(
-    key: String,
-    value: String?,
-) = commitBuilt { state ->
-    if (state.effectiveSetting(key) == value) emptyList() else listOf(PendingOp.settingSet(key, value))
 }
 
 /**

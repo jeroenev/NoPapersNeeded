@@ -1,8 +1,8 @@
 package dev.npn.core.app
 
 import dev.npn.core.db.DocumentEntity
-import dev.npn.core.index.ImportJournal
 import dev.npn.core.index.Indexer
+import dev.npn.core.index.LockedJournal
 import dev.npn.core.index.MetadataAccumulator
 import dev.npn.core.index.OpenReconciliation
 import dev.npn.core.index.Resurrected
@@ -100,6 +100,18 @@ class LifecycleChange(
 }
 
 /**
+ * How [JournalCoordinator.compact] compacts: [compactor] publishes the snapshot, [snapshots] is the
+ * source bookkeeping it plans from and records into, and only once more than [threshold] live objects
+ * exist does it fold those older than [stabilityWindowMs] into one.
+ */
+internal class Compaction(
+    val compactor: SnapshotCompactor,
+    val snapshots: SnapshotSupport,
+    val threshold: Int = JournalCoordinator.DEFAULT_COMPACTION_THRESHOLD,
+    val stabilityWindowMs: Long = JournalCoordinator.DEFAULT_COMPACTION_STABILITY_WINDOW_MS,
+)
+
+/**
  * Single point of serialization for all journal writes and the live [FoldedState] they depend on.
  *
  * Why this exists: building a correct OR-set `tag-remove` needs the dots currently observed for
@@ -132,11 +144,8 @@ class JournalCoordinator internal constructor(
     private val writer: ContentAddressedJournalWriter,
     private val indexer: Indexer,
     private val accumulator: MetadataAccumulator,
-    private val compactor: SnapshotCompactor? = null,
-    /** The source bookkeeping [compact] plans from and records into; given with a [compactor]. */
-    private val snapshots: SnapshotSupport? = null,
-    private val compactionThreshold: Int = DEFAULT_COMPACTION_THRESHOLD,
-    private val compactionStabilityWindowMs: Long = DEFAULT_COMPACTION_STABILITY_WINDOW_MS,
+    /** How [compact] compacts; null for a coordinator that never does. */
+    private val compaction: Compaction? = null,
     /** Where folds and writes run, whatever dispatcher the caller is on. */
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
     /** How long ago a document was hidden, when a rescan finds its file back (see [recordRestores]). */
@@ -318,7 +327,7 @@ class JournalCoordinator internal constructor(
                 var refold = false
                 if (staged != null) {
                     indexer.projection {
-                        val recorded = accumulator.ingestObject(staged)
+                        val recorded = accumulator.record(staged)
                         events = recorded.events
                         refold = recorded.refold
                         if (refold || events.isEmpty()) return@projection
@@ -376,7 +385,7 @@ class JournalCoordinator internal constructor(
     /**
      * Compact old, stable storage-v2 objects into one supersession snapshot, then delete the
      * superseded files. Runs under the single-writer mutex so the snapshot write and deletions are
-     * serialized against every other journal write. A no-op without a [compactor], while writes are
+     * serialized against every other journal write. A no-op without a [compaction], while writes are
      * blocked, or when the threshold/stability gate is not met. That gate is decided from the source
      * table alone, so the usual tick reads no event and no file; only the objects a plan picks are
      * checked on disk and have their events loaded.
@@ -389,28 +398,25 @@ class JournalCoordinator internal constructor(
      */
     suspend fun compact(nowMillis: Long = clock.nowMillis()): String? =
         locked {
-            val activeCompactor = compactor ?: return@locked null
-            val support = checkNotNull(snapshots) { "A coordinator that compacts needs its SnapshotSupport" }
+            val compaction = compaction ?: return@locked null
             if (writeBlockReason != null) return@locked null
+            val support = compaction.snapshots
             val (objects, snapshots) = support.compactionSources()
             val chosen =
-                activeCompactor.plan(
+                compaction.compactor.plan(
                     objects = objects,
                     snapshots = snapshots,
-                    threshold = compactionThreshold,
+                    threshold = compaction.threshold,
                     nowMillis = nowMillis,
-                    stabilityWindowMs = compactionStabilityWindowMs,
+                    stabilityWindowMs = compaction.stabilityWindowMs,
                 ) ?: return@locked null
             val plan = support.candidates(chosen) ?: return@locked null
             withContext(NonCancellable) {
-                val published = activeCompactor.publish(plan) ?: return@withContext null
+                val published = compaction.compactor.publish(plan) ?: return@withContext null
                 withDurableProjectionRecovery {
                     support.recordLocalSnapshot(published)
-                    support.deleteSupersededFiles(
-                        published.supersedes.mapNotNull { hash ->
-                            plan.firstOrNull { it.contentHash == hash }?.relPath
-                        },
-                    )
+                    // The snapshot supersedes every candidate, so every one of them goes.
+                    support.deleteSupersededFiles(plan.map { it.relPath })
                     published.contentHash
                 }
             }
@@ -480,6 +486,18 @@ class JournalCoordinator internal constructor(
     suspend fun commitAndApply(ops: List<PendingOp>): Boolean = commitBuilt { ops }
 
     /**
+     * Write [value] under the synced setting [key], null to clear it, unless the journal already
+     * holds it, so an unchanged value adds no event.
+     */
+    internal suspend fun putSetting(
+        key: String,
+        value: String?,
+    ): Boolean =
+        commitBuilt { state ->
+            if (state.effectiveSetting(key) == value) emptyList() else listOf(PendingOp.settingSet(key, value))
+        }
+
+    /**
      * Throw now if a commit would be refused. For a caller that changes the filesystem before it
      * commits, outside the lock (an in-place bake, before its relink), so a refused commit does not
      * strand a rewritten PDF with no journal record of it; or that pays for work only a commit can
@@ -497,26 +515,26 @@ class JournalCoordinator internal constructor(
      * Run [block] under the single-writer mutex: for a change to which file holds which hash that
      * does not go through the journal, an import placing its file and row. That serializes it
      * against other imports and against every rescan, whose listing and row writes it would
-     * otherwise interleave with. [block] reads and writes the journal through the [ImportJournal] it
+     * otherwise interleave with. [block] reads and writes the journal through the [LockedJournal] it
      * is handed, under the same lock: an import reads the relinks and records a returning
      * document's return in the step that made its row live, a delete for good removes the bytes
      * only while the journal still has the document deleted, and the trash purge deletes an entry
      * only while its documents' trash times say it is due. It must not call another member here, as
      * the lock is not reentrant.
      */
-    suspend fun <T> serialized(block: suspend (ImportJournal) -> T): T = locked { block(lockedJournal) }
+    suspend fun <T> serialized(block: suspend (LockedJournal) -> T): T = locked { block(lockedJournal) }
 
     /**
      * Deleted documents an import brought back in this session without a record of it, as no
      * `doc-undelete` is written ([writeUndelete] off), until a lifecycle change of theirs. A delete
-     * for good still removing the bytes ([ImportJournal.isDeleted]) leaves them be: the journal
+     * for good still removing the bytes ([LockedJournal.isDeleted]) leaves them be: the journal
      * still has them deleted, but the import's file is the user's. Read and written under [mutex].
      */
     private val returnedUnrecorded = HashSet<String>()
 
     /** The live fold, for a [serialized] block, which holds the lock it is read and written under. */
     private val lockedJournal =
-        object : ImportJournal {
+        object : LockedJournal {
             override suspend fun successorOf(docId: String): String = foldedState().resolveDocId(docId)
 
             override suspend fun isDeleted(docId: String): Boolean =
@@ -601,8 +619,8 @@ class JournalCoordinator internal constructor(
         }
 
     /**
-     * Commit [ops] as one transaction and run a full [Indexer.rescan] inside the same critical
-     * section.
+     * Commit [ops], at least one, as one transaction and run a full [Indexer.rescan] inside the
+     * same critical section.
      *
      * Unlike [commitBuilt] (which only refolds), this is for ops such as `relink` whose fold effect
      * needs a full rescan to carry metadata onto the new id and mark the superseded doc. Serializing
@@ -612,18 +630,19 @@ class JournalCoordinator internal constructor(
      * Returns the resulting [ScanReport]. Refreshes the folded state from the store after the
      * rescan.
      */
-    suspend fun commitAndRescan(ops: List<PendingOp>): ScanReport =
-        locked {
+    suspend fun commitAndRescan(ops: List<PendingOp>): ScanReport {
+        require(ops.isNotEmpty()) { "A commit and rescan publishes at least one event" }
+        return locked {
             ensureWritable()
             val current = foldedState()
             withContext(NonCancellable) {
                 // Fold the freshly-written events into the live state up front. reconcile()'s fast
                 // path returns the state unchanged when it read no new sources (the events were just
                 // recorded directly), so the projection rescan must see them here.
-                val published = ops.takeIf { it.isNotEmpty() }?.let { writeTransaction(it) }
-                projectAndRescan(current, published)
+                projectAndRescan(current, writeTransaction(ops))
             }
         }
+    }
 
     /**
      * Commit a filesystem change's relink. Once its transaction is durable, the change stands:
@@ -645,10 +664,10 @@ class JournalCoordinator internal constructor(
 
     private suspend fun projectAndRescan(
         current: FoldedState,
-        published: PublishedTransaction?,
+        published: PublishedTransaction,
     ): ScanReport =
         withDurableProjectionRecovery {
-            if (published != null) recordWritten(current, accumulator.localSource(published))
+            recordWritten(current, accumulator.localSource(published))
             rescanFrom(current)
         }
 

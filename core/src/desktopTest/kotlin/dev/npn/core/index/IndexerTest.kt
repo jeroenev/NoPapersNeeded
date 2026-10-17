@@ -194,8 +194,7 @@ class IndexerTest {
             rig.clock.advance()
             val coordinator = rig.coordinator(writer)
             coordinator.refreshState()
-            val relink = RelinkService(coordinator)
-            relink.applyRelink(oldId, newId)
+            coordinator.commitAndRescan(listOf(PendingOp.relink(oldId, newId)))
 
             rig.db.tagDao().tagsForDocument(newId) shouldContainExactly listOf("invoice")
             rig.db
@@ -347,8 +346,7 @@ class IndexerTest {
             val fields =
                 rig.db
                     .documentFieldDao()
-                    .fieldsForDocs(listOf(docId))
-                    .associate { it.fieldKey to it.fieldValue }
+                    .valuesOf(docId)
 
             row.title shouldBe fields[FieldKeys.TITLE]
             row.correspondent shouldBe fields[FieldKeys.CORRESPONDENT]

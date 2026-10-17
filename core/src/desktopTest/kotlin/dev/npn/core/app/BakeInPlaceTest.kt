@@ -65,8 +65,7 @@ class BakeInPlaceTest {
                     ?.relPath shouldBe "a.pdf"
                 rig.db
                     .documentFieldDao()
-                    .fieldsForDocs(listOf(after))
-                    .associate { it.fieldKey to it.fieldValue } shouldBe
+                    .valuesOf(after) shouldBe
                     mapOf(FieldKeys.TITLE to "Water bill", FieldKeys.CORRESPONDENT to "Aquafin")
                 rig.db
                     .tagDao()
@@ -419,8 +418,7 @@ class BakeInPlaceTest {
         docId: String,
     ) = rig.db
         .documentFieldDao()
-        .fieldsForDocs(listOf(docId))
-        .associate { it.fieldKey to it.fieldValue }
+        .valuesOf(docId)
 
     /** Bake the document [original] makes at `a.pdf`; returns its id before the bake and after. */
     private suspend fun baked(

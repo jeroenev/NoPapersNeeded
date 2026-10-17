@@ -122,9 +122,6 @@ data class FieldDef(
         require(key.isNotBlank()) { "FieldDef key must not be blank" }
     }
 
-    /** Keys other subsystems name directly (XMP, storage-path templates, auto-match rules). */
-    val isWellKnown: Boolean get() = key in FieldKeys.WELL_KNOWN
-
     /** Whether other documents' values of this field are worth offering for reuse. */
     val sharesVocabulary: Boolean get() = type.hasVocabulary && !perDocument
 }

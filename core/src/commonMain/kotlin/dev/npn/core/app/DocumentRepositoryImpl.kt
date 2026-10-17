@@ -7,9 +7,8 @@ import dev.npn.core.db.FtsDao
 import dev.npn.core.db.FtsQuery
 import dev.npn.core.db.LIVE_DOCUMENT
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.db.defs
 import dev.npn.core.db.isLive
-import dev.npn.core.db.toFieldDef
-import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.JournalCodec
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.ocr.OcrEngineRef
@@ -142,7 +141,7 @@ class DocumentRepositoryImpl(
         val prefix = query.trim().takeIf { it.length >= MIN_SUGGESTION_LENGTH } ?: return emptyList()
         val sourceLimit = limit.coerceAtLeast(1)
         val likePrefix = escapeLike(prefix) + "%"
-        val rows = ftsDao.rowsForPrefix("\"${prefix.replace("\"", "\"\"")}\"*", sourceLimit)
+        val rows = ftsDao.rowsForPrefix(FtsQuery.prefix(prefix), sourceLimit)
         val contentTerms =
             rows
                 .asSequence()
@@ -157,8 +156,7 @@ class DocumentRepositoryImpl(
         val textFields =
             db
                 .fieldDefDao()
-                .all()
-                .mapNotNull { it.toFieldDef() }
+                .defs()
                 .filter { it.sharesVocabulary }
                 .map { fieldDao.valuesForPrefix(it.key, likePrefix, sourceLimit) }
         val sources = listOf(contentTerms, tagDao.tagsForPrefix(likePrefix, sourceLimit)) + textFields
@@ -211,9 +209,9 @@ class DocumentRepositoryImpl(
 
     override suspend fun history(docId: String): List<DocumentHistoryRecord> {
         val dao = db.metadataProjectionDao()
+        // In HLC order, as the query sorts them.
         return dao
             .eventsForDocument(docId)
-            .sortedBy { Hlc(it.hlcPhysical, it.hlcCounter, it.hlcDevice) }
             .map { row ->
                 val event = JournalCodec.decodeLineOrNull(row.canonicalJson)
                 DocumentHistoryRecord(

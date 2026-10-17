@@ -2,6 +2,7 @@ package dev.npn.core.app
 
 import dev.npn.core.db.FieldKeyCount
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.db.defs
 import dev.npn.core.db.toFieldDef
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.PendingOp
@@ -38,7 +39,7 @@ class FieldRegistryImpl internal constructor(
         limit: Int,
     ): Flow<List<String>> = fieldDao.observeDistinctValues(key, limit)
 
-    override suspend fun current(): List<FieldDef> = defDao.all().mapNotNull { it.toFieldDef() }
+    override suspend fun current(): List<FieldDef> = defDao.defs()
 
     override suspend fun upsert(def: FieldDef) =
         owned {

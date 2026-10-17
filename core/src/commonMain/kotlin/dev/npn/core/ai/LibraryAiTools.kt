@@ -539,7 +539,7 @@ internal object LibraryAiTools {
                 documentDao.getByDocId(args.docId)
                     ?: return "No document with docId ${args.docId}."
             val tags = tagDao.tagsForDocument(args.docId)
-            val values = fieldDao.fieldsForDocs(listOf(args.docId)).associate { it.fieldKey to it.fieldValue }
+            val values = fieldDao.valuesOf(args.docId)
             val order = fields.map { it.key } + (values.keys - fields.map { it.key }.toSet()).sorted()
             return buildString {
                 appendLine("docId: ${doc.docId}")

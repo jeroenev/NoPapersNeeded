@@ -48,10 +48,8 @@ internal class WriteSettle(
     }
 
     /** True when the size and mtime the listing saw still hold after hashing. */
-    suspend fun unchangedSince(meta: FileMeta): Boolean {
-        val after = fs.stat(meta.relPath) ?: return false
-        return after.size == meta.size && after.mtimeMillis == meta.mtimeMillis
-    }
+    suspend fun unchangedSince(meta: FileMeta): Boolean =
+        fs.stat(meta.relPath)?.hasStoredStat(meta.size, meta.mtimeMillis) == true
 
     private suspend fun hasEofMarker(relPath: String): Boolean {
         val tail = runCatchingCancellable { fs.readTail(relPath, TAIL_BYTES) }.getOrNull() ?: return false

@@ -9,7 +9,6 @@ import dev.npn.core.db.missingSentinel
 import dev.npn.core.fs.DocumentPaths
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.journal.FoldedState
-import dev.npn.core.model.SystemProperty
 import dev.npn.core.util.runCatchingCancellable
 
 /**
@@ -75,7 +74,7 @@ internal class DocumentPathReconciler(
     fun pending(
         state: FoldedState,
         row: DocumentEntity,
-    ): Boolean = intendedPath(state, row.docId)?.let { it != row.relPath } ?: false
+    ): Boolean = state.intendedPath(row.docId)?.let { it != row.relPath } ?: false
 
     /**
      * The filesystem side of the folds in [work]: free intended paths held by stale rows, move each
@@ -89,7 +88,8 @@ internal class DocumentPathReconciler(
         val verified = HashMap(work.known)
         val moved = ArrayList<DocumentEntity>()
         for (row in current.values.toList()) {
-            val relocated = if (pending(state, row)) project(row, state) else row
+            val intended = state.intendedPath(row.docId)?.takeIf { it != row.relPath } ?: continue
+            val relocated = project(row, intended)
             if (relocated != row) {
                 current[row.docId] = relocated
                 // The move checked the bytes it placed, so observing them needs no second hash.
@@ -105,12 +105,11 @@ internal class DocumentPathReconciler(
         }
     }
 
+    /** Move [row]'s file to [intended], the path its intent asks for, where nothing else holds it. */
     private suspend fun project(
         row: DocumentEntity,
-        state: FoldedState,
+        intended: String,
     ): DocumentEntity {
-        val intended = intendedPath(state, row.docId) ?: return row
-        if (intended == row.relPath) return row
         // Metadata can arrive before a scan updates another document's old path in the cache.
         val owner = db.documentDao().getByRelPath(intended)
         if (owner != null && owner.docId != row.docId) return row
@@ -142,7 +141,8 @@ internal class DocumentPathReconciler(
     ) {
         val targets =
             rows.values.mapNotNull { row ->
-                intendedPath(state, row.docId)
+                state
+                    .intendedPath(row.docId)
                     ?.takeIf { it != row.relPath && DocumentPaths.isDocumentPath(it) }
                     ?.let { row.docId to it }
             }
@@ -162,7 +162,7 @@ internal class DocumentPathReconciler(
 
     suspend fun conflicts(state: FoldedState): List<PathConflict> =
         db.documentDao().allPathsAndMeta().mapNotNull { row ->
-            val intended = intendedPath(state, row.docId)
+            val intended = state.intendedPath(row.docId)
             if (intended == null || intended == row.relPath) null else PathConflict(row.docId, row.relPath, intended)
         }
 
@@ -177,7 +177,7 @@ internal class DocumentPathReconciler(
         val rows = db.documentDao().getByDocIds(duplicates.map { it.docId }.distinct()).associateBy { it.docId }
         val retained = ArrayList<DuplicateReport>()
         for (duplicate in duplicates) {
-            val intended = intendedPath(state, duplicate.docId)
+            val intended = state.intendedPath(duplicate.docId)
             val row = rows[duplicate.docId]
             if (intended != null && row?.relPath == intended) {
                 reconcileAvailable(duplicate.docId, duplicate.extraRelPath, intended)
@@ -186,14 +186,6 @@ internal class DocumentPathReconciler(
         }
         duplicates.clear()
         duplicates.addAll(retained)
-    }
-
-    private fun intendedPath(
-        state: FoldedState,
-        docId: String,
-    ): String? {
-        if (state.isTrashed(docId) || state.isDeleted(docId) || state.resolveDocId(docId) != docId) return null
-        return state.inheritedProp(docId, SystemProperty.STORAGE_PATH)
     }
 
     private suspend fun reconcileAvailable(

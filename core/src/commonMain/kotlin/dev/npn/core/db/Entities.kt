@@ -223,6 +223,27 @@ data class DuplicateEntity(
 )
 
 /**
+ * Cache of the library's rule list, whose master copy is a synced setting in the journal
+ * (`dev.npn.core.app.AutoMatchRuleRepositoryImpl` keeps the two in step). Disposable like the
+ * rest of the index.
+ */
+@Entity(tableName = "auto_match_rules")
+data class AutoMatchRuleEntity(
+    @PrimaryKey val id: String,
+    val name: String,
+    val enabled: Boolean,
+    /** [dev.npn.core.rules.RuleField.wire]. */
+    val field: String,
+    val algorithm: String,
+    val pattern: String,
+    /** Comma-separated tag names to add when the rule matches. */
+    val tags: String?,
+    /** JSON object of field key -> value to set when the rule matches. */
+    @ColumnInfo(defaultValue = "{}") val sets: String,
+    val position: Int,
+)
+
+/**
  * Work list for the OCR pipeline, in [DeviceDatabase]. A row means "this document is owed an OCR
  * pass" on this device, and also holds what only this device knows about that pass: a re-run or an
  * AI run asked for here, the attempts and backoff spent, and (in [OcrPageCacheEntity]) the pages

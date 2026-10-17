@@ -3,9 +3,9 @@ package dev.npn.core.app
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.index.ImportResult
 import dev.npn.core.index.MaintenanceService
-import dev.npn.core.index.RelinkService
 import dev.npn.core.index.ScanReport
 import dev.npn.core.index.SplitService
+import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
@@ -20,7 +20,7 @@ internal class MaintenanceFacadeImpl(
     private val lifetime: SessionLifetime,
     private val db: NpnDatabase,
     private val maintenance: MaintenanceService,
-    private val relink: RelinkService,
+    private val coordinator: JournalCoordinator,
     private val splitter: SplitService,
     private val writer: MetadataWriterImpl,
     private val ocr: OcrFacadeImpl,
@@ -36,8 +36,9 @@ internal class MaintenanceFacadeImpl(
         oldDocId: String,
         newDocId: String,
     ) = lifetime.owned {
-        // commitAndRescan already refreshes the coordinator's folded state under the lock.
-        scanReports.value = relink.applyRelink(oldDocId, newDocId)
+        // The relink's fold carries the old document's metadata onto the new id and marks the old
+        // one superseded, which only a rescan projects; commitAndRescan runs both under the lock.
+        scanReports.value = coordinator.commitAndRescan(listOf(PendingOp.relink(oldDocId, newDocId)))
     }
 
     override suspend fun splitPdf(
@@ -110,12 +111,7 @@ internal class MaintenanceFacadeImpl(
         val tags = db.tagDao().tagsForDocument(docId)
         // Every field carries onto the parts except the ones that describe the whole document
         // (title, notes): a part is not "the" invoice, and its notes would be misleading.
-        val fields =
-            db
-                .documentFieldDao()
-                .fieldsForDocs(listOf(docId))
-                .filter { it.fieldKey !in FieldKeys.NOT_INHERITED_ON_SPLIT }
-                .associate<_, String, String?> { it.fieldKey to it.fieldValue }
+        val fields = db.documentFieldDao().valuesOf(docId).filterKeys { it !in FieldKeys.NOT_INHERITED_ON_SPLIT }
         writer.copyAsStored(partIds, addTags = tags, fields = fields)
     }
 }

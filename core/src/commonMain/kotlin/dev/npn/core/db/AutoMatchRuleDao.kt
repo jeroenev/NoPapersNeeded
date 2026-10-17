@@ -1,9 +1,6 @@
 package dev.npn.core.db
 
-import androidx.room3.ColumnInfo
 import androidx.room3.Dao
-import androidx.room3.Entity
-import androidx.room3.PrimaryKey
 import androidx.room3.Query
 import androidx.room3.Transaction
 import androidx.room3.Upsert
@@ -12,27 +9,6 @@ import dev.npn.core.rules.MatchAlgorithm
 import dev.npn.core.rules.RuleField
 import dev.npn.core.util.NpnJson
 import kotlinx.coroutines.flow.Flow
-
-/**
- * Cache of the library's rule list, whose master copy is a synced setting in the journal
- * (`dev.npn.core.app.AutoMatchRuleRepositoryImpl` keeps the two in step). Disposable like the
- * rest of the index.
- */
-@Entity(tableName = "auto_match_rules")
-data class AutoMatchRuleEntity(
-    @PrimaryKey val id: String,
-    val name: String,
-    val enabled: Boolean,
-    /** [RuleField.wire]. */
-    val field: String,
-    val algorithm: String,
-    val pattern: String,
-    /** Comma-separated tag names to add when the rule matches. */
-    val tags: String?,
-    /** JSON object of field key -> value to set when the rule matches. */
-    @ColumnInfo(defaultValue = "{}") val sets: String,
-    val position: Int,
-)
 
 @Dao
 interface AutoMatchRuleDao {
@@ -67,7 +43,12 @@ internal fun AutoMatchRuleEntity.toRule(): AutoMatchRule =
         field = RuleField.fromWire(field) ?: RuleField.Content,
         algorithm = MatchAlgorithm.entries.firstOrNull { it.name == algorithm } ?: MatchAlgorithm.ANY_WORD,
         pattern = pattern,
-        tags = tags?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList(),
+        tags =
+            tags
+                ?.split(',')
+                ?.map { it.trim() }
+                ?.filter { it.isNotEmpty() }
+                .orEmpty(),
         sets = runCatching { setsJson.decodeFromString<Map<String, String>>(sets) }.getOrDefault(emptyMap()),
         position = position,
     )

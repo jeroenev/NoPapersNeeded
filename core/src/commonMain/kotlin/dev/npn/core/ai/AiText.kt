@@ -1,7 +1,7 @@
 package dev.npn.core.ai
 
-import dev.npn.core.model.FieldParse
 import dev.npn.core.model.FieldValues
+import dev.npn.core.model.canonicalOrNull
 import dev.npn.core.util.NpnJson
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -143,7 +143,7 @@ internal object AiText {
         spec: AiFieldSpec,
         raw: String,
     ): String? {
-        val canonical = (FieldValues.canonicalize(spec.def.type, raw) as? FieldParse.Ok)?.canonical ?: return null
+        val canonical = FieldValues.canonicalize(spec.def.type, raw).canonicalOrNull ?: return null
         val def = spec.def
         if (def.perDocument && def.type.singleLine && canonical.length > MAX_PER_DOCUMENT_CHARS) return null
         if (!spec.def.type.isTextual) return canonical

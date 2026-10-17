@@ -127,7 +127,6 @@ class SnapshotCompactionPropertyTest {
                     relPath = "objects-v2-xx/${sha256Bytes(bytes)}.jsonl",
                     contentHash = sha256Bytes(bytes),
                     events = slice,
-                    mtimeMillis = 1L,
                 ),
             )
             i += size

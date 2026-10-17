@@ -585,7 +585,7 @@ class OcrPipeline(
         // values are read for a document the index has no FTS row for yet, which gets a whole one.
         val doc = documentDao.getByDocId(docId)
         val tags = tagDao.tagsForDocument(docId)
-        val fields = fieldDao.fieldsForDocs(listOf(docId)).associate { it.fieldKey to it.fieldValue }
+        val fields = fieldDao.valuesOf(docId)
         ftsDao.upsertContent(
             FtsRows.row(
                 docId = docId,

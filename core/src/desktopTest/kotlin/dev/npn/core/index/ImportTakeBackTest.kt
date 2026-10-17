@@ -40,7 +40,7 @@ class ImportTakeBackTest {
                     fieldTypes = { emptyMap() },
                     serialize = { step ->
                         step(
-                            object : ImportJournal {
+                            object : LockedJournal {
                                 override suspend fun successorOf(docId: String): String = docId
 
                                 override suspend fun isDeleted(docId: String): Boolean = false

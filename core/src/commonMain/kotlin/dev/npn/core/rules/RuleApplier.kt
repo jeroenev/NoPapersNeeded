@@ -6,9 +6,9 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.FtsDao
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.PendingOp
-import dev.npn.core.model.FieldParse
 import dev.npn.core.model.FieldType
 import dev.npn.core.model.FieldValues
+import dev.npn.core.model.canonicalOrNull
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -99,7 +99,7 @@ class RuleApplier(
         raw: String,
     ): String? {
         val type = state.effectiveFieldType(key)
-        return (FieldValues.canonicalize(type, raw) as? FieldParse.Ok)?.canonical
+        return FieldValues.canonicalize(type, raw).canonicalOrNull
     }
 
     private class Matched(

@@ -43,7 +43,7 @@ class FoldedState {
     private val sortedRenames: List<RenameOp>
         get() = sortedRenamesCache ?: renames.sortedBy { it.hlc }.also { sortedRenamesCache = it }
 
-    data class RenameOp(
+    private data class RenameOp(
         val from: String,
         val to: String,
         val hlc: Hlc,
@@ -53,7 +53,7 @@ class FoldedState {
     // --- raw prop data: doc -> key -> winning (value, hlc) ---
     private val props = HashMap<String, HashMap<SystemProperty, PropVal>>()
 
-    data class PropVal(
+    private data class PropVal(
         val value: String?,
         override val hlc: Hlc,
     ) : HlcStamped
@@ -66,11 +66,11 @@ class FoldedState {
     private val deleted = HashMap<String, Hlc>() // doc -> hlc of the latest delete
     private val undeleted = HashMap<String, Hlc>() // doc -> hlc of the latest undelete
 
-    data class TrashVal(
+    private data class TrashVal(
         val trashed: Boolean,
         val origPath: String?,
-        val hlc: Hlc,
-    )
+        override val hlc: Hlc,
+    ) : HlcStamped
 
     // --- relinks: oldDoc -> all claims; winner is highest hlc ---
     private val relinks = HashMap<String, ArrayList<RelinkClaim>>()
@@ -78,7 +78,7 @@ class FoldedState {
     // [predecessorsOf] for every target, derived on demand and cached until the next relink applies.
     private var predecessorsCache: Map<String, List<String>>? = null
 
-    data class RelinkClaim(
+    private data class RelinkClaim(
         val newDoc: String,
         val hlc: Hlc,
     )
@@ -98,7 +98,7 @@ class FoldedState {
     // --- field registry: key -> LWW (definition-or-null, hlc); null means removed ---
     private val fieldDefs = HashMap<String, DefVal>()
 
-    data class DefVal(
+    private data class DefVal(
         val def: FieldDef?,
         override val hlc: Hlc,
     ) : HlcStamped
@@ -143,12 +143,13 @@ class FoldedState {
 
             is JournalOp.DocTrash -> {
                 val doc = event.doc ?: return
-                mergeTrash(doc, TrashVal(trashed = true, origPath = op.origPath, hlc = event.hlc))
+                val trashed = TrashVal(trashed = true, origPath = op.origPath, hlc = event.hlc)
+                trash.putIfNewerHlc(doc, event.hlc) { trashed }
             }
 
             JournalOp.DocRestore -> {
                 val doc = event.doc ?: return
-                mergeTrash(doc, TrashVal(trashed = false, origPath = null, hlc = event.hlc))
+                trash.putIfNewerHlc(doc, event.hlc) { TrashVal(trashed = false, origPath = null, hlc = event.hlc) }
             }
 
             JournalOp.DocDelete -> {
@@ -159,7 +160,7 @@ class FoldedState {
             JournalOp.DocUndelete -> {
                 val doc = event.doc ?: return
                 undeleted.keepLatest(doc, event.hlc)
-                mergeTrash(doc, TrashVal(trashed = false, origPath = null, hlc = event.hlc))
+                trash.putIfNewerHlc(doc, event.hlc) { TrashVal(trashed = false, origPath = null, hlc = event.hlc) }
             }
 
             is JournalOp.Relink -> {
@@ -195,14 +196,6 @@ class FoldedState {
         }
     }
 
-    private fun mergeTrash(
-        doc: String,
-        incoming: TrashVal,
-    ) {
-        val existing = trash[doc]
-        if (existing == null || incoming.hlc > existing.hlc) trash[doc] = incoming
-    }
-
     private fun HashMap<String, Hlc>.keepLatest(
         doc: String,
         hlc: Hlc,
@@ -218,17 +211,21 @@ class FoldedState {
      * The literal tag name of each live add is then rewritten by every rename/merge whose HLC is
      * >= the add's HLC, applied in HLC order (chained a->b, b->c => c).
      */
-    fun effectiveTags(doc: String): Set<String> {
-        val byTag = tagAdds[doc] ?: return emptySet()
+    fun effectiveTags(doc: String): Set<String> =
+        LinkedHashSet<String>().apply { forEachLiveAdd(doc) { name, _ -> add(name) } }
+
+    /** Every live add of [doc] (its dot not in [removedDots]), with its effective (post-rename) name. */
+    private inline fun forEachLiveAdd(
+        doc: String,
+        action: (name: String, dot: Dot) -> Unit,
+    ) {
+        val byTag = tagAdds[doc] ?: return
         val sortedRenames = sortedRenames
-        val result = LinkedHashSet<String>()
         for ((literal, dots) in byTag) {
             for ((dot, addHlc) in dots) {
-                if (dot in removedDots) continue
-                result.add(applyRenames(literal, addHlc, sortedRenames))
+                if (dot !in removedDots) action(applyRenames(literal, addHlc, sortedRenames), dot)
             }
         }
-        return result
     }
 
     /**
@@ -249,13 +246,13 @@ class FoldedState {
     }
 
     /** Effective value of a single-value property, or null if unset/cleared. */
-    fun effectiveProp(
+    internal fun effectiveProp(
         doc: String,
         key: SystemProperty,
     ): String? = props[doc]?.get(key)?.value
 
-    /** Winning version, including explicit clears, for comparing device-local observation baselines. */
-    fun propVersion(
+    /** Winning version, including explicit clears, of [doc]'s own register for [key]. */
+    internal fun propVersion(
         doc: String,
         key: SystemProperty,
     ): Hlc? = props[doc]?.get(key)?.hlc
@@ -332,6 +329,17 @@ class FoldedState {
     /** True if the document is currently in trash. A deleted document is [isDeleted] only, never both. */
     fun isTrashed(doc: String): Boolean = !isDeleted(doc) && trash[doc]?.trashed == true
 
+    /** Whether [doc] is one the library shows: neither trashed nor deleted, nor superseded by a relink. */
+    fun isCurrent(doc: String): Boolean = !isTrashed(doc) && !isDeleted(doc) && resolveDocId(doc) == doc
+
+    /**
+     * Where [doc]'s file is meant to be: its storage path with what it inherited ([inheritedProp]),
+     * or null when no path is intended or [doc] is not [isCurrent], as a hidden document's file goes
+     * nowhere.
+     */
+    fun intendedPath(doc: String): String? =
+        if (isCurrent(doc)) inheritedProp(doc, SystemProperty.STORAGE_PATH) else null
+
     /** Original path recorded by the winning doc-trash, if currently trashed. */
     fun trashOrigPath(doc: String): String? {
         val t = trash[doc] ?: return null
@@ -345,7 +353,7 @@ class FoldedState {
     }
 
     /** Wall time of the winning doc-delete's HLC, while the document is deleted. */
-    fun deletedAtMillis(doc: String): Long? = if (isDeleted(doc)) deleted[doc]?.physicalMillis else null
+    private fun deletedAtMillis(doc: String): Long? = if (isDeleted(doc)) deleted[doc]?.physicalMillis else null
 
     /**
      * For the trash purge, every document an event names that is deleted, or else not superseded by a
@@ -434,18 +442,7 @@ class FoldedState {
     fun liveTagDots(
         doc: String,
         effectiveName: String,
-    ): List<Dot> {
-        val byTag = tagAdds[doc] ?: return emptyList()
-        val sortedRenames = sortedRenames
-        val out = ArrayList<Dot>()
-        for ((literal, dots) in byTag) {
-            for ((dot, addHlc) in dots) {
-                if (dot in removedDots) continue
-                if (applyRenames(literal, addHlc, sortedRenames) == effectiveName) out.add(dot)
-            }
-        }
-        return out
-    }
+    ): List<Dot> = ArrayList<Dot>().apply { forEachLiveAdd(doc) { name, dot -> if (name == effectiveName) add(dot) } }
 
     /**
      * Build the OR-set `tag-remove` [PendingOp]s for [tag] over [docIds] from THIS state's live

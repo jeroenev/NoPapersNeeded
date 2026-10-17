@@ -12,13 +12,11 @@ sealed interface JournalPath {
 
     data class ObjectV2(
         val expectedHash: String,
-        val canonical: Boolean,
     ) : JournalPath
 
     /** A compaction snapshot object (multi-actor events + a supersession manifest). */
     data class SnapshotV2(
         val expectedHash: String,
-        val canonical: Boolean,
     ) : JournalPath
 
     data class UnsupportedObjectStore(
@@ -132,9 +130,9 @@ object JournalPaths {
 
             expected == null || !prefixMatches -> JournalPath.Unknown
 
-            snapshot -> JournalPath.SnapshotV2(expected, objectNamePattern.matches(name))
+            snapshot -> JournalPath.SnapshotV2(expected)
 
-            else -> JournalPath.ObjectV2(expected, objectNamePattern.matches(name))
+            else -> JournalPath.ObjectV2(expected)
         }
     }
 

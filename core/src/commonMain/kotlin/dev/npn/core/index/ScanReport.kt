@@ -16,7 +16,7 @@ data class PathConflict(
 /**
  * A candidate pairing between a disappeared/superseded document and a new one, produced by the
  * indexer's heuristics. Not auto-applied: the UI presents these and the user confirms via
- * [RelinkService.applyRelink].
+ * [dev.npn.core.app.MaintenanceFacade.applyRelink].
  *
  * [signals] are why the new file looks like the missing document's: [RelinkSignal.REPLACED_IN_PLACE]
  * alone, or some of the others, never [RelinkSignal.SAME_FOLDER] alone. [score] is a rough

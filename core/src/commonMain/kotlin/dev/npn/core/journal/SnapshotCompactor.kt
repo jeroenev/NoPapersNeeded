@@ -14,14 +14,11 @@ data class CompactionSource(
     val mtimeMillis: Long,
 )
 
-/**
- * One object considered for compaction: its content hash, the events it contributes, and its mtime.
- */
+/** One object considered for compaction: its path, its content hash and the events it contributes. */
 data class CompactionCandidate(
     val relPath: String,
     val contentHash: String,
     val events: List<JournalEvent>,
-    val mtimeMillis: Long,
 )
 
 /** A published snapshot: its path, hash, the hashes it supersedes, and the surviving events. */
@@ -85,7 +82,7 @@ class SnapshotCompactor(
                 if (seen.add(event.dot)) out.add(event)
             }
         }
-        return out.sortedWith(compareBy({ it.hlc.physicalMillis }, { it.hlc.counter }, { it.hlc.deviceId }))
+        return out.sortedBy { it.hlc }
     }
 
     /** Encode + verify-publish one snapshot superseding [candidates]. Returns null for empty input. */

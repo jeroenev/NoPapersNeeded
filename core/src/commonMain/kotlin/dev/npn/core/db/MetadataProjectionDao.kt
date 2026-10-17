@@ -62,10 +62,7 @@ private fun validateHlc(
     existing: MetadataEventEntity?,
     incoming: MetadataEventEntity,
 ) {
-    val sameIdentity =
-        existing != null &&
-            existing.deviceId == incoming.deviceId && existing.sequence == incoming.sequence
-    if (existing != null && !sameIdentity) {
+    if (existing != null && (existing.deviceId != incoming.deviceId || existing.sequence != incoming.sequence)) {
         throw MetadataIdentityCollision(
             "Distinct events share HLC ${incoming.hlcPhysical}:${incoming.hlcCounter}:${incoming.hlcDevice}",
         )
@@ -203,14 +200,6 @@ interface MetadataProjectionDao {
         snapshotPath: String,
         supersededHash: String,
     )
-
-    /** Content hashes superseded by any CURRENTLY-APPLIED snapshot source. */
-    @Query(
-        "SELECT DISTINCT s.supersededHash FROM metadata_superseded s " +
-            "JOIN metadata_sources src ON src.path = s.snapshotPath " +
-            "WHERE src.status = '$SOURCE_APPLIED'",
-    )
-    suspend fun appliedSupersededHashes(): List<String>
 
     /** Every supersession a CURRENTLY-APPLIED snapshot source records. */
     @Query(

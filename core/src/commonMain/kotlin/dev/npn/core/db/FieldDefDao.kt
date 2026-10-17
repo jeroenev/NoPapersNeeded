@@ -73,6 +73,8 @@ fun FieldDefEntity.toFieldDef(): FieldDef? {
     )
 }
 
+/** Every registered field, in registry order, skipping types this build does not know. */
+suspend fun FieldDefDao.defs(): List<FieldDef> = all().mapNotNull { it.toFieldDef() }
+
 /** Every registered field's type by key, skipping types this build does not know. */
-suspend fun FieldDefDao.fieldTypes(): Map<String, FieldType> =
-    all().mapNotNull { it.toFieldDef() }.associate { it.key to it.type }
+suspend fun FieldDefDao.fieldTypes(): Map<String, FieldType> = defs().associate { it.key to it.type }

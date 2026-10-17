@@ -35,8 +35,8 @@ data class BakeResult(
  *
  * This class holds no journal dependency. The relink is emitted through the [emitRelink]
  * lambda supplied by the caller, which is the decoupling point: the caller wires it to
- * [dev.npn.core.index.RelinkService] (a `relink` [dev.npn.core.journal.JournalOp]) without this
- * package importing the journal.
+ * [dev.npn.core.app.BakeRelink] (a `relink` [dev.npn.core.journal.JournalOp]) without this package
+ * importing the journal.
  */
 class BakeService(
     private val fs: LibraryFileSystem,

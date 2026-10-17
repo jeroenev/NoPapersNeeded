@@ -15,6 +15,9 @@ sealed interface FieldParse {
     ) : FieldParse
 }
 
+/** The canonical value an [FieldParse.Ok] holds; null for a blank input or one that does not fit. */
+val FieldParse.canonicalOrNull: String? get() = (this as? FieldParse.Ok)?.canonical
+
 /**
  * How numbers are written where the user is. Only what parsing needs: the decimal separator; the
  * grouping separator is whichever of `.`/`,` is not decimal, plus spaces.
@@ -28,10 +31,8 @@ data class FieldLocale(
         val CANONICAL = FieldLocale('.')
 
         /** Best-effort mapping from a BCP-47 language tag to a decimal separator. */
-        fun forLanguageTag(tag: String?): FieldLocale {
-            val language = tag?.substringBefore('-')?.substringBefore('_')?.lowercase()
-            return if (language in COMMA_DECIMAL_LANGUAGES) FieldLocale(',') else CANONICAL
-        }
+        fun forLanguageTag(tag: String?): FieldLocale =
+            if (AppLanguages.subtag(tag) in COMMA_DECIMAL_LANGUAGES) FieldLocale(',') else CANONICAL
 
         private val COMMA_DECIMAL_LANGUAGES =
             setOf("nl", "fr", "de", "es", "it", "pt", "da", "sv", "nb", "fi", "pl", "cs")
@@ -107,14 +108,14 @@ object FieldValues {
         stored: String,
     ): String {
         if (!type.isNumeric) return stored
-        return (canonicalize(type, stored) as? FieldParse.Ok)?.canonical ?: stored
+        return canonicalize(type, stored).canonicalOrNull ?: stored
     }
 
     /** True when [canonical] is already in the canonical form for [type]. */
-    fun isCanonical(
+    internal fun isCanonical(
         type: FieldType,
         canonical: String,
-    ): Boolean = (canonicalize(type, canonical) as? FieldParse.Ok)?.canonical == canonical
+    ): Boolean = canonicalize(type, canonical).canonicalOrNull == canonical
 
     /** The user-facing rendering of a canonical value. Off-type values come back verbatim. */
     fun display(
