@@ -89,7 +89,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.di.AppEnvironment
 import dev.npn.app.platform.LocalDocumentScanner
 import dev.npn.app.platform.platformFileToExternalSource
+import dev.npn.app.ui.common.ActionMenuItems
 import dev.npn.app.ui.common.EmptyState
+import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.ScrollToTopOnNewResults
 import dev.npn.app.ui.common.ScrollbarWidth
@@ -101,7 +103,6 @@ import dev.npn.app.ui.common.TopBarActions
 import dev.npn.app.ui.common.VerticalScrollbar
 import dev.npn.app.ui.common.isLandscape
 import dev.npn.app.ui.common.resolve
-import dev.npn.app.ui.queue.QueueCounts
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibraryFilter
@@ -332,7 +333,7 @@ private fun LibraryContent(
     val scanProgress by vm.scanProgress.collectAsStateWithLifecycle()
     val lastScan by vm.lastScanReport.collectAsStateWithLifecycle()
     val ocr by vm.ocrStatus.collectAsStateWithLifecycle()
-    val queueCounts by vm.queueCounts.collectAsStateWithLifecycle()
+    val enrichmentPending by vm.enrichmentPending.collectAsStateWithLifecycle()
     val sortableFields by vm.sortableFields.collectAsStateWithLifecycle()
     val fieldFilters by vm.fieldFilters.collectAsStateWithLifecycle()
     val queryText by vm.queryText.collectAsStateWithLifecycle()
@@ -527,7 +528,7 @@ private fun LibraryContent(
                 scanProgress = scanProgress,
                 lastScan = lastScan,
                 ocr = ocr,
-                queueCounts = queueCounts,
+                enrichmentPending = enrichmentPending,
                 dismissed = ui.bannerDismissed,
                 onDismiss = vm::dismissBanner,
                 onGoToTrash = onOpenTrash,
@@ -685,15 +686,9 @@ private fun LibraryTopBar(
             SortMenuButton(sort, sortableFields, onSetSort)
             // A desktop window has room for the view and refresh toggles beside filter and sort;
             // a compact bar keeps both one tap away in the overflow menu.
-            val (inline, overflow) =
-                if (wide) {
-                    listOf(switchView, refresh) to emptyList()
-                } else {
-                    emptyList<TopBarAction>() to listOf(switchView, refresh)
-                }
             TopBarActions(
-                inline = inline,
-                overflow = overflow,
+                actions = listOf(switchView, refresh),
+                wide = wide,
                 overflowLabel = stringResource(Res.string.library_more_actions),
             )
         },
@@ -831,7 +826,7 @@ private fun Banners(
     scanProgress: IndexProgress?,
     lastScan: ScanReport?,
     ocr: OcrStatus,
-    queueCounts: QueueCounts,
+    enrichmentPending: Int,
     dismissed: Boolean,
     onDismiss: () -> Unit,
     onGoToTrash: () -> Unit,
@@ -847,7 +842,7 @@ private fun Banners(
         }
         // Both indicators open the same queue view, which is the detail behind either count.
         if (ocr.pending > 0) OcrStatusIndicator(ocr, onOpenQueue)
-        if (queueCounts.enrichment > 0) EnrichmentStatusIndicator(queueCounts.enrichment, onOpenQueue)
+        if (enrichmentPending > 0) EnrichmentStatusIndicator(enrichmentPending, onOpenQueue)
     }
 }
 
@@ -953,11 +948,7 @@ private fun QueueStatusIndicator(
             modifier = Modifier.size(16.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Text(
-            label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        HelpText(label)
     }
 }
 
@@ -983,21 +974,17 @@ private fun LibraryFab(
             text = { Text(stringResource(Res.string.library_add)) },
         )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text(stringResource(Res.string.library_scan_document)) },
-                leadingIcon = { Icon(Icons.Filled.DocumentScanner, contentDescription = null) },
-                onClick = {
-                    expanded = false
-                    onScan()
-                },
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(Res.string.library_import_pdf)) },
-                leadingIcon = { Icon(Icons.Filled.UploadFile, contentDescription = null) },
-                onClick = {
-                    expanded = false
-                    onImport()
-                },
+            ActionMenuItems(
+                actions =
+                    listOf(
+                        TopBarAction(
+                            Icons.Filled.DocumentScanner,
+                            stringResource(Res.string.library_scan_document),
+                            onScan,
+                        ),
+                        TopBarAction(Icons.Filled.UploadFile, stringResource(Res.string.library_import_pdf), onImport),
+                    ),
+                onDismiss = { expanded = false },
             )
         }
     }
@@ -1024,19 +1011,16 @@ private fun ResultsSummary(
         stringResource(
             if (sort.ascending) Res.string.library_sort_ascending else Res.string.library_sort_descending,
         )
-    Text(
-        text =
-            pluralStringResource(
-                Res.plurals.library_results_summary,
-                count,
-                count,
-                "$fieldLabel · $direction",
-            ),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    HelpText(
+        pluralStringResource(
+            Res.plurals.library_results_summary,
+            count,
+            count,
+            "$fieldLabel · $direction",
+        ),
+        modifier = modifier.semantics { liveRegion = LiveRegionMode.Polite },
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
-        modifier = modifier.semantics { liveRegion = LiveRegionMode.Polite },
     )
 }
 

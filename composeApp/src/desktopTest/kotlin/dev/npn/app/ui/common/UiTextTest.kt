@@ -2,7 +2,6 @@ package dev.npn.app.ui.common
 
 import dev.npn.app.english
 import dev.npn.app.resourcesIn
-import dev.npn.app.ui.library.asUiText
 import dev.npn.core.app.ImportTally
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest

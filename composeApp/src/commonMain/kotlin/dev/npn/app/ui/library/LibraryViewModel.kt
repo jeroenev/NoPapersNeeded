@@ -8,15 +8,14 @@ import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.activeSearchToken
 import dev.npn.app.ui.common.aiConfigured
+import dev.npn.app.ui.common.asUiText
 import dev.npn.app.ui.common.colorsByName
 import dev.npn.app.ui.common.completeActiveSearchToken
+import dev.npn.app.ui.common.text
 import dev.npn.app.ui.common.textFieldValues
 import dev.npn.app.ui.common.uiText
-import dev.npn.app.ui.queue.QueueCounts
 import dev.npn.core.app.DocListItem
-import dev.npn.core.app.ImportFailure
 import dev.npn.core.app.ImportOutcome
-import dev.npn.core.app.ImportTally
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.LibrarySort
@@ -27,6 +26,7 @@ import dev.npn.core.app.SortField
 import dev.npn.core.app.TagInfo
 import dev.npn.core.app.TrashReceipt
 import dev.npn.core.app.ViewType
+import dev.npn.core.app.WorkStage
 import dev.npn.core.app.importAll
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.index.IndexProgress
@@ -52,14 +52,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.common_duplicate_count
-import no_papers_needed.composeapp.generated.resources.common_failed_count
-import no_papers_needed.composeapp.generated.resources.common_import_failure_copy
-import no_papers_needed.composeapp.generated.resources.common_import_failure_empty
-import no_papers_needed.composeapp.generated.resources.common_import_failure_images
-import no_papers_needed.composeapp.generated.resources.common_import_failure_superseded
-import no_papers_needed.composeapp.generated.resources.common_imported_count
-import no_papers_needed.composeapp.generated.resources.common_join_items
 import no_papers_needed.composeapp.generated.resources.common_restore_documents_failed
 import no_papers_needed.composeapp.generated.resources.common_save_setting_failed
 import no_papers_needed.composeapp.generated.resources.common_scan_already_in_library
@@ -79,17 +71,6 @@ import no_papers_needed.composeapp.generated.resources.library_undo
 import org.jetbrains.compose.resources.PluralStringResource
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
-
-/**
- * An import batch's tally as the snackbar reports it: "3 imported, 1 duplicate", leaving out what is
- * 0. A batch that came to nothing at all reads "0 imported".
- */
-fun ImportTally.asUiText(): UiText =
-    listOfNotNull(
-        imported.takeIf { it > 0 || total == 0 }?.let { uiText(Res.plurals.common_imported_count, it, it) },
-        duplicates.takeIf { it > 0 }?.let { uiText(Res.plurals.common_duplicate_count, it, it) },
-        failed.takeIf { it > 0 }?.let { uiText(Res.plurals.common_failed_count, it, it) },
-    ).reduce { summary, part -> uiText(Res.string.common_join_items, summary, part) }
 
 /** The filter and sort a result set was queried with. */
 data class LibraryQuery(
@@ -114,11 +95,13 @@ data class LibraryUiState(
     val filter: LibraryFilter = LibraryFilter(),
     val sort: LibrarySort = LibrarySort(),
     val viewType: ViewType = ViewType.LIST,
-    val selectionMode: Boolean = false,
     val selected: Set<String> = emptySet(),
     val refreshing: Boolean = false,
     val bannerDismissed: Boolean = false,
-)
+) {
+    /** Selection mode lasts exactly as long as something is selected. */
+    val selectionMode: Boolean get() = selected.isNotEmpty()
+}
 
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 @Suppress("TooManyFunctions")
@@ -169,21 +152,16 @@ class LibraryViewModel(
     val queryText: StateFlow<String> = queryInput.asStateFlow()
 
     init {
-        // Seed the initial view from the persisted default. Only applies the first value and only
-        // if the user has not already switched the view this session.
+        // Seed the view from the persisted default and the sort from the last explicitly chosen
+        // one. Only the first value applies, and each only if the user has not already chosen this
+        // session.
         viewModelScope.launch {
-            val saved = settings.settings.first().defaultViewType
-            if (!viewOverridden) {
-                _ui.update { it.copy(viewType = saved) }
-            }
-        }
-
-        // Seed the sort from the last explicitly chosen one (separate launch so a slow view-type
-        // seed cannot delay it, and vice versa).
-        viewModelScope.launch {
-            val saved = settings.settings.first().librarySort
-            if (!sortOverridden) {
-                _ui.update { it.copy(sort = saved) }
+            val saved = settings.settings.first()
+            _ui.update {
+                it.copy(
+                    viewType = if (viewOverridden) it.viewType else saved.defaultViewType,
+                    sort = if (sortOverridden) it.sort else saved.librarySort,
+                )
             }
         }
 
@@ -283,13 +261,14 @@ class LibraryViewModel(
             .stateIn(viewModelScope, WhileSubscribedTimeout, OcrStatus(0, false))
 
     /**
-     * Backlog sizes behind the library's progress banners. Only the counts: the banners open the
-     * queue view, which subscribes to the entries itself.
+     * Documents still waiting for AI enrichment, behind the library's progress banner. Only the
+     * count: the banner opens the queue view, which subscribes to the entries itself.
      */
-    val queueCounts: StateFlow<QueueCounts> =
+    val enrichmentPending: StateFlow<Int> =
         session.work.queue
-            .map { QueueCounts.of(it) }
-            .stateIn(viewModelScope, WhileSubscribedTimeout, QueueCounts())
+            .map { entries -> entries.count { it.stage == WorkStage.AI_ENRICHMENT } }
+            .distinctUntilChanged()
+            .stateIn(viewModelScope, WhileSubscribedTimeout, 0)
 
     fun onQueryChange(text: String) {
         queryInput.value = text
@@ -373,21 +352,21 @@ class LibraryViewModel(
     fun toggleSelection(docId: String) {
         _ui.update { cur ->
             val next = if (docId in cur.selected) cur.selected - docId else cur.selected + docId
-            cur.copy(selected = next, selectionMode = next.isNotEmpty())
+            cur.copy(selected = next)
         }
     }
 
     fun startSelection(docId: String) {
-        _ui.update { it.copy(selectionMode = true, selected = setOf(docId)) }
+        _ui.update { it.copy(selected = setOf(docId)) }
     }
 
     /** Enter selection mode with every visible document selected (desktop Ctrl+A / Select all). */
     fun selectAll(docIds: List<String>) {
-        _ui.update { it.copy(selectionMode = true, selected = docIds.toSet()) }
+        _ui.update { it.copy(selected = docIds.toSet()) }
     }
 
     fun clearSelection() {
-        _ui.update { it.copy(selectionMode = false, selected = emptySet()) }
+        _ui.update { it.copy(selected = emptySet()) }
     }
 
     fun dismissBanner() {
@@ -507,8 +486,7 @@ class LibraryViewModel(
      */
     private fun deselect(done: Collection<String>) {
         _ui.update { state ->
-            val remaining = state.selected - done.toSet()
-            state.copy(selected = remaining, selectionMode = remaining.isNotEmpty())
+            state.copy(selected = state.selected - done.toSet())
         }
     }
 
@@ -584,12 +562,3 @@ class LibraryViewModel(
 
 @OptIn(ExperimentalUuidApi::class)
 private fun randomId(): String = Uuid.random().toString()
-
-/** Why an import added nothing, as the reason clause of a "… failed: %1$s" message. */
-private fun ImportFailure.text(): UiText =
-    when (this) {
-        ImportFailure.EMPTY_FILE -> uiText(Res.string.common_import_failure_empty)
-        ImportFailure.UNREADABLE_IMAGES -> uiText(Res.string.common_import_failure_images)
-        ImportFailure.COPY_FAILED -> uiText(Res.string.common_import_failure_copy)
-        ImportFailure.SUPERSEDED -> uiText(Res.string.common_import_failure_superseded)
-    }

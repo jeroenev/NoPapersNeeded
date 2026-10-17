@@ -7,7 +7,6 @@ import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.QueuedEditRun
 import dev.npn.core.app.QueuedWork
 import dev.npn.core.app.WorkFacade
-import dev.npn.core.app.WorkStage
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import no_papers_needed.composeapp.generated.resources.Res
@@ -42,18 +41,4 @@ class QueueViewModel(
 
     /** Reset a terminal OCR failure to pending and kick its worker through the normal OCR seam. */
     fun retry(docId: String) = launchReporting(Res.string.common_rerun_ocr_failed) { ocr.reOcr(docId) }
-}
-
-/** How much outstanding work each pass is carrying. */
-data class QueueCounts(
-    val ocr: Int = 0,
-    val enrichment: Int = 0,
-) {
-    companion object {
-        fun of(entries: List<QueuedWork>) =
-            QueueCounts(
-                ocr = entries.count { it.stage == WorkStage.OCR },
-                enrichment = entries.count { it.stage == WorkStage.AI_ENRICHMENT },
-            )
-    }
 }
