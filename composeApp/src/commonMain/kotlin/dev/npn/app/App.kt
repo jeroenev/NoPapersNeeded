@@ -47,6 +47,7 @@ import dev.npn.app.ui.ai.AiEditReviewScreen
 import dev.npn.app.ui.ai.AiEditScreen
 import dev.npn.app.ui.ai.AiEditSelection
 import dev.npn.app.ui.common.DesktopBridge
+import dev.npn.app.ui.common.PublishWindowTitle
 import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.LocaleProvider
 import dev.npn.app.ui.common.ProvideWindowWidthClass
@@ -325,10 +326,7 @@ private fun MainNav(
                 queue = queue,
                 onNavigate = { dest -> nav.navigateTopLevel(dest) },
                 onAiChat = { nav.navigateAi(Route.AiChat, restoreState = true) },
-                onAiEdit = {
-                    aiSelection.set(emptyList())
-                    nav.navigateAi(Route.AiEdit)
-                },
+                onAiEdit = { nav.openAiEdit(aiSelection) },
             ) {
                 LibraryViewModelHost(library) {
                     MainNavHost(
@@ -396,10 +394,7 @@ private fun MainNavHost(
                 onOpenDoc = { docId, order, query -> nav.openDoc(docId, browse, order, query) },
                 onTrash = { nav.navigateTopLevel(TopLevelDestination.TRASH) },
                 onOpenQueue = { nav.navigateTopLevel(TopLevelDestination.QUEUE) },
-                onAiEdit = { docIds ->
-                    aiSelection.set(docIds)
-                    nav.navigateAi(Route.AiEdit)
-                },
+                onAiEdit = { docIds -> nav.openAiEdit(aiSelection, docIds) },
                 filterHandoff = libraryFilterHandoff,
             )
         }
@@ -529,12 +524,13 @@ private fun DriveWindowTitle(nav: NavHostController) {
     PublishWindowTitle(windowTitle)
 }
 
-/** Make [title] the native window title (desktop); null leaves the title to a screen below. */
-@Composable
-private fun PublishWindowTitle(title: String?) {
-    LaunchedEffect(title) {
-        if (title != null) DesktopBridge.windowTitle.value = title
-    }
+/** Open AI edit on [docIds], handed over through [selection]; none opens it to pick its own scope. */
+private fun NavHostController.openAiEdit(
+    selection: AiEditSelection,
+    docIds: List<String> = emptyList(),
+) {
+    selection.set(docIds)
+    navigateAi(Route.AiEdit)
 }
 
 /** AI assistant + AI tagging destinations (both reached from the library drawer). */
@@ -559,16 +555,10 @@ private fun NavGraphBuilder.aiRoutes(
                 )
                 nav.navigateTopLevel(TopLevelDestination.LIBRARY)
             },
-            onAiEditDocs = { docIds ->
-                aiSelection.set(docIds)
-                nav.navigateAi(Route.AiEdit)
-            },
+            onAiEditDocs = { docIds -> nav.openAiEdit(aiSelection, docIds) },
             onAiEdit =
                 if (showAiEditTopBar) {
-                    {
-                        aiSelection.set(emptyList())
-                        nav.navigateAi(Route.AiEdit)
-                    }
+                    { nav.openAiEdit(aiSelection) }
                 } else {
                     null
                 },

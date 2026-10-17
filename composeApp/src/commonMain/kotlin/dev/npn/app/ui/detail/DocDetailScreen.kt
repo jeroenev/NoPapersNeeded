@@ -20,16 +20,15 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.BackTopBar
-import dev.npn.app.ui.common.DesktopBridge
+import dev.npn.app.ui.common.FocusOnEntry
+import dev.npn.app.ui.common.PublishWindowTitle
 import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.settings.SettingsRepository
@@ -94,12 +93,8 @@ fun DocDetailScreen(
             is DocLoadState.Present -> {
                 val title = loadState.item.doc.displayTitle
                 // Reflect the open document in the native window title (desktop); inert elsewhere.
-                LaunchedEffect(title) { DesktopBridge.windowTitle.value = title }
-                // Wait one frame so the viewer is registered with the focus owner before asking.
-                LaunchedEffect(Unit) {
-                    withFrameNanos { }
-                    runCatching { viewerFocus.requestFocus() }
-                }
+                PublishWindowTitle(title)
+                FocusOnEntry(viewerFocus)
                 LoadedDocScreen(
                     title = title,
                     snackbar = snackbar,

@@ -73,7 +73,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -89,6 +88,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.platform.LocalDocumentScanner
 import dev.npn.app.platform.platformFileToExternalSource
+import dev.npn.app.ui.common.FocusOnEntry
 import dev.npn.app.ui.common.ActionMenuItems
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.HelpText
@@ -454,12 +454,7 @@ private fun LibraryContent(
             )
         }
     // Give the shortcut host focus on entry; key events only reach it once something is focused.
-    // Wait for the first frame so the requester node is attached to the focus owner before asking
-    // (requesting during the first composition otherwise warns "FocusRequester is not initialized").
-    LaunchedEffect(Unit) {
-        withFrameNanos { }
-        runCatching { contentFocus.requestFocus() }
-    }
+    FocusOnEntry(contentFocus)
     Scaffold(
         topBar = {
             if (ui.selectionMode) {
