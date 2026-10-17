@@ -9,7 +9,7 @@ import dev.npn.core.testing.FakeDocumentRepository
 import dev.npn.core.testing.FakeMetadataWriter
 import dev.npn.core.testing.FakeTagRepository
 import dev.npn.core.testing.listItem
-import dev.npn.core.work.QueueRetryPolicy
+import dev.npn.core.work.EndpointHealth
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -52,7 +52,7 @@ class EndpointCooldownTest {
                 edits.processNext() shouldBe false
                 rig.ai.suggestEditsCalls shouldContainExactly listOf("d1")
 
-                rig.clock.advance(QueueRetryPolicy.ENDPOINT_COOLDOWN_MS)
+                rig.clock.advance(EndpointHealth.ENDPOINT_COOLDOWN_MS)
                 edits.processNext() shouldBe true
                 rig.ai.suggestEditsCalls shouldContainExactly listOf("d1", "a")
             }
@@ -96,7 +96,7 @@ class EndpointCooldownTest {
 
                 // The endpoint answers the edit queue's retry; enrichment need not wait any longer.
                 rig.ai.failWith = null
-                rig.clock.advance(QueueRetryPolicy.ENDPOINT_COOLDOWN_MS + 60_000L)
+                rig.clock.advance(EndpointHealth.ENDPOINT_COOLDOWN_MS + 60_000L)
                 edits.processNext() shouldBe true
                 rig.drain() shouldBe 1
                 rig.ai.suggestEditsCalls shouldContainExactly listOf("a", "a", "d1")

@@ -22,7 +22,6 @@ import dev.npn.core.testing.doc
 import dev.npn.core.testing.edit
 import dev.npn.core.testing.listItem
 import dev.npn.core.work.EndpointHealth
-import dev.npn.core.work.QueueRetryPolicy
 import dev.npn.core.work.backoffMs
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
@@ -368,7 +367,7 @@ class AiEditQueueFailureTest {
 
                 rig.ai.suggestEditsCalls shouldHaveSize 1
 
-                rig.clock.advance(QueueRetryPolicy.ENDPOINT_COOLDOWN_MS)
+                rig.clock.advance(EndpointHealth.ENDPOINT_COOLDOWN_MS)
                 rig.ai.failWith = null
                 rig.ai.edit = suggestion()
                 rig.queue.processNext() shouldBe true
@@ -480,7 +479,7 @@ class AiEditQueueFailureTest {
 
                 rig.ai.failWith = null
                 rig.ai.edit = suggestion()
-                rig.clock.advance(QueueRetryPolicy.ENDPOINT_COOLDOWN_MS + backoffMs(1))
+                rig.clock.advance(EndpointHealth.ENDPOINT_COOLDOWN_MS + backoffMs(1))
                 rig.queue.processNext() shouldBe true
 
                 val job = rig.job(jobId).shouldNotBeNull()
