@@ -91,7 +91,7 @@ sealed interface JournalOp {
      * the events it carries from its own index. Such a re-encoded copy is the same event, and the
      * index keeps the copy with the flag ([EventCopies]). A label edit or reorder there is a newer
      * definition without it; for a seeded field, this build's next open writes it back
-     * ([dev.npn.core.index.JournalCoordinator.restoreSeededPerDocument]).
+     * ([dev.npn.core.app.restoreSeededPerDocument]).
      */
     data class FieldDefSet(
         val key: String,

@@ -11,8 +11,6 @@ import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.PublishedTransaction
 import dev.npn.core.journal.SnapshotCompactor
 import dev.npn.core.journal.SystemEpochClock
-import dev.npn.core.model.FieldDef
-import dev.npn.core.model.FieldKeys
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
@@ -212,8 +210,8 @@ class JournalCoordinator internal constructor(
      * Write each of [groups] whose keys the journal has never held, a cleared one included: a
      * one-time adoption of what this device had, which must not overwrite what any replica already
      * decided. A group is one setting kept under one or more keys, adopted whole or not at all: a
-     * journal holding any of its keys takes none of them. Like [seedFieldRegistryIfNeeded], the
-     * in-memory check runs first, so only an open that has something to adopt pays for the fold.
+     * journal holding any of its keys takes none of them. As for the field seeding, the in-memory
+     * check runs first, so only an open that has something to adopt pays for the fold.
      *
      * Returns whether the journal now settles every group, false when writes are blocked and nothing
      * was adopted, so a caller keeps its copy for the next attempt.
@@ -229,54 +227,6 @@ class JournalCoordinator internal constructor(
         }
         return true
     }
-
-    /**
-     * Write the well-known field definitions once per library, and bring a library seeded at an
-     * older [version] up to it once ([FieldKeys.upgradeSeeded]). Guarded by the synced
-     * [FieldKeys.SEEDED_SETTING] marker rather than by "are there any definitions", so a user who
-     * deletes every default field does not get them back when another device opens the library.
-     *
-     * The cheap marker check runs first: [commitBuilt] materializes the whole fold, and paying
-     * that on every open is exactly what [refreshState]'s projection reuse avoids. Only a library
-     * that has not been seeded at [version] yet (once, ever) reaches the fold.
-     */
-    suspend fun seedFieldRegistryIfNeeded(
-        defs: List<FieldDef>,
-        version: Int = FieldKeys.SEED_VERSION,
-    ) {
-        if (seedVersion(syncedSettings.current(FieldKeys.SEEDED_SETTING)) >= version) return
-        if (writeBlockReason != null) return
-        commitBuilt { state ->
-            val seeded = state.effectiveSetting(FieldKeys.SEEDED_SETTING)
-            val defOps =
-                when {
-                    seedVersion(seeded) >= version -> return@commitBuilt emptyList()
-                    seeded == null -> defs
-                    else -> FieldKeys.upgradeSeeded(state.effectiveFieldDefs(), defs)
-                }.map { PendingOp.fieldDefSet(it) }
-            defOps + PendingOp.settingSet(FieldKeys.SEEDED_SETTING, version.toString())
-        }
-    }
-
-    /**
-     * Give the seeded definitions back the [FieldDef.perDocument] flag an older build dropped
-     * ([FieldKeys.lostPerDocument]), changing nothing else. [projected] is the registry as the index
-     * holds it: the cheap check, so an open where nothing was lost writes nothing and skips the fold.
-     * One write per loss: the older build only drops the flag again when its user edits the field.
-     */
-    suspend fun restoreSeededPerDocument(
-        seeds: List<FieldDef>,
-        projected: List<FieldDef>,
-    ) {
-        if (FieldKeys.lostPerDocument(projected, seeds).isEmpty()) return
-        if (writeBlockReason != null) return
-        commitBuilt { state ->
-            FieldKeys.lostPerDocument(state.effectiveFieldDefs(), seeds).map { PendingOp.fieldDefSet(it) }
-        }
-    }
-
-    /** The seed version a [FieldKeys.SEEDED_SETTING] value records: 0 when absent, 1 for the first marker. */
-    private fun seedVersion(marker: String?): Int = if (marker == null) 0 else marker.toIntOrNull() ?: 1
 
     /** The folded state, replaying it from the accumulator the first time it is actually needed. */
     private suspend fun foldedState(): FoldedState = folded ?: accumulator.loadState().also { folded = it }
