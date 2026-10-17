@@ -34,33 +34,24 @@ class StoragePathRuleApplicator(
     private val mutex = Mutex()
 
     /**
-     * Compute and apply the active rule for [docId]. Returns `true` when the document was moved,
-     * `false` when no move was needed or the rule is disabled/invalid.
+     * Compute the active rule's path for [docId] and, when it differs from where the document is,
+     * record it as the document's intended path ([setPath]). Does nothing for a disabled, blank or
+     * invalid rule, or a document that is not live.
      */
-    suspend fun applyFor(docId: String): Boolean = mutex.withLock { apply(docId) }
+    suspend fun applyFor(docId: String): Unit = mutex.withLock { apply(docId) }
 
-    @Suppress("ReturnCount")
-    private suspend fun apply(docId: String): Boolean {
-        val rule = ruleProvider() ?: return false
-        if (!rule.enabled || rule.template.isBlank()) return false
-
-        val doc = documentDao.getByDocId(docId) ?: return false
-        if (!doc.isLive) return false
-
-        val tags = db.tagDao().tagsForDocument(docId)
+    private suspend fun apply(docId: String) {
+        val rule = ruleProvider()?.takeIf { it.enabled && it.template.isNotBlank() } ?: return
+        val doc = documentDao.getByDocId(docId)?.takeIf { it.isLive } ?: return
         val context =
             StoragePathContext(
                 fields = db.documentFieldDao().valuesOf(docId),
-                tags = tags,
+                tags = db.tagDao().tagsForDocument(docId),
                 originalFileName = doc.fileName,
                 fieldTypes = db.fieldDefDao().fieldTypes(),
             )
-        val expanded = StoragePathTemplate.expand(rule.template, context).pathOrNull ?: return false
+        val expanded = StoragePathTemplate.expand(rule.template, context).pathOrNull ?: return
         val target = resolveUniqueTarget(fs, documentDao, docId, expanded)
-
-        if (NpnPaths.normalize(target) == NpnPaths.normalize(doc.relPath)) return false
-
-        setPath(docId, target)
-        return true
+        if (NpnPaths.normalize(target) != NpnPaths.normalize(doc.relPath)) setPath(docId, target)
     }
 }
