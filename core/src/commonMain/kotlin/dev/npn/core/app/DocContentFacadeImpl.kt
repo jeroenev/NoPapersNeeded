@@ -1,5 +1,6 @@
 package dev.npn.core.app
 
+import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.isLive
 import dev.npn.core.fs.LibraryFileSystem
@@ -15,7 +16,7 @@ import dev.npn.core.xmp.BakeService
 import dev.npn.core.xmp.NpnXmpData
 
 /**
- * Document-as-bytes facade: thumbnails, page rendering, raw bytes, and XMP baking.
+ * Document-as-bytes facade: thumbnails, page rendering, and XMP baking.
  *
  * Composition:
  * - [ThumbnailService] caches first-page thumbnails against a platform [ThumbnailStore].
@@ -89,16 +90,10 @@ class DocContentFacadeImpl internal constructor(
     override suspend fun extractedText(docId: String): String? =
         log.runLogged("Reading the text of $docId") { db.ftsDao().contentForDoc(docId)?.takeIf { it.isNotBlank() } }
 
-    override suspend fun rawBytes(docId: String): ByteArray? =
-        log.runLogged("Reading $docId") {
-            val doc = documentDao.getByDocId(docId) ?: return@runLogged null
-            fs.readBytes(doc.relPath)
-        }
-
     override suspend fun bakedCopyBytes(docId: String): ByteArray? =
         log.runLogged("Baking a copy of $docId") {
             val doc = documentDao.getByDocId(docId) ?: return@runLogged null
-            bakeService.bakeToBytes(doc.relPath, buildXmpData(docId))
+            bakeService.bakeToBytes(doc.relPath, buildXmpData(doc))
         }
 
     override suspend fun bakeInPlace(docId: String): BakeOutcome = lifetime.owned { bakes.held { bake(docId) } }
@@ -117,7 +112,7 @@ class DocContentFacadeImpl internal constructor(
             // Read after that wait, and baked only while it is the document's: the file at its path
             // may be another one since the index last looked, or become one at any time.
             val baked =
-                bakeService.bakeInPlace(doc.relPath, docId, buildXmpData(docId)) { oldSha, newSha ->
+                bakeService.bakeInPlace(doc.relPath, docId, buildXmpData(doc)) { oldSha, newSha ->
                     relinkBake(oldSha, newSha)
                 }
             if (baked == null) BakeOutcome.Failed(BakeFailure.DOCUMENT_UNAVAILABLE) else BakeOutcome.Baked
@@ -129,16 +124,12 @@ class DocContentFacadeImpl internal constructor(
         }
     }
 
-    /** Assemble the XMP payload from the current DB row, its tags and its field rows. */
-    private suspend fun buildXmpData(docId: String): NpnXmpData {
-        val doc = documentDao.getByDocId(docId)
-        val tags = db.tagDao().tagsForDocument(docId)
-        val fields = db.documentFieldDao().valuesOf(docId)
-        return NpnXmpData(
-            documentId = docId,
-            tags = tags,
-            reviewed = if (doc?.reviewed == true) "true" else "false",
-            fields = fields,
+    /** Assemble the XMP payload from the document's row, its tags and its field rows. */
+    private suspend fun buildXmpData(doc: DocumentEntity): NpnXmpData =
+        NpnXmpData(
+            documentId = doc.docId,
+            tags = db.tagDao().tagsForDocument(doc.docId),
+            reviewed = if (doc.reviewed) "true" else "false",
+            fields = db.documentFieldDao().valuesOf(doc.docId),
         )
-    }
 }

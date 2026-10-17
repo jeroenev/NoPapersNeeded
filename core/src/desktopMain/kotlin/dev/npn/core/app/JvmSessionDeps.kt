@@ -44,7 +44,6 @@ fun jvmSessionDeps(
     log: NpnLog = JvmLog(),
 ): SessionDeps {
     File(dirs.thumbsDir).mkdirs()
-    File(dirs.tmpDir).mkdirs()
     return SessionDeps(
         fs = JvmLibraryFileSystem(libraryRoot, PathExternalIo),
         db = npnDatabase(File(dirs.dbDir, "index.db")),
@@ -68,7 +67,7 @@ fun jvmSessionDeps(
  */
 fun AppDirs.Companion.desktop(location: String): AppDirs {
     val base = "${PlatformDirs.dataHome()}/no-papers-needed/${AppDirs.libraryKey(location)}"
-    return AppDirs(dbDir = "$base/db", thumbsDir = "$base/thumbs", tmpDir = "$base/tmp")
+    return AppDirs(dbDir = "$base/db", thumbsDir = "$base/thumbs")
 }
 
 /**

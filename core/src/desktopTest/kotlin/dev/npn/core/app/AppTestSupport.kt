@@ -172,7 +172,7 @@ class AppSessionRig private constructor(
             device: String,
         ): AppDirs {
             val base = File(dbDir, device).path
-            return AppDirs(dbDir = base, thumbsDir = "$base/thumbs", tmpDir = "$base/tmp")
+            return AppDirs(dbDir = base, thumbsDir = "$base/thumbs")
         }
     }
 
@@ -232,7 +232,7 @@ suspend fun openSession(
     val base =
         jvmSessionDeps(
             libraryRoot = library,
-            dirs = AppDirs(dbDir = data.path, thumbsDir = "$data/thumbs", tmpDir = "$data/tmp"),
+            dirs = AppDirs(dbDir = data.path, thumbsDir = "$data/thumbs"),
             scope = scope,
             settings = SessionSettings(ocrLanguage = { "eng" }, aiConfig = aiConfig),
             // Far behind the files' real mtimes, so a just-written PDF counts as settled.

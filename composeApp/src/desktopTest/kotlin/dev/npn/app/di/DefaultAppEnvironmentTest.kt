@@ -32,7 +32,7 @@ class DefaultAppEnvironmentTest {
         val data = root.resolve("data").resolve(Path.of(location).fileName.toString()).toString()
         jvmSessionDeps(
             libraryRoot = Path.of(location),
-            dirs = AppDirs(dbDir = data, thumbsDir = "$data/thumbs", tmpDir = "$data/tmp"),
+            dirs = AppDirs(dbDir = data, thumbsDir = "$data/thumbs"),
             scope = scope,
             settings = SessionSettings(ocrLanguage = { "eng" }),
             installationId = "test-installation",

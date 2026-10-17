@@ -47,18 +47,18 @@ data class LibraryFilter(
         value: String?,
     ): LibraryFilter = copy(fieldEquals = if (value == null) fieldEquals - key else fieldEquals + (key to value))
 
-    /** This filter with the range on [key] replaced; an empty range drops the constraint. */
-    fun withFieldRange(
-        key: String,
-        range: FieldRange,
-    ): LibraryFilter = copy(fieldRanges = if (range.isEmpty) fieldRanges - key else fieldRanges + (key to range))
-
-    /** Convenience over [withFieldRange] that edits one bound and keeps the other. */
+    /**
+     * This filter with the range on [key] from [from] to [to], a bound not given kept as it is; an
+     * empty range drops the constraint.
+     */
     fun withFieldBounds(
         key: String,
         from: String? = fieldRanges[key]?.from,
         to: String? = fieldRanges[key]?.to,
-    ): LibraryFilter = withFieldRange(key, FieldRange(from, to))
+    ): LibraryFilter {
+        val range = FieldRange(from, to)
+        return copy(fieldRanges = if (range.isEmpty) fieldRanges - key else fieldRanges + (key to range))
+    }
 }
 
 /** What the library list is ordered by. Fields sort through `document_fields`; the rest are document columns. */

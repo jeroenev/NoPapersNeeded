@@ -1,13 +1,12 @@
 package dev.npn.core.app
 
 /**
- * App-local storage locations for one opened library. All three are absolute paths to plain
+ * App-local storage locations for one opened library. Both are absolute paths to plain
  * directories outside the synced library folder so the device-private cache is never synced.
  *
  * - [dbDir]     holds this library's two Room databases: the disposable index, and the device's
  *               own state (`device.db`), which is never dropped.
  * - [thumbsDir] holds cached first-page thumbnail PNGs.
- * - [tmpDir]    scratch space (baked-copy exports, transient files).
  *
  * Per-library isolation is achieved by the caller keying these directories on a stable hash of the
  * library location string (see [libraryKey]).
@@ -15,7 +14,6 @@ package dev.npn.core.app
 data class AppDirs(
     val dbDir: String,
     val thumbsDir: String,
-    val tmpDir: String,
 ) {
     companion object {
         /**

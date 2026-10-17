@@ -35,8 +35,6 @@ class FakeDocContentFacade : DocContentFacade {
         return bakeResult
     }
 
-    override suspend fun rawBytes(docId: String): ByteArray? = null
-
     override suspend fun clearThumbnailCache(): Int = clearedThumbnails
 
     override suspend fun extractedText(docId: String): String? =

@@ -20,8 +20,6 @@ interface DocContentFacade {
 
     suspend fun bakeInPlace(docId: String): BakeOutcome // explicit user action; emits relink
 
-    suspend fun rawBytes(docId: String): ByteArray?
-
     suspend fun clearThumbnailCache(): Int // drop cached thumbnails; returns count cleared
 
     suspend fun extractedText(docId: String): String? // OCR/embedded full text, null if none yet

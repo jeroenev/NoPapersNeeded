@@ -52,7 +52,6 @@ data class Doc(
 
     /** ISO-8601 local date, e.g. 2026-07-15. */
     val docDate: String? get() = fields[FieldKeys.DOC_DATE]
-    val notes: String? get() = fields[FieldKeys.NOTES]
 }
 
 /**
