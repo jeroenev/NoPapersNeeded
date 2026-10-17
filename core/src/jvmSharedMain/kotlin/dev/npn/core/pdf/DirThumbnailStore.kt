@@ -1,14 +1,13 @@
 package dev.npn.core.pdf
 
-import dev.npn.core.settings.AppDirs
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
- * [ThumbnailStore] writing PNGs into a plain directory: an app-local cache path (from
- * [AppDirs.thumbsDir], under `context.cacheDir` on Android), never inside the synced library folder.
+ * [ThumbnailStore] writing PNGs into a plain directory: an app-local cache path (desktop's
+ * `AppDirs.thumbsDir`, under `context.cacheDir` on Android), never inside the synced library folder.
  */
 class DirThumbnailStore(
     private val dir: String,

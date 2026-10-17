@@ -12,7 +12,6 @@ import dev.npn.core.ocr.MlKitOcrEngine
 import dev.npn.core.pdf.DirThumbnailStore
 import dev.npn.core.pdf.PdfBoxAndroidEngine
 import dev.npn.core.pdf.renderParallelism
-import dev.npn.core.settings.AppDirs
 import dev.npn.core.settings.LibraryLocations
 import dev.npn.core.settings.SessionSettings
 import dev.npn.core.util.AndroidLog
@@ -41,7 +40,7 @@ fun androidSessionDeps(
     installationId: String,
     log: NpnLog = AndroidLog,
 ): SessionDeps {
-    val key = AppDirs.libraryKey(location)
+    val key = LibraryLocations.key(location)
     val thumbsDir = File(context.cacheDir, "thumbs/$key").apply { mkdirs() }
     return SessionDeps(
         fs = libraryFileSystem(context, location),

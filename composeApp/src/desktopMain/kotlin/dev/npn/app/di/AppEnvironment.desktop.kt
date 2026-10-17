@@ -1,7 +1,6 @@
 package dev.npn.app.di
 
 import dev.npn.core.app.DesktopLog
-import dev.npn.core.app.desktop
 import dev.npn.core.app.jvmSessionDeps
 import dev.npn.core.ocr.TesseractCliEngine
 import dev.npn.core.settings.AppDirs
@@ -30,7 +29,7 @@ fun createAppEnvironment(): AppEnvironment {
         if (!Files.isDirectory(root)) throw LibraryUnavailableException.folderMissing(location)
         jvmSessionDeps(
             libraryRoot = root,
-            dirs = AppDirs.desktop(location),
+            dirs = AppDirs.forLibrary(location),
             scope = scope,
             settings = SessionSettings.from(settings),
             installationId = settings.settings.first().installationId,
