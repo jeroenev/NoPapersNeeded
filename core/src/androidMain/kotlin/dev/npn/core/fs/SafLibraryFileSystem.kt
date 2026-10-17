@@ -116,6 +116,12 @@ class SafLibraryFileSystem(
         return match
     }
 
+    /** [resolveEntry], for a caller that needs the entry to be there. */
+    private fun requireEntry(
+        relPath: String,
+        fresh: Boolean = false,
+    ): Entry = resolveEntry(relPath, fresh) ?: throw IOException("Not found: $relPath")
+
     /** Resolve the parent directory docId of [relPath], creating dirs if [create]. */
     private fun resolveParentDir(
         relPath: String,
@@ -246,7 +252,7 @@ class SafLibraryFileSystem(
 
     override suspend fun readBytes(relPath: String): ByteArray =
         withContext(Dispatchers.IO) {
-            val entry = resolveEntry(relPath) ?: throw IOException("Not found: $relPath")
+            val entry = requireEntry(relPath)
             resolver.openInputStream(docUri(entry.docId))?.use { it.readBytes() }
                 ?: throw IOException("Cannot open for read: $relPath")
         }
@@ -256,7 +262,7 @@ class SafLibraryFileSystem(
         maxBytes: Int,
     ): ByteArray =
         withContext(Dispatchers.IO) {
-            val entry = resolveEntry(relPath) ?: throw IOException("Not found: $relPath")
+            val entry = requireEntry(relPath)
             resolver.openInputStream(docUri(entry.docId))?.use { input ->
                 // Providers stream; skipping still avoids holding the whole file in memory.
                 var toSkip = maxOf(0L, entry.size - maxBytes)
@@ -273,13 +279,22 @@ class SafLibraryFileSystem(
     override suspend fun writeBytesOnce(
         relPath: String,
         bytes: ByteArray,
+    ) = createNew(relPath) { bytes.inputStream() }
+
+    /**
+     * Create [relPath], which must not exist yet, with the bytes [openInput] streams; a partial
+     * file is deleted again ([copyIntoNewFile]).
+     */
+    private suspend fun createNew(
+        relPath: String,
+        openInput: () -> InputStream,
     ) = withContext(Dispatchers.IO) {
         if (resolveEntry(relPath, fresh = true) != null) {
             error("Target already exists: $relPath")
         }
         val name = splitSegments(relPath).last()
         val parentId = resolveParentDir(relPath, create = true)
-        copyIntoNewFile(parentId, name, relPath) { bytes.inputStream() }
+        copyIntoNewFile(parentId, name, relPath, openInput = openInput)
         Unit
     }
 
@@ -386,7 +401,7 @@ class SafLibraryFileSystem(
         if (resolveEntry(toRelPath, fresh = true) != null) {
             error("Target already exists: $toRelPath")
         }
-        val source = resolveEntry(fromRelPath, fresh = true) ?: throw IOException("Not found: $fromRelPath")
+        val source = requireEntry(fromRelPath, fresh = true)
         // Moving a directory relocates every descendant path, so the cached docIds keyed under the
         // OLD path are about to be wrong. Nothing above it moves, so only that subtree goes.
         // Document moves (the hot path: import, rename, storage-path rules) move files, which are
@@ -603,24 +618,14 @@ class SafLibraryFileSystem(
 
     override suspend fun sha256(relPath: String): String =
         withContext(Dispatchers.IO) {
-            val entry = resolveEntry(relPath) ?: throw IOException("Not found: $relPath")
-            digestSha256(docUri(entry.docId), relPath)
+            digestSha256(docUri(requireEntry(relPath).docId), relPath)
         }
 
     override suspend fun importExternal(
         source: ExternalSource,
         toRelPath: String,
-    ) = withContext(Dispatchers.IO) {
-        if (resolveEntry(toRelPath, fresh = true) != null) {
-            error("Target already exists: $toRelPath")
-        }
-        val name = splitSegments(toRelPath).last()
-        val parentId = resolveParentDir(toRelPath, create = true)
-        copyIntoNewFile(parentId, name, toRelPath) {
-            resolver.openInputStream(source.uri)
-                ?: throw IOException("Cannot open external source: ${source.uri}")
-        }
-        Unit
+    ) = createNew(toRelPath) {
+        resolver.openInputStream(source.uri) ?: throw IOException("Cannot open external source: ${source.uri}")
     }
 
     /** SAF provides no reliable change notifications; indexing is rescan-driven. */

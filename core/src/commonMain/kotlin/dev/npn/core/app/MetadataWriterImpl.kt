@@ -254,22 +254,23 @@ class MetadataWriterImpl internal constructor(
     override suspend fun renameTag(
         from: String,
         to: String,
-    ) {
-        val f = from.trim()
-        val t = to.trim()
-        if (f.isEmpty() || t.isEmpty() || f == t) return
-        coordinator.commitAndApply(listOf(PendingOp.tagRename(f, t)))
-        followUp(taggedNow(t))
-    }
+    ) = retag(from, to, PendingOp::tagRename)
 
     override suspend fun mergeTag(
         from: String,
         to: String,
+    ) = retag(from, to, PendingOp::tagMerge)
+
+    /** Move tag [from] onto [to] with [op] (a rename or a merge), then follow up on what [to] tags. */
+    private suspend fun retag(
+        from: String,
+        to: String,
+        op: (String, String) -> PendingOp,
     ) {
         val f = from.trim()
         val t = to.trim()
         if (f.isEmpty() || t.isEmpty() || f == t) return
-        coordinator.commitAndApply(listOf(PendingOp.tagMerge(f, t)))
+        coordinator.commitAndApply(listOf(op(f, t)))
         followUp(taggedNow(t))
     }
 

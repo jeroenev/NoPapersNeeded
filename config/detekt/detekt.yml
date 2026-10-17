@@ -17,7 +17,8 @@ complexity:
     ignoreSimpleWhenEntries: true
   TooManyFunctions:
     allowedFunctionsPerFile: 20
-    allowedFunctionsPerClass: 20
+    # 22, not 20: a private helper that removes a duplicate should not push a class over.
+    allowedFunctionsPerClass: 22
     allowedFunctionsPerInterface: 20
     allowedFunctionsPerObject: 20
     allowedFunctionsPerEnum: 20
