@@ -196,6 +196,18 @@ class JvmLibraryFileSystem internal constructor(
     override suspend fun writeBytesOnce(
         relPath: String,
         bytes: ByteArray,
+    ) = installNew(relPath) { tmp ->
+        Files.write(tmp, bytes, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)
+    }
+
+    /**
+     * Create [relPath], which must not exist yet: [fill] writes a temp file in the same directory,
+     * which is then installed under the final name without replacement, so a partial file is never
+     * visible there and a target that appeared meanwhile is not replaced.
+     */
+    private suspend fun installNew(
+        relPath: String,
+        fill: (tmp: Path) -> Unit,
     ) = withContext(Dispatchers.IO) {
         val target = resolve(relPath)
         if (Files.exists(target)) {
@@ -203,11 +215,9 @@ class JvmLibraryFileSystem internal constructor(
         }
         val parent = target.parent
         if (parent != null) Files.createDirectories(parent)
-        // Write to a temp file in the same directory, then install it under the final name,
-        // which fails if the target appeared meanwhile.
         val tmp = Files.createTempFile(parent ?: root, NpnPaths.Temp.WRITE_PREFIX, NpnPaths.Temp.PART)
         try {
-            Files.write(tmp, bytes, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)
+            fill(tmp)
             try {
                 atomicMoveNoReplace(tmp, target)
             } catch (e: java.nio.file.FileAlreadyExistsException) {
@@ -400,34 +410,12 @@ class JvmLibraryFileSystem internal constructor(
     override suspend fun importExternal(
         source: ExternalSource,
         toRelPath: String,
-    ) = withContext(Dispatchers.IO) {
-        val target = resolve(toRelPath)
-        if (Files.exists(target)) {
-            error("Target already exists: $toRelPath")
-        }
-        val parent = target.parent
-        if (parent != null) Files.createDirectories(parent)
-        // Stream into a same-directory temp file, then install it no-replace, so a partial PDF is
-        // never visible at the final path and a target that appears meanwhile is not replaced.
-        val tmp = Files.createTempFile(parent ?: root, NpnPaths.Temp.WRITE_PREFIX, NpnPaths.Temp.PART)
-        try {
-            externalIo.openInput(source).use { input ->
-                Files.newOutputStream(tmp, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING).use {
-                    input.copyTo(it, STREAM_BUFFER_SIZE)
-                }
-            }
-            try {
-                atomicMoveNoReplace(tmp, target)
-            } catch (e: java.nio.file.FileAlreadyExistsException) {
-                error("Target already exists: $toRelPath")
-            }
-        } finally {
-            try {
-                Files.deleteIfExists(tmp)
-            } catch (_: IOException) {
+    ) = installNew(toRelPath) { tmp ->
+        externalIo.openInput(source).use { input ->
+            Files.newOutputStream(tmp, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING).use {
+                input.copyTo(it, STREAM_BUFFER_SIZE)
             }
         }
-        Unit
     }
 
     override fun watch(): Flow<FsEvent> =
