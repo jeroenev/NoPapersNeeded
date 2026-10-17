@@ -220,17 +220,15 @@ object SettingsCodec {
                 useSafStorage = reader.boolean(SettingsKeys.USE_SAF_STORAGE) ?: DEFAULTS.useSafStorage,
                 aiEnabled = reader.boolean(SettingsKeys.AI_ENABLED) ?: DEFAULTS.aiEnabled,
                 aiProvider =
-                    aiProviderProp(
-                        reader.string(SettingsKeys.AI_PROVIDER),
-                        reader.string(SettingsKeys.AI_BASE_URL),
-                    ),
+                    enumOrNull<AiProvider>(reader.string(SettingsKeys.AI_PROVIDER))
+                        ?: legacyAiProvider(reader.string(SettingsKeys.AI_BASE_URL)),
                 aiBaseUrl = reader.string(SettingsKeys.AI_BASE_URL) ?: DEFAULTS.aiBaseUrl,
                 aiApiKey = reader.string(SettingsKeys.AI_API_KEY) ?: DEFAULTS.aiApiKey,
                 aiModel = reader.string(SettingsKeys.AI_MODEL) ?: DEFAULTS.aiModel,
                 aiReasoningAssistant =
-                    aiReasoningProp(reader.string(SettingsKeys.AI_REASONING_ASSISTANT), AiReasoningLevel.DEFAULT),
+                    enumOr(reader.string(SettingsKeys.AI_REASONING_ASSISTANT), AiReasoningLevel.DEFAULT),
                 aiReasoningEdit =
-                    aiReasoningProp(reader.string(SettingsKeys.AI_REASONING_EDIT), AiReasoningLevel.LOW),
+                    enumOr(reader.string(SettingsKeys.AI_REASONING_EDIT), AiReasoningLevel.LOW),
                 aiMaxTagsPerDoc = reader.int(SettingsKeys.AI_MAX_TAGS_PER_DOC) ?: DEFAULTS.aiMaxTagsPerDoc,
                 aiMaxNewTagsPerDoc = reader.int(SettingsKeys.AI_MAX_NEW_TAGS_PER_DOC) ?: DEFAULTS.aiMaxNewTagsPerDoc,
                 aiAutoOnOcr = reader.boolean(SettingsKeys.AI_AUTO_ON_OCR) ?: DEFAULTS.aiAutoOnOcr,
@@ -306,10 +304,21 @@ object SettingsCodec {
         if (value == null) remove(key) else putString(key, value)
     }
 
+    /**
+     * The provider of settings stored before provider selection existed: a non-blank base URL means
+     * the user had configured the old free-form OpenAI-compatible endpoint, which maps exactly onto
+     * [AiProvider.CUSTOM]; fresh setups start on the first provider in the picker.
+     */
+    private fun legacyAiProvider(storedBaseUrl: String?): AiProvider =
+        if (storedBaseUrl.isNullOrBlank()) AiProvider.OPENAI else AiProvider.CUSTOM
+
+    private inline fun <reified T : Enum<T>> enumOrNull(stored: String?): T? =
+        stored?.let { runCatching { enumValueOf<T>(it) }.getOrNull() }
+
     private inline fun <reified T : Enum<T>> enumOr(
         stored: String?,
         default: T,
-    ): T = stored?.let { runCatching { enumValueOf<T>(it) }.getOrNull() } ?: default
+    ): T = enumOrNull<T>(stored) ?: default
 
     // Field defaults are declared once on SettingsSnapshot; read them off a throwaway instance so
     // they cannot drift from the data class.
@@ -353,27 +362,6 @@ internal object SettingsKeys {
     const val UPDATE_CHECK_ENABLED = "updateCheckEnabled"
     const val DISMISSED_UPDATE_VERSION = "dismissedUpdateVersion"
 }
-
-/**
- * Parse a stored [AiProvider] name. When absent (settings written before provider selection
- * existed), a non-blank stored base URL means the user had configured the old free-form
- * OpenAI-compatible endpoint, which maps exactly onto [AiProvider.CUSTOM]; fresh setups start
- * on the first provider in the picker.
- */
-internal fun aiProviderProp(
-    stored: String?,
-    storedBaseUrl: String?,
-): AiProvider =
-    stored?.takeIf { it.isNotBlank() }?.let { name -> runCatching { AiProvider.valueOf(name) }.getOrNull() }
-        ?: if (storedBaseUrl.isNullOrBlank()) AiProvider.OPENAI else AiProvider.CUSTOM
-
-/** Parse a stored [AiReasoningLevel] name, falling back to [default] when absent/unknown. */
-internal fun aiReasoningProp(
-    stored: String?,
-    default: AiReasoningLevel,
-): AiReasoningLevel =
-    stored?.takeIf { it.isNotBlank() }?.let { name -> runCatching { AiReasoningLevel.valueOf(name) }.getOrNull() }
-        ?: default
 
 /** Bounds for the user-adjustable "max suggested tags per document" setting. */
 object AiTagging {
