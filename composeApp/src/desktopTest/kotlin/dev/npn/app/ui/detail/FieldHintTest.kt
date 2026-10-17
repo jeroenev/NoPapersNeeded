@@ -5,19 +5,17 @@ package dev.npn.app.ui.detail
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Surface
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.Modifier
 import dev.npn.app.English
+import dev.npn.app.LocaleRestoringTest
 import dev.npn.app.resourcesIn
-import dev.npn.app.ui.common.LocalAppLocale
+import dev.npn.app.ui.closing
 import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.hintText
 import dev.npn.app.ui.nodes
 import dev.npn.app.ui.onUiThread
 import dev.npn.app.ui.texts
-import dev.npn.app.ui.theme.NpnTheme
+import dev.npn.app.ui.themedScene
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldParse
@@ -36,8 +34,6 @@ import no_papers_needed.composeapp.generated.resources.detail_title_hint
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.getString
 import java.util.Locale
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /**
@@ -45,19 +41,8 @@ import kotlin.test.Test
  * language; a hint the library wrote is the user's, shown as written. A model is told the stored
  * hint either way.
  */
-class FieldHintTest {
-    private var previousLocale: Locale? = null
+class FieldHintTest : LocaleRestoringTest() {
     private val seeds = FieldKeys.seedDefinitions { FieldKeys.SEED_LABELS.getValue(it) }
-
-    @BeforeTest
-    fun rememberLocale() {
-        previousLocale = Locale.getDefault()
-    }
-
-    @AfterTest
-    fun restoreLocale() {
-        previousLocale?.let { Locale.setDefault(it) }
-    }
 
     @Test
     fun theSeededHintsShowInTheAppLanguage() {
@@ -110,32 +95,21 @@ class FieldHintTest {
     private fun panelTexts(
         defs: List<FieldDef>,
         language: String = "nl",
-    ): List<String> {
-        val scene =
-            ImageComposeScene(WIDTH, HEIGHT) {
-                CompositionLocalProvider(LocalAppLocale provides language) {
-                    NpnTheme(darkTheme = false) {
-                        Surface {
-                            Box(Modifier.verticalScroll(rememberScrollState())) {
-                                FieldsSection(
-                                    doc = doc("invoice", title = "Elektriciteit"),
-                                    refused = emptySet(),
-                                    defs = defs,
-                                    vocabulary = VocabularyState(),
-                                    actions = NoFieldEdits,
-                                )
-                            }
-                        }
-                    }
-                }
+    ): List<String> =
+        themedScene(WIDTH, HEIGHT, appLocale = language) {
+            Box(Modifier.verticalScroll(rememberScrollState())) {
+                FieldsSection(
+                    doc = doc("invoice", title = "Elektriciteit"),
+                    refused = emptySet(),
+                    defs = defs,
+                    vocabulary = VocabularyState(),
+                    actions = NoFieldEdits,
+                )
             }
-        try {
-            repeat(2) { scene.render() }
-            return scene.nodes().flatMap { it.texts() }
-        } finally {
-            scene.close()
+        }.closing {
+            repeat(2) { render() }
+            nodes().flatMap { it.texts() }
         }
-    }
 
     /** [resources] in [language], read before a scene sets the JVM's locale. */
     private fun translated(

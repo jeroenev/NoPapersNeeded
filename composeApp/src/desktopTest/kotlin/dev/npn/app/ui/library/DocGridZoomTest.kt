@@ -2,16 +2,16 @@
 
 package dev.npn.app.ui.library
 
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.ImageComposeScene
 import dev.npn.app.EnglishLocaleTest
 import dev.npn.app.ui.click
+import dev.npn.app.ui.closing
 import dev.npn.app.ui.contentDescription
 import dev.npn.app.ui.onUiThread
-import dev.npn.app.ui.theme.NpnTheme
+import dev.npn.app.ui.themedScene
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySort
 import dev.npn.core.model.ReviewMode
@@ -33,39 +33,31 @@ class DocGridZoomTest : EnglishLocaleTest() {
         onUiThread {
             var persisted by mutableIntStateOf(GridSizing.DEFAULT_COLUMN_WIDTH)
             val committed = CopyOnWriteArrayList<Int>()
-            val scene =
-                ImageComposeScene(WIDTH, HEIGHT) {
-                    NpnTheme(darkTheme = false) {
-                        Surface {
-                            DocGrid(
-                                results = DocumentResults(LibraryQuery(LibraryFilter(), LibrarySort()), emptyList()),
-                                wiring = wiring(),
-                                selectionMode = false,
-                                selected = emptySet(),
-                                columnWidth = persisted,
-                                onColumnWidthChange = { committed += it },
-                            )
-                        }
-                    }
-                }
-            try {
-                scene.render()
-                scene.zoomIn()
-                scene.awaitCommits(committed, 1)
+            themedScene(WIDTH, HEIGHT) {
+                DocGrid(
+                    results = DocumentResults(LibraryQuery(LibraryFilter(), LibrarySort()), emptyList()),
+                    wiring = wiring(),
+                    selectionMode = false,
+                    selected = emptySet(),
+                    columnWidth = persisted,
+                    onColumnWidthChange = { committed += it },
+                )
+            }.closing {
+                render()
+                zoomIn()
+                awaitCommits(committed, 1)
                 val first = committed.single()
 
-                scene.zoomIn()
+                zoomIn()
                 // The first write lands only now, after the second zoom step.
                 persisted = first
-                scene.render()
-                scene.awaitCommits(committed, 2)
+                render()
+                awaitCommits(committed, 2)
 
                 // The second step is still on screen and got written, larger than the first.
                 committed shouldHaveSize 2
                 committed[0] shouldBe first
                 committed[1] shouldBeGreaterThan first
-            } finally {
-                scene.close()
             }
         }
 

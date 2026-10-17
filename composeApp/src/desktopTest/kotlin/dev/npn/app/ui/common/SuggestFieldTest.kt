@@ -1,4 +1,4 @@
-@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class, androidx.compose.ui.InternalComposeUiApi::class)
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 
 package dev.npn.app.ui.common
 
@@ -10,7 +10,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
@@ -21,10 +20,12 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.text.AnnotatedString
 import dev.npn.app.EnglishLocaleTest
+import dev.npn.app.ui.closing
 import dev.npn.app.ui.has
 import dev.npn.app.ui.isEditable
 import dev.npn.app.ui.nodes
 import dev.npn.app.ui.onUiThread
+import dev.npn.app.ui.press
 import dev.npn.app.ui.text
 import dev.npn.app.ui.texts
 import dev.npn.app.ui.theme.NpnTheme
@@ -37,16 +38,13 @@ class SuggestFieldTest : EnglishLocaleTest() {
     @Test
     fun keySuggestionsFollowTheKeystrokeJustTyped() =
         onUiThread {
-            val scene = keyForm(suggestions = listOf("invoice_no", "iban"))
-            try {
-                scene.render()
-                scene.typeKey("q")
-                scene.render()
-                scene.typeKey("i")
-                scene.render()
-                scene.has { it.text() == "invoice_no" } shouldBe true
-            } finally {
-                scene.close()
+            keyForm(suggestions = listOf("invoice_no", "iban")).closing {
+                render()
+                typeKey("q")
+                render()
+                typeKey("i")
+                render()
+                has { it.text() == "invoice_no" } shouldBe true
             }
         }
 
@@ -54,27 +52,22 @@ class SuggestFieldTest : EnglishLocaleTest() {
     @Test
     fun keySuggestionsDoNotTakeTheKeyboardFromTheField() =
         onUiThread {
-            val scene = keyForm(suggestions = listOf("invoice_no", "iban"))
-            try {
-                scene.render()
-                scene
-                    .keyField()
+            keyForm(suggestions = listOf("invoice_no", "iban")).closing {
+                render()
+                keyField()
                     .config[SemanticsActions.RequestFocus]
                     .action
                     ?.invoke()
-                scene.render()
-                scene.typeKey("in")
-                scene.render()
-                scene.has { it.text() == "invoice_no" } shouldBe true
-                scene.pressBackspace()
-                scene.render()
-                scene
-                    .keyField()
+                render()
+                typeKey("in")
+                render()
+                has { it.text() == "invoice_no" } shouldBe true
+                press(Key.Backspace)
+                render()
+                keyField()
                     .config
                     .getOrNull(SemanticsProperties.EditableText)
                     ?.text shouldBe "i"
-            } finally {
-                scene.close()
             }
         }
 
@@ -84,23 +77,20 @@ class SuggestFieldTest : EnglishLocaleTest() {
         onUiThread {
             var suggestions by mutableStateOf((1..6).map { "item$it" })
             val picked = mutableListOf<String>()
-            val scene = suggestField({ suggestions }, onPick = { picked += it })
-            try {
-                scene.render()
-                scene.focusKeyField()
-                scene.typeKey("item")
-                scene.render()
+            suggestField({ suggestions }, onPick = { picked += it }).closing {
+                render()
+                focusKeyField()
+                typeKey("item")
+                render()
                 repeat(5) {
-                    scene.press(Key.DirectionDown)
-                    scene.render()
+                    press(Key.DirectionDown)
+                    render()
                 }
                 suggestions = listOf("item1", "item2")
-                scene.render()
-                scene.press(Key.Enter)
-                scene.render()
+                render()
+                press(Key.Enter)
+                render()
                 picked shouldBe listOf("item2")
-            } finally {
-                scene.close()
             }
         }
 
@@ -110,28 +100,23 @@ class SuggestFieldTest : EnglishLocaleTest() {
         onUiThread {
             val picked = mutableListOf<String>()
             var formEnters = 0
-            val scene =
-                suggestField(
-                    { listOf("invoice_no", "iban") },
-                    onPick = { picked += it },
-                    onFormEnter = { formEnters++ },
-                )
-            try {
-                scene.render()
-                scene.focusKeyField()
-                scene.typeKey("zz")
-                scene.render()
-                scene.press(Key.Enter)
-                scene.render()
+            suggestField(
+                { listOf("invoice_no", "iban") },
+                onPick = { picked += it },
+                onFormEnter = { formEnters++ },
+            ).closing {
+                render()
+                focusKeyField()
+                typeKey("zz")
+                render()
+                press(Key.Enter)
+                render()
                 picked shouldBe emptyList()
                 formEnters shouldBe 1
-                scene
-                    .keyField()
+                keyField()
                     .config
                     .getOrNull(SemanticsProperties.EditableText)
                     ?.text shouldBe "zz"
-            } finally {
-                scene.close()
             }
         }
 
@@ -186,14 +171,6 @@ class SuggestFieldTest : EnglishLocaleTest() {
             .action
             ?.invoke()
         render()
-    }
-
-    private fun ImageComposeScene.pressBackspace() = press(Key.Backspace)
-
-    /** Sent to whatever holds the keyboard; the key-event constructor is Compose's internal one. */
-    private fun ImageComposeScene.press(key: Key) {
-        sendKeyEvent(KeyEvent(key, KeyEventType.KeyDown))
-        sendKeyEvent(KeyEvent(key, KeyEventType.KeyUp))
     }
 
     private companion object {

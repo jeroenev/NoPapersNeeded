@@ -1,11 +1,9 @@
-@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class, androidx.compose.ui.InternalComposeUiApi::class)
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 
 package dev.npn.app.ui.ai
 
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEvent
-import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.text.AnnotatedString
@@ -13,12 +11,14 @@ import dev.npn.app.EnglishLocaleTest
 import dev.npn.app.FakeLibrarySession
 import dev.npn.app.aiConfiguredSettings
 import dev.npn.app.ui.click
+import dev.npn.app.ui.closing
 import dev.npn.app.ui.contentDescription
 import dev.npn.app.ui.has
 import dev.npn.app.ui.hostedScene
 import dev.npn.app.ui.isEditable
 import dev.npn.app.ui.node
 import dev.npn.app.ui.onUiThread
+import dev.npn.app.ui.press
 import dev.npn.app.ui.text
 import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.core.ai.AiChatHistoryItem
@@ -48,21 +48,18 @@ class AiChatScreenTest : EnglishLocaleTest() {
                             second.id to toolChat("insurance"),
                         )
                 }
-            val scene = scene(session)
-            try {
-                scene.render()
-                scene.click { it.contentDescription() == "Expand" }
-                scene.render()
-                scene.has { it.contentDescription() == "Collapse" } shouldBe true
+            scene(session).closing {
+                render()
+                click { it.contentDescription() == "Expand" }
+                render()
+                has { it.contentDescription() == "Collapse" } shouldBe true
 
-                scene.click { it.contentDescription() == "Chat history" }
-                scene.render()
-                scene.click { it.text() == second.title }
-                scene.render()
+                click { it.contentDescription() == "Chat history" }
+                render()
+                click { it.text() == second.title }
+                render()
 
-                scene.has { it.contentDescription() == "Collapse" } shouldBe false
-            } finally {
-                scene.close()
+                has { it.contentDescription() == "Collapse" } shouldBe false
             }
         }
 
@@ -84,13 +81,10 @@ class AiChatScreenTest : EnglishLocaleTest() {
                                 ),
                         )
                 }
-            val scene = scene(session)
-            try {
-                scene.render()
+            scene(session).closing {
+                render()
 
-                scene.has { it.text()?.contains("\"invoices\"") == true } shouldBe true
-            } finally {
-                scene.close()
+                has { it.text()?.contains("\"invoices\"") == true } shouldBe true
             }
         }
 
@@ -99,43 +93,29 @@ class AiChatScreenTest : EnglishLocaleTest() {
     fun enterSendsTheQuestionAndShiftEnterDoesNot() =
         onUiThread {
             val session = FakeLibrarySession()
-            val scene = scene(session)
-            try {
-                scene.render()
-                scene
-                    .input()
+            scene(session).closing {
+                render()
+                input()
                     .config[SemanticsActions.RequestFocus]
                     .action
                     ?.invoke()
-                scene
-                    .input()
+                input()
                     .config[SemanticsActions.SetText]
                     .action
                     ?.invoke(AnnotatedString("What is due?"))
-                scene.render()
+                render()
 
-                scene.press(Key.Enter, shift = true)
-                scene.render()
+                press(Key.Enter, shift = true)
+                render()
                 session.aiChat.asked shouldBe emptyList()
 
-                scene.press(Key.Enter)
-                scene.render()
+                press(Key.Enter)
+                render()
                 session.aiChat.asked.map { it.second } shouldContainExactly listOf("What is due?")
-            } finally {
-                scene.close()
             }
         }
 
     private fun ImageComposeScene.input(): SemanticsNode = node { it.isEditable() }
-
-    /** Sent to whatever holds the keyboard; the key-event constructor is Compose's internal one. */
-    private fun ImageComposeScene.press(
-        key: Key,
-        shift: Boolean = false,
-    ) {
-        sendKeyEvent(KeyEvent(key, KeyEventType.KeyDown, isShiftPressed = shift))
-        sendKeyEvent(KeyEvent(key, KeyEventType.KeyUp, isShiftPressed = shift))
-    }
 
     private fun toolChat(query: String) =
         listOf(

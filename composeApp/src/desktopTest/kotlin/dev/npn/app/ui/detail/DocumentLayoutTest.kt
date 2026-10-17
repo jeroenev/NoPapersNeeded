@@ -12,6 +12,7 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.Density
 import dev.npn.app.EnglishLocaleTest
+import dev.npn.app.ui.closing
 import dev.npn.app.ui.common.ProvideWindowWidthClass
 import dev.npn.app.ui.editableText
 import dev.npn.app.ui.hostedScene
@@ -38,47 +39,41 @@ class DocumentLayoutTest : EnglishLocaleTest() {
     @Test
     fun desktopShowsPdfBesideEditableDetails() =
         onUiThread {
-            val scene = scene(1280, 800)
-            try {
-                scene.render()
-                val preview = scene.text("PDF preview")
-                val title = scene.text("Title")
+            scene(1280, 800).closing {
+                render()
+                val preview = text("PDF preview")
+                val title = text("Title")
                 assertNotNull(preview)
                 assertNotNull(title)
                 assertTrue(preview.boundsInRoot.right < title.boundsInRoot.left)
-                save(scene, "desktop-document")
-            } finally {
-                scene.close()
+                save(this, "desktop-document")
             }
         }
 
     @Test
     fun phoneUsesTabsAndKeepsDetailsInsideViewport() =
         onUiThread {
-            val scene = scene(360, 740, 1.3f)
-            try {
-                scene.render()
-                assertNotNull(scene.text("PDF preview"))
+            scene(360, 740, 1.3f).closing {
+                render()
+                assertNotNull(text("PDF preview"))
                 val details =
-                    scene.nodes().first { node ->
+                    nodes().first { node ->
                         node.config.getOrNull(SemanticsProperties.Text)?.any { it.text == "Details" } == true &&
                             node.config.getOrNull(SemanticsActions.OnClick) != null
                     }
                 details.config[SemanticsActions.OnClick].action?.invoke()
-                scene.render()
-                val title = scene.text("Title")
+                render()
+                val title = text("Title")
                 assertNotNull(title)
                 assertTrue(title.boundsInRoot.left >= 0 && title.boundsInRoot.right <= 360)
-                val saveButton = scene.text("Save changes")
-                val reviewButton = scene.text("Mark reviewed & next")
+                val saveButton = text("Save changes")
+                val reviewButton = text("Mark reviewed & next")
                 assertNotNull(saveButton)
                 assertNotNull(reviewButton)
                 assertTrue(saveButton.boundsInRoot.bottom <= 740)
                 assertTrue(reviewButton.boundsInRoot.bottom <= 740)
                 assertTrue(reviewButton.boundsInRoot.right <= 360)
-                save(scene, "phone-document")
-            } finally {
-                scene.close()
+                save(this, "phone-document")
             }
         }
 
@@ -91,16 +86,13 @@ class DocumentLayoutTest : EnglishLocaleTest() {
     @Test
     fun typingASpaceAtTheEndOfAValueIsNotSwallowed() =
         onUiThread {
-            val scene = scene(1280, 800)
-            try {
-                scene.render()
-                val title = scene.editable("Electricity invoice 2026")
+            scene(1280, 800).closing {
+                render()
+                val title = editable("Electricity invoice 2026")
                 assertNotNull(title)
                 title.config[SemanticsActions.SetText].action?.invoke(AnnotatedString("Electricity invoice "))
-                scene.render()
-                assertNotNull(scene.editable("Electricity invoice "))
-            } finally {
-                scene.close()
+                render()
+                assertNotNull(editable("Electricity invoice "))
             }
         }
 
@@ -116,13 +108,10 @@ class DocumentLayoutTest : EnglishLocaleTest() {
                     available = true,
                     metadata = AiMetadataState(suggestion = FieldSuggestion(mapOf(FieldKeys.TITLE to "March bill"))),
                 )
-            val scene = scene(1280, 800, ai = suggested)
-            try {
-                scene.render()
-                assertNotNull(scene.text("March bill"))
-                assertNotNull(scene.text("Replaces: Electricity invoice 2026"))
-            } finally {
-                scene.close()
+            scene(1280, 800, ai = suggested).closing {
+                render()
+                assertNotNull(text("March bill"))
+                assertNotNull(text("Replaces: Electricity invoice 2026"))
             }
         }
 

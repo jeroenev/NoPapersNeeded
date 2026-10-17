@@ -2,8 +2,6 @@
 
 package dev.npn.app.ui.library
 
-import androidx.compose.material3.Surface
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.LocalSaveableStateRegistry
@@ -16,9 +14,10 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.state.ToggleableState
 import dev.npn.app.EnglishLocaleTest
+import dev.npn.app.ui.closing
 import dev.npn.app.ui.nodes
 import dev.npn.app.ui.onUiThread
-import dev.npn.app.ui.theme.NpnTheme
+import dev.npn.app.ui.themedScene
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.SavedView
@@ -60,34 +59,27 @@ class LibraryDialogTest : EnglishLocaleTest() {
         onUiThread {
             val first = SaveableStateRegistry(restoredValues = null) { true }
             lateinit var dialog: MutableState<LibraryDialog?>
-            val before = scene(first) { dialog = it }
             val saved =
-                try {
-                    before.render()
+                scene(first) { dialog = it }.closing {
+                    render()
                     dialog.value = LibraryDialog.Filter
-                    before.render()
-                    before
-                        .untaggedSwitch()
+                    render()
+                    untaggedSwitch()
                         ?.config
                         ?.get(SemanticsActions.OnClick)
                         ?.action
                         ?.invoke()
-                    before.render()
-                    before.untaggedSwitch()?.config?.getOrNull(SemanticsProperties.ToggleableState) shouldBe
+                    render()
+                    untaggedSwitch()?.config?.getOrNull(SemanticsProperties.ToggleableState) shouldBe
                         ToggleableState.On
                     first.performSave()
-                } finally {
-                    before.close()
                 }
 
-            val after = scene(SaveableStateRegistry(restoredValues = saved) { true }) { dialog = it }
-            try {
-                after.render()
+            scene(SaveableStateRegistry(restoredValues = saved) { true }) { dialog = it }.closing {
+                render()
                 dialog.value shouldBe LibraryDialog.Filter
-                after.untaggedSwitch()?.config?.getOrNull(SemanticsProperties.ToggleableState) shouldBe
+                untaggedSwitch()?.config?.getOrNull(SemanticsProperties.ToggleableState) shouldBe
                     ToggleableState.On
-            } finally {
-                after.close()
             }
         }
 
@@ -101,28 +93,24 @@ class LibraryDialogTest : EnglishLocaleTest() {
         onUiThread {
             val sidePanel = mutableStateOf(true)
             lateinit var dialog: MutableState<LibraryDialog?>
-            val scene = scene(SaveableStateRegistry(restoredValues = null) { true }, sidePanel) { dialog = it }
-            try {
-                scene.render()
+            scene(SaveableStateRegistry(restoredValues = null) { true }, sidePanel) { dialog = it }.closing {
+                render()
                 dialog.value = LibraryDialog.Filter
-                scene.render()
-                scene
-                    .untaggedSwitch()
+                render()
+                untaggedSwitch()
                     ?.config
                     ?.get(SemanticsActions.OnClick)
                     ?.action
                     ?.invoke()
-                scene.render()
-                scene.untaggedSwitch()?.config?.getOrNull(SemanticsProperties.ToggleableState) shouldBe
+                render()
+                untaggedSwitch()?.config?.getOrNull(SemanticsProperties.ToggleableState) shouldBe
                     ToggleableState.On
 
                 // The window crosses the breakpoint: the editor moves to its other call site.
                 sidePanel.value = false
-                scene.render()
-                scene.untaggedSwitch()?.config?.getOrNull(SemanticsProperties.ToggleableState) shouldBe
+                render()
+                untaggedSwitch()?.config?.getOrNull(SemanticsProperties.ToggleableState) shouldBe
                     ToggleableState.On
-            } finally {
-                scene.close()
             }
         }
 
@@ -131,37 +119,31 @@ class LibraryDialogTest : EnglishLocaleTest() {
         registry: SaveableStateRegistry,
         sidePanel: MutableState<Boolean> = mutableStateOf(true),
         onDialog: (MutableState<LibraryDialog?>) -> Unit,
-    ) = ImageComposeScene(WIDTH, HEIGHT) {
-        CompositionLocalProvider(LocalSaveableStateRegistry provides registry) {
-            NpnTheme(darkTheme = false) {
-                Surface {
-                    val dialog = rememberLibraryDialog()
-                    onDialog(dialog)
-                    if (dialog.value == LibraryDialog.Filter) {
-                        val editor = rememberFilterEditorState(LibraryFilter())
-                        if (sidePanel.value) {
-                            FilterPanel(
-                                editor = editor,
-                                tags = emptyList(),
-                                fields = FieldFilterOptions(),
-                                reviewMode = ReviewMode.DEFAULT,
-                                onApply = {},
-                                onDismiss = {},
-                                fillHeight = false,
-                            )
-                        } else {
-                            FilterPanel(
-                                editor = editor,
-                                tags = emptyList(),
-                                fields = FieldFilterOptions(),
-                                reviewMode = ReviewMode.DEFAULT,
-                                onApply = {},
-                                onDismiss = {},
-                                fillHeight = true,
-                            )
-                        }
-                    }
-                }
+    ) = themedScene(WIDTH, HEIGHT, LocalSaveableStateRegistry provides registry) {
+        val dialog = rememberLibraryDialog()
+        onDialog(dialog)
+        if (dialog.value == LibraryDialog.Filter) {
+            val editor = rememberFilterEditorState(LibraryFilter())
+            if (sidePanel.value) {
+                FilterPanel(
+                    editor = editor,
+                    tags = emptyList(),
+                    fields = FieldFilterOptions(),
+                    reviewMode = ReviewMode.DEFAULT,
+                    onApply = {},
+                    onDismiss = {},
+                    fillHeight = false,
+                )
+            } else {
+                FilterPanel(
+                    editor = editor,
+                    tags = emptyList(),
+                    fields = FieldFilterOptions(),
+                    reviewMode = ReviewMode.DEFAULT,
+                    onApply = {},
+                    onDismiss = {},
+                    fillHeight = true,
+                )
             }
         }
     }

@@ -51,7 +51,7 @@ class ScreenRestorationTest : EnglishLocaleTest() {
                 },
                 after = { scene ->
                     scene.has { it.text() == "Rename tag" } shouldBe true
-                    scene.field()?.editableText() shouldBe "taxes"
+                    scene.editableField()?.editableText() shouldBe "taxes"
                 },
             )
         }
@@ -68,7 +68,7 @@ class ScreenRestorationTest : EnglishLocaleTest() {
                 },
                 after = { scene ->
                     scene.has { it.text() == "New rule" } shouldBe true
-                    scene.field()?.editableText() shouldBe "Utilities"
+                    scene.editableField()?.editableText() shouldBe "Utilities"
                 },
             )
         }
@@ -88,22 +88,16 @@ class ScreenRestorationTest : EnglishLocaleTest() {
         after: (ImageComposeScene) -> Unit,
     ) {
         val first = SaveableStateRegistry(restoredValues = null) { true }
-        val beforeScene = scene(first, content)
         val saved =
-            try {
-                beforeScene.render()
-                before(beforeScene)
+            scene(first, content).closing {
+                render()
+                before(this)
                 first.performSave()
-            } finally {
-                beforeScene.close()
             }
-        val afterScene = scene(SaveableStateRegistry(restoredValues = saved) { true }, content)
-        try {
-            afterScene.render()
-            afterScene.render()
-            after(afterScene)
-        } finally {
-            afterScene.close()
+        scene(SaveableStateRegistry(restoredValues = saved) { true }, content).closing {
+            render()
+            render()
+            after(this)
         }
     }
 
@@ -114,8 +108,6 @@ class ScreenRestorationTest : EnglishLocaleTest() {
         hostedScene(WIDTH, HEIGHT, LocalSaveableStateRegistry provides registry) {
             NpnTheme(darkTheme = false) { content() }
         }
-
-    private fun ImageComposeScene.field(): SemanticsNode? = nodes().firstOrNull { it.isEditable() }
 
     /** Click as [click] does, and render what the click opened. */
     private fun ImageComposeScene.tap(match: (SemanticsNode) -> Boolean) {

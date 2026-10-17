@@ -2,7 +2,6 @@
 
 package dev.npn.app.ui.settings
 
-import androidx.compose.material3.Surface
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
@@ -10,11 +9,12 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.text.AnnotatedString
 import dev.npn.app.ui.click
+import dev.npn.app.ui.closing
 import dev.npn.app.ui.isEnabled
 import dev.npn.app.ui.node
 import dev.npn.app.ui.nodes
 import dev.npn.app.ui.onUiThread
-import dev.npn.app.ui.theme.NpnTheme
+import dev.npn.app.ui.themedScene
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
@@ -27,28 +27,22 @@ class StoragePathRuleEditorTest {
     @Test
     fun anArmedRuleWithAnInvalidTemplateCanBeSwitchedOff() =
         onUiThread {
-            val scene = scene(enabled = true)
-            try {
-                scene.render()
-                scene.node(::isSwitch).isEnabled() shouldBe true
+            scene(enabled = true).closing {
+                render()
+                node(::isSwitch).isEnabled() shouldBe true
 
-                scene.click(::isSwitch)
+                click(::isSwitch)
 
                 switched shouldContainExactly listOf(false)
-            } finally {
-                scene.close()
             }
         }
 
     @Test
     fun aRuleThatIsOffCannotBeArmedWithAnInvalidTemplate() =
         onUiThread {
-            val scene = scene(enabled = false)
-            try {
-                scene.render()
-                scene.node(::isSwitch).isEnabled() shouldBe false
-            } finally {
-                scene.close()
+            scene(enabled = false).closing {
+                render()
+                node(::isSwitch).isEnabled() shouldBe false
             }
         }
 
@@ -57,37 +51,29 @@ class StoragePathRuleEditorTest {
     fun templateKeysAreKeptBeforeTheOwnerCatchesUp() =
         onUiThread {
             val typed = mutableListOf<String>()
-            val scene =
-                ImageComposeScene(WIDTH, HEIGHT) {
-                    NpnTheme(darkTheme = false) {
-                        Surface {
-                            StoragePathRuleEditor(
-                                template = "{title}.pdf",
-                                enabled = false,
-                                fieldTypes = emptyMap(),
-                                onTemplateChange = { typed += it },
-                                onEnabledChange = {},
-                            )
-                        }
-                    }
-                }
-            try {
-                scene.render()
+            themedScene(WIDTH, HEIGHT) {
+                StoragePathRuleEditor(
+                    template = "{title}.pdf",
+                    enabled = false,
+                    fieldTypes = emptyMap(),
+                    onTemplateChange = { typed += it },
+                    onEnabledChange = {},
+                )
+            }.closing {
+                render()
 
-                fun field() = scene.nodes().single { it.config.getOrNull(SemanticsProperties.EditableText) != null }
+                fun field() = nodes().single { it.config.getOrNull(SemanticsProperties.EditableText) != null }
                 field().config[SemanticsActions.RequestFocus].action?.invoke()
-                scene.render()
+                render()
                 for (key in listOf("a", "b")) {
                     val end = field().config[SemanticsProperties.EditableText].length
                     field().config[SemanticsActions.SetSelection].action?.invoke(end, end, false)
-                    scene.render()
+                    render()
                     field().config[SemanticsActions.InsertTextAtCursor].action?.invoke(AnnotatedString(key))
-                    scene.render()
+                    render()
                 }
                 typed shouldContainExactly listOf("{title}.pdfa", "{title}.pdfab")
                 field().config[SemanticsProperties.EditableText].text shouldBe "{title}.pdfab"
-            } finally {
-                scene.close()
             }
         }
 
@@ -95,18 +81,14 @@ class StoragePathRuleEditorTest {
         node.config.getOrNull(SemanticsProperties.ToggleableState) != null
 
     private fun scene(enabled: Boolean): ImageComposeScene =
-        ImageComposeScene(WIDTH, HEIGHT) {
-            NpnTheme(darkTheme = false) {
-                Surface {
-                    StoragePathRuleEditor(
-                        template = INVALID_TEMPLATE,
-                        enabled = enabled,
-                        fieldTypes = emptyMap(),
-                        onTemplateChange = {},
-                        onEnabledChange = { switched += it },
-                    )
-                }
-            }
+        themedScene(WIDTH, HEIGHT) {
+            StoragePathRuleEditor(
+                template = INVALID_TEMPLATE,
+                enabled = enabled,
+                fieldTypes = emptyMap(),
+                onTemplateChange = {},
+                onEnabledChange = { switched += it },
+            )
         }
 
     private companion object {

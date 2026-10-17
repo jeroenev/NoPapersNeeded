@@ -1,11 +1,15 @@
-@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class, androidx.compose.ui.InternalComposeUiApi::class)
 
 package dev.npn.app.ui
 
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ProvidedValue
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -19,6 +23,8 @@ import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
+import dev.npn.app.ui.common.LocalAppLocale
+import dev.npn.app.ui.theme.NpnTheme
 import javax.swing.SwingUtilities
 
 // Building a scene and reading and driving it through its semantics, as the desktop UI tests do.
@@ -51,6 +57,44 @@ internal fun hostedScene(
     }
 }
 
+/**
+ * A scene showing [content] as a screen of the app shows it: in the app's light theme, on a
+ * [Surface] that gives it the theme's background and text colours, in the app language
+ * [appLocale] when one is given, with whatever further [locals] the test provides around the theme.
+ * Unlike [hostedScene] it has no lifecycle or viewmodel store, for content that needs neither.
+ */
+internal fun themedScene(
+    width: Int,
+    height: Int,
+    vararg locals: ProvidedValue<*>,
+    appLocale: String? = null,
+    density: Density = Density(1f),
+    content: @Composable () -> Unit,
+): ImageComposeScene =
+    ImageComposeScene(width, height, density) {
+        CompositionLocalProvider(*locals) {
+            // The app language's provider is itself composable, so it is provided here, not passed in.
+            if (appLocale == null) {
+                NpnTheme(darkTheme = false) { Surface { content() } }
+            } else {
+                CompositionLocalProvider(LocalAppLocale provides appLocale) {
+                    NpnTheme(darkTheme = false) { Surface { content() } }
+                }
+            }
+        }
+    }
+
+/**
+ * Run [block] on the scene and close it however the block ends, as the scene holds native
+ * resources until it is closed. [ImageComposeScene] is not [AutoCloseable], so `use` does not apply.
+ */
+internal inline fun <T> ImageComposeScene.closing(block: ImageComposeScene.() -> T): T =
+    try {
+        block()
+    } finally {
+        close()
+    }
+
 /** A fresh store for a scene's viewmodels. */
 internal fun viewModelStoreOwner(): ViewModelStoreOwner =
     object : ViewModelStoreOwner {
@@ -76,15 +120,42 @@ internal fun ImageComposeScene.click(match: (SemanticsNode) -> Boolean) {
         ?.invoke()
 }
 
+/** The scene's first editable field, if it shows one. */
+internal fun ImageComposeScene.editableField(): SemanticsNode? = nodes().firstOrNull { it.isEditable() }
+
 /** Replace the text of the scene's first editable field with [value], and render. */
 internal fun ImageComposeScene.type(value: String) {
-    nodes()
-        .firstOrNull { it.isEditable() }
+    editableField()
         ?.config
         ?.get(SemanticsActions.SetText)
         ?.action
         ?.invoke(AnnotatedString(value))
     render()
+}
+
+/**
+ * Give focus to the first node that can take it, and render, so a key sent next reaches it as it
+ * would after a click. A scene starts with nothing focused, and keys then go nowhere.
+ */
+internal fun ImageComposeScene.focusFirst() {
+    node { it.config.getOrNull(SemanticsActions.RequestFocus) != null }
+        .config[SemanticsActions.RequestFocus]
+        .action
+        ?.invoke()
+    render()
+}
+
+/**
+ * Press and release [key], with Ctrl or Shift held if asked. It is sent to whatever holds the
+ * keyboard; the key-event constructor is Compose's internal one, as a test has no native event.
+ */
+internal fun ImageComposeScene.press(
+    key: Key,
+    ctrl: Boolean = false,
+    shift: Boolean = false,
+) {
+    sendKeyEvent(KeyEvent(key, KeyEventType.KeyDown, isCtrlPressed = ctrl, isShiftPressed = shift))
+    sendKeyEvent(KeyEvent(key, KeyEventType.KeyUp, isCtrlPressed = ctrl, isShiftPressed = shift))
 }
 
 internal fun SemanticsNode.isEditable(): Boolean = config.getOrNull(SemanticsProperties.EditableText) != null

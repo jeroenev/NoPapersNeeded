@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import dev.npn.app.EnglishLocaleTest
 import dev.npn.app.resourcesIn
 import dev.npn.app.ui.click
+import dev.npn.app.ui.closing
 import dev.npn.app.ui.common.LocalAppLocale
 import dev.npn.app.ui.nodes
 import dev.npn.app.ui.onUiThread
@@ -246,11 +247,9 @@ class FilterNumberBoundTest : EnglishLocaleTest() {
                 // Only when asked: the app-language local sets the JVM's locale as it is provided.
                 if (language == null) content() else CompositionLocalProvider(LocalAppLocale provides language, content)
             }
-        try {
-            panel.scene.render()
+        panel.scene.closing {
+            render()
             panel.block()
-        } finally {
-            panel.scene.close()
         }
     }
 

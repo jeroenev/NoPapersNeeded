@@ -9,6 +9,7 @@ import androidx.compose.ui.ImageComposeScene
 import dev.npn.app.EnglishLocaleTest
 import dev.npn.app.FakeLibrarySession
 import dev.npn.app.ui.click
+import dev.npn.app.ui.closing
 import dev.npn.app.ui.contentDescription
 import dev.npn.app.ui.hostedScene
 import dev.npn.app.ui.onUiThread
@@ -30,15 +31,12 @@ class AiEditReviewScreenTest : EnglishLocaleTest() {
             val opened = mutableListOf<String>()
             var onOpenDoc by mutableStateOf<(String) -> Unit>({ opened += "first:$it" })
             val session = FakeLibrarySession().apply { aiEditQueue.reviews["job"] = OneDocReview }
-            val scene = scene(session) { onOpenDoc }
-            try {
-                scene.render()
+            scene(session) { onOpenDoc }.closing {
+                render()
                 onOpenDoc = { opened += "second:$it" }
-                scene.render()
-                scene.click { it.contentDescription() == "Open document" }
+                render()
+                click { it.contentDescription() == "Open document" }
                 opened shouldContainExactly listOf("second:a")
-            } finally {
-                scene.close()
             }
         }
 

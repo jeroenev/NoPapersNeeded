@@ -1,4 +1,4 @@
-@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class, androidx.compose.ui.InternalComposeUiApi::class)
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 
 package dev.npn.app.ui.detail
 
@@ -10,13 +10,11 @@ import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEvent
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.unit.dp
-import dev.npn.app.ui.node
+import dev.npn.app.ui.closing
+import dev.npn.app.ui.focusFirst
 import dev.npn.app.ui.onUiThread
+import dev.npn.app.ui.press
 import io.kotest.matchers.collections.shouldContainExactly
 import kotlin.test.Test
 
@@ -34,8 +32,8 @@ class DocumentKeysTest {
     @Test
     fun ctrlArrowsInTheViewerWalkToAnotherDocument() =
         onUiThread {
-            press(Focused.VIEWER, Key.DirectionRight, ctrl = true)
-            press(Focused.VIEWER, Key.DirectionLeft, ctrl = true)
+            pressIn(Focused.VIEWER, Key.DirectionRight, ctrl = true)
+            pressIn(Focused.VIEWER, Key.DirectionLeft, ctrl = true)
 
             ran shouldContainExactly listOf("next document", "previous document")
         }
@@ -43,8 +41,8 @@ class DocumentKeysTest {
     @Test
     fun plainArrowsInTheViewerTurnThePage() =
         onUiThread {
-            press(Focused.VIEWER, Key.DirectionRight)
-            press(Focused.VIEWER, Key.DirectionLeft)
+            pressIn(Focused.VIEWER, Key.DirectionRight)
+            pressIn(Focused.VIEWER, Key.DirectionLeft)
 
             ran shouldContainExactly listOf("page 2", "page 0")
         }
@@ -53,13 +51,14 @@ class DocumentKeysTest {
     @Test
     fun ctrlArrowsOnThePaneDividerWalkToAnotherDocument() =
         onUiThread {
-            press(Focused.DIVIDER, Key.DirectionRight, ctrl = true)
-            press(Focused.DIVIDER, Key.DirectionRight)
+            pressIn(Focused.DIVIDER, Key.DirectionRight, ctrl = true)
+            pressIn(Focused.DIVIDER, Key.DirectionRight)
 
             ran shouldContainExactly listOf("next document", "grow")
         }
 
-    private fun press(
+    /** Compose the screen's keys with [focused] holding focus inside them, and press [key] there. */
+    private fun pressIn(
         focused: Focused,
         key: Key,
         ctrl: Boolean = false,
@@ -96,18 +95,10 @@ class DocumentKeysTest {
                     Box(Modifier.size(10.dp).focusable().then(keys))
                 }
             }
-        try {
-            scene.render()
-            scene
-                .node { it.config.getOrNull(SemanticsActions.RequestFocus) != null }
-                .config[SemanticsActions.RequestFocus]
-                .action
-                ?.invoke()
-            scene.render()
-            scene.sendKeyEvent(KeyEvent(key, KeyEventType.KeyDown, isCtrlPressed = ctrl))
-            scene.sendKeyEvent(KeyEvent(key, KeyEventType.KeyUp, isCtrlPressed = ctrl))
-        } finally {
-            scene.close()
+        scene.closing {
+            render()
+            focusFirst()
+            press(key, ctrl = ctrl)
         }
     }
 

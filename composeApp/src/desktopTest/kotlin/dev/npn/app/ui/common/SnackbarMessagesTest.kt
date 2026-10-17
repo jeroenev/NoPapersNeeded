@@ -4,6 +4,7 @@ package dev.npn.app.ui.common
 
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.ui.ImageComposeScene
+import dev.npn.app.ui.closing
 import dev.npn.app.ui.onUiThread
 import dev.npn.app.ui.text
 import io.kotest.matchers.shouldBe
@@ -74,13 +75,11 @@ class SnackbarMessagesTest {
         block: (ImageComposeScene) -> Unit,
     ) {
         val scene = ImageComposeScene(WIDTH, HEIGHT) { SnackbarMessages(messages, snackbar) }
-        try {
+        scene.closing {
             // One frame starts the collector, the next composes the first message's snackbar.
-            scene.render()
-            scene.render()
-            block(scene)
-        } finally {
-            scene.close()
+            render()
+            render()
+            block(this)
         }
     }
 

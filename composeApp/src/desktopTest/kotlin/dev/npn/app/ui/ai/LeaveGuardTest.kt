@@ -11,6 +11,7 @@ import androidx.navigationevent.DirectNavigationEventInput
 import androidx.navigationevent.NavigationEventDispatcher
 import androidx.navigationevent.NavigationEventDispatcherOwner
 import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
+import dev.npn.app.ui.closing
 import dev.npn.app.ui.onUiThread
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
@@ -38,19 +39,17 @@ class LeaveGuardTest {
                         LeaveGuard(guarding = guarding, onBack = { guarded++ })
                     }
                 }
-            try {
-                scene.render()
+            scene.closing {
+                render()
                 back.backCompleted()
                 guarded shouldBe 1
                 fellThrough shouldBe 0
 
                 guarding = false
-                scene.render()
+                render()
                 back.backCompleted()
                 guarded shouldBe 1
                 fellThrough shouldBe 1
-            } finally {
-                scene.close()
             }
         }
 

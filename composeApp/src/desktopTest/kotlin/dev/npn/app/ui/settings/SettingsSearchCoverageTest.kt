@@ -10,6 +10,7 @@ import androidx.compose.ui.semantics.getOrNull
 import dev.npn.app.EnglishLocaleTest
 import dev.npn.app.NoSettingsPaneActions
 import dev.npn.app.paneState
+import dev.npn.app.ui.closing
 import dev.npn.app.ui.nodes
 import dev.npn.app.ui.onUiThread
 import dev.npn.app.ui.theme.NpnTheme
@@ -47,11 +48,9 @@ class SettingsSearchCoverageTest : EnglishLocaleTest() {
                     Column { category.content(EVERYTHING_SHOWN, NoSettingsPaneActions()) }
                 }
             }
-        try {
-            scene.render()
-            return scene.labels() to checkNotNull(search)
-        } finally {
-            scene.close()
+        return scene.closing {
+            render()
+            labels() to checkNotNull(search)
         }
     }
 

@@ -3,7 +3,6 @@
 package dev.npn.app.ui.detail
 
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -22,10 +21,11 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import dev.npn.app.EnglishLocaleTest
 import dev.npn.app.ui.click
+import dev.npn.app.ui.closing
 import dev.npn.app.ui.contentDescription
 import dev.npn.app.ui.nodes
 import dev.npn.app.ui.onUiThread
-import dev.npn.app.ui.theme.NpnTheme
+import dev.npn.app.ui.themedScene
 import io.kotest.matchers.floats.plusOrMinus
 import io.kotest.matchers.shouldBe
 import org.jetbrains.skia.EncodedImageFormat
@@ -38,31 +38,23 @@ class PageViewerTest : EnglishLocaleTest() {
     fun everySettledPageReachesTheViewModel() =
         onUiThread {
             var pageIndex by mutableIntStateOf(0)
-            val scene =
-                ImageComposeScene(WIDTH, HEIGHT) {
-                    NpnTheme(darkTheme = false) {
-                        Surface {
-                            PageViewer(
-                                initialPage = pageIndex,
-                                pageCount = PageCountState.Ready(3),
-                                render = { _, _ -> null },
-                                onPageChange = { pageIndex = it },
-                                onRetryPageCount = {},
-                            )
-                        }
-                    }
-                }
-            try {
-                scene.settle()
-                scene.click("Next page")
-                scene.settle()
+            themedScene(WIDTH, HEIGHT) {
+                PageViewer(
+                    initialPage = pageIndex,
+                    pageCount = PageCountState.Ready(3),
+                    render = { _, _ -> null },
+                    onPageChange = { pageIndex = it },
+                    onRetryPageCount = {},
+                )
+            }.closing {
+                settle()
+                click("Next page")
+                settle()
                 pageIndex shouldBe 1
 
-                scene.click("Previous page")
-                scene.settle()
+                click("Previous page")
+                settle()
                 pageIndex shouldBe 0
-            } finally {
-                scene.close()
             }
         }
 
@@ -78,19 +70,15 @@ class PageViewerTest : EnglishLocaleTest() {
         var created: ImageComposeScene? = null
         onUiThread {
             created =
-                ImageComposeScene(WIDTH, HEIGHT) {
-                    NpnTheme(darkTheme = false) {
-                        Surface {
-                            PageViewer(
-                                initialPage = 0,
-                                pageCount = PageCountState.Ready(1),
-                                render = { _, _ -> page },
-                                onPageChange = {},
-                                onRetryPageCount = {},
-                                modifier = Modifier.size(viewer),
-                            )
-                        }
-                    }
+                themedScene(WIDTH, HEIGHT) {
+                    PageViewer(
+                        initialPage = 0,
+                        pageCount = PageCountState.Ready(1),
+                        render = { _, _ -> page },
+                        onPageChange = {},
+                        onRetryPageCount = {},
+                        modifier = Modifier.size(viewer),
+                    )
                 }
         }
         val scene = checkNotNull(created)

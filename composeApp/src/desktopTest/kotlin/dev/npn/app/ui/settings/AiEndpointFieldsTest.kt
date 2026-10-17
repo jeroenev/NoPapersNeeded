@@ -15,6 +15,7 @@ import androidx.compose.ui.text.AnnotatedString
 import dev.npn.app.EnglishLocaleTest
 import dev.npn.app.NoSettingsPaneActions
 import dev.npn.app.paneState
+import dev.npn.app.ui.closing
 import dev.npn.app.ui.nodes
 import dev.npn.app.ui.onUiThread
 import dev.npn.app.ui.theme.NpnTheme
@@ -153,11 +154,9 @@ class AiEndpointFieldsTest : EnglishLocaleTest() {
 
     private fun pane(block: Pane.() -> Unit) {
         val pane = Pane()
-        try {
-            pane.scene.render()
+        pane.scene.closing {
+            render()
             pane.block()
-        } finally {
-            pane.scene.close()
         }
     }
 

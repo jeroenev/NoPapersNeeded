@@ -18,6 +18,7 @@ import androidx.compose.ui.text.AnnotatedString
 import dev.npn.app.EnglishLocaleTest
 import dev.npn.app.resourcesIn
 import dev.npn.app.ui.click
+import dev.npn.app.ui.closing
 import dev.npn.app.ui.common.LocalAppLocale
 import dev.npn.app.ui.common.ProvideWindowWidthClass
 import dev.npn.app.ui.contentDescription
@@ -296,11 +297,9 @@ class NumberFieldEntryTest : EnglishLocaleTest() {
                     CompositionLocalProvider(LocalAppLocale provides language, content)
                 }
             }
-        try {
-            editor.scene.render()
+        editor.scene.closing {
+            render()
             editor.block()
-        } finally {
-            editor.scene.close()
         }
     }
 

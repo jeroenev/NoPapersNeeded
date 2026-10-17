@@ -14,6 +14,7 @@ import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.closing
 import dev.npn.app.ui.nav.NavigationShell
 import dev.npn.app.ui.nav.QueueStatus
 import dev.npn.app.ui.nav.TopLevelDestination
@@ -81,13 +82,11 @@ class WindowWidthClassTest {
                         }
                     }
                 }
-            try {
-                scene.render()
+            scene.closing {
+                render()
                 widthClass = WindowWidthClass.COMPACT
                 Snapshot.sendApplyNotifications()
-                scene.render()
-            } finally {
-                scene.close()
+                render()
             }
 
             // The content moved from beside the rail to above the bottom bar...
@@ -113,12 +112,7 @@ class WindowWidthClassTest {
         width: Int,
         content: @Composable () -> Unit,
     ) {
-        val scene = ImageComposeScene(width, HEIGHT, Density(1f), content = content)
-        try {
-            scene.render()
-        } finally {
-            scene.close()
-        }
+        ImageComposeScene(width, HEIGHT, Density(1f), content = content).closing { render() }
     }
 
     private companion object {

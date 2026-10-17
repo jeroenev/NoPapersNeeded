@@ -8,6 +8,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.ImageComposeScene
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import dev.npn.app.ui.closing
 import dev.npn.app.ui.detail.DocumentDraftHost
 import dev.npn.app.ui.detail.DocumentDrafts
 import dev.npn.app.ui.detail.LocalDocumentDrafts
@@ -48,19 +49,17 @@ class LanguageChangeTest : EnglishLocaleTest() {
                         }
                     }
                 }
-            try {
-                scene.settle()
+            scene.closing {
+                settle()
                 val before = checkNotNull(drafts)
                 before.field("doc-1", FieldKeys.TITLE, "Unsaved title", persisted = null)
 
                 settings.updateSettings { it.copy(appLanguage = "nl") }
-                scene.settle()
+                settle()
 
                 val after = checkNotNull(drafts)
                 after shouldBeSameInstanceAs before
                 after.state["doc-1"]?.dirty shouldBe true
-            } finally {
-                scene.close()
             }
         }
 
@@ -84,18 +83,18 @@ class LanguageChangeTest : EnglishLocaleTest() {
                         }
                     }
                 }
-            try {
-                scene.settle()
+            scene.closing {
+                settle()
                 val before = checkNotNull(shown)
                 val subtreeBefore = subtree
                 before.browse.setOrder(listOf("doc-1", "doc-2"))
                 before.nav.navigate(DOCUMENT)
-                scene.settle()
+                settle()
                 before.nav.navigate(SETTINGS)
-                scene.settle()
+                settle()
 
                 settings.updateSettings { it.copy(appLanguage = "nl") }
-                scene.settle()
+                settle()
 
                 // The language's key did rebuild what is under it.
                 subtree shouldNotBeSameInstanceAs subtreeBefore
@@ -103,10 +102,8 @@ class LanguageChangeTest : EnglishLocaleTest() {
                 after.nav shouldBeSameInstanceAs before.nav
                 after.nav.currentBackStack.value
                     .mapNotNull { it.destination.route } shouldBe listOf(LIBRARY, DOCUMENT, SETTINGS)
-                scene.has { SETTINGS in it.texts() } shouldBe true
+                has { SETTINGS in it.texts() } shouldBe true
                 after.browse.neighbour("doc-1", 1) shouldBe "doc-2"
-            } finally {
-                scene.close()
             }
         }
 

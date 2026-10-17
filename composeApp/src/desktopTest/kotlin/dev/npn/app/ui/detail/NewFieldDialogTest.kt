@@ -2,8 +2,6 @@
 
 package dev.npn.app.ui.detail
 
-import androidx.compose.material3.Surface
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
@@ -13,14 +11,14 @@ import androidx.compose.ui.text.AnnotatedString
 import dev.npn.app.EnglishLocaleTest
 import dev.npn.app.resourcesIn
 import dev.npn.app.ui.click
-import dev.npn.app.ui.common.LocalAppLocale
+import dev.npn.app.ui.closing
 import dev.npn.app.ui.hasError
 import dev.npn.app.ui.isEditable
 import dev.npn.app.ui.isEnabled
 import dev.npn.app.ui.nodes
 import dev.npn.app.ui.onUiThread
 import dev.npn.app.ui.texts
-import dev.npn.app.ui.theme.NpnTheme
+import dev.npn.app.ui.themedScene
 import dev.npn.app.ui.type
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.runBlocking
@@ -157,26 +155,18 @@ class NewFieldDialogTest : EnglishLocaleTest() {
     ) {
         val dialog = Dialog(words)
         dialog.scene =
-            ImageComposeScene(WIDTH, HEIGHT) {
-                CompositionLocalProvider(LocalAppLocale provides "nl") {
-                    NpnTheme(darkTheme = false) {
-                        Surface {
-                            NewFieldDialog(
-                                seed = NewFieldSeed(key = KEY, label = LABEL),
-                                existing = emptyList(),
-                                keySuggestions = emptyList(),
-                                onConfirm = { _, value -> dialog.confirmed += value },
-                                onDismiss = {},
-                            )
-                        }
-                    }
-                }
+            themedScene(WIDTH, HEIGHT, appLocale = "nl") {
+                NewFieldDialog(
+                    seed = NewFieldSeed(key = KEY, label = LABEL),
+                    existing = emptyList(),
+                    keySuggestions = emptyList(),
+                    onConfirm = { _, value -> dialog.confirmed += value },
+                    onDismiss = {},
+                )
             }
-        try {
-            repeat(2) { dialog.scene.render() }
+        dialog.scene.closing {
+            repeat(2) { render() }
             dialog.block()
-        } finally {
-            dialog.scene.close()
         }
     }
 
