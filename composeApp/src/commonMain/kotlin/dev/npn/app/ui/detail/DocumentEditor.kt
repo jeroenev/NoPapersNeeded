@@ -172,65 +172,68 @@ private fun EditorSaveBar(
     onDiscard: () -> Unit,
     onReview: (() -> Unit)?,
     hasNext: Boolean,
+    modifier: Modifier = Modifier,
 ) {
     var confirmDiscard by remember { mutableStateOf(false) }
-    HorizontalDivider()
-    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-        val status =
-            when {
-                !draft.writable -> stringResource(Res.string.ux_field_invalid)
-                draft.error != null -> stringResource(Res.string.ux_save_failed_summary)
-                draft.saving -> stringResource(Res.string.detail_saving)
-                draft.dirty -> stringResource(Res.string.ux_draft_hint)
-                draft.saved -> stringResource(Res.string.detail_saved)
-                else -> null
+    Column(modifier) {
+        HorizontalDivider()
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            val status =
+                when {
+                    !draft.writable -> stringResource(Res.string.ux_field_invalid)
+                    draft.error != null -> stringResource(Res.string.ux_save_failed_summary)
+                    draft.saving -> stringResource(Res.string.detail_saving)
+                    draft.dirty -> stringResource(Res.string.ux_draft_hint)
+                    draft.saved -> stringResource(Res.string.detail_saved)
+                    else -> null
+                }
+            status?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color =
+                        if (draft.error != null || !draft.writable) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    // Announce save progress and outcome to assistive tech as it changes; an error is
+                    // assertive so it interrupts, the rest are polite. The text itself is the message.
+                    modifier =
+                        Modifier.semantics {
+                            liveRegion =
+                                if (draft.error != null) LiveRegionMode.Assertive else LiveRegionMode.Polite
+                        },
+                )
             }
-        status?.let {
-            Text(
-                it,
-                style = MaterialTheme.typography.bodySmall,
-                color =
-                    if (draft.error != null || !draft.writable) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                // Announce save progress and outcome to assistive tech as it changes; an error is
-                // assertive so it interrupts, the rest are polite. The text itself is the message.
-                modifier =
-                    Modifier.semantics {
-                        liveRegion =
-                            if (draft.error != null) LiveRegionMode.Assertive else LiveRegionMode.Polite
-                    },
+            if (draft.error != null) TechnicalDetails(draft.error)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (draft.dirty || draft.saving) {
+                    Button(onClick = onSave, enabled = !draft.saving && draft.writable) {
+                        Text(stringResource(Res.string.ux_save_changes))
+                    }
+                    TextButton(onClick = { confirmDiscard = true }, enabled = !draft.saving) {
+                        Text(stringResource(Res.string.ux_discard_short))
+                    }
+                }
+                onReview?.let {
+                    Button(onClick = it, enabled = !draft.saving && draft.writable) {
+                        Text(stringResource(if (hasNext) Res.string.ux_review_next else Res.string.ux_review_finish))
+                    }
+                }
+            }
+        }
+        if (confirmDiscard) {
+            ConfirmDialog(
+                title = stringResource(Res.string.ux_discard),
+                message = stringResource(Res.string.ux_discard_prompt),
+                confirmLabel = stringResource(Res.string.ux_discard),
+                onConfirm = {
+                    confirmDiscard = false
+                    onDiscard()
+                },
+                onDismiss = { confirmDiscard = false },
             )
         }
-        if (draft.error != null) TechnicalDetails(draft.error)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (draft.dirty || draft.saving) {
-                Button(onClick = onSave, enabled = !draft.saving && draft.writable) {
-                    Text(stringResource(Res.string.ux_save_changes))
-                }
-                TextButton(onClick = { confirmDiscard = true }, enabled = !draft.saving) {
-                    Text(stringResource(Res.string.ux_discard_short))
-                }
-            }
-            onReview?.let {
-                Button(onClick = it, enabled = !draft.saving && draft.writable) {
-                    Text(stringResource(if (hasNext) Res.string.ux_review_next else Res.string.ux_review_finish))
-                }
-            }
-        }
-    }
-    if (confirmDiscard) {
-        ConfirmDialog(
-            title = stringResource(Res.string.ux_discard),
-            message = stringResource(Res.string.ux_discard_prompt),
-            confirmLabel = stringResource(Res.string.ux_discard),
-            onConfirm = {
-                confirmDiscard = false
-                onDiscard()
-            },
-            onDismiss = { confirmDiscard = false },
-        )
     }
 }

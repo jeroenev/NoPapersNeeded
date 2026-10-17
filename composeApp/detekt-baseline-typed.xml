@@ -17,11 +17,6 @@
     <ID>LambdaParameterInRestartableEffect:PageViewer.kt:render: suspend (pageIndex: Int, maxDim: Int) -&gt; ByteArray?</ID>
     <ID>ModifierWithoutDefault:AiEditSetupControls.kt:modifier: Modifier</ID>
     <ID>ModifierWithoutDefault:FieldEditor.kt:modifier: Modifier</ID>
-    <ID>MultipleEmitters:AiEditReviewUi.kt:@Composable private fun RemovalChipsRow</ID>
-    <ID>MultipleEmitters:DocumentEditor.kt:@OptIn(ExperimentalLayoutApi::class) @Composable private fun EditorSaveBar</ID>
-    <ID>MultipleEmitters:FilterSheet.kt:@Composable private fun TagFilterSection</ID>
-    <ID>MultipleEmitters:ImportSettingsPane.kt:@Composable private fun OcrLanguageSettings</ID>
-    <ID>MultipleEmitters:ImportSettingsPane.kt:@Composable private fun WatchedFolderSettings</ID>
     <ID>NoNameShadowing:FilterSheet.kt:{ onDraftChange(draft.withFieldBounds(def.key, from = it)) }</ID>
     <ID>NoNameShadowing:FilterSheet.kt:{ onDraftChange(draft.withFieldBounds(def.key, to = it)) }</ID>
     <ID>ParameterNaming:AiChatScreen.kt:onOpenFiltered: (List&lt;String&gt;) -&gt; Unit</ID>

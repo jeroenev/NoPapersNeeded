@@ -3,6 +3,7 @@
 package dev.npn.app.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -104,7 +105,7 @@ internal fun ImportSettingsPane(
 }
 
 @Composable
-private fun WatchedFolderSettings(
+private fun ColumnScope.WatchedFolderSettings(
     watchedFolder: String?,
     useSaf: Boolean,
     deleteAfterImport: Boolean,
@@ -175,7 +176,7 @@ internal fun watchedFolderPick(
  * and shows up as a chip of its own so it can be removed again.
  */
 @Composable
-private fun OcrLanguageSettings(
+private fun ColumnScope.OcrLanguageSettings(
     setting: String?,
     onChange: (String?) -> Unit,
 ) {

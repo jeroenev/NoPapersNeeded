@@ -5,6 +5,7 @@ package dev.npn.app.ui.library
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -294,7 +295,7 @@ data class FieldFilterOptions(
  * transient text.
  */
 @Composable
-private fun FilterFields(
+private fun ColumnScope.FilterFields(
     editor: FilterEditorState,
     tags: List<TagInfo>,
     fields: FieldFilterOptions,
@@ -478,7 +479,7 @@ private fun NumberBound(
 }
 
 @Composable
-private fun TagFilterSection(
+private fun ColumnScope.TagFilterSection(
     editor: FilterEditorState,
     tags: List<TagInfo>,
 ) {

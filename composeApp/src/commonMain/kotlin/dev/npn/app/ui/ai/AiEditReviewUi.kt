@@ -4,6 +4,7 @@ package dev.npn.app.ui.ai
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
@@ -240,7 +241,7 @@ private fun AddChipsRow(
 
 /** The proposed tag-removal chips of one review row (all start pre-deselected). */
 @Composable
-private fun RemovalChipsRow(
+private fun ColumnScope.RemovalChipsRow(
     doc: ReviewDoc,
     onToggle: (String, String) -> Unit,
 ) {
