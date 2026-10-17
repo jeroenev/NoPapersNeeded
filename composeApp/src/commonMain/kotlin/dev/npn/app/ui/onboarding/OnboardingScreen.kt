@@ -24,7 +24,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import dev.npn.app.OpenFailure
 import dev.npn.app.platform.defaultLibraryLocation
-import dev.npn.app.platform.supportsLibraryFolderCreation
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.TestTags
 import dev.npn.app.ui.common.TextInputDialog
@@ -155,7 +154,8 @@ private fun LibraryChoices(
     onUseRecommendedFolder: (location: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val canCreate = !useSaf && supportsLibraryFolderCreation()
+    // Both platforms create a folder inside a direct parent; a SAF parent cannot take one.
+    val canCreate = !useSaf
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,

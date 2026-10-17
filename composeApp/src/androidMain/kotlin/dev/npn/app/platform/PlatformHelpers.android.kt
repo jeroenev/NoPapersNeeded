@@ -122,8 +122,6 @@ actual fun supportsSharing(): Boolean = true
 /** The APK is sideloaded from the GitHub release, so nothing else updates it. */
 actual fun checksForUpdates(): Boolean = true
 
-actual fun supportsLibraryFolderCreation(): Boolean = true
-
 actual suspend fun createLibraryFolder(
     parentLocation: String,
     name: String,

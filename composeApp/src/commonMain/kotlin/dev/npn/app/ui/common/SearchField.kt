@@ -25,10 +25,11 @@ import no_papers_needed.composeapp.generated.resources.common_search_documents
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * The library search box. Its [suggestions] come ready-made from the caller (the library works
- * them out from the index as the query settles), so unlike [SuggestField] it filters nothing
- * itself, and it reopens its menu whenever new ones arrive while it has focus. The menu and its
- * keyboard handling are [SuggestField]'s.
+ * A search box: the library's, and Settings' (with its own [placeholder] and no suggestions). Its
+ * [suggestions] come ready-made from the caller (the library works them out from the index as the
+ * query settles), so unlike [SuggestField] it filters nothing itself, and it reopens its menu
+ * whenever new ones arrive while it has focus. The menu and its keyboard handling are
+ * [SuggestField]'s.
  */
 @Composable
 fun SearchField(

@@ -46,6 +46,7 @@ import dev.npn.app.ui.common.BackTopBar
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.LocalWindowWidthClass
+import dev.npn.app.ui.common.SearchField
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.rememberLibraryFolderPicker
 import dev.npn.app.ui.detail.LocalDocumentDrafts
@@ -261,7 +262,12 @@ private fun SettingsCategoryList(
     val labels = settingsCategoryLabels()
     val results = labels.filter { it.matches(query) }
     Column(modifier) {
-        SettingsSearchField(query = query, onQueryChange = { query = it })
+        SearchField(
+            value = query,
+            onValueChange = { query = it },
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            placeholder = stringResource(Res.string.common_settings_search),
+        )
         if (results.isEmpty()) {
             Text(
                 text = stringResource(Res.string.common_settings_search_no_results, query.trim()),
@@ -281,28 +287,6 @@ private fun SettingsCategoryList(
             }
         }
     }
-}
-
-@Composable
-private fun SettingsSearchField(
-    query: String,
-    onQueryChange: (String) -> Unit,
-) {
-    OutlinedTextField(
-        value = query,
-        onValueChange = onQueryChange,
-        label = { Text(text = stringResource(Res.string.common_settings_search)) },
-        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-        trailingIcon = {
-            if (query.isNotEmpty()) {
-                IconButton(onClick = { onQueryChange("") }) {
-                    Icon(Icons.Filled.Close, contentDescription = stringResource(Res.string.common_clear_search))
-                }
-            }
-        },
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-    )
 }
 
 @Composable

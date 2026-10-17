@@ -96,12 +96,6 @@ expect fun supportsSharing(): Boolean
 expect fun checksForUpdates(): Boolean
 
 /**
- * Whether the platform can create a new library folder inside a [FolderAccess.DIRECT] parent.
- * True on both platforms; a SAF parent is refused by [createLibraryFolder].
- */
-expect fun supportsLibraryFolderCreation(): Boolean
-
-/**
  * Create a new library folder named [name] inside [parentLocation] (a [FolderAccess.DIRECT]
  * location) and return its location string, or null on failure. Creating an existing directory
  * succeeds, so the recommended default folder is opened through this too.
