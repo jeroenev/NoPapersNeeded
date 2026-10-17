@@ -16,8 +16,7 @@ import androidx.compose.runtime.setValue
  * implementations need no changes.
  */
 class BrowseContext {
-    var docIds: List<String> by mutableStateOf(emptyList())
-        private set
+    private var docIds: List<String> by mutableStateOf(emptyList())
 
     /** Search query that produced the current browse order, if any. */
     var searchQuery: String? by mutableStateOf(null)
@@ -31,21 +30,18 @@ class BrowseContext {
         searchQuery = query
     }
 
-    fun indexOf(docId: String): Int = docIds.indexOf(docId)
-
     fun neighbour(
         docId: String,
         delta: Int,
     ): String? {
-        val i = indexOf(docId)
+        val i = docIds.indexOf(docId)
         if (i < 0) return null
-        val target = i + delta
-        return docIds.getOrNull(target)
+        return docIds.getOrNull(i + delta)
     }
 
     /** 1-based position and total for a "3 of 41" indicator, or null if the doc is not in the list. */
     fun positionOf(docId: String): Pair<Int, Int>? {
-        val i = indexOf(docId)
+        val i = docIds.indexOf(docId)
         if (i < 0) return null
         return (i + 1) to docIds.size
     }

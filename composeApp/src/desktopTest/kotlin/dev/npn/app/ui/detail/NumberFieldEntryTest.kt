@@ -283,7 +283,7 @@ class NumberFieldEntryTest {
                                 MetadataUiState(
                                     document =
                                         DocumentSection(
-                                            item = editor.item,
+                                            loadState = DocLoadState.Present(editor.item),
                                             reviewMode = ReviewMode.INBOX_WORKFLOW,
                                             fieldDefs = defs,
                                         ),

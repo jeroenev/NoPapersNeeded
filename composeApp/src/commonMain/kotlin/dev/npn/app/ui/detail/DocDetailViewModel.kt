@@ -300,7 +300,6 @@ class DocDetailViewModel(
     private val document: Flow<DocumentSection> =
         combine(doc, reviewMode, fieldDefs, ocrText, ocrVersions) { item, mode, defs, text, versions ->
             DocumentSection(
-                item = item,
                 loadState = loadStateOf(item),
                 reviewed = item?.effectiveReviewed(mode) == true,
                 reviewMode = mode,
@@ -352,7 +351,6 @@ class DocDetailViewModel(
         return MetadataUiState(
             document =
                 DocumentSection(
-                    item = item,
                     loadState = loadStateOf(item),
                     reviewed = item?.effectiveReviewed(ReviewMode.DEFAULT) == true,
                     highlightTerms = highlightTerms,
@@ -504,7 +502,13 @@ class DocDetailViewModel(
                 ) {
                     // Every field the user marked for AI, in ALL mode: this is an explicit request to
                     // second-guess what is there, unlike the automatic pass which only fills gaps.
-                    val fields = fieldRegistry.current().filter { it.aiEnabled }.map { AiFieldConfig(it.key, AiFieldMode.ALL) }
+                    val fields =
+                        fieldRegistry.current().filter { it.aiEnabled }.map {
+                            AiFieldConfig(
+                                it.key,
+                                AiFieldMode.ALL,
+                            )
+                        }
                     ai.suggestEdits(docId, AiEditRequest(fields = fields)).metadata
                 }
             aiMetadata.value = AiMetadataState(suggestion = suggestion ?: FieldSuggestion.EMPTY)

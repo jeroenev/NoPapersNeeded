@@ -174,10 +174,12 @@ class DocumentLayoutTest {
                                     MetadataUiState(
                                         document =
                                             DocumentSection(
-                                                item =
-                                                    DocListItem(
-                                                        doc("invoice", title = "Electricity invoice"),
-                                                        listOf("Utilities"),
+                                                loadState =
+                                                    DocLoadState.Present(
+                                                        DocListItem(
+                                                            doc("invoice", title = "Electricity invoice"),
+                                                            listOf("Utilities"),
+                                                        ),
                                                     ),
                                                 reviewMode = ReviewMode.INBOX_WORKFLOW,
                                                 // The panel renders fields from the registry; seed it as a

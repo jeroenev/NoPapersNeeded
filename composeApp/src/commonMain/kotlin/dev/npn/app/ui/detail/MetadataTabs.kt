@@ -33,6 +33,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -120,7 +121,7 @@ internal fun MetadataTabs(
     // Shared with OcrTextTab so Ctrl+F can move focus into its find field. Focus is only requested
     // when Ctrl+F raises the counter, never on a plain tab tap (which would pop the keyboard).
     val findFocus = remember { FocusRequester() }
-    var findRequestCounter by remember { mutableStateOf(0) }
+    var findRequestCounter by remember { mutableIntStateOf(0) }
     Column(
         modifier.findKeys {
             savedTab = PanelTab.TEXT

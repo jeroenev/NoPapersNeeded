@@ -24,15 +24,13 @@ data class MetadataUiState(
 )
 
 /**
- * The document itself plus the library-wide settings that decide how it is shown. [item] is null
- * until the document row arrives (and stays null for a document that is gone), which the editor
- * shows as unavailable. [loadState] disambiguates that null: still-loading vs confirmed missing, so
- * a screen can wait rather than flash "unavailable". [reviewed] is already resolved against
+ * The document itself plus the library-wide settings that decide how it is shown. [loadState]
+ * holds the row once it arrives, and tells a row still loading from one confirmed missing, so a
+ * screen can wait rather than flash "unavailable". [reviewed] is already resolved against
  * [reviewMode], so no call site repeats that derivation.
  */
 @Immutable
 data class DocumentSection(
-    val item: DocListItem? = null,
     val loadState: DocLoadState = DocLoadState.Loading,
     val reviewed: Boolean = false,
     val reviewMode: ReviewMode = ReviewMode.DEFAULT,
@@ -42,7 +40,13 @@ data class DocumentSection(
     val ocrVersions: List<OcrVersion> = emptyList(),
     /** Terms from the search that opened this document, highlighted in the text tab. */
     val highlightTerms: List<String> = emptyList(),
-)
+) {
+    /**
+     * The document row, or null until it arrives and for a document that is gone, which the editor
+     * shows as unavailable.
+     */
+    val item: DocListItem? get() = (loadState as? DocLoadState.Present)?.item
+}
 
 /**
  * Library-wide values offered as completions while editing: tags, the existing values of each text

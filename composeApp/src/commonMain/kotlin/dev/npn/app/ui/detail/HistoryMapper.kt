@@ -116,71 +116,22 @@ object HistoryMapper {
 
     private fun kind(entry: HistoryEntry): HistoryEventKind =
         when (entry) {
-            is HistoryEntry.TagAdded -> {
-                HistoryEventKind.TAG_ADD
-            }
-
-            is HistoryEntry.TagRemoved -> {
-                HistoryEventKind.TAG_REMOVE
-            }
-
-            is HistoryEntry.TagRenamed -> {
-                HistoryEventKind.TAG_RENAME
-            }
-
-            is HistoryEntry.TagMerged -> {
-                HistoryEventKind.TAG_MERGE
-            }
-
-            is HistoryEntry.TagStyled -> {
-                HistoryEventKind.TAG_STYLE
-            }
-
-            is HistoryEntry.Reviewed, is HistoryEntry.ReviewUnreadable -> {
-                HistoryEventKind.PROP_REVIEWED
-            }
-
-            is HistoryEntry.OcrEnginePinned -> {
-                HistoryEventKind.PROP_OCR_ENGINE
-            }
-
-            is HistoryEntry.StoragePathSet -> {
-                HistoryEventKind.PROP_STORAGE_PATH
-            }
-
-            is HistoryEntry.FieldSet -> {
-                if (entry.value ==
-                    null
-                ) {
-                    HistoryEventKind.FIELD_REMOVE
-                } else {
-                    HistoryEventKind.FIELD_SET
-                }
-            }
-
-            is HistoryEntry.Trashed -> {
-                HistoryEventKind.TRASH
-            }
-
-            HistoryEntry.Restored -> {
-                HistoryEventKind.RESTORE
-            }
-
-            HistoryEntry.Deleted -> {
-                HistoryEventKind.DELETE
-            }
-
-            is HistoryEntry.Relinked -> {
-                HistoryEventKind.RELINK
-            }
-
-            is HistoryEntry.SettingChanged -> {
-                HistoryEventKind.SETTING
-            }
-
-            is HistoryEntry.Unknown, is HistoryEntry.Undecodable -> {
-                HistoryEventKind.UNKNOWN
-            }
+            is HistoryEntry.TagAdded -> HistoryEventKind.TAG_ADD
+            is HistoryEntry.TagRemoved -> HistoryEventKind.TAG_REMOVE
+            is HistoryEntry.TagRenamed -> HistoryEventKind.TAG_RENAME
+            is HistoryEntry.TagMerged -> HistoryEventKind.TAG_MERGE
+            is HistoryEntry.TagStyled -> HistoryEventKind.TAG_STYLE
+            is HistoryEntry.Reviewed, is HistoryEntry.ReviewUnreadable -> HistoryEventKind.PROP_REVIEWED
+            is HistoryEntry.OcrEnginePinned -> HistoryEventKind.PROP_OCR_ENGINE
+            is HistoryEntry.StoragePathSet -> HistoryEventKind.PROP_STORAGE_PATH
+            is HistoryEntry.FieldSet if entry.value == null -> HistoryEventKind.FIELD_REMOVE
+            is HistoryEntry.FieldSet -> HistoryEventKind.FIELD_SET
+            is HistoryEntry.Trashed -> HistoryEventKind.TRASH
+            HistoryEntry.Restored -> HistoryEventKind.RESTORE
+            HistoryEntry.Deleted -> HistoryEventKind.DELETE
+            is HistoryEntry.Relinked -> HistoryEventKind.RELINK
+            is HistoryEntry.SettingChanged -> HistoryEventKind.SETTING
+            is HistoryEntry.Unknown, is HistoryEntry.Undecodable -> HistoryEventKind.UNKNOWN
         }
 
     private fun reviewedText(reviewed: Boolean?): UiText =
