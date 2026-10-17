@@ -2,9 +2,6 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>AbstractClassCanBeInterface:JournalOp.kt:JournalOp$JournalOp</ID>
-    <ID>CyclomaticComplexMethod:FoldedState.kt:FoldedState$fun apply</ID>
-    <ID>EmptyWhileBlock:DocumentFilterTest.kt:DocumentFilterTest${}</ID>
     <ID>ImplicitDefaultLocale:JvmLibraryFileSystemTest.kt:JvmLibraryFileSystemTest$"%02x".format(it)</ID>
     <ID>InjectDispatcher:DocumentRepositoryImpl.kt:DocumentRepositoryImpl$Default</ID>
     <ID>InjectDispatcher:Indexer.kt:Indexer$Default</ID>
@@ -19,34 +16,7 @@
     <ID>InjectDispatcher:SafLibraryFileSystem.kt:SafLibraryFileSystem$IO</ID>
     <ID>InjectDispatcher:SafWatchedFolder.kt:SafWatchedFolder$IO</ID>
     <ID>InjectDispatcher:SettingsRepositoryImpl.kt:SettingsRepositoryImpl$IO</ID>
-    <ID>LoopWithTooManyJumpStatements:Indexer.kt:Indexer$for</ID>
-    <ID>LoopWithTooManyJumpStatements:OcrPipeline.kt:OcrPipeline$for</ID>
-    <ID>MatchingDeclarationName:ExternalSource.desktop.kt:ExternalSource</ID>
-    <ID>ReturnCount:FoldedState.kt:FoldedState$fun apply</ID>
-    <ID>ReturnCount:NpnPaths.kt:NpnPaths$fun indexable: Boolean</ID>
     <ID>SpreadOperator:IndexerWriteSettleTest.kt:IndexerWriteSettleTest$(p, content.encodeToByteArray(), *options)</ID>
-    <ID>SwallowedException:JvmLibraryFileSystem.kt:JvmLibraryFileSystem$e: java.nio.file.FileAlreadyExistsException</ID>
-    <ID>TooManyFunctions:DocumentDao.kt:DocumentDao</ID>
-    <ID>UnsafeCallOnNullableType:CompactionReconcileTest.kt:CompactionReconcileTest$db.metadataProjectionDao().state()!!</ID>
-    <ID>UnsafeCallOnNullableType:FieldModelAcceptanceTest.kt:FieldModelAcceptanceTest$rig.session.documents .observeDoc(a) .first()!!</ID>
-    <ID>UnsafeCallOnNullableType:HlcSeedingTest.kt:HlcSeedingTest$rig.session.documents .observeDoc(id) .first()!!</ID>
-    <ID>UnsafeCallOnNullableType:HlcSeedingTest.kt:HlcSeedingTest$session2.documents .observeDoc(id) .first()!!</ID>
-    <ID>UnsafeCallOnNullableType:JournalEventSerializer.kt:JournalEventSerializer$obj["dev"]!!</ID>
-    <ID>UnsafeCallOnNullableType:JournalEventSerializer.kt:JournalEventSerializer$obj["hlc"]!!</ID>
-    <ID>UnsafeCallOnNullableType:JournalEventSerializer.kt:JournalEventSerializer$obj["op"]!!</ID>
-    <ID>UnsafeCallOnNullableType:JournalEventSerializer.kt:JournalEventSerializer$obj["seq"]!!</ID>
-    <ID>UnsafeCallOnNullableType:JournalEventSerializer.kt:JournalEventSerializer$this[name]!!</ID>
-    <ID>UnsafeCallOnNullableType:JvmLibraryFileSystemNoReplaceTest.kt:JvmLibraryFileSystemNoReplaceTest$runCatching { Files.createLink(b, c) }.exceptionOrNull()!!</ID>
-    <ID>UnsafeCallOnNullableType:MetadataWriterTest.kt:MetadataWriterTest$rig.session.documents .observeDoc(id) .first()!!</ID>
-    <ID>UnsafeCallOnNullableType:OcrPipelineTest.kt:OcrPipelineTest$repo .observeDoc(docId) .first()!!</ID>
-    <ID>UnsafeCallOnNullableType:OcrPipelineTest.kt:OcrPipelineTest$repo.observeDoc(docId).first()!!</ID>
-    <ID>UnsafeCallOnNullableType:ReconcilePerfTest.kt:ReconcilePerfTest$db.metadataProjectionDao().state()!!</ID>
-    <ID>UnsafeCallOnNullableType:SplitPdfTest.kt:SplitPdfTest$rig.session.documents .observeDoc(done.partDocIds[0]) .first()!!</ID>
-    <ID>UnsafeCallOnNullableType:ThumbnailServiceTest.kt:ThumbnailServiceTest$db.thumbnailDao().get(docId)!!</ID>
-    <ID>UnsafeCallOnNullableType:ThumbnailServiceTest.kt:ThumbnailServiceTest$store.lastPng!!</ID>
     <ID>UseOrEmpty:AiText.kt:AiText$(this[key] as? JsonArray) ?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -&gt; p.isString }?.contentOrNull } ?.map { it.trim() } ?.filter { it.isNotEmpty() } ?: emptyList()</ID>
-    <ID>UseOrEmpty:StoragePathTemplate.kt:StoragePathTemplate$value ?: ""</ID>
-    <ID>UseRequireNotNull:SnapshotFormat.kt:SnapshotCodec$require(supersedes != null) { "Snapshot manifest supersedes must be an array" }</ID>
-    <ID>UseRequireNotNull:SnapshotFormat.kt:SnapshotCodec$require(version != null) { "Snapshot manifest version must be an integer" }</ID>
   </CurrentIssues>
 </SmellBaseline>
