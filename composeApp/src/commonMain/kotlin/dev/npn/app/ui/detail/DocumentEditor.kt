@@ -13,7 +13,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
@@ -21,7 +20,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -45,13 +43,6 @@ import no_papers_needed.composeapp.generated.resources.ux_review_next
 import no_papers_needed.composeapp.generated.resources.ux_save_changes
 import no_papers_needed.composeapp.generated.resources.ux_save_failed_summary
 import org.jetbrains.compose.resources.stringResource
-
-/**
- * True while this document cannot be written: a save is in flight, or the draft is not writable
- * yet (an unparseable date). Only controls that *trigger* a write read it — editing itself stays
- * live, so a save in progress never disables the field the user is typing in.
- */
-internal val LocalDocumentWriteBlocked = staticCompositionLocalOf { false }
 
 /**
  * One explicit save model for all editable document fields, in either responsive presentation.
@@ -95,16 +86,15 @@ internal fun DocumentEditor(
     val types = rememberUpdatedState(state.document.fieldDefs.associate { it.key to it.type })
     val actions = remember(writes, store, docId) { DraftedActions(writes, store, docId, persisted, types) }
     Column(modifier.imePadding().saveKeys { if (draft.dirty) store.save(docId) }) {
-        CompositionLocalProvider(LocalDocumentWriteBlocked provides (draft.saving || !draft.writable)) {
-            MetadataPanel(
-                state = state,
-                item = edited,
-                refused = draft.refused,
-                actions = actions,
-                previewTab = preview,
-                modifier = Modifier.fillMaxSize().weight(1f),
-            )
-        }
+        MetadataPanel(
+            state = state,
+            item = edited,
+            refused = draft.refused,
+            writeBlocked = draft.saving || !draft.writable,
+            actions = actions,
+            previewTab = preview,
+            modifier = Modifier.fillMaxSize().weight(1f),
+        )
         EditorSaveBar(
             draft = draft,
             onSave = { store.save(docId) },

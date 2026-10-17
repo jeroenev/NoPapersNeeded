@@ -46,13 +46,17 @@ private const val KEY_STEP = 0.05f
  * The page preview and the metadata tabs of [item], the document as its draft shows it: side by
  * side on a wide window, or the preview as the first tab on a compact one. The library's side panel
  * counts as compact (see [dev.npn.app.ui.library.DocPreviewPanel]). [refused] are the keys whose
- * draft value is an entry its editor refused, as typed.
+ * draft value is an entry its editor refused, as typed. [writeBlocked] holds while this document
+ * cannot be written: a save is in flight, or the draft is not writable yet (an unparseable date).
+ * Only controls that *trigger* a write follow it — editing itself stays live, so a save in progress
+ * never disables the field the user is typing in.
  */
 @Composable
 fun MetadataPanel(
     state: MetadataUiState,
     item: DocListItem,
     refused: Set<String>,
+    writeBlocked: Boolean,
     actions: MetadataActions,
     previewTab: @Composable (Modifier) -> Unit,
     modifier: Modifier = Modifier,
@@ -61,10 +65,20 @@ fun MetadataPanel(
         if (LocalWindowWidthClass.current.isWide) {
             DocumentPanes(
                 preview = previewTab,
-                details = { MetadataTabs(state, item, refused, actions, previewTab = null, modifier = it) },
+                details = {
+                    MetadataTabs(
+                        state,
+                        item,
+                        refused,
+                        writeBlocked,
+                        actions,
+                        previewTab = null,
+                        modifier = it,
+                    )
+                },
             )
         } else {
-            MetadataTabs(state, item, refused, actions, previewTab, Modifier.fillMaxSize())
+            MetadataTabs(state, item, refused, writeBlocked, actions, previewTab, Modifier.fillMaxSize())
         }
     }
 }

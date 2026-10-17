@@ -4,8 +4,6 @@
   <CurrentIssues>
     <ID>AbstractClassCanBeConcreteClass:MainDispatcherTest.kt:MainDispatcherTest$MainDispatcherTest</ID>
     <ID>AbstractClassCanBeConcreteClass:MessagesViewModel.kt:MessagesViewModel$MessagesViewModel</ID>
-    <ID>CompositionLocalAllowlist:DocumentDrafts.kt:internal val LocalDocumentDrafts = staticCompositionLocalOf&lt;DocumentDrafts&gt; { error("Document drafts not provided") }</ID>
-    <ID>CompositionLocalAllowlist:DocumentEditor.kt:/** * True while this document cannot be written: a save is in flight, or the draft is not writable * yet (an unparseable date). Only controls that *trigger* a write read it — editing itself stays * live, so a save in progress never disables the field the user is typing in. */ internal val LocalDocumentWriteBlocked = staticCompositionLocalOf { false }</ID>
     <ID>CompositionLocalAllowlist:LocalAppLocale.kt:LocalAppLocale$private val currentLocale = staticCompositionLocalOf { Locale.getDefault().toString() }</ID>
     <ID>CompositionLocalNaming:LocalAppLocale.kt:LocalAppLocale$private val currentLocale = staticCompositionLocalOf { Locale.getDefault().toString() }</ID>
     <ID>InjectDispatcher:DefaultAppEnvironment.kt:DefaultAppEnvironment$Default</ID>

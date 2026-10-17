@@ -104,6 +104,7 @@ internal fun MetadataTabs(
     state: MetadataUiState,
     item: DocListItem,
     refused: Set<String>,
+    writeBlocked: Boolean,
     actions: MetadataActions,
     previewTab: (@Composable (Modifier) -> Unit)?,
     modifier: Modifier = Modifier,
@@ -159,6 +160,7 @@ internal fun MetadataTabs(
                     state = state,
                     item = item,
                     refused = refused,
+                    writeBlocked = writeBlocked,
                     actions = actions,
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )
@@ -204,6 +206,7 @@ private fun DetailsTab(
     state: MetadataUiState,
     item: DocListItem,
     refused: Set<String>,
+    writeBlocked: Boolean,
     actions: MetadataActions,
     modifier: Modifier = Modifier,
 ) {
@@ -217,7 +220,12 @@ private fun DetailsTab(
                 .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        ReviewStatusSection(state.document.reviewMode, state.document.reviewed, actions::setReviewed)
+        ReviewStatusSection(
+            reviewMode = state.document.reviewMode,
+            reviewed = state.document.reviewed,
+            enabled = !writeBlocked,
+            onReviewedChange = actions::setReviewed,
+        )
         FieldsSection(
             doc = doc,
             refused = refused,
@@ -230,6 +238,7 @@ private fun DetailsTab(
             state = state.ai.metadata,
             labels = state.document.fieldDefs.associate { it.key to it.label },
             current = doc.fields,
+            acceptEnabled = !writeBlocked,
             actions = actions,
         )
 
@@ -279,6 +288,8 @@ private fun DetailsTab(
 private fun ReviewStatusSection(
     reviewMode: ReviewMode,
     reviewed: Boolean,
+    /** False while the document cannot be written; marking it reviewed writes. */
+    enabled: Boolean,
     onReviewedChange: (Boolean) -> Unit,
 ) {
     if (!reviewMode.reviewMarkerIsAuthoritative) return
@@ -289,7 +300,7 @@ private fun ReviewStatusSection(
     ) {
         ReviewedBadge(reviewed)
         // Writes straight through (it also commits the draft), so it follows the save bar's rules.
-        OutlinedButton(onClick = { onReviewedChange(!reviewed) }, enabled = !LocalDocumentWriteBlocked.current) {
+        OutlinedButton(onClick = { onReviewedChange(!reviewed) }, enabled = enabled) {
             Text(
                 stringResource(
                     if (reviewed) Res.string.detail_mark_needs_review else Res.string.detail_mark_reviewed,
@@ -371,6 +382,8 @@ private fun AiMetadataSuggestions(
     state: AiMetadataState,
     labels: Map<String, String>,
     current: Map<String, String>,
+    /** False while the document cannot be written; accepting a suggestion writes. */
+    acceptEnabled: Boolean,
     actions: DocumentWrites,
 ) {
     if (!available) return
@@ -387,6 +400,7 @@ private fun AiMetadataSuggestions(
                 value = value,
                 replaces = current[key]?.takeIf { it.isNotBlank() && it != value },
                 key = key,
+                acceptEnabled = acceptEnabled,
                 onAccept = { actions.acceptAiMetadata(it) },
                 onDismiss = actions::dismissAiMetadata,
             )
@@ -430,6 +444,7 @@ private fun AiMetadataSuggestionRow(
     value: String,
     replaces: String?,
     key: String,
+    acceptEnabled: Boolean,
     onAccept: (String) -> Unit,
     onDismiss: (String) -> Unit,
 ) {
@@ -439,7 +454,7 @@ private fun AiMetadataSuggestionRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SuggestedFieldValue(label = label, value = value, replaces = replaces, modifier = Modifier.weight(1f))
-        IconButton(onClick = { onAccept(key) }, enabled = !LocalDocumentWriteBlocked.current) {
+        IconButton(onClick = { onAccept(key) }, enabled = acceptEnabled) {
             Icon(
                 Icons.Filled.Check,
                 contentDescription = stringResource(Res.string.detail_use_suggestion, label),
