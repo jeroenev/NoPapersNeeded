@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 
 /**
  * Koog-backed implementation of the AI facets ([AiChat], [AiSuggest]) and of the vision OCR engine
@@ -45,6 +47,13 @@ class AiFacadeImpl(
     private val sessions = ChatSessions(chats, ownWrite, chatHistoryStore, clock)
 
     private val runtimes = AiRuntimeCache()
+
+    /**
+     * The one ceiling on [suggestEdits] calls in flight, whichever path asks: interactive and
+     * queued edit runs, automatic enrichment and single-document requests together never hold
+     * more than [MAX_CONCURRENT_SUGGESTIONS] requests open at the endpoint.
+     */
+    private val suggesting = Semaphore(MAX_CONCURRENT_SUGGESTIONS)
 
     override fun ask(
         sessionId: String,
@@ -118,7 +127,7 @@ class AiFacadeImpl(
                 )
                 user(AiPrompts.editUser(doc.fileName, currentFields, fields, request, currentTags, text))
             }
-        val response = runtime.executor.execute(thePrompt, runtime.model)
+        val response = suggesting.withPermit { runtime.executor.execute(thePrompt, runtime.model) }
         return AiText.parseEditSuggestion(
             response.textContent(),
             currentFields = currentFields,
@@ -216,8 +225,15 @@ class AiFacadeImpl(
      */
     private fun promptContext(config: AiConfig): AiPromptContext = AiPromptContext.of(config.appLanguage, clock)
 
-    private companion object {
-        const val MAX_AGENT_ITERATIONS = 15
+    companion object {
+        /**
+         * Edit suggestions asked of the endpoint at once, across every path that asks. The calls are
+         * mostly IO-bound, so overlapping them is a large speedup over asking one at a time; the
+         * ceiling bounds the load on the endpoint.
+         */
+        const val MAX_CONCURRENT_SUGGESTIONS = 12
+
+        private const val MAX_AGENT_ITERATIONS = 15
 
         /**
          * Calls one page may cost per attempt at its document: the call plus a single retry (see
@@ -231,6 +247,6 @@ class AiFacadeImpl(
          * never paid for twice; anything more here would turn a systematically failing endpoint
          * into a bill instead of an error.
          */
-        const val PAGE_ATTEMPTS = 2
+        private const val PAGE_ATTEMPTS = 2
     }
 }

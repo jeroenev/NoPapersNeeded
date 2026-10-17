@@ -2,6 +2,7 @@ package dev.npn.core.app.aiedit
 
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiEditSuggestion
+import dev.npn.core.ai.AiFacadeImpl
 import dev.npn.core.ai.AiSuggest
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.async
@@ -13,9 +14,12 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 
 /**
- * One [AiSuggest.suggestEdits] call per document, at most [CONCURRENCY] at once. Shared by the
- * interactive [AiEditRun] and the queued [AiEditQueue], so a run in the background never asks the
- * endpoint harder than one the user watches.
+ * One [AiSuggest.suggestEdits] call per document, at most [CONCURRENCY] of one run's documents at
+ * once. Used by the interactive [AiEditRun] and the queued [AiEditQueue], so a run in the
+ * background never asks the endpoint harder than one the user watches. This bounds one run's
+ * fan-out (and the answers it holds while [suggest]'s `then` handles them); the ceiling every
+ * asking path shares, runs and the background drains together, is the AI facade's
+ * ([AiFacadeImpl.MAX_CONCURRENT_SUGGESTIONS]).
  */
 internal class SuggestionRunner(
     private val ai: AiSuggest,
@@ -49,10 +53,7 @@ internal class SuggestionRunner(
     }
 
     companion object {
-        /**
-         * Documents asked about at once. The calls are mostly IO-bound, so overlapping them is a
-         * large speedup over asking one at a time; the ceiling bounds the load on the endpoint.
-         */
-        const val CONCURRENCY = 12
+        /** One run's documents asked about at once: as many as the endpoint's shared ceiling. */
+        const val CONCURRENCY = AiFacadeImpl.MAX_CONCURRENT_SUGGESTIONS
     }
 }
