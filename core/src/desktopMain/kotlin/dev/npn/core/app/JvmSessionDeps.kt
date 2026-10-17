@@ -8,6 +8,7 @@ import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.ocr.TesseractCliEngine
+import dev.npn.core.pdf.DirThumbnailStore
 import dev.npn.core.pdf.PdfBoxEngine
 import dev.npn.core.pdf.ThumbnailStore
 import dev.npn.core.pdf.renderParallelism

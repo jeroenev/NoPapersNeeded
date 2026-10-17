@@ -1,6 +1,5 @@
-package dev.npn.core.app
+package dev.npn.core.pdf
 
-import dev.npn.core.pdf.ThumbnailStore
 import dev.npn.core.settings.AppDirs
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers

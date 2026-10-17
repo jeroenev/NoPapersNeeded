@@ -9,6 +9,7 @@ import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.SafLibraryFileSystem
 import dev.npn.core.ocr.MlKitOcrEngine
+import dev.npn.core.pdf.DirThumbnailStore
 import dev.npn.core.pdf.PdfBoxAndroidEngine
 import dev.npn.core.pdf.renderParallelism
 import dev.npn.core.settings.AppDirs
