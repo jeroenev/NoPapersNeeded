@@ -8,6 +8,7 @@ import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.index.DeviceIdentity
 import dev.npn.core.index.MutableClock
+import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
 import dev.npn.core.ocr.OcrEngine
@@ -127,6 +128,8 @@ class AppSessionRig private constructor(
             deviceTrashRetentionDays: Int? = null,
             legacyLibrarySettings: suspend () -> LegacyLibrarySettings = { LegacyLibrarySettings() },
             aiConfig: suspend () -> AiConfig = { AiConfig.DISABLED },
+            /** Whether the session records a deleted document's return ([JournalCoordinator]'s gate). */
+            writeUndelete: Boolean = JournalOp.DocUndelete.WRITTEN,
             /** The PDF engine the session uses, over the real one. */
             pdfEngine: (PdfEngine) -> PdfEngine = { it },
             /** The library filesystem the session sees, over the real one the rig's [fs] reads directly. */
@@ -154,7 +157,8 @@ class AppSessionRig private constructor(
                     thumbnailStore = FakeThumbStore(File(dbDir, "thumbs")),
                     log = log,
                 )
-            val session = LibrarySessionImpl.openSession(base.over(files(base.fs), pdfEngine(base.pdfEngine)))
+            val session =
+                LibrarySessionImpl.openSession(base.over(files(base.fs), pdfEngine(base.pdfEngine)), writeUndelete)
             storagePath?.let {
                 session.storagePath.setStoragePathTemplate(it.template)
                 session.storagePath.setStoragePathEnabled(it.enabled)
@@ -185,6 +189,8 @@ class AppSessionRig private constructor(
         legacyLibrarySettings: suspend () -> LegacyLibrarySettings = { LegacyLibrarySettings() },
         /** How long this device kept trashed documents, if it ever stored a retention. */
         deviceTrashRetentionDays: Int? = null,
+        /** Whether the session records a deleted document's return ([JournalCoordinator]'s gate). */
+        writeUndelete: Boolean = JournalOp.DocUndelete.WRITTEN,
     ): Pair<LibrarySessionImpl, NpnDatabase> {
         val deps =
             jvmSessionDeps(
@@ -206,7 +212,7 @@ class AppSessionRig private constructor(
         // Force a distinct deviceId by seeding the kv before openSession.
         deps.deviceDb.keyValueDao().put(DeviceIdentity.KEY_DEVICE_ID, "device-two")
         otherDeviceDbs += deps.deviceDb
-        return LibrarySessionImpl.openSession(deps) to deps.db
+        return LibrarySessionImpl.openSession(deps, writeUndelete) to deps.db
     }
 }
 

@@ -19,6 +19,7 @@ import dev.npn.core.index.ScanReport
 import dev.npn.core.index.SupersededImportException
 import dev.npn.core.index.WriteSettle
 import dev.npn.core.journal.EpochClock
+import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.pdf.PdfEngine
@@ -377,12 +378,19 @@ class LibrarySessionImpl private constructor(
          * publishes through the same primitive before it writes anything ([DeviceIdentity]: this
          * installation's marker, or a throwaway object once that is there), so each one finds out.
          */
-        suspend fun openSession(deps: SessionDeps): LibrarySessionImpl {
+        suspend fun openSession(deps: SessionDeps): LibrarySessionImpl =
+            openSession(deps, JournalOp.DocUndelete.WRITTEN)
+
+        /** [openSession], recording a deleted document's return as a `doc-undelete` when [writeUndelete]. */
+        internal suspend fun openSession(
+            deps: SessionDeps,
+            writeUndelete: Boolean,
+        ): LibrarySessionImpl {
             val lifetime = SessionLifetime(deps.scope)
             // Before anything reads the device id: an index from before device.db holds it.
             moveDeviceState(deps)
             val indexer = Indexer(deps.fs, deps.db, deps.clock, deps.log)
-            val coordinator = createCoordinator(deps, indexer)
+            val coordinator = createCoordinator(deps, indexer, writeUndelete)
             val deviceId = DeviceIdentity(deps.deviceDb.keyValueDao(), deps.fs, deps.installationId, deps.log).resolve()
             foldJournal(deps, coordinator)
 

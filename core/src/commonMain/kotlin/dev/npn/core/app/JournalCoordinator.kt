@@ -143,6 +143,12 @@ class JournalCoordinator internal constructor(
     private val clock: EpochClock = SystemEpochClock,
     /** Where a rescan's failure to record a restore goes; the rescan itself carries on. */
     private val log: NpnLog = NpnLog.None,
+    /**
+     * Whether a deleted document's return is recorded as a `doc-undelete`. Off in this build
+     * ([JournalOp.DocUndelete.WRITTEN]): such a return then writes nothing, and only a rescan that
+     * finds the file shows the document, for that scan. Tests of the writing path turn it on.
+     */
+    private val writeUndelete: Boolean = JournalOp.DocUndelete.WRITTEN,
 ) {
     private val mutex = Mutex()
     private var writeBlockReason: String? = null
@@ -483,20 +489,32 @@ class JournalCoordinator internal constructor(
      */
     suspend fun <T> serialized(block: suspend (ImportJournal) -> T): T = locked { block(lockedJournal) }
 
+    /**
+     * Deleted documents an import brought back in this session without a record of it, as no
+     * `doc-undelete` is written ([writeUndelete] off), until a lifecycle change of theirs. A delete
+     * for good still removing the bytes ([ImportJournal.isDeleted]) leaves them be: the journal
+     * still has them deleted, but the import's file is the user's. Read and written under [mutex].
+     */
+    private val returnedUnrecorded = HashSet<String>()
+
     /** The live fold, for a [serialized] block, which holds the lock it is read and written under. */
     private val lockedJournal =
         object : ImportJournal {
             override suspend fun successorOf(docId: String): String = foldedState().resolveDocId(docId)
 
-            override suspend fun isDeleted(docId: String): Boolean = foldedState().isDeleted(docId)
+            override suspend fun isDeleted(docId: String): Boolean =
+                docId !in returnedUnrecorded && foldedState().isDeleted(docId)
 
             override suspend fun restoreReturned(
                 docId: String,
                 relPath: String,
             ): Boolean {
                 val current = foldedState()
-                val ops = current.restoreOps(docId, relPath)
-                if (ops.isEmpty()) return false
+                val ops = current.restoreOps(docId, relPath, writeUndelete)
+                if (ops.isEmpty()) {
+                    if (current.isDeleted(docId)) returnedUnrecorded += docId
+                    return false
+                }
                 ensureWritable()
                 withContext(NonCancellable) { projectStanding(current, writeTransaction(ops)) }
                 return true
@@ -557,6 +575,7 @@ class JournalCoordinator internal constructor(
                         log.runLogged("Moving the file of $id back") { change.undoMove() }
                     }
                 }
+                returnedUnrecorded -= id
                 projectStanding(current, checkNotNull(published), preserveLifecycleDocs = docs)
                 // The change stands: a failure to read what it left is no failure of the change.
                 log.runLogged("Reading what the lifecycle change of $id left") { change.standing() }
@@ -663,7 +682,7 @@ class JournalCoordinator internal constructor(
     ) {
         val settled = clock.nowMillis() - RESTORE_SETTLE_MS
         val returned = resurrected.filter { it.hiddenAtMillis <= settled }
-        val ops = returned.flatMap { state.restoreOps(it.docId, it.relPath) }
+        val ops = returned.flatMap { state.restoreOps(it.docId, it.relPath, writeUndelete) }
         if (ops.isEmpty()) return
         log.runLogged("Recording the return of ${returned.joinToString { it.relPath }}") {
             withContext(NonCancellable) { recordProjected(state, ops) }

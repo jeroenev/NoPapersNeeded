@@ -25,26 +25,34 @@ import kotlin.test.Test
 
 /**
  * A deleted or trashed document whose file comes back: the decision to show it again is recorded
- * in the journal, so the next fold, after any edit, does not hide it again.
+ * in the journal, so the next fold, after any edit, does not hide it again. A deleted document's
+ * return is a `doc-undelete`, which this build reads but does not write
+ * ([JournalOp.DocUndelete.WRITTEN]): the tests of that record turn the gate on, and the others pin
+ * what the default writes.
  */
 class DocumentRestoreTest {
     private lateinit var rig: AppSessionRig
 
-    /** Run [block] over a fresh session, closed before the test's scope ends. */
-    private fun withRig(block: suspend () -> Unit) =
-        runTest {
-            rig = AppSessionRig.create(backgroundScope)
-            try {
-                block()
-            } finally {
-                rig.close()
-            }
+    /**
+     * Run [block] over a fresh session, closed before the test's scope ends, which records a deleted
+     * document's return when [writeUndelete].
+     */
+    private fun withRig(
+        writeUndelete: Boolean = JournalOp.DocUndelete.WRITTEN,
+        block: suspend () -> Unit,
+    ) = runTest {
+        rig = AppSessionRig.create(backgroundScope, writeUndelete = writeUndelete)
+        try {
+            block()
+        } finally {
+            rig.close()
         }
+    }
 
     /** Neither deleted nor trashed once imported again, and still so after an edit and a rescan. */
     @Test
     fun aReImportedDeletedDocumentStaysVisibleAfterAnEdit() =
-        withRig {
+        withRig(writeUndelete = true) {
             val bytes = PdfFixtures.embeddedTextPdf("alpha")
             rig.writePdf("a.pdf", bytes)
             rig.session.rescan()
@@ -70,7 +78,7 @@ class DocumentRestoreTest {
     /** Delete and restore are last-writer-wins: a delete after the restore hides it again. */
     @Test
     fun aDeleteNewerThanTheRestoreWins() =
-        withRig {
+        withRig(writeUndelete = true) {
             val bytes = PdfFixtures.embeddedTextPdf("alpha")
             rig.writePdf("a.pdf", bytes)
             rig.session.rescan()
@@ -97,7 +105,7 @@ class DocumentRestoreTest {
      */
     @Test
     fun aFileBroughtBackLongAfterItsDeleteIsRestoredForGood() =
-        withRig {
+        withRig(writeUndelete = true) {
             val bytes = PdfFixtures.embeddedTextPdf("alpha")
             rig.writePdf("a.pdf", bytes)
             rig.session.rescan()
@@ -168,6 +176,78 @@ class DocumentRestoreTest {
         }
 
     /**
+     * By default an import of a deleted document's bytes records nothing, as builds before
+     * `doc-undelete` did: the import stands, and the document shows until a fold of the journal
+     * hides it again, and again at each rescan that finds its file.
+     */
+    @Test
+    fun aReImportedDeletedDocumentWritesNoUndeleteByDefault() =
+        withRig {
+            val bytes = PdfFixtures.embeddedTextPdf("alpha")
+            rig.writePdf("a.pdf", bytes)
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+            deleteForGood(id)
+            val objects = rig.journalObjectCount()
+
+            val imported =
+                rig.session.ingest
+                    .importPdfBytes(bytes, "a.pdf")
+                    .shouldBeInstanceOf<ImportOutcome.Imported>()
+
+            rig.journalObjectCount() shouldBe objects
+            rig.exists(imported.relPath).shouldBeTrue()
+            assertVisible(id)
+            rig.session.rescan()
+            assertVisible(id)
+            journalOps().filter { it.contains(JournalOp.DocUndelete.WIRE) }.shouldBeEmpty()
+        }
+
+    /** Nor does a rescan finding a deleted document's file long after the delete, by default. */
+    @Test
+    fun aFileBroughtBackLongAfterItsDeleteWritesNoUndeleteByDefault() =
+        withRig {
+            val bytes = PdfFixtures.embeddedTextPdf("alpha")
+            rig.writePdf("a.pdf", bytes)
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+            deleteForGood(id)
+            val objects = rig.journalObjectCount()
+
+            rig.clock.advance(2 * DAY)
+            rig.writePdf("a.pdf", bytes)
+            rig.session.rescan()
+
+            rig.journalObjectCount() shouldBe objects
+            journalOps().filter { it.contains(JournalOp.DocUndelete.WIRE) }.shouldBeEmpty()
+            assertVisible(id)
+        }
+
+    /** A `doc-undelete` another device wrote still brings the document back here, for good. */
+    @Test
+    fun anUndeleteFromAnotherDeviceIsFoldedByDefault() =
+        withRig {
+            val bytes = PdfFixtures.embeddedTextPdf("alpha")
+            rig.writePdf("a.pdf", bytes)
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+            deleteForGood(id)
+
+            rig.clock.advance(2 * DAY)
+            rig.writePdf("a.pdf", bytes)
+            ContentAddressedJournalWriter(rig.fs, "other-installation", HlcWatermarkAllocator(rig.clock))
+                .commit(listOf(PendingOp.docUndelete(id), PendingOp.propSet(id, SystemProperty.STORAGE_PATH, "a.pdf")))
+            rig.session.rescan()
+            rig.session.meta.setField(id, FieldKeys.TITLE, "Back again")
+
+            assertVisible(id)
+            rig.db
+                .documentDao()
+                .getByDocId(id)
+                ?.relPath shouldBe "a.pdf"
+        }
+
+    /**
      * Two scans imported under one name: the second lands where the trashed first one was. The
      * file there is the second scan, which says nothing about the first.
      */
@@ -199,7 +279,7 @@ class DocumentRestoreTest {
     /** Nor does it, long after the first was deleted for good, write the first one's return. */
     @Test
     fun aScanImportedLongAfterADeleteWhereTheDeletedScanWasLeavesItDeleted() =
-        withRig {
+        withRig(writeUndelete = true) {
             val first = importScan("first")
             rig.session.meta.setField(first, FieldKeys.TITLE, "First scan")
             deleteForGood(first)

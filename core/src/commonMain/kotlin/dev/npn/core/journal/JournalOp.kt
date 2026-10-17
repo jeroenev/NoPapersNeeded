@@ -136,11 +136,21 @@ sealed class JournalOp {
      * re-import, or a sync tool restoring it): it wins over an older [DocDelete] and, like
      * [DocRestore], over an older [DocTrash]. Builds that predate it refuse an object holding it,
      * as any [Unknown] op.
+     *
+     * This build reads and folds it but does not write it ([WRITTEN] is false): the builds in use
+     * do not know it yet. Until a later build turns [WRITTEN] on, a deleted document whose bytes
+     * come back is shown again by the rescan that finds them, for that scan only.
      */
     data object DocUndelete : JournalOp() {
         override val wire get() = WIRE
 
         const val WIRE = "doc-undelete"
+
+        /**
+         * Whether this build writes the op. Turn it on in a build released after every device runs
+         * one that reads it; [dev.npn.core.app.JournalCoordinator] takes its default from here.
+         */
+        const val WRITTEN = false
     }
 
     /** {"newDoc": sha256}; doc = old id. */

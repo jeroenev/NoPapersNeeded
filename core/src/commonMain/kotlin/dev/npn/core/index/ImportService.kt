@@ -72,15 +72,20 @@ interface ImportJournal {
 
     /**
      * Whether the journal has [docId] deleted: its latest delete is newer than any undelete. An
-     * import that brings it back writes one ([restoreReturned]); a rescan showing its file again
-     * soon after the delete writes none, and leaves it deleted.
+     * import that brings it back writes one ([restoreReturned]) once this build writes
+     * `doc-undelete` ([dev.npn.core.journal.JournalOp.DocUndelete.WRITTEN]), and until then none,
+     * so false too for a document an import brought back in this session unrecorded, until its next
+     * lifecycle change; a rescan showing its file again soon after the delete writes none, and
+     * leaves it deleted.
      */
     suspend fun isDeleted(docId: String): Boolean
 
     /**
      * Record that [docId]'s bytes are in the library again, at [relPath], when the journal still has
-     * it deleted or trashed. Writes nothing, and needs no write access, for a document nothing hides.
-     * Returns whether it wrote the return; throws only when it did not.
+     * it deleted or trashed. Writes nothing, and needs no write access, for a document nothing hides,
+     * nor for a deleted one while this build writes no `doc-undelete`: the import then stands as
+     * builds before that op left it, shown until a fold of the journal hides it again. Returns
+     * whether it wrote the return; throws only when it did not.
      */
     suspend fun restoreReturned(
         docId: String,
@@ -141,7 +146,8 @@ interface ImportJournal {
  * import's).
  *
  * Bytes the journal had deleted or trashed are recorded as back ([ImportJournal.restoreReturned])
- * in that same step; without that record, the next fold would hide the document again. One step,
+ * in that same step, deleted ones only once this build writes `doc-undelete`; without that record,
+ * the next fold would hide the document again. One step,
  * so no trash, rescan or other lifecycle change lands between the row turning live and the journal
  * saying so, and a record that fails takes the import back before the lock is let go. Once a
  * document is back, whatever the trash still holds of it is deleted: the trash keeps an entry for

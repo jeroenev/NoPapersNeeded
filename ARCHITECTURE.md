@@ -347,7 +347,16 @@ live in `buildSrc`. Hot Reload via `mise hot`.
   hash must be the document's. Another file under the same name (a second `scan.pdf`) or a file
   still being written brings nothing back.
   `doc-undelete` is newer than the other lifecycle ops: a build from before it refuses an object
-  holding one (see Compatibility), so it stops opening the library once a return is recorded.
+  holding one (see Compatibility), so it would stop opening the library once a return is recorded.
+  This build therefore reads and folds it but does not write it: `JournalOp.DocUndelete.WRITTEN`
+  is false, and `JournalCoordinator` takes its `writeUndelete` default from it. Until then a
+  deleted document's return records nothing, as before the op existed: an import of its bytes
+  stands and shows it until a fold of the journal hides it again, and a rescan that finds its file
+  shows it for that scan only, however long ago the delete was. A delete for good still removing
+  the bytes leaves the file of such an import in place: the coordinator remembers, for the session,
+  which deleted documents an import brought back unrecorded. A trashed document's return still
+  writes `doc-restore`. A later build, released once every device runs one that reads the op, turns
+  `WRITTEN` on and nothing else.
 
 ## Where to look for common tasks
 

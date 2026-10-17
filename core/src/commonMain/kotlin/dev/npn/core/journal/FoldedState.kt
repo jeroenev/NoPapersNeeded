@@ -473,15 +473,18 @@ class FoldedState {
     /**
      * The ops that bring [doc] back once its file is in the library again at [relPath]: a
      * `doc-undelete` when it is deleted, else a `doc-restore` when it is trashed, each with where
-     * the file now is, as a restore from the trash records it. Empty when nothing hides it.
+     * the file now is, as a restore from the trash records it. Empty when nothing hides it, and for
+     * a deleted document unless [writeUndelete]: builds before this one refuse a `doc-undelete`, so
+     * it is written only once [JournalOp.DocUndelete.WRITTEN] is on.
      */
     fun restoreOps(
         doc: String,
         relPath: String,
+        writeUndelete: Boolean,
     ): List<PendingOp> {
         val restore =
             when {
-                isDeleted(doc) -> PendingOp.docUndelete(doc)
+                isDeleted(doc) -> if (writeUndelete) PendingOp.docUndelete(doc) else return emptyList()
                 isTrashed(doc) -> PendingOp.docRestore(doc)
                 else -> return emptyList()
             }

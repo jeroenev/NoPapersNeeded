@@ -80,6 +80,7 @@ private suspend fun createObjectWriter(deps: SessionDeps): ContentAddressedJourn
 internal suspend fun createCoordinator(
     deps: SessionDeps,
     indexer: Indexer,
+    writeUndelete: Boolean,
 ): JournalCoordinator {
     val snapshots = SnapshotSupport(deps.fs, deps.db.metadataProjectionDao())
     return JournalCoordinator(
@@ -90,6 +91,7 @@ internal suspend fun createCoordinator(
         snapshots = snapshots,
         clock = deps.clock,
         log = deps.log,
+        writeUndelete = writeUndelete,
     )
 }
 

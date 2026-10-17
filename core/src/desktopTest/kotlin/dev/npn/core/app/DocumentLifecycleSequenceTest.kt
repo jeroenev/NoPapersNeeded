@@ -1,6 +1,7 @@
 package dev.npn.core.app
 
 import dev.npn.core.fs.sha256Bytes
+import dev.npn.core.journal.JournalOp
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.assertions.withClue
@@ -14,14 +15,18 @@ import java.io.File
 import kotlin.random.Random
 import kotlin.test.Test
 
-/** Exercise combinations of lifecycle operations against a model independent of the journal fold. */
+/**
+ * Exercise combinations of lifecycle operations against a model independent of the journal fold.
+ * The model has an import bring a deleted document back for good, on every device, which takes a
+ * `doc-undelete`: both sessions write it, as a build with [JournalOp.DocUndelete.WRITTEN] on will.
+ */
 class DocumentLifecycleSequenceTest {
     @Test
     fun lifecycleSequencesPreserveIdentityAndMetadataAcrossDevicesAndIndexRebuilds() =
         runTest {
             for (seed in SEEDS) {
-                val rig = AppSessionRig.create(backgroundScope)
-                val (peer, peerDb) = rig.secondSession(backgroundScope)
+                val rig = AppSessionRig.create(backgroundScope, writeUndelete = true)
+                val (peer, peerDb) = rig.secondSession(backgroundScope, writeUndelete = true)
                 try {
                     val expected =
                         List(DOCUMENTS) { number ->
