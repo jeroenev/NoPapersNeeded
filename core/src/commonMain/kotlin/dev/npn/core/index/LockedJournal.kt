@@ -2,7 +2,7 @@ package dev.npn.core.index
 
 /**
  * The journal as a step under the writer lock reads and writes it
- * ([dev.npn.core.app.JournalCoordinator.serialized]): an import's ([ImportService]), a delete for
+ * ([JournalCoordinator.serialized]): an import's ([ImportService]), a delete for
  * good's removal of the bytes and the trash purge's deletes. Its calls take no lock of their own, so
  * they are for that step alone.
  */

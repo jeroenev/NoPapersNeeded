@@ -18,7 +18,7 @@ data class PublishedTransaction(
  * on this device or a clone of it, can ever produce the same event identity.
  *
  * `internal` to the `core` module so the single write path is enforced at the type level:
- * [dev.npn.core.app.JournalCoordinator] is the only sanctioned writer, so its mutex +
+ * [dev.npn.core.index.JournalCoordinator] is the only sanctioned writer, so its mutex +
  * [FoldedState] refresh + DB projection cannot be bypassed by an outside caller grabbing [commit]
  * directly. `core`'s test source sets remain in-module and may construct it.
  */

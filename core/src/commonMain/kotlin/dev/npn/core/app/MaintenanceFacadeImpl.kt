@@ -2,6 +2,7 @@ package dev.npn.core.app
 
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.index.ImportResult
+import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.index.MaintenanceService
 import dev.npn.core.index.ScanReport
 import dev.npn.core.index.SplitService

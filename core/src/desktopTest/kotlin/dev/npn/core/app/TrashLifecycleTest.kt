@@ -9,6 +9,7 @@ import dev.npn.core.fs.TrashOps
 import dev.npn.core.fs.VerifiedPublicationFailedException
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.index.IndexRig
+import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.index.MetadataAccumulator
 import dev.npn.core.index.MutableClock
 import dev.npn.core.index.WatchedFileSystem

@@ -52,7 +52,7 @@ import kotlinx.coroutines.sync.withLock
  * Steps 3 to 6 write in one database transaction, as every fold does; step 7 is filesystem work
  * and runs after it commits (see [projection]).
  *
- * Not safe for concurrent calls: [dev.npn.core.app.JournalCoordinator] makes every call under its
+ * Not safe for concurrent calls: [JournalCoordinator] makes every call under its
  * single-writer lock, and nothing else calls in.
  */
 @Suppress("LargeClass")

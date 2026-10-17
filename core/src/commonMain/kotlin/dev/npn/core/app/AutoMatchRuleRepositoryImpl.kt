@@ -3,6 +3,7 @@ package dev.npn.core.app
 import dev.npn.core.db.AutoMatchRuleDao
 import dev.npn.core.db.toEntity
 import dev.npn.core.db.toRule
+import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.rules.AutoMatchRule
 import dev.npn.core.rules.AutoMatchRuleJson

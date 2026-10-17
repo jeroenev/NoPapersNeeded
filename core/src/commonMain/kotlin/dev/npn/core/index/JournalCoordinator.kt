@@ -1,13 +1,6 @@
-package dev.npn.core.app
+package dev.npn.core.index
 
 import dev.npn.core.db.DocumentEntity
-import dev.npn.core.index.Indexer
-import dev.npn.core.index.LockedJournal
-import dev.npn.core.index.MetadataAccumulator
-import dev.npn.core.index.OpenReconciliation
-import dev.npn.core.index.Resurrected
-import dev.npn.core.index.ScanReport
-import dev.npn.core.index.SnapshotSupport
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.FoldedState
@@ -122,7 +115,7 @@ internal class Compaction(
  *
  * Every transaction is published as one storage-v2 object. There is no other format to fall back
  * to: a filesystem that cannot publish without replacement fails the write, and the session refuses
- * to open such a library in the first place (see [LibrarySessionImpl.openSession]). Legacy v1
+ * to open such a library in the first place (see [dev.npn.core.app.LibrarySessionImpl.openSession]). Legacy v1
  * segments are still read and folded.
  *
  * Normal commits apply their frozen events directly to the persisted accumulator and bounded DB

@@ -91,7 +91,7 @@ sealed class JournalOp {
      * the events it carries from its own index. Such a re-encoded copy is the same event, and the
      * index keeps the copy with the flag ([EventCopies]). A label edit or reorder there is a newer
      * definition without it; for a seeded field, this build's next open writes it back
-     * ([dev.npn.core.app.JournalCoordinator.restoreSeededPerDocument]).
+     * ([dev.npn.core.index.JournalCoordinator.restoreSeededPerDocument]).
      */
     data class FieldDefSet(
         val key: String,
@@ -150,7 +150,7 @@ sealed class JournalOp {
 
         /**
          * Whether this build writes the op. Turn it on in a build released after every device runs
-         * one that reads it; [dev.npn.core.app.JournalCoordinator] takes its default from here.
+         * one that reads it; [dev.npn.core.index.JournalCoordinator] takes its default from here.
          */
         const val WRITTEN = false
     }

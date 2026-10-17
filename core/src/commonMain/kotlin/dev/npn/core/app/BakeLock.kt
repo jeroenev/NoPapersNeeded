@@ -1,5 +1,6 @@
 package dev.npn.core.app
 
+import dev.npn.core.index.JournalCoordinator
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 

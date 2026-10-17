@@ -2,6 +2,7 @@ package dev.npn.core.app
 
 import dev.npn.core.db.AiEnrichQueueDao
 import dev.npn.core.db.AiEnrichedEntity
+import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.ocr.OcrPipeline
 import dev.npn.core.util.NpnLog

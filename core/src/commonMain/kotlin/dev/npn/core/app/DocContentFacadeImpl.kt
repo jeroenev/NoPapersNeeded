@@ -4,6 +4,7 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.isLive
 import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.RenderGate
 import dev.npn.core.pdf.ThumbnailService

@@ -9,9 +9,11 @@ import dev.npn.core.db.defs
 import dev.npn.core.db.fieldTypes
 import dev.npn.core.fs.TrashOps
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
+import dev.npn.core.index.Compaction
 import dev.npn.core.index.DeviceIdentity
 import dev.npn.core.index.ImportService
 import dev.npn.core.index.Indexer
+import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.index.MaintenanceService
 import dev.npn.core.index.MetadataAccumulator
 import dev.npn.core.index.ScanReport

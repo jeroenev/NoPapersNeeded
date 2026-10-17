@@ -1,6 +1,5 @@
 package dev.npn.core.index
 
-import dev.npn.core.app.JournalCoordinator
 import dev.npn.core.db.ProjectionStatus
 import dev.npn.core.db.TempIndexDb
 import dev.npn.core.fs.ExternalSource

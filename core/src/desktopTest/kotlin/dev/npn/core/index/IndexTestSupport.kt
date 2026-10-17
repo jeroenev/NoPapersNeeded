@@ -1,6 +1,5 @@
 package dev.npn.core.index
 
-import dev.npn.core.app.JournalCoordinator
 import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.DocumentEntity
@@ -14,7 +13,6 @@ import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.PathExternalIo
-import dev.npn.core.index.ScanReport
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.HlcWatermarkAllocator

@@ -1,5 +1,6 @@
 package dev.npn.core.app
 
+import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.rules.AutoMatchRuleJson
 import kotlinx.coroutines.flow.Flow

@@ -7,6 +7,7 @@ import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.index.DeviceIdentity
+import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.index.MutableClock
 import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.JournalPath

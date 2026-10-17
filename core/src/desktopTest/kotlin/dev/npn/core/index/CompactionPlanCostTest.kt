@@ -1,7 +1,5 @@
 package dev.npn.core.index
 
-import dev.npn.core.app.Compaction
-import dev.npn.core.app.JournalCoordinator
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.ProjectionStatus
 import dev.npn.core.db.SourceStatus

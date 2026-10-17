@@ -21,7 +21,7 @@ import dev.npn.core.util.runCatchingCancellable
 /**
  * Compaction-side bookkeeping over the metadata accumulator's tables: recording a locally-published
  * snapshot, gathering compaction candidates from applied sources, and deleting superseded files.
- * [dev.npn.core.app.JournalCoordinator.compact] and [MetadataAccumulator]'s reconcile share one.
+ * [JournalCoordinator.compact] and [MetadataAccumulator]'s reconcile share one.
  */
 class SnapshotSupport(
     private val fs: LibraryFileSystem,

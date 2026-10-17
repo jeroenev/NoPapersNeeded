@@ -1,6 +1,7 @@
 package dev.npn.core.app
 
 import dev.npn.core.db.DocumentDao
+import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.model.SystemProperty

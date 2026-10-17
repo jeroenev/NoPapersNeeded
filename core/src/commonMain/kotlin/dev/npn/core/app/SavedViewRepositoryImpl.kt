@@ -2,6 +2,7 @@ package dev.npn.core.app
 
 import dev.npn.core.db.LegacyIndexTables
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.util.NpnJson
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged

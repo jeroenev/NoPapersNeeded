@@ -4,6 +4,7 @@ import dev.npn.core.db.FieldKeyCount
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.defs
 import dev.npn.core.db.toFieldDef
+import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.FieldDef

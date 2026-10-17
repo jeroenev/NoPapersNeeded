@@ -453,7 +453,7 @@ class FoldedState {
      *
      * This is the ONLY way to construct a `tag-remove` op ([PendingOp.tagRemove] is `internal`),
      * so a correct removal can only be built against a live [FoldedState] read under the
-     * [dev.npn.core.app.JournalCoordinator] mutex (via `commitBuilt`). That makes a removal against
+     * [dev.npn.core.index.JournalCoordinator] mutex (via `commitBuilt`). That makes a removal against
      * stale or fabricated dots unexpressible: a caller with no live state cannot mint one.
      */
     fun tagRemovalOps(

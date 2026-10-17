@@ -23,7 +23,7 @@ import kotlinx.serialization.json.jsonObject
  *
  * Rules belong to the library: the list is one synced journal setting ([AutoMatchRuleJson]),
  * cached in Room, so every device matches with the same rules and the same field keys. Their
- * actions are applied as ordinary journal ops via [dev.npn.core.app.JournalCoordinator].
+ * actions are applied as ordinary journal ops via [dev.npn.core.index.JournalCoordinator].
  */
 @Serializable
 data class AutoMatchRule(

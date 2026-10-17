@@ -7,6 +7,8 @@ import dev.npn.core.fs.VerifiedPublicationFailedException
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
 import dev.npn.core.index.IndexRig
 import dev.npn.core.index.Indexer
+import dev.npn.core.index.JournalCoordinator
+import dev.npn.core.index.LifecycleChange
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.JournalPath

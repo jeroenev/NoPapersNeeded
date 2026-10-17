@@ -15,6 +15,7 @@ import dev.npn.core.index.ImportResult
 import dev.npn.core.index.ImportService
 import dev.npn.core.index.IndexProgress
 import dev.npn.core.index.Indexer
+import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.index.ScanReport
 import dev.npn.core.index.SupersededImportException
 import dev.npn.core.index.WriteSettle
