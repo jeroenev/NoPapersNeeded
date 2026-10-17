@@ -13,21 +13,10 @@ class TrashOps(
     private val fs: LibraryFileSystem,
 ) {
     /**
-     * Move [relPath] into `.npn/trash/`, returning the trash-relative path used. The base
-     * trash name is [NpnPaths.trashPath]; if that already exists (two trashes in the same
-     * millisecond), the episode counts up until a free name is found.
+     * Where the trash puts [relPath], the file of the document [sha256] trashed at [episodeMillis]:
+     * [NpnPaths.trashPath], or, when that is taken (two trashes in the same millisecond), the next
+     * episode with a free name.
      */
-    suspend fun moveToTrash(
-        relPath: String,
-        sha256: String,
-        episodeMillis: Long,
-    ): String {
-        val target = trashTarget(relPath, sha256, episodeMillis)
-        fs.move(relPath, target)
-        return target
-    }
-
-    /** Where [moveToTrash] puts [relPath], the file of the document [sha256] trashed at [episodeMillis]. */
     suspend fun trashTarget(
         relPath: String,
         sha256: String,
@@ -43,26 +32,20 @@ class TrashOps(
     }
 
     /**
-     * Restore a file from trash to [toRelPath]. If the target is taken, a
-     * `name (restored).pdf`-style suffix is inserted (then `(restored 1)`, ...) until free.
-     */
-    suspend fun restore(
-        trashRelPath: String,
-        toRelPath: String,
-    ): String {
-        val target = restoreTarget(toRelPath, fs::exists)
-        fs.move(trashRelPath, target)
-        return target
-    }
-
-    /**
-     * Where a file restored to [toRelPath] goes: there, or beside it when it is [taken] ([restore]
-     * takes a path a file is at).
+     * Where a file restored to [toRelPath] goes: there, or, when that is [taken], beside it as
+     * `name (restored).pdf` (then `(restored 1)`, ...), the first such name not [taken].
      */
     suspend fun restoreTarget(
         toRelPath: String,
         taken: suspend (String) -> Boolean,
-    ): String = uniquifyRestored(toRelPath, taken)
+    ): String =
+        uniquifyPath(
+            toRelPath,
+            startIndex = 1,
+            firstSuffix = " (restored)",
+            suffix = { " (restored $it)" },
+            exists = taken,
+        )
 
     /**
      * All entries currently in `.npn/trash/` (files only, never a temporary file a move into the trash
@@ -181,16 +164,4 @@ class TrashOps(
             if (owned) fs.delete(meta.relPath)
         }
     }
-
-    private suspend fun uniquifyRestored(
-        path: String,
-        taken: suspend (String) -> Boolean,
-    ): String =
-        uniquifyPath(
-            path,
-            startIndex = 1,
-            firstSuffix = " (restored)",
-            suffix = { " (restored $it)" },
-            exists = taken,
-        )
 }

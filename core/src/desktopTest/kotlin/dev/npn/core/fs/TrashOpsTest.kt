@@ -36,12 +36,12 @@ class TrashOpsTest {
     fun moveToTrashAndRestoreRoundtrip() =
         runTest {
             fs.writeBytesOnce("inbox/doc.pdf", "content".encodeToByteArray())
-            val trashRel = trash.moveToTrash("inbox/doc.pdf", "deadbeefcafebabe", 1_000)
+            val trashRel = moveToTrash("inbox/doc.pdf", "deadbeefcafebabe", 1_000)
             trashRel shouldBe ".npn/trash/doc__deadbeef-1000.pdf"
             fs.exists("inbox/doc.pdf").shouldBeFalse()
             fs.exists(trashRel).shouldBeTrue()
 
-            val restored = trash.restore(trashRel, "inbox/doc.pdf")
+            val restored = restore(trashRel, "inbox/doc.pdf")
             restored shouldBe "inbox/doc.pdf"
             fs.readBytes("inbox/doc.pdf").decodeToString() shouldBe "content"
         }
@@ -54,8 +54,8 @@ class TrashOpsTest {
             val id = sha256Bytes(content)
             fs.writeBytesOnce("a/doc.pdf", content)
             fs.writeBytesOnce("b/doc.pdf", content)
-            val kept = trash.moveToTrash("a/doc.pdf", id, 1_000)
-            val changed = trash.moveToTrash("b/doc.pdf", id, 2_000)
+            val kept = moveToTrash("a/doc.pdf", id, 1_000)
+            val changed = moveToTrash("b/doc.pdf", id, 2_000)
             val hashed = trash.hashCandidates(id)
             fs.delete(changed)
             fs.writeBytesOnce(changed, "other content".encodeToByteArray())
@@ -79,8 +79,8 @@ class TrashOpsTest {
             fs.writeBytesOnce("a/doc.pdf", "1".encodeToByteArray())
             fs.writeBytesOnce("b/doc.pdf", "2".encodeToByteArray())
             // Same name + same hash prefix in the same millisecond -> the episode counts up.
-            val first = trash.moveToTrash("a/doc.pdf", "deadbeefcafebabe", 1_000)
-            val second = trash.moveToTrash("b/doc.pdf", "deadbeefcafebabe", 1_000)
+            val first = moveToTrash("a/doc.pdf", "deadbeefcafebabe", 1_000)
+            val second = moveToTrash("b/doc.pdf", "deadbeefcafebabe", 1_000)
             first shouldBe ".npn/trash/doc__deadbeef-1000.pdf"
             second shouldBe ".npn/trash/doc__deadbeef-1001.pdf"
             trash.listTrash() shouldHaveSize 2
@@ -90,7 +90,7 @@ class TrashOpsTest {
     fun aMoveIntoTheTrashThatALeftTemporaryFileIsNotATrashEntry() =
         runTest {
             fs.writeBytesOnce("inbox/doc.pdf", "content".encodeToByteArray())
-            val trashed = trash.moveToTrash("inbox/doc.pdf", "deadbeefcafebabe", 1_000)
+            val trashed = moveToTrash("inbox/doc.pdf", "deadbeefcafebabe", 1_000)
             fs.writeBytesOnce(
                 "${NpnPaths.TRASH_DIR}/${NpnPaths.Temp.moveName("interrupted")}",
                 "partial".encodeToByteArray(),
@@ -119,10 +119,10 @@ class TrashOpsTest {
     fun restoreUniquifiesWhenTargetTaken() =
         runTest {
             fs.writeBytesOnce("inbox/doc.pdf", "orig".encodeToByteArray())
-            val trashRel = trash.moveToTrash("inbox/doc.pdf", "deadbeefcafebabe", 1_000)
+            val trashRel = moveToTrash("inbox/doc.pdf", "deadbeefcafebabe", 1_000)
             // A new file now occupies the original path.
             fs.writeBytesOnce("inbox/doc.pdf", "new".encodeToByteArray())
-            val restored = trash.restore(trashRel, "inbox/doc.pdf")
+            val restored = restore(trashRel, "inbox/doc.pdf")
             restored shouldContain "(restored)"
             fs.readBytes(restored).decodeToString() shouldBe "orig"
             fs.readBytes("inbox/doc.pdf").decodeToString() shouldBe "new"
@@ -240,7 +240,7 @@ class TrashOpsTest {
             val colliding = trashWithMtime("x/colliding.pdf", CLASHING_FIRST, mtime = 1_000, episodeMillis = 100_000)
             // Another file's bytes under a name the old document's entry could carry.
             fs.writeBytesOnce("y/unknown.pdf", CLASHING_SECOND.encodeToByteArray())
-            val entry = trash.moveToTrash("y/unknown.pdf", colliding.id, 100_000)
+            val entry = moveToTrash("y/unknown.pdf", colliding.id, 100_000)
             Files.setLastModifiedTime(root.resolve(entry), FileTime.fromMillis(1_000))
 
             trash.purgeOlderThan(500_000, mapOf(colliding.id to 100_000L))
@@ -257,6 +257,19 @@ class TrashOpsTest {
         NpnPaths.trashHashPrefix("noext__deadbeef-1") shouldBe "deadbeef"
         NpnPaths.trashHashPrefix("doc.pdf") shouldBe null
     }
+
+    /** Move [relPath] into the trash as the session's trash does, returning the entry. */
+    private suspend fun moveToTrash(
+        relPath: String,
+        sha256: String,
+        episodeMillis: Long,
+    ): String = trash.trashTarget(relPath, sha256, episodeMillis).also { fs.move(relPath, it) }
+
+    /** Move [trashRelPath] back to [toRelPath], or beside it when a file is there, returning where. */
+    private suspend fun restore(
+        trashRelPath: String,
+        toRelPath: String,
+    ): String = trash.restoreTarget(toRelPath, fs::exists).also { fs.move(trashRelPath, it) }
 
     /** A trashed file's entry, and the id whose hash prefix its name carries. */
     private class Trashed(
@@ -277,7 +290,7 @@ class TrashOpsTest {
         val bytes = content.encodeToByteArray()
         fs.writeBytesOnce(relPath, bytes)
         val id = sha256Bytes(bytes)
-        val trashed = trash.moveToTrash(relPath, id, episodeMillis)
+        val trashed = moveToTrash(relPath, id, episodeMillis)
         Files.setLastModifiedTime(root.resolve(trashed), FileTime.fromMillis(mtime))
         return Trashed(trashed, id)
     }
