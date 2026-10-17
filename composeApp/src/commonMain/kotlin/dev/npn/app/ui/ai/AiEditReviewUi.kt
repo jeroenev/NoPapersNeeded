@@ -93,21 +93,15 @@ private val ReviewThumbnailSize = 56.dp
  */
 @Composable
 internal fun ReviewBatch(
-    docs: List<ReviewDoc>,
-    emptyDocs: List<ReviewDoc>,
+    batch: ReviewBatchState,
     content: DocContentFacade,
     review: ReviewController,
     onOpenDoc: (String) -> Unit,
 ) {
-    val selected =
-        docs.sumOf { doc ->
-            doc.chips.count { it.selected } + doc.removals.count { it.selected } + doc.fields.count { it.selected }
-        }
-    val total = docs.sumOf { doc -> doc.chips.size + doc.removals.size + doc.fields.size }
-    val docsWithSelection =
-        docs.count { doc ->
-            doc.chips.any { it.selected } || doc.removals.any { it.selected } || doc.fields.any { it.selected }
-        }
+    val (docs, emptyDocs) = batch
+    val selected = docs.sumOf { it.selectedCount }
+    val total = docs.sumOf { it.suggestionCount }
+    val docsWithSelection = docs.count { it.selectedCount > 0 }
     Column(Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -174,14 +168,10 @@ private fun ReviewRow(
     review: ReviewController,
     onOpenDoc: (String) -> Unit,
 ) {
-    val allSelected =
-        doc.chips.all { it.selected } && doc.removals.all { it.selected } && doc.fields.all { it.selected }
-    val noneSelected =
-        doc.chips.none { it.selected } && doc.removals.none { it.selected } && doc.fields.none { it.selected }
     val toggleState =
-        when {
-            allSelected -> ToggleableState.On
-            noneSelected -> ToggleableState.Off
+        when (doc.selectedCount) {
+            doc.suggestionCount -> ToggleableState.On
+            0 -> ToggleableState.Off
             else -> ToggleableState.Indeterminate
         }
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
@@ -220,8 +210,8 @@ private fun ReviewRow(
         }
         TriStateCheckbox(
             state = toggleState,
-            // On/Indeterminate → clear; Off → select all.
-            onClick = { review.setDocSelection(doc.docId, !allSelected) },
+            // On → clear; Indeterminate/Off → select all.
+            onClick = { review.setDocSelection(doc.docId, toggleState != ToggleableState.On) },
         )
     }
 }

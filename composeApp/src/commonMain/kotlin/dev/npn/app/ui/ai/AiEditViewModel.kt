@@ -44,7 +44,6 @@ import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_fields_failed
-import no_papers_needed.composeapp.generated.resources.ai_edit_apply_finish_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_tags_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_more_remain_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_queue_failed
@@ -133,10 +132,9 @@ sealed interface EditPhase {
         val documents: Int,
     ) : EditPhase
 
-    /** Per-doc suggestion chips + field rows awaiting the user's confirmation; nothing written yet. */
+    /** The [batch] awaiting the user's confirmation; nothing written yet. */
     data class Review(
-        val docs: List<ReviewDoc>,
-        val emptyDocs: List<ReviewDoc>,
+        val batch: ReviewBatchState,
     ) : EditPhase
 
     /** Writing selected tags and data fields through the journal. */
@@ -617,16 +615,14 @@ class AiEditViewModel(
      * back for the rest.
      */
     private suspend fun queueRun(docIds: List<String>) {
-        runCatchingCancellable { editQueue.enqueueEditRun(docIds, buildRequest()) }
-            .onSuccess {
-                // Queued documents are spent as far as this page is concerned: the preview and any
-                // later batch must not offer them again while the run is still out there.
-                edit.markHandedOff(docIds)
-                _ui.update { it.copy(phase = EditPhase.Queued(docIds.size)) }
-            }.onFailure { cause ->
-                message(uiText(Res.string.ai_edit_queue_failed, cause.reasonText()))
-                _ui.update { it.copy(phase = EditPhase.Idle) }
-            }
+        if (!reporting(Res.string.ai_edit_queue_failed) { editQueue.enqueueEditRun(docIds, buildRequest()) }) {
+            _ui.update { it.copy(phase = EditPhase.Idle) }
+            return
+        }
+        // Queued documents are spent as far as this page is concerned: the preview and any later
+        // batch must not offer them again while the run is still out there.
+        edit.markHandedOff(docIds)
+        _ui.update { it.copy(phase = EditPhase.Queued(docIds.size)) }
     }
 
     /**
@@ -647,7 +643,7 @@ class AiEditViewModel(
     override fun updateReview(transform: (List<ReviewDoc>) -> List<ReviewDoc>) =
         _ui.update { state ->
             val review = state.phase as? EditPhase.Review ?: return@update state
-            state.copy(phase = review.copy(docs = transform(review.docs)))
+            state.copy(phase = EditPhase.Review(review.batch.copy(docs = transform(review.batch.docs))))
         }
 
     /**
@@ -662,11 +658,13 @@ class AiEditViewModel(
         run =
             viewModelScope.launch {
                 _ui.update { it.copy(phase = EditPhase.Applying) }
-                var outcome: ApplyOutcome? = null
-                reporting(Res.string.ai_edit_apply_finish_failed) {
-                    outcome = edit.apply(_ui.value.scopeKey(), review.docs)
-                }
-                showApplied(review, outcome)
+                applyReview(
+                    review.batch,
+                    Res.string.ai_edit_more_remain_failed,
+                    write = { docs -> edit.apply(_ui.value.scopeKey(), docs) },
+                    showReview = { batch -> _ui.update { it.copy(phase = EditPhase.Review(batch)) } },
+                    showDone = { result -> _ui.update { it.copy(phase = EditPhase.Done(result)) } },
+                )
             }
     }
 
@@ -708,7 +706,7 @@ class AiEditViewModel(
                         uiText(Res.plurals.ai_edit_suggest_failed, result.total, result.failures, result.total),
                     )
                 }
-                _ui.update { it.copy(phase = EditPhase.Review(result.docs, result.emptyDocs)) }
+                _ui.update { it.copy(phase = EditPhase.Review(ReviewBatchState(result.docs, result.emptyDocs))) }
             }
         }
     }
@@ -742,30 +740,6 @@ class AiEditViewModel(
                 _ui.update { it.copy(phase = EditPhase.Done(edit.landedSoFar().copy(moreRemain = more))) }
             }
     }
-
-    /** Show what an Apply from [review] came to; a null [outcome] (it failed) is the Review again. */
-    private fun showApplied(
-        review: EditPhase.Review,
-        outcome: ApplyOutcome?,
-    ) {
-        when (outcome) {
-            null, ApplyOutcome.NothingSelected -> {
-                _ui.update { it.copy(phase = review) }
-            }
-
-            is ApplyOutcome.Done -> {
-                outcome.followUpFailure?.let { failure ->
-                    message(uiText(Res.string.ai_edit_more_remain_failed, failure.reasonText()))
-                }
-                _ui.update { it.copy(phase = EditPhase.Done(outcome.result)) }
-            }
-
-            is ApplyOutcome.Retry -> {
-                message(outcome.failureText())
-                _ui.update { it.copy(phase = EditPhase.Review(outcome.remaining, review.emptyDocs)) }
-            }
-        }
-    }
 }
 
 /**
@@ -773,8 +747,8 @@ class AiEditViewModel(
  * or both. A Retry's documents keep selected exactly the items still owed, so they say which.
  */
 internal fun ApplyOutcome.Retry.failureText(): UiText {
-    val tags = remaining.any { doc -> doc.chips.any { it.selected } || doc.removals.any { it.selected } }
-    val fields = remaining.any { doc -> doc.fields.any { it.selected } }
+    val tags = remaining.any { it.selectedTagCount > 0 }
+    val fields = remaining.any { it.selectedFieldCount > 0 }
     val sentence =
         when {
             !fields -> Res.plurals.ai_edit_apply_tags_failed

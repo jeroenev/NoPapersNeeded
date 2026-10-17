@@ -62,7 +62,7 @@ fun AiEditReviewScreen(
                 }
 
                 is QueuedReviewPhase.Review -> {
-                    ReviewBatch(current.docs, current.emptyDocs, session.content, review = vm, onOpenDoc = onOpenDoc)
+                    ReviewBatch(current.batch, session.content, review = vm, onOpenDoc = onOpenDoc)
                 }
 
                 QueuedReviewPhase.Applying -> {

@@ -3,7 +3,6 @@ package dev.npn.app.ui.ai
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.reasonText
 import dev.npn.app.ui.common.uiText
-import dev.npn.core.app.ApplyOutcome
 import dev.npn.core.app.ApplyResult
 import dev.npn.core.app.EditRunReview
 import dev.npn.core.app.LibrarySession
@@ -16,7 +15,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.ai_edit_apply_finish_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_review_discard_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_review_open_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_review_queue_drop_failed
@@ -36,10 +34,10 @@ sealed interface QueuedReviewPhase {
      */
     data object Unavailable : QueuedReviewPhase
 
-    /** Per-doc suggestion chips + field rows awaiting confirmation; nothing written yet. */
+    /** The [batch] under review, from the opened [run]; nothing written yet. */
     data class Review(
-        val docs: List<ReviewDoc>,
-        val emptyDocs: List<ReviewDoc>,
+        val batch: ReviewBatchState,
+        val run: EditRunReview,
     ) : QueuedReviewPhase
 
     /** Writing selected tags and data fields through the journal. */
@@ -74,9 +72,6 @@ class AiEditReviewViewModel(
     private val _phase = MutableStateFlow<QueuedReviewPhase>(QueuedReviewPhase.Loading)
     val phase: StateFlow<QueuedReviewPhase> = _phase.asStateFlow()
 
-    /** The opened run, or null until it loads (or when it turned out not to be there). */
-    private var review: EditRunReview? = null
-
     private var run: Job? = null
 
     init {
@@ -85,9 +80,8 @@ class AiEditReviewViewModel(
                 runCatchingCancellable { queue.openEditRun(jobId) }
                     .onFailure { message(uiText(Res.string.ai_edit_review_open_failed, it.reasonText())) }
                     .getOrNull()
-            review = opened
             _phase.value =
-                opened?.let { QueuedReviewPhase.Review(it.docs, it.emptyDocs) }
+                opened?.let { QueuedReviewPhase.Review(ReviewBatchState(it.docs, it.emptyDocs), it) }
                     ?: QueuedReviewPhase.Unavailable
         }
     }
@@ -98,7 +92,7 @@ class AiEditReviewViewModel(
     override fun updateReview(transform: (List<ReviewDoc>) -> List<ReviewDoc>) =
         _phase.update { phase ->
             val current = phase as? QueuedReviewPhase.Review ?: return@update phase
-            current.copy(docs = transform(current.docs))
+            current.copy(batch = current.batch.copy(docs = transform(current.batch.docs)))
         }
 
     /**
@@ -109,14 +103,17 @@ class AiEditReviewViewModel(
      */
     override fun apply() {
         val current = _phase.value as? QueuedReviewPhase.Review ?: return
-        val opened = review ?: return
         if (run?.isActive == true) return
         run =
             viewModelScope.launch {
                 _phase.value = QueuedReviewPhase.Applying
-                var outcome: ApplyOutcome? = null
-                reporting(Res.string.ai_edit_apply_finish_failed) { outcome = opened.apply(current.docs) }
-                showApplied(current, outcome)
+                applyReview(
+                    current.batch,
+                    Res.string.ai_edit_review_queue_drop_failed,
+                    write = current.run::apply,
+                    showReview = { _phase.value = current.copy(batch = it) },
+                    showDone = { _phase.value = QueuedReviewPhase.Done(it) },
+                )
             }
     }
 
@@ -128,7 +125,7 @@ class AiEditReviewViewModel(
      * stays on Review, since the run is still queued.
      */
     override fun leaveReview() {
-        val opened = review ?: return
+        val opened = (_phase.value as? QueuedReviewPhase.Review)?.run ?: return
         if (run?.isActive == true) return
         run =
             viewModelScope.launch {
@@ -137,29 +134,5 @@ class AiEditReviewViewModel(
                     _phase.value = QueuedReviewPhase.Done(opened.landedSoFar())
                 }
             }
-    }
-
-    /** Show what an Apply from [current] came to; a null [outcome] (it failed) is the Review again. */
-    private fun showApplied(
-        current: QueuedReviewPhase.Review,
-        outcome: ApplyOutcome?,
-    ) {
-        when (outcome) {
-            null, ApplyOutcome.NothingSelected -> {
-                _phase.value = current
-            }
-
-            is ApplyOutcome.Done -> {
-                outcome.followUpFailure?.let { failure ->
-                    message(uiText(Res.string.ai_edit_review_queue_drop_failed, failure.reasonText()))
-                }
-                _phase.value = QueuedReviewPhase.Done(outcome.result)
-            }
-
-            is ApplyOutcome.Retry -> {
-                message(outcome.failureText())
-                _phase.value = current.copy(docs = outcome.remaining)
-            }
-        }
     }
 }
