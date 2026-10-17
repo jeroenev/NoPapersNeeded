@@ -17,6 +17,7 @@ import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.journalObjects
+import dev.npn.core.ocr.FakeOcrEngine
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pathrules.StoragePathRuleApplicator
@@ -35,18 +36,6 @@ import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.assertFailsWith
-
-/** No-op OCR engine (unavailable) so the pipeline uses embedded text only. */
-class NoopOcrEngine : OcrEngine {
-    override suspend fun available(): Boolean = false
-
-    override val name: String = "noop"
-
-    override suspend fun recognizePng(
-        png: ByteArray,
-        lang: String,
-    ): String = ""
-}
 
 class FakeThumbStore(
     private val dir: File,
@@ -149,7 +138,7 @@ class AppSessionRig private constructor(
     companion object {
         suspend fun create(
             scope: CoroutineScope,
-            ocr: OcrEngine = NoopOcrEngine(),
+            ocr: OcrEngine = FakeOcrEngine.unavailable(),
             /** The library's storage-path rule, written to its journal once the session is open. */
             storagePath: StoragePathRule? = null,
             log: NpnLog = JvmLog(),
@@ -212,7 +201,7 @@ class AppSessionRig private constructor(
      */
     suspend fun secondSession(
         scope: CoroutineScope,
-        ocr: OcrEngine = NoopOcrEngine(),
+        ocr: OcrEngine = FakeOcrEngine.unavailable(),
         clock: MutableClock = MutableClock(50_000L, autoTick = true),
         aiConfig: suspend () -> AiConfig = { AiConfig.DISABLED },
         legacyLibrarySettings: suspend () -> LegacyLibrarySettings = { LegacyLibrarySettings() },
@@ -289,7 +278,7 @@ private const val NEWER_STORE = "${NpnPaths.JOURNAL_DIR}/objects-v9-00"
  * [AppSessionRig.create] options and closed before that scope ends.
  */
 fun appSessionTest(
-    ocr: OcrEngine = NoopOcrEngine(),
+    ocr: OcrEngine = FakeOcrEngine.unavailable(),
     storagePath: StoragePathRule? = null,
     log: NpnLog = JvmLog(),
     deviceTrashRetentionDays: Int? = null,
@@ -356,7 +345,7 @@ suspend fun openSession(
             // Far behind the files' real mtimes, so a just-written PDF counts as settled.
             clock = MutableClock(autoTick = true),
             installationId = installationId,
-            ocrEngine = NoopOcrEngine(),
+            ocrEngine = FakeOcrEngine.unavailable(),
             thumbnailStore = FakeThumbStore(File(data, "thumbs")),
         )
     val deps = base.over(files(base.fs), base.pdfEngine)

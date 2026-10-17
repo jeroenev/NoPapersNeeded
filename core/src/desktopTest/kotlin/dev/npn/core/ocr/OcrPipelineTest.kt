@@ -148,7 +148,11 @@ class OcrPipelineTest {
     @Test
     fun failureIncrementsAttemptsAndFailsAfterMax() =
         runTest {
-            val throwing = ThrowingOcrEngine()
+            val throwing =
+                FakeOcrEngine(
+                    isAvailable = true,
+                    name = "mlkit",
+                ).apply { failure = RuntimeException("boom") }
             val bytes = PdfFixtures.imageOnlyPdf()
             val docId = rig.stageDoc("scan.pdf", bytes)
             val clock = MutableClock()
@@ -428,21 +432,4 @@ class OcrPipelineTest {
                 worker.close()
             }
         }
-}
-
-private class ThrowingOcrEngine : OcrEngine {
-    override val name: String = "mlkit"
-
-    var calls = 0
-        private set
-
-    override suspend fun available(): Boolean = true
-
-    override suspend fun recognizePng(
-        png: ByteArray,
-        lang: String,
-    ): String {
-        calls++
-        throw RuntimeException("boom")
-    }
 }

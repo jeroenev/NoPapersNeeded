@@ -8,6 +8,7 @@ import dev.npn.core.index.rowAtPath
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
+import dev.npn.core.ocr.FakeOcrEngine
 import dev.npn.core.ocr.OcrEngineSelector
 import dev.npn.core.ocr.OcrPipeline
 import dev.npn.core.ocr.OcrSidecarFiles
@@ -445,7 +446,7 @@ class DocumentFilterTest {
             fs = rig.fs,
             sidecars = OcrSidecarFiles(rig.fs),
             pdfEngine = PdfBoxEngine(),
-            engines = OcrEngineSelector(local = NoopOcrEngine()),
+            engines = OcrEngineSelector(local = FakeOcrEngine.unavailable()),
             documentDao = rig.db.documentDao(),
             ftsDao = rig.db.ftsDao(),
             ocrQueueDao = rig.deviceDb.ocrQueueDao(),

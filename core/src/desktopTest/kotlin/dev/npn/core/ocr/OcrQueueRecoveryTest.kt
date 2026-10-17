@@ -109,7 +109,9 @@ class OcrQueueRecoveryTest {
             // land. A cancellation still says nothing about the document, and recording one would
             // let an engine being torn down spend the attempts that decide "permanently failed".
             val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
-            val pipe = rig.pipeline("devA", CancellingOcrEngine())
+            val engine = FakeOcrEngine(isAvailable = true, name = "mlkit")
+            engine.failure = CancellationException("engine torn down")
+            val pipe = rig.pipeline("devA", engine)
 
             assertFailsWith<CancellationException> { pipe.processNext() }
 
@@ -143,18 +145,6 @@ class OcrQueueRecoveryTest {
                 .shouldNotBeNull()
                 .state shouldBe QueueState.FAILED.column
         }
-}
-
-/** Raises a cancellation of its own, without the surrounding scope being cancelled. */
-private class CancellingOcrEngine : OcrEngine {
-    override val name: String = "mlkit"
-
-    override suspend fun available(): Boolean = true
-
-    override suspend fun recognizePng(
-        png: ByteArray,
-        lang: String,
-    ): String = throw CancellationException("engine torn down")
 }
 
 /**

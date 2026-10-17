@@ -3,6 +3,7 @@ package dev.npn.core.app
 import dev.npn.core.index.MutableClock
 import dev.npn.core.index.requireByDocId
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.ocr.FakeOcrEngine
 import dev.npn.core.pdf.PdfBoxEngine
 import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.settings.SessionSettings
@@ -77,7 +78,7 @@ class HlcSeedingTest {
                     db = rig.db,
                     deviceDb = rig.deviceDb,
                     pdfEngine = PdfBoxEngine(),
-                    ocrEngine = NoopOcrEngine(),
+                    ocrEngine = FakeOcrEngine.unavailable(),
                     xmpIO = PdfBoxXmpIO(),
                     thumbnailStore = FakeThumbStore(File(rig.dbDir, "thumbs-reopen")),
                     renderParallelism = 1,
