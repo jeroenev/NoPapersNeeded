@@ -194,9 +194,6 @@ fun FilterPanel(
     fillHeight: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val draft = editor.draft
-    val setBoundValidity: (String, Boolean) -> Unit = editor::setBoundValidity
-
     Surface(modifier = modifier, tonalElevation = 3.dp) {
         Column(if (fillHeight) Modifier.fillMaxSize() else Modifier.fillMaxWidth()) {
             FilterPanelHeader(
@@ -215,19 +212,16 @@ fun FilterPanel(
                 key(editor.resetCounter) {
                     FilterFields(
                         editor = editor,
-                        draft = draft,
                         tags = tags,
                         fields = fields,
                         reviewMode = reviewMode,
-                        onDraftChange = { editor.draft = it },
-                        onBoundValidity = setBoundValidity,
                     )
                 }
             }
 
             HorizontalDivider()
             OutlinedButton(
-                onClick = { onApply(draft) },
+                onClick = { onApply(editor.draft) },
                 enabled = editor.invalidBounds.isEmpty(),
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
             ) { Text(stringResource(Res.string.library_apply_filters)) }
@@ -290,20 +284,18 @@ data class FieldFilterOptions(
 
 /**
  * The editable filter fields (tags, reviewed, one row per default field, untagged-only). Edits
- * produce a new draft [LibraryFilter] via [onDraftChange]; the dialog's [FilterEditorState] owns the
- * draft state and the tag section's transient text.
+ * replace [FilterEditorState.draft]; the dialog's [editor] owns the draft and the tag section's
+ * transient text.
  */
 @Composable
 private fun FilterFields(
     editor: FilterEditorState,
-    draft: LibraryFilter,
     tags: List<TagInfo>,
     fields: FieldFilterOptions,
     reviewMode: ReviewMode,
-    onDraftChange: (LibraryFilter) -> Unit,
-    onBoundValidity: (String, Boolean) -> Unit,
 ) {
-    TagFilterSection(editor, tags, draft, onDraftChange)
+    val draft = editor.draft
+    TagFilterSection(editor, tags)
 
     // The stored reviewed marker is only maintained in the inbox workflow; outside it,
     // review state is derived from tags (reviewed == tagged) and the marker is stale.
@@ -313,21 +305,21 @@ private fun FilterFields(
                 selected = reviewFilterLabel(ReviewFilter.from(draft.reviewed)),
                 options = ReviewFilter.entries,
                 optionLabel = ::reviewFilterLabel,
-                onSelect = { onDraftChange(draft.copy(reviewed = it.value)) },
+                onSelect = { editor.draft = draft.copy(reviewed = it.value) },
             )
         }
     }
 
     for (def in fields.fields.filter { it.showByDefault }) {
         key(def.key) {
-            FieldFilterRow(def, fields.values[def.key].orEmpty(), draft, onDraftChange, onBoundValidity)
+            FieldFilterRow(def, fields.values[def.key].orEmpty(), editor)
         }
     }
 
     SwitchRow(
         label = stringResource(Res.string.library_untagged_only),
         checked = draft.untaggedOnly,
-        onCheckedChange = { onDraftChange(draft.copy(untaggedOnly = it)) },
+        onCheckedChange = { editor.draft = draft.copy(untaggedOnly = it) },
     )
 }
 
@@ -339,20 +331,22 @@ private fun FilterFields(
 private fun FieldFilterRow(
     def: FieldDef,
     values: List<String>,
-    draft: LibraryFilter,
-    onDraftChange: (LibraryFilter) -> Unit,
-    onBoundValidity: (String, Boolean) -> Unit,
+    editor: FilterEditorState,
 ) {
+    val draft = editor.draft
+    val onDraftChange = { filter: LibraryFilter -> editor.draft = filter }
     when (def.type) {
         FieldType.TEXT -> {
+            // Null is "any value": the filter leaves the field alone.
+            val anyValue = stringResource(Res.string.library_any)
             FilterFieldRow(def.label) {
-                Dropdown(
-                    selected = optionalFilterLabel(optionalFilterValue(draft.fieldEquals[def.key])),
-                    options = optionalFilterOptions(values),
-                    optionLabel = ::optionalFilterLabel,
-                    onSelect = { onDraftChange(draft.withFieldEquals(def.key, it.valueOrNull())) },
+                Dropdown<String?>(
+                    selected = draft.fieldEquals[def.key] ?: anyValue,
+                    options = listOf(null) + values,
+                    optionLabel = { it ?: anyValue },
+                    onSelect = { onDraftChange(draft.withFieldEquals(def.key, it)) },
                     searchLabel = stringResource(Res.string.library_search_field, def.label),
-                    searchText = { if (it is OptionalFilterValue.Value) it.value else "" },
+                    searchText = { it.orEmpty() },
                 )
             }
         }
@@ -388,7 +382,7 @@ private fun FieldFilterRow(
                         value = draft.fieldRanges[def.key]?.from,
                         label = stringResource(Res.string.library_from),
                         onCommit = { onDraftChange(draft.withFieldBounds(def.key, from = it)) },
-                        onValidity = { valid -> onBoundValidity("${def.key}:from", valid) },
+                        onValidity = { valid -> editor.setBoundValidity("${def.key}:from", valid) },
                         modifier = it,
                     )
                 },
@@ -398,7 +392,7 @@ private fun FieldFilterRow(
                         value = draft.fieldRanges[def.key]?.to,
                         label = stringResource(Res.string.library_to),
                         onCommit = { onDraftChange(draft.withFieldBounds(def.key, to = it)) },
-                        onValidity = { valid -> onBoundValidity("${def.key}:to", valid) },
+                        onValidity = { valid -> editor.setBoundValidity("${def.key}:to", valid) },
                         modifier = it,
                     )
                 },
@@ -481,9 +475,9 @@ private fun NumberBound(
 private fun TagFilterSection(
     editor: FilterEditorState,
     tags: List<TagInfo>,
-    filter: LibraryFilter,
-    onFilterChange: (LibraryFilter) -> Unit,
 ) {
+    val filter = editor.draft
+    val onFilterChange = { changed: LibraryFilter -> editor.draft = changed }
     SectionLabel(stringResource(Res.string.ux_include_tags))
     val mixed = filter.tagsAll.isNotEmpty() && filter.tagsAny.isNotEmpty()
     val matchAll = editor.matchAll
@@ -593,10 +587,7 @@ private fun SectionLabel(text: String) {
     SectionHeading(text, style = MaterialTheme.typography.labelLarge)
 }
 
-/**
- * One filter row: the field label on the left and its selector on the right, so the reviewer,
- * correspondent and document-type fields read as a compact form instead of stacked sections.
- */
+/** One filter row: the field's label with its selector right under it. */
 @Composable
 private fun FilterFieldRow(
     label: String,
@@ -630,31 +621,4 @@ private fun reviewFilterLabel(value: ReviewFilter): String =
         ReviewFilter.ANY -> stringResource(Res.string.library_any)
         ReviewFilter.REVIEWED -> stringResource(Res.string.common_reviewed)
         ReviewFilter.NEEDS_REVIEW -> stringResource(Res.string.common_needs_review)
-    }
-
-private sealed interface OptionalFilterValue {
-    data object Any : OptionalFilterValue
-
-    data class Value(
-        val value: String,
-    ) : OptionalFilterValue
-}
-
-private fun optionalFilterValue(value: String?): OptionalFilterValue =
-    value?.let(OptionalFilterValue::Value) ?: OptionalFilterValue.Any
-
-private fun optionalFilterOptions(values: List<String>): List<OptionalFilterValue> =
-    listOf(OptionalFilterValue.Any) + values.map(OptionalFilterValue::Value)
-
-@Composable
-private fun optionalFilterLabel(value: OptionalFilterValue): String =
-    when (value) {
-        OptionalFilterValue.Any -> stringResource(Res.string.library_any)
-        is OptionalFilterValue.Value -> value.value
-    }
-
-private fun OptionalFilterValue.valueOrNull(): String? =
-    when (this) {
-        OptionalFilterValue.Any -> null
-        is OptionalFilterValue.Value -> value
     }
