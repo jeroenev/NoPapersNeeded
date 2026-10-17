@@ -18,8 +18,8 @@ val runtimeJdk =
     }
 
 dependencies {
-    implementation(project(":composeApp"))
-    implementation(project(":core"))
+    implementation(projects.composeApp)
+    implementation(projects.core)
     implementation(compose.desktop.currentOs)
     implementation(libs.compose.components.resources)
     implementation(libs.kotlinx.coroutines.swing)
@@ -35,6 +35,7 @@ tasks.test {
 val npnAppName = "no-papers-needed"
 val npnAppVersion = NpnVersion.of(project).name
 val npnDisplayName = "No papers needed"
+val npnFlatpakId = "io.github.jeroenev.NoPapersNeeded"
 val npnDescription = "Personal paperless document library"
 val npnMainClass = "dev.npn.desktop.MainKt"
 
@@ -292,7 +293,7 @@ val tessdataFastModels = providers.fileContents(tessdataFastModelList).asText.ma
 // BundledTessdataTest holds the Flatpak manifest's models and OcrLanguages.BUNDLED to that same
 // list. It reads the files from the project directory, its working directory.
 tasks.test {
-    inputs.files(tessdataFastModelList, "flatpak/io.github.jeroenev.NoPapersNeeded.yml")
+    inputs.files(tessdataFastModelList, "flatpak/$npnFlatpakId.yml")
     systemProperty("npn.tessdataFastBaseUrl", tessdataFastBaseUrl)
 }
 
@@ -320,7 +321,6 @@ if (isWindowsHost) {
 // manifest (desktopApp/flatpak/) installs from: app/ is the app image, share/ holds the
 // desktop entry, metainfo and icon. `mise package-flatpak` builds from the staged directory;
 // releases publish the tarball, which is what Flathub builds from.
-val npnFlatpakId = "io.github.jeroenev.NoPapersNeeded"
 val linuxBundleName = "$npnAppName-$npnAppVersion-linux-x86_64"
 
 // The release date is the built commit's, which keeps the tarball reproducible.
