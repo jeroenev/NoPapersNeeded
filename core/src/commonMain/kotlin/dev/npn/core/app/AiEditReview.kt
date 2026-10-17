@@ -66,8 +66,8 @@ internal class ReviewProjector(
 
     /** First ~[SNIPPET_LENGTH] chars of extracted text, whitespace-collapsed; null when unavailable. */
     private suspend fun snippetFor(docId: String): String? =
-        runCatchingCancellable { content.extractedText(docId) }
-            .getOrNull()
+        content
+            .extractedText(docId)
             ?.replace(Regex("\\s+"), " ")
             ?.trim()
             ?.takeIf { it.isNotBlank() }
@@ -111,19 +111,17 @@ internal class ReviewApply(
     private val landed = Landed()
 
     /**
-     * Write the selected items of [docs], less what an earlier attempt already wrote. [onDocWritten]
-     * fires with each document's id as a write covering it lands; [moreRemain] is asked only once
-     * everything landed, for [ApplyResult.moreRemain]. The writes stand when it fails: the Done
+     * Write the selected items of [docs], less what an earlier attempt already wrote. [moreRemain] is
+     * asked only once everything landed, for [ApplyResult.moreRemain]. The writes stand when it fails: the Done
      * offers no more and carries the failure.
      */
     suspend fun apply(
         docs: List<ReviewDoc>,
-        onDocWritten: (String) -> Unit = {},
         moreRemain: suspend () -> Boolean,
     ): ApplyOutcome {
         val edits = docs.map { it.selectedEdit() }
         if (edits.all { it.isEmpty }) return ApplyOutcome.NothingSelected
-        val written = write(edits, onDocWritten)
+        val written = write(edits)
         landed += written.landed
         if (written.failedDocs.isEmpty()) {
             val more = runCatchingCancellable { moreRemain() }
@@ -176,22 +174,18 @@ internal class ReviewApply(
         val failedDocs = mutableSetOf<String>()
     }
 
-    private suspend fun write(
-        edits: List<SelectedEdit>,
-        onDocWritten: (String) -> Unit,
-    ): Written {
+    private suspend fun write(edits: List<SelectedEdit>): Written {
         val written = Written()
         for ((tag, docIds) in edits.byTag { it.addTags }) {
-            writeTag(written.landed.adds, written, docIds, tag, onDocWritten) { meta.addTag(docIds, tag) }
+            writeTag(written.landed.adds, written, docIds, tag) { meta.addTag(docIds, tag) }
         }
         for ((tag, docIds) in edits.byTag { it.removeTags }) {
-            writeTag(written.landed.removals, written, docIds, tag, onDocWritten) { meta.removeTag(docIds, tag) }
+            writeTag(written.landed.removals, written, docIds, tag) { meta.removeTag(docIds, tag) }
         }
         for (edit in edits.filter { it.fields.isNotEmpty() }) {
             val landed = runCatchingCancellable { meta.applyEdits(listOf(edit.docId), fields = edit.fields) }.isSuccess
             if (landed) {
                 edit.fields.keys.forEach { written.landed.fields += edit.docId to it }
-                onDocWritten(edit.docId)
             } else {
                 written.failedDocs += edit.docId
             }
@@ -205,14 +199,10 @@ internal class ReviewApply(
         written: Written,
         docIds: List<String>,
         tag: String,
-        onDocWritten: (String) -> Unit,
         call: suspend () -> Unit,
     ) {
         if (runCatchingCancellable { call() }.isSuccess) {
-            docIds.forEach { docId ->
-                into += docId to tag
-                onDocWritten(docId)
-            }
+            docIds.forEach { into += it to tag }
         } else {
             written.failedDocs += docIds
         }

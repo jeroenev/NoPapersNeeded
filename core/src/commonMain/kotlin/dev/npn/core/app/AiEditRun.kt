@@ -347,13 +347,8 @@ class AiEditRunImpl(
         key: ScopeKey,
         docs: List<ReviewDoc>,
     ): ApplyOutcome =
-        // _processed is Review state, so it stays this run's to keep: each document is marked as a
-        // write covering it commits.
-        reviewApply.apply(
-            docs,
-            onDocWritten = { docId -> _processed.update { it + docId } },
-            moreRemain = { moreRemain(key) },
-        )
+        // Every document of the Review is processed already: enterReview marked them all.
+        reviewApply.apply(docs, moreRemain = { moreRemain(key) })
 
     override fun landedSoFar(): ApplyResult = reviewApply.landedSoFar()
 
