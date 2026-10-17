@@ -12,7 +12,7 @@ import kotlin.test.Test
  * Pure tests for the active-chip composition: chip ordering, and per-chip removal clearing exactly
  * the right facet.
  */
-class ActiveFilterChipsTest {
+class ActiveFilterChipTest {
     @Test
     fun emptyFilterProducesNoChips() {
         LibraryFilter().activeChips() shouldBe emptyList()
