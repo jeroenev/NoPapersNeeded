@@ -39,13 +39,6 @@ detekt {
     )
 }
 
-tasks.withType<Detekt>().configureEach {
-    reports {
-        html.required.set(true)
-        sarif.required.set(false)
-    }
-}
-
 val typedCompilations = typedDetektCompilations[path].orEmpty()
 val typedTasks = typedCompilations.map { "detekt$it" }
 // The Compose ruleset resolves types for part of its checks, so only the typed run loads it.
@@ -53,16 +46,22 @@ val typedPlugins = configurations.create("detektTypedPlugins") { isCanBeConsumed
 if (typedCompilations.isNotEmpty()) {
     dependencies.add(
         typedPlugins.name,
+        // The root build applies this plugin before a subproject's own script, when only the root
+        // project has the version catalog extension yet.
         rootProject.extensions
             .getByType<VersionCatalogsExtension>()
-            .named(
-                "libs",
-            ).findLibrary("compose-rules-detekt")
+            .named("libs")
+            .findLibrary("compose-rules-detekt")
             .get(),
     )
 }
 
 tasks.withType<Detekt>().configureEach {
+    // Nothing reads an HTML or SARIF report; findings are read from the console.
+    reports {
+        html.required.set(false)
+        sarif.required.set(false)
+    }
     if (name in typedTasks) {
         // A compilation's sources include generated code (Compose resources, Room, BuildInfo).
         exclude { it.file.invariantSeparatorsPath.contains("/build/generated/") }
