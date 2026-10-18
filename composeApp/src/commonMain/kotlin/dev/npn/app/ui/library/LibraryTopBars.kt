@@ -9,14 +9,12 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.NewLabel
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -35,6 +33,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import dev.npn.app.ui.common.HelpText
+import dev.npn.app.ui.common.SelectionTopBar
 import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.TopBarAction
 import dev.npn.app.ui.common.TopBarActions
@@ -48,8 +47,6 @@ import dev.npn.core.model.reviewMarkerIsAuthoritative
 import io.github.vinceglb.filekit.name
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_add_tag
-import no_papers_needed.composeapp.generated.resources.common_cancel
-import no_papers_needed.composeapp.generated.resources.common_select_all
 import no_papers_needed.composeapp.generated.resources.library_ai_edit
 import no_papers_needed.composeapp.generated.resources.library_documents
 import no_papers_needed.composeapp.generated.resources.library_filters
@@ -60,7 +57,6 @@ import no_papers_needed.composeapp.generated.resources.library_refresh
 import no_papers_needed.composeapp.generated.resources.library_remove_tag
 import no_papers_needed.composeapp.generated.resources.library_results_summary_ascending
 import no_papers_needed.composeapp.generated.resources.library_results_summary_descending
-import no_papers_needed.composeapp.generated.resources.library_selected_count
 import no_papers_needed.composeapp.generated.resources.library_sort
 import no_papers_needed.composeapp.generated.resources.library_sort_added
 import no_papers_needed.composeapp.generated.resources.library_sort_ascending
@@ -162,8 +158,9 @@ private fun SortMenuButton(
     }
 }
 
+/** The library's [SelectionTopBar]: tag, trash, AI-edit and review actions on the selected documents. */
 @Composable
-internal fun SelectionTopBar(
+internal fun LibrarySelectionTopBar(
     count: Int,
     /** Every document in the results, for "select all". */
     allDocIds: List<String>,
@@ -183,13 +180,6 @@ internal fun SelectionTopBar(
             TopBarAction(Icons.Filled.AutoFixHigh, stringResource(Res.string.library_ai_edit), it)
         }
     val trash = TopBarAction(Icons.Filled.Delete, stringResource(Res.string.library_trash), onRequestTrash)
-    val selectAll =
-        TopBarAction(
-            icon = Icons.Filled.SelectAll,
-            label = stringResource(Res.string.common_select_all),
-            onClick = { actions.selectAll(allDocIds) },
-            enabled = allDocIds.isNotEmpty(),
-        )
     // Adding and removing tags and AI edit are all about the selection itself, so a wide bar shows
     // them beside add-tag and trash. A compact bar keeps just the two frequent actions and leaves
     // remove-tag, AI edit and the reviewed toggles in the overflow menu.
@@ -202,7 +192,6 @@ internal fun SelectionTopBar(
         }
     val overflow =
         buildList {
-            add(selectAll)
             if (!wide) add(removeTag)
             if (!wide) aiEdit?.let { add(it) }
             if (reviewMode.reviewMarkerIsAuthoritative) {
@@ -222,24 +211,13 @@ internal fun SelectionTopBar(
                 )
             }
         }
-    TopAppBar(
-        title = {
-            Text(
-                pluralStringResource(Res.plurals.library_selected_count, count, count),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        },
-        navigationIcon = {
-            TooltipIconButton(Icons.Filled.Clear, stringResource(Res.string.common_cancel), actions::clearSelection)
-        },
-        actions = {
-            TopBarActions(
-                inline = inline,
-                overflow = overflow,
-                overflowLabel = stringResource(Res.string.library_more_actions),
-            )
-        },
+    SelectionTopBar(
+        count = count,
+        onClose = actions::clearSelection,
+        onSelectAll = { actions.selectAll(allDocIds) }.takeIf { allDocIds.isNotEmpty() },
+        inline = inline,
+        // Select all leads it, so it is never empty.
+        overflow = overflow,
     )
 }
 

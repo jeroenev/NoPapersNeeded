@@ -23,12 +23,10 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CallMerge
-import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
@@ -64,11 +62,11 @@ import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.LoadingIndicator
+import dev.npn.app.ui.common.SelectionTopBar
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.TagFormDialog
 import dev.npn.app.ui.common.TagPickDialog
 import dev.npn.app.ui.common.TextInputDialog
-import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.TopBarAction
 import dev.npn.app.ui.common.onSecondaryClick
 import dev.npn.app.ui.common.parseHexColor
@@ -77,12 +75,10 @@ import dev.npn.core.app.TagInfo
 import dev.npn.core.util.NpnJson
 import kotlinx.serialization.Serializable
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.common_delete
 import no_papers_needed.composeapp.generated.resources.common_document_count
 import no_papers_needed.composeapp.generated.resources.common_rename
 import no_papers_needed.composeapp.generated.resources.common_save
-import no_papers_needed.composeapp.generated.resources.common_select_all
 import no_papers_needed.composeapp.generated.resources.common_tags_actions
 import no_papers_needed.composeapp.generated.resources.common_tags_color_many_title
 import no_papers_needed.composeapp.generated.resources.common_tags_color_style
@@ -104,7 +100,6 @@ import no_papers_needed.composeapp.generated.resources.common_tags_style_title
 import no_papers_needed.composeapp.generated.resources.common_tags_title
 import no_papers_needed.composeapp.generated.resources.library_deselect
 import no_papers_needed.composeapp.generated.resources.library_select
-import no_papers_needed.composeapp.generated.resources.library_selected_count
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -290,37 +285,30 @@ private fun TagSelectionTopBar(
     onSelectAll: () -> Unit,
     onOpen: (TagDialog) -> Unit,
 ) {
-    TopAppBar(
-        title = { Text(pluralStringResource(Res.plurals.library_selected_count, selected.size, selected.size)) },
-        navigationIcon = {
-            IconButton(onClick = onClose) {
-                Icon(Icons.Filled.Clear, contentDescription = stringResource(Res.string.common_cancel))
-            }
-        },
-        actions = {
-            TooltipIconButton(
-                icon = Icons.Filled.SelectAll,
-                label = stringResource(Res.string.common_select_all),
-                onClick = onSelectAll,
-            )
-            TooltipIconButton(
-                icon = Icons.Filled.Palette,
-                label = stringResource(Res.string.common_tags_color_style),
-                onClick = { onOpen(TagDialog.Style(selected)) },
-            )
-            TooltipIconButton(
-                icon = Icons.AutoMirrored.Filled.CallMerge,
-                label = stringResource(Res.string.common_tags_merge),
-                onClick = { onOpen(TagDialog.Merge(selected)) },
-                // Merging needs at least a pair.
-                enabled = selected.size >= 2,
-            )
-            TooltipIconButton(
-                icon = Icons.Filled.Delete,
-                label = stringResource(Res.string.common_delete),
-                onClick = { onOpen(TagDialog.Delete(selected)) },
-            )
-        },
+    SelectionTopBar(
+        count = selected.size,
+        onClose = onClose,
+        onSelectAll = onSelectAll,
+        inline =
+            listOf(
+                TopBarAction(
+                    Icons.Filled.Palette,
+                    stringResource(Res.string.common_tags_color_style),
+                    { onOpen(TagDialog.Style(selected)) },
+                ),
+                TopBarAction(
+                    Icons.AutoMirrored.Filled.CallMerge,
+                    stringResource(Res.string.common_tags_merge),
+                    { onOpen(TagDialog.Merge(selected)) },
+                    // Merging needs at least a pair.
+                    enabled = selected.size >= 2,
+                ),
+                TopBarAction(
+                    Icons.Filled.Delete,
+                    stringResource(Res.string.common_delete),
+                    { onOpen(TagDialog.Delete(selected)) },
+                ),
+            ),
     )
 }
 

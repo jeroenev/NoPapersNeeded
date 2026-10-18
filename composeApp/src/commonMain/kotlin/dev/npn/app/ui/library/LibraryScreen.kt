@@ -311,7 +311,7 @@ private fun LibraryContent(
     Scaffold(
         topBar = {
             if (ui.selectionMode) {
-                SelectionTopBar(
+                LibrarySelectionTopBar(
                     count = ui.selected.size,
                     allDocIds = allDocIds,
                     reviewMode = reviewMode,
