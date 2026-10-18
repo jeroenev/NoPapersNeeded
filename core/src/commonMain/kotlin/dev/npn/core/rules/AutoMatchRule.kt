@@ -40,6 +40,20 @@ data class AutoMatchRule(
     val sets: Map<String, String> = emptyMap(),
     val position: Int = 0,
 ) {
+    /**
+     * This rule as it is stored and matched: its name and pattern trimmed, and its tags and set
+     * values trimmed with the blank ones dropped. A rule is normalized where it comes in, saved
+     * ([dev.npn.core.app.AutoMatchRuleRepository.save]) or decoded ([AutoMatchRuleJson]), since a
+     * list another device's build wrote may hold what this one would not.
+     */
+    fun normalized(): AutoMatchRule =
+        copy(
+            name = name.trim(),
+            pattern = pattern.trim(),
+            tags = tags.map { it.trim() }.filter { it.isNotEmpty() },
+            sets = sets.mapValues { it.value.trim() }.filterValues { it.isNotEmpty() },
+        )
+
     companion object {
         /** The order rules are stored, listed and run in: by position, then by id. */
         internal val ORDER: Comparator<AutoMatchRule> = compareBy(AutoMatchRule::position, AutoMatchRule::id)
@@ -124,7 +138,9 @@ object AutoMatchRuleJson {
     private val json = NpnJson.Persisted
     private val listSerializer = ListSerializer(LegacyAware)
 
-    fun decodeList(text: String): List<AutoMatchRule> = json.decodeFromString(listSerializer, text)
+    /** The rules in [text], each [AutoMatchRule.normalized]. */
+    fun decodeList(text: String): List<AutoMatchRule> =
+        json.decodeFromString(listSerializer, text).map(AutoMatchRule::normalized)
 
     fun encodeList(rules: List<AutoMatchRule>): String = json.encodeToString(listSerializer, rules)
 

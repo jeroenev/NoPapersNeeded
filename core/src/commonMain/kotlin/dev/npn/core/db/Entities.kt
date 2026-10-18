@@ -232,7 +232,7 @@ data class AutoMatchRuleEntity(
     val field: String,
     val algorithm: String,
     val pattern: String,
-    /** Comma-separated tag names to add when the rule matches. */
+    /** JSON list of the tag names to add when the rule matches (comma-joined in earlier builds). */
     val tags: String?,
     /** JSON object of field key -> value to set when the rule matches. */
     @ColumnInfo(defaultValue = "{}") val sets: String,

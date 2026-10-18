@@ -1,7 +1,6 @@
 package dev.npn.core.app
 
 import dev.npn.core.db.AutoMatchRuleDao
-import dev.npn.core.db.toEntity
 import dev.npn.core.db.toRule
 import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.journal.PendingOp
@@ -42,7 +41,7 @@ internal class AutoMatchRuleRepositoryImpl(
 
     @OptIn(ExperimentalUuidApi::class)
     override suspend fun save(rule: AutoMatchRule): String {
-        val saved = rule.copy(id = rule.id.ifBlank { Uuid.random().toString() }).toEntity().toRule()
+        val saved = rule.copy(id = rule.id.ifBlank { Uuid.random().toString() }).normalized()
         lifetime.owned {
             edit { rules -> rules.filterNot { it.id == saved.id } + saved }
             applier.applyToExistingDocs()

@@ -1,5 +1,7 @@
 package dev.npn.core.app
 
+import dev.npn.core.db.AutoMatchRuleEntity
+import dev.npn.core.db.toRule
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
@@ -255,6 +257,27 @@ class AutoMatchRuleIntegrationTest {
                 """{"id":"r2","name":"Name","field":"FILE_NAME","pattern":"y"}]"""
         AutoMatchRuleJson.decodeList(first).map { it.field to it.algorithm } shouldBe
             listOf(RuleField.Content to MatchAlgorithm.ANY_WORD, RuleField.FileName to MatchAlgorithm.ANY_WORD)
+    }
+
+    /** The rules table caches a rule's tags whole, a tag with a comma in it included. */
+    @Test
+    fun aTagWithACommaSurvivesTheCache() =
+        appSessionTest { rig ->
+            val rule = AutoMatchRule(id = "r1", name = "Smith", pattern = "smith", tags = listOf("Smith, John"))
+            rig.session.rules.save(rule)
+
+            rig.session.rules
+                .observeRules()
+                .first() shouldBe listOf(rule)
+        }
+
+    /** A row an earlier build cached comma-joined still reads, until the journal's list is mirrored over it. */
+    @Test
+    fun aRuleRowCachedCommaJoinedStillReads() {
+        val row =
+            AutoMatchRuleEntity("r1", "Old", true, "content", "EXACT", "x", tags = "a, b", sets = "{}", position = 0)
+
+        row.toRule().tags shouldBe listOf("a", "b")
     }
 
     /** A newer build's algorithm or kind of field is not read as the default: the list does not decode. */

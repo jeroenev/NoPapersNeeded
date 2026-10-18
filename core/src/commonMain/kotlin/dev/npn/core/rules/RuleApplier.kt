@@ -16,8 +16,8 @@ import kotlinx.coroutines.sync.withLock
  * through [JournalCoordinator]. Runs as a side effect when OCR text becomes available and when
  * a rule is saved/updated.
  *
- * [rules] reads the rule list wherever it is stored. Each call here reads it once and compiles the
- * enabled rules once, however many documents it then matches.
+ * [rules] reads the rule list wherever it is stored, each rule [AutoMatchRule.normalized]. Each call
+ * here reads it once and compiles the enabled rules once, however many documents it then matches.
  */
 class RuleApplier(
     private val rules: suspend () -> List<AutoMatchRule>,
@@ -133,15 +133,8 @@ class RuleApplier(
                     is RuleField.Field -> fields[field.key]
                 }
             if (!candidate.matches(value)) continue
-            rule.tags
-                .asSequence()
-                .map { it.trim() }
-                .filter { it.isNotEmpty() }
-                .forEach { tags += it }
-            for ((key, raw) in rule.sets) {
-                val trimmed = raw.trim()
-                if (trimmed.isNotEmpty()) sets[key] = trimmed
-            }
+            tags += rule.tags
+            sets += rule.sets
         }
         return Matched(tags, sets)
     }

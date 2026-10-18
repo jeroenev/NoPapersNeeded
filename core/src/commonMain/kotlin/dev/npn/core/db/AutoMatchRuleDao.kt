@@ -43,32 +43,31 @@ internal fun AutoMatchRuleEntity.toRule(): AutoMatchRule =
         field = RuleField.fromWire(field) ?: RuleField.Content,
         algorithm = MatchAlgorithm.entries.firstOrNull { it.name == algorithm } ?: MatchAlgorithm.ANY_WORD,
         pattern = pattern,
-        tags =
-            tags
-                ?.split(',')
-                ?.map { it.trim() }
-                ?.filter { it.isNotEmpty() }
-                .orEmpty(),
-        sets = runCatching { setsJson.decodeFromString<Map<String, String>>(sets) }.getOrDefault(emptyMap()),
+        tags = tags?.let(::cachedTags).orEmpty(),
+        sets = runCatching { cacheJson.decodeFromString<Map<String, String>>(sets) }.getOrDefault(emptyMap()),
         position = position,
     )
 
+/** The row caching [this] rule, which comes [AutoMatchRule.normalized] from the journal's list. */
 internal fun AutoMatchRule.toEntity(): AutoMatchRuleEntity =
     AutoMatchRuleEntity(
         id = id,
-        name = name.trim(),
+        name = name,
         enabled = enabled,
         field = field.wire,
         algorithm = algorithm.name,
-        pattern = pattern.trim(),
-        tags =
-            tags
-                .map { it.trim() }
-                .filter { it.isNotEmpty() }
-                .joinToString(",")
-                .takeIf { it.isNotEmpty() },
-        sets = setsJson.encodeToString(sets.mapValues { it.value.trim() }.filterValues { it.isNotEmpty() }),
+        pattern = pattern,
+        tags = cacheJson.encodeToString(tags),
+        sets = cacheJson.encodeToString(sets),
         position = position,
     )
 
-private val setsJson = NpnJson.Persisted
+/**
+ * The tags a row caches, a JSON list. Earlier builds cached them comma-joined, which split a tag
+ * holding a comma; such a row reads that way until the journal's list is mirrored over it.
+ */
+private fun cachedTags(stored: String): List<String> =
+    runCatching { cacheJson.decodeFromString<List<String>>(stored) }
+        .getOrElse { stored.split(',').map(String::trim).filter(String::isNotEmpty) }
+
+private val cacheJson = NpnJson.Persisted

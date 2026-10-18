@@ -327,15 +327,15 @@ internal data class RuleFormState(
     fun toRule(): AutoMatchRule =
         AutoMatchRule(
             id = id,
-            name = name.trim(),
+            name = name,
             enabled = enabled,
             field = field,
             algorithm = algorithm,
-            pattern = pattern.trim(),
-            tags = tags.split(',').map { it.trim() }.filter { it.isNotEmpty() },
-            sets = sets.mapValues { it.value.trim() }.filterValues { it.isNotEmpty() },
+            pattern = pattern,
+            tags = tags.split(','),
+            sets = sets,
             position = position,
-        )
+        ).normalized()
 
     companion object {
         fun of(rule: AutoMatchRule): RuleFormState =

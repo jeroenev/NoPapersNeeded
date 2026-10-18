@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.Flow
 interface AutoMatchRuleRepository {
     fun observeRules(): Flow<List<AutoMatchRule>>
 
+    /** Save [rule], [AutoMatchRule.normalized], under a new id when its own is blank; returns its id. */
     suspend fun save(rule: AutoMatchRule): String
 
     suspend fun delete(id: String)
