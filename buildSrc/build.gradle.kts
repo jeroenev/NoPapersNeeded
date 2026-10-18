@@ -20,6 +20,10 @@ kotlin {
             .get()
             .toInt(),
     )
+    // As npn.toolchain sets for the app's modules; npn.werror=false turns it off here too.
+    compilerOptions.allWarningsAsErrors.set(
+        providers.gradleProperty("npn.werror").map { it.toBoolean() }.orElse(true),
+    )
 }
 
 // The plugins the convention plugins apply or configure. On buildSrc's classpath they are on every

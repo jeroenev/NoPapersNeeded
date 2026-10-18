@@ -25,7 +25,9 @@ design, build/packaging/release details, and the library folder layout.
   `gradle/gradle-daemon-jvm.properties` repeat it; `:buildSrc:test` fails when they disagree.
   Bytecode stays at `jvm-target` 17, with `-Xjdk-release` on desktop compilations, because
   Android shares it and minSdk 30 lacks newer library APIs. Raising `jdk` never raises the
-  target; raising the target is a separate, Android-driven decision.
+  target; raising the target is a separate, Android-driven decision. Compiler warnings are
+  errors in every compilation (`npn.toolchain`, and buildSrc's own build); fix the warning, or pass
+  `-Pnpn.werror=false` locally while experimenting. Tests already opt in to `ExperimentalCoroutinesApi`.
 - `buildSrc` — build logic: every task class the build scripts register (packaging, `BuildInfo`,
   `checkLocalization`), and convention plugins that read the catalog: `npn.toolchain` (the JDK and
   bytecode target, applied by every module, plus the SDK levels of `androidApp` and

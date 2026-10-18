@@ -80,6 +80,12 @@ Android targets, SDK levels included, through `npn.kmp-module`. Both plugins rea
 Android SDK is located via `local.properties` (`sdk.dir`) or the `ANDROID_HOME` /
 `ANDROID_SDK_ROOT` environment variable.
 
+Every Kotlin compilation, `buildSrc` included, treats compiler warnings as errors and runs in
+progressive mode (`npn.toolchain`). To try something that warns, such as a dependency upgrade
+with new deprecations, pass `-Pnpn.werror=false` (or set it in `~/.gradle/gradle.properties`);
+CI always builds with warnings as errors. Test source sets of the multiplatform modules opt in to
+`kotlinx.coroutines.ExperimentalCoroutinesApi`, so tests need no `@OptIn` for the test dispatchers.
+
 ### Task runner (mise)
 
 Common build, run, test, and device-deploy commands are wrapped as

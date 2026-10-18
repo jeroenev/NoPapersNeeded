@@ -8,6 +8,7 @@ import org.jetbrains.kotlin.gradle.dsl.KotlinAndroidProjectExtension
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 import org.jetbrains.kotlin.gradle.targets.jvm.KotlinJvmTarget
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
 
 // Every module compiles with the catalog's `jdk` and emits `jvm-target` bytecode. Desktop code also
 // compiles against that release's class library (-Xjdk-release), so it cannot call an API that the
@@ -18,6 +19,16 @@ val levels = NpnBuildLevels.of(project)
 val bytecode = JvmTarget.fromTarget(levels.jvmTarget)
 val jdkRelease = "-Xjdk-release=${levels.jvmTarget}"
 val testRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+// Every Kotlin compilation treats warnings as errors, so a deprecation or an unused result is
+// fixed where it appears instead of piling up. `-Pnpn.werror=false` (or the same line in
+// ~/.gradle/gradle.properties) turns that off locally, e.g. while trying a dependency upgrade.
+val warningsAsErrors = providers.gradleProperty("npn.werror").map { it.toBoolean() }.orElse(true)
+tasks.withType<KotlinCompilationTask<*>>().configureEach {
+    compilerOptions.allWarningsAsErrors.set(warningsAsErrors)
+    // Fixes for language bugs take effect now instead of after a deprecation cycle.
+    compilerOptions.progressiveMode.set(true)
+}
 
 pluginManager.withPlugin("org.jetbrains.kotlin.multiplatform") {
     configure<KotlinMultiplatformExtension> {
