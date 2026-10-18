@@ -7,6 +7,9 @@ local.properties
 captures/
 .DS_Store
 workmd/
-docs/
+docs/*
+!docs/AI_TOOL_DATA_GAPS.md
+!docs/SIMULATION.md
+!docs/MUTATION_TESTING.md
 .opencode/
 .codex/

@@ -47,7 +47,7 @@ internal suspend fun openSession(
     try {
         // Before anything reads the device id: an index from before device.db holds it.
         moveDeviceState(deps)
-        val indexer = Indexer(deps.fs, deps.db, deps.clock, deps.log)
+        val indexer = Indexer(deps.fs, deps.db, deps.clock, deps.log, hashing = deps.computation)
         val coordinator = createCoordinator(deps, indexer, writeUndelete)
         // Waits out a write a caller started outside the lifetime, then refuses every later one.
         lifetime.releaseOnClose(coordinator::close)
@@ -113,6 +113,7 @@ private suspend fun createCoordinator(
         writer = createObjectWriter(deps),
         indexer = indexer,
         accumulator = MetadataAccumulator(deps.fs, deps.db),
+        dispatcher = deps.computation,
         clock = deps.clock,
         log = deps.log,
         writeUndelete = writeUndelete,

@@ -8,7 +8,7 @@ this first. The other documents each own one thing and this one does not repeat 
 | AGENTS.md | Build and test commands, conventions, detekt, and the short list of invariants you must not break. |
 | CONTEXT.md | The domain glossary: what Field, Edit Run, Review, facet and so on mean here. |
 | DEVELOPMENT.md | Design background, packaging and release mechanics, the library folder layout on disk. |
-| `docs/` | Longer design notes on one topic each, for example `AI_TOOL_DATA_GAPS.md` and `storage-path-reconciliation.md`. |
+| `docs/` | Longer notes on one topic each: `SIMULATION.md` (the deterministic simulation of the core), `AI_TOOL_DATA_GAPS.md`. The directory is otherwise ignored by git, for local working notes; a document meant for the repository is listed in `.gitignore`'s exceptions. |
 
 The document has four layers. Sections 1 to 3 are the map: what the system is and where the code
 lives. Sections 4 and 5 are how it runs: lifecycle, concurrency, and the paths data takes. Section 6

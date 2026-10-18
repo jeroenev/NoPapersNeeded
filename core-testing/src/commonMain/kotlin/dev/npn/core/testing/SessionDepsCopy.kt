@@ -25,4 +25,6 @@ fun SessionDeps.copy(
         log = log,
         clock = clock,
         installationId = installationId,
+        computation = computation,
+        timeSource = timeSource,
     )

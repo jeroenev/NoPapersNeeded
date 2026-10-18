@@ -225,7 +225,7 @@ internal class LibrarySessionImpl(
                     .watch()
                     .mapNotNull { event ->
                         log.runLogged("Reading the change at ${event.relPath}") { watchAction(event, deviceId) }
-                    }.settled()
+                    }.settled(timeSource = deps.timeSource)
                     .collect { act(it) }
             }
         }
