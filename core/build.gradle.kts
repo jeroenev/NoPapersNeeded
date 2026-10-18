@@ -93,8 +93,8 @@ dependencies {
 }
 
 // Lint's model lists every component's source directories, KSP's output among them, but AGP does
-// not order the test components' lint tasks after KSP; Gradle then refuses a build that runs both
-// (compileDeviceTests and lintDebug, as CI does).
+// not order the test components' lint tasks after KSP; Gradle then refuses a build that runs both,
+// such as a local `compileDeviceTests :androidApp:lintDebug` (CI runs them separately).
 tasks.matching { it.name.endsWith("LintModel") || it.name.startsWith("lintAnalyze") }.configureEach {
     mustRunAfter(tasks.matching { it.name.startsWith("ksp") })
 }

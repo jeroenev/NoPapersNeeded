@@ -62,18 +62,21 @@ jobs:
           :buildSrc:test
           :desktopApp:test
 
-      # detektTyped is detekt with type resolution: it needs the compiled classpaths, so it shares
-      # this invocation instead of running with the source-only detekt above, as does Android lint
-      # (lintDebug lints core and composeApp's Android code too).
-      - name: Compile (Android and desktop), typed static analysis and Android lint
-        run: >-
-          ./gradlew
-          :core:compileAndroidMain
-          :composeApp:compileKotlinDesktop
-          :composeApp:compileAndroidMain
-          compileDeviceTests
-          detektTyped
-          :androidApp:lintDebug
+      # Builds every module's Android code on the way (desktop compiled for the tests above).
+      - name: Compile and device tests
+        run: ./gradlew compileDeviceTests
+
+      # detektTyped is detekt with type resolution over the compiled classpaths. The runner has
+      # ~8 GB, so the Kotlin daemon left over from compiling is stopped first, and typed detekt and
+      # Android lint each get their own invocation rather than sharing one.
+      - name: Typed static analysis
+        run: |
+          pkill -f KotlinCompileDaemon || true
+          ./gradlew detektTyped
+
+      # lintDebug lints core and composeApp's Android code too.
+      - name: Android lint
+        run: ./gradlew :androidApp:lintDebug
 
       # KSP re-exports the Room schemas while compiling above. A difference means a schema change
       # whose export was not committed: device.db's DeviceDatabaseSchemaTest only guards what is.
