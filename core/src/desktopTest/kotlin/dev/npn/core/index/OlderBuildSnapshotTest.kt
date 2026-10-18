@@ -34,7 +34,7 @@ class OlderBuildSnapshotTest {
     /** Another device's object defining the title with `perDocument`, on disk and read by nobody yet. */
     private suspend fun titleObject(): PublishedTransaction {
         rig.clock.advance()
-        return checkNotNull(rig.writer("device-two").commit(listOf(PendingOp.fieldDefSet(title))))
+        return rig.writer("device-two").commit(listOf(PendingOp.fieldDefSet(title)))
     }
 
     /** The snapshot an older build compacts [x] into: x's events without `perDocument`, superseding x. */

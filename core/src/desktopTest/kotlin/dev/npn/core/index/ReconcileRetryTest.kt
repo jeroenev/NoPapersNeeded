@@ -51,7 +51,7 @@ class ReconcileRetryTest {
         val published =
             listOf("one", "two").map { tag ->
                 rig.clock.advance()
-                tag to checkNotNull(remote.commit(listOf(PendingOp.tagAdd(docId, tag)))).relPath
+                tag to remote.commit(listOf(PendingOp.tagAdd(docId, tag))).relPath
             }
         val (earlier, later) = published.sortedBy { (_, path) -> path }
         val laterBytes = rig.fs.readBytes(later.second)
@@ -105,7 +105,7 @@ class ReconcileRetryTest {
             val coordinator = rig.coordinator()
             coordinator.refreshState()
             rig.clock.advance()
-            val published = checkNotNull(rig.writer("device-two").commit(listOf(PendingOp.tagAdd(docId, "remote"))))
+            val published = rig.writer("device-two").commit(listOf(PendingOp.tagAdd(docId, "remote")))
             val bucket = NpnPaths.parentDir(published.relPath)
             val name = NpnPaths.fileName(published.relPath)
             val partial = rig.fs.readBytes(published.relPath).let { it.copyOf(it.size / 2) }

@@ -57,9 +57,8 @@ class LanguageChangeTest : EnglishLocaleTest() {
                 settings.updateSettings { it.copy(appLanguage = "nl") }
                 settle()
 
-                val after = checkNotNull(drafts)
-                after shouldBeSameInstanceAs before
-                after.state["doc-1"]?.dirty shouldBe true
+                drafts shouldBeSameInstanceAs before
+                before.state["doc-1"]?.dirty shouldBe true
             }
         }
 

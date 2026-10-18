@@ -264,7 +264,7 @@ class ImportService(
                 withContext(NonCancellable) { unplace(hash, existing, target.takeIf { inPlace == null }, tmpPath) }
             }
         }
-        return checkNotNull(placement)
+        return placement
     }
 
     /**

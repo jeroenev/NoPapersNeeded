@@ -110,10 +110,6 @@ naming:
       - 'native'
       - 'iosArm64'
       - 'iosX64'
-      - reason: "Track it as an issue, or do it now"
-        value: "TODO:"
-      - reason: "Must be resolved before this ships"
-        value: "STOPSHIP:"
       - 'macosX64'
       - 'mingwX64'
       - 'linuxX64'
@@ -135,6 +131,12 @@ coroutines:
     # A catch-all around a suspend call also catches CancellationException and so breaks
     # structured cancellation. Needs type resolution, so only the typed tasks run it.
     active: true
+  SuspendFunInFinallySection:
+    # A cancelled coroutine's finally block cannot suspend: the call throws CancellationException
+    # and the cleanup never runs. Cleanup that must run goes in withContext(NonCancellable). A
+    # test's finally runs after a failure, not a cancellation, so tests are left out.
+    active: true
+    excludes: *testSources
 
 potential-bugs:
   ElseCaseInsteadOfExhaustiveWhen:
@@ -148,6 +150,20 @@ potential-bugs:
       - 'ai.koog.prompt.streaming.StreamFrame'
   UnsafeCallOnNullableType:
     excludes: *testSources
+  # Low-noise checks for real bugs, on top of the defaults. Tried and left off: MissingUseCall
+  # (215 hits, nearly all a Closeable handed to its owner or returned), PropertyUsedBeforeDeclaration
+  # (57, reads inside function bodies, which run after every property is initialised) and
+  # NullableToStringCall (9, deliberate "null" in keys and messages, or a smart cast it cannot see).
+  UnconditionalJumpStatementInLoop:
+    active: true
+  DontDowncastCollectionTypes:
+    active: true
+  CharArrayToStringCall:
+    active: true
+  ExitOutsideMain:
+    active: true
+  UnnecessaryNotNullCheck:
+    active: true
 
 performance:
   ForEachOnRange:

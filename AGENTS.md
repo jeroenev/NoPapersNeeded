@@ -120,6 +120,13 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   next to it and is called out in the PR. Prefer the real fix.
 - `LongMethod` ignores `@Composable` functions: their length measures UI-tree depth, not
   complexity.
+- `ForbiddenComment` rejects `TODO:`, `FIXME` and `STOPSHIP:`: track unfinished work as an issue.
+- Typed `SuspendFunInFinallySection` (main sources): a `finally` that suspends does its cleanup in
+  `withContext(NonCancellable)`, or a cancelled coroutine skips it. Where the enclosing block or the
+  callee already is NonCancellable, suppress the hit with that reason.
+- Typed potential-bug rules beyond the defaults: `UnconditionalJumpStatementInLoop`,
+  `DontDowncastCollectionTypes`, `CharArrayToStringCall`, `ExitOutsideMain`,
+  `UnnecessaryNotNullCheck` (the config lists the ones tried and left off, with why).
 
 ## Architecture invariants (do not break)
 
@@ -131,8 +138,8 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   `device.db` (`DeviceDatabase`) beside the index: never synced, never dropped, real migrations
   only. `DeviceDatabaseSchemaTest` pins each shipped version's identity hash (append only, never
   edit an entry) and opens every shipped schema through the production builder, and CI fails when
-  the compiled schema export differs from `core/schemas`. Library data (settings, saved views, rules) belongs in the journal, not in either
-  database.
+  the compiled schema export differs from `core/schemas`. Library data (settings, saved views,
+  rules) belongs in the journal, not in either database.
 - PDFs are immutable after import (rename/move only). Sole exception: explicit
   bake-in-place, which replaces only the bytes it read and hashed as the document's (while the
   file keeps the size and mtime it had then) and records a `relink` journal event for the new hash.

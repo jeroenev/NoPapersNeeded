@@ -554,7 +554,7 @@ class JournalCoordinator internal constructor(
                     }
                 }
                 returnedUnrecorded -= id
-                projectStanding(current, checkNotNull(published), preserveLifecycleDocs = docs)
+                projectStanding(current, published, preserveLifecycleDocs = docs)
                 // The change stands: a failure to read what it left is no failure of the change.
                 log.runLogged("Reading what the lifecycle change of $id left") { change.standing() }
             }
