@@ -2,19 +2,24 @@ package dev.npn.app
 
 import dev.npn.app.platform.ScanResult
 import dev.npn.app.ui.common.uiText
+import dev.npn.app.ui.library.LibraryDialog
 import dev.npn.app.ui.library.LibraryQuery
 import dev.npn.app.ui.library.LibraryViewModel
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySort
+import dev.npn.core.app.SavedView
 import dev.npn.core.app.SortField
 import dev.npn.core.app.TagInfo
+import dev.npn.core.app.ViewType
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.testing.doc
 import dev.npn.core.testing.listItem
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.maps.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -33,6 +38,47 @@ class LibraryViewModelTest : MainDispatcherTest() {
         session: FakeLibrarySession = FakeLibrarySession(),
         settings: FakeSettingsRepository = FakeSettingsRepository(),
     ) = LibraryViewModel(session, settings).also { collecting(it.content) }
+
+    /**
+     * A restored process shows the library as the user left it: the filter and the search typed
+     * into it, a saved view's sort and layout, the selection, the previewed document and the
+     * dialog open over the list.
+     */
+    @Test
+    fun aRestoredProcessShowsTheLibraryAsItWas() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply {
+                    documents.documents.value = listOf(listItem(doc("doc-1")), listItem(doc("doc-2")))
+                }
+            val settings = FakeSettingsRepository()
+            val screen = recreatable { LibraryViewModel(session, settings, it) }
+            screen.vm.apply {
+                applySavedView(
+                    SavedView(
+                        "v1",
+                        "Invoices",
+                        LibraryFilter(tagsAll = listOf("invoice")),
+                        LibrarySort(SortField.Name, ascending = true),
+                        ViewType.GRID,
+                    ),
+                )
+                onQueryChange("tax 2024")
+                startSelection("doc-1")
+                toggleSelection("doc-2")
+                preview("doc-2")
+                openDialog(LibraryDialog.RenameView("v1", "Invoices"))
+            }
+            val restored =
+                screen.recreate(
+                    this,
+                    { combine(it.content, it.preview, it.dialog, ::Triple) },
+                ) { (content, preview, dialog) ->
+                    Triple(Transient.library(content), preview, dialog)
+                }
+            restored.ui.value.filter shouldBe LibraryFilter(query = "tax 2024", tagsAll = listOf("invoice"))
+            restored.ui.value.selected shouldBe setOf("doc-1", "doc-2")
+        }
 
     @Test
     fun queryTextReflectsKeystrokesImmediately() =

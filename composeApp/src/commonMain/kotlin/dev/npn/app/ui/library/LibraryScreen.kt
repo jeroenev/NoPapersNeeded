@@ -38,13 +38,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.platform.LocalDocumentScanner
 import dev.npn.app.platform.platformFileToExternalSource
@@ -113,7 +113,7 @@ fun LibraryScreen(
     /** Each document's viewmodel store, shared with the detail screen; the side panel holds the previewed one's. */
     documents: KeyedViewModelStores<String>,
     modifier: Modifier = Modifier,
-    vm: LibraryViewModel = viewModel { LibraryViewModel(session, settings) },
+    vm: LibraryViewModel = viewModel { LibraryViewModel(session, settings, createSavedStateHandle()) },
     previewed: ViewModelStoreLease<String> = viewModel { ViewModelStoreLease(documents) },
 ) {
     val state by vm.content.collectAsStateWithLifecycle()
@@ -143,19 +143,19 @@ fun LibraryScreen(
 
     val snackbar = rememberSnackbarMessages(vm.messages)
 
-    var dialog by rememberLibraryDialog()
+    val dialog by vm.dialog.collectAsStateWithLifecycle()
 
     val wide = LocalWindowWidthClass.current.isWide
     // Measured for the side panel's width only; whether there is a side panel is the window's call.
     BoxWithConstraints(modifier.fillMaxSize()) {
         // Wide layouts preview a tapped document in the side panel; compact ones open it directly.
-        var previewDocId by rememberSaveable { mutableStateOf<String?>(null) }
+        val previewDocId by vm.preview.collectAsStateWithLifecycle()
         // The previewed document keeps its viewmodel while the panel is there to show it (and the
         // detail screen, sharing it, for as long as that is open); another document, a closed panel
         // or a compact window lets go of it once the composition has.
         SideEffect { previewed.keepOnly(previewDocId.takeIf { wide }) }
         val onDocClick: (String) -> Unit =
-            remember(wide) { { docId -> if (wide) previewDocId = docId else openDoc(docId) } }
+            remember(wide) { { docId -> if (wide) vm.preview(docId) else openDoc(docId) } }
 
         val sidePanelWidth = (maxWidth * SIDE_PANEL_FRACTION).coerceIn(SidePanelMinWidth, SidePanelMaxWidth)
         val panel = Modifier.width(sidePanelWidth).fillMaxHeight()
@@ -170,7 +170,7 @@ fun LibraryScreen(
                     onOpenQueue = onOpenQueue,
                     onOpenTrash = onTrash,
                     onAiEdit = onAiEdit,
-                    onDialog = { dialog = it },
+                    onDialog = vm::openDialog,
                 )
             }
             // Wide layouts give the side panel to the filter editor when it is open, else to the
@@ -183,7 +183,7 @@ fun LibraryScreen(
                     val editor = rememberFilterEditorState(ui.filter)
                     val apply = { applied: LibraryFilter ->
                         vm.setFilter(applied)
-                        dialog = null
+                        vm.openDialog(null)
                     }
                     if (wide) {
                         FilterPanel(
@@ -192,7 +192,7 @@ fun LibraryScreen(
                             fields = fieldFilters,
                             reviewMode = state.reviewMode,
                             onApply = apply,
-                            onDismiss = { dialog = null },
+                            onDismiss = { vm.openDialog(null) },
                             fillHeight = true,
                             modifier = panel,
                         )
@@ -203,7 +203,7 @@ fun LibraryScreen(
                             fields = fieldFilters,
                             reviewMode = state.reviewMode,
                             onApply = apply,
-                            onDismiss = { dialog = null },
+                            onDismiss = { vm.openDialog(null) },
                         )
                     }
                 }
@@ -218,9 +218,9 @@ fun LibraryScreen(
                         session = session,
                         settings = settings,
                         snackbar = snackbar,
-                        onClose = { previewDocId = null },
+                        onClose = { vm.preview(null) },
                         onExpand = { openDoc(previewItem.doc.docId) },
-                        onReviewNext = { if (previewDocId == previewItem.doc.docId) previewDocId = nextId },
+                        onReviewNext = { if (vm.preview.value == previewItem.doc.docId) vm.preview(nextId) },
                         hasNext = nextId != null,
                         searchQuery = ui.filter.query,
                         modifier = panel,
@@ -245,7 +245,7 @@ fun LibraryScreen(
             onAddTag = vm::bulkAddTag,
             onRemoveTag = vm::bulkRemoveTag,
             onTrash = vm::bulkTrash,
-            onDismiss = { dialog = null },
+            onDismiss = { vm.openDialog(null) },
         )
     }
 }
