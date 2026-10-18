@@ -219,7 +219,7 @@ class ScreenRestorationTest : EnglishLocaleTest() {
         label: String,
     ) = FieldDef(key, label, FieldType.TEXT, showByDefault = false, aiEnabled = false, position = 0)
 
-    /** Keeps the field manager's dialog as the settings screen's viewmodel does ([SettingsViewModel.openFieldDialog]). */
+    /** Keeps the field manager's dialog as the settings viewmodel does ([SettingsViewModel.openFieldDialog]). */
     private class FieldDialogs(
         saved: SavedStateHandle,
     ) : ViewModel() {
