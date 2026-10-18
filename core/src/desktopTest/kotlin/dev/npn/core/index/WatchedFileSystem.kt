@@ -39,8 +39,6 @@ internal class WatchedFileSystem(
         }
     }
 
-    override suspend fun listAll(): List<FileMeta> = delegate.listAll().also { record("listAll", "") }
-
     override suspend fun listAllIndexable(): List<FileMeta> = delegate.listAllIndexable().also { record("list", "") }
 
     override suspend fun listAllUnder(relPath: String): List<FileMeta> {

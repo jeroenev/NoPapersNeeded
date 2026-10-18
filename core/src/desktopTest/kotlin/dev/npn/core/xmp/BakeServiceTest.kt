@@ -257,7 +257,7 @@ class BakeServiceTest {
             }
 
             fs.readBytes("doc.pdf") shouldBe other
-            val recovery = fs.listAll().single { it.name.startsWith("npn-recovery-") }
+            val recovery = fs.listAllUnder("").single { it.name.startsWith("npn-recovery-") }
             fs.readBytes(recovery.relPath) shouldBe original
             fs.sha256(recovery.relPath) shouldBe oldSha
         }
@@ -331,7 +331,7 @@ class BakeServiceTest {
             fs.readBytes("doc.pdf") shouldNotBe original
             // ... and the original survives under a recovery name, as the branch that finds another
             // file there saves it.
-            val recovery = fs.listAll().single { it.name.startsWith("npn-recovery-") }
+            val recovery = fs.listAllUnder("").single { it.name.startsWith("npn-recovery-") }
             fs.readBytes(recovery.relPath) shouldBe original
             fs.sha256(recovery.relPath) shouldBe oldSha
         }

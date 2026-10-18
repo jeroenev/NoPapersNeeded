@@ -83,9 +83,6 @@ interface LibraryFileSystem {
         toRelPath: String,
     ): Unit = throw VerifiedPublicationUnavailableException("Atomic document claiming is unsupported")
 
-    /** Recursive walk of the whole library, including `.npn/` contents. Directories are included. */
-    suspend fun listAll(): List<FileMeta>
-
     /**
      * Recursive walk of the whole library excluding the `.npn/` metadata subtree (journal, OCR
      * sidecars, trash), for indexing/rescan walks. Each platform prunes the subtree in the walk
@@ -93,7 +90,10 @@ interface LibraryFileSystem {
      */
     suspend fun listAllIndexable(): List<FileMeta>
 
-    /** Recursive walk below [relPath], excluding [relPath] itself. */
+    /**
+     * Recursive walk below [relPath], excluding [relPath] itself. Directories are included; `""`
+     * walks the whole library, `.npn/` contents included.
+     */
     suspend fun listAllUnder(relPath: String): List<FileMeta>
 
     suspend fun exists(relPath: String): Boolean

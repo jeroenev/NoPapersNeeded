@@ -63,7 +63,7 @@ class JvmLibraryFileSystemTest {
             fs.writeBytesOnce("inbox/a.pdf", "hello".encodeToByteArray())
             fs.writeBytesOnce(".npn/journal/dev1/0.jsonl", "{}".encodeToByteArray())
 
-            val all = fs.listAll()
+            val all = fs.listAllUnder("")
             val relPaths = all.map { it.relPath }
             relPaths.shouldContainExactlyInAnyOrder(
                 "inbox",
@@ -98,7 +98,7 @@ class JvmLibraryFileSystemTest {
             Files.createDirectories(root.resolve("dir"))
             Files.write(root.resolve("dir").resolve("x\\y.pdf"), "hello".encodeToByteArray())
 
-            fs.listAll().map { it.relPath }.shouldContainExactlyInAnyOrder("dir", "dir/x\\y.pdf")
+            fs.listAllUnder("").map { it.relPath }.shouldContainExactlyInAnyOrder("dir", "dir/x\\y.pdf")
         }
 
     @Test

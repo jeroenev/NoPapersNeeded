@@ -21,10 +21,11 @@ import kotlin.uuid.Uuid
  * `ACTION_OPEN_DOCUMENT_TREE`, it exposes the same library-relative, '/'-separated view as the
  * direct-filesystem implementation.
  *
- * Performance: [listAll] walks the tree with direct [android.content.ContentResolver] queries
- * against [DocumentsContract] child-document uris (COLUMN_DOCUMENT_ID/DISPLAY_NAME/MIME_TYPE/
- * SIZE/LAST_MODIFIED), recursing into directories. This is dramatically faster than
- * [DocumentFile.listFiles], which does one binder round-trip per child. Path-to-docId resolution
+ * Performance: [listAllIndexable] and [listAllUnder] walk the tree with direct
+ * [android.content.ContentResolver] queries against [DocumentsContract] child-document uris
+ * (COLUMN_DOCUMENT_ID/DISPLAY_NAME/MIME_TYPE/SIZE/LAST_MODIFIED), recursing into directories.
+ * This is dramatically faster than [DocumentFile.listFiles], which does one binder round-trip
+ * per child. Path-to-docId resolution
  * is memoized per directory (see [SafDirectoryCache]), because SAF has no path lookup and every
  * operation would otherwise re-list all of its ancestors.
  *
@@ -181,11 +182,6 @@ class SafLibraryFileSystem(
         }
         return parentId
     }
-
-    override suspend fun listAll(): List<FileMeta> =
-        withContext(io) {
-            listAllFrom(treeDocId, "")
-        }
 
     override suspend fun listAllIndexable(): List<FileMeta> =
         withContext(io) {

@@ -29,7 +29,7 @@ class TrashLifecycleTest {
             doc.trashed.shouldBeTrue()
             // A file now exists under .npn/trash/.
             val trash =
-                rig.fs.listAll().filter {
+                rig.fs.listAllUnder("").filter {
                     !it.isDirectory && it.relPath.startsWith("${NpnPaths.TRASH_DIR}/")
                 }
             trash.isNotEmpty().shouldBeTrue()

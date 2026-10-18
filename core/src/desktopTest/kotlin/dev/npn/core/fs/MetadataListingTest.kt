@@ -24,16 +24,10 @@ class MetadataListingTest {
         delegate: LibraryFileSystem,
     ) : LibraryFileSystem by delegate {
         private val inner = delegate
-        var wholeLibraryWalks = 0
         val walkedDirs = ArrayList<String>()
 
         /** Entries every walk returned, summed: the work a walk costs grows with this. */
         var entriesListed = 0
-
-        override suspend fun listAll(): List<FileMeta> {
-            wholeLibraryWalks++
-            return inner.listAll().also { entriesListed += it.size }
-        }
 
         override suspend fun listAllUnder(relPath: String): List<FileMeta> {
             walkedDirs += relPath
@@ -76,7 +70,6 @@ class MetadataListingTest {
             sidecars.listForHash(hash) shouldContainExactlyInAnyOrder listOf("dev-a", "dev-b.tesseract")
             sidecars.list().size shouldBe 3
 
-            fs.wholeLibraryWalks shouldBe 0
             fs.walkedDirs shouldContainExactly listOf(NpnPaths.OCR_DIR, NpnPaths.OCR_DIR)
             fs.entriesListed shouldBe 6
         }
@@ -87,7 +80,6 @@ class MetadataListingTest {
             TrashOps(fs).listTrash().map { it.relPath } shouldContainExactly
                 listOf(NpnPaths.trashPath("old.pdf", hash, 1_000))
 
-            fs.wholeLibraryWalks shouldBe 0
             fs.walkedDirs shouldContainExactly listOf(NpnPaths.TRASH_DIR)
             fs.entriesListed shouldBe 1
         }

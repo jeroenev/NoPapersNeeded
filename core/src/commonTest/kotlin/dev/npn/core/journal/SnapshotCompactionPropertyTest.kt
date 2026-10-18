@@ -22,8 +22,6 @@ import kotlin.test.assertEquals
 
 /** Minimal FS stub for compactor unit tests that only exercise pure planning/survival logic. */
 private object NoPublishFs : LibraryFileSystem {
-    override suspend fun listAll(): List<FileMeta> = emptyList()
-
     override suspend fun listAllIndexable(): List<FileMeta> = emptyList()
 
     override suspend fun listAllUnder(relPath: String): List<FileMeta> = emptyList()

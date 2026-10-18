@@ -50,7 +50,7 @@ class DocumentPathReplicationTest {
             watched.calls("publish") shouldBe emptyList()
             rig.fs.sha256("archive/new.pdf") shouldBe hash
             rig.exists("old.pdf") shouldBe false
-            rig.fs.listAll().filter { it.name.startsWith("npn-recovery-") } shouldBe emptyList()
+            rig.fs.listAllUnder("").filter { it.name.startsWith("npn-recovery-") } shouldBe emptyList()
         }
 
     @Test
@@ -175,7 +175,7 @@ class DocumentPathReplicationTest {
             DocumentPaths(racing).reconcile(hash, "old.pdf", "new.pdf") shouldBe "old.pdf"
             rig.exists("new.pdf") shouldBe false
             rig.fs.readBytes("old.pdf").decodeToString() shouldBe "replacement"
-            rig.fs.listAll().filter { it.name.startsWith(NpnPaths.Temp.RECOVERY_PREFIX) } shouldBe emptyList()
+            rig.fs.listAllUnder("").filter { it.name.startsWith(NpnPaths.Temp.RECOVERY_PREFIX) } shouldBe emptyList()
         }
 
     @Test
@@ -198,7 +198,7 @@ class DocumentPathReplicationTest {
             assertFailsWith<IllegalStateException> { DocumentPaths(failing).reconcile(hash, "old.pdf", "new.pdf") }
             rig.fs.sha256("old.pdf") shouldBe hash
             rig.exists("new.pdf") shouldBe false
-            rig.fs.listAll().filter { it.name.startsWith(NpnPaths.Temp.RECOVERY_PREFIX) } shouldBe emptyList()
+            rig.fs.listAllUnder("").filter { it.name.startsWith(NpnPaths.Temp.RECOVERY_PREFIX) } shouldBe emptyList()
         }
 
     @Test
@@ -217,14 +217,14 @@ class DocumentPathReplicationTest {
             DocumentPaths(otherVolume).reconcile(hash, "old.pdf", "archive/new.pdf") shouldBe "archive/new.pdf"
             rig.fs.sha256("archive/new.pdf") shouldBe hash
             rig.exists("old.pdf") shouldBe false
-            rig.fs.listAll().filter { it.name.startsWith(NpnPaths.Temp.RECOVERY_PREFIX) } shouldBe emptyList()
+            rig.fs.listAllUnder("").filter { it.name.startsWith(NpnPaths.Temp.RECOVERY_PREFIX) } shouldBe emptyList()
         }
 
     private suspend fun copyJournal(
         from: IndexRig,
         to: IndexRig,
     ) {
-        for (entry in from.fs.listAll()) {
+        for (entry in from.fs.listAllUnder("")) {
             if (!entry.isDirectory && entry.relPath.startsWith(".npn/journal/") && !to.exists(entry.relPath)) {
                 to.fs.writeBytesOnce(entry.relPath, from.fs.readBytes(entry.relPath))
             }

@@ -91,9 +91,7 @@ class JvmLibraryFileSystem internal constructor(
      */
     private fun relOf(path: Path): String = root.relativize(path).joinToString("/")
 
-    override suspend fun listAll(): List<FileMeta> = listAllFrom(root)
-
-    /** [listAll] without the `.npn/` metadata subtree, for indexing/rescan walks. */
+    /** The whole library without the `.npn/` metadata subtree, for indexing/rescan walks. */
     override suspend fun listAllIndexable(): List<FileMeta> = listAllFrom(root, skipNpn = true)
 
     override suspend fun listAllUnder(relPath: String): List<FileMeta> = listAllFrom(resolve(relPath))

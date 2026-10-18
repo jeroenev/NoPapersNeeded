@@ -38,8 +38,6 @@ private class CountingFileSystem(
 
     fun journalReads(): List<String> = reads.filter { it.startsWith("${NpnPaths.JOURNAL_DIR}/") }
 
-    override suspend fun listAll(): List<FileMeta> = delegate.listAll()
-
     override suspend fun listAllIndexable(): List<FileMeta> = delegate.listAllIndexable()
 
     override suspend fun listAllUnder(relPath: String): List<FileMeta> = delegate.listAllUnder(relPath)

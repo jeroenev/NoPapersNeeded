@@ -75,7 +75,7 @@ class ExternalDocumentMovesTest {
                         .relPath shouldBe "manual.pdf"
                     a.accumulator.loadState().effectiveProp(hash, SystemProperty.STORAGE_PATH) shouldBe "manual.pdf"
                     a.exists("app.pdf") shouldBe false
-                    for (entry in a.fs.listAll()) {
+                    for (entry in a.fs.listAllUnder("")) {
                         if (!entry.isDirectory && entry.relPath.startsWith(".npn/journal/")) {
                             b.fs.writeBytesOnce(entry.relPath, a.fs.readBytes(entry.relPath))
                         }
