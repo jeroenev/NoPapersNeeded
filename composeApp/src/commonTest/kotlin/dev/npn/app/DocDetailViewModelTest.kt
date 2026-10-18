@@ -24,6 +24,7 @@ import dev.npn.core.ocr.OcrEngineRef
 import dev.npn.core.ocr.OcrState
 import dev.npn.core.testing.doc
 import dev.npn.core.testing.listItem
+import dev.npn.core.util.NpnLog
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
@@ -36,7 +37,9 @@ import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_no_ai_metadata_suggestions
 import no_papers_needed.composeapp.generated.resources.common_no_ai_tag_suggestions
+import no_papers_needed.composeapp.generated.resources.common_writes_journal_incomplete
 import no_papers_needed.composeapp.generated.resources.common_writes_need_newer_app
+import no_papers_needed.composeapp.generated.resources.common_writes_reconcile_failed
 import no_papers_needed.composeapp.generated.resources.detail_add_tag_failed
 import no_papers_needed.composeapp.generated.resources.detail_ocr_details_failed
 import no_papers_needed.composeapp.generated.resources.detail_ocr_engine_failed
@@ -138,6 +141,42 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
             messages shouldContainExactly
                 listOf(uiText(Res.string.detail_add_tag_failed, uiText(Res.string.common_writes_need_newer_app)))
+        }
+
+    /**
+     * A write refused while the journal is incomplete, or after reading it failed, says why in the
+     * user's terms (the library is read-only until then), not with the technical cause, which naming
+     * journal objects goes to the log.
+     */
+    @Test
+    fun aWriteRefusedForAnIncompleteOrUnreadJournalSaysWhyAndLogsTheCause() =
+        runTest(dispatcher) {
+            for (
+            (block, reason) in
+            listOf(
+                WriteBlock.JOURNAL_DAMAGED to Res.string.common_writes_journal_incomplete,
+                WriteBlock.RECONCILE_FAILED to Res.string.common_writes_reconcile_failed,
+            )
+            ) {
+                val refusal =
+                    MetadataWriteBlocked(
+                        block,
+                        "Metadata writes are disabled: .npn/journal/objects-v2-0001 disappeared",
+                    )
+                val logged = mutableListOf<Throwable?>()
+                val session =
+                    FakeLibrarySession().apply {
+                        meta.failBatchOps = { throw refusal }
+                        log = NpnLog { _, _, error -> logged += error }
+                    }
+                val model = liveDocDetailVm(session = session)
+                val messages = collecting(model.messages.map { it.text })
+                advanceUntilIdle()
+                model.addTag("finance")
+                advanceUntilIdle()
+                messages shouldContainExactly listOf(uiText(Res.string.detail_add_tag_failed, uiText(reason)))
+                logged shouldContainExactly listOf(refusal)
+            }
         }
 
     /**

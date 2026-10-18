@@ -24,6 +24,8 @@
     <string name="common_view_grid">Cuadrícula</string>
     <string name="common_unknown_error">error desconocido</string>
     <string name="common_writes_need_newer_app">la biblioteca tiene cambios de una versión más reciente de la aplicación; actualiza la aplicación para poder modificarla</string>
+    <string name="common_writes_journal_incomplete">al historial de cambios de la biblioteca le falta un archivo que la sincronización aún no ha entregado, o que se ha perdido; la biblioteca es de solo lectura hasta que esté completo</string>
+    <string name="common_writes_reconcile_failed">no se pudo leer el historial de cambios de la biblioteca; la biblioteca es de solo lectura hasta que la próxima comprobación salga bien</string>
     <string name="common_could_not_open_library">No se pudo abrir la biblioteca.</string>
 
     <string name="common_opening_library">Abriendo biblioteca...</string>

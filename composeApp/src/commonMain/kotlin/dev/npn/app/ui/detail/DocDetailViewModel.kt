@@ -176,7 +176,19 @@ class DocDetailViewModel private constructor(
          * viewmodel; a new one shows the document afresh.
          */
         saved: SavedStateHandle = SavedStateHandle(),
-    ) : this(docId, session, settings, searchQuery, initialItem, newViewModelScope(), MessageSink(), saved, Mutex())
+    ) : this(
+        docId,
+        session,
+        settings,
+        searchQuery,
+        initialItem,
+        newViewModelScope(),
+        MessageSink {
+            session.log
+        },
+        saved,
+        Mutex(),
+    )
 
     private val documents = session.documents
     private val meta = session.meta

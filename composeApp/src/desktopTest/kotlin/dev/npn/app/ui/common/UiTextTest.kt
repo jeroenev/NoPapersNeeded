@@ -24,16 +24,25 @@ class UiTextTest {
             RuntimeException().reasonText().english() shouldBe "RuntimeException"
         }
 
-    /** Only a refusal the user can act on, an app that needs updating, is put in their words. */
+    /**
+     * Every refused write is put in the user's words, never the technical cause: an app that needs
+     * updating, a journal still missing an object, or a journal that could not be read.
+     */
     @Test
-    fun aWriteRefusedForANewerFormatGivesALocalizedReason() =
+    fun aRefusedWriteGivesALocalizedReason() =
         runTest {
             val newer = MetadataWriteBlocked(WriteBlock.NEWER_FORMAT, "Metadata writes are disabled: unknown op")
             uiText(Res.string.detail_add_tag_failed, newer.reasonText()).english() shouldBe
                 "Could not add the tag: the library has changes from a newer version of the app; " +
                 "update the app to make changes"
-            MetadataWriteBlocked(WriteBlock.JOURNAL_DAMAGED, "Object is empty").reasonText() shouldBe
-                UiText.Raw("Object is empty")
+            val damaged = MetadataWriteBlocked(WriteBlock.JOURNAL_DAMAGED, "Object is empty")
+            uiText(Res.string.detail_add_tag_failed, damaged.reasonText()).english() shouldBe
+                "Could not add the tag: the library's change history is missing a file that sync has not " +
+                "delivered yet, or one that was lost; the library is read-only until it is complete"
+            val unread = MetadataWriteBlocked(WriteBlock.RECONCILE_FAILED, "No such file: .npn/journal")
+            uiText(Res.string.detail_add_tag_failed, unread.reasonText()).english() shouldBe
+                "Could not add the tag: reading the library's change history failed; the library is " +
+                "read-only until the next check succeeds"
         }
 
     @Test

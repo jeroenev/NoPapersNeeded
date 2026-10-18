@@ -24,6 +24,8 @@
     <string name="common_view_grid">Raster</string>
     <string name="common_unknown_error">onbekende fout</string>
     <string name="common_writes_need_newer_app">de bibliotheek bevat wijzigingen van een nieuwere versie van de app; werk de app bij om iets te wijzigen</string>
+    <string name="common_writes_journal_incomplete">de wijzigingsgeschiedenis van de bibliotheek mist een bestand dat de synchronisatie nog niet heeft geleverd, of dat verloren is gegaan; de bibliotheek is alleen-lezen tot die compleet is</string>
+    <string name="common_writes_reconcile_failed">het lezen van de wijzigingsgeschiedenis van de bibliotheek is mislukt; de bibliotheek is alleen-lezen tot de volgende controle slaagt</string>
     <string name="common_could_not_open_library">De bibliotheek kon niet worden geopend.</string>
 
     <string name="common_opening_library">Bibliotheek openen...</string>

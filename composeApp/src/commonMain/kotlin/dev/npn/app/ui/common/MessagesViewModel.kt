@@ -2,6 +2,7 @@ package dev.npn.app.ui.common
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.npn.core.index.MetadataWriteBlocked
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.warn
@@ -36,7 +37,10 @@ class BulkFailure(
  * Its own class so that a helper a viewmodel delegates to, built before the viewmodel, reports
  * through the same messages (see the [MessagesViewModel] constructor taking one).
  */
-class MessageSink {
+class MessageSink(
+    /** Where a refused write's technical cause goes, which its sentence leaves out ([reasonText]). */
+    private val log: () -> NpnLog = { NpnLog.None },
+) {
     private val channel = Channel<UiMessage>(Channel.UNLIMITED)
 
     /** The messages to show; collect it from one place only, normally [SnackbarMessages]. */
@@ -59,8 +63,10 @@ class MessageSink {
         block: suspend () -> Unit,
     ): Boolean =
         runCatchingCancellable { block() }
-            .onFailure { message(uiText(failed, it.reasonText())) }
-            .isSuccess
+            .onFailure {
+                if (it is MetadataWriteBlocked) log().warn("A write was refused", it)
+                message(uiText(failed, it.reasonText()))
+            }.isSuccess
 }
 
 /** A new scope as [viewModelScope] makes one, for a viewmodel that hands it to helpers built before it. */
@@ -78,7 +84,8 @@ open class MessagesViewModel : ViewModel {
     private val sink: MessageSink
 
     constructor() : super() {
-        sink = MessageSink()
+        // Read when a write fails, once a subclass has set its log.
+        sink = MessageSink { log }
     }
 
     /**
