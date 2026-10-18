@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.BackTopBar
 import dev.npn.app.ui.common.EmptyState
@@ -38,7 +39,8 @@ fun AiEditReviewScreen(
     onBack: () -> Unit,
     onOpenDoc: (String) -> Unit,
     modifier: Modifier = Modifier,
-    vm: AiEditReviewViewModel = viewModel(key = jobId) { AiEditReviewViewModel(session, jobId) },
+    vm: AiEditReviewViewModel =
+        viewModel(key = jobId) { AiEditReviewViewModel(session, jobId, createSavedStateHandle()) },
 ) {
     val phase by vm.phase.collectAsStateWithLifecycle()
     val snackbar = rememberSnackbarMessages(vm.messages)
