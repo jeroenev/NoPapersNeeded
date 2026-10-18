@@ -90,39 +90,22 @@ CI always builds with warnings as errors. Test source sets of the multiplatform 
 
 Common build, run, test, and device-deploy commands are wrapped as
 [mise](https://mise.jdx.dev) tasks in `mise.toml` (plus file tasks in
-`.mise/tasks/`). Run `mise tasks` to list them, and `mise run <task>` (or just
-`mise <task>`) to execute one. The raw Gradle commands each task wraps are shown
-below if you prefer to run them directly.
+`.mise/tasks/`). Run `mise tasks` to list them with what each does, and
+`mise <task>` to run one; most are a single Gradle command you can also run directly.
+The ones that need more than their description:
 
-| Task | Wraps |
-|------|-------|
-| `mise apk` | `./gradlew :androidApp:assembleDebug` |
-| `mise apk-release` | `./gradlew :androidApp:assembleRelease` (signed only with `NPN_KEYSTORE_*` set, see [Releases](#releases)) |
-| `mise bundle` | `./gradlew :androidApp:bundleRelease` |
-| `mise baseline-profile` | `./gradlew :androidApp:generateBaselineProfile` (needs a device on Android 13+, see [Release builds: R8 and baseline profiles](#release-builds-r8-and-baseline-profiles)) |
-| `mise deploy` | `installDebug` over adb, then launches the app (add `--release` for the release build) |
-| `mise uninstall` | `adb uninstall dev.npn.debug` (the debug build) |
-| `mise uninstall-release` | `adb uninstall dev.npn` (the release build) |
-| `mise pair` | one-time adb Wi-Fi pairing wizard (Android 11+) |
-| `mise connect <ip:port>` | `adb connect` for an already-paired device |
-| `mise devices` | `adb devices -l` |
-| `mise hot` | `./gradlew :desktopApp:hotRun --auto` (Compose Hot Reload) |
-| `mise desktop` | `./gradlew :desktopApp:run` |
-| `mise package-deb` | `./gradlew :desktopApp:packageDeb` |
-| `mise package-rpm` | `./gradlew :desktopApp:packageRpm` (needs `rpmbuild`) |
-| `mise package-appimage` | `./gradlew :desktopApp:packageAppImage` |
-| `mise package-flatpak` | Single-file `.flatpak` bundle (needs `flatpak-builder`) |
-| `mise flathub-manifest [version]` | Flathub manifest for a published release |
-| `mise package-jar` | `./gradlew :desktopApp:packageUberJarForCurrentOS` |
-| `mise release <version>` | Bumps the version, tags `v<version>` and pushes; CI publishes the release |
-| `mise icons` | Re-renders the desktop icon bitmaps from `design/branding/icon.svg` |
-| `mise test` | `./gradlew :core:desktopTest` |
-| `mise test-fast` | Core and shared UI desktop tests |
-| `mise test-all` | `./gradlew allTests :desktopApp:test :buildSrc:test` |
-| `mise check` | `./gradlew check` |
-| `mise hooks-install` | Enable the version-controlled Git hooks |
-| `mise build` | `./gradlew build` |
-| `mise clean` | `./gradlew clean` |
+- `mise deploy` installs the debug build over adb and launches it (`--release` for the
+  release build); `mise pair` is a one-time adb Wi-Fi pairing wizard (Android 11+), and
+  `mise connect <ip:port>` reconnects a paired device.
+- `mise test-device` runs the instrumentation tests on a connected device; CI only compiles them.
+- `mise baseline-profile` regenerates the baseline profile on a device on Android 13+ (see
+  [Release builds: R8 and baseline profiles](#release-builds-r8-and-baseline-profiles)).
+- `mise apk-release` is signed only with `NPN_KEYSTORE_*` set, and `mise release <version>`
+  bumps the version, tags `v<version>` and pushes; CI publishes the release (see
+  [Releases](#releases)).
+- `mise package-flatpak` needs `flatpak-builder`; `mise flathub-manifest [version]` derives the
+  Flathub manifest for a published release.
+- `mise hooks-install` points Git at the repository's hooks (`.githooks/`), once per clone.
 
 Formatting is enforced with Spotless and ktlint on every Kotlin source and Gradle Kotlin
 script, unused imports included. Run `./gradlew spotlessCheck` to check it or
