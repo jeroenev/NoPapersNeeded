@@ -9,7 +9,6 @@ import dev.npn.core.app.aiedit.ApplyResult
 import dev.npn.core.app.aiedit.EditProgress
 import dev.npn.core.app.aiedit.EditScope
 import dev.npn.core.model.FieldDef
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 /**

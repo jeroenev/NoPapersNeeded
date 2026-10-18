@@ -15,7 +15,6 @@ import dev.npn.core.app.AiOcrOutcome
 import dev.npn.core.app.BakeFailure
 import dev.npn.core.app.BakeOutcome
 import dev.npn.core.app.DocListItem
-import dev.npn.core.app.DocumentRepository
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.OcrVersion
 import dev.npn.core.app.RelocationOutcome

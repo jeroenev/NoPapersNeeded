@@ -8,7 +8,6 @@ import dev.npn.core.testing.FakeDocumentRepository
 import dev.npn.core.testing.FakeFieldRegistry
 import dev.npn.core.testing.FakeMetadataWriter
 import dev.npn.core.testing.FakeTagRepository
-import dev.npn.core.testing.edit
 
 /** An [AiEditRunImpl] over the shared AI-edit fakes, with [selection] as the documents the user selected. */
 internal class AiEditRunHarness(

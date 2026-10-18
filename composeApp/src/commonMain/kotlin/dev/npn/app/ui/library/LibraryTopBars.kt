@@ -44,7 +44,6 @@ import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.model.labelFor
 import dev.npn.core.model.reviewMarkerIsAuthoritative
-import io.github.vinceglb.filekit.name
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_add_tag
 import no_papers_needed.composeapp.generated.resources.library_ai_edit

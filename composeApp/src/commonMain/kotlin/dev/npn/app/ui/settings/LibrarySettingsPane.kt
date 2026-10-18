@@ -12,7 +12,6 @@ import dev.npn.app.ui.common.SwitchRow
 import dev.npn.app.ui.common.TypedTextField
 import dev.npn.app.ui.common.rememberStorageAccess
 import dev.npn.app.ui.common.resolve
-import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
 import dev.npn.core.pathrules.StoragePathContext
 import dev.npn.core.pathrules.StoragePathExpansion

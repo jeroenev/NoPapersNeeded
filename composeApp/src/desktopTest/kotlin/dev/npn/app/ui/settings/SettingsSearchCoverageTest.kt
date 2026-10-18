@@ -14,7 +14,6 @@ import dev.npn.app.ui.closing
 import dev.npn.app.ui.nodes
 import dev.npn.app.ui.onUiThread
 import dev.npn.app.ui.theme.NpnTheme
-import dev.npn.app.ui.type
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.settings.SettingsSnapshot

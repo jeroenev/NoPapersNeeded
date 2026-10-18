@@ -3,7 +3,6 @@ package dev.npn.core.index
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.ocr.OcrState
 import io.kotest.matchers.booleans.shouldBeFalse
-import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
