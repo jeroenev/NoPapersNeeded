@@ -21,7 +21,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -34,6 +33,7 @@ import dev.npn.app.ui.common.FieldDefFormState
 import dev.npn.app.ui.common.FieldEditor
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.TooltipIconButton
+import dev.npn.app.ui.common.jsonSaver
 import dev.npn.app.ui.common.rememberFieldLocale
 import dev.npn.core.app.Doc
 import dev.npn.core.model.FieldDef
@@ -41,8 +41,8 @@ import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldParse
 import dev.npn.core.model.FieldType
 import dev.npn.core.model.FieldValues
-import dev.npn.core.util.NpnJson
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.nullable
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_save
 import no_papers_needed.composeapp.generated.resources.detail_add_field
@@ -72,7 +72,9 @@ internal fun FieldsSection(
 ) {
     // Keys the user picked from "Add field" this session; they render empty until a value lands.
     var revealed by remember(doc.docId) { mutableStateOf(emptySet<String>()) }
-    var newField by rememberSaveable(stateSaver = NewFieldSeed.Saver) { mutableStateOf(null) }
+    var newField by rememberSaveable(
+        stateSaver = jsonSaver(NewFieldSeed.serializer().nullable),
+    ) { mutableStateOf(null) }
     val shown = defs.filter { it.showByDefault || it.key in doc.fields || it.key in revealed }
     val orphanKeys = (doc.fields.keys - defs.map { it.key }.toSet()).sorted()
 
@@ -192,15 +194,7 @@ internal data class NewFieldSeed(
     val key: String = "",
     val label: String = "",
     val value: String? = null,
-) {
-    companion object {
-        val Saver: Saver<NewFieldSeed?, String> =
-            Saver(
-                save = { seed -> seed?.let { NpnJson.Persisted.encodeToString(serializer(), it) } },
-                restore = { NpnJson.Persisted.decodeFromString(serializer(), it) },
-            )
-    }
-}
+)
 
 /**
  * Define a field from the document panel: the shared [FieldDefForm] plus an optional first value

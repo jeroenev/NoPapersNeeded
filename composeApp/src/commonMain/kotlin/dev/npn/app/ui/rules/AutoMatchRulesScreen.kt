@@ -28,7 +28,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -44,6 +43,7 @@ import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.LoadingIndicator
 import dev.npn.app.ui.common.NumericField
 import dev.npn.app.ui.common.TooltipIconButton
+import dev.npn.app.ui.common.jsonSaver
 import dev.npn.app.ui.common.rememberSnackbarMessages
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.model.FieldDef
@@ -52,8 +52,8 @@ import dev.npn.core.rules.AutoMatchRule
 import dev.npn.core.rules.MatchAlgorithm
 import dev.npn.core.rules.RuleField
 import dev.npn.core.rules.RuleMatcher
-import dev.npn.core.util.NpnJson
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.nullable
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_delete
 import no_papers_needed.composeapp.generated.resources.common_name
@@ -98,7 +98,7 @@ fun AutoMatchRulesScreen(
     val snackbar = rememberSnackbarMessages(vm.messages)
 
     // Saveable, form fields included, so an open dialog is back after the screen is recreated.
-    var dialog by rememberSaveable(stateSaver = RuleDialog.Saver) { mutableStateOf(null) }
+    var dialog by rememberSaveable(stateSaver = jsonSaver(RuleDialog.serializer().nullable)) { mutableStateOf(null) }
 
     AutoMatchRulesScaffold(
         rules = rules,
@@ -151,14 +151,6 @@ private sealed interface RuleDialog {
     data class Delete(
         val id: String,
     ) : RuleDialog
-
-    companion object {
-        val Saver: Saver<RuleDialog?, String> =
-            Saver(
-                save = { dialog -> dialog?.let { NpnJson.Persisted.encodeToString(serializer(), it) } },
-                restore = { NpnJson.Persisted.decodeFromString(serializer(), it) },
-            )
-    }
 }
 
 @Composable

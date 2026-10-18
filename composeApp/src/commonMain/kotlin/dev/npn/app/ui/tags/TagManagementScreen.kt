@@ -67,13 +67,14 @@ import dev.npn.app.ui.common.TagPickDialog
 import dev.npn.app.ui.common.TextInputDialog
 import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.TopBarAction
+import dev.npn.app.ui.common.jsonSaver
 import dev.npn.app.ui.common.onSecondaryClick
 import dev.npn.app.ui.common.parseHexColor
 import dev.npn.app.ui.common.rememberSnackbarMessages
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.TagInfo
-import dev.npn.core.util.NpnJson
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.nullable
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_delete
 import no_papers_needed.composeapp.generated.resources.common_document_count
@@ -153,14 +154,6 @@ private sealed interface TagDialog {
     data class Delete(
         val names: List<String>,
     ) : TagDialog
-
-    companion object {
-        val Saver: Saver<TagDialog?, String> =
-            Saver(
-                save = { dialog -> dialog?.let { NpnJson.Persisted.encodeToString(serializer(), it) } },
-                restore = { NpnJson.Persisted.decodeFromString(serializer(), it) },
-            )
-    }
 }
 
 // The dialogs get the viewmodel only as its TagWrites interface, the hand-down the conventions prescribe.
@@ -173,7 +166,7 @@ fun TagManagementScreen(
     val tags by vm.tags.collectAsStateWithLifecycle()
     val rows by vm.rows.collectAsStateWithLifecycle()
 
-    var dialog by rememberSaveable(stateSaver = TagDialog.Saver) { mutableStateOf(null) }
+    var dialog by rememberSaveable(stateSaver = jsonSaver(TagDialog.serializer().nullable)) { mutableStateOf(null) }
     val selection = rememberSaveable(saver = TagSelection.Saver) { TagSelection() }
 
     val snackbar = rememberSnackbarMessages(vm.messages)

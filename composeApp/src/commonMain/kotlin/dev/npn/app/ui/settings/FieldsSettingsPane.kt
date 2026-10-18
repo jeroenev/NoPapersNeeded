@@ -24,7 +24,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -38,10 +37,11 @@ import dev.npn.app.ui.common.FieldDefFormState
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.fieldTypeLabel
+import dev.npn.app.ui.common.jsonSaver
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
-import dev.npn.core.util.NpnJson
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.nullable
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_delete
 import no_papers_needed.composeapp.generated.resources.common_edit
@@ -83,14 +83,6 @@ private sealed interface FieldDialog {
     data class Delete(
         val key: String,
     ) : FieldDialog
-
-    companion object {
-        val Saver: Saver<FieldDialog?, String> =
-            Saver(
-                save = { dialog -> dialog?.let { NpnJson.Persisted.encodeToString(serializer(), it) } },
-                restore = { NpnJson.Persisted.decodeFromString(serializer(), it) },
-            )
-    }
 }
 
 /**
@@ -106,7 +98,7 @@ internal fun FieldsSettingsPane(
     onRemove: (key: String, clearValues: Boolean) -> Unit,
     onMove: (key: String, delta: Int) -> Unit,
 ) {
-    var dialog by rememberSaveable(stateSaver = FieldDialog.Saver) { mutableStateOf(null) }
+    var dialog by rememberSaveable(stateSaver = jsonSaver(FieldDialog.serializer().nullable)) { mutableStateOf(null) }
 
     HelpText(stringResource(Res.string.common_settings_document_fields_help))
     fields.forEachIndexed { index, def ->

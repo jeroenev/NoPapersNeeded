@@ -33,7 +33,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -51,6 +50,7 @@ import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.StatusBadge
 import dev.npn.app.ui.common.TopBarAction
 import dev.npn.app.ui.common.TopBarActions
+import dev.npn.app.ui.common.jsonSaver
 import dev.npn.app.ui.common.rememberSnackbarMessages
 import dev.npn.app.ui.common.resolve
 import dev.npn.core.app.Doc
@@ -58,8 +58,8 @@ import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.index.RelinkCandidate
-import dev.npn.core.util.NpnJson
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.nullable
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_delete
 import no_papers_needed.composeapp.generated.resources.common_empty_trash
@@ -108,14 +108,6 @@ private sealed interface TrashConfirm {
 
     @Serializable
     data object EmptyTrash : TrashConfirm
-
-    companion object {
-        val Saver: Saver<TrashConfirm?, String> =
-            Saver(
-                save = { confirm -> confirm?.let { NpnJson.Persisted.encodeToString(serializer(), it) } },
-                restore = { NpnJson.Persisted.decodeFromString(serializer(), it) },
-            )
-    }
 }
 
 /** Whether this confirmation is for a document no longer among [trashed]. */
@@ -144,7 +136,7 @@ fun TrashScreen(
     val state = loaded ?: TrashUiState()
 
     var tab by rememberSaveable { mutableStateOf(TrashTab.TRASH) }
-    var confirm by rememberSaveable(stateSaver = TrashConfirm.Saver) { mutableStateOf(null) }
+    var confirm by rememberSaveable(stateSaver = jsonSaver(TrashConfirm.serializer().nullable)) { mutableStateOf(null) }
 
     val snackbar = rememberSnackbarMessages(vm.messages)
 

@@ -8,9 +8,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.TagPickDialog
 import dev.npn.app.ui.common.TextInputDialog
+import dev.npn.app.ui.common.jsonSaver
 import dev.npn.core.app.SavedView
-import dev.npn.core.util.NpnJson
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.nullable
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.library_add
 import no_papers_needed.composeapp.generated.resources.library_add_tag_to_documents
@@ -60,11 +61,7 @@ sealed interface LibraryDialog {
 }
 
 /** Saves the open dialog as JSON; nothing open saves nothing. */
-internal val LibraryDialogSaver: Saver<LibraryDialog?, String> =
-    Saver(
-        save = { dialog -> dialog?.let { NpnJson.Persisted.encodeToString(LibraryDialog.serializer(), it) } },
-        restore = { NpnJson.Persisted.decodeFromString(LibraryDialog.serializer(), it) },
-    )
+internal val LibraryDialogSaver: Saver<LibraryDialog?, String> = jsonSaver(LibraryDialog.serializer().nullable)
 
 /** The library screen's open dialog, kept across recreation; see [LibraryDialog]. */
 @Composable
