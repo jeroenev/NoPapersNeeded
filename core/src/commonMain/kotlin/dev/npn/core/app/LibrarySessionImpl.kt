@@ -67,7 +67,8 @@ class LibrarySessionImpl private constructor(
     private val fs get() = deps.fs
     override val log: NpnLog get() = deps.log
     private val importService = library.imports
-    private val writer = library.ownedWriter
+    private val writer = library.writer
+    private val lifecycle = library.lifecycle
 
     override val documents: DocumentRepository = library.documents
     override val tags: TagRepository = library.tags
@@ -86,13 +87,13 @@ class LibrarySessionImpl private constructor(
     internal val trashPurge: TrashPurge = library.trashPurge
 
     // The facet properties only narrow the type a consumer sees: the session is the ingest facet,
-    // [OwnedWriter] backs all three write facets, and [AiFacadeImpl] both AI facets.
+    // [MetadataWriterImpl] backs two write facets, and [AiFacadeImpl] both AI facets.
     override val ingest: IngestFacade get() = this
     override val ocr: OcrFacade get() = ocrFacade
     override val work: WorkFacade get() = queues
     override val meta: MetadataWriter get() = writer
     override val tagAdmin: TagAdmin get() = writer
-    override val docLifecycle: DocLifecycle get() = writer
+    override val docLifecycle: DocLifecycle get() = lifecycle
     override val aiChat: AiChat get() = aiFacade
     override val aiSuggest: AiSuggest get() = aiFacade
 

@@ -15,18 +15,13 @@ internal class Library(
     val storagePath: StoragePathFacade,
     /** With the rules' read side and the applier OCR runs them through. */
     val rules: AutoMatchRuleRepositoryImpl,
-    /** [writer] and [lifecycle] for a caller outside the session: each call owned by its lifetime. */
-    val ownedWriter: OwnedWriter,
+    /** Each call owned by the session's lifetime, as every facet's is. */
+    val writer: MetadataWriterImpl,
+    val lifecycle: DocLifecycleImpl,
     val reviewConfig: ReviewConfigFacade,
     val trashRetention: JournalTrashRetention,
     /** The trash auto-purge by [trashRetention]. */
     val trashPurge: TrashPurge,
     val content: DocContentFacade,
     val imports: ImportService,
-) {
-    /** The writer itself, for work that already runs as the session's: the drains, owned facet calls. */
-    val writer: MetadataWriterImpl get() = ownedWriter.writer
-
-    /** The document lifecycle itself, for work that already runs as the session's (a split's trash). */
-    val lifecycle: DocLifecycleImpl get() = ownedWriter.lifecycle
-}
+)

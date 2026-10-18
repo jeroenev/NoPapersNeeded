@@ -18,6 +18,7 @@ import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineName
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Runnable
 import kotlinx.coroutines.async
@@ -43,8 +44,18 @@ class LifecycleBehindARescanTest {
             dispatcher = waiting,
         )
     private val files = WatchedFileSystem(rig.fs).also { it.db = rig.db }
-    private val lifecycle =
-        rig.docLifecycle(coordinator, files)
+    private val lifecycle = rig.docLifecycle(coordinator, files)
+
+    /**
+     * [lifecycle] for the call [behindARescan] holds up. A call runs on its lifetime's scope, not the
+     * caller's coroutine, so that scope is what carries the waiter's name.
+     */
+    private val waitingLifecycle =
+        rig.docLifecycle(
+            coordinator,
+            files,
+            SessionLifetime(CoroutineScope(Dispatchers.Unconfined + CoroutineName(ParkedSignal.WAITER))),
+        )
 
     @AfterTest
     fun teardown() = rig.close()
@@ -60,7 +71,7 @@ class LifecycleBehindARescanTest {
             coordinator.rescan()
             val id = rig.fs.sha256("inbox/a.pdf")
 
-            behindARescan({ lifecycle.trashDoc(id) }) { rig.moveFile("inbox/a.pdf", "archive/a.pdf") }
+            behindARescan({ waitingLifecycle.trashDoc(id) }) { rig.moveFile("inbox/a.pdf", "archive/a.pdf") }
 
             rig.exists("archive/a.pdf").shouldBeFalse()
             rig.fs.trashEntries().map { rig.fs.sha256(it.relPath) } shouldBe listOf(id)
@@ -98,7 +109,7 @@ class LifecycleBehindARescanTest {
                     .single()
                     .relPath
 
-            behindARescan({ lifecycle.restoreDoc(id) }) {
+            behindARescan({ waitingLifecycle.restoreDoc(id) }) {
                 rig
                     .writer("other-installation")
                     .commit(
@@ -133,7 +144,7 @@ class LifecycleBehindARescanTest {
             files.clear()
             var hashedBeforeTheLock = emptyList<String>()
 
-            behindARescan({ lifecycle.restoreDoc(id) }) { hashedBeforeTheLock = files.calls("sha256") }
+            behindARescan({ waitingLifecycle.restoreDoc(id) }) { hashedBeforeTheLock = files.calls("sha256") }
 
             hashedBeforeTheLock shouldHaveSize 1
             files.calls("sha256") shouldBe hashedBeforeTheLock
@@ -141,9 +152,9 @@ class LifecycleBehindARescanTest {
         }
 
     /**
-     * Start a rescan and stop it once it holds the writer lock; run [action] in a coroutine of its
-     * own until it waits for that lock, then [meanwhile], which changes the library before the rescan
-     * reads it; then let the rescan go on, and await both.
+     * Start a rescan and stop it once it holds the writer lock; run [action], a call on
+     * [waitingLifecycle], in a coroutine of its own until it waits for that lock, then [meanwhile],
+     * which changes the library before the rescan reads it; then let the rescan go on, and await both.
      */
     private suspend fun TestScope.behindARescan(
         action: suspend () -> Unit,
@@ -152,7 +163,7 @@ class LifecycleBehindARescanTest {
         val reached = journal.pauseNextListing()
         val rescan = async { coordinator.rescan() }
         reached.await()
-        val waiter = async(CoroutineName(ParkedSignal.WAITER)) { action() }
+        val waiter = async { action() }
         waiting.parked.receive()
         meanwhile()
         journal.resume()

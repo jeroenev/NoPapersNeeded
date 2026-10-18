@@ -34,6 +34,8 @@ import dev.npn.core.util.warn
  * bake left.
  */
 internal class DocLifecycleImpl(
+    /** Every call runs whole as work the session owns ([SessionLifetime.owned]). */
+    private val lifetime: SessionLifetime,
     private val coordinator: JournalCoordinator,
     db: NpnDatabase,
     private val fs: LibraryFileSystem,
@@ -52,7 +54,7 @@ internal class DocLifecycleImpl(
     private val documentDao = db.documentDao()
 
     /** Trash [docId], or what a bake made of it once that bake is done: the receipt names the one trashed. */
-    override suspend fun trashDoc(docId: String): TrashReceipt? = bakeLock.held { trash(docId) }
+    override suspend fun trashDoc(docId: String): TrashReceipt? = lifetime.owned { bakeLock.held { trash(docId) } }
 
     private suspend fun trash(docId: String): TrashReceipt? {
         var trashed: String? = null
@@ -85,15 +87,17 @@ internal class DocLifecycleImpl(
         return trashed?.let { TrashReceipt(it, trashedAt) }
     }
 
-    override suspend fun restoreDoc(docId: String) = restore(docId, listing = null)
+    override suspend fun restoreDoc(docId: String) = lifetime.owned { restore(docId, listing = null) }
 
     override suspend fun restoreDocs(docIds: List<String>): Int =
-        forEachListed(docIds, "Restoring") { docId, listing -> restore(docId, listing) }
+        lifetime.owned { forEachListed(docIds, "Restoring") { docId, listing -> restore(docId, listing) } }
 
     override suspend fun undoTrash(trashes: List<TrashReceipt>): Int {
         val trashedAt = trashes.associate { it.docId to it.trashedAt }
-        return forEachListed(trashedAt.keys.toList(), "Restoring") { docId, listing ->
-            restore(docId, listing) { it.trashedAt == trashedAt[docId] }
+        return lifetime.owned {
+            forEachListed(trashedAt.keys.toList(), "Restoring") { docId, listing ->
+                restore(docId, listing) { it.trashedAt == trashedAt[docId] }
+            }
         }
     }
 
@@ -178,17 +182,20 @@ internal class DocLifecycleImpl(
             missing = false,
         )
 
-    override suspend fun deleteDocPermanently(docId: String) = bakeLock.held { deleteForGood(docId, listing = null) }
+    override suspend fun deleteDocPermanently(docId: String) =
+        lifetime.owned { bakeLock.held { deleteForGood(docId, listing = null) } }
 
     /** Held once around the whole run, so no bake starts or ends between its documents. */
     override suspend fun deleteDocsPermanently(docIds: List<String>): PermanentDeleteTally =
-        bakeLock.held {
-            var filesLeft = 0
-            val failed =
-                forEachListed(docIds, "Deleting") { docId, listing ->
-                    if (deleteForGood(docId, listing) == PermanentDeleteOutcome.FILE_LEFT) filesLeft++
-                }
-            PermanentDeleteTally(failed = failed, filesLeft = filesLeft)
+        lifetime.owned {
+            bakeLock.held {
+                var filesLeft = 0
+                val failed =
+                    forEachListed(docIds, "Deleting") { docId, listing ->
+                        if (deleteForGood(docId, listing) == PermanentDeleteOutcome.FILE_LEFT) filesLeft++
+                    }
+                PermanentDeleteTally(failed = failed, filesLeft = filesLeft)
+            }
         }
 
     /**
@@ -297,11 +304,13 @@ internal class DocLifecycleImpl(
         docId: String,
         newFileName: String,
     ): RelocationOutcome =
-        relocate(docId) { doc ->
-            val clean = NpnPaths.sanitizeFileName(newFileName.trim()).ifEmpty { return@relocate null }
-            val name = if (NpnPaths.isPdf(clean)) clean else "$clean.pdf"
-            val dir = NpnPaths.parentDir(doc.relPath)
-            if (dir.isEmpty()) name else "$dir/$name"
+        lifetime.owned {
+            relocate(docId) { doc ->
+                val clean = NpnPaths.sanitizeFileName(newFileName.trim()).ifEmpty { return@relocate null }
+                val name = if (NpnPaths.isPdf(clean)) clean else "$clean.pdf"
+                val dir = NpnPaths.parentDir(doc.relPath)
+                if (dir.isEmpty()) name else "$dir/$name"
+            }
         }
 
     override suspend fun moveFile(
@@ -311,9 +320,11 @@ internal class DocLifecycleImpl(
         if (!NpnPaths.isSafe(newDirRelPath)) {
             RelocationOutcome.INVALID_NAME
         } else {
-            relocate(docId) { doc ->
-                val dir = NpnPaths.normalize(newDirRelPath)
-                if (dir.isEmpty()) doc.fileName else "$dir/${doc.fileName}"
+            lifetime.owned {
+                relocate(docId) { doc ->
+                    val dir = NpnPaths.normalize(newDirRelPath)
+                    if (dir.isEmpty()) doc.fileName else "$dir/${doc.fileName}"
+                }
             }
         }
 

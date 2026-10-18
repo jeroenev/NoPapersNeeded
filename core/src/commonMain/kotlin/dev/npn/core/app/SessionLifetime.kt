@@ -34,9 +34,15 @@ internal class SessionLifetime(
      *
      * A caller cancelled meanwhile sees its own cancellation. A session closed under the call is a
      * failure the caller should see, not a cancellation, so that becomes an [IllegalStateException].
+     *
+     * Owned work may call owned work (a drain writing through the writer facet): the inner call is a
+     * sibling on [scope] that the outer one awaits, so [close] cancels and awaits both. A caller
+     * that is itself being cancelled (a drain the close just cancelled) gets its own cancellation,
+     * not [CLOSED], so it unwinds rather than records a failure.
      */
     @Suppress("SuspendFunSwallowedCancellation") // Deliberate: see above; ensureActive rethrows the caller's own.
     suspend fun <T> owned(block: suspend () -> T): T {
+        currentCoroutineContext().ensureActive()
         checkOpen()
         val work = scope.async { block() }
         return try {

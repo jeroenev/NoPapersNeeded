@@ -26,21 +26,25 @@ import dev.npn.core.util.runLogged
  * thrown.
  */
 internal class MetadataWriterImpl(
+    private val lifetime: SessionLifetime,
     private val coordinator: JournalCoordinator,
     private val db: NpnDatabase,
     private val pathRuleApplicator: StoragePathRuleApplicator,
     private val log: NpnLog,
-    private val applyAutoMatch: suspend (String) -> Unit = {},
+    private val applyAutoMatch: suspend (String) -> Unit,
 ) : MetadataWriter,
     TagAdmin {
     private val tagDao get() = db.tagDao()
 
+    // Each public write runs whole as work the session owns, its follow-ups included.
+    private suspend fun <T> owned(block: suspend () -> T): T = lifetime.owned(block)
+
     override suspend fun addTag(
         docIds: List<String>,
         tag: String,
-    ) {
+    ) = owned {
         val t = tag.trim()
-        if (t.isEmpty() || docIds.isEmpty()) return
+        if (t.isEmpty() || docIds.isEmpty()) return@owned
         coordinator.commitAndApply(docIds.map { PendingOp.tagAdd(it, t) })
         followUp(docIds)
     }
@@ -48,9 +52,9 @@ internal class MetadataWriterImpl(
     override suspend fun removeTag(
         docIds: List<String>,
         tag: String,
-    ) {
+    ) = owned {
         val t = tag.trim()
-        if (t.isEmpty() || docIds.isEmpty()) return
+        if (t.isEmpty() || docIds.isEmpty()) return@owned
         coordinator.commitBuilt { state -> state.tagRemovalOps(docIds, t) }
         followUp(docIds)
     }
@@ -58,8 +62,8 @@ internal class MetadataWriterImpl(
     override suspend fun setReviewed(
         docIds: List<String>,
         reviewed: Boolean,
-    ) {
-        if (docIds.isEmpty()) return
+    ) = owned {
+        if (docIds.isEmpty()) return@owned
         val v = if (reviewed) "true" else "false"
         coordinator.commitAndApply(docIds.map { PendingOp.propSet(it, SystemProperty.REVIEWED, v) })
     }
@@ -87,10 +91,10 @@ internal class MetadataWriterImpl(
         docIds: List<String>,
         key: String,
         value: String?,
-    ) {
-        val k = FieldKeys.normalize(key) ?: return
+    ) = owned {
+        val k = FieldKeys.normalize(key) ?: return@owned
         val ids = docIds.distinct()
-        if (ids.isEmpty()) return
+        if (ids.isEmpty()) return@owned
         val changed =
             coordinator.commitBuilt { state ->
                 val v = canonical(state, k, value)
@@ -105,7 +109,7 @@ internal class MetadataWriterImpl(
         addTags: List<String>,
         fields: Map<String, String?>,
         fillOnly: Boolean,
-    ) = edit(docIds, addTags, fields, fillOnly, asStored = false)
+    ) = owned { edit(docIds, addTags, fields, fillOnly, asStored = false) }
 
     /**
      * [applyEdits] for metadata carried from another document as it holds it (a split's parts): a
@@ -230,12 +234,12 @@ internal class MetadataWriterImpl(
     override suspend fun renameTag(
         from: String,
         to: String,
-    ) = retag(from, to, PendingOp::tagRename)
+    ) = owned { retag(from, to, PendingOp::tagRename) }
 
     override suspend fun mergeTag(
         from: String,
         to: String,
-    ) = retag(from, to, PendingOp::tagMerge)
+    ) = owned { retag(from, to, PendingOp::tagMerge) }
 
     /** Move tag [from] onto [to] with [op] (a rename or a merge), then follow up on what [to] tags. */
     private suspend fun retag(
@@ -250,23 +254,24 @@ internal class MetadataWriterImpl(
         followUp(taggedNow(t))
     }
 
-    override suspend fun deleteTag(name: String) {
-        val t = name.trim()
-        if (t.isEmpty()) return
-        val affected = tagDao.docIdsWithTag(t)
-        // No dedicated journal op by design: remove the tag from every doc currently holding it,
-        // listing all observed dots (OR-set delete-everywhere).
-        coordinator.commitBuilt { state -> state.tagRemovalOps(state.taggedDocs(), t) }
-        followUp(affected)
-    }
+    override suspend fun deleteTag(name: String) =
+        owned {
+            val t = name.trim()
+            if (t.isEmpty()) return@owned
+            val affected = tagDao.docIdsWithTag(t)
+            // No dedicated journal op by design: remove the tag from every doc currently holding it,
+            // listing all observed dots (OR-set delete-everywhere).
+            coordinator.commitBuilt { state -> state.tagRemovalOps(state.taggedDocs(), t) }
+            followUp(affected)
+        }
 
     override suspend fun setTagStyle(
         tag: String,
         color: String?,
         icon: String?,
-    ) {
+    ) = owned {
         val t = tag.trim()
-        if (t.isEmpty()) return
+        if (t.isEmpty()) return@owned
         coordinator.commitAndApply(listOf(PendingOp.tagStyle(t, color, icon)))
     }
 

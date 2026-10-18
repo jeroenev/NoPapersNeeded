@@ -26,6 +26,7 @@ import dev.npn.core.settings.SessionSettings
 import dev.npn.core.util.JvmLog
 import dev.npn.core.util.NpnLog
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.TestResult
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
@@ -234,13 +235,15 @@ class AppSessionRig private constructor(
 
 /**
  * A [DocLifecycleImpl] over [coordinator] on this rig's index, which sees the library through
- * [files]; a rename or move sets nothing off.
+ * [files] and owns its calls on [lifetime]; a rename or move sets nothing off.
  */
 internal fun IndexRig.docLifecycle(
     coordinator: JournalCoordinator,
     files: LibraryFileSystem = fs,
+    lifetime: SessionLifetime = SessionLifetime(CoroutineScope(Dispatchers.Unconfined)),
 ): DocLifecycleImpl =
     DocLifecycleImpl(
+        lifetime,
         coordinator,
         db,
         files,

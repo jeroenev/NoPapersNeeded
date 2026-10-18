@@ -175,6 +175,7 @@ internal suspend fun buildLibrary(
     val retention = JournalTrashRetention(coordinator, lifetime)
     val writer =
         MetadataWriterImpl(
+            lifetime,
             coordinator,
             db,
             pathRules,
@@ -183,6 +184,7 @@ internal suspend fun buildLibrary(
         )
     val lifecycle =
         DocLifecycleImpl(
+            lifetime,
             coordinator,
             db,
             deps.fs,
@@ -199,7 +201,8 @@ internal suspend fun buildLibrary(
         fieldRegistry = FieldRegistryImpl(db, coordinator, lifetime),
         storagePath = storagePath,
         rules = AutoMatchRuleRepositoryImpl(db.autoMatchRuleDao(), ruleSource, ruleApplier, coordinator, lifetime),
-        ownedWriter = OwnedWriter(writer, lifecycle, lifetime),
+        writer = writer,
+        lifecycle = lifecycle,
         reviewConfig = JournalReviewConfig(coordinator, db.documentDao(), lifetime),
         trashRetention = retention,
         trashPurge = TrashPurge(coordinator, db, trash, retention, deps.clock, deps.log),
@@ -281,10 +284,7 @@ internal fun buildEnrichment(
         )
     }, step = AiAutoEnricher::processNext)
 
-/**
- * Bulk AI edits handed to the background; their writes wait for a human review, which a caller
- * applies, so they go through [Library.ownedWriter]. Drained once [rescanned].
- */
+/** Bulk AI edits handed to the background; their writes wait for a human review. Drained once [rescanned]. */
 internal fun buildEditQueue(
     deps: SessionDeps,
     lifetime: SessionLifetime,
@@ -297,7 +297,7 @@ internal fun buildEditQueue(
             dao = deps.deviceDb.aiEditJobDao(),
             documents = library.documents,
             content = library.content,
-            meta = library.ownedWriter,
+            meta = library.writer,
             ai = ai,
             fieldRegistry = library.fieldRegistry,
             tags = library.tags,
