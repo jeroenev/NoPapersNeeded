@@ -6,7 +6,7 @@ package dev.npn.core.pathrules
  * @param template Filename/folder template using `{variable}` or `{variable:format}` placeholders.
  * @param enabled Whether newly imported or edited documents should be moved/renamed automatically.
  */
-data class StoragePathRule(
+internal data class StoragePathRule(
     val template: String,
     val enabled: Boolean,
 )

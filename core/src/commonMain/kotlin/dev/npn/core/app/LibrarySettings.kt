@@ -18,7 +18,7 @@ data class StoragePathSetting(
     val enabled: Boolean = false,
 ) {
     /** The rule documents are placed by, or null when there is no template to place them by. */
-    val rule: StoragePathRule? get() = template?.let { StoragePathRule(it, enabled) }
+    internal val rule: StoragePathRule? get() = template?.let { StoragePathRule(it, enabled) }
 }
 
 /**

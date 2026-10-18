@@ -25,7 +25,7 @@ import kotlinx.coroutines.sync.withLock
  * the same free target. Lock order: [dev.npn.core.rules.RuleApplier]'s lock, this one, then the
  * coordinator's ([setPath] takes it); [applyFor] never runs under the coordinator's lock.
  */
-class StoragePathRuleApplicator(
+internal class StoragePathRuleApplicator(
     private val fs: LibraryFileSystem,
     private val db: NpnDatabase,
     private val ruleProvider: suspend () -> StoragePathRule?,

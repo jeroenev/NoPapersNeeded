@@ -14,7 +14,7 @@ object RuleMatcher {
     private val WHITESPACE = Regex("\\s+")
 
     /** [rule] with its pattern parsed: words, expressions and the fuzzy pattern are built here, once. */
-    fun compile(rule: AutoMatchRule): CompiledRule {
+    internal fun compile(rule: AutoMatchRule): CompiledRule {
         val pattern = rule.pattern.trim()
         if (pattern.isEmpty()) return CompiledRule(rule) { false }
         val test: (String) -> Boolean =
@@ -71,7 +71,7 @@ object RuleMatcher {
 }
 
 /** A rule whose pattern [RuleMatcher.compile] has parsed, ready to match any number of texts. */
-class CompiledRule internal constructor(
+internal class CompiledRule(
     val rule: AutoMatchRule,
     private val test: (String) -> Boolean,
 ) {

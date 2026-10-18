@@ -134,7 +134,7 @@ object MatchAlgorithmSerializer : KnownEnumSerializer<MatchAlgorithm>("MatchAlgo
  * top-level strings instead of [AutoMatchRule.sets]. A list with a rule this build cannot match as
  * its writer meant (a field kind or an algorithm it does not know) fails to decode as a whole.
  */
-object AutoMatchRuleJson {
+internal object AutoMatchRuleJson {
     private val json = NpnJson.Persisted
     private val listSerializer = ListSerializer(LegacyAware)
 
