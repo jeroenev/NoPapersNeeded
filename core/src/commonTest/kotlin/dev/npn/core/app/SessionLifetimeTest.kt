@@ -2,6 +2,7 @@ package dev.npn.core.app
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
@@ -9,6 +10,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -53,6 +55,18 @@ class SessionLifetimeTest {
             assertFailsWith<IllegalStateException> { lifetime.checkOpen() }
         }
 
+    /** A cancellation the block raises itself is not the session closing. */
+    @Test
+    fun aTimeoutInsideOwnedWorkReachesTheCallerAsItIs() =
+        runTest {
+            val lifetime = SessionLifetime(backgroundScope)
+
+            assertFailsWith<TimeoutCancellationException> {
+                lifetime.owned { withTimeout(TIMEOUT_MS) { awaitCancellation() } }
+            }
+            lifetime.checkOpen()
+        }
+
     @Test
     fun aCancelledCallerSeesItsOwnCancellationAndTheWorkStops() =
         runTest {
@@ -81,4 +95,8 @@ class SessionLifetimeTest {
             assertTrue(workStopped)
             lifetime.checkOpen()
         }
+
+    private companion object {
+        const val TIMEOUT_MS = 10L
+    }
 }

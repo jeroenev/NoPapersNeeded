@@ -34,6 +34,8 @@ internal class SessionLifetime(
      *
      * A caller cancelled meanwhile sees its own cancellation. A session closed under the call is a
      * failure the caller should see, not a cancellation, so that becomes an [IllegalStateException].
+     * Any other cancellation is the block's own (a `withTimeout` inside it) and reaches the caller
+     * as it is.
      *
      * Owned work may call owned work (a drain writing through the writer facet): the inner call is a
      * sibling on [scope] that the outer one awaits, so [close] cancels and awaits both. A caller
@@ -50,6 +52,7 @@ internal class SessionLifetime(
         } catch (e: CancellationException) {
             work.cancel()
             currentCoroutineContext().ensureActive()
+            if (job.isActive) throw e
             throw IllegalStateException(CLOSED, e)
         }
     }
