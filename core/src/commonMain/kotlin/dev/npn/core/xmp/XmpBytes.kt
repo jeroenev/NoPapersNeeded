@@ -10,8 +10,7 @@ package dev.npn.core.xmp
  *
  * This helper:
  * - detects a UTF-16 BE/LE BOM and decodes the remaining bytes accordingly,
- * - detects a UTF-8 BOM and decodes the remaining bytes as UTF-8,
- * - otherwise decodes as UTF-8,
+ * - otherwise decodes as UTF-8, where a UTF-8 BOM decodes to a leading U+FEFF,
  * - and always strips a single leading U+FEFF from the decoded text so the parser never sees it.
  *
  * Kept pure-Kotlin over [ByteArray] (no platform charset) so both JVM actuals share one code
@@ -23,19 +22,12 @@ internal fun decodeXmpBytes(bytes: ByteArray): String {
         when {
             hasUtf16BeBom(bytes) -> decodeUtf16(bytes, startIndex = 2, bigEndian = true)
             hasUtf16LeBom(bytes) -> decodeUtf16(bytes, startIndex = 2, bigEndian = false)
-            hasUtf8Bom(bytes) -> bytes.decodeToString(startIndex = 3)
             else -> bytes.decodeToString()
         }
-    // A UTF-8 packet may still carry an encoded BOM (U+FEFF) or one may survive from a source
-    // without a byte-level BOM; strip a single leading occurrence so the parser never sees it.
+    // A UTF-8 packet's BOM decodes to U+FEFF; strip a single leading occurrence so the parser
+    // never sees it.
     return decoded.removePrefix("\uFEFF")
 }
-
-private fun hasUtf8Bom(bytes: ByteArray): Boolean =
-    bytes.size >= 3 &&
-        bytes[0] == 0xEF.toByte() &&
-        bytes[1] == 0xBB.toByte() &&
-        bytes[2] == 0xBF.toByte()
 
 private fun hasUtf16BeBom(bytes: ByteArray): Boolean =
     bytes.size >= 2 && bytes[0] == 0xFE.toByte() && bytes[1] == 0xFF.toByte()
