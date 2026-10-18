@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNot
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
@@ -90,15 +91,16 @@ class AiChatViewModel(
         }
         // Resolve display titles for cited documents as they appear in the transcript, so the
         // bubbles can label their doc chips. Title lookup is data access and belongs here, not in
-        // a leaf composable (where it would also re-fire as rows scroll in and out).
+        // a leaf composable (where it would also re-fire as rows scroll in and out). Only a changed
+        // transcript can cite anything new, and a streaming answer cites nothing until it completes,
+        // so its tokens do not rescan the transcript.
         viewModelScope.launch {
             _ui
-                .map { state ->
-                    state.transcript.items
-                        .filterIsInstance<TranscriptItem.AssistantTurn>()
-                        .flatMap { it.docRefs }
-                        .distinct()
-                }.distinctUntilChanged()
+                .map { it.transcript }
+                .distinctUntilChanged()
+                .filterNot { it.streaming }
+                .map { it.docRefs() }
+                .distinctUntilChanged()
                 .collect { refs -> resolveDocTitles(refs) }
         }
     }

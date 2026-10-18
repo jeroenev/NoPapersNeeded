@@ -88,6 +88,16 @@ data class ChatTranscript(
             is AiChatEvent.Done -> completeAssistant(event.fullText)
         }
 
+    /** Whether an assistant answer is still streaming in; it cites nothing until it completes. */
+    val streaming: Boolean get() = (items.lastOrNull() as? TranscriptItem.AssistantTurn)?.streaming == true
+
+    /** Every document the finished answers cite, in order of first citation. */
+    fun docRefs(): List<String> =
+        items
+            .filterIsInstance<TranscriptItem.AssistantTurn>()
+            .flatMap { it.docRefs }
+            .distinct()
+
     /** Append a [TranscriptItem.UserTurn] for [text]. */
     fun plusUser(text: String): ChatTranscript = appended(items) { id -> TranscriptItem.UserTurn(id, text) }
 
