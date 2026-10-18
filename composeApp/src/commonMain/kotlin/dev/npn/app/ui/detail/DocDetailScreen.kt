@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -22,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.BackTopBar
 import dev.npn.app.ui.common.FloatingControls
 import dev.npn.app.ui.common.FocusOnEntry
+import dev.npn.app.ui.common.LoadingIndicator
 import dev.npn.app.ui.common.PositionStepper
 import dev.npn.app.ui.common.PublishWindowTitle
 import dev.npn.core.app.LibrarySession
@@ -73,11 +73,7 @@ fun DocDetailScreen(
         // still loading, and must not flash the "unavailable" surface. Only a confirmed absence does.
         when (loadState) {
             is DocLoadState.Loading -> {
-                DocPlaceholderScaffold(onBack) { padding ->
-                    Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
-                }
+                DocPlaceholderScaffold(onBack) { padding -> LoadingIndicator(Modifier.padding(padding)) }
             }
 
             is DocLoadState.Missing -> {
