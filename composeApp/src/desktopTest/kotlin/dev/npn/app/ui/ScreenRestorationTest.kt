@@ -10,17 +10,22 @@ import androidx.compose.runtime.saveable.SaveableStateRegistry
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.lifecycle.ViewModelStoreOwner
 import dev.npn.app.EnglishLocaleTest
 import dev.npn.app.FakeLibrarySession
+import dev.npn.app.ui.detail.OcrEngineRow
 import dev.npn.app.ui.rules.AutoMatchRulesScreen
 import dev.npn.app.ui.settings.FieldsSettingsPane
 import dev.npn.app.ui.tags.TagManagementScreen
 import dev.npn.app.ui.theme.NpnTheme
+import dev.npn.core.app.OcrVersion
 import dev.npn.core.app.TagInfo
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldType
+import dev.npn.core.ocr.OcrEngineId
+import dev.npn.core.ocr.OcrEngineRef
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 
@@ -130,6 +135,35 @@ class ScreenRestorationTest : EnglishLocaleTest() {
                 has { it.text() == "Edit field" } shouldBe false
             }
         }
+
+    /** The OCR engine picker comes back open, with a choice of automatic over the pinned engine. */
+    @Test
+    fun anOpenOcrEnginePickerKeepsItsChoice() =
+        onUiThread {
+            val tesseract = OcrEngineRef.Known(OcrEngineId.TESSERACT)
+            restored(
+                content = {
+                    OcrEngineRow(
+                        indexedEngine = tesseract,
+                        pinned = true,
+                        versions = listOf(OcrVersion(tesseract, "desktop", "eng", createdAt = 0L, active = true)),
+                        onSetEngine = {},
+                    )
+                },
+                before = { scene ->
+                    scene.tap { "Tesseract" in it.texts() }
+                    scene.tap { "Automatic (best available)" in it.texts() }
+                },
+                after = { scene ->
+                    scene.has { it.text() == "Text source for search" } shouldBe true
+                    scene.node { "Automatic (best available)" in it.texts() }.isSelectedRadio() shouldBe true
+                },
+            )
+        }
+
+    /** Whether [this] node, or the radio row it sits in, is selected. */
+    private fun SemanticsNode.isSelectedRadio(): Boolean =
+        generateSequence(this) { it.parent }.any { it.config.getOrNull(SemanticsProperties.Selected) == true }
 
     private fun field(
         key: String,

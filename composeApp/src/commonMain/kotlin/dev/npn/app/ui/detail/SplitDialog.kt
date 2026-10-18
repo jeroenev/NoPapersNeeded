@@ -2,20 +2,19 @@ package dev.npn.app.ui.detail
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.HelpText
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.detail_split
 import no_papers_needed.composeapp.generated.resources.detail_split_after_pages
 import no_papers_needed.composeapp.generated.resources.detail_split_document
@@ -51,51 +50,46 @@ fun SplitDialog(
     pageCount: Int,
     onConfirm: (List<IntRange>) -> Unit,
     onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var input by rememberSaveable { mutableStateOf("") }
     val segments = parseSplitPoints(input, pageCount)
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(Res.string.detail_split_document)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    stringResource(Res.string.detail_split_explanation, pageCount - 1),
-                    style = MaterialTheme.typography.bodyMedium,
+    ConfirmDialog(
+        title = stringResource(Res.string.detail_split_document),
+        onConfirm = { segments?.let(onConfirm) },
+        onDismiss = onDismiss,
+        modifier = modifier,
+        confirmLabel = stringResource(Res.string.detail_split),
+        confirmEnabled = segments != null,
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                stringResource(Res.string.detail_split_explanation, pageCount - 1),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            OutlinedTextField(
+                value = input,
+                onValueChange = { input = it },
+                label = { Text(stringResource(Res.string.detail_split_after_pages)) },
+                singleLine = true,
+                isError = input.isNotBlank() && segments == null,
+            )
+            if (segments != null) {
+                HelpText(
+                    segments
+                        .mapIndexed { i, range ->
+                            val pages =
+                                pluralStringResource(
+                                    Res.plurals.detail_split_pages,
+                                    range.count(),
+                                    range.first + 1,
+                                    range.last + 1,
+                                )
+                            stringResource(Res.string.detail_split_part, i + 1, pages)
+                        }.joinToString("\n"),
                 )
-                OutlinedTextField(
-                    value = input,
-                    onValueChange = { input = it },
-                    label = { Text(stringResource(Res.string.detail_split_after_pages)) },
-                    singleLine = true,
-                    isError = input.isNotBlank() && segments == null,
-                )
-                if (segments != null) {
-                    HelpText(
-                        segments
-                            .mapIndexed { i, range ->
-                                val pages =
-                                    pluralStringResource(
-                                        Res.plurals.detail_split_pages,
-                                        range.count(),
-                                        range.first + 1,
-                                        range.last + 1,
-                                    )
-                                stringResource(Res.string.detail_split_part, i + 1, pages)
-                            }.joinToString("\n"),
-                    )
-                }
             }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = segments != null,
-                onClick = { segments?.let(onConfirm) },
-            ) { Text(stringResource(Res.string.detail_split)) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) }
-        },
-    )
+        }
+    }
 }

@@ -20,19 +20,19 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,11 +40,13 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.HighlightSegment
 import dev.npn.app.ui.common.HighlightText
@@ -62,7 +64,6 @@ import dev.npn.core.ocr.OcrState
 import kotlinx.coroutines.delay
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_apply
-import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.common_clear_search
 import no_papers_needed.composeapp.generated.resources.detail_automatic_engine
 import no_papers_needed.composeapp.generated.resources.detail_choose_ocr_engine
@@ -313,10 +314,17 @@ internal fun OcrEngineRow(
     versions: List<OcrVersion>,
     onSetEngine: (OcrEngineRef?) -> Unit,
 ) {
-    var showPicker by remember { mutableStateOf(false) }
+    var showPicker by rememberSaveable { mutableStateOf(false) }
     val hasVersions = versions.isNotEmpty()
+    val chooseLabel = stringResource(Res.string.detail_choose_ocr_engine)
     Row(
-        Modifier.fillMaxWidth().then(if (hasVersions) Modifier.clickable { showPicker = true } else Modifier),
+        Modifier.fillMaxWidth().then(
+            if (hasVersions) {
+                Modifier.clickable(onClickLabel = chooseLabel, role = Role.DropdownList) { showPicker = true }
+            } else {
+                Modifier
+            },
+        ),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -334,11 +342,8 @@ internal fun OcrEngineRow(
             )
         }
         if (hasVersions) {
-            Icon(
-                Icons.Filled.ArrowDropDown,
-                contentDescription = stringResource(Res.string.detail_choose_ocr_engine),
-                modifier = Modifier.size(20.dp),
-            )
+            // The row says what it does; the arrow only shows that it opens a choice.
+            Icon(Icons.Filled.ArrowDropDown, contentDescription = null, modifier = Modifier.size(20.dp))
         }
     }
     if (showPicker) {
@@ -362,41 +367,41 @@ private fun OcrEnginePickerDialog(
     onDismiss: () -> Unit,
 ) {
     val engines = remember(versions) { versions.distinctBy { it.engine } }
-    var selected by remember { mutableStateOf(pinnedEngine) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(Res.string.detail_search_text_engine)) },
-        text = {
-            Column {
+    // Saved as the engine's label, "" for automatic, so a restored dialog keeps a choice of automatic.
+    var selected by rememberSaveable(stateSaver = EngineChoiceSaver) { mutableStateOf(pinnedEngine) }
+    ConfirmDialog(
+        title = stringResource(Res.string.detail_search_text_engine),
+        onConfirm = { onConfirm(selected) },
+        onDismiss = onDismiss,
+        confirmLabel = stringResource(Res.string.common_apply),
+    ) {
+        Column {
+            OcrEngineOption(
+                label = stringResource(Res.string.detail_automatic_engine),
+                secondary = null,
+                selected = selected == null,
+                onClick = { selected = null },
+            )
+            engines.forEach { version ->
                 OcrEngineOption(
-                    label = stringResource(Res.string.detail_automatic_engine),
-                    secondary = null,
-                    selected = selected == null,
-                    onClick = { selected = null },
+                    label = engineLabel(version.engine).resolve(),
+                    secondary =
+                        stringResource(
+                            Res.string.detail_engine_source,
+                            version.deviceId,
+                            formatEpochDate(version.createdAt),
+                        ),
+                    selected = selected == version.engine,
+                    onClick = { selected = version.engine },
                 )
-                engines.forEach { version ->
-                    OcrEngineOption(
-                        label = engineLabel(version.engine).resolve(),
-                        secondary =
-                            stringResource(
-                                Res.string.detail_engine_source,
-                                version.deviceId,
-                                formatEpochDate(version.createdAt),
-                            ),
-                        selected = selected == version.engine,
-                        onClick = { selected = version.engine },
-                    )
-                }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(selected) }) { Text(stringResource(Res.string.common_apply)) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) }
-        },
-    )
+        }
+    }
 }
+
+/** An engine choice as its stored label, with automatic (null) as the empty one. */
+private val EngineChoiceSaver: Saver<OcrEngineRef?, String> =
+    Saver(save = { it?.label.orEmpty() }, restore = OcrEngineRef::ofColumn)
 
 @Composable
 private fun OcrEngineOption(

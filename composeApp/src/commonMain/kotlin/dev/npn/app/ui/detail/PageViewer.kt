@@ -12,7 +12,6 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.ZoomOut
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -40,6 +39,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.FloatingControls
 import dev.npn.app.ui.common.NumericField
 import dev.npn.app.ui.common.PositionStepper
@@ -53,7 +53,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.common_retry
 import no_papers_needed.composeapp.generated.resources.detail_go
 import no_papers_needed.composeapp.generated.resources.detail_go_to_page
@@ -501,24 +500,17 @@ private fun GoToPageDialog(
 ) {
     // The page number as shown (1-based); the field commits only a page the document has.
     var page by rememberSaveable { mutableIntStateOf(current + 1) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(Res.string.detail_go_to_page)) },
-        text = {
-            NumericField(
-                value = page,
-                onValueChange = { page = it },
-                range = 1..pageCount,
-                label = stringResource(Res.string.detail_page_range, pageCount),
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = { onGo(page - 1) }) {
-                Text(stringResource(Res.string.detail_go))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) }
-        },
-    )
+    ConfirmDialog(
+        title = stringResource(Res.string.detail_go_to_page),
+        onConfirm = { onGo(page - 1) },
+        onDismiss = onDismiss,
+        confirmLabel = stringResource(Res.string.detail_go),
+    ) {
+        NumericField(
+            value = page,
+            onValueChange = { page = it },
+            range = 1..pageCount,
+            label = stringResource(Res.string.detail_page_range, pageCount),
+        )
+    }
 }
