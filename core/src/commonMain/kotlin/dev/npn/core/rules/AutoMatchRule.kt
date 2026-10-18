@@ -111,10 +111,6 @@ object AutoMatchRuleJson {
 
     fun encodeList(rules: List<AutoMatchRule>): String = json.encodeToString(listSerializer, rules)
 
-    fun decode(text: String): AutoMatchRule = json.decodeFromString(LegacyAware, text)
-
-    fun encode(rule: AutoMatchRule): String = json.encodeToString(LegacyAware, rule)
-
     private object LegacyAware : JsonTransformingSerializer<AutoMatchRule>(AutoMatchRule.serializer()) {
         private val legacyKeys = mapOf("correspondent" to FieldKeys.CORRESPONDENT, "docType" to FieldKeys.DOC_TYPE)
 
