@@ -6,7 +6,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 // Contract between the service layer (implemented in dev.npn.core.app) and the UI layer
-// (composeApp). UI code must depend only on these types plus the db entities they carry.
+// (composeApp). None of these types carries a db entity: the index's rows never leave core (see Doc).
 
 /** An inclusive bound pair on one field, in the field type's canonical string form (either end open). */
 @Serializable

@@ -5,10 +5,12 @@ import kotlinx.serialization.Serializable
 /**
  * How a field's value is entered, validated, stored and asked for.
  *
- * Only two places are allowed to switch exhaustively on this enum: [FieldValues] (canonical form)
- * and the UI's `FieldEditor` (input control). Everything else reads the capabilities each constant
- * declares — that is what keeps adding a type a two-file change, and why a new type has to state
- * every one of them rather than silently get `false`.
+ * Only the files `checkFieldTypeBranches` allows branch on this enum: [FieldValues] (canonical
+ * form), and in the UI `FieldEditor` (input control and type label) and the filter sheet (filter
+ * control). Everything else reads the capabilities each constant declares — that is what keeps a
+ * new type to those three files, and why a new type has to state every one of them rather than
+ * silently get `false`. Older builds refuse a field definition of a type they do not know, so a
+ * build that reads a new type ships before any build lets a user pick it.
  */
 @Serializable
 enum class FieldType(

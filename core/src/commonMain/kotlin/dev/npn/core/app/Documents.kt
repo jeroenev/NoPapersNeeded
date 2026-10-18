@@ -10,8 +10,8 @@ import kotlinx.coroutines.flow.Flow
 
 /**
  * The stable view of one document across this read seam. `dev.npn.core.db.DocumentEntity` — the
- * disposable index row — never leaves `core.db`; [DocumentRepositoryImpl] maps it here exactly
- * once, so a column change ripples no further than that mapping.
+ * disposable index row — never crosses it; [DocumentRepositoryImpl] maps it here exactly once, so
+ * a column change ripples no further than that mapping.
  *
  * Deliberately absent: `mtime`, which is index bookkeeping with no consumer outside `core`.
  */
