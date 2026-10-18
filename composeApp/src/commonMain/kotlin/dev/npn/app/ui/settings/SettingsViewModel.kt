@@ -26,6 +26,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -139,6 +140,18 @@ class SettingsViewModel(
     /** Documents carrying a value per field key, for the field manager's usage column and delete warning. */
     private val fieldUsage: StateFlow<Map<String, Int>> =
         fieldRegistry.usageCounts().stateIn(viewModelScope, WhileSubscribedTimeout, emptyMap())
+
+    /**
+     * The pane picked on a wide window, where picking one is a selection rather than navigation
+     * ([SettingsScreen]). Kept here rather than in the screen: the change of the app's language
+     * that the Appearance pane makes rebuilds the screen, and must leave that pane open.
+     */
+    private val _picked = MutableStateFlow<SettingsCategoryId?>(null)
+    val picked: StateFlow<SettingsCategoryId?> = _picked.asStateFlow()
+
+    fun pick(id: SettingsCategoryId?) {
+        _picked.value = id
+    }
 
     /** Everything a settings pane shows, as one value. */
     internal val paneState: StateFlow<SettingsPaneState> =

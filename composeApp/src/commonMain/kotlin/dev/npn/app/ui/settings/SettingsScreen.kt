@@ -30,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -131,13 +132,23 @@ fun SettingsScreen(
     // it must not stack back-stack entries, and it must not reset the search box by tearing
     // the screen down. Compact layouts drill down for real, which is what makes system back
     // return to the list. A pane picked while wide stays open when the window turns compact,
-    // without a route of its own, so Back there closes it rather than leaving Settings.
-    var picked by rememberSaveable { mutableStateOf<SettingsCategoryId?>(null) }
+    // without a route of its own, so Back there closes it rather than leaving Settings. The
+    // viewmodel holds it, so the rebuild a change of language makes keeps it; it is saved as well,
+    // for the new viewmodel of a restored process.
+    rememberSaveable(
+        vm,
+        saver =
+            Saver(
+                save = { it.picked.value?.routeKey },
+                restore = { key -> vm.also { it.pick(SettingsCategoryId.fromRouteKey(key)) } },
+            ),
+    ) { vm }
+    val picked by vm.picked.collectAsStateWithLifecycle()
     val closePicked = !wide && category == null && picked != null
     NavigationBackHandler(
         state = rememberNavigationEventState(NavigationEventInfo.None),
         isBackEnabled = closePicked,
-        onBackCompleted = { picked = null },
+        onBackCompleted = { vm.pick(null) },
     )
     SettingsScaffold(
         wide = wide,
@@ -150,8 +161,8 @@ fun SettingsScreen(
         snackbar = snackbar,
         paneState = paneState,
         paneActions = paneActions,
-        onSelect = { id -> if (wide) picked = id else onOpenCategory(id) },
-        onBack = { if (closePicked) picked = null else onBack() },
+        onSelect = { id -> if (wide) vm.pick(id) else onOpenCategory(id) },
+        onBack = { if (closePicked) vm.pick(null) else onBack() },
     )
     draftToResume?.let { docId ->
         ConfirmDialog(

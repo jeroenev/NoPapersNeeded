@@ -7,12 +7,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.Snapshot
+import dev.npn.app.BuildInfo
 import dev.npn.app.EnglishLocaleTest
 import dev.npn.app.FakeLibrarySession
 import dev.npn.app.FakeSettingsRepository
 import dev.npn.app.ui.click
 import dev.npn.app.ui.closing
 import dev.npn.app.ui.common.LocalWindowWidthClass
+import dev.npn.app.ui.common.LocaleProvider
 import dev.npn.app.ui.common.WindowWidthClass
 import dev.npn.app.ui.contentDescription
 import dev.npn.app.ui.detail.DocumentDrafts
@@ -71,6 +73,51 @@ class SettingsScreenTest : EnglishLocaleTest() {
                 render()
                 has { it.contentDescription() == "Back" } shouldBe false
                 leftSettings shouldBe false
+            }
+        }
+
+    /**
+     * The Appearance pane changes the app's language, which rebuilds everything under it: on a wide
+     * window the pane the user was on stays open rather than falling back to the first one.
+     */
+    @Test
+    fun aLanguageChangeKeepsTheWidePaneOpen() =
+        onUiThread {
+            var language by mutableStateOf<String?>(null)
+            val drafts = DocumentDrafts(FakeMetadataWriter(), CoroutineScope(Dispatchers.Unconfined))
+            hostedScene(WIDTH, HEIGHT) {
+                LocaleProvider(language) {
+                    CompositionLocalProvider(
+                        LocalWindowWidthClass provides WindowWidthClass.WIDE,
+                        LocalDocumentDrafts provides drafts,
+                    ) {
+                        NpnTheme(darkTheme = false) {
+                            SettingsScreen(
+                                settings = FakeSettingsRepository(),
+                                session = FakeLibrarySession(),
+                                category = null,
+                                onOpenCategory = {},
+                                onBack = {},
+                                onOpenLibrary = {},
+                                onResumeDraft = {},
+                                onAutoMatchRules = {},
+                            )
+                        }
+                    }
+                }
+            }.closing {
+                render()
+                click { "About" in it.texts() }
+                render()
+                has { node -> node.texts().any { BuildInfo.VERSION in it } } shouldBe true
+
+                language = "nl"
+                Snapshot.sendApplyNotifications()
+                render()
+                render()
+
+                // Only the About pane shows the version, in any language.
+                has { node -> node.texts().any { BuildInfo.VERSION in it } } shouldBe true
             }
         }
 
