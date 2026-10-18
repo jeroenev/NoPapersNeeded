@@ -89,12 +89,9 @@ class UndoneCompactionTest {
             state.shouldNotBeNull().effectiveTags(docId)
         }
 
-    private suspend fun reconcilePastTheGraceWindow() =
-        repeat(SourceSetValidator.PENDING_SUPERSESSION_LIMIT + 1) { coordinator.reconcileMetadata() }
-
     /**
-     * The objects hold every event the snapshot did, so its loss is explained: writes go on past the
-     * grace window, and the index forgets the snapshot, as a rebuild from the folder would.
+     * The objects hold every event the snapshot did, so its loss is explained: writes go on, and the
+     * index forgets the snapshot, as a rebuild from the folder would.
      */
     @Test
     fun aCompactionUndoneByARestoreBlocksNothing() =
@@ -108,7 +105,7 @@ class UndoneCompactionTest {
 
             Files.delete(rig.libRoot.resolve(snapshot))
             putBack(backup, objects)
-            reconcilePastTheGraceWindow()
+            repeat(2) { coordinator.reconcileMetadata() }
 
             val dao = rig.db.metadataProjectionDao()
             checkNotNull(dao.state()).migrationState shouldBe ProjectionStatus.READY
@@ -147,7 +144,7 @@ class UndoneCompactionTest {
             Files.delete(rig.libRoot.resolve(journalFiles<JournalPath.SnapshotV2>().single()))
             putBack(firstBackup, first)
             putBack(secondBackup, second)
-            reconcilePastTheGraceWindow()
+            repeat(2) { coordinator.reconcileMetadata() }
 
             checkNotNull(rig.db.metadataProjectionDao().state()).migrationState shouldBe ProjectionStatus.READY
             rig.db
@@ -157,9 +154,9 @@ class UndoneCompactionTest {
             rebuiltTags(docId).size shouldBe 10
         }
 
-    /** A snapshot gone with one of the objects it replaced still escalates: its events are not all on disk. */
+    /** A snapshot gone with one of the objects it replaced still blocks writes: its events are not all on disk. */
     @Test
-    fun aSnapshotGoneWithOneOfItsObjectsStillHardBlocks() =
+    fun aSnapshotGoneWithOneOfItsObjectsStillBlocksWrites() =
         runTest {
             val docId = aDocument()
             tagOneByOne(docId, List(6) { "tag$it" })
@@ -170,7 +167,6 @@ class UndoneCompactionTest {
 
             Files.delete(rig.libRoot.resolve(snapshot))
             putBack(backup, objects.drop(1))
-            repeat(SourceSetValidator.PENDING_SUPERSESSION_LIMIT) { coordinator.reconcileMetadata() }
 
             val blocked = assertFailsWith<MetadataWriteBlocked> { coordinator.reconcileMetadata() }
             blocked.message shouldContain snapshot

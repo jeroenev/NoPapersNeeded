@@ -12,12 +12,6 @@ class MetadataIdentityCollision(
     message: String,
 ) : IllegalStateException(message)
 
-/** One stored event of the source at [sourcePath], as its canonical JSON. */
-data class SourceEventJson(
-    val sourcePath: String,
-    val canonicalJson: String,
-)
-
 private fun validateActor(
     existing: MetadataTransactionActorEntity?,
     incoming: MetadataTransactionActorEntity,
@@ -161,17 +155,6 @@ interface MetadataProjectionDao {
     @Query("SELECT * FROM metadata_source_events WHERE sourcePath = :sourcePath")
     suspend fun sourceEvents(sourcePath: String): List<MetadataSourceEventEntity>
 
-    @Query(
-        "SELECT se.sourcePath AS sourcePath, e.canonicalJson AS canonicalJson FROM metadata_source_events se " +
-            "JOIN metadata_events e ON e.deviceId = se.eventDeviceId AND e.sequence = se.eventSequence " +
-            "WHERE se.sourcePath IN (:paths)",
-    )
-    suspend fun eventsOfSourcesChunk(paths: List<String>): List<SourceEventJson>
-
-    /** The stored events of each source in [paths], in one join per bind-limit slice. */
-    suspend fun eventsOfSources(paths: List<String>): List<SourceEventJson> =
-        paths.chunkedBind { eventsOfSourcesChunk(it) }
-
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertSourceEvents(events: List<MetadataSourceEventEntity>)
 
@@ -192,13 +175,6 @@ interface MetadataProjectionDao {
 
     @Query("DELETE FROM metadata_superseded WHERE snapshotPath = :snapshotPath")
     suspend fun deleteSupersededBy(snapshotPath: String)
-
-    /** Drop one claim of [snapshotPath]'s: that it supersedes [supersededHash]. */
-    @Query("DELETE FROM metadata_superseded WHERE snapshotPath = :snapshotPath AND supersededHash = :supersededHash")
-    suspend fun deleteSupersession(
-        snapshotPath: String,
-        supersededHash: String,
-    )
 
     /** Every supersession a CURRENTLY-APPLIED snapshot source records. */
     @Query(

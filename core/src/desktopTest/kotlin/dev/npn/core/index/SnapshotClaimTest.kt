@@ -11,16 +11,14 @@ import dev.npn.core.journal.journalObjects
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
-import io.kotest.matchers.string.shouldContain
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.Test
-import kotlin.test.assertFailsWith
 
 /**
  * A snapshot whose manifest names an object it holds none of the events of, as another build's or a
- * faulty one's could: a manifest vouches for an object only with that object's events.
+ * faulty one's could: the object stays an object like any other.
  */
 class SnapshotClaimTest {
     private val rig = IndexRig.create()
@@ -29,9 +27,9 @@ class SnapshotClaimTest {
     @AfterTest
     fun teardown() = rig.close()
 
-    /** Such a snapshot deletes nothing, and the folder alone still folds every event of the object. */
+    /** Such a snapshot changes nothing, and the folder alone still folds every event of the object. */
     @Test
-    fun aSnapshotListingAnObjectWithoutItsEventsDeletesNothing() =
+    fun aSnapshotListingAnObjectWithoutItsEventsChangesNothing() =
         runTest {
             val (docId, victim) = anObjectAndASnapshotThatOnlyNamesIt()
 
@@ -43,19 +41,6 @@ class SnapshotClaimTest {
                 val state = MetadataAccumulator(rig.fs, rebuilt.db).reconcile().state
                 state.shouldNotBeNull().effectiveTags(docId) shouldBe setOf("tag0", "tag1")
             }
-        }
-
-    /** The index keeps no claim it found false: the object's loss is a loss, as with no snapshot. */
-    @Test
-    fun anObjectASnapshotOnlyNamesIsMissedWhenItGoes() =
-        runTest {
-            val (_, victim) = anObjectAndASnapshotThatOnlyNamesIt()
-            coordinator.reconcileMetadata()
-
-            rig.deleteFile(victim)
-
-            repeat(SourceSetValidator.PENDING_SUPERSESSION_LIMIT) { coordinator.reconcileMetadata() }
-            assertFailsWith<MetadataWriteBlocked> { coordinator.reconcileMetadata() }.message shouldContain victim
         }
 
     /**

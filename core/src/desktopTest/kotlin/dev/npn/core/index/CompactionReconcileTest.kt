@@ -11,17 +11,16 @@ import dev.npn.core.fs.NpnPaths
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.compactAsAnEarlierBuild
-import dev.npn.core.journal.journalObjects
 import dev.npn.core.journal.journalPaths
-import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
-import java.nio.file.StandardCopyOption
+import java.nio.file.Path
 import java.nio.file.StandardCopyOption.COPY_ATTRIBUTES
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -37,21 +36,57 @@ class CompactionReconcileTest {
     private val fs = rig.fs
     private val db = rig.db
     private val clock = rig.clock
+    private val coordinator = rig.coordinator()
 
     @AfterTest
     fun teardown() = rig.close()
 
-    private fun coordinator(): JournalCoordinator = rig.coordinator()
+    /** A document tagged with each of [tags], one transaction apiece, reconciled. Returns its id. */
+    private suspend fun aDocumentTagged(tags: List<String>): String {
+        rig.writePdf("a.pdf", "alpha")
+        rig.rescan()
+        coordinator.refreshState()
+        val docId = db.documentDao().requireRowAtPath("a.pdf").docId
+        tagOneByOne(docId, tags)
+        return docId
+    }
 
-    /**
-     * Compact every object and snapshot on disk as an earlier build did, then let [coordinator]
-     * reconcile what it left; returns the snapshot's path.
-     */
-    private suspend fun compactAll(coordinator: JournalCoordinator): String =
-        fs
-            .compactAsAnEarlierBuild(
-                fs.journalPaths<JournalPath.ObjectV2>() + fs.journalPaths<JournalPath.SnapshotV2>(),
-            ).also { coordinator.reconcileMetadata() }
+    private suspend fun tagOneByOne(
+        docId: String,
+        tags: List<String>,
+    ) {
+        for (tag in tags) {
+            clock.advance()
+            coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, tag)))
+        }
+        coordinator.reconcileMetadata()
+    }
+
+    /** Compact every object and snapshot on disk as an earlier build did; returns the snapshot's path. */
+    private suspend fun compactAll(): String =
+        fs.compactAsAnEarlierBuild(fs.journalPaths<JournalPath.ObjectV2>() + fs.journalPaths<JournalPath.SnapshotV2>())
+
+    /** A copy of the library file at [path] outside it, mtime and all. */
+    private fun keep(path: String): Path =
+        rig.scratchDir().resolve(NpnPaths.fileName(path)).also {
+            Files.copy(libRoot.resolve(path), it, COPY_ATTRIBUTES)
+        }
+
+    private fun putBack(
+        kept: Path,
+        path: String,
+    ) {
+        Files.copy(kept, libRoot.resolve(path), COPY_ATTRIBUTES)
+    }
+
+    private suspend fun shouldBeReady() {
+        checkNotNull(db.metadataProjectionDao().state()).migrationState shouldBe ProjectionStatus.READY
+    }
+
+    private suspend fun shouldStayWritable(docId: String) {
+        clock.advance()
+        coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "after"))).shouldBeTrue()
+    }
 
     private suspend fun v2Count() = fs.journalPaths<JournalPath.ObjectV2>().size
 
@@ -60,148 +95,63 @@ class CompactionReconcileTest {
     @Test
     fun aLibraryAnEarlierBuildCompactedFoldsAndStaysWritable() =
         runTest {
-            rig.writePdf("a.pdf", "alpha")
-            val coordinator = coordinator()
-            rig.rescan()
-            coordinator.refreshState()
-            val docId = db.documentDao().requireRowAtPath("a.pdf").docId
-
-            // 6 separate transactions -> 6 v2 objects, above the threshold of 3.
-            repeat(6) { i ->
-                clock.advance()
-                coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "tag$i")))
-            }
-            coordinator.reconcileMetadata()
+            val docId = aDocumentTagged(List(6) { "tag$it" })
             v2Count() shouldBe 6
-
             val tagsBefore = db.tagDao().tagsForDocument(docId).sorted()
 
-            compactAll(coordinator)
+            compactAll()
             snapCount() shouldBe 1
-            // Superseded objects were deleted.
             v2Count() shouldBe 0
 
-            // A reconcile after compaction must NOT block writes and must keep the projection intact.
             coordinator.reconcileMetadata()
+            shouldBeReady()
             db.tagDao().tagsForDocument(docId).sorted() shouldContainExactly tagsBefore
-
-            // Writes still work.
-            clock.advance()
-            coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "after"))).shouldBeTrue()
-        }
-
-    @Test
-    fun deletionBeforeSnapshotDoesNotBlockThenSnapshotArrivalCleansUp() =
-        runTest {
-            rig.writePdf("a.pdf", "alpha")
-            val coordinator = coordinator()
-            rig.rescan()
-            coordinator.refreshState()
-            val docId = db.documentDao().requireRowAtPath("a.pdf").docId
-            repeat(5) { i ->
-                clock.advance()
-                coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "tag$i")))
-            }
-            coordinator.reconcileMetadata()
-
-            // Simulate a remote device that compacted: it deleted the superseded objects, but the
-            // snapshot file has not arrived yet (sync reordering). Move the objects aside.
-            val v2Files =
-                fs.journalObjects()
-            val stash = rig.scratchDir()
-            val moved =
-                v2Files.map { file ->
-                    val target = stash.resolve(file.name)
-                    Files.move(libRoot.resolve(file.relPath), target)
-                    file to target
-                }
-
-            // Pending supersession: events still applied locally, so reconcile must NOT hard-block.
-            repeat(3) { coordinator.reconcileMetadata() }
-            db
-                .metadataProjectionDao()
-                .state()
-                .shouldNotBeNull()
-                .migrationState shouldBe ProjectionStatus.READY
-            db.tagDao().tagsForDocument(docId).size shouldBe 5
-
-            // Now the snapshot arrives (build it from the stashed objects' events via the compactor).
-            // Simpler: restore the objects then compact locally to produce a real snapshot, then delete.
-            moved.forEach { (file, target) -> Files.move(target, libRoot.resolve(file.relPath)) }
-            coordinator.reconcileMetadata()
-            compactAll(coordinator)
-
-            // After the snapshot is applied and superseded objects deleted, reconcile stays clean.
-            coordinator.reconcileMetadata()
-            db
-                .metadataProjectionDao()
-                .state()
-                .shouldNotBeNull()
-                .migrationState shouldBe ProjectionStatus.READY
-            db.tagDao().tagsForDocument(docId).size shouldBe 5
-        }
-
-    @Test
-    fun aSupersededObjectLeftOnDiskIsDeletedByTheNextReconcile() =
-        runTest {
-            rig.writePdf("a.pdf", "alpha")
-            val coordinator = coordinator()
-            rig.rescan()
-            coordinator.refreshState()
-            val docId = checkNotNull(db.documentDao().rowAtPath("a.pdf")).docId
-            repeat(6) { i ->
-                clock.advance()
-                coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "tag$i")))
-            }
-            coordinator.reconcileMetadata()
-            // Keep one object aside, mtime and all, to put back as if the compaction's delete of it
-            // had failed.
-            val leftover =
-                fs.journalObjects().first()
-            val kept = rig.scratchDir().resolve(leftover.name)
-            Files.copy(libRoot.resolve(leftover.relPath), kept, StandardCopyOption.COPY_ATTRIBUTES)
-            compactAll(coordinator)
-            Files.copy(kept, libRoot.resolve(leftover.relPath), StandardCopyOption.COPY_ATTRIBUTES)
-
-            coordinator.reconcileMetadata()
-
-            Files.exists(libRoot.resolve(leftover.relPath)).shouldBeFalse()
-            checkNotNull(db.metadataProjectionDao().state()).migrationState shouldBe ProjectionStatus.READY
-            db.tagDao().tagsForDocument(docId).size shouldBe 6
-            clock.advance()
-            coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "after"))).shouldBeTrue()
+            shouldStayWritable(docId)
         }
 
     /**
-     * A leftover whose bytes changed since (a sync conflict wrote over it) is still swept: its events
-     * are in the snapshot on disk, which the pass reads instead of it, so it fails nothing.
+     * Another device's earlier build compacted, and its deletions arrived before its snapshot: the
+     * objects are gone and nothing on disk holds their events yet. That blocks writes at once, and
+     * the snapshot lifts the block when it arrives.
      */
     @Test
-    fun aSupersededObjectLeftOnDiskWithOtherBytesIsDeletedByTheNextReconcile() =
+    fun aDeletionThatArrivesBeforeItsSnapshotBlocksWritesUntilTheSnapshotArrives() =
         runTest {
-            rig.writePdf("a.pdf", "alpha")
-            val coordinator = coordinator()
-            rig.rescan()
-            coordinator.refreshState()
-            val docId = checkNotNull(db.documentDao().rowAtPath("a.pdf")).docId
-            repeat(6) { i ->
-                clock.advance()
-                coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "tag$i")))
-            }
+            val docId = aDocumentTagged(List(5) { "tag$it" })
+            val snapshot = compactAll()
+            val inTransit = keep(snapshot)
+            Files.delete(libRoot.resolve(snapshot))
+
+            assertFailsWith<MetadataWriteBlocked> { coordinator.reconcileMetadata() }.block shouldBe
+                WriteBlock.JOURNAL_DAMAGED
+            assertFailsWith<MetadataWriteBlocked> { shouldStayWritable(docId) }
+            db.tagDao().tagsForDocument(docId).size shouldBe 5
+
+            putBack(inTransit, snapshot)
             coordinator.reconcileMetadata()
+
+            shouldBeReady()
+            db.tagDao().tagsForDocument(docId).size shouldBe 5
+            shouldStayWritable(docId)
+        }
+
+    /** An object the compaction could not delete is an object like any other: read, kept, and counted once. */
+    @Test
+    fun aSupersededObjectLeftOnDiskIsKept() =
+        runTest {
+            val docId = aDocumentTagged(List(6) { "tag$it" })
             val leftover = fs.journalPaths<JournalPath.ObjectV2>().first()
-            val kept = rig.scratchDir().resolve(NpnPaths.fileName(leftover))
-            Files.copy(libRoot.resolve(leftover), kept, StandardCopyOption.COPY_ATTRIBUTES)
-            compactAll(coordinator)
-            Files.write(libRoot.resolve(leftover), Files.readAllBytes(kept) + "\n".encodeToByteArray())
-
+            val kept = keep(leftover)
+            compactAll()
             coordinator.reconcileMetadata()
+            putBack(kept, leftover)
 
-            Files.exists(libRoot.resolve(leftover)).shouldBeFalse()
-            checkNotNull(db.metadataProjectionDao().state()).migrationState shouldBe ProjectionStatus.READY
+            repeat(2) { coordinator.reconcileMetadata() }
+
+            rig.exists(leftover).shouldBeTrue()
+            shouldBeReady()
             db.tagDao().tagsForDocument(docId).size shouldBe 6
-            clock.advance()
-            coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "after"))).shouldBeTrue()
+            shouldStayWritable(docId)
         }
 
     /**
@@ -212,35 +162,14 @@ class CompactionReconcileTest {
     @Test
     fun objectsBackWithoutTheSnapshotThatReplacedThemAreKept() =
         runTest {
-            rig.writePdf("a.pdf", "alpha")
-            val coordinator = coordinator()
-            rig.rescan()
-            coordinator.refreshState()
-            val docId = checkNotNull(db.documentDao().rowAtPath("a.pdf")).docId
-            repeat(6) { i ->
-                clock.advance()
-                coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "tag$i")))
-            }
-            coordinator.reconcileMetadata()
-            val backup = rig.scratchDir()
+            val docId = aDocumentTagged(List(6) { "tag$it" })
             val objects = fs.journalPaths<JournalPath.ObjectV2>()
-            objects.forEach {
-                Files.copy(
-                    libRoot.resolve(it),
-                    backup.resolve(NpnPaths.fileName(it)),
-                    StandardCopyOption.COPY_ATTRIBUTES,
-                )
-            }
-            compactAll(coordinator)
+            val backup = objects.associateWith(::keep)
+            compactAll()
+            coordinator.reconcileMetadata()
 
             fs.journalPaths<JournalPath.SnapshotV2>().forEach { Files.delete(libRoot.resolve(it)) }
-            objects.forEach {
-                Files.copy(
-                    backup.resolve(NpnPaths.fileName(it)),
-                    libRoot.resolve(it),
-                    StandardCopyOption.COPY_ATTRIBUTES,
-                )
-            }
+            backup.forEach { (path, kept) -> putBack(kept, path) }
             coordinator.reconcileMetadata()
 
             fs.journalPaths<JournalPath.ObjectV2>() shouldContainExactlyInAnyOrder objects
@@ -251,68 +180,42 @@ class CompactionReconcileTest {
             }
         }
 
-    /** A snapshot that no longer reads as what was applied fails the pass before its leftovers go. */
+    /** A snapshot that no longer reads as what was applied fails the pass. */
     @Test
-    fun aChangedSnapshotFailsThePassBeforeAnythingIsDeleted() =
+    fun aChangedSnapshotFailsThePass() =
         runTest {
-            rig.writePdf("a.pdf", "alpha")
-            val coordinator = coordinator()
-            rig.rescan()
-            coordinator.refreshState()
-            val docId = checkNotNull(db.documentDao().rowAtPath("a.pdf")).docId
-            repeat(6) { i ->
-                clock.advance()
-                coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "tag$i")))
-            }
+            aDocumentTagged(List(6) { "tag$it" })
+            val snapshot = libRoot.resolve(compactAll())
             coordinator.reconcileMetadata()
-            val leftover = fs.journalPaths<JournalPath.ObjectV2>().first()
-            val kept = rig.scratchDir().resolve(NpnPaths.fileName(leftover))
-            Files.copy(libRoot.resolve(leftover), kept, StandardCopyOption.COPY_ATTRIBUTES)
-            compactAll(coordinator)
-            Files.copy(kept, libRoot.resolve(leftover), StandardCopyOption.COPY_ATTRIBUTES)
 
-            val snapshot = libRoot.resolve(fs.journalPaths<JournalPath.SnapshotV2>().single())
             Files.write(snapshot, Files.readAllBytes(snapshot) + "\n".encodeToByteArray())
-            assertFailsWith<MetadataWriteBlocked> { coordinator.reconcileMetadata() }
 
-            Files.exists(libRoot.resolve(leftover)).shouldBeTrue()
+            assertFailsWith<MetadataWriteBlocked> { coordinator.reconcileMetadata() }
         }
 
     /**
      * After a chain compaction the first snapshot is gone, and the objects it replaced are carried
-     * by the one that replaced it: a leftover of them is still deleted, and their loss stays
-     * explained past the grace window.
+     * by the one that replaced it: a leftover of them is read as any object, and the loss of the rest
+     * stays explained.
      */
     @Test
     fun aSnapshotReplacedInTurnStillAccountsForTheObjectsItReplaced() =
         runTest {
-            rig.writePdf("a.pdf", "alpha")
-            val coordinator = coordinator()
-            rig.rescan()
-            coordinator.refreshState()
-            val docId = checkNotNull(db.documentDao().rowAtPath("a.pdf")).docId
-            repeat(6) { i ->
-                clock.advance()
-                coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "a$i")))
-            }
-            coordinator.reconcileMetadata()
+            val docId = aDocumentTagged(List(6) { "a$it" })
             val leftover = fs.journalPaths<JournalPath.ObjectV2>().first()
-            val kept = rig.scratchDir().resolve(NpnPaths.fileName(leftover))
-            Files.copy(libRoot.resolve(leftover), kept, StandardCopyOption.COPY_ATTRIBUTES)
-            compactAll(coordinator)
-            repeat(4) { i ->
-                clock.advance()
-                coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "b$i")))
-            }
+            val kept = keep(leftover)
+            compactAll()
             coordinator.reconcileMetadata()
-            compactAll(coordinator)
+            tagOneByOne(docId, List(4) { "b$it" })
+            compactAll()
+            coordinator.reconcileMetadata()
             snapCount() shouldBe 1
 
-            Files.copy(kept, libRoot.resolve(leftover), StandardCopyOption.COPY_ATTRIBUTES)
-            repeat(SourceSetValidator.PENDING_SUPERSESSION_LIMIT + 1) { coordinator.reconcileMetadata() }
+            putBack(kept, leftover)
+            repeat(2) { coordinator.reconcileMetadata() }
 
-            Files.exists(libRoot.resolve(leftover)).shouldBeFalse()
-            checkNotNull(db.metadataProjectionDao().state()).migrationState shouldBe ProjectionStatus.READY
+            rig.exists(leftover).shouldBeTrue()
+            shouldBeReady()
             db.tagDao().tagsForDocument(docId).size shouldBe 10
         }
 
@@ -333,48 +236,16 @@ class CompactionReconcileTest {
             )
             val lost = listOf(checkNotNull(dao.source(objectPath)))
             val snapshotOnDisk = mapOf(snapshotPath to FileMeta(snapshotPath, "$snapshotHash.jsonl", 1, 1, false))
+            val validator = SourceSetValidator(dao)
 
-            val snapshots = SnapshotSupport(fs, dao)
-
-            suspend fun SourceSetValidator.judge(files: Map<String, FileMeta>): String? {
+            suspend fun judge(files: Map<String, FileMeta>): String? {
                 val current = dao.allSources()
-                return unexplainedSourceLoss(
-                    lost,
-                    current,
-                    files,
-                    snapshots.carriedByListed(files.keys, current).hashes,
-                )
+                val carried = SnapshotSupport(dao).carriedByListed(files.keys, current).hashes
+                return validator.unexplainedSourceLoss(lost, current, files, carried)
             }
-            val withSnapshot = SourceSetValidator(dao)
-            repeat(SourceSetValidator.PENDING_SUPERSESSION_LIMIT + 1) {
-                withSnapshot.judge(snapshotOnDisk) shouldBe null
-            }
-            val withoutSnapshot = SourceSetValidator(dao)
-            repeat(SourceSetValidator.PENDING_SUPERSESSION_LIMIT) { withoutSnapshot.judge(emptyMap()) shouldBe null }
-            withoutSnapshot.judge(emptyMap()).shouldNotBeNull()
-        }
 
-    /** A pass that hard-blocks on one lost object still counts the grace window of those after it. */
-    @Test
-    fun aHardLossStillCountsTheLossesListedAfterIt() =
-        runTest {
-            val first = "a".repeat(64)
-            val second = "c".repeat(64)
-            val lost =
-                listOf(
-                    source("${NpnPaths.JOURNAL_DIR}/objects-v2-aa/$first.jsonl", SourceKind.OBJECT, first),
-                    source("${NpnPaths.JOURNAL_DIR}/objects-v2-cc/$second.jsonl", SourceKind.OBJECT, second),
-                )
-            val validator = SourceSetValidator(db.metadataProjectionDao())
-
-            suspend fun judge(previous: List<MetadataSourceEntity>) =
-                validator.unexplainedSourceLoss(previous, emptyList(), emptyMap(), emptySet())
-            repeat(SourceSetValidator.PENDING_SUPERSESSION_LIMIT) { judge(lost) shouldBe null }
-
-            judge(lost).shouldNotBeNull()
-
-            // The second object's window was spent in the same passes as the first's, not restarted.
-            judge(lost.drop(1)).shouldNotBeNull()
+            judge(snapshotOnDisk) shouldBe null
+            judge(emptyMap()).shouldNotBeNull() shouldContain objectPath
         }
 
     private fun source(
@@ -383,32 +254,26 @@ class CompactionReconcileTest {
         hash: String,
     ) = MetadataSourceEntity(path, kind, SourceFingerprint(1, 1, hash), hash, SourceStatus.APPLIED)
 
+    /** An object gone with no snapshot superseding it is damage: writes stop at once, until it is back. */
     @Test
-    fun unexplainedObjectLossEventuallyHardBlocks() =
+    fun anUnexplainedObjectLossBlocksWritesUntilTheObjectIsBack() =
         runTest {
-            rig.writePdf("a.pdf", "alpha")
-            val coordinator = coordinator()
-            rig.rescan()
-            coordinator.refreshState()
-            val docId = db.documentDao().requireRowAtPath("a.pdf").docId
-            repeat(4) { i ->
-                clock.advance()
-                coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "tag$i")))
-            }
+            val docId = aDocumentTagged(List(4) { "tag$it" })
+            val victim = fs.journalPaths<JournalPath.ObjectV2>().first()
+            val kept = keep(victim)
+            Files.delete(libRoot.resolve(victim))
+
+            assertFailsWith<MetadataWriteBlocked> {
+                coordinator.reconcileMetadata()
+            }.message.shouldNotBeNull() shouldContain
+                victim
+            checkNotNull(db.metadataProjectionDao().state()).migrationState shouldBe ProjectionStatus.FAILED
+
+            putBack(kept, victim)
             coordinator.reconcileMetadata()
 
-            // Delete a v2 object with NO snapshot ever superseding it -> genuine damage.
-            val victim =
-                fs.journalObjects().first()
-            Files.delete(libRoot.resolve(victim.relPath))
-
-            // Tolerated for the grace window, then escalates to a hard block.
-            repeat(SourceSetValidator.PENDING_SUPERSESSION_LIMIT) { coordinator.reconcileMetadata() }
-            assertFailsWith<MetadataWriteBlocked> { coordinator.reconcileMetadata() }
-            db
-                .metadataProjectionDao()
-                .state()
-                .shouldNotBeNull()
-                .migrationState shouldBe ProjectionStatus.FAILED
+            shouldBeReady()
+            db.tagDao().tagsForDocument(docId).size shouldBe 4
+            shouldStayWritable(docId)
         }
 }

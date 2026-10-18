@@ -5,126 +5,27 @@ import dev.npn.core.db.MetadataSourceEntity
 import dev.npn.core.db.MetadataSupersededEntity
 import dev.npn.core.db.SourceKind
 import dev.npn.core.db.SourceStatus
-import dev.npn.core.fs.LibraryFileSystem
-import dev.npn.core.journal.EventCopies
-import dev.npn.core.journal.EventDecoderRegistry
-import dev.npn.core.journal.JournalSourceRead
-import dev.npn.core.journal.SnapshotV2Reader
-import dev.npn.core.util.runCatchingCancellable
 
 /**
- * What the compaction snapshots earlier builds wrote account for, over the metadata accumulator's
- * tables, for [MetadataAccumulator]'s reconcile.
+ * What the compaction snapshots earlier builds wrote account for, for [MetadataAccumulator]'s
+ * reconcile. Those builds folded objects into a snapshot and deleted them; this build reads the
+ * snapshots and writes none, so a library they compacted lacks objects the index once applied.
  */
 internal class SnapshotSupport(
-    private val fs: LibraryFileSystem,
     private val dao: MetadataProjectionDao,
 ) {
     /**
-     * The applied objects and snapshots among [listed] whose events a snapshot also in [listed]
-     * carries: the compaction that published it could not delete them, and a later plan leaves them
-     * out. A reconcile pass reads that snapshot rather than them, whatever their own bytes are now.
-     * [sources] is the source table before the pass.
-     *
-     * A manifest is taken at its word only as far as the events go: a source is carried when every
-     * event the index recorded for it is carried in full by the listed snapshots that supersede it,
-     * directly or through a chain. The snapshot's bytes prove that: the event table keeps the richest
-     * copy across sources, so its joins cannot prove which keys an older snapshot actually holds.
-     * Leftovers are rare, and only a pass that has one loads any events.
-     */
-    suspend fun supersededLeftovers(
-        listed: Set<String>,
-        sources: List<MetadataSourceEntity>,
-    ): Set<String> = leftovers(listed, sources).carried
-
-    /**
-     * Delete the [supersededLeftovers] among [listed]. Runs after the pass read [listed], so every
-     * snapshot there reads as the one applied. [sources] is the source table before the pass.
-     * Returns the paths deleted.
-     *
-     * The claims a listed snapshot makes on a leftover whose events it does not hold are dropped from
-     * the index: that object is a live source again, whose loss the validator counts, and which the
-     * next compaction carries.
-     */
-    suspend fun deleteSupersededLeftovers(
-        listed: Set<String>,
-        sources: List<MetadataSourceEntity>,
-    ): Set<String> {
-        val found = leftovers(listed, sources)
-        for (claim in found.refuted) dao.deleteSupersession(claim.snapshotPath, claim.supersededHash)
-        return found.carried.filterTo(HashSet()) { runCatchingCancellable { fs.delete(it) }.isSuccess }
-    }
-
-    /** The superseded sources [listed] holds: the [carried] ones' paths, and the [refuted] claims on the others. */
-    private class Leftovers(
-        val carried: Set<String>,
-        val refuted: List<MetadataSupersededEntity>,
-    )
-
-    private suspend fun leftovers(
-        listed: Set<String>,
-        sources: List<MetadataSourceEntity>,
-    ): Leftovers {
-        val supersessions = dao.appliedSupersessions()
-        val graph = SupersessionGraph(sources, supersessions)
-        // What each listed snapshot carries, on its own.
-        val reaches = graph.snapshots.filter { it in listed }.associateWith { graph.reach(listOf(it)) }
-        val candidates =
-            sources.filter { source ->
-                source.status == SourceStatus.APPLIED && source.path in listed &&
-                    reaches.values.any { source.contentHash in it.hashes }
-            }
-        if (candidates.isEmpty()) return Leftovers(emptySet(), emptyList())
-        val eventsOf = HashMap<String, Map<EventKey, String>>()
-        val requiredBySource = dao.eventsOfSources(candidates.map { it.path }).groupBy { it.sourcePath }
-        val carried = HashSet<String>()
-        val refuted = ArrayList<MetadataSupersededEntity>()
-        for (candidate in candidates) {
-            val carriers = reaches.filterValues { candidate.contentHash in it.hashes }
-            val held = carriers.keys.map { eventsOf.getOrPut(it) { snapshotCopies(it) } }
-            val required = requiredBySource[candidate.path].orEmpty()
-            val fullyCarried =
-                required.isNotEmpty() &&
-                    required.all { stored ->
-                        val event = EventDecoderRegistry.decodeStored(stored.canonicalJson)
-                        held.any { copies ->
-                            val copy = copies[event.dev to event.seq]
-                            copy != null && EventCopies.richer(copy, stored.canonicalJson) == copy
-                        }
-                    }
-            if (fullyCarried) {
-                carried += candidate.path
-            } else {
-                val claimants = carriers.values.flatMapTo(HashSet()) { it.snapshots }
-                refuted +=
-                    supersessions.filter { it.supersededHash == candidate.contentHash && it.snapshotPath in claimants }
-            }
-        }
-        return Leftovers(carried, refuted)
-    }
-
-    /** Canonical copies actually present in a verified snapshot, independent of the merged index. */
-    private suspend fun snapshotCopies(path: String): Map<EventKey, String> {
-        val read = runCatchingCancellable { SnapshotV2Reader.read(path, fs.readBytes(path)) }.getOrNull()
-        return (read as? JournalSourceRead.Accepted)?.events.orEmpty().associate {
-            (it.event.dev to it.event.seq) to it.canonicalJson
-        }
-    }
-
-    /**
      * What the files in [listed] carry, for a pass that read them; [sources] is the source table after
      * the read. A source's events are on disk when the source is listed, when a listed snapshot carries
-     * them, or, for a snapshot that is gone, when every hash it superseded is
-     * carried in turn: a snapshot holds the events of what it replaced and nothing else
-     * ([dev.npn.core.journal.SnapshotCompactor.publish]), so a folder put back from before a compaction
-     * lost none of them.
+     * them, or, for a snapshot that is gone, when every hash it superseded is carried in turn: a
+     * snapshot holds the events of what it replaced and nothing else, so a folder put back from before
+     * a compaction lost none of them.
      *
      * Such a gone snapshot that no applied snapshot supersedes is [ListedCarriage.undone]: the index is
-     * to forget it, as a rebuild from the folder would never have known it, or compaction keeps choosing
-     * it and leaves out the objects it replaced although they are back. One that another gone snapshot
-     * supersedes still explains that one, so it is forgotten only after it.
+     * to forget it, as a rebuild from the folder would never have known it. One that another gone
+     * snapshot supersedes still explains that one, so it is forgotten only after it.
      */
-    internal suspend fun carriedByListed(
+    suspend fun carriedByListed(
         listed: Set<String>,
         sources: List<MetadataSourceEntity>,
     ): ListedCarriage {
@@ -134,9 +35,8 @@ internal class SnapshotSupport(
         // snapshot among them superseded. A snapshot that is gone vouches for nothing, whatever its
         // source row says: the folder is the truth, and the index only a cache of it. The graph maps a
         // superseded snapshot's hash to its path; one gone from the folder was read in an earlier pass,
-        // so the table holds it from before this one. A claim a pass found false is no longer among the
-        // graph's ([deleteSupersededLeftovers]).
-        val hashes = HashSet(graph.reach(graph.snapshots.filter { it in listed }).hashes)
+        // so the table holds it from before this one.
+        val hashes = HashSet(graph.reach(graph.snapshots.filter { it in listed }))
         sources.filter { it.status == SourceStatus.APPLIED && it.path in listed }.mapNotNullTo(
             hashes,
         ) { it.contentHash }
@@ -158,9 +58,6 @@ internal class SnapshotSupport(
         return ListedCarriage(hashes, undone)
     }
 }
-
-/** An event's identity in the index: its device and sequence. */
-private typealias EventKey = Pair<String, Long>
 
 /**
  * The applied snapshots' supersession claims, as a graph: a snapshot to the hashes it supersedes,
@@ -185,23 +82,18 @@ private class SupersessionGraph(
     /** The hashes the snapshot at [path] supersedes itself. */
     fun inputsOf(path: String): List<String> = bySnapshot[path].orEmpty()
 
-    /** What [roots] carry: every hash they supersede, in turn, and every snapshot on the way, theirs included. */
-    fun reach(roots: Collection<String>): Reach {
+    /** What the snapshots at [roots] carry: every hash they supersede, and in turn what each of those superseded. */
+    fun reach(roots: Collection<String>): Set<String> {
         val hashes = HashSet<String>()
-        val snapshots = roots.filterTo(HashSet()) { it in bySnapshot }
-        val pending = ArrayDeque(snapshots)
+        val visited = roots.filterTo(HashSet()) { it in bySnapshot }
+        val pending = ArrayDeque(visited)
         while (pending.isNotEmpty()) {
             for (hash in bySnapshot[pending.removeFirst()].orEmpty()) {
-                if (hashes.add(hash)) snapshotWithHash[hash]?.let { if (snapshots.add(it)) pending.addLast(it) }
+                if (hashes.add(hash)) snapshotWithHash[hash]?.let { if (visited.add(it)) pending.addLast(it) }
             }
         }
-        return Reach(hashes, snapshots)
+        return hashes
     }
-
-    class Reach(
-        val hashes: Set<String>,
-        val snapshots: Set<String>,
-    )
 }
 
 /** What the journal files one reconcile pass listed and read hold; see [SnapshotSupport.carriedByListed]. */

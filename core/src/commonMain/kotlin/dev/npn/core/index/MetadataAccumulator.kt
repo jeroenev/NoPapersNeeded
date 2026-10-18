@@ -109,10 +109,11 @@ internal sealed interface OpenReconciliation {
 internal class MetadataAccumulator(
     private val fs: LibraryFileSystem,
     db: NpnDatabase,
-    /** Deletes what an applied snapshot on disk superseded. */
-    private val snapshots: SnapshotSupport = SnapshotSupport(fs, db.metadataProjectionDao()),
 ) {
     private val dao = db.metadataProjectionDao()
+
+    /** What the snapshots earlier builds compacted into account for; see [SnapshotSupport]. */
+    private val snapshots = SnapshotSupport(dao)
 
     /** Judges whether the source set is safe to fold; see [SourceSetValidator]. */
     private val validator = SourceSetValidator(dao)
@@ -260,30 +261,28 @@ internal class MetadataAccumulator(
         validator.newerStore(entries)?.let { fail(WriteBlock.NEWER_FORMAT, it) }
         validator.invalidObjectPath(entries)?.let { fail(WriteBlock.JOURNAL_DAMAGED, it) }
         val previous = dao.allSources()
-        val listed = entries.filter { !it.isDirectory }.associateBy { it.relPath }
-
-        // A leftover whose events a snapshot on disk carries is not read, whatever its own bytes are
-        // now (a sync conflict may have written over it). The snapshot is read first, so one that
-        // changed or no longer reads fails the pass before any file it supersedes is deleted, and
-        // only a snapshot on disk now supersedes anything, and only what it holds the events of.
-        val ingest = ingestFiles((listed - snapshots.supersededLeftovers(listed.keys, previous)).values)
-        val swept = snapshots.deleteSupersededLeftovers(listed.keys, previous)
-        val files = listed - swept
+        val files = entries.filter { !it.isDirectory }.associateBy { it.relPath }
+        val ingest = ingestFiles(files.values)
         val current = dao.allSources()
         val carried = snapshots.carriedByListed(files.keys, current)
         validator.unexplainedSourceLoss(previous, current, files, carried.hashes)?.let {
             fail(WriteBlock.JOURNAL_DAMAGED, it)
         }
         // A compaction a restore undid: its objects are back and hold its events, so the index
-        // forgets the snapshot as a rebuild would, and a later compaction replaces them again.
+        // forgets the snapshot as a rebuild would.
         carried.undone.forEach { dao.forgetSource(it) }
+        // A file gone that never read as a source (one a sync tool had only partly written) recorded
+        // nothing, and its row goes with it.
+        val gone = previous.filter { it.path !in files }
+        gone.filter { it.status != SourceStatus.APPLIED }.forEach { dao.deleteSource(it.path) }
 
-        // A source gone with its events still on disk elsewhere (the objects a compaction deleted,
-        // which its snapshot carries) shrinks nothing: its rows and events stay, and a caller's
-        // in-memory state still is their fold. Any other loss, or a forgotten snapshot, may have.
+        // A source gone with its events still on disk elsewhere (the objects an earlier build's
+        // compaction deleted, which its snapshot carries) shrinks nothing: its rows and events stay,
+        // and a caller's in-memory state still is their fold. Any other loss, or a forgotten
+        // snapshot, may have.
         val sourceRemoved =
             carried.undone.isNotEmpty() ||
-                previous.any { it.path !in files && it.contentHash !in carried.hashes }
+                gone.any { it.status == SourceStatus.APPLIED && it.contentHash !in carried.hashes }
         return ReconcilePass(projectionCleared, ingest, sourceRemoved)
     }
 
