@@ -6,10 +6,10 @@ import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.db.AiEnrichQueueEntity
 import dev.npn.core.db.AiEnrichedEntity
 import dev.npn.core.db.DeviceDatabase
+import dev.npn.core.db.FtsRows
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.TempIndexDb
 import dev.npn.core.db.documentEntity
-import dev.npn.core.index.FtsRows
 import dev.npn.core.index.MutableClock
 import dev.npn.core.index.requireByDocId
 import dev.npn.core.testing.FakeAiSuggest

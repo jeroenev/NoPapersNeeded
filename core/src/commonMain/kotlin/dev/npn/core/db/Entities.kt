@@ -171,7 +171,7 @@ data class FieldDefEntity(
  * (regular) FTS5 table. FTS5 finds a row only by MATCH or by rowid: a `docId = ?` filter reads
  * every row, so a document's row is addressed by the rowid [FtsKeyEntity] records for it, never
  * through [docId], which is here for search results. Rows are built by
- * [dev.npn.core.index.FtsRows] only, so every write site indexes the same columns.
+ * [FtsRows] only, so every write site indexes the same columns.
  * The JVM integration test verifies that [Fts5] works with the bundled SQLite driver.
  *
  * A schema change to this table needs a migration that keeps each row's rowid. Room's

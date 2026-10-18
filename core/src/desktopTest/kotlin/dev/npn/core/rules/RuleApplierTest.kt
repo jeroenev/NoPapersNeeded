@@ -1,6 +1,6 @@
 package dev.npn.core.rules
 
-import dev.npn.core.index.FtsRows
+import dev.npn.core.db.FtsRows
 import dev.npn.core.index.IndexRig
 import dev.npn.core.index.rowAtPath
 import io.kotest.matchers.collections.shouldContainExactly

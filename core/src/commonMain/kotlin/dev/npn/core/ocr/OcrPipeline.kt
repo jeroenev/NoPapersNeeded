@@ -1,6 +1,7 @@
 package dev.npn.core.ocr
 
 import dev.npn.core.db.DocumentEntity
+import dev.npn.core.db.FtsRows
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.OcrPageCacheEntity
 import dev.npn.core.db.OcrQueueDao
@@ -10,7 +11,6 @@ import dev.npn.core.db.isLive
 import dev.npn.core.db.queueState
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.readDocument
-import dev.npn.core.index.FtsRows
 import dev.npn.core.index.WriteSettle
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.util.EpochClock

@@ -1,7 +1,6 @@
 package dev.npn.core.db
 
 import dev.npn.core.app.DocumentRepositoryImpl
-import dev.npn.core.index.FtsRows
 import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe

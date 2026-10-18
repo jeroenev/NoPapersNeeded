@@ -1,7 +1,6 @@
 package dev.npn.core.db
 
 import androidx.sqlite.execSQL
-import dev.npn.core.index.FtsRows
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest

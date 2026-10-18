@@ -1,5 +1,6 @@
 package dev.npn.core.index
 
+import dev.npn.core.db.FtsRows
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.StatementLog
 import dev.npn.core.db.isFullFtsScan

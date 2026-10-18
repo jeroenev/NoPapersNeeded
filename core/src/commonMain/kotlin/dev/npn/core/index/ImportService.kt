@@ -2,6 +2,7 @@ package dev.npn.core.index
 
 import androidx.room3.withWriteTransaction
 import dev.npn.core.db.DocumentEntity
+import dev.npn.core.db.FtsRows
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.OcrQueueDao
 import dev.npn.core.db.OcrQueueEntity

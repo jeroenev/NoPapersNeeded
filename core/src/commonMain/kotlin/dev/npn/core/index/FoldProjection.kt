@@ -3,6 +3,7 @@ package dev.npn.core.index
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.DocumentFieldEntity
 import dev.npn.core.db.FtsDocumentEntity
+import dev.npn.core.db.FtsRows
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.TagEntity
 import dev.npn.core.fs.NpnPaths

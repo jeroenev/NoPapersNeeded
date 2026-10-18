@@ -1,7 +1,4 @@
-package dev.npn.core.index
-
-import dev.npn.core.db.FtsDocumentEntity
-import dev.npn.core.db.NpnDatabase
+package dev.npn.core.db
 
 /**
  * The one place an FTS row is assembled. The fold writes a row's metadata columns and the OCR

@@ -1,6 +1,5 @@
 package dev.npn.core.db
 
-import dev.npn.core.index.FtsRows
 import io.kotest.matchers.ints.shouldBeLessThan
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest

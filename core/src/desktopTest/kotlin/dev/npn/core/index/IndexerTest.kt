@@ -1,5 +1,6 @@
 package dev.npn.core.index
 
+import dev.npn.core.db.FtsRows
 import dev.npn.core.db.searchDocIds
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.FieldKeys

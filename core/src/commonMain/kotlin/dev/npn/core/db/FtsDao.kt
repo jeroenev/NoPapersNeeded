@@ -58,7 +58,7 @@ interface FtsDao {
     /**
      * The fold's write: the metadata columns of each of [rows] (file name, tags, fields). A document
      * with an FTS row keeps its extracted text, which only [upsertContent] writes; one without gets
-     * [rows]' row as given. Build rows with [dev.npn.core.index.FtsRows].
+     * [rows]' row as given. Build rows with [FtsRows].
      */
     @Transaction
     suspend fun upsertMetadata(rows: List<FtsDocumentEntity>) {
