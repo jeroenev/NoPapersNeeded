@@ -17,13 +17,13 @@ interface FieldDefDao {
     @Query("SELECT * FROM field_defs ORDER BY position, fieldKey")
     suspend fun all(): List<FieldDefEntity>
 
-    /** Distinct field keys carrying at least one value but no registry definition, with counts. */
+    /** Distinct field keys carrying at least one value but no registry definition. */
     @Query(
-        "SELECT f.fieldKey AS fieldKey, COUNT(*) AS count FROM document_fields f " +
+        "SELECT DISTINCT f.fieldKey FROM document_fields f " +
             "LEFT JOIN field_defs d ON d.fieldKey = f.fieldKey " +
-            "WHERE d.fieldKey IS NULL GROUP BY f.fieldKey ORDER BY f.fieldKey COLLATE NOCASE",
+            "WHERE d.fieldKey IS NULL ORDER BY f.fieldKey COLLATE NOCASE",
     )
-    fun observeOrphanKeys(): Flow<List<FieldKeyCount>>
+    fun observeOrphanKeys(): Flow<List<String>>
 
     @Upsert
     suspend fun upsertAll(defs: List<FieldDefEntity>)

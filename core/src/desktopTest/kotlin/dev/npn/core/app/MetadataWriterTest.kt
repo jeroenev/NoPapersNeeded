@@ -170,9 +170,7 @@ class MetadataWriterTest {
             // Unregistered keys surface as orphans, with usage counts.
             rig.session.fieldRegistry
                 .orphanKeys()
-                .first()
-                .map { it.fieldKey } shouldContainExactlyInAnyOrder
-                listOf("amount", "vendor")
+                .first() shouldContainExactlyInAnyOrder listOf("amount", "vendor")
 
             // Clearing a field removes it.
             rig.session.meta.setField(id, "amount", null)

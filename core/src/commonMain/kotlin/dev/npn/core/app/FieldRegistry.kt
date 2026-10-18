@@ -1,6 +1,5 @@
 package dev.npn.core.app
 
-import dev.npn.core.db.FieldKeyCount
 import dev.npn.core.model.FieldDef
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -19,8 +18,8 @@ interface FieldRegistry {
     /** Every live definition, in registry order (position, then key). */
     val fields: Flow<List<FieldDef>>
 
-    /** Keys that carry values on some document but have no definition, with document counts. */
-    fun orphanKeys(): Flow<List<FieldKeyCount>>
+    /** Keys that carry values on some document but have no definition, case-insensitively ordered. */
+    fun orphanKeys(): Flow<List<String>>
 
     /** How many documents carry a value for each key (registered or not); absent keys have none. */
     fun usageCounts(): Flow<Map<String, Int>>
@@ -51,9 +50,6 @@ interface FieldRegistry {
         key: String,
         clearValues: Boolean = false,
     )
-
-    /** Rewrite positions so the registry follows [keys]; keys not listed keep their relative order after. */
-    suspend fun reorder(keys: List<String>)
 
     /**
      * Move [key] [delta] places in the registry order (negative is earlier), reading the order and

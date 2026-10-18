@@ -304,7 +304,7 @@ class SessionSmokeTest {
                         )
                     },
                     { rig.session.fieldRegistry.remove(FieldKeys.TITLE, clearValues = true) },
-                    { rig.session.fieldRegistry.reorder(listOf(FieldKeys.TITLE)) },
+                    { rig.session.fieldRegistry.move(FieldKeys.TITLE, 1) },
                     { rig.session.rules.save(AutoMatchRule(id = "", name = "rule", pattern = "first")) },
                     { rig.session.rules.setEnabled("rule", enabled = true) },
                     { rig.session.rules.delete("rule") },

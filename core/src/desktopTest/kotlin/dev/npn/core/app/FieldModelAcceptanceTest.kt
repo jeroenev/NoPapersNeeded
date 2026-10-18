@@ -65,8 +65,7 @@ class FieldModelAcceptanceTest {
                 .first()["amount"] shouldBe 1
             rig.session.fieldRegistry
                 .orphanKeys()
-                .first()
-                .map { it.fieldKey } shouldNotContain "amount"
+                .first() shouldNotContain "amount"
 
             val repo = DocumentRepositoryImpl(rig.db)
             // Equality filter.

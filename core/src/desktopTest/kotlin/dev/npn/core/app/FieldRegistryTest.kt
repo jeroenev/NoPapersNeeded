@@ -171,31 +171,11 @@ class FieldRegistryTest {
             val registry = rig.session.fieldRegistry
             registry.fields.first { it.isNotEmpty() }
             rig.session.meta.setField(id, "vendor", "Acme")
-            registry
-                .orphanKeys()
-                .first { it.isNotEmpty() }
-                .single()
-                .fieldKey shouldBe "vendor"
+            registry.orphanKeys().first { it.isNotEmpty() } shouldBe listOf("vendor")
             registry.upsert(def("vendor"))
             registry.orphanKeys().first { it.isEmpty() }
             registry.remove("vendor")
-            registry
-                .orphanKeys()
-                .first { it.isNotEmpty() }
-                .single()
-                .count shouldBe 1
-        }
-
-    @Test
-    fun reorderRewritesPositions() =
-        appSessionTest { rig ->
-            val registry = rig.session.fieldRegistry
-            registry.fields.first { it.isNotEmpty() }
-            registry.reorder(listOf("notes", "title"))
-            val ordered = registry.fields.first { it.first().key == "notes" }
-            ordered.map { it.key } shouldContainExactly
-                listOf("notes", "title", "correspondent", "docType", "docDate")
-            ordered.map { it.position } shouldContainExactly (0 until 5).toList()
+            registry.orphanKeys().first { it.isNotEmpty() } shouldBe listOf("vendor")
         }
 
     @Test

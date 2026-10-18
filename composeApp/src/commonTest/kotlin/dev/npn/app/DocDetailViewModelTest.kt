@@ -12,7 +12,6 @@ import dev.npn.core.app.DocumentHistoryRecord
 import dev.npn.core.app.HistoryEntry
 import dev.npn.core.app.OcrVersion
 import dev.npn.core.app.TagInfo
-import dev.npn.core.db.FieldKeyCount
 import dev.npn.core.index.MetadataWriteBlocked
 import dev.npn.core.index.WriteBlock
 import dev.npn.core.model.FieldDef
@@ -310,7 +309,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
                     documents.singleDoc.value = listItem(doc("doc-1", reviewed = true), listOf("finance"))
                     fieldRegistry.values.value =
                         mapOf(FieldKeys.CORRESPONDENT to listOf("ACME"), FieldKeys.DOC_TYPE to listOf("invoice"))
-                    fieldRegistry.orphans.value = listOf(FieldKeyCount("amount", 3))
+                    fieldRegistry.orphans.value = listOf("amount")
                     tags.tags.value = listOf(TagInfo("finance", "#ff0000", null, 1))
                     reviewConfig.reviewModeFlow.value = ReviewMode.INBOX_WORKFLOW
                 }

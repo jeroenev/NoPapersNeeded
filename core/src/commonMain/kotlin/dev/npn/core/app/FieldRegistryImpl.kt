@@ -1,6 +1,5 @@
 package dev.npn.core.app
 
-import dev.npn.core.db.FieldKeyCount
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.defs
 import dev.npn.core.db.toFieldDef
@@ -30,7 +29,7 @@ internal class FieldRegistryImpl(
     override val fields: Flow<List<FieldDef>> =
         defDao.observeAll().map { rows -> rows.mapNotNull { it.toFieldDef() } }.distinctUntilChanged()
 
-    override fun orphanKeys(): Flow<List<FieldKeyCount>> = defDao.observeOrphanKeys()
+    override fun orphanKeys(): Flow<List<String>> = defDao.observeOrphanKeys()
 
     override fun usageCounts(): Flow<Map<String, Int>> =
         fieldDao.observeKeysWithCounts().map { rows -> rows.associate { it.fieldKey to it.count } }
@@ -94,12 +93,6 @@ internal class FieldRegistryImpl(
      */
     private fun FoldedState.docsCarrying(key: String): List<String> =
         docsWithMetadata().map(::resolveDocId).distinct().filter { key in inheritedFields(it) }
-
-    override suspend fun reorder(keys: List<String>) =
-        commitOrder { defs ->
-            val byKey = defs.associateBy { it.key }
-            keys.mapNotNull { byKey[it] } + defs.filter { it.key !in keys }
-        }
 
     override suspend fun move(
         key: String,

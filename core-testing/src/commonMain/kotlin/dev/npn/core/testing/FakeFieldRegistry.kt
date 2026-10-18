@@ -1,7 +1,6 @@
 package dev.npn.core.testing
 
 import dev.npn.core.app.FieldRegistry
-import dev.npn.core.db.FieldKeyCount
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import kotlinx.coroutines.flow.Flow
@@ -14,18 +13,17 @@ import kotlinx.coroutines.flow.map
  */
 class FakeFieldRegistry : FieldRegistry {
     val defs = MutableStateFlow(FieldKeys.seedDefinitions { FieldKeys.SEED_LABELS.getValue(it) })
-    val orphans = MutableStateFlow<List<FieldKeyCount>>(emptyList())
+    val orphans = MutableStateFlow<List<String>>(emptyList())
     val values = MutableStateFlow<Map<String, List<String>>>(emptyMap())
     val usage = MutableStateFlow<Map<String, Int>>(emptyMap())
 
     val upserts = mutableListOf<FieldDef>()
     val removals = mutableListOf<Pair<String, Boolean>>()
-    val reorders = mutableListOf<List<String>>()
     val moves = mutableListOf<Pair<String, Int>>()
 
     override val fields: Flow<List<FieldDef>> get() = defs
 
-    override fun orphanKeys(): Flow<List<FieldKeyCount>> = orphans
+    override fun orphanKeys(): Flow<List<String>> = orphans
 
     override fun usageCounts(): Flow<Map<String, Int>> = usage
 
@@ -55,13 +53,6 @@ class FakeFieldRegistry : FieldRegistry {
     ) {
         removals += key to clearValues
         defs.value = defs.value.filter { it.key != key }
-    }
-
-    override suspend fun reorder(keys: List<String>) {
-        reorders += keys
-        val byKey = defs.value.associateBy { it.key }
-        val ordered = keys.mapNotNull { byKey[it] } + defs.value.filter { it.key !in keys }
-        defs.value = ordered.mapIndexed { i, d -> d.copy(position = i) }
     }
 
     override suspend fun move(

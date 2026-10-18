@@ -222,10 +222,7 @@ class DocDetailViewModel private constructor(
 
     /** Keys documents carry without a definition, offered when the user defines a new field. */
     private val orphanKeys: StateFlow<List<String>> =
-        fieldRegistry
-            .orphanKeys()
-            .map { keys -> keys.map { it.fieldKey } }
-            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
+        fieldRegistry.orphanKeys().stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     /**
      * What decides the indexed OCR text: the OCR state, and which stored version is indexed. Picking
