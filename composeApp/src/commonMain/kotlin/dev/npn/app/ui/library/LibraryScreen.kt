@@ -32,7 +32,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -61,13 +60,7 @@ import dev.npn.app.ui.common.TopBarAction
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
-import dev.npn.core.app.OcrStatus
-import dev.npn.core.app.SavedView
 import dev.npn.core.app.ViewType
-import dev.npn.core.index.IndexProgress
-import dev.npn.core.index.ScanReport
-import dev.npn.core.model.FieldDef
-import dev.npn.core.model.ReviewMode
 import dev.npn.core.model.reviewMarkerIsAuthoritative
 import dev.npn.core.settings.SettingsRepository
 import io.github.vinceglb.filekit.dialogs.FileKitMode
@@ -99,39 +92,6 @@ private const val SIDE_PANEL_FRACTION = 0.5f
 private val SidePanelMinWidth = 420.dp
 private val SidePanelMaxWidth = 800.dp
 
-/**
- * Everything the library list shows, collected once by [LibraryScreen] from its viewmodel's flows.
- * Immutable, so the list skips when only the side panel or a dialog changes.
- */
-@Immutable
-internal data class LibraryContentState(
-    val ui: LibraryUiState = LibraryUiState(),
-    /** Null until the first result set arrives, so the list shows a spinner, not "no documents". */
-    val results: DocumentResults? = null,
-    val queryText: String = "",
-    val suggestions: List<String> = emptyList(),
-    val tagColors: Map<String, String?> = emptyMap(),
-    val reviewMode: ReviewMode = ReviewMode.DEFAULT,
-    val reviewCount: Int = 0,
-    val savedViews: List<SavedView> = emptyList(),
-    val banners: LibraryBanners = LibraryBanners(),
-    /** The registry fields the sort menu offers. */
-    val sortableFields: List<FieldDef> = emptyList(),
-    /** Every registry field, for the active-filter chips' labels. */
-    val fields: List<FieldDef> = emptyList(),
-    val gridColumnWidth: Int = DEFAULT_GRID_COLUMN_WIDTH,
-    val landscapeListColumns: Boolean = false,
-)
-
-/** What the progress and warning banners above the results report. */
-@Immutable
-internal data class LibraryBanners(
-    val scanProgress: IndexProgress? = null,
-    val lastScan: ScanReport? = null,
-    val ocr: OcrStatus = OcrStatus(pending = 0, running = false),
-    val enrichmentPending: Int = 0,
-)
-
 // The list gets the viewmodel only as its LibraryActions interface, the hand-down the conventions prescribe.
 @Suppress("ViewModelForwarding")
 @Composable
@@ -149,25 +109,12 @@ fun LibraryScreen(
     modifier: Modifier = Modifier,
     vm: LibraryViewModel = viewModel { LibraryViewModel(session, settings) },
 ) {
-    val ui by vm.ui.collectAsStateWithLifecycle()
-    val results by vm.documents.collectAsStateWithLifecycle()
+    val state by vm.content.collectAsStateWithLifecycle()
+    // The filter sheet's vocabulary, which the list itself does not show.
     val tags by vm.tags.collectAsStateWithLifecycle()
-    val tagColors by vm.tagColors.collectAsStateWithLifecycle()
     val fieldFilters by vm.fieldFilters.collectAsStateWithLifecycle()
-    val sortableFields by vm.sortableFields.collectAsStateWithLifecycle()
-    val reviewMode by vm.reviewMode.collectAsStateWithLifecycle()
-    val reviewCount by vm.needsReviewCount.collectAsStateWithLifecycle()
-    val savedViews by vm.savedViews.collectAsStateWithLifecycle()
-    val queryText by vm.queryText.collectAsStateWithLifecycle()
-    val suggestions by vm.suggestions.collectAsStateWithLifecycle()
-    val gridColumnWidth by vm.gridColumnWidth.collectAsStateWithLifecycle()
-    val landscapeListColumns by vm.landscapeListColumns.collectAsStateWithLifecycle()
-    val aiConfigured by vm.aiConfigured.collectAsStateWithLifecycle()
-    val scanProgress by vm.scanProgress.collectAsStateWithLifecycle()
-    val lastScan by vm.lastScanReport.collectAsStateWithLifecycle()
-    val ocr by vm.ocrStatus.collectAsStateWithLifecycle()
-    val enrichmentPending by vm.enrichmentPending.collectAsStateWithLifecycle()
-    val docs = results?.items
+    val ui = state.ui
+    val docs = state.results?.items
 
     LaunchedEffect(Unit) {
         filterHandoff.consume()?.let(vm::setFilter)
@@ -197,29 +144,14 @@ fun LibraryScreen(
         Row(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f)) {
                 LibraryContent(
-                    state =
-                        LibraryContentState(
-                            ui = ui,
-                            results = results,
-                            queryText = queryText,
-                            suggestions = suggestions,
-                            tagColors = tagColors,
-                            reviewMode = reviewMode,
-                            reviewCount = reviewCount,
-                            savedViews = savedViews,
-                            banners = LibraryBanners(scanProgress, lastScan, ocr, enrichmentPending),
-                            sortableFields = sortableFields,
-                            fields = fieldFilters.fields,
-                            gridColumnWidth = gridColumnWidth,
-                            landscapeListColumns = landscapeListColumns,
-                        ),
+                    state = state,
                     actions = vm,
                     content = session.content,
                     snackbar = snackbar,
                     onOpenDoc = onDocClick,
                     onOpenQueue = onOpenQueue,
                     onOpenTrash = onTrash,
-                    onAiEdit = onAiEdit.takeIf { aiConfigured },
+                    onAiEdit = onAiEdit.takeIf { state.aiConfigured },
                     onDialog = { dialog = it },
                 )
             }
@@ -240,7 +172,7 @@ fun LibraryScreen(
                             editor = editor,
                             tags = tags,
                             fields = fieldFilters,
-                            reviewMode = reviewMode,
+                            reviewMode = state.reviewMode,
                             onApply = apply,
                             onDismiss = { dialog = null },
                             fillHeight = true,
@@ -251,7 +183,7 @@ fun LibraryScreen(
                             editor = editor,
                             tags = tags,
                             fields = fieldFilters,
-                            reviewMode = reviewMode,
+                            reviewMode = state.reviewMode,
                             onApply = apply,
                             onDismiss = { dialog = null },
                         )

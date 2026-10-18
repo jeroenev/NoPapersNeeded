@@ -1,5 +1,6 @@
 package dev.npn.app.ui.library
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.platform.ScanResult
 import dev.npn.app.ui.common.BulkFailure
@@ -113,6 +114,41 @@ data class LibraryUiState(
 internal const val DEFAULT_GRID_COLUMN_WIDTH = 160
 
 /**
+ * Everything the library list shows, assembled by [LibraryViewModel.content] from its flows.
+ * Immutable, so the list skips when only the side panel or a dialog changes.
+ */
+@Immutable
+internal data class LibraryContentState(
+    val ui: LibraryUiState = LibraryUiState(),
+    /** Null until the first result set arrives, so the list shows a spinner, not "no documents". */
+    val results: DocumentResults? = null,
+    val queryText: String = "",
+    val suggestions: List<String> = emptyList(),
+    val tagColors: Map<String, String?> = emptyMap(),
+    val reviewMode: ReviewMode = ReviewMode.DEFAULT,
+    val reviewCount: Int = 0,
+    val savedViews: List<SavedView> = emptyList(),
+    val banners: LibraryBanners = LibraryBanners(),
+    /** The registry fields the sort menu offers. */
+    val sortableFields: List<FieldDef> = emptyList(),
+    /** Every registry field, for the active-filter chips' labels. */
+    val fields: List<FieldDef> = emptyList(),
+    val gridColumnWidth: Int = DEFAULT_GRID_COLUMN_WIDTH,
+    val landscapeListColumns: Boolean = false,
+    /** Whether AI is configured, which offers AI edit on a selection; follows Settings. */
+    val aiConfigured: Boolean = false,
+)
+
+/** What the progress and warning banners above the results report. */
+@Immutable
+internal data class LibraryBanners(
+    val scanProgress: IndexProgress? = null,
+    val lastScan: ScanReport? = null,
+    val ocr: OcrStatus = OcrStatus(pending = 0, running = false),
+    val enrichmentPending: Int = 0,
+)
+
+/**
  * What the library list asks of its viewmodel, so the list composables take this and never the
  * viewmodel itself. Implemented by [LibraryViewModel]; each member's contract is documented there.
  */
@@ -163,6 +199,14 @@ interface LibraryActions {
     fun deleteSavedView(view: SavedView)
 }
 
+/** The part of [LibraryContentState] that changes as the user types and the results arrive. */
+private data class LibraryListCore(
+    val ui: LibraryUiState,
+    val results: DocumentResults?,
+    val queryText: String,
+    val suggestions: List<String>,
+)
+
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 class LibraryViewModel(
     session: LibrarySession,
@@ -187,30 +231,11 @@ class LibraryViewModel(
     // Same race guard for the persisted sort seed.
     private var sortOverridden = false
 
-    /** Min grid cell width (dp), user-adjustable via settings; drives the adaptive column count. */
-    val gridColumnWidth: StateFlow<Int> =
-        settings.settings
-            .map { it.gridColumnWidth }
-            .distinctUntilChanged()
-            .stateIn(viewModelScope, WhileSubscribedTimeout, DEFAULT_GRID_COLUMN_WIDTH)
-
-    /** Whether AI is configured, which offers AI edit on a selection; follows Settings. */
-    val aiConfigured: StateFlow<Boolean> =
-        settings.aiConfigured().stateIn(viewModelScope, WhileSubscribedTimeout, false)
-
-    /** When true, the list view uses multiple columns while the window is landscape. */
-    val landscapeListColumns: StateFlow<Boolean> =
-        settings.settings
-            .map { it.landscapeListColumns }
-            .distinctUntilChanged()
-            .stateIn(viewModelScope, WhileSubscribedTimeout, false)
-
     // Raw query text, debounced before it hits the filter. The search field reads this directly
     // (via [queryText]) so it reflects keystrokes immediately; the debounce only gates the filter.
     // Binding the field to the debounced filter value instead desyncs the Android IME and drops
     // input.
     private val queryInput = MutableStateFlow("")
-    val queryText: StateFlow<String> = queryInput.asStateFlow()
 
     init {
         // Seed the view from the persisted default and the sort from the last explicitly chosen
@@ -240,7 +265,7 @@ class LibraryViewModel(
     // indicator instead of flashing the empty state on a slow initial load. Results keep carrying
     // the query they came from until the new one delivers, so a filter/sort change and the items
     // it produces reach the UI as one value (see [DocumentResults]).
-    val documents: StateFlow<DocumentResults?> =
+    private val documents: StateFlow<DocumentResults?> =
         combine(
             _ui.map { it.filter }.distinctUntilChanged(),
             _ui.map { it.sort }.distinctUntilChanged(),
@@ -255,8 +280,8 @@ class LibraryViewModel(
      * Autocomplete suggestions for the current query. Debounced separately from the filter
      * so suggestions are fast but do not fire on every keystroke.
      */
-    val suggestions: StateFlow<List<String>> =
-        queryText
+    private val suggestions: StateFlow<List<String>> =
+        queryInput
             .debounce(SUGGESTION_DEBOUNCE_MS)
             .distinctUntilChanged()
             .flatMapLatest { q ->
@@ -268,16 +293,11 @@ class LibraryViewModel(
                 }
             }.stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
+    /** The library's tags, for the filter sheet and the tag pickers. */
     val tags: StateFlow<List<TagInfo>> =
         session.tags
             .observeTags()
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
-
-    /** Each tag's colour by name, for the tag chips on the documents. */
-    val tagColors: StateFlow<Map<String, String?>> =
-        tags
-            .map { it.colorsByName() }
-            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyMap())
 
     /** The filter sheet's field rows: the registry plus each text field's values. */
     val fieldFilters: StateFlow<FieldFilterOptions> =
@@ -285,47 +305,94 @@ class LibraryViewModel(
             FieldFilterOptions(fields = defs, values = values)
         }.stateIn(viewModelScope, WhileSubscribedTimeout, FieldFilterOptions())
 
-    /** Registry fields the sort menu offers: everything but prose, which has no useful order. */
-    val sortableFields: StateFlow<List<FieldDef>> =
-        session.fieldRegistry.fields
-            .map { defs -> defs.filter { it.type.singleLine } }
-            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
+    /** Min grid cell width (dp), user-adjustable via settings; drives the adaptive column count. */
+    private val gridColumnWidth: StateFlow<Int> =
+        settings.settings
+            .map { it.gridColumnWidth }
+            .distinctUntilChanged()
+            .stateIn(viewModelScope, WhileSubscribedTimeout, DEFAULT_GRID_COLUMN_WIDTH)
 
-    val reviewMode: StateFlow<ReviewMode> =
+    /** Whether AI is configured, which offers AI edit on a selection; follows Settings. */
+    private val aiConfigured: StateFlow<Boolean> =
+        settings.aiConfigured().stateIn(viewModelScope, WhileSubscribedTimeout, false)
+
+    /** When true, the list view uses multiple columns while the window is landscape. */
+    private val landscapeListColumns: StateFlow<Boolean> =
+        settings.settings
+            .map { it.landscapeListColumns }
+            .distinctUntilChanged()
+            .stateIn(viewModelScope, WhileSubscribedTimeout, false)
+
+    private val reviewMode: StateFlow<ReviewMode> =
         reviewConfig.reviewMode
             .stateIn(viewModelScope, WhileSubscribedTimeout, ReviewMode.DEFAULT)
 
-    val needsReviewCount: StateFlow<Int> =
+    private val needsReviewCount: StateFlow<Int> =
         reviewConfig.reviewMode
             .flatMapLatest(documentRepository::observeReviewQueueCount)
             .stateIn(viewModelScope, WhileSubscribedTimeout, 0)
 
-    val savedViews: StateFlow<List<SavedView>> =
-        savedViewRepository
-            .observeSavedViews()
-            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
-
-    val scanProgress: StateFlow<IndexProgress?> =
-        ingest.scanProgress
-            .stateIn(viewModelScope, WhileSubscribedTimeout, null)
-
-    val lastScanReport: StateFlow<ScanReport?> =
+    private val lastScanReport: StateFlow<ScanReport?> =
         ingest.lastScanReport
             .stateIn(viewModelScope, WhileSubscribedTimeout, null)
 
-    val ocrStatus: StateFlow<OcrStatus> =
-        session.ocr.ocrStatus
-            .stateIn(viewModelScope, WhileSubscribedTimeout, OcrStatus(0, false))
+    /**
+     * What the progress and warning banners report. Of the AI enrichment, only the count of
+     * documents still waiting: the banner opens the queue view, which subscribes to the entries itself.
+     */
+    private val banners: StateFlow<LibraryBanners> =
+        combine(
+            ingest.scanProgress,
+            lastScanReport,
+            session.ocr.ocrStatus,
+            session.work.queue
+                .map { entries -> entries.count { it.stage == WorkStage.AI_ENRICHMENT } }
+                .distinctUntilChanged(),
+            ::LibraryBanners,
+        ).stateIn(viewModelScope, WhileSubscribedTimeout, LibraryBanners())
+
+    /** What decorates the documents and lays them out, apart from the results themselves. */
+    private val presentation: StateFlow<LibraryContentState> =
+        combine(
+            fieldFilters,
+            tags.map { it.colorsByName() },
+            savedViewRepository.observeSavedViews(),
+            combine(gridColumnWidth, landscapeListColumns, aiConfigured, ::Triple),
+        ) { fieldOptions, tagColors, savedViews, (gridColumnWidth, landscapeListColumns, aiConfigured) ->
+            LibraryContentState(
+                tagColors = tagColors,
+                savedViews = savedViews,
+                // Everything but prose, which has no useful order.
+                sortableFields = fieldOptions.fields.filter { it.type.singleLine },
+                fields = fieldOptions.fields,
+                gridColumnWidth = gridColumnWidth,
+                landscapeListColumns = landscapeListColumns,
+                aiConfigured = aiConfigured,
+            )
+        }.stateIn(viewModelScope, WhileSubscribedTimeout, LibraryContentState())
 
     /**
-     * Documents still waiting for AI enrichment, behind the library's progress banner. Only the
-     * count: the banner opens the queue view, which subscribes to the entries itself.
+     * Everything the library list shows, in one state: the UI state, the [DocumentResults] (its
+     * query and items together, so the list can tell a new query from an update), the search box,
+     * the review queue, the banners, and what decorates and lays out the documents.
      */
-    val enrichmentPending: StateFlow<Int> =
-        session.work.queue
-            .map { entries -> entries.count { it.stage == WorkStage.AI_ENRICHMENT } }
-            .distinctUntilChanged()
-            .stateIn(viewModelScope, WhileSubscribedTimeout, 0)
+    internal val content: StateFlow<LibraryContentState> =
+        combine(
+            combine(_ui, documents, queryInput, suggestions, ::LibraryListCore),
+            combine(reviewMode, needsReviewCount, ::Pair),
+            banners,
+            presentation,
+        ) { core, (mode, reviewCount), banners, presentation ->
+            presentation.copy(
+                ui = core.ui,
+                results = core.results,
+                queryText = core.queryText,
+                suggestions = core.suggestions,
+                reviewMode = mode,
+                reviewCount = reviewCount,
+                banners = banners,
+            )
+        }.stateIn(viewModelScope, WhileSubscribedTimeout, LibraryContentState())
 
     override fun onQueryChange(text: String) {
         queryInput.value = text

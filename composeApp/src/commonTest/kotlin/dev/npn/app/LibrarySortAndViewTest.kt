@@ -65,6 +65,7 @@ class LibrarySortAndViewTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val settings = FakeSettingsRepository(initialDefaultView = null)
             val model = LibraryViewModel(FakeLibrarySession(), settings)
+            collecting(model.content)
             val view =
                 SavedView(
                     id = "v1",
@@ -75,7 +76,8 @@ class LibrarySortAndViewTest : MainDispatcherTest() {
             model.applySavedView(view)
             model.ui.value.filter shouldBe view.filter
             model.ui.value.viewType shouldBe ViewType.GRID
-            model.queryText.value shouldBe "tax"
+            runCurrent()
+            model.content.value.queryText shouldBe "tax"
             // The late default must not override the applied saved view.
             settings.updateSettings { it.copy(defaultViewType = ViewType.LIST) }
             advanceUntilIdle()

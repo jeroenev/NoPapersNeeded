@@ -17,6 +17,7 @@ import io.kotest.matchers.maps.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -28,10 +29,11 @@ import no_papers_needed.composeapp.generated.resources.library_refresh_failed
 import kotlin.test.Test
 
 class LibraryViewModelTest : MainDispatcherTest() {
-    private fun vm(
+    /** The viewmodel, its [LibraryViewModel.content] collected as the screen would. */
+    private fun TestScope.vm(
         session: FakeLibrarySession = FakeLibrarySession(),
         settings: FakeSettingsRepository = FakeSettingsRepository(),
-    ) = LibraryViewModel(session, settings)
+    ) = LibraryViewModel(session, settings).also { collecting(it.content) }
 
     @Test
     fun queryTextReflectsKeystrokesImmediately() =
@@ -39,7 +41,8 @@ class LibraryViewModelTest : MainDispatcherTest() {
             val model = vm()
             model.onQueryChange("invoice")
             // queryText mirrors the raw input without waiting for the debounce.
-            model.queryText.value shouldBe "invoice"
+            runCurrent()
+            model.content.value.queryText shouldBe "invoice"
             // The filter has NOT been updated yet (debounce not elapsed).
             model.ui.value.filter.query
                 .shouldBeNull()
@@ -77,29 +80,28 @@ class LibraryViewModelTest : MainDispatcherTest() {
                     documents.suggestionsList = listOf("invoice", "inventory")
                 }
             val model = vm(session = session)
-            collecting(model.suggestions)
             model.onQueryChange("annual inv")
             advanceTimeBy(99)
             runCurrent()
-            model.suggestions.value shouldBe emptyList()
+            model.content.value.suggestions shouldBe emptyList()
             advanceTimeBy(2)
             runCurrent()
-            model.suggestions.value shouldContainExactly listOf("invoice", "inventory")
+            model.content.value.suggestions shouldContainExactly listOf("invoice", "inventory")
             model.acceptSuggestion("invoice")
-            model.queryText.value shouldBe "annual invoice"
+            runCurrent()
+            model.content.value.queryText shouldBe "annual invoice"
         }
 
     @Test
     fun shortOrNoResultSuggestionQueryStaysEmpty() =
         runTest(dispatcher) {
             val model = vm()
-            collecting(model.suggestions)
             model.onQueryChange("a")
             advanceUntilIdle()
-            model.suggestions.value shouldBe emptyList()
+            model.content.value.suggestions shouldBe emptyList()
             model.onQueryChange("missing")
             advanceUntilIdle()
-            model.suggestions.value shouldBe emptyList()
+            model.content.value.suggestions shouldBe emptyList()
         }
 
     @Test
@@ -108,7 +110,6 @@ class LibraryViewModelTest : MainDispatcherTest() {
             val session = FakeLibrarySession().apply { reviewConfig.reviewModeFlow.value = ReviewMode.UNTAGGED_ONLY }
             val model = vm(session = session)
             // reviewMode is a WhileSubscribed StateFlow; keep a live collector so .value tracks upstream.
-            collecting(model.reviewMode)
             advanceUntilIdle()
             model.applyReviewPreset()
             model.ui.value.filter shouldBe LibraryFilter(untaggedOnly = true)
@@ -119,7 +120,6 @@ class LibraryViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { reviewConfig.reviewModeFlow.value = ReviewMode.INBOX_WORKFLOW }
             val model = vm(session = session)
-            collecting(model.reviewMode)
             advanceUntilIdle()
             model.applyReviewPreset()
             model.ui.value.filter shouldBe LibraryFilter(unreviewedOrUntagged = true)
@@ -132,7 +132,8 @@ class LibraryViewModelTest : MainDispatcherTest() {
             model.onQueryChange("stale")
             advanceUntilIdle()
             model.applyReviewPreset()
-            model.queryText.value shouldBe ""
+            runCurrent()
+            model.content.value.queryText shouldBe ""
         }
 
     @Test
@@ -220,18 +221,17 @@ class LibraryViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val settings = FakeSettingsRepository()
             val model = vm(settings = settings)
-            collecting(model.aiConfigured)
             runCurrent()
-            model.aiConfigured.value shouldBe false
+            model.content.value.aiConfigured shouldBe false
 
             // Configured in Settings while the library is open: no reopen needed.
             settings.edit { it.copy(aiEnabled = true, aiProvider = AiProvider.OLLAMA, aiModel = "qwen3:8b") }
             runCurrent()
-            model.aiConfigured.value shouldBe true
+            model.content.value.aiConfigured shouldBe true
 
             settings.edit { it.copy(aiEnabled = false) }
             runCurrent()
-            model.aiConfigured.value shouldBe false
+            model.content.value.aiConfigured shouldBe false
         }
 
     /** The chips on the documents take their colours from the library's tags, and follow a change. */
@@ -241,13 +241,12 @@ class LibraryViewModelTest : MainDispatcherTest() {
             val session = FakeLibrarySession()
             session.tags.tags.value = listOf(TagInfo("finance", "#ff0000", null, 3))
             val model = vm(session = session)
-            collecting(model.tagColors)
             runCurrent()
-            model.tagColors.value shouldContainExactly mapOf("finance" to "#ff0000")
+            model.content.value.tagColors shouldContainExactly mapOf("finance" to "#ff0000")
 
             session.tags.tags.value = listOf(TagInfo("finance", "#00ff00", null, 3), TagInfo("draft", null, null, 1))
             runCurrent()
-            model.tagColors.value shouldContainExactly mapOf("finance" to "#00ff00", "draft" to null)
+            model.content.value.tagColors shouldContainExactly mapOf("finance" to "#00ff00", "draft" to null)
         }
 
     @Test
@@ -299,7 +298,8 @@ class LibraryViewModelTest : MainDispatcherTest() {
             val model = vm()
             model.setFilter(LibraryFilter(query = "taxes", untaggedOnly = true))
             model.ui.value.filter shouldBe LibraryFilter(query = "taxes", untaggedOnly = true)
-            model.queryText.value shouldBe "taxes"
+            runCurrent()
+            model.content.value.queryText shouldBe "taxes"
         }
 
     /** A dismissed issues banner stays dismissed through a filter change, which has nothing to do with scans. */
@@ -309,13 +309,12 @@ class LibraryViewModelTest : MainDispatcherTest() {
             val session = FakeLibrarySession()
             session.ingest.lastScanReportFlow.value = emptyScanReport().copy(conflictFiles = listOf("a.pdf"))
             val model = vm(session = session)
-            collecting(model.lastScanReport)
             runCurrent()
 
             model.dismissBanner()
             model.setFilter(LibraryFilter(untaggedOnly = true))
 
-            model.ui.value.scanIssuesDismissed(model.lastScanReport.value) shouldBe true
+            model.ui.value.scanIssuesDismissed(model.content.value.banners.lastScan) shouldBe true
         }
 
     /** A new scan's report brings the banner back, even one listing the same issues. */
@@ -326,15 +325,14 @@ class LibraryViewModelTest : MainDispatcherTest() {
             val issues = emptyScanReport().copy(conflictFiles = listOf("a.pdf"))
             session.ingest.lastScanReportFlow.value = issues
             val model = vm(session = session)
-            collecting(model.lastScanReport)
             runCurrent()
             model.dismissBanner()
-            model.ui.value.scanIssuesDismissed(model.lastScanReport.value) shouldBe true
+            model.ui.value.scanIssuesDismissed(model.content.value.banners.lastScan) shouldBe true
 
             session.ingest.lastScanReportFlow.value = issues.copy(durationMillis = 5)
             runCurrent()
 
-            model.ui.value.scanIssuesDismissed(model.lastScanReport.value) shouldBe false
+            model.ui.value.scanIssuesDismissed(model.content.value.banners.lastScan) shouldBe false
         }
 
     @Test
@@ -344,7 +342,8 @@ class LibraryViewModelTest : MainDispatcherTest() {
             model.setFilter(LibraryFilter(query = "x", fieldEquals = mapOf(FieldKeys.DOC_TYPE to "letter")))
             model.clearFilter()
             model.ui.value.filter shouldBe LibraryFilter()
-            model.queryText.value shouldBe ""
+            runCurrent()
+            model.content.value.queryText shouldBe ""
         }
 
     @Test
@@ -357,12 +356,11 @@ class LibraryViewModelTest : MainDispatcherTest() {
                     reviewConfig.reviewModeFlow.value = ReviewMode.UNTAGGED_ONLY
                 }
             val model = vm(session = session)
-            collecting(model.needsReviewCount)
             advanceUntilIdle()
-            model.needsReviewCount.value shouldBe 5
+            model.content.value.reviewCount shouldBe 5
             session.reviewConfig.reviewModeFlow.value = ReviewMode.INBOX_WORKFLOW
             advanceUntilIdle()
-            model.needsReviewCount.value shouldBe 9
+            model.content.value.reviewCount shouldBe 9
         }
 
     @Test
@@ -373,9 +371,8 @@ class LibraryViewModelTest : MainDispatcherTest() {
                     documents.documents.value = listOf(listItem("d1"), listItem("d2"))
                 }
             val model = vm(session = session)
-            collecting(model.documents)
             advanceUntilIdle()
-            model.documents.value
+            model.content.value.results
                 ?.items
                 .orEmpty()
                 .map { it.doc.docId } shouldBe listOf("d1", "d2")
@@ -396,13 +393,14 @@ class LibraryViewModelTest : MainDispatcherTest() {
                     documents.documents.value = listOf(listItem("d1"), listItem("d2"))
                 }
             val model = vm(session = session)
-            collecting(model.documents)
             advanceUntilIdle()
-            model.documents.value?.query shouldBe LibraryQuery(LibraryFilter(), LibrarySort())
+            model.content.value.results
+                ?.query shouldBe LibraryQuery(LibraryFilter(), LibrarySort())
 
             model.setSort(SortField.Field(FieldKeys.DOC_DATE), ascending = false)
             advanceUntilIdle()
-            model.documents.value?.query shouldBe
+            model.content.value.results
+                ?.query shouldBe
                 LibraryQuery(LibraryFilter(), LibrarySort(SortField.Field(FieldKeys.DOC_DATE), ascending = false))
         }
 
@@ -414,13 +412,13 @@ class LibraryViewModelTest : MainDispatcherTest() {
                     documents.documents.value = listOf(listItem("d1"))
                 }
             val model = vm(session = session)
-            val queries = collecting(model.documents.map { it?.query })
+            val queries = collecting(model.content.map { it.results?.query })
             advanceUntilIdle()
 
             // A document arriving under the same filter/sort (import, rescan) is not a new query.
             session.documents.documents.value = listOf(listItem("d1"), listItem("d2"))
             advanceUntilIdle()
-            model.documents.value
+            model.content.value.results
                 ?.items
                 ?.size shouldBe 2
             queries.filterNotNull().distinct() shouldBe listOf(LibraryQuery(LibraryFilter(), LibrarySort()))
