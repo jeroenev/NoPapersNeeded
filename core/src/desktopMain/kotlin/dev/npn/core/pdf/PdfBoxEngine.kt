@@ -35,8 +35,8 @@ class PdfBoxEngine(
     private fun loadOrThrow(bytes: ByteArray): PDDocument =
         try {
             Loader.loadPDF(bytes)
-        } catch (t: Throwable) {
-            throw PdfOpenException("Failed to load PDF", t)
+        } catch (e: Exception) {
+            throw PdfOpenException("Failed to load PDF", e)
         }
 
     override suspend fun imagesToPdf(images: List<ByteArray>): ByteArray =

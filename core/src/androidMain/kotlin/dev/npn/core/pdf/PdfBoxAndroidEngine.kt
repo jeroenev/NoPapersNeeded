@@ -49,8 +49,8 @@ class PdfBoxAndroidEngine(
         PdfBoxAndroidInit.ensure(context)
         return try {
             PDDocument.load(bytes)
-        } catch (t: Throwable) {
-            throw PdfOpenException("Failed to load PDF", t)
+        } catch (e: Exception) {
+            throw PdfOpenException("Failed to load PDF", e)
         }
     }
 
@@ -58,17 +58,22 @@ class PdfBoxAndroidEngine(
     private fun openPages(bytes: ByteArray): PdfPageBackend {
         val temp = File.createTempFile("npn-pdf-", ".pdf", context.cacheDir)
         var pfd: ParcelFileDescriptor? = null
+        var opened = false
         try {
             temp.writeBytes(bytes)
             val descriptor = ParcelFileDescriptor.open(temp, ParcelFileDescriptor.MODE_READ_ONLY).also { pfd = it }
-            return RendererPageBackend(PdfRenderer(descriptor), descriptor, temp)
-        } catch (t: Throwable) {
-            try {
-                pfd?.close()
-            } catch (_: Throwable) {
+            return RendererPageBackend(PdfRenderer(descriptor), descriptor, temp).also { opened = true }
+        } catch (e: Exception) {
+            throw PdfOpenException("Failed to stage or open PDF for rendering", e)
+        } finally {
+            // Cleaned up whatever went wrong, an error included.
+            if (!opened) {
+                try {
+                    pfd?.close()
+                } catch (_: Exception) {
+                }
+                temp.delete()
             }
-            temp.delete()
-            throw PdfOpenException("Failed to stage or open PDF for rendering", t)
         }
     }
 
@@ -145,7 +150,7 @@ private class PdfBoxTextBackend(
     override fun close() {
         try {
             document.close()
-        } catch (_: Throwable) {
+        } catch (_: Exception) {
         }
     }
 }
@@ -185,11 +190,11 @@ private class RendererPageBackend(
     override fun close() {
         try {
             renderer.close()
-        } catch (_: Throwable) {
+        } catch (_: Exception) {
         }
         try {
             pfd.close()
-        } catch (_: Throwable) {
+        } catch (_: Exception) {
         }
         tempFile.delete()
     }
