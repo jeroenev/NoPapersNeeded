@@ -11,6 +11,10 @@ updates:
         patterns:
           - "dev.detekt*"
           - "io.nlopez.compose.rules*"
+      # The koog-beta clients depend on the stable koog base modules of the same release.
+      koog:
+        patterns:
+          - "ai.koog*"
 
   - package-ecosystem: github-actions
     directory: /
