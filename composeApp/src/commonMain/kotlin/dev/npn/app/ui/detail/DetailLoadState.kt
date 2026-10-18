@@ -25,6 +25,9 @@ sealed interface DocLoadState {
     data object Missing : DocLoadState
 }
 
+/** The row when [DocLoadState.Present]; null while loading and for a document that is gone. */
+val DocLoadState.item: DocListItem? get() = (this as? DocLoadState.Present)?.item
+
 /**
  * Page count as an explicit lifecycle rather than a bare `Int` where 0 doubled as both "loading"
  * and "empty". The viewer keyed its spinner off `count <= 0`, so a genuine failure (a corrupt or

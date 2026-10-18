@@ -19,7 +19,6 @@ import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.OcrVersion
 import dev.npn.core.app.RelocationOutcome
 import dev.npn.core.app.SplitOutcome
-import dev.npn.core.app.effectiveReviewed
 import dev.npn.core.app.reusableFieldValues
 import dev.npn.core.index.SplitFailure
 import dev.npn.core.model.FieldDef
@@ -285,7 +284,6 @@ class DocDetailViewModel private constructor(
         combine(loadState, reviewMode, fieldDefs, ocrText, ocrVersions) { state, mode, defs, text, versions ->
             DocumentSection(
                 loadState = state,
-                reviewed = state.item?.effectiveReviewed(mode) == true,
                 reviewMode = mode,
                 fieldDefs = defs,
                 ocrText = text,
@@ -314,7 +312,7 @@ class DocDetailViewModel private constructor(
         }.stateIn(viewModelScope, WhileSubscribedTimeout, seedState())
 
     /**
-     * What the panel shows before the first combined emission. [ReviewMode.DEFAULT] matches the
+     * What the panel shows before the first combined emission. Its [ReviewMode.DEFAULT] matches the
      * initial value of the review-mode flow, so the seeded reviewed badge does not flicker when
      * that emission arrives.
      */
@@ -323,7 +321,6 @@ class DocDetailViewModel private constructor(
             document =
                 DocumentSection(
                     loadState = initialLoadState,
-                    reviewed = initialLoadState.item?.effectiveReviewed(ReviewMode.DEFAULT) == true,
                     highlightTerms = highlightTerms,
                 ),
         )
@@ -545,8 +542,6 @@ class DocDetailViewModel private constructor(
 /** Missing files and bake predecessors still carry editable metadata; lifecycle tombstones do not. */
 private fun DocListItem?.loadState(): DocLoadState =
     this?.takeUnless { it.doc.trashed || it.doc.deleted }?.let(DocLoadState::Present) ?: DocLoadState.Missing
-
-private val DocLoadState.item: DocListItem? get() = (this as? DocLoadState.Present)?.item
 
 private fun BakeFailure.text(): UiText =
     when (this) {

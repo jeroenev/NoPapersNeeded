@@ -3,6 +3,7 @@ package dev.npn.app.ui.detail
 import androidx.compose.runtime.Immutable
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.OcrVersion
+import dev.npn.core.app.effectiveReviewed
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldParse
 import dev.npn.core.model.ReviewMode
@@ -26,13 +27,12 @@ data class MetadataUiState(
 /**
  * The document itself plus the library-wide settings that decide how it is shown. [loadState]
  * holds the row once it arrives, and tells a row still loading from one confirmed missing, so a
- * screen can wait rather than flash "unavailable". [reviewed] is already resolved against
- * [reviewMode], so no call site repeats that derivation.
+ * screen can wait rather than flash "unavailable". [reviewed] is resolved against [reviewMode]
+ * here, so no call site repeats that derivation.
  */
 @Immutable
 data class DocumentSection(
     val loadState: DocLoadState = DocLoadState.Loading,
-    val reviewed: Boolean = false,
     val reviewMode: ReviewMode = ReviewMode.DEFAULT,
     /** The field registry in display order; decides which fields render and how each is edited. */
     val fieldDefs: List<FieldDef> = emptyList(),
@@ -45,7 +45,10 @@ data class DocumentSection(
      * The document row, or null until it arrives and for a document that is gone, which the editor
      * shows as unavailable.
      */
-    val item: DocListItem? get() = (loadState as? DocLoadState.Present)?.item
+    val item: DocListItem? get() = loadState.item
+
+    /** Whether the document counts as reviewed under [reviewMode]; false while there is no row. */
+    val reviewed: Boolean get() = item?.effectiveReviewed(reviewMode) == true
 }
 
 /**
