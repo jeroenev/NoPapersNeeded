@@ -5,6 +5,12 @@ updates:
     schedule:
       interval: monthly
     open-pull-requests-limit: 5
+    groups:
+      # Each io.nlopez.compose.rules release targets one detekt version, so they update together.
+      detekt:
+        patterns:
+          - "dev.detekt*"
+          - "io.nlopez.compose.rules*"
 
   - package-ecosystem: github-actions
     directory: /
