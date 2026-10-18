@@ -19,7 +19,7 @@ internal class DocumentPaths(
         source: String,
         target: String,
     ): String {
-        if (source == target || !isDocumentPath(target) || !fs.supportsDocumentRelocation) return source
+        if (source == target || !NpnPaths.isDocumentPath(target) || !fs.supportsDocumentRelocation) return source
         val placed = if (fs.exists(target)) alreadyPlaced(docId, source, target) else relocate(docId, source, target)
         return if (placed) target else source
     }
@@ -105,10 +105,4 @@ internal class DocumentPaths(
     /** Atomically take [source]'s name away under a fresh recovery name in the same folder. */
     private suspend fun claim(source: String): String =
         NpnPaths.Temp.recoveryPath(beside = source).also { fs.claimDocument(source, it) }
-
-    companion object {
-        fun isDocumentPath(path: String): Boolean =
-            NpnPaths.isSafe(path) && NpnPaths.normalize(path) == path &&
-                NpnPaths.indexable(FileMeta(path, NpnPaths.fileName(path), 0, 0, false))
-    }
 }

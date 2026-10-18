@@ -8,6 +8,7 @@ import dev.npn.core.db.isLive
 import dev.npn.core.db.missingSentinel
 import dev.npn.core.fs.DocumentPaths
 import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.fs.NpnPaths
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.util.runCatchingCancellable
 
@@ -147,7 +148,7 @@ internal class DocumentPathReconciler(
             rows.values.mapNotNull { row ->
                 state
                     .intendedPath(row.docId)
-                    ?.takeIf { it != row.relPath && DocumentPaths.isDocumentPath(it) }
+                    ?.takeIf { it != row.relPath && NpnPaths.isDocumentPath(it) }
                     ?.let { row.docId to it }
             }
         for ((docId, intended) in targets) {

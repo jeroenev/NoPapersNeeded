@@ -323,6 +323,10 @@ object NpnPaths {
             !isSyncConflict(meta.name) &&
             !isSyncTemp(meta.name)
 
+    /** True when [path], already in its [normalize]d form, is one a document file may have ([indexable]). */
+    fun isDocumentPath(path: String): Boolean =
+        isSafe(path) && normalize(path) == path && indexable(FileMeta(path, fileName(path), 0, 0, false))
+
     /**
      * Normalize a library-relative path: strip leading/trailing slashes, collapse repeats.
      *

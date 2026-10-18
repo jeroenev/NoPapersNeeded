@@ -3,7 +3,6 @@ package dev.npn.core.app
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.isLive
-import dev.npn.core.fs.DocumentPaths
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
@@ -147,7 +146,7 @@ internal class DocLifecycleImpl(
      * event named) is no place for a document, and it comes back in the inbox instead.
      */
     private fun restorePath(doc: DocumentEntity): String =
-        (doc.trashedOrigPath ?: doc.relPath).takeIf { DocumentPaths.isDocumentPath(it) }
+        (doc.trashedOrigPath ?: doc.relPath).takeIf { NpnPaths.isDocumentPath(it) }
             ?: "${NpnPaths.DEFAULT_INBOX}/${doc.fileName}"
 
     /**
@@ -343,7 +342,7 @@ internal class DocLifecycleImpl(
         val target = destination(doc) ?: return RelocationOutcome.UNCHANGED
         val refusal =
             when {
-                !DocumentPaths.isDocumentPath(target) -> RelocationOutcome.INVALID_NAME
+                !NpnPaths.isDocumentPath(target) -> RelocationOutcome.INVALID_NAME
                 target == doc.relPath -> RelocationOutcome.UNCHANGED
                 !fs.exists(target) -> null
                 fs.sameFile(doc.relPath, target) -> RelocationOutcome.UNCHANGED
