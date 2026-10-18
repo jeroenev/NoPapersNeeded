@@ -56,10 +56,6 @@ style:
     excludeGuardClauses: true
   MaxLineLength:
     maxLineLength: 120
-  UnusedPrivateFunction:
-    active: true
-  UnusedPrivateProperty:
-    active: true
   ForbiddenMethodCall:
     # Needs type resolution, so only the typed run checks it. Tests may block and print.
     active: true
@@ -81,7 +77,7 @@ style:
       - reason: 'It is marked as obsolete. Use `kotlin.time.measureTime` instead.'
         value: 'kotlin.system.measureTimeMillis'
   ForbiddenComment:
-    # Flag leftover FIXME so they are tracked.
+    # Flag leftover markers: unfinished work is tracked as an issue, not a comment.
     active: true
     comments:
       - reason: "Track and resolve before release"
@@ -98,6 +94,10 @@ naming:
       - 'native'
       - 'iosArm64'
       - 'iosX64'
+      - reason: "Track it as an issue, or do it now"
+        value: "TODO:"
+      - reason: "Must be resolved before this ships"
+        value: "STOPSHIP:"
       - 'macosX64'
       - 'mingwX64'
       - 'linuxX64'
