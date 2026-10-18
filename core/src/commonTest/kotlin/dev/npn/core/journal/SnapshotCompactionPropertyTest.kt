@@ -55,8 +55,6 @@ private object NoPublishFs : LibraryFileSystem {
 
     override suspend fun delete(relPath: String) = Unit
 
-    override suspend fun mkdirs(relPath: String) = Unit
-
     override suspend fun sha256(relPath: String): String = ""
 
     override suspend fun importExternal(

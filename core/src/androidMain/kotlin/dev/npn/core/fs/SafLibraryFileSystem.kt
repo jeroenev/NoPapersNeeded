@@ -140,7 +140,7 @@ class SafLibraryFileSystem(
 
     /**
      * Resolve [dirSegments] as a directory chain, creating any level that does not exist yet, and
-     * return the deepest docId. Shared by [mkdirs] and the creating half of [resolveParentDir].
+     * return the deepest docId: the creating half of [resolveParentDir].
      *
      * Refresh the actual parent chain first, so a cached id that survived a move or rename cannot
      * send a write to a displaced directory. Missing levels are created with exactly their name
@@ -603,14 +603,6 @@ class SafLibraryFileSystem(
             // Deleting a directory invalidates its own cached docId and every descendant's, but
             // nothing above it. Files are never cached, so deleting one needs no invalidation.
             if (entry.isDir) dirCache.invalidateSubtree(splitSegments(relPath).joinToString("/"))
-            Unit
-        }
-
-    override suspend fun mkdirs(relPath: String) =
-        withContext(io) {
-            val segments = splitSegments(relPath)
-            if (segments.isEmpty()) return@withContext
-            createDirPath(segments, relPath)
             Unit
         }
 

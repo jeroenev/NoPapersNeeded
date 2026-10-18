@@ -394,12 +394,6 @@ class JvmLibraryFileSystem internal constructor(
             Unit
         }
 
-    override suspend fun mkdirs(relPath: String) =
-        withContext(io) {
-            Files.createDirectories(resolve(relPath))
-            Unit
-        }
-
     override suspend fun sha256(relPath: String): String =
         withContext(io) {
             hashPath(resolve(relPath))

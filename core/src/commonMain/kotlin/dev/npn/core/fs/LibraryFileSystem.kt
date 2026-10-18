@@ -165,8 +165,6 @@ interface LibraryFileSystem {
 
     suspend fun delete(relPath: String)
 
-    suspend fun mkdirs(relPath: String)
-
     /** Streaming SHA-256 of the file's bytes, lowercase hex. */
     suspend fun sha256(relPath: String): String
 

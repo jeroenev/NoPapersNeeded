@@ -77,8 +77,6 @@ private class CountingFileSystem(
 
     override suspend fun delete(relPath: String) = delegate.delete(relPath)
 
-    override suspend fun mkdirs(relPath: String) = delegate.mkdirs(relPath)
-
     override suspend fun sha256(relPath: String): String = delegate.sha256(relPath)
 
     override suspend fun importExternal(
