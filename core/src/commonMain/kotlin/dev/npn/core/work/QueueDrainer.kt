@@ -5,6 +5,7 @@ import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.warn
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
@@ -29,11 +30,15 @@ import kotlinx.coroutines.sync.withLock
  * One worker loop does the draining, fed by a conflated channel: a [kick] while a drain runs asks
  * for exactly one more drain after it, however many kicks arrive meanwhile. A step that throws is
  * logged to [log] and ends that drain; the loop carries on, and the next kick drains again.
+ *
+ * @param ready when given, every drain waits for it before its first [step]: a queue whose steps
+ *  are not safe yet (the session's drains, until its first rescan) can still be kicked meanwhile.
  */
 class QueueDrainer(
     parentScope: CoroutineScope,
     private val name: String = "queue",
     private val log: NpnLog = NpnLog.None,
+    private val ready: Deferred<Unit>? = null,
     private val step: suspend () -> Boolean,
 ) {
     private val mutex = Mutex()
@@ -96,6 +101,7 @@ class QueueDrainer(
     internal suspend fun drain(): Int {
         var count = 0
         mutex.withLock {
+            ready?.await()
             runCatchingCancellable {
                 while (step()) count++
             }.onFailure { log.warn("$name drain stopped after $count item(s)", it) }
@@ -122,19 +128,21 @@ class DrainedQueue<Q>(
 
 /**
  * Build a queue whose trigger kicks its own drainer: [build] receives the `onEnqueued` callback to
- * call whenever it records new work, and the drainer runs [step] over that same queue. Built this
- * way, a queue cannot record work that waits for a periodic tick, whoever holds it afterwards.
+ * call whenever it records new work, and the drainer runs [step] over that same queue, once [ready]
+ * (see [QueueDrainer]). Built this way, a queue cannot record work that waits for a periodic tick,
+ * whoever holds it afterwards.
  */
 fun <Q> drainedQueue(
     scope: CoroutineScope,
     name: String,
     log: NpnLog,
+    ready: Deferred<Unit>?,
     build: (onEnqueued: () -> Unit) -> Q,
     step: suspend (Q) -> Boolean,
 ): DrainedQueue<Q> {
     // The callback only runs once something is queued, which needs the queue, so after this is set.
     lateinit var worker: QueueDrainer
     val queue = build { worker.kick() }
-    worker = QueueDrainer(scope, name, log) { step(queue) }
+    worker = QueueDrainer(scope, name, log, ready) { step(queue) }
     return DrainedQueue(queue, worker)
 }

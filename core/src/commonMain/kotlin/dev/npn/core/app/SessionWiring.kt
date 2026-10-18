@@ -263,7 +263,7 @@ internal fun buildEnrichment(
     policy: UnattendedAiPolicy,
     rescanned: Deferred<Unit>,
 ): DrainedQueue<AiAutoEnricher> =
-    drainedQueue(lifetime.scope, "AI enrichment queue", deps.log, build = { onEnqueued ->
+    drainedQueue(lifetime.scope, "AI enrichment queue", deps.log, ready = rescanned, build = { onEnqueued ->
         AiAutoEnricher(
             documentDao = deps.db.documentDao(),
             ftsDao = deps.db.ftsDao(),
@@ -277,10 +277,7 @@ internal fun buildEnrichment(
             canWrite = coordinator::canWrite,
             onEnqueued = onEnqueued,
         )
-    }) {
-        rescanned.await()
-        it.processNext()
-    }
+    }, step = AiAutoEnricher::processNext)
 
 /**
  * Bulk AI edits handed to the background; their writes wait for a human review, which a caller
@@ -293,7 +290,7 @@ internal fun buildEditQueue(
     ai: AiFacadeImpl,
     rescanned: Deferred<Unit>,
 ): DrainedQueue<AiEditQueue> =
-    drainedQueue(lifetime.scope, "AI edit queue", deps.log, build = { onEnqueued ->
+    drainedQueue(lifetime.scope, "AI edit queue", deps.log, ready = rescanned, build = { onEnqueued ->
         AiEditQueue(
             dao = deps.deviceDb.aiEditJobDao(),
             documents = library.documents,
@@ -308,10 +305,7 @@ internal fun buildEditQueue(
             onEnqueued = onEnqueued,
             ownWrite = { lifetime.owned(it) },
         )
-    }) {
-        rescanned.await()
-        it.processNext()
-    }
+    }, step = AiEditQueue::processNext)
 
 /**
  * This device's OCR pipeline and queue, drained once [rescanned]. Indexed text runs the library's
@@ -359,10 +353,7 @@ internal fun buildOcr(
         writer = library.writer,
         content = library.content,
         worker =
-            QueueDrainer(lifetime.scope, "OCR queue", deps.log) {
-                rescanned.await()
-                pipeline.processNext()
-            },
+            QueueDrainer(lifetime.scope, "OCR queue", deps.log, ready = rescanned, step = pipeline::processNext),
         clock = deps.clock,
         staleFiles = staleFiles,
     )
