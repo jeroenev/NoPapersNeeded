@@ -347,8 +347,8 @@ class OcrPipeline(
         doc: DocumentEntity,
         aiRequested: Boolean,
     ): PageResult {
-        val handle = pdfEngine.open(bytes) // throws PdfOpenException on invalid pdf
-        try {
+        // Throws PdfOpenException on an invalid pdf.
+        return pdfEngine.open(bytes).use { handle ->
             // Chosen once, off the PDF's real page count (the doc row's may still be null on a
             // first run), so the whole document is transcribed by one engine and its sidecar's
             // engine label is the truth about every OCR'd page in it.
@@ -386,9 +386,7 @@ class OcrPipeline(
             // pages are deterministic and identical across devices, so a partially embedded
             // result is still labeled (and ranked) by its OCR engine.
             val name = if (usedOcr) engine.name else OcrEngineId.EMBEDDED.column
-            return PageResult(pages, name, lang)
-        } finally {
-            handle.close()
+            PageResult(pages, name, lang)
         }
     }
 

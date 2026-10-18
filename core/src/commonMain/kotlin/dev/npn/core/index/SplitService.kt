@@ -70,13 +70,7 @@ class SplitService(
         // The file at the document's path may be another one since the index last looked; its parts
         // would get this document's metadata, and the document would be trashed in its place.
         if (sha256Bytes(bytes) != doc.docId) return Result.Failed(SplitFailure.DOCUMENT_UNAVAILABLE)
-        val handle = pdfEngine.open(bytes)
-        val pageCount =
-            try {
-                handle.pageCount
-            } finally {
-                handle.close()
-            }
+        val pageCount = pdfEngine.open(bytes).use { it.pageCount }
         if (!coversEveryPage(segments, pageCount)) return Result.Failed(SplitFailure.INVALID_PARTS)
 
         val baseName = NpnPaths.stripPdfExtension(doc.fileName)
