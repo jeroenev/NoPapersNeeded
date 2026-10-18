@@ -71,16 +71,29 @@ fun App(env: AppEnvironment) {
 
 /**
  * What the open library's UI keeps when the app's language changes: its unsaved [drafts], where its
- * navigation stands ([nav]), its screens' viewmodels ([viewModels]), the order the detail screen
- * walks ([browse]), and what one screen hands another as it navigates there. All of it belongs to
- * one session: another library gets its own.
+ * navigation stands ([nav]), its screens' viewmodels ([viewModels]), and, through [handover], the
+ * order the detail screen walks and what one screen hands another as it navigates there. All of it
+ * belongs to one session: another library gets its own.
  */
 @Stable
 internal class LibraryUi(
     val drafts: DocumentDrafts,
     val nav: NavHostController,
     val viewModels: ViewModelStoreOwner,
+    handover: LibraryHandover,
 ) {
+    val browse = handover.browse
+    val libraryFilter = handover.libraryFilter
+    val aiEditSelection = handover.aiEditSelection
+}
+
+/**
+ * What the open library's screens hand each other as they navigate. Kept beside the session's
+ * viewmodels ([LibraryViewModelStores]), so a window recreated for a configuration change still has
+ * it, and dropped with them. A process restore starts without it, as a screen opened afresh would.
+ */
+internal class LibraryHandover {
+    /** The order the detail screen walks, and the search it highlights. */
     val browse = BrowseContext()
 
     /** A filter for the library to apply when it shows (the assistant's "show in library"). */
@@ -91,13 +104,14 @@ internal class LibraryUi(
 }
 
 /**
- * The viewmodel stores of the open library's screens, one per session. Held in the window's store
- * (the activity's on Android), so an activity recreated for a configuration change finds its
- * library's screens as they were. [keepOnly] clears every other session's store, so nothing a
- * closed library's screens started runs on against it.
+ * The viewmodel stores of the open library's screens, and what they hand each other, one per
+ * session. Held in the window's store (the activity's on Android), so an activity recreated for a
+ * configuration change finds its library's screens as they were. [keepOnly] clears every other
+ * session's store, so nothing a closed library's screens started runs on against it.
  */
 internal class LibraryViewModelStores : ViewModel() {
     private val owners = HashMap<LibrarySession, ViewModelStoreOwner>()
+    private val handovers = HashMap<LibrarySession, LibraryHandover>()
 
     fun of(session: LibrarySession): ViewModelStoreOwner =
         owners.getOrPut(session) {
@@ -106,8 +120,11 @@ internal class LibraryViewModelStores : ViewModel() {
             }
         }
 
+    fun handoverOf(session: LibrarySession): LibraryHandover = handovers.getOrPut(session) { LibraryHandover() }
+
     fun keepOnly(session: LibrarySession?) {
         for (gone in owners.keys.filter { it != session }) owners.remove(gone)?.viewModelStore?.clear()
+        handovers.keys.retainAll { it == session }
     }
 
     override fun onCleared() = keepOnly(null)
@@ -127,7 +144,7 @@ internal fun LocalizedApp(
     stores: LibraryViewModelStores = viewModel { LibraryViewModelStores() },
     content: @Composable (LibraryUi?) -> Unit,
 ) {
-    val library = session?.let { rememberLibraryUi(it, scope, stores.of(it)) }
+    val library = session?.let { rememberLibraryUi(it, scope, stores.of(it), stores.handoverOf(it)) }
     // Side effects run once the composition has let go of what it no longer shows.
     SideEffect { stores.keepOnly(session) }
     LocaleProvider(settings) { content(library) }
@@ -138,6 +155,7 @@ private fun rememberLibraryUi(
     session: LibrarySession,
     scope: CoroutineScope,
     viewModels: ViewModelStoreOwner,
+    handover: LibraryHandover,
 ): LibraryUi {
     val drafts = rememberDocumentDrafts(session, scope)
     // A controller of the session's own, as its back stack holds the session's viewmodel stores: a
@@ -145,7 +163,7 @@ private fun rememberLibraryUi(
     // activity or a restored process. Saved, so the restore finds the key it was saved under.
     val navKey = rememberSaveable(session) { Random.nextLong() }
     val nav = key(navKey) { rememberNavController() }
-    return remember(drafts, nav, viewModels) { LibraryUi(drafts, nav, viewModels) }
+    return remember(drafts, nav, viewModels, handover) { LibraryUi(drafts, nav, viewModels, handover) }
 }
 
 /** [content], with [library]'s screens' viewmodels kept in its store ([LibraryUi.viewModels]). */

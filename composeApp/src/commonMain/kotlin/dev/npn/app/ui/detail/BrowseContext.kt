@@ -11,9 +11,9 @@ import androidx.compose.runtime.setValue
  * across the navigation. Also carries the originating search query so the detail screen can
  * highlight matching terms in the OCR text tab.
  *
- * Held as plain UI state (created in the nav host) rather than on the session/environment: it is
- * throwaway navigation state, and keeping it out of the DI graph means the platform environment
- * implementations need no changes.
+ * Navigation state, not library data: it lives with the open library's screens
+ * ([dev.npn.app.LibraryHandover], in the session's viewmodel store), so a recreated window keeps
+ * it, and nothing outside the UI knows it.
  */
 class BrowseContext {
     private var docIds: List<String> by mutableStateOf(emptyList())

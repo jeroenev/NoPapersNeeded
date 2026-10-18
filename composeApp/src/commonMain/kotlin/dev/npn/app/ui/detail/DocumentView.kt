@@ -27,7 +27,9 @@ import dev.npn.core.settings.SettingsRepository
  * [onReviewNext] and [hasNext] drive the save bar's "mark reviewed" button.
  *
  * The [vm] defaults to one for [docId] in the current [androidx.lifecycle.ViewModelStoreOwner],
- * seeded with [searchQuery]'s terms and, when the caller already has the row, [initialItem].
+ * seeded with [searchQuery]'s terms and, when the caller already has the row, [initialItem]. Keyed on
+ * the document alone: the seeds are read once, so a host showing it again with other seeds (a
+ * recreated window whose browse order is gone) finds the same viewmodel rather than a second one.
  */
 @Suppress("ViewModelForwarding") // vm reaches the editor and the actions only as DocumentWrites and DocumentActions
 @Composable
@@ -44,7 +46,7 @@ internal fun DocumentView(
     searchQuery: String? = null,
     initialItem: DocListItem? = null,
     vm: DocDetailViewModel =
-        viewModel(key = "detail-$docId-${searchQuery.orEmpty()}") {
+        viewModel(key = "detail-$docId") {
             DocDetailViewModel(docId, session, settings, searchQuery, initialItem)
         },
     frame: @Composable (

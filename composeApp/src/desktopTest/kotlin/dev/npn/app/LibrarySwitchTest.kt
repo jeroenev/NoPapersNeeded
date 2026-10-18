@@ -19,6 +19,7 @@ import androidx.navigation.compose.composable
 import dev.npn.app.ui.hostedScene
 import dev.npn.app.ui.onUiThread
 import dev.npn.app.ui.viewModelStoreOwner
+import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeSameInstanceAs
@@ -98,14 +99,35 @@ class LibrarySwitchTest : EnglishLocaleTest() {
     @Test
     fun aRecreatedWindowKeepsTheLibrarysScreens() {
         var probes: List<Probe> = emptyList()
-        val (_, after, probe) =
+        val (before, after, probe) =
             afterVisitingADocument { window, _ ->
+                checkNotNull(window.shown).apply {
+                    browse.setOrder(listOf("doc-1", "doc-2"), query = "tax")
+                    libraryFilter.set(LibraryFilter(query = "invoice"))
+                }
                 window.recreate()
                 probes = window.probes
             }
         probe.cleared shouldBe false
         after.nav.routes() shouldBe listOf(LIBRARY, DOCUMENT)
         probes.distinct() shouldBe listOf(probe)
+        // What the screens handed each other is still there: the detail's browse order and search,
+        // and a hand-off the library has yet to take.
+        after shouldNotBeSameInstanceAs before
+        after.browse.neighbour("doc-1", 1) shouldBe "doc-2"
+        after.browse.searchQuery shouldBe "tax"
+        after.libraryFilter.consume() shouldBe LibraryFilter(query = "invoice")
+    }
+
+    @Test
+    fun anotherLibraryStartsWithoutTheOldOnesBrowseOrder() {
+        val (_, after, _) =
+            afterVisitingADocument { window, _ ->
+                checkNotNull(window.shown).browse.setOrder(listOf("doc-1", "doc-2"))
+                session = FakeLibrarySession()
+                window.settle()
+            }
+        after.browse.positionOf("doc-1") shouldBe null
     }
 
     /** What [change] left: the library's UI before and after it, and the document screen's viewmodel. */
