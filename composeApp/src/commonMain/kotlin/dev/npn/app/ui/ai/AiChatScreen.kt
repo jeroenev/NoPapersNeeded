@@ -71,7 +71,6 @@ import dev.npn.app.ui.common.rememberSnackbarMessages
 import dev.npn.core.ai.AiChatSession
 import dev.npn.core.ai.ChatTools
 import dev.npn.core.app.LibrarySession
-import dev.npn.core.settings.SettingsRepository
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_ask_documents
 import no_papers_needed.composeapp.generated.resources.ai_assistant_title
@@ -101,7 +100,8 @@ private const val BUBBLE_MAX_WIDTH_FRACTION = 0.85f
 @Composable
 fun AiChatScreen(
     session: LibrarySession,
-    settings: SettingsRepository,
+    /** Whether AI is configured; without it the input row gives way to a "configure in Settings" hint. */
+    configured: Boolean,
     onBack: () -> Unit,
     onOpenDoc: (String) -> Unit,
     onShowInLibrary: (List<String>) -> Unit,
@@ -109,7 +109,7 @@ fun AiChatScreen(
     /** Hands off to the AI-edit page without preselection; null where the top bar offers no such action. */
     onAiEdit: (() -> Unit)?,
     modifier: Modifier = Modifier,
-    vm: AiChatViewModel = viewModel { AiChatViewModel(session, settings) },
+    vm: AiChatViewModel = viewModel { AiChatViewModel(session) },
 ) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     val snackbar = rememberSnackbarMessages(vm.messages)
@@ -175,7 +175,7 @@ fun AiChatScreen(
                 }
             }
 
-            if (ui.configured) {
+            if (configured) {
                 InputRow(
                     value = input,
                     busy = ui.busy,

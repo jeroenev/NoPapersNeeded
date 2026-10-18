@@ -235,7 +235,7 @@ private fun MainNavHost(
             )
         }
         settingsRoutes(nav, settings, session, browse, onOpenLibrary)
-        aiRoutes(library, session, settings, showAiEditTopBar)
+        aiRoutes(library, session, settings, aiConfigured, showAiEditTopBar)
     }
 }
 
@@ -272,6 +272,7 @@ private fun NavGraphBuilder.aiRoutes(
     library: LibraryUi,
     session: LibrarySession,
     settings: SettingsRepository,
+    aiConfigured: Boolean,
     showAiEditTopBar: Boolean,
 ) {
     val nav = library.nav
@@ -279,7 +280,7 @@ private fun NavGraphBuilder.aiRoutes(
     composable<Route.AiChat> {
         AiChatScreen(
             session = session,
-            settings = settings,
+            configured = aiConfigured,
             onBack = { nav.popBackStack() },
             onOpenDoc = { docId -> nav.openDoc(docId, browse) },
             onShowInLibrary = { docIds ->

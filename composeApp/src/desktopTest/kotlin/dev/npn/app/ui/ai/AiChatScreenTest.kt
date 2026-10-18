@@ -9,7 +9,6 @@ import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.text.AnnotatedString
 import dev.npn.app.EnglishLocaleTest
 import dev.npn.app.FakeLibrarySession
-import dev.npn.app.aiConfiguredSettings
 import dev.npn.app.ui.click
 import dev.npn.app.ui.closing
 import dev.npn.app.ui.contentDescription
@@ -119,6 +118,18 @@ class AiChatScreenTest : EnglishLocaleTest() {
             }
         }
 
+    /** Without an AI endpoint the chat offers the way to configure one instead of a question field. */
+    @Test
+    fun anUnconfiguredChatPointsToSettingsInsteadOfTheInput() =
+        onUiThread {
+            scene(FakeLibrarySession(), configured = false).closing {
+                render()
+
+                has { it.text() == "Configure the AI assistant in Settings" } shouldBe true
+                has { it.isEditable() } shouldBe false
+            }
+        }
+
     private fun ImageComposeScene.input(): SemanticsNode = node { it.isEditable() }
 
     private fun toolChat(query: String) =
@@ -127,12 +138,15 @@ class AiChatScreenTest : EnglishLocaleTest() {
             AiChatHistoryItem.ToolUse("search_documents", mapOf("query" to query), "found one"),
         )
 
-    private fun scene(session: FakeLibrarySession): ImageComposeScene =
+    private fun scene(
+        session: FakeLibrarySession,
+        configured: Boolean = true,
+    ): ImageComposeScene =
         hostedScene(WIDTH, HEIGHT) {
             NpnTheme(darkTheme = false) {
                 AiChatScreen(
                     session = session,
-                    settings = aiConfiguredSettings(),
+                    configured = configured,
                     onBack = {},
                     onOpenDoc = {},
                     onShowInLibrary = {},

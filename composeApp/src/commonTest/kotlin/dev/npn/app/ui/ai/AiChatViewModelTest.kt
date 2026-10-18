@@ -1,16 +1,13 @@
 package dev.npn.app.ui.ai
 
 import dev.npn.app.FakeLibrarySession
-import dev.npn.app.FakeSettingsRepository
 import dev.npn.app.MainDispatcherTest
-import dev.npn.app.aiConfiguredSettings
 import dev.npn.app.collecting
 import dev.npn.app.failure
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.AiChatEvent
 import dev.npn.core.ai.AiChatHistoryItem
 import dev.npn.core.ai.AiChatSession
-import dev.npn.core.ai.AiProvider
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
@@ -29,15 +26,12 @@ import no_papers_needed.composeapp.generated.resources.common_ai_assistant_unrea
 import kotlin.test.Test
 
 /**
- * Coroutine-plumbing tests only: send gating, busy transitions, stop/clear, failure handling, the
- * config probe, history capture, and the blank-answer message. The fold rules themselves live in
+ * Coroutine-plumbing tests only: send gating, busy transitions, stop/clear, failure handling,
+ * history capture, and the blank-answer message. The fold rules themselves live in
  * [ChatTranscriptTest] — do not re-assert them here.
  */
 class AiChatViewModelTest : MainDispatcherTest() {
-    private fun vm(
-        session: FakeLibrarySession = FakeLibrarySession(),
-        settings: FakeSettingsRepository = aiConfiguredSettings(),
-    ) = AiChatViewModel(session, settings)
+    private fun vm(session: FakeLibrarySession = FakeLibrarySession()) = AiChatViewModel(session)
 
     @Test
     fun anUnreadableSessionListIsReportedWhileANewChatCanStillOpen() =
@@ -50,22 +44,6 @@ class AiChatViewModelTest : MainDispatcherTest() {
             messages shouldContainExactly listOf(failure(Res.string.ai_chat_open_failed, "unreadable sessions"))
             model.ui.value.currentSessionId shouldBe session.aiChat.createdChatSession.id
             model.ui.value.loading shouldBe false
-        }
-
-    /** An open chat follows Settings: configuring AI there, or turning it off, applies at once. */
-    @Test
-    fun configuredFollowsSettings() =
-        runTest(dispatcher) {
-            val settings = FakeSettingsRepository()
-            val model = vm(settings = settings)
-            collecting(model.ui)
-
-            advanceUntilIdle()
-            model.ui.value.configured shouldBe false
-
-            settings.edit { it.copy(aiEnabled = true, aiProvider = AiProvider.OLLAMA, aiModel = "qwen3:8b") }
-            advanceUntilIdle()
-            model.ui.value.configured shouldBe true
         }
 
     @Test

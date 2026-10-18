@@ -8,8 +8,6 @@ import dev.npn.core.ai.AiChatEvent
 import dev.npn.core.ai.AiChatHistoryItem
 import dev.npn.core.ai.AiChatSession
 import dev.npn.core.app.LibrarySession
-import dev.npn.core.settings.SettingsRepository
-import dev.npn.core.settings.aiConfigured
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,11 +29,9 @@ import no_papers_needed.composeapp.generated.resources.common_ai_assistant_unrea
 import org.jetbrains.compose.resources.StringResource
 
 /**
- * Chat UI state. [configured] follows Settings, so the screen can show a "configure in settings"
- * hint instead of the input row; it reads true until Settings first answer, so the input row does
- * not flash the hint while they load. [busy] is true while
- * a request is streaming. [docTitles] resolves cited docRefs to display titles as they appear in
- * the transcript; an unresolved ref falls back to a shortened id at the render site.
+ * Chat UI state. [busy] is true while a request is streaming. [docTitles] resolves cited docRefs to
+ * display titles as they appear in the transcript; an unresolved ref falls back to a shortened id at
+ * the render site.
  */
 data class AiChatUiState(
     val transcript: ChatTranscript = ChatTranscript.EMPTY,
@@ -44,7 +40,6 @@ data class AiChatUiState(
     val busy: Boolean = false,
     /** A session is being created, selected or deleted; sending waits until its history is ready. */
     val loading: Boolean = true,
-    val configured: Boolean = true,
     val docTitles: Map<String, String> = emptyMap(),
 )
 
@@ -58,8 +53,6 @@ data class AiChatUiState(
  */
 class AiChatViewModel(
     session: LibrarySession,
-    /** The device settings, followed for whether AI is configured. */
-    private val settings: SettingsRepository,
 ) : MessagesViewModel() {
     private val ai = session.aiChat
     private val documents = session.documents
@@ -73,10 +66,6 @@ class AiChatViewModel(
     private var clearing: Job? = null
 
     init {
-        // Follows Settings, so configuring AI there (or turning it off) applies to an open chat.
-        viewModelScope.launch {
-            settings.aiConfigured().collect { configured -> _ui.update { it.copy(configured = configured) } }
-        }
         viewModelScope.launch {
             try {
                 reporting(Res.string.ai_chat_new_failed) {
