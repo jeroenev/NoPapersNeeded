@@ -84,7 +84,7 @@ class AiChatScreenTest : EnglishLocaleTest() {
             scene(session).closing {
                 render()
 
-                has { it.text()?.contains("\"invoices\"") == true } shouldBe true
+                has { it.text()?.contains("“invoices”") == true } shouldBe true
             }
         }
 

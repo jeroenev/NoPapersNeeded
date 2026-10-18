@@ -13,9 +13,9 @@
     <string name="ai_stop">Parar</string>
     <string name="ai_send">Enviar</string>
     <string name="ai_configure_in_settings">Configure o assistente de IA em Configurações</string>
-    <string name="ai_tool_searched_documents">Documentos pesquisados: %1$s</string>
-    <string name="ai_tool_searched_file_names">Nomes de arquivo pesquisados: %1$s</string>
-    <string name="ai_tool_listed_tagged_documents">Documentos listados com a etiqueta %1$s</string>
+    <string name="ai_tool_searched_documents">Documentos pesquisados: “%1$s”</string>
+    <string name="ai_tool_searched_file_names">Nomes de arquivo pesquisados: “%1$s”</string>
+    <string name="ai_tool_listed_tagged_documents">Documentos listados com a etiqueta “%1$s”</string>
     <string name="ai_tool_listed_tags">Etiquetas listadas</string>
     <string name="ai_tool_read_document">Documento lido: %1$s</string>
     <string name="ai_tool_read_document_text">Texto lido de %1$s</string>

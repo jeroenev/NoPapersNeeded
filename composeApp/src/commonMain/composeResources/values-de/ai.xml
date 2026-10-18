@@ -13,9 +13,9 @@
     <string name="ai_stop">Stopp</string>
     <string name="ai_send">Senden</string>
     <string name="ai_configure_in_settings">KI-Assistent in den Einstellungen einrichten</string>
-    <string name="ai_tool_searched_documents">Dokumente durchsucht: %1$s</string>
-    <string name="ai_tool_searched_file_names">Dateinamen durchsucht: %1$s</string>
-    <string name="ai_tool_listed_tagged_documents">Dokumente mit Tag %1$s aufgelistet</string>
+    <string name="ai_tool_searched_documents">Dokumente durchsucht: „%1$s“</string>
+    <string name="ai_tool_searched_file_names">Dateinamen durchsucht: „%1$s“</string>
+    <string name="ai_tool_listed_tagged_documents">Dokumente mit Tag „%1$s“ aufgelistet</string>
     <string name="ai_tool_listed_tags">Tags aufgelistet</string>
     <string name="ai_tool_read_document">Dokument %1$s gelesen</string>
     <string name="ai_tool_read_document_text">Text von %1$s gelesen</string>

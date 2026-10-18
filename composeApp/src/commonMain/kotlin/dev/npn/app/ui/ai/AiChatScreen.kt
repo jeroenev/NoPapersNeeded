@@ -546,21 +546,21 @@ internal fun toolLabel(
         ChatTools.SEARCH_DOCUMENTS -> {
             stringResource(
                 Res.string.ai_tool_searched_documents,
-                quoted(args[ChatTools.ARG_QUERY]),
+                argument(args[ChatTools.ARG_QUERY]),
             )
         }
 
         ChatTools.SEARCH_FILENAMES -> {
             stringResource(
                 Res.string.ai_tool_searched_file_names,
-                quoted(args[ChatTools.ARG_PATTERN]),
+                argument(args[ChatTools.ARG_PATTERN]),
             )
         }
 
         ChatTools.DOCUMENTS_WITH_TAG -> {
             stringResource(
                 Res.string.ai_tool_listed_tagged_documents,
-                quoted(args[ChatTools.ARG_TAG]),
+                argument(args[ChatTools.ARG_TAG]),
             )
         }
 
@@ -587,8 +587,9 @@ internal fun toolLabel(
         }
     }
 
+/** A tool argument as given (the strings quote it, as their language does), or an unknown value. */
 @Composable
-private fun quoted(value: String?): String = value?.let { "\"$it\"" } ?: stringResource(Res.string.ai_unknown_value)
+private fun argument(value: String?): String = value ?: stringResource(Res.string.ai_unknown_value)
 
 @Composable
 private fun shortId(value: String?): String =
