@@ -11,23 +11,17 @@ plugins {
     alias(libs.plugins.spotless)
 }
 
-// Every Kotlin file in the repository. Sources live under each module's src/, so the file walk never
-// enters a build directory another task may be writing to.
-// ktlint removes unused imports only when asked to. Overriding any property drops the default code
-// style, so the override names it too.
-val ktlintOverrides =
-    mapOf(
-        "ktlint_code_style" to "ktlint_official",
-        "ktlint_standard_no-unused-imports" to "enabled",
-    )
+// ktlint's rules and line length come from .editorconfig.
 spotless {
+    // Every Kotlin file in the repository. Sources live under each module's src/, so the file walk
+    // never enters a build directory another task may be writing to.
     kotlin {
         target("*/src/**/*.kt")
-        ktlint(libs.versions.ktlint.get()).editorConfigOverride(ktlintOverrides)
+        ktlint(libs.versions.ktlint.get())
     }
     kotlinGradle {
         target("*.gradle.kts", "*/*.gradle.kts", "*/src/**/*.gradle.kts")
-        ktlint(libs.versions.ktlint.get()).editorConfigOverride(ktlintOverrides)
+        ktlint(libs.versions.ktlint.get())
     }
 }
 

@@ -12,6 +12,8 @@ trim_trailing_whitespace = true
 [*.{kt,kts}]
 ij_kotlin_code_style_defaults = KOTLIN_OFFICIAL
 max_line_length = 120
+# ktlint removes unused imports only when asked to.
+ktlint_standard_no-unused-imports = enabled
 
 [*.{md,yml,yaml}]
 indent_size = 2
