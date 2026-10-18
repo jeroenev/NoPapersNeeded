@@ -127,11 +127,7 @@ fun DocActions(
         fileName = NpnPaths.stripPdfExtension(NpnPaths.fileName(item.doc.relPath)),
         pageCount = state.pageCount.count,
         aiOcr = state.aiOcr,
-        onRename = actions::rename,
-        onTrash = actions::trash,
-        onAiOcr = actions::ocrWithAi,
-        onSplit = actions::split,
-        onBake = actions::bakeInPlace,
+        actions = actions,
         onDismiss = { dialog = null },
     )
 }
@@ -248,11 +244,7 @@ private fun DocActionDialogs(
     fileName: String,
     pageCount: Int,
     aiOcr: AiOcrOffer,
-    onRename: (String) -> Unit,
-    onTrash: () -> Unit,
-    onAiOcr: () -> Unit,
-    onSplit: (List<IntRange>) -> Unit,
-    onBake: () -> Unit,
+    actions: DocumentActions,
     onDismiss: () -> Unit,
 ) {
     when (dialog) {
@@ -264,7 +256,7 @@ private fun DocActionDialogs(
                 confirmLabel = stringResource(Res.string.detail_rename),
                 confirmEnabled = { it.isNotBlank() && it.trim() != fileName },
                 onConfirm = {
-                    onRename(it)
+                    actions.rename(it)
                     onDismiss()
                 },
                 onDismiss = onDismiss,
@@ -279,7 +271,7 @@ private fun DocActionDialogs(
                 destructive = true,
                 onConfirm = {
                     onDismiss()
-                    onTrash()
+                    actions.trash()
                 },
                 onDismiss = onDismiss,
             )
@@ -292,7 +284,7 @@ private fun DocActionDialogs(
                 confirmLabel = stringResource(Res.string.detail_bake_in_place),
                 onConfirm = {
                     onDismiss()
-                    onBake()
+                    actions.bakeInPlace()
                 },
                 onDismiss = onDismiss,
             )
@@ -307,7 +299,7 @@ private fun DocActionDialogs(
                 confirmLabel = stringResource(Res.string.detail_ai_ocr_confirm),
                 onConfirm = {
                     onDismiss()
-                    onAiOcr()
+                    actions.ocrWithAi()
                 },
                 onDismiss = onDismiss,
             )
@@ -318,7 +310,7 @@ private fun DocActionDialogs(
                 pageCount = pageCount,
                 onConfirm = { segments ->
                     onDismiss()
-                    onSplit(segments)
+                    actions.split(segments)
                 },
                 onDismiss = onDismiss,
             )
