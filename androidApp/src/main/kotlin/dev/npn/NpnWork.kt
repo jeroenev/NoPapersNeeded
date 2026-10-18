@@ -88,6 +88,13 @@ class QueueDrainWorker(
 ) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val session = NpnApplication.environment(applicationContext).openedLibrary() ?: return Result.success()
+        // The drains wait for a rescan to succeed. When the initial one failed and none has since,
+        // waiting would only hold the process for the whole timeout: the queues stay as they are
+        // for the maintenance run, whose own rescan lets them go.
+        if (!session.awaitInitialRescan()) {
+            AndroidLog.warn("The library's initial rescan failed; leaving the queues for the next maintenance run")
+            return Result.success()
+        }
         // Whatever is left when this gives up stays queued for the next drain or maintenance run.
         AndroidLog.runLogged("Draining the queues after an import") {
             withTimeoutOrNull(DRAIN_TIMEOUT_MS) {
