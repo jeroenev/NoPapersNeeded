@@ -9,7 +9,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -40,7 +39,7 @@ import dev.npn.app.ui.common.Handoff
 import dev.npn.app.ui.common.LocaleProvider
 import dev.npn.app.ui.common.ProvideWindowWidthClass
 import dev.npn.app.ui.common.PublishWindowTitle
-import dev.npn.app.ui.common.SnackbarMessages
+import dev.npn.app.ui.common.rememberSnackbarMessages
 import dev.npn.app.ui.common.testTagsAsResourceIds
 import dev.npn.app.ui.detail.BrowseContext
 import dev.npn.app.ui.detail.DocumentDraftHost
@@ -168,8 +167,7 @@ private fun AppRoot(
     val useSaf by vm.useSafStorage.collectAsStateWithLifecycle()
     LocalizedApp(env.settings, (state as? AppState.Open)?.session, env.appScope) { library ->
         AppSurface {
-            val snackbar = remember { SnackbarHostState() }
-            SnackbarMessages(vm.messages, snackbar)
+            val snackbar = rememberSnackbarMessages(vm.messages)
             // Files dropped on the desktop window import into whichever library is open, from any screen.
             LaunchedEffect(vm) { DesktopBridge.droppedFiles.receiveAsFlow().collect { vm.importFiles(it) } }
             // Without a library there are no screens to title the window; the app's name, in its language.

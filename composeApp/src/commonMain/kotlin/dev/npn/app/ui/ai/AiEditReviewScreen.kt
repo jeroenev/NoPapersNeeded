@@ -7,16 +7,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.BackTopBar
 import dev.npn.app.ui.common.EmptyState
-import dev.npn.app.ui.common.SnackbarMessages
+import dev.npn.app.ui.common.rememberSnackbarMessages
 import dev.npn.core.app.LibrarySession
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_applying
@@ -43,8 +41,7 @@ fun AiEditReviewScreen(
     vm: AiEditReviewViewModel = viewModel(key = jobId) { AiEditReviewViewModel(session, jobId) },
 ) {
     val phase by vm.phase.collectAsStateWithLifecycle()
-    val snackbar = remember { SnackbarHostState() }
-    SnackbarMessages(vm.messages, snackbar)
+    val snackbar = rememberSnackbarMessages(vm.messages)
 
     Scaffold(
         modifier = modifier,

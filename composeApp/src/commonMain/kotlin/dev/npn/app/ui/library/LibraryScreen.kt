@@ -55,8 +55,8 @@ import dev.npn.app.ui.common.Handoff
 import dev.npn.app.ui.common.LoadingIndicator
 import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.SearchField
-import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.TopBarAction
+import dev.npn.app.ui.common.rememberSnackbarMessages
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
@@ -127,8 +127,7 @@ fun LibraryScreen(
         onOpenDoc(docId, docs.orEmpty().map { it.doc.docId }, ui.filter.query)
     }
 
-    val snackbar = remember { SnackbarHostState() }
-    SnackbarMessages(vm.messages, snackbar)
+    val snackbar = rememberSnackbarMessages(vm.messages)
 
     var dialog by rememberLibraryDialog()
 

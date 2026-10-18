@@ -48,11 +48,11 @@ import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.LoadingIndicator
 import dev.npn.app.ui.common.LocalWindowWidthClass
-import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.StatusBadge
 import dev.npn.app.ui.common.TopBarAction
 import dev.npn.app.ui.common.TopBarActions
 import dev.npn.app.ui.common.enumNameSaver
+import dev.npn.app.ui.common.rememberSnackbarMessages
 import dev.npn.app.ui.common.resolve
 import dev.npn.core.app.Doc
 import dev.npn.core.app.DocContentFacade
@@ -130,8 +130,7 @@ fun TrashScreen(
     var tab by rememberSaveable(stateSaver = enumNameSaver()) { mutableStateOf(TrashTab.TRASH) }
     var confirm by remember { mutableStateOf<TrashConfirm?>(null) }
 
-    val snackbar = remember { SnackbarHostState() }
-    SnackbarMessages(vm.messages, snackbar)
+    val snackbar = rememberSnackbarMessages(vm.messages)
 
     TrashScaffold(
         tab = tab,

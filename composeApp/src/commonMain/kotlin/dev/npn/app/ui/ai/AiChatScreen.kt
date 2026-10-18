@@ -41,7 +41,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -66,10 +65,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.BackTopBar
 import dev.npn.app.ui.common.ExpandIcon
-import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.expander
 import dev.npn.app.ui.common.previewKeyShortcuts
+import dev.npn.app.ui.common.rememberSnackbarMessages
 import dev.npn.core.ai.AiChatSession
 import dev.npn.core.ai.ChatTools
 import dev.npn.core.app.LibrarySession
@@ -114,8 +113,7 @@ fun AiChatScreen(
     vm: AiChatViewModel = viewModel { AiChatViewModel(session, settings) },
 ) {
     val ui by vm.ui.collectAsStateWithLifecycle()
-    val snackbar = remember { SnackbarHostState() }
-    SnackbarMessages(vm.messages, snackbar)
+    val snackbar = rememberSnackbarMessages(vm.messages)
 
     var input by rememberSaveable { mutableStateOf("") }
     val listState = rememberLazyListState()

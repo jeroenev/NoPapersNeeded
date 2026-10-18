@@ -15,15 +15,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationDrawerItem
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -47,13 +43,12 @@ import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.SearchField
-import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.rememberLibraryFolderPicker
+import dev.npn.app.ui.common.rememberSnackbarMessages
 import dev.npn.app.ui.detail.LocalDocumentDrafts
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.settings.SettingsRepository
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.common_clear_search
 import no_papers_needed.composeapp.generated.resources.common_settings_search
 import no_papers_needed.composeapp.generated.resources.common_settings_search_no_results
 import no_papers_needed.composeapp.generated.resources.common_settings_title
@@ -98,8 +93,7 @@ fun SettingsScreen(
 ) {
     val paneState by vm.paneState.collectAsStateWithLifecycle()
 
-    val snackbar = remember { SnackbarHostState() }
-    SnackbarMessages(vm.messages, snackbar)
+    val snackbar = rememberSnackbarMessages(vm.messages)
 
     val drafts = LocalDocumentDrafts.current
     var draftToResume by remember { mutableStateOf<String?>(null) }

@@ -32,7 +32,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -47,7 +46,7 @@ import dev.npn.app.ui.common.Dropdown
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.LoadingIndicator
-import dev.npn.app.ui.common.SnackbarMessages
+import dev.npn.app.ui.common.rememberSnackbarMessages
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.labelFor
@@ -99,8 +98,7 @@ fun AutoMatchRulesScreen(
 ) {
     val rules by vm.rules.collectAsStateWithLifecycle()
     val fields by vm.fields.collectAsStateWithLifecycle()
-    val snackbar = remember { SnackbarHostState() }
-    SnackbarMessages(vm.messages, snackbar)
+    val snackbar = rememberSnackbarMessages(vm.messages)
 
     // Saveable, form fields included, so an open dialog is back after the screen is recreated.
     var dialog by rememberSaveable(stateSaver = RuleDialog.Saver) { mutableStateOf(null) }

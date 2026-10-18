@@ -63,13 +63,13 @@ import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.LoadingIndicator
 import dev.npn.app.ui.common.SelectionTopBar
-import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.TagFormDialog
 import dev.npn.app.ui.common.TagPickDialog
 import dev.npn.app.ui.common.TextInputDialog
 import dev.npn.app.ui.common.TopBarAction
 import dev.npn.app.ui.common.onSecondaryClick
 import dev.npn.app.ui.common.parseHexColor
+import dev.npn.app.ui.common.rememberSnackbarMessages
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.TagInfo
 import dev.npn.core.util.NpnJson
@@ -178,8 +178,7 @@ fun TagManagementScreen(
     var dialog by rememberSaveable(stateSaver = TagDialog.Saver) { mutableStateOf(null) }
     val selection = rememberSaveable(saver = TagSelection.Saver) { TagSelection() }
 
-    val snackbar = remember { SnackbarHostState() }
-    SnackbarMessages(vm.messages, snackbar)
+    val snackbar = rememberSnackbarMessages(vm.messages)
 
     TagListScaffold(
         loadedRows = rows,

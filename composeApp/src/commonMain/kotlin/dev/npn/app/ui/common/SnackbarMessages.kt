@@ -5,6 +5,7 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import kotlinx.coroutines.flow.Flow
 import org.jetbrains.compose.resources.rememberResourceEnvironment
@@ -32,4 +33,15 @@ fun SnackbarMessages(
             if (result == SnackbarResult.ActionPerformed) message.action?.onPerform()
         }
     }
+}
+
+/**
+ * A snackbar host state showing [messages] ([SnackbarMessages]): what a screen with one viewmodel
+ * and its own snackbar host needs.
+ */
+@Composable
+fun rememberSnackbarMessages(messages: Flow<UiMessage>): SnackbarHostState {
+    val snackbar = remember { SnackbarHostState() }
+    SnackbarMessages(messages, snackbar)
+    return snackbar
 }

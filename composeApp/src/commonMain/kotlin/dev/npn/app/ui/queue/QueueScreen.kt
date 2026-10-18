@@ -23,13 +23,11 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -45,10 +43,10 @@ import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.LoadingIndicator
 import dev.npn.app.ui.common.SectionHeading
-import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.StatusBadge
 import dev.npn.app.ui.common.TechnicalDetails
 import dev.npn.app.ui.common.formatEpochDateTime
+import dev.npn.app.ui.common.rememberSnackbarMessages
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.QueuedEditRun
 import dev.npn.core.app.QueuedWork
@@ -101,8 +99,7 @@ fun QueueScreen(
 ) {
     val items by vm.items.collectAsStateWithLifecycle()
     val editRuns by vm.editRuns.collectAsStateWithLifecycle()
-    val snackbar = remember { SnackbarHostState() }
-    SnackbarMessages(vm.messages, snackbar)
+    val snackbar = rememberSnackbarMessages(vm.messages)
 
     Scaffold(
         modifier = modifier,

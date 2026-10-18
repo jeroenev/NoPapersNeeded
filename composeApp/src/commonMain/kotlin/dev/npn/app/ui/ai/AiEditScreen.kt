@@ -11,7 +11,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -29,7 +28,7 @@ import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
 import dev.npn.app.ui.common.BackTopBar
 import dev.npn.app.ui.common.ConfirmDialog
-import dev.npn.app.ui.common.SnackbarMessages
+import dev.npn.app.ui.common.rememberSnackbarMessages
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.aiedit.EditProgress
 import dev.npn.core.settings.SettingsRepository
@@ -73,8 +72,7 @@ fun AiEditScreen(
     vm: AiEditViewModel = viewModel { AiEditViewModel(session, settings, selection) },
 ) {
     val ui by vm.ui.collectAsStateWithLifecycle()
-    val snackbar = remember { SnackbarHostState() }
-    SnackbarMessages(vm.messages, snackbar)
+    val snackbar = rememberSnackbarMessages(vm.messages)
 
     // Leaving mid-flight throws away answers that were already paid for, so Back asks first in
     // exactly the phases where that is true: the top-bar arrow, the system gesture and, on
