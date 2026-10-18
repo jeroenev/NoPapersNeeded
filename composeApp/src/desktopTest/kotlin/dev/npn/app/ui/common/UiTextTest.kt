@@ -3,6 +3,8 @@ package dev.npn.app.ui.common
 import dev.npn.app.english
 import dev.npn.app.resourcesIn
 import dev.npn.core.app.ImportTally
+import dev.npn.core.index.MetadataWriteBlocked
+import dev.npn.core.index.WriteBlock
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
@@ -20,6 +22,18 @@ class UiTextTest {
             uiText(Res.string.detail_add_tag_failed, UiText.Raw("disk full")).english() shouldBe
                 "Could not add the tag: disk full"
             RuntimeException().reasonText().english() shouldBe "RuntimeException"
+        }
+
+    /** Only a refusal the user can act on, an app that needs updating, is put in their words. */
+    @Test
+    fun aWriteRefusedForANewerFormatGivesALocalizedReason() =
+        runTest {
+            val newer = MetadataWriteBlocked(WriteBlock.NEWER_FORMAT, "Metadata writes are disabled: unknown op")
+            uiText(Res.string.detail_add_tag_failed, newer.reasonText()).english() shouldBe
+                "Could not add the tag: the library has changes from a newer version of the app; " +
+                "update the app to make changes"
+            MetadataWriteBlocked(WriteBlock.JOURNAL_DAMAGED, "Object is empty").reasonText() shouldBe
+                UiText.Raw("Object is empty")
         }
 
     @Test

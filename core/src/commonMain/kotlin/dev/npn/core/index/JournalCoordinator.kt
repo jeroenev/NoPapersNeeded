@@ -150,7 +150,9 @@ class JournalCoordinator internal constructor(
     private val writeUndelete: Boolean = JournalOp.DocUndelete.WRITTEN,
 ) {
     private val mutex = Mutex()
-    private var writeBlockReason: String? = null
+
+    /** What blocks writes, as [blockWrites] recorded it; null while they are taken. */
+    private var writeBlock: MetadataWriteBlocked? = null
     private var closed = false
 
     /**
@@ -219,7 +221,7 @@ class JournalCoordinator internal constructor(
         if (groups.all { group -> group.keys.any(syncedSettings::written) }) return true
         return locked {
             // Read under the lock: a pass failing meanwhile blocks writes, and that is a refusal.
-            if (writeBlockReason != null) return@locked false
+            if (writeBlock != null) return@locked false
             val current = foldedState()
             val held = current.settings()
             val ops =
@@ -250,7 +252,7 @@ class JournalCoordinator internal constructor(
                         folded = null
                         observeSourceHlc(outcome.maxHlc)
                         syncedSettings.seed(accumulator.loadStateOf(JournalOp.SettingSet.WIRE))
-                        writeBlockReason = null
+                        writeBlock = null
                     }
 
                     is OpenReconciliation.Refolded -> {
@@ -312,7 +314,7 @@ class JournalCoordinator internal constructor(
                     // Nothing on disk changed and this session has never needed the fold. There is
                     // nothing to project, and replaying the journal just to prove that is what made
                     // the periodic tick as expensive as a boot.
-                    writeBlockReason = null
+                    writeBlock = null
                     return@locked
                 }
                 adopt(current) {
@@ -345,7 +347,7 @@ class JournalCoordinator internal constructor(
     suspend fun compact(nowMillis: Long = clock.nowMillis()): String? =
         locked {
             val compaction = compaction ?: return@locked null
-            if (writeBlockReason != null) return@locked null
+            if (writeBlock != null) return@locked null
             val support = compaction.snapshots
             val (objects, snapshots) = support.compactionSources()
             val chosen =
@@ -455,7 +457,7 @@ class JournalCoordinator internal constructor(
      * Whether a commit would be taken now: false once [close] has run or while writes are blocked.
      * For a caller that only waits a refusal out, so a refusal is an answer rather than a failure.
      */
-    suspend fun canWrite(): Boolean = withContext(dispatcher) { mutex.withLock { !closed && writeBlockReason == null } }
+    suspend fun canWrite(): Boolean = withContext(dispatcher) { mutex.withLock { !closed && writeBlock == null } }
 
     /**
      * Run [block] under the single-writer mutex: for a change to which file holds which hash that
@@ -662,12 +664,16 @@ class JournalCoordinator internal constructor(
      */
     private suspend fun writeTransaction(ops: List<PendingOp>): PublishedTransaction = writer.commit(ops)
 
+    /** Refuse a write, with why ([MetadataWriteBlocked.block]), while a failed pass blocks them. */
     private fun ensureWritable() {
-        check(writeBlockReason == null) { "Metadata writes are disabled: $writeBlockReason" }
+        val blocked = writeBlock ?: return
+        throw MetadataWriteBlocked(blocked.block, "Metadata writes are disabled: ${blocked.message}")
     }
 
+    /** Block writes for [failure]: a pass's own refusal keeps its reason, any other failure is the pass's. */
     private fun blockWrites(failure: Throwable) {
-        writeBlockReason = failure.reason()
+        writeBlock = failure as? MetadataWriteBlocked
+            ?: MetadataWriteBlocked(WriteBlock.RECONCILE_FAILED, failure.reason())
     }
 
     /**
@@ -715,7 +721,7 @@ class JournalCoordinator internal constructor(
         val result = project()
         // Read after projecting: a rescan's own writes (external moves, restores) raise it.
         accumulator.markReady(state.maxHlc)
-        writeBlockReason = null
+        writeBlock = null
         return result
     }
 
@@ -748,11 +754,11 @@ class JournalCoordinator internal constructor(
      * Run [attempt] — a bounded projection of an ALREADY-durable write/publish — and, on any
      * failure, keep the disposable in-memory state + DB projection from diverging from the journal.
      *
-     * On failure the ORIGINAL exception is preserved (its message latches [writeBlockReason]) while
+     * On failure the ORIGINAL exception is preserved (it latches [writeBlock]) while
      * we try to rebuild the projection from the durable store via [recoverDurableProjection]:
      *  - recovery succeeds -> the projection is consistent again and writes are re-enabled, but the
      *    original failure is still rethrown so the caller learns the optimistic projection failed;
-     *  - recovery fails -> that failure also latches [writeBlockReason] (never escapes unlatched)
+     *  - recovery fails -> that failure also latches [writeBlock] (never escapes unlatched)
      *    and is attached as suppressed to the rethrown original, and the live fold is dropped
      *    for the next reconcile or ingest to rebuild in full ([refoldPending]).
      *

@@ -32,18 +32,27 @@ class SourceSetValidator(
      */
     private val pendingSupersession = HashMap<String, Int>()
 
-    /** A reason to reject the whole entry set on store-version grounds, or null when it is sound. */
-    fun unsupportedStorage(entries: List<FileMeta>): String? {
-        val supportedStoreVersions = setOf(JournalPaths.STORAGE_V2, JournalPaths.SNAPSHOT_V2)
+    /**
+     * A reason to reject the whole entry set because it holds an object store only a newer build
+     * writes, or null when every store is one this build reads.
+     */
+    fun newerStore(entries: List<FileMeta>): String? {
         val unsupported =
             entries
                 .asSequence()
                 .mapNotNull { JournalPaths.objectStoreVersion(it.relPath) }
-                .firstOrNull { it !in supportedStoreVersions }
-        if (unsupported != null) return "Unsupported metadata object store version $unsupported"
+                .firstOrNull { it !in SUPPORTED_STORE_VERSIONS }
+        return unsupported?.let { "Unsupported metadata object store version $it" }
+    }
+
+    /**
+     * A reason to reject the whole entry set because a store this build reads holds a file that is
+     * no object of it, or null when there is none.
+     */
+    fun invalidObjectPath(entries: List<FileMeta>): String? {
         val invalidObject =
             entries.firstOrNull { entry ->
-                !entry.isDirectory && JournalPaths.objectStoreVersion(entry.relPath) in supportedStoreVersions &&
+                !entry.isDirectory && JournalPaths.objectStoreVersion(entry.relPath) in SUPPORTED_STORE_VERSIONS &&
                     JournalPaths.classify(entry.relPath) is JournalPath.Unknown
             }
         return invalidObject?.let { "Invalid metadata object path: ${it.relPath}" }
@@ -129,6 +138,8 @@ class SourceSetValidator(
     }
 
     companion object {
+        private val SUPPORTED_STORE_VERSIONS = setOf(JournalPaths.STORAGE_V2, JournalPaths.SNAPSHOT_V2)
+
         /**
          * How many consecutive reconciles a deleted-but-still-applied content-addressed source may
          * stay unexplained (no hash replacement, no applied snapshot superseding it) before it is

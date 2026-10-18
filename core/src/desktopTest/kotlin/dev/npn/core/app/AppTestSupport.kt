@@ -7,6 +7,7 @@ import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.TrashOps
+import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.index.DeviceIdentity
 import dev.npn.core.index.IndexRig
 import dev.npn.core.index.JournalCoordinator
@@ -14,6 +15,7 @@ import dev.npn.core.index.MutableClock
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.JournalOp
+import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.journalObjects
 import dev.npn.core.ocr.FakeOcrEngine
 import dev.npn.core.ocr.OcrEngine
@@ -238,6 +240,14 @@ internal fun AppSessionRig.unblockMetadataWrites() {
 
 /** An object store from a newer build. */
 private const val NEWER_STORE = "${NpnPaths.JOURNAL_DIR}/objects-v9-00"
+
+/** Publish a storage-v2 object, as a newer build would, holding an op this build does not know (`future`). */
+internal suspend fun LibraryFileSystem.writeNewerBuildsObject() {
+    val actor = "00000000-0000-4000-8000-000000000001"
+    val line = """{"v":1,"seq":1,"hlc":{"t":1,"c":0,"d":"$actor"},"dev":"$actor","doc":null,"op":"future","p":{}}"""
+    val bytes = "$line\n".encodeToByteArray()
+    writeBytesOnce(JournalPaths.objectPath(sha256Bytes(bytes)), bytes)
+}
 
 /**
  * A test over a fresh [AppSessionRig], built in the test's background scope with these

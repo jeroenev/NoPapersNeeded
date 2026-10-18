@@ -14,6 +14,7 @@ import dev.npn.app.ui.common.TechnicalDetails
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_open_failed_folder_missing
 import no_papers_needed.composeapp.generated.resources.common_open_failed_folder_not_created
+import no_papers_needed.composeapp.generated.resources.common_open_failed_needs_newer_app
 import no_papers_needed.composeapp.generated.resources.common_open_failed_storage_access
 import no_papers_needed.composeapp.generated.resources.common_open_failed_unreadable
 import no_papers_needed.composeapp.generated.resources.common_open_failed_unsupported_storage
@@ -43,5 +44,6 @@ private val OpenFailureReason.message: StringResource
             OpenFailureReason.NO_STORAGE_ACCESS -> Res.string.common_open_failed_storage_access
             OpenFailureReason.FOLDER_NOT_CREATED -> Res.string.common_open_failed_folder_not_created
             OpenFailureReason.UNSUPPORTED_STORAGE -> Res.string.common_open_failed_unsupported_storage
+            OpenFailureReason.NEEDS_NEWER_APP -> Res.string.common_open_failed_needs_newer_app
             OpenFailureReason.UNREADABLE -> Res.string.common_open_failed_unreadable
         }

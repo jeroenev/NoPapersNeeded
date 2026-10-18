@@ -1,8 +1,11 @@
 package dev.npn.app.ui.common
 
 import androidx.compose.runtime.Composable
+import dev.npn.core.index.MetadataWriteBlocked
+import dev.npn.core.index.WriteBlock
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_unknown_error
+import no_papers_needed.composeapp.generated.resources.common_writes_need_newer_app
 import org.jetbrains.compose.resources.PluralStringResource
 import org.jetbrains.compose.resources.ResourceEnvironment
 import org.jetbrains.compose.resources.StringResource
@@ -62,13 +65,25 @@ fun uiText(
 ): UiText = UiText.Plural(res, quantity, args.toList())
 
 /**
- * This failure's reason as message text, for the "%s" of a "Could not …: %s" sentence: its message,
- * else its class name, else a localized "unknown error".
+ * This failure's reason as message text, for the "%s" of a "Could not …: %s" sentence: a localized
+ * reason for a write refused because a newer version of the app changed the library, else its
+ * message, else its class name, else a localized "unknown error".
  */
 fun Throwable.reasonText(): UiText =
-    message?.takeIf { it.isNotBlank() }?.let(UiText::Raw)
+    (this as? MetadataWriteBlocked)?.blockText()
+        ?: message?.takeIf { it.isNotBlank() }?.let(UiText::Raw)
         ?: this::class.simpleName?.let(UiText::Raw)
         ?: uiText(Res.string.common_unknown_error)
+
+/**
+ * Why writes are refused, in the user's terms, where they can act on it: only a newer app reads the
+ * library. A damaged journal or a failed pass keeps its technical message, which is all there is.
+ */
+private fun MetadataWriteBlocked.blockText(): UiText? =
+    when (block) {
+        WriteBlock.NEWER_FORMAT -> uiText(Res.string.common_writes_need_newer_app)
+        WriteBlock.JOURNAL_DAMAGED, WriteBlock.RECONCILE_FAILED -> null
+    }
 
 /** This text in [environment]'s language, outside a composition (see [SnackbarMessages]). */
 suspend fun UiText.resolve(environment: ResourceEnvironment): String =

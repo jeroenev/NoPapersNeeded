@@ -23,6 +23,7 @@
     <string name="common_view_list">Liste</string>
     <string name="common_view_grid">Raster</string>
     <string name="common_unknown_error">unbekannter Fehler</string>
+    <string name="common_writes_need_newer_app">die Bibliothek enthält Änderungen einer neueren Version der App; aktualisiere die App, um etwas zu ändern</string>
     <string name="common_could_not_open_library">Die Bibliothek konnte nicht geöffnet werden.</string>
 
     <string name="common_opening_library">Bibliothek wird geöffnet...</string>
@@ -31,6 +32,7 @@
     <string name="common_open_failed_storage_access">No Papers Needed darf nicht auf den Gerätespeicher zugreifen und kann den Bibliotheksordner daher nicht lesen. Erlaube den Zugriff auf alle Dateien und versuche es dann erneut.</string>
     <string name="common_open_failed_folder_not_created">Der Bibliotheksordner konnte dort nicht angelegt werden. Wähle einen anderen Speicherort.</string>
     <string name="common_open_failed_unsupported_storage">Dieser Speicher kann die Änderungen an der Bibliothek nicht sicher speichern: Er kann keine Datei anlegen, ohne zu riskieren, eine Datei zu ersetzen, die ein anderes Gerät gerade geschrieben hat. Wähle einen Ordner auf einem anderen Laufwerk oder Dateisystem.</string>
+    <string name="common_open_failed_needs_newer_app">Diese Bibliothek enthält Änderungen einer neueren Version von No Papers Needed, die diese Version nicht lesen kann. Aktualisiere die App und versuche es dann erneut.</string>
     <string name="common_open_failed_unreadable">Die Bibliothek konnte nicht gelesen werden. Die technischen Details nennen den Grund.</string>
     <string name="common_pick_folder_again">Ordner erneut wählen</string>
 

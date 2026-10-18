@@ -313,7 +313,9 @@ live in `buildSrc`. Hot Reload via `mise hot`.
 - **Compatibility.** A build folds only the ops it knows. An object, snapshot or segment holding an
   op it does not know, or a known op it cannot read (a `prop-set` of a newer system property, a
   `field-def` of a newer field type), is refused there as unsupported: that build blocks writes and
-  stops opening the library until it updates. There is no skip path, so a new op ships in a build
+  stops opening the library until it updates, and says so (`MetadataWriteBlocked` carries
+  `WriteBlock.NEWER_FORMAT`, which the app tells the user as an update to install, not as an
+  unreadable library). There is no skip path, so a new op ships in a build
   that reads it before any build writes it; `WireFormatTest` pins the op names. A payload key a
   build does not know breaks less, but lasts only in the object that holds it: that build drops it
   from every event it writes again, compaction included, which re-encodes the events it carries

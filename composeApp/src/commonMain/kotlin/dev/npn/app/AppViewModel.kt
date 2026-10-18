@@ -16,6 +16,8 @@ import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.importAll
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
+import dev.npn.core.index.MetadataWriteBlocked
+import dev.npn.core.index.WriteBlock
 import dev.npn.core.settings.aiConfigured
 import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
@@ -227,6 +229,7 @@ private fun Throwable.toOpenFailure(): OpenFailure =
             when (this) {
                 is LibraryUnavailableException -> reason
                 is VerifiedPublicationUnavailableException -> OpenFailureReason.UNSUPPORTED_STORAGE
+                is MetadataWriteBlocked if block == WriteBlock.NEWER_FORMAT -> OpenFailureReason.NEEDS_NEWER_APP
                 else -> OpenFailureReason.UNREADABLE
             },
         details = reason(),

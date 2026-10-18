@@ -27,7 +27,30 @@ import dev.npn.core.journal.SnapshotV2Reader
 import dev.npn.core.journal.StorageV1Reader
 import dev.npn.core.journal.StorageV2Reader
 
+/** Why a library refuses metadata writes, as a caller can act on it. */
+enum class WriteBlock {
+    /**
+     * The journal holds what only a newer build reads: an op, an event or snapshot version, or an
+     * object store this build does not know. Updating the app is the way out.
+     */
+    NEWER_FORMAT,
+
+    /**
+     * A journal source does not read as valid, shrank, or disappeared without a replacement: damaged,
+     * or still arriving through a sync. A later pass that reads the journal whole lifts it.
+     */
+    JOURNAL_DAMAGED,
+
+    /** A fold, reconcile or projection pass failed for another reason, such as storage or the index. */
+    RECONCILE_FAILED,
+}
+
+/**
+ * Thrown by a pass that finds the journal cannot be folded, and by every write refused while that
+ * stands; [block] says why. The message is the technical cause, in English, for the log and support.
+ */
 class MetadataWriteBlocked(
+    val block: WriteBlock,
     message: String,
 ) : IllegalStateException(message)
 
@@ -146,7 +169,7 @@ class MetadataAccumulator(
         if (applied && existing.kind == SourceKind.LEGACY_SEGMENT) {
             val previousSize = existing.fingerprint.size
             if (previousSize != null && meta.size < previousSize) {
-                fail("Legacy metadata source shrank: ${meta.relPath}")
+                fail(WriteBlock.JOURNAL_DAMAGED, "Legacy metadata source shrank: ${meta.relPath}")
             }
         }
         if (applied && existing.fingerprint.sameStat(meta.size, meta.mtimeMillis)) return null
@@ -194,7 +217,10 @@ class MetadataAccumulator(
 
             is JournalSourceRead.Retryable -> {
                 if (staged.previouslyApplied) {
-                    fail("Previously applied metadata source is no longer valid: ${staged.relPath} (${result.message})")
+                    fail(
+                        WriteBlock.JOURNAL_DAMAGED,
+                        "Previously applied metadata source is no longer valid: ${staged.relPath} (${result.message})",
+                    )
                 }
                 dao.upsertSource(
                     MetadataSourceEntity(
@@ -206,11 +232,11 @@ class MetadataAccumulator(
                         diagnostic = result.message,
                     ),
                 )
-                fail(result.message)
+                fail(WriteBlock.JOURNAL_DAMAGED, result.message)
             }
 
             is JournalSourceRead.Unsupported -> {
-                fail(result.message)
+                fail(WriteBlock.NEWER_FORMAT, result.message)
             }
         }
 
@@ -231,7 +257,8 @@ class MetadataAccumulator(
             dao.clearAccumulator()
         }
         val entries = fs.listAllUnder(NpnPaths.JOURNAL_DIR)
-        validator.unsupportedStorage(entries)?.let { fail(it) }
+        validator.newerStore(entries)?.let { fail(WriteBlock.NEWER_FORMAT, it) }
+        validator.invalidObjectPath(entries)?.let { fail(WriteBlock.JOURNAL_DAMAGED, it) }
         val previous = dao.allSources()
         val listed = entries.filter { !it.isDirectory }.associateBy { it.relPath }
 
@@ -244,7 +271,9 @@ class MetadataAccumulator(
         val files = listed - swept
         val current = dao.allSources()
         val carried = snapshots.carriedByListed(files.keys, current)
-        validator.unexplainedSourceLoss(previous, current, files, carried.hashes)?.let { fail(it) }
+        validator.unexplainedSourceLoss(previous, current, files, carried.hashes)?.let {
+            fail(WriteBlock.JOURNAL_DAMAGED, it)
+        }
         // A compaction a restore undid: its objects are back and hold its events, so the index
         // forgets the snapshot as a rebuild would, and a later compaction replaces them again.
         carried.undone.forEach { dao.forgetSource(it) }
@@ -408,7 +437,7 @@ class MetadataAccumulator(
     ) {
         val path = JournalPaths.classify(meta.relPath)
         if (path is JournalPath.UnsupportedObjectStore) {
-            fail("Unsupported metadata object store version ${path.version}")
+            fail(WriteBlock.NEWER_FORMAT, "Unsupported metadata object store version ${path.version}")
         }
         val staged = stage(meta, path) ?: return
         val recorded = record(staged)
@@ -463,9 +492,12 @@ class MetadataAccumulator(
             events.forEach { stored -> state.apply(EventDecoderRegistry.decodeStored(stored.canonicalJson)) }
         }
 
-    private suspend fun fail(message: String): Nothing {
+    private suspend fun fail(
+        block: WriteBlock,
+        message: String,
+    ): Nothing {
         dao.upsertState(projectionState(ProjectionStatus.FAILED, Hlc.ZERO, message))
-        throw MetadataWriteBlocked(message)
+        throw MetadataWriteBlocked(block, message)
     }
 
     private suspend fun projectionState(

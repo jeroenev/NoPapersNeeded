@@ -7,6 +7,8 @@ import dev.npn.core.ai.AiProvider
 import dev.npn.core.app.QueuedWork
 import dev.npn.core.app.WorkStage
 import dev.npn.core.app.WorkState
+import dev.npn.core.index.MetadataWriteBlocked
+import dev.npn.core.index.WriteBlock
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
@@ -112,13 +114,38 @@ class AppViewModelTest : MainDispatcherTest() {
     fun anUnexpectedFailureReadsAsUnreadableWithTheCauseOnlyAsADetail() =
         runTest(dispatcher) {
             val env = env(savedLocation = "/lib")
-            env.failures["/lib"] = IllegalStateException("Unsupported metadata object store version 9")
+            env.failures["/lib"] = IllegalStateException("database disk image is malformed")
             val vm = model(env)
 
             vm.state.value shouldBe
                 AppState.RestoreFailed(
-                    OpenFailure(OpenFailureReason.UNREADABLE, "Unsupported metadata object store version 9"),
+                    OpenFailure(OpenFailureReason.UNREADABLE, "database disk image is malformed"),
                 )
+        }
+
+    /**
+     * A library holding what only a newer version of the app reads asks for an update rather than
+     * calling the library unreadable; a damaged journal still reads as unreadable.
+     */
+    @Test
+    fun aLibraryANewerAppChangedAsksForAnUpdate() =
+        runTest(dispatcher) {
+            val env = env(savedLocation = "/lib")
+            env.failures["/lib"] =
+                MetadataWriteBlocked(WriteBlock.NEWER_FORMAT, "Object line 1 uses unknown operation x")
+            val vm = model(env)
+
+            vm.state.value shouldBe
+                AppState.RestoreFailed(
+                    OpenFailure(OpenFailureReason.NEEDS_NEWER_APP, "Object line 1 uses unknown operation x"),
+                )
+
+            env.failures["/lib"] = MetadataWriteBlocked(WriteBlock.JOURNAL_DAMAGED, "Object is not valid UTF-8")
+            vm.retry()
+            runCurrent()
+
+            vm.state.value shouldBe
+                AppState.RestoreFailed(OpenFailure(OpenFailureReason.UNREADABLE, "Object is not valid UTF-8"))
         }
 
     @Test

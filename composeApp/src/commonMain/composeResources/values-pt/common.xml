@@ -23,6 +23,7 @@
     <string name="common_view_list">Lista</string>
     <string name="common_view_grid">Grade</string>
     <string name="common_unknown_error">erro desconhecido</string>
+    <string name="common_writes_need_newer_app">a biblioteca tem alterações de uma versão mais recente do app; atualize o app para fazer alterações</string>
     <string name="common_could_not_open_library">Não foi possível abrir a biblioteca.</string>
 
     <string name="common_opening_library">Abrindo biblioteca...</string>
@@ -31,6 +32,7 @@
     <string name="common_open_failed_storage_access">O No Papers Needed não tem permissão para acessar o armazenamento do dispositivo e, por isso, não consegue ler a pasta da biblioteca. Permita o acesso a todos os arquivos e tente novamente.</string>
     <string name="common_open_failed_folder_not_created">Não foi possível criar a pasta da biblioteca nesse local. Escolha outro local.</string>
     <string name="common_open_failed_unsupported_storage">Este armazenamento não consegue salvar as alterações da biblioteca com segurança: ele não consegue criar um arquivo sem correr o risco de substituir um que outro dispositivo acabou de gravar. Escolha uma pasta em outra unidade ou outro sistema de arquivos.</string>
+    <string name="common_open_failed_needs_newer_app">Esta biblioteca tem alterações feitas por uma versão mais recente do No Papers Needed, que esta versão não consegue ler. Atualize o app e tente novamente.</string>
     <string name="common_open_failed_unreadable">Não foi possível ler a biblioteca. Os detalhes técnicos informam o motivo.</string>
     <string name="common_pick_folder_again">Escolher a pasta novamente</string>
 

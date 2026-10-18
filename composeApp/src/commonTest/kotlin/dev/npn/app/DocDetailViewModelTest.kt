@@ -13,6 +13,8 @@ import dev.npn.core.app.HistoryEntry
 import dev.npn.core.app.OcrVersion
 import dev.npn.core.app.TagInfo
 import dev.npn.core.db.FieldKeyCount
+import dev.npn.core.index.MetadataWriteBlocked
+import dev.npn.core.index.WriteBlock
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
@@ -32,6 +34,7 @@ import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_no_ai_metadata_suggestions
 import no_papers_needed.composeapp.generated.resources.common_no_ai_tag_suggestions
+import no_papers_needed.composeapp.generated.resources.common_writes_need_newer_app
 import no_papers_needed.composeapp.generated.resources.detail_add_tag_failed
 import no_papers_needed.composeapp.generated.resources.detail_ocr_details_failed
 import no_papers_needed.composeapp.generated.resources.detail_ocr_engine_failed
@@ -96,6 +99,21 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             model.addTag("finance")
             advanceUntilIdle()
             messages shouldContainExactly listOf(failure(Res.string.detail_add_tag_failed, "journal write failed"))
+        }
+
+    /** A write refused because a newer app changed the library says to update, not the English cause. */
+    @Test
+    fun aWriteRefusedForANewerFormatAsksForAnUpdate() =
+        runTest(dispatcher) {
+            val refusal = MetadataWriteBlocked(WriteBlock.NEWER_FORMAT, "Metadata writes are disabled: unknown op")
+            val session = FakeLibrarySession().apply { meta.failBatchOps = { throw refusal } }
+            val model = liveDocDetailVm(session = session)
+            val messages = collecting(model.messages.map { it.text })
+            advanceUntilIdle()
+            model.addTag("finance")
+            advanceUntilIdle()
+            messages shouldContainExactly
+                listOf(uiText(Res.string.detail_add_tag_failed, uiText(Res.string.common_writes_need_newer_app)))
         }
 
     /**

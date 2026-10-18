@@ -23,6 +23,7 @@
     <string name="common_view_list">Liste</string>
     <string name="common_view_grid">Grille</string>
     <string name="common_unknown_error">erreur inconnue</string>
+    <string name="common_writes_need_newer_app">la bibliothèque contient des modifications d’une version plus récente de l’application ; mettez l’application à jour pour la modifier</string>
     <string name="common_could_not_open_library">Impossible d’ouvrir la bibliothèque.</string>
 
     <string name="common_opening_library">Ouverture de la bibliothèque…</string>
@@ -31,6 +32,7 @@
     <string name="common_open_failed_storage_access">No Papers Needed n’est pas autorisé à accéder au stockage de l’appareil et ne peut donc pas lire le dossier de la bibliothèque. Autorisez l’accès à tous les fichiers, puis réessayez.</string>
     <string name="common_open_failed_folder_not_created">Le dossier de la bibliothèque n’a pas pu être créé à cet endroit. Choisissez un autre emplacement.</string>
     <string name="common_open_failed_unsupported_storage">Ce stockage ne peut pas enregistrer les modifications de la bibliothèque en toute sécurité : il ne peut pas créer un fichier sans risquer de remplacer celui qu’un autre appareil vient d’écrire. Choisissez un dossier sur un autre disque ou un autre système de fichiers.</string>
+    <string name="common_open_failed_needs_newer_app">Cette bibliothèque contient des modifications faites par une version plus récente de No Papers Needed, que cette version ne sait pas lire. Mettez l’application à jour, puis réessayez.</string>
     <string name="common_open_failed_unreadable">La bibliothèque n’a pas pu être lue. Les détails techniques en donnent la raison.</string>
     <string name="common_pick_folder_again">Rechoisir le dossier</string>
 

@@ -4,6 +4,7 @@ import dev.npn.core.db.ProjectionStatus
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.index.MetadataWriteBlocked
+import dev.npn.core.index.WriteBlock
 import dev.npn.core.index.requireByDocId
 import dev.npn.core.journal.CompactionCandidate
 import dev.npn.core.journal.Hlc
@@ -180,7 +181,7 @@ class MetadataReplicationTest {
             val path = JournalPaths.objectPath(sha256Bytes(partial))
             rig.fs.writeBytesOnce(path, partial)
 
-            assertFailsWith<MetadataWriteBlocked> { rig.session.rescan() }
+            assertFailsWith<MetadataWriteBlocked> { rig.session.rescan() }.block shouldBe WriteBlock.JOURNAL_DAMAGED
             rig.db
                 .metadataProjectionDao()
                 .state()
@@ -191,9 +192,27 @@ class MetadataReplicationTest {
                     .observeDocuments(LibraryFilter(), LibrarySort())
                     .first()
             tagsOf(items, id) shouldContain "preserved"
-            assertFailsWith<IllegalStateException> {
+            assertFailsWith<MetadataWriteBlocked> {
                 rig.session.meta.addTag(listOf(id), "must-not-write")
-            }
+            }.block shouldBe WriteBlock.JOURNAL_DAMAGED
+        }
+
+    /**
+     * An object holding an op only a newer build knows blocks writes, and every refused write says
+     * so, as the reason the user is told: the app needs updating, the journal is not damaged.
+     */
+    @Test
+    fun anOpFromANewerBuildBlocksWritesAsANewerFormat() =
+        appSessionTest { rig ->
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+            rig.fs.writeNewerBuildsObject()
+
+            assertFailsWith<MetadataWriteBlocked> { rig.session.rescan() }.block shouldBe WriteBlock.NEWER_FORMAT
+            assertFailsWith<MetadataWriteBlocked> {
+                rig.session.meta.addTag(listOf(id), "refused")
+            }.block shouldBe WriteBlock.NEWER_FORMAT
         }
 
     @Test

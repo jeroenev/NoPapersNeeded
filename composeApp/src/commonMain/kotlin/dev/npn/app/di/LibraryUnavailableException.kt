@@ -17,6 +17,9 @@ enum class OpenFailureReason {
      */
     UNSUPPORTED_STORAGE,
 
+    /** The journal holds what only a newer version of the app reads: updating the app opens it. */
+    NEEDS_NEWER_APP,
+
     /** Anything else: the library or the app's data for it could not be read. */
     UNREADABLE,
 }
