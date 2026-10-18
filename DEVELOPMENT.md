@@ -131,8 +131,11 @@ and obvious hardcoded strings in shared Compose UI, are checked with
 `./gradlew checkLocalization` (its own tests: `./gradlew :buildSrc:test`). The task
 also runs as part of `./gradlew check`; intentional language-neutral literals must be
 listed in `config/localization-hardcoded-allowlist.txt`.
+`./gradlew checkFieldTypeBranches` (also part of `check`) keeps document fields registry data: it
+fails on code that branches on a `FieldType` constant outside the few files allowed to (canonical
+form and the per-type UI controls, listed in `build.gradle.kts`).
 Run `mise hooks-install` once per clone to enable the pre-commit formatting, source-only
-detekt, localization and fast-test checks; the hook never formats or stages files. Commit messages are
+detekt, localization, FieldType and fast-test checks; the hook never formats or stages files. Commit messages are
 prefixed with the current branch name when needed.
 
 ### Tests

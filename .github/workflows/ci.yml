@@ -44,8 +44,8 @@ jobs:
         run: shellcheck .githooks/* .mise/tasks/* .github/scripts/*
 
       # Grouped into few Gradle invocations: each one pays configuration again.
-      - name: Formatting, localization guard and static analysis
-        run: ./gradlew spotlessCheck checkLocalization detekt
+      - name: Formatting, localization and FieldType guards, and static analysis
+        run: ./gradlew spotlessCheck checkLocalization checkFieldTypeBranches detekt
 
       # Desktop suites with coverage, then the same commonTest suites against the Android target
       # plus whatever only exists there (androidHostTest). Coverage stays on the desktop run.

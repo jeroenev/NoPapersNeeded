@@ -36,8 +36,28 @@ val checkLocalization by tasks.registering(LocalizationGuardTask::class) {
     hardcodedAllowlist.set(layout.projectDirectory.file("config/localization-hardcoded-allowlist.txt"))
 }
 
+val checkFieldTypeBranches by tasks.registering(FieldTypeGuardTask::class) {
+    group = "verification"
+    description = "Checks that only the allowed files branch on a FieldType (fields are registry data)."
+    sources.from(
+        fileTree(layout.projectDirectory) {
+            include("*/src/*Main/kotlin/**/*.kt", "*/src/main/kotlin/**/*.kt")
+        },
+    )
+    rootDirectory.set(layout.projectDirectory)
+    allowed.set(
+        setOf(
+            // Canonical form, per type.
+            "core/src/commonMain/kotlin/dev/npn/core/model/FieldValues.kt",
+            // Where the type picks a control: the editor and its type label, and the filter sheet.
+            "composeApp/src/commonMain/kotlin/dev/npn/app/ui/common/FieldEditor.kt",
+            "composeApp/src/commonMain/kotlin/dev/npn/app/ui/library/FilterSheet.kt",
+        ),
+    )
+}
+
 tasks.named("check") {
-    dependsOn(checkLocalization)
+    dependsOn(checkLocalization, checkFieldTypeBranches)
 }
 
 // Device tests only run on a device, so CI only builds them: it compiles each module's and runs the

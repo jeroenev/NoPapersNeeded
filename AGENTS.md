@@ -59,8 +59,9 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   :composeApp:testAndroidHostTest`. Both are in `check`/`allTests`, so `mise test-all` and
   `mise check` cover them; `mise test-fast` deliberately does not.
 - Single test class: `./gradlew :core:desktopTest --tests 'dev.npn.core.journal.OrSetTest'`.
-- Build logic tests (`buildSrc`, e.g. the `checkLocalization` guard): `./gradlew :buildSrc:test`.
-  They are not part of `check`; CI runs them with the other tests.
+- Build logic tests (`buildSrc`, e.g. the `checkLocalization` and `checkFieldTypeBranches`
+  guards): `./gradlew :buildSrc:test`. They are not part of `check`; CI runs them with the other
+  tests.
 - Desktop shell tests (`desktopApp`, e.g. the single-instance lock): `./gradlew :desktopApp:test`.
   CI runs them with the other tests too.
 - Live AI endpoint checks are opt-in and skipped by default (they cost money):
@@ -71,10 +72,11 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
 - Fast UI iteration: `mise hot` (Compose Hot Reload on desktop). Android-only paths
   (scanner, share intents, WorkManager) need a device: `mise deploy`.
 - CI (`.github/workflows/ci.yml`) runs: shellcheck (hooks, mise tasks, `.github/scripts`) →
-  spotlessCheck → checkLocalization → detekt → tests+coverage (kover drives both desktop test
-  suites) → Android-target host tests → compile android+desktop + `compileDeviceTests` (the root task
-  that builds every device test without a device; add a new module's there) + `detektTyped` → assembleDebug →
-  desktopApp build → packageAppImage. Match that order when verifying larger changes. Actions
+  spotlessCheck → checkLocalization + checkFieldTypeBranches → detekt → tests+coverage (kover
+  drives both desktop test suites) → Android-target host tests → compile android+desktop +
+  `compileDeviceTests` (the root task that builds every device test without a device; add a new
+  module's there) + `detektTyped` → committed Room schema exports → assembleDebug → desktopApp
+  build → packageAppImage. Match that order when verifying larger changes. Actions
   minutes and artifact storage are metered (private repo): PRs stop after compile, packaging runs
   on `main` only, the coverage report uploads only on `main` or after a failure, binaries upload
   only on a manual run, and the Windows build (`windows.yml`) and CodeQL run weekly or on demand.
@@ -184,7 +186,9 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   `FieldEditor.kt` (the editor and its type label) and the filter sheet's per-type filter
   control. Every other branch reads the `FieldDef`'s data (its flags and hint, and the
   capabilities each `FieldType` constant must declare, such as `singleLine` or `hasVocabulary`),
-  never compares or switches on the type. Storage is always the canonical form; a blank value
+  never compares or switches on the type; `./gradlew checkFieldTypeBranches` (in `check`, CI and
+  the pre-commit hook) fails on a `FieldType.X ->` branch, an `==`/`!=` against a constant or an
+  `is FieldType` in main sources outside those files (`build.gradle.kts` lists them). Storage is always the canonical form; a blank value
   clears the field and is never stored as `""`. Each number has exactly one canonical form (`7`,
   `1.5`), so canonical strings compare as values; the fold reads what older builds stored (`007`,
   `1.50`) through `FieldValues.normalized`. The five typed `documents` columns are a read cache
