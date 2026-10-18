@@ -6,8 +6,12 @@ import dev.npn.core.model.SystemProperty
 /**
  * A pending op the caller wants to commit. The writer assigns seq and HLC and fills in the
  * envelope. `doc` follows the op's requirements (see [JournalOp]).
+ *
+ * Built through the factories below: the constructor is `internal`, like [tagRemove], so code
+ * outside `core` cannot wrap a `tag-remove` of its own making in one.
  */
-data class PendingOp(
+@ConsistentCopyVisibility
+data class PendingOp internal constructor(
     val doc: String?,
     val op: JournalOp,
 ) {
@@ -20,8 +24,10 @@ data class PendingOp(
         /**
          * `internal` on purpose: a correct OR-set `tag-remove` must carry the dots CURRENTLY live
          * for `(doc, tag)`. The only sanctioned way to obtain those is [FoldedState.tagRemovalOps],
-         * which reads a live [FoldedState] under the coordinator mutex. Keeping this factory out of
-         * the public surface makes a removal against stale/fabricated dots unexpressible.
+         * which reads a live [FoldedState] under the coordinator mutex. With this factory, the
+         * [PendingOp] constructor and [JournalOp.TagRemove]'s all `internal`, code outside `core`
+         * cannot express a removal against stale or fabricated dots; inside it, only the journal
+         * decoder and tests build one directly.
          */
         internal fun tagRemove(
             doc: String,

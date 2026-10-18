@@ -35,8 +35,12 @@ sealed interface JournalOp {
         }
     }
 
-    /** {"tag": String, "dots": [[deviceId, seq], ...]}; observed-remove. doc required. */
-    data class TagRemove(
+    /**
+     * {"tag": String, "dots": [[deviceId, seq], ...]}; observed-remove. doc required. Built only
+     * inside `core`: by [FoldedState.tagRemovalOps] from live dots, or decoded from the journal.
+     */
+    @ConsistentCopyVisibility
+    data class TagRemove internal constructor(
         val tag: String,
         val dots: List<Dot>,
     ) : JournalOp {

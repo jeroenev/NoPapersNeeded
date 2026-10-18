@@ -454,10 +454,11 @@ class FoldedState {
      * addressed to), and emit a remove carrying them, skipping docs that do not hold the tag (empty
      * dots). A dot is listed once however many of [docIds] share it.
      *
-     * This is the ONLY way to construct a `tag-remove` op ([PendingOp.tagRemove] is `internal`),
-     * so a correct removal can only be built against a live [FoldedState] read under the
-     * [dev.npn.core.index.JournalCoordinator] mutex (via `commitBuilt`). That makes a removal against
-     * stale or fabricated dots unexpressible: a caller with no live state cannot mint one.
+     * Outside `core` this is the ONLY way to construct a `tag-remove` op ([PendingOp.tagRemove], the
+     * [PendingOp] constructor and [JournalOp.TagRemove]'s are `internal`), so a correct removal can
+     * only be built against a live [FoldedState] read under the
+     * [dev.npn.core.index.JournalCoordinator] mutex (via `commitBuilt`). A caller with no live state
+     * cannot mint one; inside `core`, only the journal decoder and tests build one otherwise.
      */
     fun tagRemovalOps(
         docIds: Collection<String>,
