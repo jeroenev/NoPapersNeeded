@@ -39,7 +39,7 @@ import java.util.Collections
  * Every component reads and writes the library through [fs], the decorator [create] was handed
  * over [raw], the real filesystem.
  */
-class IndexRig private constructor(
+internal class IndexRig private constructor(
     val libRoot: Path,
     private val dbs: TempIndexDb,
     val raw: JvmLibraryFileSystem,
@@ -200,7 +200,8 @@ class IndexRig private constructor(
 }
 
 /** A test over a fresh [IndexRig], closed once [block] is done. */
-fun indexTest(block: suspend TestScope.(IndexRig) -> Unit): TestResult = runTest { IndexRig.create().use { block(it) } }
+internal fun indexTest(block: suspend TestScope.(IndexRig) -> Unit): TestResult =
+    runTest { IndexRig.create().use { block(it) } }
 
 /**
  * Writes v1 segments, `.npn/journal/<deviceId>/<first seq>.jsonl`, the way builds before storage-v2
@@ -278,7 +279,7 @@ class MutableClock(
  * [ImportService]'s serialize where no coordinator holds a lock: each step runs at once, against a
  * journal that holds no relink and hides no document.
  */
-val unserialized: suspend (suspend (LockedJournal) -> Unit) -> Unit = { step ->
+internal val unserialized: suspend (suspend (LockedJournal) -> Unit) -> Unit = { step ->
     step(
         object : LockedJournal {
             override suspend fun successorOf(docId: String): String = docId

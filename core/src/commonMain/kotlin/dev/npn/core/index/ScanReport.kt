@@ -52,7 +52,7 @@ enum class RelinkSignal {
  * [relPath] (put back by a sync tool or the user). A rescan prefers the file and reports it, so
  * the coordinator can record a restore; [hiddenAtMillis] is the wall time of the event that hid it.
  */
-data class Resurrected(
+internal data class Resurrected(
     val docId: String,
     val relPath: String,
     val hiddenAtMillis: Long,

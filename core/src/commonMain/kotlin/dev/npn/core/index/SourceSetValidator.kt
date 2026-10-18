@@ -18,7 +18,7 @@ import dev.npn.core.journal.JournalPaths
  * projection state (and so blocking writes) stays with [MetadataAccumulator], which owns the DB
  * write — this class only judges.
  */
-class SourceSetValidator(
+internal class SourceSetValidator(
     private val dao: MetadataProjectionDao,
 ) {
     /**

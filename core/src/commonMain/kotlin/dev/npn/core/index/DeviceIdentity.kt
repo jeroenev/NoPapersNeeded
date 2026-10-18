@@ -42,7 +42,7 @@ import kotlin.uuid.Uuid
  * included: [resolve] lets that [VerifiedPublicationUnavailableException] through so the library
  * refuses to open. Any other failure to publish is retried at the next open.
  */
-class DeviceIdentity(
+internal class DeviceIdentity(
     private val kv: KeyValueDao,
     private val fs: LibraryFileSystem,
     private val installationId: String,

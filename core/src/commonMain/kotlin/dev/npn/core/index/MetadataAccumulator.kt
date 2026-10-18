@@ -69,7 +69,7 @@ class MetadataWriteBlocked(
  *   project just [newEvents] via a bounded reprojection. When false the caller must fully
  *   reproject: [state] was rebuilt from the DB and may differ arbitrarily from its prior value.
  */
-data class MetadataReconciliation(
+internal data class MetadataReconciliation(
     val state: FoldedState?,
     val sourcesRead: Int,
     val newEvents: List<JournalEvent> = emptyList(),
@@ -86,7 +86,7 @@ data class MetadataReconciliation(
  * function of the applied source set, so an unchanged source set means neither the whole-journal
  * refold nor the whole-DB reprojection can produce a different result, and both can be skipped.
  */
-sealed interface OpenReconciliation {
+internal sealed interface OpenReconciliation {
     /**
      * The applied source set is byte-identical to the one the stored, ready projection was built
      * from. Nothing to refold and nothing to reproject; [maxHlc] is the watermark that projection
@@ -106,7 +106,7 @@ sealed interface OpenReconciliation {
 }
 
 /** Persisted source/event accumulator. Synced files remain authoritative; this cache is rebuildable. */
-class MetadataAccumulator(
+internal class MetadataAccumulator(
     private val fs: LibraryFileSystem,
     db: NpnDatabase,
     /** Deletes what an applied snapshot on disk superseded; the coordinator's compaction shares it. */

@@ -78,7 +78,7 @@ private class SyncedSettings {
  * published. [standing] runs once the change stands and is projected, still under the lock, for a
  * caller that reads what it left before anything else can change it.
  */
-class LifecycleChange(
+internal class LifecycleChange(
     val ops: List<PendingOp>,
     val optimisticWrite: suspend () -> Unit,
     val move: suspend () -> Unit = {},
@@ -125,12 +125,12 @@ internal class Compaction(
  * state must therefore go through [foldedState] rather than assume it already exists.
  *
  * This is the ONLY sanctioned journal write path (see AGENTS.md). The invariant is enforced at
- * the type level rather than by convention: [ContentAddressedJournalWriter] and the primary
- * constructor are `internal` to `core` and the held [writer] is private, so no caller outside
- * `core` can obtain the raw writer and skip the mutex, the live [FoldedState] refresh, or the DB
- * projection. Expose new capabilities as named members here rather than widening [writer].
+ * the type level rather than by convention: [ContentAddressedJournalWriter] and this class are
+ * `internal` to `core` and the held [writer] is private, so no caller outside `core` can obtain the
+ * raw writer and skip the mutex, the live [FoldedState] refresh, or the DB projection. Expose new
+ * capabilities as named members here rather than widening [writer].
  */
-class JournalCoordinator internal constructor(
+internal class JournalCoordinator(
     private val writer: ContentAddressedJournalWriter,
     private val indexer: Indexer,
     private val accumulator: MetadataAccumulator,

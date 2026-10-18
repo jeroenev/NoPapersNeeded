@@ -52,7 +52,7 @@ import kotlinx.coroutines.sync.withLock
  * Not safe for concurrent calls: [JournalCoordinator] makes every call under its
  * single-writer lock, and nothing else calls in.
  */
-class Indexer(
+internal class Indexer(
     private val fs: LibraryFileSystem,
     private val db: NpnDatabase,
     private val clock: EpochClock = SystemEpochClock,

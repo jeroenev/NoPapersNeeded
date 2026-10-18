@@ -19,7 +19,7 @@ import kotlinx.coroutines.sync.withLock
  * [rules] reads the rule list wherever it is stored, each rule [AutoMatchRule.normalized]. Each call
  * here reads it once and compiles the enabled rules once, however many documents it then matches.
  */
-class RuleApplier(
+internal class RuleApplier(
     private val rules: suspend () -> List<AutoMatchRule>,
     private val ftsDao: FtsDao,
     private val documentDao: DocumentDao,

@@ -6,7 +6,7 @@ package dev.npn.core.index
  * good's removal of the bytes and the trash purge's deletes. Its calls take no lock of their own, so
  * they are for that step alone.
  */
-interface LockedJournal {
+internal interface LockedJournal {
     /** The document [docId]'s bytes became, its relink chain followed to the end; [docId] when none superseded it. */
     suspend fun successorOf(docId: String): String
 

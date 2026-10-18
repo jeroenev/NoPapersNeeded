@@ -24,7 +24,7 @@ import kotlinx.coroutines.withContext
  * it already imported are taken back ([rollBack]) and the library is left as it was, but for a
  * document a part brought back, which stays.
  */
-class SplitService(
+internal class SplitService(
     private val fs: LibraryFileSystem,
     private val pdfEngine: PdfEngine,
     private val importService: ImportService,

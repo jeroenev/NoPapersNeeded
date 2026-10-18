@@ -33,7 +33,7 @@ import kotlinx.coroutines.withContext
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
-sealed interface ImportResult {
+internal sealed interface ImportResult {
     /**
      * The bytes are [docId]'s file at [relPath] now. [broughtBack]: they were a document the library
      * had but did not show (trashed, deleted or missing), and the import brought that document back,
@@ -53,13 +53,13 @@ sealed interface ImportResult {
 }
 
 /** The file to import has no bytes. */
-class EmptyImportException : IllegalArgumentException("The file is empty")
+internal class EmptyImportException : IllegalArgumentException("The file is empty")
 
 /**
  * The file to import holds bytes a relink superseded (a bake's original), and the document they
  * became is not one the library shows; no import brings superseded bytes back.
  */
-class SupersededImportException :
+internal class SupersededImportException :
     IllegalArgumentException("The file is an earlier version of a document in the library")
 
 /**
@@ -99,7 +99,7 @@ class SupersededImportException :
  * as long as its document is live, so it would be a second copy for good.
  */
 @OptIn(ExperimentalUuidApi::class)
-class ImportService(
+internal class ImportService(
     private val fs: LibraryFileSystem,
     private val db: NpnDatabase,
     private val ocrQueueDao: OcrQueueDao,

@@ -23,7 +23,7 @@ import dev.npn.core.util.runCatchingCancellable
  * snapshot, gathering compaction candidates from applied sources, and deleting superseded files.
  * [JournalCoordinator.compact] and [MetadataAccumulator]'s reconcile share one.
  */
-class SnapshotSupport(
+internal class SnapshotSupport(
     private val fs: LibraryFileSystem,
     private val dao: MetadataProjectionDao,
 ) {

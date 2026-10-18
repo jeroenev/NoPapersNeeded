@@ -12,7 +12,7 @@ import dev.npn.core.fs.holds
 /**
  * Resolves external duplicates: removes an extra copy of a document's bytes beside its own file.
  */
-class DuplicateResolver(
+internal class DuplicateResolver(
     private val fs: LibraryFileSystem,
     private val documentDao: DocumentDao,
     private val duplicateDao: DuplicateDao,
