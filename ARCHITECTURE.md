@@ -124,23 +124,32 @@ Shared Compose Multiplatform UI + viewmodels + dependency wiring.
 recreated window or activity, a restored process on Android, a change of the app's language (which
 rebuilds everything under `LocaleProvider`) and a change of width class (which swaps the layout, and
 with it the composables). A composable's own state, `rememberSaveable` included, survives only the
-first two, and only where it keeps its place in the tree. So whatever the user would miss — a
-selection, text typed into a screen or a dialog, the pane, tab or document a screen shows, an open
-dialog or confirmation and what it is about, a filter being edited, a review under way — is screen
-state, and lives in the screen's viewmodel, never in a composable. Screens' viewmodels live in their
-back-stack entries, whose stores `LibrarySessionUi` holds above `LocaleProvider`, so they outlive
-all of the above but a process death. For that one, a viewmodel takes the `SavedStateHandle` its
-entry hands it (`createSavedStateHandle()` in the `viewModel {}` initializer) and keeps each such
-value in a `SavedUiState` (or saves its own state's worth-keeping part with `saveUiState`): saved as
-`NpnJson.Persisted` JSON on every change, restored when the new viewmodel is built, and dropped when
-too large for Android's saved state. State the screens share or hand each other belongs to the session's `LibrarySessionUi`: the drafts (saved at
-the root, for a restored process) and the hand-offs (not saved). What a composable may keep is what
-nobody misses: hover, focus, an open menu, animation, a gesture under way, scroll positions. What a
-restored process legitimately loses is work in flight (a rescan, a model call, a write), messages
-not yet shown, and what lived only in memory before it (results fetched on demand, the last scan's
-report). Every viewmodel test recreates its viewmodel at least once mid-interaction through
-`Recreatable` (`composeApp` commonTest), which saves and restores the handle as a process death
-does and checks the screen renders the same; its `Transient` lists the exceptions above.
+first two, and only where it keeps its place in the tree. So whatever the user would miss (a
+selection, text typed into a screen, the pane, tab or document it shows, an open dialog or
+confirmation and what it is about, a review under way) is screen state, and lives in the screen's
+viewmodel, never in a composable. Screens' viewmodels live in their back-stack entries, whose stores
+`LibrarySessionUi` holds above `LocaleProvider`, so they outlive all of the above but a process
+death. For that one, a viewmodel takes the `SavedStateHandle` its entry hands it
+(`createSavedStateHandle()` in the `viewModel {}` initializer) and keeps each such value in a
+`SavedUiState` (`ui/common`; or saves the part of its own state worth keeping with `saveUiState`):
+saved as `NpnJson.Persisted` JSON on every change, restored when the new viewmodel is built, and
+dropped when too large for Android's saved state (a selection or a filter over thousands of
+documents comes back empty). A document's viewmodel lives in the document's own store, which no
+entry saves, so the view showing it saves its handle (`rememberDocumentSavedState`). State the
+screens share or hand each other belongs to `LibrarySessionUi`: the drafts (saved at the root, for
+a restored process) and the hand-offs (not saved; a viewmodel that needs one after a restore, as AI
+edit does its documents, saves its own copy). A modal dialog's own edit buffer (the text in a
+`TextInputDialog`) may stay in the dialog's `rememberSaveable` while the viewmodel holds which
+dialog is open, as long as the dialog keeps its place across layouts: a language change cannot
+happen under a modal, and content that changes place with the width class moves as one
+`movableContentOf` (the navigation content, a document's metadata tabs). What a composable may keep
+is what nobody misses: hover, focus, an open menu, animation, a gesture under way, a splitter or
+scroll position. What a restored process legitimately loses is work in flight (a rescan, a model
+call, a write), messages not yet shown, and what lived only in memory (results fetched on demand,
+the last scan's report). Every viewmodel test recreates its viewmodel at least once mid-interaction
+through `Recreatable` (`composeApp` commonTest), which saves the handle as a process death does,
+builds a new viewmodel from it and the same fakes, and checks the screen renders the same; its
+`Transient` lists the exceptions, each with why.
 
 ### `core-testing` — `dev.npn.core.testing`
 
