@@ -322,20 +322,22 @@ class LibrarySessionImpl private constructor(
         ): LibrarySessionImpl {
             val lifetime = SessionLifetime(deps.scope)
             var coordinator: JournalCoordinator? = null
+            var opened = false
             try {
                 // Before anything reads the device id: an index from before device.db holds it.
                 moveDeviceState(deps)
                 val indexer = Indexer(deps.fs, deps.db, deps.clock, deps.log)
                 val journal = createCoordinator(deps, indexer, writeUndelete).also { coordinator = it }
-                return wire(deps, lifetime, indexer, journal)
-            } catch (failure: Throwable) {
-                // Nothing the open started may outlive it: stop whatever runs on the lifetime (a
-                // cancelled open included), then hand the failure on.
-                withContext(NonCancellable) {
-                    lifetime.close()
-                    coordinator?.close()
+                return wire(deps, lifetime, indexer, journal).also { opened = true }
+            } finally {
+                // Nothing a failed open started may outlive it (a cancelled open included): stop
+                // whatever runs on the lifetime, while the failure goes on to the caller.
+                if (!opened) {
+                    withContext(NonCancellable) {
+                        lifetime.close()
+                        coordinator?.close()
+                    }
                 }
-                throw failure
             }
         }
 
