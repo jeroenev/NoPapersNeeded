@@ -50,7 +50,7 @@ class RuleApplier(
             if (compiled.isEmpty()) return@withLock
             val readsText = compiled.any { it.rule.field == RuleField.Content }
             for (doc in documentDao.getAllLive()) {
-                val content = if (readsText) ftsDao.contentForDoc(doc.docId) else null
+                val content = if (readsText) ftsDao.textOf(doc.docId) else null
                 apply(doc, content, compiled, organize = true)
             }
         }
@@ -59,7 +59,7 @@ class RuleApplier(
     private suspend fun enabledRules(): List<CompiledRule> =
         rules()
             .filter { it.enabled && it.pattern.isNotBlank() }
-            .sortedWith(compareBy(AutoMatchRule::position, AutoMatchRule::id))
+            .sortedWith(AutoMatchRule.ORDER)
             .map(RuleMatcher::compile)
 
     private suspend fun apply(

@@ -37,7 +37,12 @@ data class AutoMatchRule(
     /** Field key -> value to set when the rule matches. Later rules override earlier ones. */
     val sets: Map<String, String> = emptyMap(),
     val position: Int = 0,
-)
+) {
+    companion object {
+        /** The order rules are stored, listed and run in: by position, then by id. */
+        internal val ORDER: Comparator<AutoMatchRule> = compareBy(AutoMatchRule::position, AutoMatchRule::id)
+    }
+}
 
 /** Which part of the document a rule matches against. */
 @Serializable(with = RuleFieldSerializer::class)

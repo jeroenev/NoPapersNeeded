@@ -37,7 +37,7 @@ internal class AutoMatchRuleRepositoryImpl(
 ) : AutoMatchRuleRepository {
     override fun observeRules(): Flow<List<AutoMatchRule>> =
         dao.observeAll().map { list ->
-            list.map { it.toRule() }.sortedWith(RULE_ORDER)
+            list.map { it.toRule() }.sortedWith(AutoMatchRule.ORDER)
         }
 
     @OptIn(ExperimentalUuidApi::class)
@@ -71,7 +71,7 @@ internal class AutoMatchRuleRepositoryImpl(
                 checkNotNull(source.decoded(json)) {
                     "The auto-match rules were saved by a newer version of the app"
                 }
-            val next = change(rules).sortedWith(RULE_ORDER)
+            val next = change(rules).sortedWith(AutoMatchRule.ORDER)
             if (next == rules) {
                 emptyList()
             } else {
