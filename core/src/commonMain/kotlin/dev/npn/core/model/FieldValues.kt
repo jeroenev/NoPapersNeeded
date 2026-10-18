@@ -111,12 +111,6 @@ object FieldValues {
         return canonicalize(type, stored).canonicalOrNull ?: stored
     }
 
-    /** True when [canonical] is already in the canonical form for [type]. */
-    internal fun isCanonical(
-        type: FieldType,
-        canonical: String,
-    ): Boolean = canonicalize(type, canonical).canonicalOrNull == canonical
-
     /** The user-facing rendering of a canonical value. Off-type values come back verbatim. */
     fun display(
         type: FieldType,

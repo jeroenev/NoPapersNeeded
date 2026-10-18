@@ -98,8 +98,8 @@ class FieldValuesTest {
         assertEquals("0", ok(FieldType.DECIMAL, "-0.00"))
         assertEquals("-0.25", ok(FieldType.DECIMAL, "-0.250"))
         assertEquals("1.5", ok(FieldType.DECIMAL, "1,50", nl))
-        assertTrue(!FieldValues.isCanonical(FieldType.NUMBER, "007"))
-        assertTrue(!FieldValues.isCanonical(FieldType.DECIMAL, "1.50"))
+        assertTrue(!isCanonical(FieldType.NUMBER, "007"))
+        assertTrue(!isCanonical(FieldType.DECIMAL, "1.50"))
     }
 
     @Test
@@ -132,10 +132,16 @@ class FieldValuesTest {
 
     @Test
     fun isCanonicalRoundTrips() {
-        assertTrue(FieldValues.isCanonical(FieldType.DECIMAL, "12.5"))
-        assertTrue(!FieldValues.isCanonical(FieldType.DECIMAL, "12,5"))
-        assertTrue(!FieldValues.isCanonical(FieldType.TEXT, " x"))
+        assertTrue(isCanonical(FieldType.DECIMAL, "12.5"))
+        assertTrue(!isCanonical(FieldType.DECIMAL, "12,5"))
+        assertTrue(!isCanonical(FieldType.TEXT, " x"))
     }
+
+    /** True when [value] is already in the canonical form for [type]. */
+    private fun isCanonical(
+        type: FieldType,
+        value: String,
+    ) = FieldValues.canonicalize(type, value).canonicalOrNull == value
 }
 
 class FieldKeysTest {
