@@ -20,15 +20,17 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.attribute.FileTime
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 
 /**
- * The follow-up rescan a session schedules for files that were still being written: a deferred file
- * gets indexed without anyone rescanning, and a newer signal replaces a pending follow-up rather
- * than adding a second one.
+ * The rescans a session runs by itself. The follow-up it schedules for files that were still being
+ * written: a deferred file gets indexed without anyone rescanning, and a newer signal replaces a
+ * pending follow-up rather than adding a second one. And the retry of an initial rescan that failed,
+ * at the maintenance tick.
  *
  * The session runs on its own [time], which only the test advances: a follow-up's delay passes when
  * the test says so, never while a rescan waits on the database.
@@ -42,10 +44,15 @@ class SettleRescanTest {
     /** The next read of this path gets other bytes: a file another app is rewriting in place. */
     @Volatile private var rewriting: String? = null
 
+    /** While set, the library cannot be listed, so every rescan fails. */
+    @Volatile private var unreadable = false
+
     private fun over(fs: LibraryFileSystem): LibraryFileSystem =
         object : LibraryFileSystem by fs {
-            override suspend fun listAllIndexable(): List<FileMeta> =
-                fs.listAllIndexable().also { listings.incrementAndGet() }
+            override suspend fun listAllIndexable(): List<FileMeta> {
+                if (unreadable) throw IOException("library unreadable")
+                return fs.listAllIndexable().also { listings.incrementAndGet() }
+            }
 
             override suspend fun readBytes(relPath: String): ByteArray {
                 if (relPath != rewriting) return fs.readBytes(relPath)
@@ -149,7 +156,32 @@ class SettleRescanTest {
             listings.get() shouldBe 3
         }
 
+    /**
+     * An initial rescan that failed keeps the drains waiting, and on desktop nothing else rescans
+     * until the folder changes: the maintenance tick tries again, and its rescan lets them run.
+     */
+    @Test
+    fun theMaintenanceTickRetriesAFailedInitialRescan() =
+        settleTest { rig ->
+            unreadable = true
+            rig.session.start()
+            rig.session.awaitInitialRescan() shouldBe false
+            unreadable = false
+
+            withContext(Dispatchers.Default) {
+                withTimeout(TIMEOUT_MILLIS) {
+                    while (!rig.session.awaitInitialRescan()) {
+                        time.advanceTimeBy(PAST_A_TICK_MILLIS)
+                        delay(POLL_MILLIS)
+                    }
+                }
+            }
+        }
+
     private companion object {
+        /** Past the session's maintenance tick. */
+        const val PAST_A_TICK_MILLIS = 15L * 60L * 1000L + 1_000L
+
         /** Beyond the longest settle wait plus the session's margin past it. */
         const val PAST_A_FOLLOW_UP_MILLIS = WriteSettle.QUIET_MILLIS + 1_000L
         const val POLL_MILLIS = 20L

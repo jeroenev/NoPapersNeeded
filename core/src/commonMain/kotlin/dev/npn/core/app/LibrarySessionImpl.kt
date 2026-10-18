@@ -244,6 +244,11 @@ class LibrarySessionImpl internal constructor(
                 // Compaction runs under the same single-writer mutex; it only fires when the stable
                 // object count exceeds the threshold, so most reconciles are a cheap no-op.
                 log.runLogged("Journal compaction") { coordinator.compact() }
+                // An initial rescan that failed keeps every drain at the gate, and on desktop nothing
+                // else rescans until the library folder changes (Android rescans on every resume).
+                if (!drainsReady.isCompleted) {
+                    log.runLogged("Retrying the initial rescan") { doWatchTriggeredRescan() }
+                }
                 // OCR retries, enrichment rows and edit runs become due by the passage of time,
                 // which no Room flow can observe; this tick is what actually retries a backed-off
                 // one.
