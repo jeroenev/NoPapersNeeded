@@ -33,7 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -59,6 +59,8 @@ import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.index.RelinkCandidate
+import dev.npn.core.util.NpnJson
+import kotlinx.serialization.Serializable
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_delete
 import no_papers_needed.composeapp.generated.resources.common_empty_trash
@@ -91,15 +93,30 @@ import org.jetbrains.compose.resources.stringResource
 
 private enum class TrashTab { TRASH, DUPLICATES, MISSING }
 
-/** The confirmation open on the trash screen, if any: each of these writes cannot be undone. */
+/**
+ * The confirmation open on the trash screen, if any: each of these writes cannot be undone. Saved as
+ * JSON, so it is open again after the screen is recreated.
+ */
+@Serializable
 private sealed interface TrashConfirm {
+    @Serializable
     data class DeleteForever(
         val docId: String,
     ) : TrashConfirm
 
+    @Serializable
     data object RestoreAll : TrashConfirm
 
+    @Serializable
     data object EmptyTrash : TrashConfirm
+
+    companion object {
+        val Saver: Saver<TrashConfirm?, String> =
+            Saver(
+                save = { confirm -> confirm?.let { NpnJson.Persisted.encodeToString(serializer(), it) } },
+                restore = { NpnJson.Persisted.decodeFromString(serializer(), it) },
+            )
+    }
 }
 
 /** Whether this confirmation is for a document no longer among [trashed]. */
@@ -128,7 +145,7 @@ fun TrashScreen(
     val state = loaded ?: TrashUiState()
 
     var tab by rememberSaveable(stateSaver = enumNameSaver()) { mutableStateOf(TrashTab.TRASH) }
-    var confirm by remember { mutableStateOf<TrashConfirm?>(null) }
+    var confirm by rememberSaveable(stateSaver = TrashConfirm.Saver) { mutableStateOf(null) }
 
     val snackbar = rememberSnackbarMessages(vm.messages)
 

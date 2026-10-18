@@ -12,7 +12,7 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import dev.npn.app.platform.sharePdfBytes
 import dev.npn.app.platform.supportsSharing
@@ -100,7 +100,7 @@ fun DocActions(
     actions: DocumentActions,
     compact: Boolean,
 ) {
-    var dialog by remember { mutableStateOf<DocActionDialog?>(null) }
+    var dialog by rememberSaveable { mutableStateOf<DocActionDialog?>(null) }
 
     ShareOrExportButton(
         exportName = exportName(item),

@@ -2,7 +2,9 @@
 
 package dev.npn.app.ui
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.LocalSaveableStateRegistry
 import androidx.compose.runtime.saveable.SaveableStateRegistry
 import androidx.compose.ui.ImageComposeScene
@@ -12,9 +14,12 @@ import androidx.compose.ui.semantics.getOrNull
 import dev.npn.app.EnglishLocaleTest
 import dev.npn.app.FakeLibrarySession
 import dev.npn.app.ui.rules.AutoMatchRulesScreen
+import dev.npn.app.ui.settings.FieldsSettingsPane
 import dev.npn.app.ui.tags.TagManagementScreen
 import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.core.app.TagInfo
+import dev.npn.core.model.FieldDef
+import dev.npn.core.model.FieldType
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 
@@ -72,6 +77,53 @@ class ScreenRestorationTest : EnglishLocaleTest() {
                 },
             )
         }
+
+    @Test
+    fun anOpenFieldDeletionComesBack() =
+        onUiThread {
+            restored(
+                content = { FieldsPane(listOf(field("invoiceNo", "Invoice number"))) },
+                before = { scene ->
+                    scene.tap { it.contentDescription() == "Delete" }
+                    scene.has { it.text() == "Delete field" } shouldBe true
+                },
+                after = { scene -> scene.has { it.text() == "Delete field" } shouldBe true },
+            )
+        }
+
+    @Test
+    fun aFieldDialogClosesWhenItsFieldIsGone() =
+        onUiThread {
+            val fields = mutableStateOf(listOf(field("invoiceNo", "Invoice number")))
+            scene(SaveableStateRegistry(restoredValues = null) { true }) { FieldsPane(fields.value) }.closing {
+                render()
+                tap { it.text() == "Invoice number" }
+                has { it.text() == "Edit field" } shouldBe true
+
+                fields.value = listOf(field("orderNo", "Order number"))
+                render()
+                render()
+                has { it.text() == "Edit field" } shouldBe false
+            }
+        }
+
+    private fun field(
+        key: String,
+        label: String,
+    ) = FieldDef(key, label, FieldType.TEXT, showByDefault = false, aiEnabled = false, position = 0)
+
+    @Composable
+    private fun FieldsPane(fields: List<FieldDef>) {
+        Column {
+            FieldsSettingsPane(
+                fields = fields,
+                usage = emptyMap(),
+                onSave = {},
+                onRemove = { _, _ -> },
+                onMove = { _, _ -> },
+            )
+        }
+    }
 
     private fun tagSession() =
         FakeLibrarySession().apply {

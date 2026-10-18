@@ -96,7 +96,7 @@ fun SettingsScreen(
     val snackbar = rememberSnackbarMessages(vm.messages)
 
     val drafts = LocalDocumentDrafts.current
-    var draftToResume by remember { mutableStateOf<String?>(null) }
+    var draftToResume by rememberSaveable { mutableStateOf<String?>(null) }
     val pickLibrary =
         rememberLibraryFolderPicker(
             useSaf = paneState.settings.snapshot.useSafStorage,

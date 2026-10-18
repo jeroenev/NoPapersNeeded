@@ -22,10 +22,13 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,6 +43,8 @@ import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.fieldTypeLabel
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.util.NpnJson
+import kotlinx.serialization.Serializable
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.common_delete
@@ -64,6 +69,35 @@ import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
 /**
+ * The one dialog the field manager has open, or none. Edit and Delete name their field by key and
+ * are resolved against the current registry, so a field edited on another device meanwhile shows
+ * as it is now. Saved as JSON, so it is open again after the screen is recreated.
+ */
+@Serializable
+private sealed interface FieldDialog {
+    @Serializable
+    data object Add : FieldDialog
+
+    @Serializable
+    data class Edit(
+        val key: String,
+    ) : FieldDialog
+
+    @Serializable
+    data class Delete(
+        val key: String,
+    ) : FieldDialog
+
+    companion object {
+        val Saver: Saver<FieldDialog?, String> =
+            Saver(
+                save = { dialog -> dialog?.let { NpnJson.Persisted.encodeToString(serializer(), it) } },
+                restore = { NpnJson.Persisted.decodeFromString(serializer(), it) },
+            )
+    }
+}
+
+/**
  * The library's field manager: every registered field in display order with its label, key, type
  * and usage count. Tapping a row edits it; the arrows reorder; the bin deletes after a warning
  * that names the usage count and offers to clear the values too. New fields are added at the end.
@@ -76,9 +110,7 @@ internal fun FieldsSettingsPane(
     onRemove: (key: String, clearValues: Boolean) -> Unit,
     onMove: (key: String, delta: Int) -> Unit,
 ) {
-    var editing by remember { mutableStateOf<FieldDef?>(null) }
-    var adding by remember { mutableStateOf(false) }
-    var deleting by remember { mutableStateOf<FieldDef?>(null) }
+    var dialog by rememberSaveable(stateSaver = FieldDialog.Saver) { mutableStateOf(null) }
 
     HelpText(stringResource(Res.string.common_settings_document_fields_help))
     fields.forEachIndexed { index, def ->
@@ -88,52 +120,71 @@ internal fun FieldsSettingsPane(
                 count = usage[def.key] ?: 0,
                 canMoveUp = index > 0,
                 canMoveDown = index < fields.lastIndex,
-                onEdit = { editing = def },
+                onEdit = { dialog = FieldDialog.Edit(def.key) },
                 onMove = { onMove(def.key, it) },
-                onDelete = { deleting = def },
+                onDelete = { dialog = FieldDialog.Delete(def.key) },
             )
         }
     }
-    OutlinedButton(onClick = { adding = true }) {
+    OutlinedButton(onClick = { dialog = FieldDialog.Add }) {
         Icon(Icons.Filled.Add, contentDescription = null)
         Text(stringResource(Res.string.detail_add_field), modifier = Modifier.padding(start = 8.dp))
     }
     HelpText(stringResource(Res.string.common_settings_syncs_across_devices))
 
-    if (adding) {
-        FieldDefDialog(
-            existing = fields,
-            def = null,
-            usage = 0,
-            onConfirm = {
-                onSave(it)
-                adding = false
-            },
-            onDismiss = { adding = false },
-        )
+    val open = dialog ?: return
+    val close = { dialog = null }
+    val key =
+        when (open) {
+            FieldDialog.Add -> null
+            is FieldDialog.Edit -> open.key
+            is FieldDialog.Delete -> open.key
+        }
+    val def = key?.let { wanted -> fields.firstOrNull { it.key == wanted } }
+    if (key != null && def == null) {
+        // The field went away (removed on another device) while its dialog was open. An empty
+        // registry is one still loading, as after the screen was recreated: never a library's.
+        if (fields.isNotEmpty()) LaunchedEffect(key) { close() }
+        return
     }
-    editing?.let { def ->
-        FieldDefDialog(
-            existing = fields,
-            def = def,
-            usage = usage[def.key] ?: 0,
-            onConfirm = {
-                onSave(it)
-                editing = null
-            },
-            onDismiss = { editing = null },
-        )
-    }
-    deleting?.let { def ->
-        DeleteFieldDialog(
-            def = def,
-            usage = usage[def.key] ?: 0,
-            onConfirm = { clear ->
-                onRemove(def.key, clear)
-                deleting = null
-            },
-            onDismiss = { deleting = null },
-        )
+    when (open) {
+        FieldDialog.Add -> {
+            FieldDefDialog(
+                existing = fields,
+                def = null,
+                usage = 0,
+                onConfirm = {
+                    onSave(it)
+                    close()
+                },
+                onDismiss = close,
+            )
+        }
+
+        is FieldDialog.Edit -> {
+            FieldDefDialog(
+                existing = fields,
+                def = def,
+                usage = usage[open.key] ?: 0,
+                onConfirm = {
+                    onSave(it)
+                    close()
+                },
+                onDismiss = close,
+            )
+        }
+
+        is FieldDialog.Delete -> {
+            DeleteFieldDialog(
+                def = checkNotNull(def),
+                usage = usage[open.key] ?: 0,
+                onConfirm = { clear ->
+                    onRemove(open.key, clear)
+                    close()
+                },
+                onDismiss = close,
+            )
+        }
     }
 }
 
