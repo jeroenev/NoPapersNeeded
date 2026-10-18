@@ -1,40 +1,37 @@
 package dev.npn.core.pdf
 
 import dev.npn.core.db.DocumentDao
-import dev.npn.core.db.ThumbnailDao
-import dev.npn.core.db.ThumbnailEntity
 import dev.npn.core.fs.LibraryFileSystem
-import dev.npn.core.util.EpochClock
-import dev.npn.core.util.SystemEpochClock
 import dev.npn.core.util.runCatchingCancellable
 
 /**
  * Writes/reads first-page thumbnail PNGs into an app-local cache directory (never inside the
  * synced library folder). `DirThumbnailStore` implements it on both JVM targets; the session's
- * wiring (`jvmSessionDeps`, `androidSessionDeps`) picks the directory.
+ * wiring (`jvmSessionDeps`, `androidSessionDeps`) picks the directory. The files are the whole
+ * cache: the system may clear the directory at any time (Android's cache directory), so whether a
+ * thumbnail exists is asked of it, never remembered elsewhere.
  */
 interface ThumbnailStore {
+    /** The absolute path of [docId]'s thumbnail, or null when the directory holds none. */
+    suspend fun existing(docId: String): String?
+
     /** Persist [png] for [docId]; returns the absolute cache path. */
     suspend fun write(
         docId: String,
         png: ByteArray,
     ): String
 
-    suspend fun delete(docId: String)
+    /** Delete every thumbnail; returns how many were deleted. */
+    suspend fun clear(): Int
 }
 
-/**
- * Cached-or-generate first-page thumbnails. Thumbnails are disposable; the [ThumbnailEntity] row
- * records the cache path and generation time.
- */
+/** Cached-or-generate first-page thumbnails. Thumbnails are disposable; [ThumbnailStore] holds them. */
 class ThumbnailService(
     private val engine: PdfEngine,
     private val fs: LibraryFileSystem,
     private val store: ThumbnailStore,
-    private val thumbnailDao: ThumbnailDao,
     private val documentDao: DocumentDao,
     private val renderGate: RenderGate,
-    private val clock: EpochClock = SystemEpochClock,
 ) {
     /**
      * Return the cache path of [docId]'s thumbnail, generating it from the first page if
@@ -45,7 +42,7 @@ class ThumbnailService(
         docId: String,
         relPath: String,
     ): String? {
-        thumbnailDao.get(docId)?.let { return it.cachePath }
+        store.existing(docId)?.let { return it }
 
         val bytes = runCatchingCancellable { fs.readBytes(relPath) }.getOrElse { return null }
 
@@ -62,13 +59,6 @@ class ThumbnailService(
             }.getOrNull() ?: return null
 
         val cachePath = store.write(docId, png)
-        thumbnailDao.upsert(
-            ThumbnailEntity(
-                docId = docId,
-                cachePath = cachePath,
-                generatedAt = clock.nowMillis(),
-            ),
-        )
 
         // The document is open anyway, so record its page count if the row has none yet.
         documentDao.fillPageCount(docId, pageCount)
@@ -77,17 +67,11 @@ class ThumbnailService(
     }
 
     /**
-     * Delete every cached thumbnail (files + DB rows) so they regenerate on next display. Used to
-     * pick up render-quality changes for thumbnails cached under an older, lower-resolution render.
-     * Returns the number of cache entries cleared.
+     * Delete every cached thumbnail so they regenerate on next display. Used to pick up
+     * render-quality changes for thumbnails cached under an older, lower-resolution render.
+     * Returns the number of thumbnails cleared.
      */
-    suspend fun clearCache(): Int {
-        val all = thumbnailDao.getAll()
-        // Best effort: a file left behind is never served again once its row is gone.
-        all.forEach { runCatchingCancellable { store.delete(it.docId) } }
-        thumbnailDao.deleteAll()
-        return all.size
-    }
+    suspend fun clearCache(): Int = store.clear()
 
     private companion object {
         /** The longer side of a thumbnail, in pixels. */

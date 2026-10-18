@@ -5,6 +5,7 @@ import dev.npn.core.index.requireByDocId
 import dev.npn.core.index.requireDoc
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.ocr.FakeOcrEngine
+import dev.npn.core.pdf.DirThumbnailStore
 import dev.npn.core.pdf.PdfBoxEngine
 import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.settings.SessionSettings
@@ -78,7 +79,7 @@ class HlcSeedingTest {
                     pdfEngine = PdfBoxEngine(),
                     ocrEngine = FakeOcrEngine.unavailable(),
                     xmpIO = PdfBoxXmpIO(),
-                    thumbnailStore = FakeThumbStore(File(rig.dbDir, "thumbs-reopen")),
+                    thumbnailStore = DirThumbnailStore(File(rig.dbDir, "thumbs-reopen").path),
                     renderParallelism = 1,
                     scope = backgroundScope,
                     settings = SessionSettings(ocrLanguage = { "eng" }),

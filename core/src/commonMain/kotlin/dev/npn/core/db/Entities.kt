@@ -205,13 +205,6 @@ data class FtsKeyEntity(
     val docId: String,
 )
 
-@Entity(tableName = "thumbnails")
-data class ThumbnailEntity(
-    @PrimaryKey val docId: String,
-    val cachePath: String,
-    val generatedAt: Long,
-)
-
 /**
  * Extra paths holding the same content hash. The document row retains the one canonical path;
  * externally created copies remain here until cleanup.

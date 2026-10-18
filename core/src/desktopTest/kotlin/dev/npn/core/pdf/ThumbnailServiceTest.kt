@@ -41,7 +41,7 @@ class ThumbnailServiceTest {
             )
             val store = RecordingThumbnailStore()
             val service =
-                ThumbnailService(PdfBoxEngine(), fs, store, db.thumbnailDao(), db.documentDao(), RenderGate(1))
+                ThumbnailService(PdfBoxEngine(), fs, store, db.documentDao(), RenderGate(1))
 
             val path = service.ensureThumbnail(docId, "doc.pdf")
             path shouldNotBe null
@@ -50,11 +50,7 @@ class ThumbnailServiceTest {
 
             // pageCount backfilled from the open handle.
             db.documentDao().requireByDocId(docId).pageCount shouldBe 2
-            db
-                .thumbnailDao()
-                .get(docId)
-                .shouldNotBeNull()
-                .cachePath shouldBe path
+            store.existing(docId) shouldBe path
         }
 
     /**
@@ -97,7 +93,6 @@ class ThumbnailServiceTest {
                     PdfBoxEngine(),
                     fs,
                     RecordingThumbnailStore(),
-                    db.thumbnailDao(),
                     racingDao,
                     RenderGate(1),
                 )
@@ -135,7 +130,7 @@ class ThumbnailServiceTest {
             )
             val store = RecordingThumbnailStore()
             val service =
-                ThumbnailService(PdfBoxEngine(), fs, store, db.thumbnailDao(), db.documentDao(), RenderGate(1))
+                ThumbnailService(PdfBoxEngine(), fs, store, db.documentDao(), RenderGate(1))
 
             val first = service.ensureThumbnail(docId, "doc.pdf")
             val second = service.ensureThumbnail(docId, "doc.pdf")
@@ -143,12 +138,34 @@ class ThumbnailServiceTest {
             store.writes[docId] shouldBe 1 // only generated once
         }
 
+    /** Android's cache directory may be cleared by the system behind the app's back. */
+    @Test
+    fun aThumbnailWhoseFileVanishedIsDrawnAgain() =
+        runTest {
+            val bytes = PdfFixtures.embeddedTextPdf("cleared")
+            fs.writeBytesOnce("doc.pdf", bytes)
+            val docId = fs.sha256("doc.pdf")
+            db.documentDao().upsert(
+                documentEntity(docId, "doc.pdf", size = bytes.size.toLong(), mtime = 1, addedAt = 1),
+            )
+            val dir = Files.createTempDirectory("npn-thumbs")
+            val service =
+                ThumbnailService(PdfBoxEngine(), fs, DirThumbnailStore(dir.toString()), db.documentDao(), RenderGate(1))
+
+            val path = service.ensureThumbnail(docId, "doc.pdf").shouldNotBeNull()
+            dir.toFile().deleteRecursively()
+
+            service.ensureThumbnail(docId, "doc.pdf") shouldBe path
+            isPng(Files.readAllBytes(Path.of(path))).shouldBeTrue()
+            dir.toFile().deleteRecursively()
+        }
+
     @Test
     fun returnsNullWhenFileMissing() =
         runTest {
             val store = RecordingThumbnailStore()
             val service =
-                ThumbnailService(PdfBoxEngine(), fs, store, db.thumbnailDao(), db.documentDao(), RenderGate(1))
+                ThumbnailService(PdfBoxEngine(), fs, store, db.documentDao(), RenderGate(1))
             service.ensureThumbnail("a".repeat(64), "nope.pdf") shouldBe null
         }
 
@@ -163,13 +180,13 @@ class ThumbnailServiceTest {
             )
             val store = RecordingThumbnailStore()
             val service =
-                ThumbnailService(PdfBoxEngine(), fs, store, db.thumbnailDao(), db.documentDao(), RenderGate(1))
+                ThumbnailService(PdfBoxEngine(), fs, store, db.documentDao(), RenderGate(1))
 
             service.ensureThumbnail(docId, "doc.pdf")
-            db.thumbnailDao().get(docId) shouldNotBe null
+            store.existing(docId) shouldNotBe null
 
             service.clearCache() shouldBe 1
-            db.thumbnailDao().get(docId) shouldBe null
+            store.existing(docId) shouldBe null
             store.writes.containsKey(docId).shouldBeFalse() // file deleted via store
 
             // Next ensure regenerates (writes again).
@@ -182,16 +199,18 @@ private class RecordingThumbnailStore : ThumbnailStore {
     val writes = mutableMapOf<String, Int>()
     var lastPng: ByteArray? = null
 
+    override suspend fun existing(docId: String): String? = pathOf(docId).takeIf { docId in writes }
+
     override suspend fun write(
         docId: String,
         png: ByteArray,
     ): String {
         writes[docId] = (writes[docId] ?: 0) + 1
         lastPng = png
-        return "/cache/$docId.png"
+        return pathOf(docId)
     }
 
-    override suspend fun delete(docId: String) {
-        writes.remove(docId)
-    }
+    override suspend fun clear(): Int = writes.size.also { writes.clear() }
+
+    private fun pathOf(docId: String) = "/cache/$docId.png"
 }

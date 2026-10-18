@@ -50,7 +50,8 @@ import kotlinx.coroutines.Dispatchers
     // v24: device-local state leaves for DeviceDatabase: ocr_queue, ocr_page_cache, ai_enrich_queue,
     //      ai_edit_jobs, ai_edit_job_docs and documents.aiEnrichedAt.
     // v25: adds field_defs.perDocument.
-    version = 25,
+    // v26: drops thumbnails; the thumbnail store answers from its files alone.
+    version = 26,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 3, to = 4),
@@ -73,6 +74,7 @@ import kotlinx.coroutines.Dispatchers
         AutoMigration(from = 20, to = 21),
         AutoMigration(from = 21, to = 22, spec = NpnDatabase.FtsKeys::class),
         AutoMigration(from = 24, to = 25),
+        AutoMigration(from = 25, to = 26, spec = NpnDatabase.DropThumbnails::class),
     ],
     entities = [
         DocumentEntity::class,
@@ -82,7 +84,6 @@ import kotlinx.coroutines.Dispatchers
         FieldDefEntity::class,
         FtsDocumentEntity::class,
         FtsKeyEntity::class,
-        ThumbnailEntity::class,
         DuplicateEntity::class,
         KeyValueEntity::class,
         MetadataSourceEntity::class,
@@ -107,8 +108,6 @@ abstract class NpnDatabase : RoomDatabase() {
 
     abstract fun fieldDefDao(): FieldDefDao
 
-    abstract fun thumbnailDao(): ThumbnailDao
-
     abstract fun duplicateDao(): DuplicateDao
 
     abstract fun keyValueDao(): KeyValueDao
@@ -125,6 +124,14 @@ abstract class NpnDatabase : RoomDatabase() {
      */
     @DeleteTable(tableName = "folded_segments")
     class DropFoldedSegments : AutoMigrationSpec
+
+    /**
+     * v25 -> v26: drop `thumbnails`. Its rows only repeated each thumbnail's file path, and trusted
+     * a file the system may have cleared since (Android's cache directory); the store now asks the
+     * directory itself.
+     */
+    @DeleteTable(tableName = "thumbnails")
+    class DropThumbnails : AutoMigrationSpec
 
     /**
      * v14 -> v15: the per-property FTS columns give way to one `fields` column. The index is

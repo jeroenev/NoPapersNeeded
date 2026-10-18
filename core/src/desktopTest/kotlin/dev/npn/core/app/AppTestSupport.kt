@@ -18,8 +18,8 @@ import dev.npn.core.journal.journalObjects
 import dev.npn.core.ocr.FakeOcrEngine
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.pathrules.StoragePathRule
+import dev.npn.core.pdf.DirThumbnailStore
 import dev.npn.core.pdf.PdfEngine
-import dev.npn.core.pdf.ThumbnailStore
 import dev.npn.core.settings.AppDirs
 import dev.npn.core.settings.LegacyLibrarySettings
 import dev.npn.core.settings.SessionSettings
@@ -34,24 +34,6 @@ import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.assertFailsWith
-
-class FakeThumbStore(
-    private val dir: File,
-) : ThumbnailStore {
-    override suspend fun write(
-        docId: String,
-        png: ByteArray,
-    ): String {
-        dir.mkdirs()
-        val f = File(dir, "$docId.png")
-        f.writeBytes(png)
-        return f.absolutePath
-    }
-
-    override suspend fun delete(docId: String) {
-        File(dir, "$docId.png").delete()
-    }
-}
 
 /**
  * A library filesystem, for [AppSessionRig.create]'s `files`, that runs [next] once, right before the
@@ -170,7 +152,7 @@ class AppSessionRig private constructor(
                     clock = clock,
                     installationId = "test-installation",
                     ocrEngine = ocr,
-                    thumbnailStore = FakeThumbStore(File(dbDir, "thumbs")),
+                    thumbnailStore = DirThumbnailStore(File(dbDir, "thumbs").path),
                     log = log,
                 )
             val session =
@@ -224,7 +206,7 @@ class AppSessionRig private constructor(
                 clock = clock,
                 installationId = "second-installation",
                 ocrEngine = ocr,
-                thumbnailStore = FakeThumbStore(File(dbDir, "thumbs2")),
+                thumbnailStore = DirThumbnailStore(File(dbDir, "thumbs2").path),
             )
         // Force a distinct deviceId by seeding the kv before openSession.
         deps.deviceDb.keyValueDao().put(DeviceIdentity.KEY_DEVICE_ID, "device-two")
@@ -346,7 +328,7 @@ suspend fun openSession(
             clock = MutableClock(autoTick = true),
             installationId = installationId,
             ocrEngine = FakeOcrEngine.unavailable(),
-            thumbnailStore = FakeThumbStore(File(data, "thumbs")),
+            thumbnailStore = DirThumbnailStore(File(data, "thumbs").path),
         )
     val deps = base.over(files(base.fs), base.pdfEngine)
     return OpenSession(LibrarySessionImpl.open(deps), deps)
