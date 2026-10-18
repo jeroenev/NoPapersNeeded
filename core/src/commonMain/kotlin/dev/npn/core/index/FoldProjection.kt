@@ -78,7 +78,12 @@ internal sealed interface FoldScope {
                             documents.addAll(state.docsWithMetadata())
                         }
 
-                        else -> {}
+                        // Their own document is all they touch, or they touch none (a setting, or an
+                        // op from a newer build, which folds to nothing).
+                        is JournalOp.TagAdd, is JournalOp.TagRemove, is JournalOp.PropSet, is JournalOp.FieldSet,
+                        is JournalOp.DocTrash, JournalOp.DocRestore, JournalOp.DocDelete, JournalOp.DocUndelete,
+                        is JournalOp.SettingSet, is JournalOp.Unknown,
+                        -> {}
                     }
                 }
                 for (doc in documents.toList()) {
