@@ -260,6 +260,7 @@ internal fun buildEnrichment(
     coordinator: JournalCoordinator,
     library: Library,
     ai: AiFacadeImpl,
+    policy: UnattendedAiPolicy,
     rescanned: Deferred<Unit>,
 ): DrainedQueue<AiAutoEnricher> =
     drainedQueue(lifetime.scope, "AI enrichment queue", deps.log, build = { onEnqueued ->
@@ -270,7 +271,7 @@ internal fun buildEnrichment(
             ai = ai,
             meta = library.writer,
             fieldRegistry = library.fieldRegistry,
-            policy = UnattendedAiPolicy(deps.settings.aiConfig),
+            policy = policy,
             clock = deps.clock,
             health = ai.endpointHealth,
             canWrite = coordinator::canWrite,
@@ -323,6 +324,7 @@ internal fun buildOcr(
     deviceId: String,
     library: Library,
     ai: AiFacadeImpl,
+    policy: UnattendedAiPolicy,
     rescanned: Deferred<Unit>,
     onOcrProduced: suspend (docId: String) -> Unit,
 ): OcrFacadeImpl {
@@ -331,7 +333,7 @@ internal fun buildOcr(
         OcrEngineSelector(
             local = deps.ocrEngine,
             ai = ai.ocrEngine,
-            aiAuto = UnattendedAiPolicy(deps.settings.aiConfig)::autoOcr,
+            aiAuto = policy::autoOcr,
         )
     val pipeline =
         OcrPipeline(

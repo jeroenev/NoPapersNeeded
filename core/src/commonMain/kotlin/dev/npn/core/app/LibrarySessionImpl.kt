@@ -3,6 +3,7 @@ package dev.npn.core.app
 import dev.npn.core.ai.AiChat
 import dev.npn.core.ai.AiFacadeImpl
 import dev.npn.core.ai.AiSuggest
+import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.app.aiedit.AiEditQueueFacade
 import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.NpnDatabase
@@ -356,7 +357,9 @@ class LibrarySessionImpl private constructor(
             // but until the first rescan an index may not know the library's documents (a rebuilt one
             // has no rows at all), so no drain starts before then.
             val rescanned = CompletableDeferred<Unit>()
-            val enrichment = buildEnrichment(deps, lifetime, coordinator, library, ai, rescanned)
+            // What this device may spend on the endpoint unattended, for enrichment and OCR alike.
+            val policy = UnattendedAiPolicy(deps.settings.aiConfig)
+            val enrichment = buildEnrichment(deps, lifetime, coordinator, library, ai, policy, rescanned)
             val edits = buildEditQueue(deps, lifetime, library, ai, rescanned)
             val ocr =
                 buildOcr(
@@ -365,6 +368,7 @@ class LibrarySessionImpl private constructor(
                     deviceId,
                     library,
                     ai,
+                    policy,
                     rescanned,
                     // Only the *intent* is recorded here: this runs on the OCR queue-drain thread,
                     // where a network call would stall OCR of every remaining document.
