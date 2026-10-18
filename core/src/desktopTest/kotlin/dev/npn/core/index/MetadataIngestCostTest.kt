@@ -6,6 +6,7 @@ import dev.npn.core.db.isFullTableScan
 import dev.npn.core.db.queryPlan
 import dev.npn.core.journal.PendingOp
 import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.shouldBe
@@ -69,6 +70,38 @@ class MetadataIngestCostTest {
         }
 
     @Test
+    fun aCompactionLeavesLaterIngestsIncremental() =
+        runTest {
+            rig.writePdf("a.pdf", "alpha")
+            rig.rescan()
+            val docId = checkNotNull(rig.db.documentDao().rowAtPath("a.pdf")).docId
+            val coordinator =
+                rig.coordinator(rig.writer("dev-main"), compaction = rig.compaction(threshold = 3))
+            coordinator.refreshState()
+            repeat(HISTORY) {
+                rig.clock.advance()
+                coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "tag-$it")))
+            }
+            checkNotNull(coordinator.compact(nowMillis = FAR_FUTURE))
+            coordinator.reconcileMetadata()
+
+            // The objects the compaction deleted are carried by its snapshot: no source was lost.
+            log.clear()
+            rig.clock.advance()
+            rig.writer("device-two").commit(listOf(PendingOp.tagAdd(docId, "remote")))
+            coordinator.reconcileMetadata()
+
+            rig.db
+                .tagDao()
+                .tagsForDocument(docId) shouldContain "remote"
+            log.statements
+                .filter { "metadata_events" in it }
+                .distinct()
+                .filter { sql -> rig.db.queryPlan(sql).any { isFullTableScan(it, "metadata_events") } }
+                .shouldBeEmpty()
+        }
+
+    @Test
     fun aSourceReadAgainDropsOnlyTheEventsItNoLongerHolds() =
         runTest {
             rig.writePdf("a.pdf", "alpha")
@@ -91,6 +124,9 @@ class MetadataIngestCostTest {
 
     private companion object {
         const val HISTORY = 30
+
+        /** Late enough that every object the test wrote is past the compaction's stability window. */
+        const val FAR_FUTURE = 4_000_000_000_000L
         const val EVENT_BY_IDENTITY = "SELECT * FROM metadata_events WHERE deviceId = ? AND sequence = ?"
     }
 }

@@ -257,9 +257,13 @@ class MetadataAccumulator(
         // forgets the snapshot as a rebuild would, and a later compaction replaces them again.
         carried.undone.forEach { dao.forgetSource(it) }
 
-        // A source present before but gone now (even with a validated replacement above) means the
-        // event graph may have shrunk relative to a caller's in-memory state.
-        return ReconcilePass(projectionCleared, ingest, previous.any { it.path !in files })
+        // A source gone with its events still on disk elsewhere (the objects a compaction deleted,
+        // which its snapshot carries) shrinks nothing: its rows and events stay, and a caller's
+        // in-memory state still is their fold. Any other loss, or a forgotten snapshot, may have.
+        val sourceRemoved =
+            carried.undone.isNotEmpty() ||
+                previous.any { it.path !in files && it.contentHash !in carried.hashes }
+        return ReconcilePass(projectionCleared, ingest, sourceRemoved)
     }
 
     suspend fun reconcile(currentState: FoldedState? = null): MetadataReconciliation {
