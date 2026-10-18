@@ -70,6 +70,7 @@
     <string name="detail_engine_source">%1$s · %2$s</string>
     <string name="detail_remove_field">Remove field %1$s</string>
     <string name="detail_new_field">New field</string>
+    <string name="detail_new_field_menu">New field…</string>
     <string name="detail_add_field">Add field</string>
     <string name="detail_orphan_fields">Not in the field list</string>
     <string name="detail_add_to_fields">Add to fields</string>

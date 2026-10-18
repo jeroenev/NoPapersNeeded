@@ -68,6 +68,7 @@
     <string name="detail_engine_source">%1$s · %2$s</string>
     <string name="detail_remove_field">Feld %1$s entfernen</string>
     <string name="detail_new_field">Neues Feld</string>
+    <string name="detail_new_field_menu">Neues Feld…</string>
     <string name="detail_add_field">Feld hinzufügen</string>
     <string name="detail_orphan_fields">Nicht in der Feldliste</string>
     <string name="detail_add_to_fields">Zu den Feldern hinzufügen</string>

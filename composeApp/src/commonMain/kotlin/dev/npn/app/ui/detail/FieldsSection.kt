@@ -54,6 +54,7 @@ import no_papers_needed.composeapp.generated.resources.common_save
 import no_papers_needed.composeapp.generated.resources.detail_add_field
 import no_papers_needed.composeapp.generated.resources.detail_add_to_fields
 import no_papers_needed.composeapp.generated.resources.detail_new_field
+import no_papers_needed.composeapp.generated.resources.detail_new_field_menu
 import no_papers_needed.composeapp.generated.resources.detail_orphan_fields
 import no_papers_needed.composeapp.generated.resources.detail_remove_field
 import no_papers_needed.composeapp.generated.resources.detail_title_hint
@@ -129,7 +130,7 @@ internal fun FieldsSection(
             label = stringResource(Res.string.detail_add_field),
             fields = defs.filter { it !in shown },
             onPick = { revealed = revealed + it.key },
-            newLabel = stringResource(Res.string.detail_new_field) + "…",
+            newLabel = stringResource(Res.string.detail_new_field_menu),
             onNew = { newField = NewFieldSeed() },
         )
     }
