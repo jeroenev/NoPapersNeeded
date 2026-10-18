@@ -1,6 +1,8 @@
 package dev.npn.app
 
 import dev.npn.app.ui.common.uiText
+import dev.npn.app.ui.trash.TrashConfirm
+import dev.npn.app.ui.trash.TrashTab
 import dev.npn.app.ui.trash.TrashUiState
 import dev.npn.app.ui.trash.TrashViewModel
 import dev.npn.core.index.DuplicateReport
@@ -11,6 +13,7 @@ import dev.npn.core.testing.listItem
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -23,6 +26,22 @@ import kotlin.test.Test
 
 class TrashViewModelTest : MainDispatcherTest() {
     private fun vm(session: FakeLibrarySession = FakeLibrarySession()) = TrashViewModel(session)
+
+    /** A restored process shows the tab the user was on, and the deletion they were confirming. */
+    @Test
+    fun aRestoredProcessKeepsTheTabAndTheOpenConfirmation() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply {
+                    documents.trashed.value = listOf(listItem(doc("doc-1", trashed = true)))
+                }
+            val screen = recreatable { TrashViewModel(session, it) }
+            screen.vm.selectTab(TrashTab.MISSING)
+            screen.vm.confirm(TrashConfirm.DeleteForever("doc-1"))
+
+            val restored = screen.recreate(this, { combine(it.state, it.tab, it.confirm, ::Triple) })
+            restored.confirm.value shouldBe TrashConfirm.DeleteForever("doc-1")
+        }
 
     /** Not loaded is not empty: the screen shows its empty states only once the trash has loaded. */
     @Test
