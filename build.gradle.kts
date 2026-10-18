@@ -25,7 +25,7 @@ spotless {
     }
 }
 
-val checkLocalization by tasks.registering(LocalizationGuardTask::class) {
+tasks.register<LocalizationGuardTask>("checkLocalization") {
     group = "verification"
     description = "Checks every translation's keys and placeholders, and hardcoded Compose UI strings."
     resourceRoots.from(
@@ -37,7 +37,7 @@ val checkLocalization by tasks.registering(LocalizationGuardTask::class) {
     hardcodedAllowlist.set(layout.projectDirectory.file("config/localization-hardcoded-allowlist.txt"))
 }
 
-val checkFieldTypeBranches by tasks.registering(FieldTypeGuardTask::class) {
+tasks.register<FieldTypeGuardTask>("checkFieldTypeBranches") {
     group = "verification"
     description = "Checks that only the allowed files branch on a FieldType (fields are registry data)."
     sources.from(
@@ -58,7 +58,7 @@ val checkFieldTypeBranches by tasks.registering(FieldTypeGuardTask::class) {
 }
 
 tasks.named("check") {
-    dependsOn(checkLocalization, checkFieldTypeBranches)
+    dependsOn("checkLocalization", "checkFieldTypeBranches")
 }
 
 // Device tests only run on a device, so CI only builds them: it compiles each module's and runs the

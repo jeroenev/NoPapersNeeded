@@ -32,7 +32,7 @@ kotlin {
     sourceSets {
         // The hierarchy template matches the `desktop` jvm target but not the AGP multiplatform
         // library target, so the Android edge into `jvmShared` is drawn by hand.
-        val jvmSharedMain by getting
+        val jvmSharedMain = getByName("jvmSharedMain")
         jvmSharedMain.dependencies {
             compileOnly(libs.jna)
         }
