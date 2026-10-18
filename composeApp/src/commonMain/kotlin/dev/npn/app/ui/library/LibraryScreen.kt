@@ -122,10 +122,16 @@ fun LibraryScreen(
 
     // Opening a doc records the current sorted+filtered order so the detail screen can page between
     // documents; ids are stable so the order stays valid across navigation. The originating search
-    // query is also passed through so the detail screen can highlight matching terms.
-    val openDoc: (String) -> Unit = { docId ->
-        onOpenDoc(docId, docs.orEmpty().map { it.doc.docId }, ui.filter.query)
-    }
+    // query is also passed through so the detail screen can highlight matching terms. Remembered,
+    // reading the current results through State, so the list's item wiring survives every result
+    // or selection change.
+    val currentDocs by rememberUpdatedState(docs)
+    val currentQuery by rememberUpdatedState(ui.filter.query)
+    val currentOnOpenDoc by rememberUpdatedState(onOpenDoc)
+    val openDoc: (String) -> Unit =
+        remember {
+            { docId -> currentOnOpenDoc(docId, currentDocs.orEmpty().map { it.doc.docId }, currentQuery) }
+        }
 
     val snackbar = rememberSnackbarMessages(vm.messages)
 
@@ -136,7 +142,8 @@ fun LibraryScreen(
     BoxWithConstraints(modifier.fillMaxSize()) {
         // Wide layouts preview a tapped document in the side panel; compact ones open it directly.
         var previewDocId by rememberSaveable { mutableStateOf<String?>(null) }
-        val onDocClick: (String) -> Unit = { docId -> if (wide) previewDocId = docId else openDoc(docId) }
+        val onDocClick: (String) -> Unit =
+            remember(wide) { { docId -> if (wide) previewDocId = docId else openDoc(docId) } }
 
         val sidePanelWidth = (maxWidth * SIDE_PANEL_FRACTION).coerceIn(SidePanelMinWidth, SidePanelMaxWidth)
         val panel = Modifier.width(sidePanelWidth).fillMaxHeight()
@@ -264,10 +271,15 @@ private fun LibraryContent(
     val scan = LocalDocumentScanner.current?.rememberLauncher(actions::importScan)
 
     val scope = rememberCoroutineScope()
-    val onAddTag = { onDialog(LibraryDialog.AddTag) }
+    // Remembered, like the item wiring built from them below, so they outlive a state change.
+    val currentOnDialog by rememberUpdatedState(onDialog)
+    val onAddTag: () -> Unit = remember { { currentOnDialog(LibraryDialog.AddTag) } }
     // Only the tags the selection actually carries: removing any other is a no-op.
-    val onRemoveTag: () -> Unit = { scope.launch { onDialog(LibraryDialog.RemoveTag(actions.tagsInSelection())) } }
-    val onRequestTrash = { onDialog(LibraryDialog.ConfirmTrash) }
+    val onRemoveTag: () -> Unit =
+        remember(scope, actions) {
+            { scope.launch { currentOnDialog(LibraryDialog.RemoveTag(actions.tagsInSelection())) } }
+        }
+    val onRequestTrash: () -> Unit = remember { { currentOnDialog(LibraryDialog.ConfirmTrash) } }
     // Hand the selection to the AI-edit page and leave selection mode behind.
     val aiEditSelection: (() -> Unit)? =
         onAiEdit?.let { open ->
@@ -286,7 +298,17 @@ private fun LibraryContent(
     // as it was.
     val selectedNow by rememberUpdatedState(ui.selected)
     val wiring =
-        remember(content, state.tagColors, reviewMode, wide, onOpenDoc, onAddTag, onRemoveTag, onRequestTrash) {
+        remember(
+            content,
+            state.tagColors,
+            reviewMode,
+            wide,
+            actions,
+            onOpenDoc,
+            onAddTag,
+            onRemoveTag,
+            onRequestTrash,
+        ) {
             fun onSelection(action: () -> Unit): (String) -> Unit =
                 { docId ->
                     if (docId !in selectedNow) actions.startSelection(docId)
