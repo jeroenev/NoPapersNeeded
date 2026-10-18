@@ -46,7 +46,7 @@ object IntentImport {
             }
 
             Intent.ACTION_SEND_MULTIPLE -> {
-                intent.getParcelableArrayListExtraCompat<Uri>(Intent.EXTRA_STREAM) ?: emptyList()
+                intent.getParcelableArrayListExtraCompat<Uri>(Intent.EXTRA_STREAM).orEmpty()
             }
 
             Intent.ACTION_VIEW -> {

@@ -74,7 +74,7 @@ fun newViewModelScope(): CoroutineScope = CoroutineScope(SupervisorJob() + Dispa
  * full disk, permissions). Fire-and-forget writes must go through [launchReporting] so a failure
  * is reported to the user instead of silently swallowed, or crashing the app.
  */
-abstract class MessagesViewModel : ViewModel {
+open class MessagesViewModel : ViewModel {
     private val sink: MessageSink
 
     constructor() : super() {

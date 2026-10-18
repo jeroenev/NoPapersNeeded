@@ -312,6 +312,9 @@ private fun PageSlide(
     // resetting, and a drag after a resize or rotation clamps against the old size).
     val liveTransform = rememberUpdatedState(transform)
     val liveContainer = rememberUpdatedState(container)
+    // The effect below restarts on the page and zoom only; a new render (another document's)
+    // must still be the one it calls.
+    val currentRender by rememberUpdatedState(render)
 
     LaunchedEffect(page, bucket, isCurrent, renderAttempt) {
         // Show any cached bitmap immediately (even at a coarser bucket) to avoid a spinner flash.
@@ -321,7 +324,7 @@ private fun PageSlide(
             state = PageState.Ready(existing)
         } else {
             // The content facade says a page it cannot render with null, never by throwing.
-            val bytes = render(page, BASE_MAX_DIM * bucket)
+            val bytes = currentRender(page, BASE_MAX_DIM * bucket)
             val bmp = bytes?.let { decodePage(it) }
             if (bmp != null) {
                 cache.put(page, bucket, bmp)

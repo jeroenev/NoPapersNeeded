@@ -11,10 +11,10 @@ import java.util.Locale
 actual object LocalAppLocale {
     // The system locale, read when the object initializes: before the first provides replaces it.
     private val default: Locale = Locale.getDefault()
-    private val currentLocale = staticCompositionLocalOf { Locale.getDefault().toString() }
+    private val LocalLocaleTag = staticCompositionLocalOf { Locale.getDefault().toString() }
 
     actual val current: String
-        @Composable get() = currentLocale.current
+        @Composable get() = LocalLocaleTag.current
 
     @Composable
     actual infix fun provides(value: String?): ProvidedValue<*> {
@@ -24,6 +24,6 @@ actual object LocalAppLocale {
                 else -> Locale(value)
             }
         Locale.setDefault(new)
-        return currentLocale.provides(new.toString())
+        return LocalLocaleTag.provides(new.toString())
     }
 }

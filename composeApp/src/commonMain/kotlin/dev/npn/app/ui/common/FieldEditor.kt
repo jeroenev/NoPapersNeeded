@@ -73,11 +73,11 @@ fun FieldEditor(
     val hint = def.hintText()?.resolve()
     when (def.type) {
         FieldType.TEXT -> {
-            TextValueField(def.label, value.orEmpty(), suggestions, hint, placeholder, modifier, commitText)
+            TextValueField(def.label, value.orEmpty(), suggestions, hint, placeholder, commitText, modifier)
         }
 
         FieldType.LONG_TEXT -> {
-            LongTextField(def.label, value.orEmpty(), hint, modifier, commitText)
+            LongTextField(def.label, value.orEmpty(), hint, commitText, modifier)
         }
 
         FieldType.NUMBER, FieldType.DECIMAL -> {
@@ -93,7 +93,7 @@ fun FieldEditor(
         }
 
         FieldType.DATE -> {
-            DateField(def, value.orEmpty(), hint, modifier, commitText)
+            DateField(def, value.orEmpty(), hint, commitText, modifier)
         }
     }
 }
@@ -123,11 +123,11 @@ private fun rememberFieldText(external: String): MutableState<String> {
 private fun CommitTextField(
     label: String,
     initial: String,
+    onCommit: (String) -> Unit,
     modifier: Modifier = Modifier,
     placeholder: String? = null,
     isError: Boolean = false,
     supportingText: String? = null,
-    onCommit: (String) -> Unit,
 ) {
     var text by rememberFieldText(initial)
     OutlinedTextField(
@@ -153,8 +153,8 @@ private fun TextValueField(
     suggestions: List<String>,
     hint: String?,
     placeholder: String?,
-    modifier: Modifier,
     onCommit: (String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var text by rememberFieldText(initial)
     SuggestField(
@@ -176,8 +176,8 @@ private fun LongTextField(
     label: String,
     initial: String,
     hint: String?,
-    modifier: Modifier,
     onCommit: (String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     // Matters most here: a note is prose, so spaces at the end of what is typed so far are
     // constant. See [rememberFieldText].
@@ -202,8 +202,8 @@ private fun DateField(
     def: FieldDef,
     value: String,
     hint: String?,
-    modifier: Modifier,
     onCommit: (String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var showPicker by remember { mutableStateOf(false) }
     val invalid = value.isNotBlank() && !FieldValues.isIsoDate(value.trim())

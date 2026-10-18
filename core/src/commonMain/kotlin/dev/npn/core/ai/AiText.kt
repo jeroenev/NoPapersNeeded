@@ -196,7 +196,7 @@ internal object AiText {
             ?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.contentOrNull }
             ?.map { it.trim() }
             ?.filter { it.isNotEmpty() }
-            ?: emptyList()
+            .orEmpty()
 
     private fun firstJsonObject(text: String): JsonObject? {
         var start = text.indexOf('{')

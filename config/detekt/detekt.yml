@@ -195,8 +195,10 @@ Compose:
   CompositionLocalAllowlist:
     # Deliberate implicit dependencies: the window's width class, decided once at the root, the
     # document scanner the platform entry point provides, and the library's one store of unsaved
-    # document drafts, which the editors, the resume banner and Settings all read.
+    # document drafts, which the editors, the resume banner and Settings all read. LocalLocaleTag is
+    # desktop's stand-in for the locale Android's LocalConfiguration carries (LocalAppLocale).
     allowedCompositionLocals:
       - LocalWindowWidthClass
       - LocalDocumentScanner
       - LocalDocumentDrafts
+      - LocalLocaleTag

@@ -34,7 +34,7 @@ design, build/packaging/release details, and the library folder layout.
   `baselineprofile` and every Android module's device-test runner), `npn.kmp-module` (the
   `desktop` and Android library targets and their SDK levels, and the test libraries every
   `commonTest` shares, `core-testing` included, for `core`, `core-testing` and `composeApp`) and
-  `npn.detekt` (both detekt runs and their baselines; the root build applies it to every project,
+  `npn.detekt` (both detekt runs; the root build applies it to every project,
   and its map of typed compilations is where a new module gets its typed run). Kotlin, the
   Android Gradle plugin and detekt are on buildSrc's classpath, so modules apply them by id, never
   with `alias(...)`: Gradle refuses a version for a plugin that is already there.
@@ -99,7 +99,7 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
 
 - One config, `config/detekt/detekt.yml`, two runs; `check` runs both:
   - `./gradlew detekt`: source-only (no type resolution) over every source set. Fast, needs no
-    compile. Baseline: per-module `detekt-baseline.xml`, where present.
+    compile.
   - `./gradlew detektTyped`: the type-resolved per-compilation tasks (`detektMainDesktop`,
     `detektMainAndroid`, `detektTestDesktop`, `detektHostTestAndroid` in `core`/`composeApp`;
     `detektMainDesktop` in `core-testing`; `detektDebug` in `androidApp`; `detektMain` in
@@ -107,22 +107,20 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
     `UnusedPrivate*`, `UnusedVariable`, `SuspendFunSwallowedCancellation`, ...); the source-only
     run skips them silently. They also load the Compose ruleset (`io.nlopez.compose.rules:detekt`,
     its default config): viewmodels forwarded into child composables, composables without a
-    `modifier`, parameter order and naming. Baseline: per-module `detekt-baseline-typed.xml`, where present.
+    `modifier`, parameter order and naming.
     Device tests, release variants and `baselineprofile` only get the source-only run.
 - A rule that exempts tests lists `*testSources` (this build's test source sets) as its
   `excludes`; detekt's own defaults name other builds' source sets and miss `desktopTest` and
   the Android ones.
-- Baselines grandfather old findings; CI fails on NEW issues only. Do not add to baselines; fix
-  findings in code you touch. Baselines should shrink: after a cleanup, regenerate with
-  `./gradlew :<module>:detektBaseline` or `./gradlew detektTypedBaseline` and check that the diff
-  only removes lines.
+- No baselines: fix a finding, or suppress a false positive with a one-line reason next to the
+  `@Suppress`.
 - The typed analysis runs without compiler plugins (kotlinx.serialization, Compose), so it logs
   "compiler errors found during analysis" and can misreport code next to `serializer()` calls or
   `actual` declarations. Suppress a new false positive with a one-line reason that says so;
   don't contort the code around it.
 - A complexity `@Suppress` (`LongMethod`, `LongParameterList`, `TooManyFunctions`,
-  `CyclomaticComplexMethod`, ...) counts as baseline growth: a new one needs a one-line reason
-  next to it and is called out in the PR. Prefer the real fix.
+  `CyclomaticComplexMethod`, ...) needs a one-line reason next to it and is called out in the
+  PR. Prefer the real fix.
 - `LongMethod` ignores `@Composable` functions: their length measures UI-tree depth, not
   complexity.
 - `ForbiddenComment` rejects `TODO:`, `FIXME` and `STOPSHIP:`: track unfinished work as an issue.

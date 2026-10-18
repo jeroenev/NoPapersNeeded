@@ -14,7 +14,7 @@ import kotlin.test.BeforeTest
  * bodies with `runTest(dispatcher) { ... }` so scheduler advancement (advanceUntilIdle,
  * advanceTimeBy for the debounce) works against the same dispatcher.
  */
-abstract class MainDispatcherTest {
+open class MainDispatcherTest {
     protected val dispatcher: TestDispatcher = StandardTestDispatcher()
 
     @BeforeTest

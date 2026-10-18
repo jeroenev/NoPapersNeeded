@@ -1,7 +1,0 @@
-<?xml version="1.0" ?>
-<SmellBaseline>
-  <ManuallySuppressedIssues/>
-  <CurrentIssues>
-    <ID>UseOrEmpty:IntentImport.kt:IntentImport$intent.getParcelableArrayListExtraCompat&lt;Uri&gt;(Intent.EXTRA_STREAM) ?: emptyList()</ID>
-  </CurrentIssues>
-</SmellBaseline>

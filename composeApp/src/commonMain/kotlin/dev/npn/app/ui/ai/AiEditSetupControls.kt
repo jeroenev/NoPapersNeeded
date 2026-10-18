@@ -43,7 +43,7 @@ internal fun SetupSection(
 
 @Composable
 internal fun SetupColumn(
-    modifier: Modifier,
+    modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) = Column(modifier, verticalArrangement = Arrangement.spacedBy(16.dp), content = content)
 

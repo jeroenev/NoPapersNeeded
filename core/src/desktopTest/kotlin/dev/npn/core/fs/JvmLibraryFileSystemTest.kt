@@ -17,6 +17,7 @@ import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
+import java.util.Locale
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
@@ -176,7 +177,7 @@ class JvmLibraryFileSystemTest {
                 MessageDigest
                     .getInstance("SHA-256")
                     .digest(content)
-                    .joinToString("") { "%02x".format(it) }
+                    .joinToString("") { "%02x".format(Locale.ROOT, it) }
             fs.sha256("f.txt") shouldBe expected
             // Known vector: sha256("")
             fs.writeBytesOnce("empty.txt", ByteArray(0))
