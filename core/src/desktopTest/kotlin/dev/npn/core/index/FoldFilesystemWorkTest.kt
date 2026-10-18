@@ -101,24 +101,22 @@ class FoldFilesystemWorkTest {
         }
 
     /**
-     * A path written for a relink predecessor moves the live document's file: the relink target
-     * shares the file with the id that was renamed away, so the intent written there is its own.
+     * The path a relink predecessor was meant to be at moves the live document's file: the relink
+     * copies it onto the target ([dev.npn.core.journal.FoldedState.relinkOps]), whose own it is then.
      */
     @Test
-    fun aRenameWrittenForARelinkPredecessorMovesTheLiveDocumentsFile() =
+    fun aRelinkPredecessorsPathCopiedByTheRelinkMovesTheLiveDocumentsFile() =
         runTest {
             writePdfs(1)
             coordinator.rescan()
             val docId = checkNotNull(db.documentDao().rowAtPath("doc-0.pdf")).docId
             val older = "a".repeat(64)
+            coordinator.commitAndApply(
+                listOf(PendingOp.propSet(older, SystemProperty.STORAGE_PATH, "archive/renamed.pdf")),
+            )
             fs.clear()
 
-            coordinator.commitAndApply(
-                listOf(
-                    PendingOp.propSet(older, SystemProperty.STORAGE_PATH, "archive/renamed.pdf"),
-                    PendingOp.relink(older, docId),
-                ),
-            )
+            coordinator.commitBuilt { it.relinkOps(older, docId) }
 
             Files.exists(libRoot.resolve("archive/renamed.pdf")) shouldBe true
             Files.exists(libRoot.resolve("doc-0.pdf")) shouldBe false

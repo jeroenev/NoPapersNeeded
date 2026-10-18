@@ -89,8 +89,9 @@ class MetadataReplicationTest {
 
             val objects =
                 rig.fs.journalObjects()
-            // Two user transactions plus the one-time field-registry seed written on open.
-            objects.size shouldBe 3
+            // Two user transactions plus the one-time field-registry seed and relink-copies marker
+            // written on open.
+            objects.size shouldBe 4
             objects.forEach { objectFile ->
                 assertIs<JournalSourceRead.Accepted>(
                     StorageV2Reader.read(objectFile.relPath, rig.fs.readBytes(objectFile.relPath)),

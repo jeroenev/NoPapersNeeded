@@ -572,19 +572,33 @@ internal class JournalCoordinator(
      * same critical section.
      *
      * Unlike [commitBuilt] (which only refolds), this is for ops such as `relink` whose fold effect
-     * needs a full rescan to carry metadata onto the new id and mark the superseded doc. Serializing
-     * this against every other write keeps the write, the fold it is built on and the rescan that
-     * projects it in one order.
+     * needs a full rescan to mark the superseded doc. Serializing this against every other write
+     * keeps the write, the fold it is built on and the rescan that projects it in one order.
      *
      * Throws only before publication, when nothing changed (a bake then restores its original
      * file). Once the transaction is published the change stands: a projection or rescan failure is
      * dealt with as for any commit (writes latched, the projection rebuilt from the store) and
      * logged, and the call returns null instead of the [ScanReport].
      */
-    suspend fun commitAndRescan(ops: List<PendingOp>): ScanReport? =
+    suspend fun commitAndRescan(ops: List<PendingOp>): ScanReport? = commitBuiltAndRescan { ops }
+
+    /**
+     * Relink [oldDoc] onto [newDoc] as [commitAndRescan] commits: one transaction holding the
+     * `relink` and the copies of [oldDoc]'s metadata onto [newDoc] ([FoldedState.relinkOps]), built
+     * on the live fold under the lock, so no write lands between what is copied and the relink.
+     * [alongside] adds what else that fold asks to go with it.
+     */
+    suspend fun relinkAndRescan(
+        oldDoc: String,
+        newDoc: String,
+        alongside: (FoldedState) -> List<PendingOp> = { emptyList() },
+    ): ScanReport? = commitBuiltAndRescan { alongside(it) + it.relinkOps(oldDoc, newDoc) }
+
+    private suspend fun commitBuiltAndRescan(build: (FoldedState) -> List<PendingOp>): ScanReport? =
         locked {
             ensureWritable()
             val current = foldedState()
+            val ops = build(current)
             withContext(NonCancellable) {
                 val published = writeTransaction(ops)
                 log.runLogged("Projecting the published ${published.relPath} and rescanning") {

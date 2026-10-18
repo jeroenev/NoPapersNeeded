@@ -43,9 +43,8 @@ internal sealed interface FoldScope {
         companion object {
             /**
              * The scope of [events], already reduced into [state]: their documents and styled
-             * tags, plus what a rename, merge, relink or field definition fans out to, and the
-             * relink predecessors of each document, whose metadata it shows, as a full fold
-             * projects them.
+             * tags, plus what a rename, merge, relink, tag removal or field definition fans out to,
+             * as a full fold projects them.
              */
             fun of(
                 state: FoldedState,
@@ -56,8 +55,8 @@ internal sealed interface FoldScope {
                 val styledTags = LinkedHashSet<String>()
                 for (event in events) {
                     event.doc?.let(documents::add)
-                    // TagRemove needs no extra scope: its affected document is already added via
-                    // event.doc above. Rename/merge/relink/style fan out to more docs/tags.
+                    // Rename/merge/relink/style, and a removal an earlier build wrote, fan out to
+                    // more docs/tags.
                     when (val op = event.op) {
                         is JournalOp.TagRename, is JournalOp.TagMerge -> {
                             documents.addAll(state.taggedDocs())
@@ -67,9 +66,16 @@ internal sealed interface FoldScope {
                             styledTags += op.tag
                         }
 
+                        // Its old document (event.doc) is superseded; the new one's metadata is its
+                        // own, copied in the same transaction, so no other row changes.
                         is JournalOp.Relink -> {
-                            documents.addAll(state.docsWithMetadata())
                             documents += op.newDoc
+                        }
+
+                        // Builds before relink copies listed, in a removal from a relink target,
+                        // its predecessors' dots too, so their rows change with it.
+                        is JournalOp.TagRemove -> {
+                            event.doc?.let { documents += state.predecessorsOf(state.resolveDocId(it)) }
                         }
 
                         // A definition change is library-wide: every document's projection of that
@@ -81,16 +87,11 @@ internal sealed interface FoldScope {
 
                         // Their own document is all they touch, or they touch none (a setting, or an
                         // op from a newer build, which folds to nothing).
-                        is JournalOp.TagAdd, is JournalOp.TagRemove, is JournalOp.PropSet, is JournalOp.FieldSet,
+                        is JournalOp.TagAdd, is JournalOp.PropSet, is JournalOp.FieldSet,
                         is JournalOp.DocTrash, JournalOp.DocRestore, JournalOp.DocDelete, JournalOp.DocUndelete,
                         is JournalOp.SettingSet, is JournalOp.Unknown,
                         -> {}
                     }
-                }
-                for (doc in documents.toList()) {
-                    val current = state.resolveDocId(doc)
-                    documents += current
-                    documents += state.predecessorsOf(current)
                 }
                 return Events(documents, styledTags, preserveLifecycleDocs)
             }
@@ -135,21 +136,19 @@ internal class FoldProjection(
      *
      * Design notes:
      * - Tags: every tag with a known style gets a [TagEntity] upsert; every doc's document_tags is
-     *   replaced with its tag set, its relink predecessors' included ([FoldedState.inheritedTags]).
+     *   replaced with its own tag set ([FoldedState.effectiveTags]).
      *   Tags appearing only in adds (no explicit style) are upserted with null style so
      *   tag-management counts see them.
-     * - Fields: every doc's document_fields is replaced with its field map, which reads its own and
-     *   its relink predecessors' values as one ([FoldedState.inheritedFields]); the well-known five
-     *   are additionally cached on the doc row. reviewed/ocrEngineOverride come from the system
-     *   props, read the same way.
+     * - Fields: every doc's document_fields is replaced with its field map
+     *   ([FoldedState.effectiveFields]); the well-known five are additionally cached on the doc row.
+     *   reviewed/ocrEngineOverride come from its system props.
      * - Trash and delete: the trashed and deleted flags, trashedOrigPath and trashedAt come from the
      *   fold's lifecycle state. Resurrection, on a full rescan only: when the journal says trashed
      *   or deleted but the document's own bytes are back at its current or original path, the file
      *   wins (flags and missing cleared) and the document is reported, so the caller can record a
      *   restore; until one is recorded, any other fold hides it again (see [FoldPass.lifecycle]).
-     * - Relinks: fold resolves old->new; the effective views are already keyed on ids. For a folded
-     *   relink where both ids are known, the OLD doc is marked deleted/superseded and the NEW doc
-     *   carries the metadata (fold exposes effective views on the resolved id).
+     * - Relinks: the OLD doc is marked deleted/superseded. The NEW doc shows its own metadata, which
+     *   the relink's transaction copied onto it ([FoldedState.relinkOps]); no view reads a predecessor.
      * - FTS: after tags/props, each affected doc's metadata-derived fts columns (fileName, tags,
      *   fields) are written. The extracted-text content column belongs to the OCR pipeline, so
      *   the fold never touches it. A brand-new doc gets a row with no content yet, which the OCR
@@ -257,7 +256,7 @@ internal class FoldProjection(
         styledTags: Set<String>,
     ) {
         val allTags = LinkedHashSet<String>()
-        for (doc in journalDocs) allTags.addAll(state.inheritedTags(doc))
+        for (doc in journalDocs) allTags.addAll(state.effectiveTags(doc))
         allTags.addAll(styledTags)
         val existingTagRows = tagDao.all().associateBy { it.name }
         val changed =
@@ -314,14 +313,14 @@ internal class FoldProjection(
                 row.copy(
                     relPath = lifecycle.relPath,
                     fileName = lifecycle.fileName,
-                    reviewed = state.inheritedProp(doc, SystemProperty.REVIEWED) == "true",
+                    reviewed = state.effectiveProp(doc, SystemProperty.REVIEWED) == "true",
                     // Read cache of the well-known field rows; see DocumentEntity.correspondent.
                     correspondent = fields[FieldKeys.CORRESPONDENT],
                     docType = fields[FieldKeys.DOC_TYPE],
                     docDate = fields[FieldKeys.DOC_DATE],
                     title = fields[FieldKeys.TITLE],
                     notes = fields[FieldKeys.NOTES],
-                    ocrEngineOverride = state.inheritedProp(doc, SystemProperty.OCR_ENGINE),
+                    ocrEngineOverride = state.effectiveProp(doc, SystemProperty.OCR_ENGINE),
                     trashed = lifecycle.trashed,
                     trashedOrigPath = if (lifecycle.trashed) lifecycle.origPath else null,
                     trashedAt = if (lifecycle.trashed) state.trashedAtMillis(doc) ?: row.trashedAt else null,
@@ -344,24 +343,24 @@ internal class FoldProjection(
         }
 
         /**
-         * A doc's tags, its predecessors' included, sorted. Diffed against the preloaded rows: a
+         * A doc's tags, sorted. Diffed against the preloaded rows: a
          * rewrite goes to [changes] only when the set actually changed, so an unrelated edit does not
          * invalidate `document_tags` observers for every doc.
          */
         private fun tags(doc: String): List<String> {
-            val effTags = state.inheritedTags(doc).sorted()
+            val effTags = state.effectiveTags(doc).sorted()
             if (preloaded.tags[doc].orEmpty() != effTags) changes.tags[doc] = effTags
             return effTags
         }
 
         /**
-         * Every field value for a doc, its predecessors' writes included ([FoldedState.inheritedFields]).
+         * Every field value for a doc ([FoldedState.effectiveFields]).
          * Rows carry the numeric shadow for the registry's NUMBER/DECIMAL fields. Diffed like tags so
          * an unrelated edit does not rewrite this doc's field rows. Returns the effective map, which
          * also feeds the cached well-known columns and the FTS row.
          */
         private fun fields(doc: String): Map<String, String> {
-            val effFields = state.inheritedFields(doc)
+            val effFields = state.effectiveFields(doc)
             val rows =
                 effFields.map { (key, value) ->
                     val numValue = FieldValues.numeric(state.effectiveFieldType(key), value)

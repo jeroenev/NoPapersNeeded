@@ -4,7 +4,14 @@ import dev.npn.core.db.searchDocIds
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.libraryPdfs
+import dev.npn.core.journal.JournalEvent
+import dev.npn.core.journal.JournalOp
+import dev.npn.core.journal.JournalSourceRead
+import dev.npn.core.journal.PendingOp
+import dev.npn.core.journal.StorageV2Reader
+import dev.npn.core.journal.journalObjects
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.SystemProperty
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.util.RecordingLog
@@ -23,6 +30,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
+import kotlin.test.assertIs
 
 class BakeInPlaceTest {
     @Test
@@ -59,11 +67,11 @@ class BakeInPlaceTest {
         }
 
     /**
-     * An edit to a baked document projects it with what it inherited, as a rescan does: marking it
-     * reviewed keeps its title, correspondent and tag in the index and in search.
+     * An edit to a baked document projects it with what the relink copied onto it, as a rescan does:
+     * marking it reviewed keeps its title, correspondent and tag in the index and in search.
      */
     @Test
-    fun anEditToABakedDocumentKeepsWhatItInherited() =
+    fun anEditToABakedDocumentKeepsWhatItWasGiven() =
         appSessionTest { rig ->
             val (before, after) = bakeFiled(rig)
 
@@ -81,9 +89,9 @@ class BakeInPlaceTest {
             rig.db.documentDao().getByDocId(before) shouldBe superseded
         }
 
-    /** The storage-path rule after an edit to a baked document files it by what it inherited. */
+    /** The storage-path rule after an edit to a baked document files it by what the relink copied. */
     @Test
-    fun anEditToABakedDocumentFilesItByWhatItInherited() =
+    fun anEditToABakedDocumentFilesItByWhatItWasGiven() =
         appSessionTest(storagePath = StoragePathRule("{correspondent}/{title}.pdf", enabled = true)) { rig ->
             val filed = "Aquafin/Water bill.pdf"
             val (_, after) = bakeFiled(rig)
@@ -98,9 +106,9 @@ class BakeInPlaceTest {
             rig.docId(filed) shouldBe after
         }
 
-    /** What a baked document inherited is its own: a clear clears it and a removal removes it, for good. */
+    /** What a baked document was given is its own: a clear clears it and a removal removes it, for good. */
     @Test
-    fun whatABakedDocumentInheritedCanBeCleared() =
+    fun whatABakedDocumentWasGivenCanBeCleared() =
         appSessionTest { rig ->
             val (_, after) = bakeFiled(rig)
 
@@ -119,6 +127,81 @@ class BakeInPlaceTest {
                 .tagDao()
                 .tagsForDocument(after)
                 .shouldBeEmpty()
+        }
+
+    /**
+     * The relink's transaction holds the copies: the baked document's fields, tags, review mark and
+     * storage path are events of its own, published with the relink, and its history shows them.
+     */
+    @Test
+    fun theBakesRelinkCopiesTheMetadataInItsOwnTransaction() =
+        appSessionTest(storagePath = StoragePathRule("{correspondent}/{title}.pdf", enabled = true)) { rig ->
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val before = rig.docId("a.pdf")
+            rig.session.meta.applyEdits(listOf(before), addTags = listOf("filed"), fields = FILED)
+            rig.session.meta.setReviewed(listOf(before), true)
+            val filed = "Aquafin/Water bill.pdf"
+            val objects =
+                rig.fs
+                    .journalObjects()
+                    .map { it.relPath }
+                    .toSet()
+
+            rig.session.content.bakeInPlace(before) shouldBe BakeOutcome.Baked
+
+            val after = rig.docId(filed)
+            val written = rig.fs.journalObjects().filterNot { it.relPath in objects }
+            val relinkObject = written.single { meta -> eventsOf(rig, meta.relPath).any { it.op is JournalOp.Relink } }
+            eventsOf(rig, relinkObject.relPath).map { it.doc to it.op }.toSet() shouldBe
+                setOf(
+                    before to JournalOp.Relink(after),
+                    after to JournalOp.FieldSet(FieldKeys.CORRESPONDENT, "Aquafin"),
+                    after to JournalOp.FieldSet(FieldKeys.TITLE, "Water bill"),
+                    after to JournalOp.TagAdd("filed"),
+                    after to JournalOp.PropSet(SystemProperty.REVIEWED, "true"),
+                    after to JournalOp.PropSet(SystemProperty.STORAGE_PATH, filed),
+                )
+            rig.db
+                .documentDao()
+                .getByDocId(after)
+                ?.reviewed shouldBe true
+            // Its history is its own events: the copies, not the original's edits before the bake.
+            rig.session.documents
+                .history(after)
+                .map { it.entry }
+                .toSet() shouldBe
+                setOf(
+                    HistoryEntry.FieldSet(FieldKeys.CORRESPONDENT, "Aquafin"),
+                    HistoryEntry.FieldSet(FieldKeys.TITLE, "Water bill"),
+                    HistoryEntry.TagAdded("filed"),
+                    HistoryEntry.Reviewed(true),
+                    HistoryEntry.StoragePathSet(filed),
+                )
+        }
+
+    /**
+     * The accepted change from inheritance: an edit of the original that a device which had not seen
+     * the bake makes after it no longer reaches the baked document.
+     */
+    @Test
+    fun aLaterEditOfTheOriginalDoesNotReachTheBakedDocument() =
+        appSessionTest { rig ->
+            val (before, after) = bakeFiled(rig)
+            rig.clock.advance(1_000)
+            rig.writer("other-device").commit(
+                listOf(
+                    PendingOp.fieldSet(before, FieldKeys.TITLE, "Sewer bill"),
+                    PendingOp.tagAdd(before, "late"),
+                ),
+            )
+
+            rig.session.rescan()
+
+            fieldsOf(rig, after) shouldBe FILED
+            rig.db
+                .tagDao()
+                .tagsForDocument(after) shouldContainExactly listOf("filed")
         }
 
     /** A document baked twice shows the title it was given between the bakes, not the first one. */
@@ -339,6 +422,14 @@ class BakeInPlaceTest {
         rig.session.content.bakeInPlace(before) shouldBe BakeOutcome.Baked
         return before to rig.docId(path)
     }
+
+    private suspend fun eventsOf(
+        rig: AppSessionRig,
+        relPath: String,
+    ): List<JournalEvent> =
+        assertIs<JournalSourceRead.Accepted>(StorageV2Reader.read(relPath, rig.fs.readBytes(relPath)))
+            .events
+            .map { it.event }
 
     private suspend fun fieldsOf(
         rig: AppSessionRig,

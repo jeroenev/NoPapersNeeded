@@ -24,9 +24,9 @@ import dev.npn.core.xmp.NpnXmpData
  * - [ThumbnailService] caches first-page thumbnails against a platform [ThumbnailStore].
  * - [PdfEngine] is opened per call and closed via `use` (kept simple; no long-lived handle cache).
  * - [BakeService] + [NpnXmpData] (assembled from the current DB row + tags) drive export/in-place
- *   bake. In-place bake relinks the new hash through [relinkBake] ([BakeRelink]): the relink's rescan
- *   carries the document's tags and fields onto it and marks the old row superseded, and the baked
- *   document keeps its original's text.
+ *   bake. In-place bake relinks the new hash through [relinkBake] ([BakeRelink]): the relink's
+ *   transaction copies the document's tags, fields and properties onto it, its rescan marks the old
+ *   row superseded, and the baked document keeps its original's text.
  *
  * Reads return null on failure and an in-place bake a [BakeOutcome.Failed]; both log the cause to
  * [log]. The calls that write (the thumbnail cache, the page-count backfill, an in-place bake) run
