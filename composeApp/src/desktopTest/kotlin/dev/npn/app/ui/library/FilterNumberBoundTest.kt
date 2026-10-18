@@ -125,7 +125,8 @@ class FilterNumberBoundTest : EnglishLocaleTest() {
             panel(words) {
                 type("1.")
                 filter = LibraryFilter(fieldRanges = mapOf(KEY to FieldRange(from = "3")))
-                scene.render()
+                // The editor takes the new filter in an effect, so the draft follows a frame later.
+                repeat(2) { scene.render() }
                 shown() shouldBe "3"
                 // The invalid entry is gone with its replacement; Apply is back on, so the change
                 // is not stuck behind an entry that is no longer there.
@@ -133,7 +134,7 @@ class FilterNumberBoundTest : EnglishLocaleTest() {
                 applyButton().config.contains(SemanticsProperties.Disabled) shouldBe false
 
                 filter = LibraryFilter()
-                scene.render()
+                repeat(2) { scene.render() }
                 shown() shouldBe ""
                 repeat(2) { scene.render() }
                 applyButton().config.contains(SemanticsProperties.Disabled) shouldBe false

@@ -149,6 +149,25 @@ class FilterEditorState internal constructor(
      */
     var invalidBounds by mutableStateOf(emptySet<String>())
         private set
+
+    /**
+     * Whether the draft includes tags both ways, all of some and any of others: a filter the
+     * all/any toggle cannot express (one applied from a saved view or the assistant), so the editor
+     * lists both groups instead.
+     */
+    val mixedTagMatch: Boolean get() = draft.tagsAll.isNotEmpty() && draft.tagsAny.isNotEmpty()
+
+    /**
+     * Whether included tags must all match: as the draft's included tags say, and while it includes
+     * none, as the toggle was left ([matchAll]).
+     */
+    val matchesAllTags: Boolean
+        get() =
+            when {
+                draft.tagsAll.isNotEmpty() -> true
+                draft.tagsAny.isNotEmpty() -> false
+                else -> matchAll
+            }
     var resetCounter by mutableIntStateOf(0)
         private set
 
@@ -181,7 +200,10 @@ fun rememberFilterEditorState(filter: LibraryFilter): FilterEditorState {
         rememberSaveable(saver = FilterEditorStateSaver) {
             FilterEditorState(draft = filter, live = filter, tagQuery = "", matchAll = filter.tagsAny.isEmpty())
         }
-    editor.bringUpTo(filter)
+    // After composition rather than during it: the editor's state is not written while composing.
+    // A filter that changes under an open editor (the search box's debounce) shows in the draft a
+    // frame later, which nobody can see.
+    LaunchedEffect(editor, filter) { editor.bringUpTo(filter) }
     return editor
 }
 
@@ -464,14 +486,8 @@ private fun ColumnScope.TagFilterSection(
     val filter = editor.draft
     val onFilterChange = { changed: LibraryFilter -> editor.draft = changed }
     SectionLabel(stringResource(Res.string.ux_include_tags))
-    val mixed = filter.tagsAll.isNotEmpty() && filter.tagsAny.isNotEmpty()
-    val matchAll = editor.matchAll
-    val effectiveAll =
-        when {
-            filter.tagsAll.isNotEmpty() -> true
-            filter.tagsAny.isNotEmpty() -> false
-            else -> matchAll
-        }
+    val mixed = editor.mixedTagMatch
+    val effectiveAll = editor.matchesAllTags
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         FilterChip(
             selected = !mixed && effectiveAll,
