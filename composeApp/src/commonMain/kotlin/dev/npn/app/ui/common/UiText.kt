@@ -71,7 +71,6 @@ fun Throwable.reasonText(): UiText =
         ?: uiText(Res.string.common_unknown_error)
 
 /** This text in [environment]'s language, outside a composition (see [SnackbarMessages]). */
-@Suppress("SpreadOperator") // Compose's string formatters take their arguments only as a vararg.
 suspend fun UiText.resolve(environment: ResourceEnvironment): String =
     when (this) {
         is UiText.Res -> getString(environment, res, *args.resolved { it.resolve(environment) })
@@ -80,7 +79,6 @@ suspend fun UiText.resolve(environment: ResourceEnvironment): String =
     }
 
 /** This text in the composition's language. */
-@Suppress("SpreadOperator") // Compose's string formatters take their arguments only as a vararg.
 @Composable
 fun UiText.resolve(): String =
     when (this) {

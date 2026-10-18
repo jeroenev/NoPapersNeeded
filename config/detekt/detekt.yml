@@ -173,7 +173,9 @@ performance:
   ForEachOnRange:
     excludes: *testSources
   SpreadOperator:
-    excludes: *testSources
+    # Its only hits outside tests were the vararg string formatters UiText hands its arguments
+    # to, which take them no other way; the array copy it warns about costs nothing there.
+    active: false
 
 exceptions:
   InstanceOfCheckForException:
