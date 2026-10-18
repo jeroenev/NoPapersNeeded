@@ -3,8 +3,10 @@ package dev.npn.app.ui.ai
 import dev.npn.app.FakeLibrarySession
 import dev.npn.app.FakeSettingsRepository
 import dev.npn.app.MainDispatcherTest
+import dev.npn.app.Transient
 import dev.npn.app.collecting
 import dev.npn.app.failure
+import dev.npn.app.recreatable
 import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.aiedit.AiEditRun
@@ -69,6 +71,37 @@ class AiEditApplicationTest : MainDispatcherTest() {
         advanceUntilIdle()
         return model
     }
+
+    /**
+     * An interactive Review cannot come back in a restored process: its suggestions lived only in
+     * the old one's memory. The page is back on its setup form ([Transient.aiEdit]), as configured,
+     * and the documents of the lost Review are in scope again rather than counted as reviewed.
+     */
+    @Test
+    fun aRestoredProcessLosesAnInteractiveReviewButGivesItsDocumentsBack() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            session.documents.documents.value = listOf(listItem("a"))
+            session.tags.tagNames = listOf("invoice")
+            session.aiSuggest.edit = edit(addTags = listOf(TagSuggestion("invoice", isNew = false)))
+            val screen = recreatable { AiEditViewModel(session, FakeSettingsRepository(), saved = it) }
+            collecting(screen.vm.ui)
+            advanceUntilIdle()
+            screen.vm.setTask(EditTask.CUSTOM)
+            screen.vm.setBackground(false)
+            screen.vm.start()
+            advanceUntilIdle()
+            screen.vm
+                .reviewDocs()
+                .single()
+                .docId shouldBe "a"
+
+            val restored = screen.recreate(this, { it.ui }, Transient::aiEdit)
+            restored.ui.value.phase shouldBe EditPhase.Idle
+            collecting(restored.preview)
+            advanceUntilIdle()
+            restored.preview.value.total shouldBe 1
+        }
 
     @Test
     fun toggleChipFlipsAddAndRemovalSelection() =

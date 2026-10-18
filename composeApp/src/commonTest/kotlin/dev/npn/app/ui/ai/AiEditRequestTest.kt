@@ -4,6 +4,7 @@ import dev.npn.app.FakeLibrarySession
 import dev.npn.app.FakeSettingsRepository
 import dev.npn.app.MainDispatcherTest
 import dev.npn.app.collecting
+import dev.npn.app.recreatable
 import dev.npn.core.ai.AiFieldMode
 import dev.npn.core.ai.AiTagging
 import dev.npn.core.model.FieldDef
@@ -25,6 +26,30 @@ class AiEditRequestTest : MainDispatcherTest() {
         position: Int,
         type: FieldType = FieldType.TEXT,
     ) = FieldDef(key, key, type, showByDefault = false, aiEnabled = false, position = position)
+
+    /**
+     * A restored process keeps how the run was configured, field by field: the registry's first
+     * answer to the new viewmodel does not seed it back to the defaults.
+     */
+    @Test
+    fun aRestoredProcessKeepsTheRequestAsConfigured() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val screen = recreatable { vm(FakeAiEditRun().apply { inScope("a") }, session, task = null, saved = it) }
+            collecting(screen.vm.ui)
+            advanceUntilIdle()
+            screen.vm.apply {
+                setTask(EditTask.CUSTOM)
+                setFieldMode(FieldKeys.TITLE, AiFieldMode.ALL)
+                setMaxTags(2)
+                setIncludeTagRemovals(true)
+            }
+
+            val restored = screen.recreate(this, { it.ui })
+            restored.ui.value.fieldOptions
+                .getValue(FieldKeys.TITLE)
+                .mode shouldBe AiFieldMode.ALL
+        }
 
     @Test
     fun settingsDefaultsAreSeededIntoUiState() =

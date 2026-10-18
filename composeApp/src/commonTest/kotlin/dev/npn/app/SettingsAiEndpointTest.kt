@@ -1,12 +1,14 @@
 package dev.npn.app
 
 import androidx.lifecycle.ViewModelStore
+import dev.npn.app.ui.settings.SettingsCategoryId
 import dev.npn.app.ui.settings.TextSetting
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiReasoningLevel
 import dev.npn.core.ai.AiTagging
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -15,6 +17,23 @@ import kotlin.test.Test
 
 /** The AI endpoint on the Settings screen: provider, base URL, key, model and tagging limits. */
 class SettingsAiEndpointTest : MainDispatcherTest() {
+    /**
+     * A restored process shows the AI pane with the endpoint address the user typed: a viewmodel
+     * that goes saves what was typed into it, so the new one reads it back as saved.
+     */
+    @Test
+    fun aRestoredProcessShowsTheTypedEndpoint() =
+        runTest(dispatcher) {
+            val settings = FakeSettingsRepository()
+            val screen = recreatable { settingsVm(settings = settings, saved = it) }
+            screen.vm.pick(SettingsCategoryId.AI)
+            screen.vm.type(TextSetting.AI_BASE_URL, "http://192.168.1.20:11434")
+            runCurrent()
+
+            val restored = screen.recreate(this, { combine(it.paneState, it.picked, ::Pair) })
+            restored.paneState.value.settings.snapshot.aiBaseUrl shouldBe "http://192.168.1.20:11434"
+        }
+
     @Test
     fun aiEditsPersistThroughRepository() =
         runTest(dispatcher) {

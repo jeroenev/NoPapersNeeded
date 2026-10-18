@@ -25,6 +25,32 @@ import kotlin.test.Test
 
 /** Accepting a suggestion must retain its retry and the user's draft until the write lands. */
 class AiMetadataAcceptanceTest : MainDispatcherTest() {
+    /**
+     * A restored process keeps what the user typed over a suggestion (the session's drafts, saved
+     * apart from the viewmodel), but not the suggestion: it lived only in the old process's memory,
+     * so the panel offers to ask again. One of the losses [Transient.document] names.
+     */
+    @Test
+    fun aRestoredProcessKeepsTheDraftButNotTheSuggestion() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            session.aiSuggest.edit = suggestion("Suggested")
+            val screen = recreatable { DocDetailViewModel("one", session, aiConfiguredSettings(), saved = it) }
+            collecting(screen.vm.metadata)
+            val drafts = DocumentDrafts(session.meta, backgroundScope)
+            drafts.field("one", FieldKeys.TITLE, "Typed", persisted = "Stored")
+            screen.vm.suggestAiMetadata()
+            advanceUntilIdle()
+            screen.vm.metadata.value.ai.metadata.suggestion[FieldKeys.TITLE] shouldBe "Suggested"
+
+            val restored = screen.recreate(this, { it.metadata }, Transient::document)
+            restored.metadata.value.ai.metadata.suggestion shouldBe FieldSuggestion.EMPTY
+            DocumentDrafts(session.meta, backgroundScope, drafts.serialize())
+                .state
+                .getValue("one")
+                .fields[FieldKeys.TITLE] shouldBe "Typed"
+        }
+
     @Test
     fun aFailedAcceptanceKeepsTheSuggestionAndDraftForRetry() =
         runTest(dispatcher) {

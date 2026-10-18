@@ -1,7 +1,9 @@
 package dev.npn.app.ui.ai
 
 import dev.npn.app.MainDispatcherTest
+import dev.npn.app.Transient
 import dev.npn.app.collecting
+import dev.npn.app.recreatable
 import dev.npn.app.ui.common.reasonText
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.aiedit.ApplyResult
@@ -10,6 +12,7 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -20,6 +23,44 @@ import kotlin.test.Test
 
 /** Start → Suggesting → Review: how a batch's progress and answer show on the page. */
 class AiEditSuggestionTest : MainDispatcherTest() {
+    /**
+     * A batch being suggested is work in flight: it dies with the process, so a restored page is
+     * back on the setup form ([Transient.aiEdit]), as configured, with nothing of the batch spent.
+     */
+    @Test
+    fun aRestoredProcessIsBackOnTheSetupFormWhenABatchWasBeingSuggested() =
+        runTest(dispatcher) {
+            val screen =
+                recreatable { saved ->
+                    vm(
+                        FakeAiEditRun().apply {
+                            inScope("a", "b")
+                            gate = CompletableDeferred()
+                            progress =
+                                listOf(
+                                    EditProgress(done = 0, total = 2, currentTitle = null, currentFileName = "a.pdf"),
+                                )
+                            batch = review(reviewDoc("a", tags = listOf("t")))
+                        },
+                        saved = saved,
+                    )
+                }
+            collecting(screen.vm.ui)
+            advanceUntilIdle()
+            screen.vm.start()
+            advanceUntilIdle()
+            screen.vm.ui.value.phase
+                .shouldBeInstanceOf<EditPhase.Suggesting>()
+
+            val restored =
+                screen.recreate(this, { combine(it.ui, it.preview, ::Pair) }) { (ui, preview) ->
+                    Transient.aiEdit(ui) to
+                        preview
+                }
+            restored.ui.value.phase shouldBe EditPhase.Idle
+            restored.preview.value.total shouldBe 2
+        }
+
     @Test
     fun theRunsProgressIsTheSuggestingPhase() =
         runTest(dispatcher) {

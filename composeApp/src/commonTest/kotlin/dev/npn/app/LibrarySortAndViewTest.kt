@@ -1,5 +1,6 @@
 package dev.npn.app
 
+import dev.npn.app.ui.library.LibraryDialog
 import dev.npn.app.ui.library.LibraryViewModel
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySort
@@ -10,6 +11,7 @@ import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.maps.shouldContainExactly
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -25,6 +27,27 @@ class LibrarySortAndViewTest : MainDispatcherTest() {
         session: FakeLibrarySession = FakeLibrarySession(),
         settings: FakeSettingsRepository = FakeSettingsRepository(),
     ) = LibraryViewModel(session, settings)
+
+    /**
+     * A restored process shows the list sorted and laid out as the user chose, the persisted choices
+     * included, with the save-view dialog they had open.
+     */
+    @Test
+    fun aRestoredProcessKeepsTheSortTheLayoutAndTheSaveViewDialog() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val settings = FakeSettingsRepository()
+            val screen = recreatable { LibraryViewModel(session, settings, it) }
+            screen.vm.setSort(SortField.Name, ascending = true)
+            screen.vm.setViewType(ViewType.GRID)
+            screen.vm.openDialog(LibraryDialog.SaveView)
+
+            val restored =
+                screen.recreate(this, { combine(it.content, it.dialog, ::Pair) }) { (content, dialog) ->
+                    Transient.library(content) to dialog
+                }
+            restored.ui.value.sort shouldBe LibrarySort(SortField.Name, ascending = true)
+        }
 
     @Test
     fun opensOnThePersistedDefaultView() =

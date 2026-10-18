@@ -3,6 +3,7 @@ package dev.npn.app.ui.ai
 import dev.npn.app.FakeLibrarySession
 import dev.npn.app.MainDispatcherTest
 import dev.npn.app.collecting
+import dev.npn.app.recreatable
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.SavedView
@@ -13,6 +14,7 @@ import dev.npn.core.model.ReviewMode
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -26,6 +28,24 @@ class AiEditScopeTest : MainDispatcherTest() {
             filter = LibraryFilter(tagsAll = listOf("invoice")),
             sort = LibrarySort(SortField.Name, ascending = true),
         )
+
+    /** A restored process keeps the saved view the run is scoped to, and previews the same batch. */
+    @Test
+    fun aRestoredProcessKeepsTheSavedViewScope() =
+        runTest(dispatcher) {
+            val other = invoices.copy(id = "v2", name = "Receipts")
+            val session = FakeLibrarySession().apply { savedViews.views.value = listOf(invoices, other) }
+            val screen =
+                recreatable { vm(FakeAiEditRun().apply { inScope("a", "b") }, session, saved = it, task = null) }
+            collecting(screen.vm.ui)
+            advanceUntilIdle()
+            screen.vm.setTask(EditTask.CUSTOM)
+            screen.vm.setScope(EditScope.SAVED_VIEW)
+            screen.vm.setSavedView("v2")
+
+            val restored = screen.recreate(this, { combine(it.ui, it.preview, ::Pair) })
+            restored.ui.value.savedViewId shouldBe "v2"
+        }
 
     @Test
     fun thePreviewIsTheScopeTotalAndTheNextBatch() =

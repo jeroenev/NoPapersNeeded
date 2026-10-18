@@ -7,12 +7,17 @@ import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.viewModelFactory
 import dev.npn.app.ui.ai.AiChatUiState
+import dev.npn.app.ui.ai.AiEditUiState
+import dev.npn.app.ui.ai.EditPhase
 import dev.npn.app.ui.detail.AiMetadataState
 import dev.npn.app.ui.detail.AiTagState
 import dev.npn.app.ui.detail.DetailUiState
 import dev.npn.app.ui.detail.HistoryUiState
 import dev.npn.app.ui.detail.MetadataUiState
 import dev.npn.app.ui.library.LibraryContentState
+import dev.npn.app.ui.settings.AiModelListState
+import dev.npn.app.ui.settings.AiSelfTestState
+import dev.npn.app.ui.settings.SettingsPaneState
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.test.TestScope
@@ -113,6 +118,17 @@ internal object Transient {
     /** A rescan under way; and the dismissed scan report, which goes with the report ingest kept in memory. */
     fun library(state: LibraryContentState): LibraryContentState =
         state.copy(ui = state.ui.copy(refreshing = false, dismissedScanReport = null))
+
+    /** The models listed and the self-test's verdicts: results fetched on demand, which the panes ask for again. */
+    fun settings(state: SettingsPaneState): SettingsPaneState =
+        state.copy(aiModels = AiModelListState(), aiSelfTest = AiSelfTestState())
+
+    /**
+     * AI edit's phase past the setup form: a batch being suggested or applied is work in flight, a
+     * Done or Queued page reports work finished, and a Review's suggestions lived only in memory (the
+     * one loss here that is not legitimate: the suggestions were paid for; see the report).
+     */
+    fun aiEdit(state: AiEditUiState): AiEditUiState = state.copy(phase = EditPhase.Idle)
 
     /** A bake, a re-index or a split under way. */
     fun document(state: DetailUiState): DetailUiState =

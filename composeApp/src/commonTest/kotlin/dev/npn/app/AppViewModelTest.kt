@@ -65,6 +65,23 @@ class AppViewModelTest : MainDispatcherTest() {
             vm.queueStatus.value shouldBe QueueStatus.None
         }
 
+    /**
+     * A restored process opens the library the window had open, from the saved location, as any
+     * start does: nothing about it lives in the window's saved state.
+     */
+    @Test
+    fun aRestoredProcessOpensTheSameLibrary() =
+        runTest(dispatcher) {
+            val env = env(savedLocation = "/lib")
+            val screen =
+                recreatable {
+                    AppViewModel(env, io) { parent, name -> createdLocation(parent, name) }
+                }
+
+            val restored = screen.recreate(this, { it.state })
+            restored.state.value shouldBe AppState.Open(env.sessions.getValue("/lib"))
+        }
+
     @Test
     fun theSavedLibraryOpensAtStart() =
         runTest(dispatcher) {
