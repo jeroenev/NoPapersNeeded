@@ -81,6 +81,7 @@ internal fun MainNav(
                         settings = settings,
                         session = session,
                         library = library,
+                        aiConfigured = aiConfigured,
                         showAiEditTopBar = !aiEditInSidebar,
                         onOpenLibrary = onOpenLibrary,
                     )
@@ -182,6 +183,7 @@ private fun MainNavHost(
     settings: SettingsRepository,
     session: LibrarySession,
     library: LibraryUi,
+    aiConfigured: Boolean,
     showAiEditTopBar: Boolean,
     onOpenLibrary: (location: String) -> Unit,
 ) {
@@ -195,7 +197,7 @@ private fun MainNavHost(
                 onOpenDoc = { docId, order, query -> nav.openDoc(docId, browse, order, query) },
                 onTrash = { nav.navigateTopLevel(TopLevelDestination.TRASH) },
                 onOpenQueue = { nav.navigateTopLevel(TopLevelDestination.QUEUE) },
-                onAiEdit = { docIds -> nav.openAiEdit(library, docIds) },
+                onAiEdit = if (aiConfigured) ({ docIds -> nav.openAiEdit(library, docIds) }) else null,
                 filterHandoff = library.libraryFilter,
             )
         }

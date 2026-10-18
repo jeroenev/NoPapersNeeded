@@ -100,8 +100,11 @@ fun LibraryScreen(
     onTrash: () -> Unit,
     /** Opens the processing queue page, behind the OCR / AI-enrichment progress banners. */
     onOpenQueue: () -> Unit,
-    /** Opens the AI-edit page, optionally scoped to the given documents (empty = no preselection). */
-    onAiEdit: (List<String>) -> Unit,
+    /**
+     * Opens the AI-edit page, optionally scoped to the given documents (empty = no preselection);
+     * null while no AI endpoint is configured.
+     */
+    onAiEdit: ((List<String>) -> Unit)?,
     /** A filter another screen hands the library to apply when it shows. */
     filterHandoff: Handoff<LibraryFilter>,
     modifier: Modifier = Modifier,
@@ -111,7 +114,6 @@ fun LibraryScreen(
     // The filter sheet's vocabulary, which the list itself does not show.
     val tags by vm.tags.collectAsStateWithLifecycle()
     val fieldFilters by vm.fieldFilters.collectAsStateWithLifecycle()
-    val selectionTags by vm.selectionTags.collectAsStateWithLifecycle()
     val tagNames = remember(tags) { tags.map { it.name } }
     val ui = state.ui
     val docs = state.results?.items
@@ -157,7 +159,7 @@ fun LibraryScreen(
                     onOpenDoc = onDocClick,
                     onOpenQueue = onOpenQueue,
                     onOpenTrash = onTrash,
-                    onAiEdit = onAiEdit.takeIf { state.aiConfigured },
+                    onAiEdit = onAiEdit,
                     onDialog = { dialog = it },
                 )
             }
@@ -218,8 +220,14 @@ fun LibraryScreen(
         LibraryDialogHost(
             dialog = dialog,
             selectedCount = ui.selected.size,
-            // Removing a tag the selection does not carry is a no-op, so that picker offers only theirs.
-            tagOptions = if (dialog == LibraryDialog.RemoveTag) selectionTags else tagNames,
+            // Removing a tag the selection does not carry is a no-op, so that picker offers only theirs,
+            // read only while it is open.
+            tagOptions =
+                if (dialog == LibraryDialog.RemoveTag) {
+                    vm.selectionTags.collectAsStateWithLifecycle().value
+                } else {
+                    tagNames
+                },
             onSaveView = vm::saveCurrentView,
             onRenameView = vm::renameSavedView,
             onAddTag = vm::bulkAddTag,

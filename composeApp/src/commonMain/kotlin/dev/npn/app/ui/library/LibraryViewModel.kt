@@ -35,7 +35,6 @@ import dev.npn.core.index.ScanReport
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.settings.SettingsRepository
-import dev.npn.core.settings.aiConfigured
 import dev.npn.core.util.runLogged
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -137,8 +136,6 @@ internal data class LibraryContentState(
     val fields: List<FieldDef> = emptyList(),
     val gridColumnWidth: Int = DEFAULT_GRID_COLUMN_WIDTH,
     val landscapeListColumns: Boolean = false,
-    /** Whether AI is configured, which offers AI edit on a selection; follows Settings. */
-    val aiConfigured: Boolean = false,
 )
 
 /** What the progress and warning banners above the results report. */
@@ -298,7 +295,8 @@ class LibraryViewModel(
      * offers only these: removing a tag the selection does not carry is a no-op, and the whole
      * vocabulary would bury the handful actually in play. Read again whenever the selection or the
      * documents change, from the repository rather than the visible results, so a selection that
-     * survived a filter change still lists completely.
+     * survived a filter change still lists completely; and only while subscribed, which the screen
+     * is while that picker is open.
      */
     val selectionTags: StateFlow<List<String>> =
         combine(_ui.map { it.selected }.distinctUntilChanged(), documents) { selected, _ -> selected }
@@ -337,10 +335,6 @@ class LibraryViewModel(
             .map { it.gridColumnWidth }
             .distinctUntilChanged()
             .stateIn(viewModelScope, WhileSubscribedTimeout, DEFAULT_GRID_COLUMN_WIDTH)
-
-    /** Whether AI is configured, which offers AI edit on a selection; follows Settings. */
-    private val aiConfigured: StateFlow<Boolean> =
-        settings.aiConfigured().stateIn(viewModelScope, WhileSubscribedTimeout, false)
 
     /** When true, the list view uses multiple columns while the window is landscape. */
     private val landscapeListColumns: StateFlow<Boolean> =
@@ -383,8 +377,8 @@ class LibraryViewModel(
             fieldFilters,
             tags.map { it.colorsByName() },
             savedViewRepository.observeSavedViews(),
-            combine(gridColumnWidth, landscapeListColumns, aiConfigured, ::Triple),
-        ) { fieldOptions, tagColors, savedViews, (gridColumnWidth, landscapeListColumns, aiConfigured) ->
+            combine(gridColumnWidth, landscapeListColumns, ::Pair),
+        ) { fieldOptions, tagColors, savedViews, (gridColumnWidth, landscapeListColumns) ->
             LibraryContentState(
                 tagColors = tagColors,
                 savedViews = savedViews,
@@ -393,7 +387,6 @@ class LibraryViewModel(
                 fields = fieldOptions.fields,
                 gridColumnWidth = gridColumnWidth,
                 landscapeListColumns = landscapeListColumns,
-                aiConfigured = aiConfigured,
             )
         }.stateIn(viewModelScope, WhileSubscribedTimeout, LibraryContentState())
 
