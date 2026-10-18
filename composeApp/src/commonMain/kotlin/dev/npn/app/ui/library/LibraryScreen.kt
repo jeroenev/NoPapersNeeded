@@ -459,6 +459,7 @@ private fun LibraryContent(
                 dismissed = ui.scanIssuesDismissed(state.banners.lastScan),
                 onDismiss = actions::dismissBanner,
                 onGoToTrash = onOpenTrash,
+                onShowDocuments = { docIds -> actions.setFilter(LibraryFilter(docIds = docIds)) },
                 onOpenQueue = onOpenQueue,
             )
 

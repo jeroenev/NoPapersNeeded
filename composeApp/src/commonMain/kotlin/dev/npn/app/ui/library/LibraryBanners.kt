@@ -26,6 +26,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.resolve
@@ -36,27 +38,42 @@ import no_papers_needed.composeapp.generated.resources.library_dismiss
 import no_papers_needed.composeapp.generated.resources.library_duplicate_count
 import no_papers_needed.composeapp.generated.resources.library_ocr_pending
 import no_papers_needed.composeapp.generated.resources.library_ocr_pending_running
+import no_papers_needed.composeapp.generated.resources.library_path_conflict_count
 import no_papers_needed.composeapp.generated.resources.library_review
 import no_papers_needed.composeapp.generated.resources.queue_ai_pending
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
+/**
+ * The progress and warning banners above the results. The last scan's issues are one dismissable
+ * banner ([dismissed] for this scan's report); [onShowDocuments] narrows the library to the documents
+ * that could not be moved to their new location, which a scan can report by the thousand (every one
+ * a storage-path rule names, on storage that cannot move documents), so the banner only counts them.
+ */
 @Composable
 internal fun Banners(
     banners: LibraryBanners,
     dismissed: Boolean,
     onDismiss: () -> Unit,
     onGoToTrash: () -> Unit,
+    onShowDocuments: (docIds: List<String>) -> Unit,
     onOpenQueue: () -> Unit,
 ) {
     Column(Modifier.padding(horizontal = 16.dp)) {
         banners.scanProgress?.let { ScanProgressBanner(it) }
         val lastScan = banners.lastScan
-        PathConflictsBanner(lastScan?.pathConflicts.orEmpty())
         val conflicts = lastScan?.conflictFiles.orEmpty()
         val dupes = lastScan?.duplicates.orEmpty()
-        if (!dismissed && (conflicts.isNotEmpty() || dupes.isNotEmpty())) {
-            ScanIssuesBanner(conflicts.size, dupes.size, onGoToTrash, onDismiss)
+        val pathConflicts = lastScan?.pathConflicts.orEmpty()
+        if (!dismissed && conflicts.size + dupes.size + pathConflicts.size > 0) {
+            ScanIssuesBanner(
+                conflictCount = conflicts.size,
+                duplicateCount = dupes.size,
+                pathConflictCount = pathConflicts.size,
+                onGoToTrash = onGoToTrash,
+                onShowPathConflicts = { onShowDocuments(pathConflicts.map { it.docId }) },
+                onDismiss = onDismiss,
+            )
         }
         // Both indicators open the same queue view, which is the detail behind either count.
         val ocr = banners.ocr
@@ -98,11 +115,17 @@ private fun ScanProgressBanner(scanProgress: IndexProgress) {
     }
 }
 
+/**
+ * The last scan's issues, one sentence per kind. Conflict files and duplicates are reviewed in the
+ * trash; the documents that could not be moved are a link that shows them in the library.
+ */
 @Composable
 private fun ScanIssuesBanner(
     conflictCount: Int,
     duplicateCount: Int,
+    pathConflictCount: Int,
     onGoToTrash: () -> Unit,
+    onShowPathConflicts: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
@@ -126,8 +149,23 @@ private fun ScanIssuesBanner(
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
+                if (pathConflictCount > 0) {
+                    Text(
+                        pluralStringResource(
+                            Res.plurals.library_path_conflict_count,
+                            pathConflictCount,
+                            pathConflictCount,
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        textDecoration = TextDecoration.Underline,
+                        modifier = Modifier.clickable(role = Role.Button, onClick = onShowPathConflicts),
+                    )
+                }
             }
-            TextButton(onClick = onGoToTrash) { Text(stringResource(Res.string.library_review)) }
+            if (conflictCount > 0 || duplicateCount > 0) {
+                TextButton(onClick = onGoToTrash) { Text(stringResource(Res.string.library_review)) }
+            }
             TextButton(onClick = onDismiss) { Text(stringResource(Res.string.library_dismiss)) }
         }
     }

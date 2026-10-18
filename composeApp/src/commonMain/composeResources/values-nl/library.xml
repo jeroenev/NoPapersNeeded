@@ -60,7 +60,10 @@
 
     <string name="library_scan_folding">Bibliotheek bijwerken…</string>
 
-    <string name="library_path_conflict">Kan %1$s niet verplaatsen naar %2$s. Het huidige bestand blijft behouden. Los het conflict op de doellocatie op of kies een andere locatie; NPN probeert het opnieuw bij een herscan.</string>
+    <plurals name="library_path_conflict_count">
+        <item quantity="one">%1$d document kon niet naar zijn nieuwe locatie worden verplaatst.</item>
+        <item quantity="other">%1$d documenten konden niet naar hun nieuwe locatie worden verplaatst.</item>
+    </plurals>
     <plurals name="library_conflict_file_count">
         <item quantity="one">%1$d conflictbestand.</item>
         <item quantity="other">%1$d conflictbestanden.</item>
