@@ -117,7 +117,7 @@ class SettingsViewModel(
                 storagePathEnabled = path.enabled,
                 trashRetentionDays = typedDays ?: days,
             )
-        }.stateIn(viewModelScope, WhileSubscribedTimeout, SettingsUiState())
+        }.stateIn(viewModelScope, WhileSubscribedTimeout, SettingsUiState(snapshot = settings.settings.value))
 
     private val reviewMode: StateFlow<ReviewMode> =
         reviewConfig.reviewMode.stateIn(viewModelScope, WhileSubscribedTimeout, ReviewMode.DEFAULT)

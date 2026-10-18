@@ -118,14 +118,13 @@ class AppViewModel(
         env.settings.settings
             .map { it.useSafStorage }
             .distinctUntilChanged()
-            .stateIn(viewModelScope, WhileSubscribedTimeout, false)
+            .stateIn(viewModelScope, WhileSubscribedTimeout, env.settings.settings.value.useSafStorage)
 
-    /**
-     * Whether AI is configured, for the shell's AI entries. Kept from the start rather than while
-     * subscribed, so the answer is in before the library opens and the bar never shifts under it.
-     */
+    /** Whether AI is configured, for the shell's AI entries. */
     val aiConfigured: StateFlow<Boolean> =
-        env.settings.aiConfigured().stateIn(viewModelScope, SharingStarted.Eagerly, false)
+        env.settings
+            .aiConfigured()
+            .stateIn(viewModelScope, SharingStarted.Eagerly, env.settings.settings.value.aiConfigured)
 
     /**
      * Outstanding background work in the open library, for the shell's queue badge: the only

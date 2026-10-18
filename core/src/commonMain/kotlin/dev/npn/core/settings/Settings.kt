@@ -9,6 +9,7 @@ import dev.npn.core.app.SortField
 import dev.npn.core.app.ViewType
 import dev.npn.core.ocr.OcrLanguages
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
@@ -87,8 +88,10 @@ fun SettingsSnapshot.toAiConfig(systemLanguage: String? = null): AiConfig =
  * AI entries, the library's and the document's AI actions, the chat). A local settings read, so it
  * follows Settings the moment AI is configured or turned off, with no session or screen to reopen.
  */
-fun SettingsRepository.aiConfigured(): Flow<Boolean> =
-    settings.map { it.toAiConfig().configured }.distinctUntilChanged()
+fun SettingsRepository.aiConfigured(): Flow<Boolean> = settings.map { it.aiConfigured }.distinctUntilChanged()
+
+/** Whether these settings configure an AI endpoint; [SettingsRepository.aiConfigured] follows it. */
+val SettingsSnapshot.aiConfigured: Boolean get() = toAiConfig().configured
 
 /**
  * Device-local, app-global settings (never per library, never synced through the journal — the
@@ -108,8 +111,11 @@ fun SettingsRepository.aiConfigured(): Flow<Boolean> =
  * value coerced into [AiTagging.RANGE].
  */
 interface SettingsRepository {
-    /** The current settings, already normalised (clamped, defaults filled). */
-    val settings: Flow<SettingsSnapshot>
+    /**
+     * The current settings, already normalised (clamped, defaults filled). Loaded when the
+     * repository is built, so [StateFlow.value] is always the real settings, never a placeholder.
+     */
+    val settings: StateFlow<SettingsSnapshot>
 
     /**
      * Mutate the settings: [transform] receives the current normalised snapshot and returns the

@@ -90,7 +90,7 @@ class DefaultAppEnvironmentTest {
                 env.session.value.shouldNotBeNull()
                 env.opening.value shouldBe false
                 settings.settingsFlow.value
-                    ?.libraryLocation shouldBe good
+                    .libraryLocation shouldBe good
             } finally {
                 env.closeLibrary()
             }
@@ -113,7 +113,7 @@ class DefaultAppEnvironmentTest {
 
                 flaky.session.value.shouldNotBeNull()
                 settings.settingsFlow.value
-                    ?.libraryLocation shouldBe good
+                    .libraryLocation shouldBe good
             } finally {
                 flaky.closeLibrary()
                 flaky.appScope.cancel()
@@ -140,7 +140,7 @@ class DefaultAppEnvironmentTest {
                 env.session.value.shouldNotBeNull()
                 env.opening.value shouldBe false
                 settings.settingsFlow.value
-                    ?.libraryLocation shouldBe good
+                    .libraryLocation shouldBe good
             } finally {
                 env.closeLibrary()
             }

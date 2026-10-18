@@ -175,7 +175,7 @@ class AppViewModelTest : MainDispatcherTest() {
 
             vm.state.value shouldBe AppState.Open(env.sessions.getValue("/home/lib"))
             env.settings.settingsFlow.value
-                ?.libraryLocation shouldBe "/home/lib"
+                .libraryLocation shouldBe "/home/lib"
         }
 
     @Test
@@ -191,7 +191,7 @@ class AppViewModelTest : MainDispatcherTest() {
 
             vm.state.value shouldBe AppState.RestoreFailed(OpenFailure(OpenFailureReason.UNREADABLE, "broken index"))
             env.settings.settingsFlow.value
-                ?.libraryLocation shouldBe "/usb/lib"
+                .libraryLocation shouldBe "/usb/lib"
         }
 
     @Test
@@ -309,7 +309,7 @@ class AppViewModelTest : MainDispatcherTest() {
 
             vm.useSafStorage.value shouldBe true
             env.settings.settingsFlow.value
-                ?.useSafStorage shouldBe true
+                .useSafStorage shouldBe true
         }
 
     @Test

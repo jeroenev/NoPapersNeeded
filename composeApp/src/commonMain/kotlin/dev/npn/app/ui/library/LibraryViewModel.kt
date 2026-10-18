@@ -34,18 +34,19 @@ import dev.npn.core.index.IndexProgress
 import dev.npn.core.index.ScanReport
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.settings.GridSizing
 import dev.npn.core.settings.SettingsRepository
 import dev.npn.core.util.runLogged
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -111,9 +112,6 @@ data class LibraryUiState(
     fun scanIssuesDismissed(report: ScanReport?): Boolean = report != null && report == dismissedScanReport
 }
 
-/** The grid's minimum cell width (dp) until the settings have loaded. */
-internal const val DEFAULT_GRID_COLUMN_WIDTH = 160
-
 /**
  * Everything the library list shows, assembled by [LibraryViewModel.content] from its flows.
  * Immutable, so the list skips when only the side panel or a dialog changes.
@@ -134,7 +132,7 @@ internal data class LibraryContentState(
     val sortableFields: List<FieldDef> = emptyList(),
     /** Every registry field, for the active-filter chips' labels. */
     val fields: List<FieldDef> = emptyList(),
-    val gridColumnWidth: Int = DEFAULT_GRID_COLUMN_WIDTH,
+    val gridColumnWidth: Int = GridSizing.DEFAULT_COLUMN_WIDTH,
     val landscapeListColumns: Boolean = false,
 )
 
@@ -218,15 +216,12 @@ class LibraryViewModel(
     private val reviewConfig = session.reviewConfig
     override val log = session.log
 
-    private val _ui = MutableStateFlow(LibraryUiState())
+    // Opens on the persisted default view and the last explicitly chosen sort.
+    private val _ui =
+        MutableStateFlow(
+            settings.settings.value.let { LibraryUiState(sort = it.librarySort, viewType = it.defaultViewType) },
+        )
     val ui: StateFlow<LibraryUiState> = _ui.asStateFlow()
-
-    // True once the user picks a view or applies a saved view this session. Guards against the
-    // async default-view seed clobbering an explicit choice made before it arrives.
-    private var viewOverridden = false
-
-    // Same race guard for the persisted sort seed.
-    private var sortOverridden = false
 
     // Raw query text, debounced before it hits the filter. The search field reads this directly
     // (via [queryText]) so it reflects keystrokes immediately; the debounce only gates the filter.
@@ -235,19 +230,6 @@ class LibraryViewModel(
     private val queryInput = MutableStateFlow("")
 
     init {
-        // Seed the view from the persisted default and the sort from the last explicitly chosen
-        // one. Only the first value applies, and each only if the user has not already chosen this
-        // session.
-        viewModelScope.launch {
-            val saved = settings.settings.first()
-            _ui.update {
-                it.copy(
-                    viewType = if (viewOverridden) it.viewType else saved.defaultViewType,
-                    sort = if (sortOverridden) it.sort else saved.librarySort,
-                )
-            }
-        }
-
         viewModelScope.launch {
             queryInput
                 .debounce(QUERY_DEBOUNCE_MS)
@@ -329,19 +311,24 @@ class LibraryViewModel(
             FieldFilterOptions(fields = defs, values = values)
         }.stateIn(viewModelScope, WhileSubscribedTimeout, FieldFilterOptions())
 
-    /** Min grid cell width (dp), user-adjustable via settings; drives the adaptive column count. */
-    private val gridColumnWidth: StateFlow<Int> =
-        settings.settings
-            .map { it.gridColumnWidth }
-            .distinctUntilChanged()
-            .stateIn(viewModelScope, WhileSubscribedTimeout, DEFAULT_GRID_COLUMN_WIDTH)
+    /** What the list shows before its flows answer: no results yet, laid out as the settings say. */
+    private val initialContent =
+        settings.settings.value.let {
+            LibraryContentState(
+                ui = _ui.value,
+                gridColumnWidth = it.gridColumnWidth,
+                landscapeListColumns = it.landscapeListColumns,
+            )
+        }
 
-    /** When true, the list view uses multiple columns while the window is landscape. */
-    private val landscapeListColumns: StateFlow<Boolean> =
+    /**
+     * The grid's minimum cell width (dp), user-adjustable via settings; drives the adaptive column
+     * count. With whether the list view uses multiple columns while the window is landscape.
+     */
+    private val layout: Flow<Pair<Int, Boolean>> =
         settings.settings
-            .map { it.landscapeListColumns }
+            .map { it.gridColumnWidth to it.landscapeListColumns }
             .distinctUntilChanged()
-            .stateIn(viewModelScope, WhileSubscribedTimeout, false)
 
     private val reviewMode: StateFlow<ReviewMode> =
         reviewConfig.reviewMode
@@ -377,7 +364,7 @@ class LibraryViewModel(
             fieldFilters,
             tags.map { it.colorsByName() },
             savedViewRepository.observeSavedViews(),
-            combine(gridColumnWidth, landscapeListColumns, ::Pair),
+            layout,
         ) { fieldOptions, tagColors, savedViews, (gridColumnWidth, landscapeListColumns) ->
             LibraryContentState(
                 tagColors = tagColors,
@@ -388,7 +375,7 @@ class LibraryViewModel(
                 gridColumnWidth = gridColumnWidth,
                 landscapeListColumns = landscapeListColumns,
             )
-        }.stateIn(viewModelScope, WhileSubscribedTimeout, LibraryContentState())
+        }.stateIn(viewModelScope, WhileSubscribedTimeout, initialContent)
 
     /**
      * Everything the library list shows, in one state: the UI state, the [DocumentResults] (its
@@ -411,7 +398,7 @@ class LibraryViewModel(
                 reviewCount = reviewCount,
                 banners = banners,
             )
-        }.stateIn(viewModelScope, WhileSubscribedTimeout, LibraryContentState())
+        }.stateIn(viewModelScope, WhileSubscribedTimeout, initialContent)
 
     override fun onQueryChange(text: String) {
         queryInput.value = text
@@ -447,7 +434,6 @@ class LibraryViewModel(
         field: SortField,
         ascending: Boolean,
     ) {
-        sortOverridden = true
         val sort = LibrarySort(field, ascending)
         _ui.update { it.copy(sort = sort) }
         // Persist so the choice survives restart.
@@ -455,7 +441,6 @@ class LibraryViewModel(
     }
 
     override fun setViewType(v: ViewType) {
-        viewOverridden = true
         _ui.update { it.copy(viewType = v) }
         // Persist so the choice becomes the default and survives restart (also keeps the settings
         // screen in sync with the top-bar switcher).
@@ -463,9 +448,7 @@ class LibraryViewModel(
     }
 
     override fun applySavedView(view: SavedView) {
-        viewOverridden = true
-        // Guards the seed only; a saved view's sort is part of the view, not a new default.
-        sortOverridden = true
+        // A saved view's sort is part of the view, not a new default, so it is not persisted.
         _ui.update { it.copy(filter = view.filter, sort = view.sort, viewType = view.viewType) }
         queryInput.value = view.filter.query.orEmpty()
     }

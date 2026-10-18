@@ -3,7 +3,6 @@ package dev.npn.core.settings
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.model.systemLanguage
 import dev.npn.core.ocr.OcrLanguages
-import kotlinx.coroutines.flow.first
 
 /**
  * The device settings a session reads while it runs. Each is read at the moment it is needed (the
@@ -29,9 +28,9 @@ class SessionSettings(
             systemLanguage: () -> String = ::systemLanguage,
         ): SessionSettings =
             SessionSettings(
-                ocrLanguage = { OcrLanguages.effective(settings.settings.first().ocrLanguage, systemLanguage()) },
+                ocrLanguage = { OcrLanguages.effective(settings.settings.value.ocrLanguage, systemLanguage()) },
                 legacyLibrarySettings = settings::legacyLibrarySettings,
-                aiConfig = { settings.settings.first().toAiConfig(systemLanguage()) },
+                aiConfig = { settings.settings.value.toAiConfig(systemLanguage()) },
             )
     }
 }

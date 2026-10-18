@@ -59,12 +59,12 @@ class SettingsViewModelTest : MainDispatcherTest() {
 
             model.watchedFolderPicked(FolderPick.AccessNotKept)
             advanceUntilIdle()
-            settings.settingsFlow.value?.watchedFolder shouldBe "/inbox"
+            settings.settingsFlow.value.watchedFolder shouldBe "/inbox"
             messages shouldContainExactly listOf(uiText(Res.string.common_folder_access_not_kept_watched))
 
             model.watchedFolderPicked(FolderPick.Location(TREE))
             advanceUntilIdle()
-            settings.settingsFlow.value?.watchedFolder shouldBe TREE
+            settings.settingsFlow.value.watchedFolder shouldBe TREE
             messages shouldContainExactly listOf(uiText(Res.string.common_folder_access_not_kept_watched))
         }
 
@@ -83,12 +83,12 @@ class SettingsViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
             model.watchedFolderPicked(FolderPick.Location("/home/lib"))
             advanceUntilIdle()
-            settings.settingsFlow.value?.watchedFolder shouldBe "/inbox"
+            settings.settingsFlow.value.watchedFolder shouldBe "/inbox"
             messages shouldContainExactly List(2) { uiText(Res.string.common_folder_in_library_watched) }
 
             model.watchedFolderPicked(FolderPick.Location("/home/scans"))
             advanceUntilIdle()
-            settings.settingsFlow.value?.watchedFolder shouldBe "/home/scans"
+            settings.settingsFlow.value.watchedFolder shouldBe "/home/scans"
             messages.size shouldBe 2
         }
 
@@ -235,10 +235,10 @@ class SettingsViewModelTest : MainDispatcherTest() {
             model.edit { it.copy(appLanguage = "nl") }
             advanceUntilIdle()
             val s = settings.settingsFlow.value
-            s?.ocrLanguage shouldBe "deu"
-            s?.defaultViewType shouldBe ViewType.GRID
-            s?.landscapeListColumns shouldBe true
-            s?.appLanguage shouldBe "nl"
+            s.ocrLanguage shouldBe "deu"
+            s.defaultViewType shouldBe ViewType.GRID
+            s.landscapeListColumns shouldBe true
+            s.appLanguage shouldBe "nl"
         }
 
     @Test
@@ -254,7 +254,7 @@ class SettingsViewModelTest : MainDispatcherTest() {
             model.edit { it.copy(appLanguage = null) }
             advanceUntilIdle()
             model.paneState.value.settings.snapshot.appLanguage shouldBe null
-            settings.settingsFlow.value?.appLanguage shouldBe null
+            settings.settingsFlow.value.appLanguage shouldBe null
         }
 
     @Test

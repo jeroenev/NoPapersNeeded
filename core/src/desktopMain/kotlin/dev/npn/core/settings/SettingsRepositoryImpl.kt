@@ -4,8 +4,9 @@ import dev.npn.core.util.NpnLog
 import dev.npn.core.util.warn
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -143,7 +144,7 @@ class SettingsRepositoryImpl internal constructor(
         }
     }
 
-    override val settings: Flow<SettingsSnapshot> = state
+    override val settings: StateFlow<SettingsSnapshot> = state.asStateFlow()
 
     override suspend fun edit(transform: (SettingsSnapshot) -> SettingsSnapshot) =
         persistMutex.withLock {

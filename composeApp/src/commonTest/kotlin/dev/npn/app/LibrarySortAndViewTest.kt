@@ -27,26 +27,9 @@ class LibrarySortAndViewTest : MainDispatcherTest() {
     ) = LibraryViewModel(session, settings)
 
     @Test
-    fun defaultViewSeedAppliesWhenUserHasNotChosen() =
+    fun opensOnThePersistedDefaultView() =
         runTest(dispatcher) {
-            val settings = FakeSettingsRepository(initialDefaultView = ViewType.GRID)
-            val model = vm(settings = settings)
-            advanceUntilIdle()
-            model.ui.value.viewType shouldBe ViewType.GRID
-        }
-
-    @Test
-    fun explicitViewChoiceIsNotClobberedByLateDefaultSeed() =
-        runTest(dispatcher) {
-            val settings = FakeSettingsRepository(initialDefaultView = null)
-            val model = LibraryViewModel(FakeLibrarySession(), settings)
-            // User picks GRID before the async default seed (LIST) arrives.
-            model.setViewType(ViewType.GRID)
-            runCurrent()
-            model.ui.value.viewType shouldBe ViewType.GRID
-            // Now the deferred default arrives; it must NOT clobber the explicit choice.
-            settings.updateSettings { it.copy(defaultViewType = ViewType.LIST) }
-            advanceUntilIdle()
+            val model = vm(settings = FakeSettingsRepository(initialDefaultView = ViewType.GRID))
             model.ui.value.viewType shouldBe ViewType.GRID
         }
 
@@ -57,14 +40,13 @@ class LibrarySortAndViewTest : MainDispatcherTest() {
             val model = vm(settings = settings)
             model.setViewType(ViewType.GRID)
             advanceUntilIdle()
-            settings.settingsFlow.value?.defaultViewType shouldBe ViewType.GRID
+            settings.settingsFlow.value.defaultViewType shouldBe ViewType.GRID
         }
 
     @Test
-    fun applySavedViewSetsFilterSortViewAndMarksOverridden() =
+    fun applySavedViewSetsFilterSortAndView() =
         runTest(dispatcher) {
-            val settings = FakeSettingsRepository(initialDefaultView = null)
-            val model = LibraryViewModel(FakeLibrarySession(), settings)
+            val model = vm()
             collecting(model.content)
             val view =
                 SavedView(
@@ -78,10 +60,6 @@ class LibrarySortAndViewTest : MainDispatcherTest() {
             model.ui.value.viewType shouldBe ViewType.GRID
             runCurrent()
             model.content.value.queryText shouldBe "tax"
-            // The late default must not override the applied saved view.
-            settings.updateSettings { it.copy(defaultViewType = ViewType.LIST) }
-            advanceUntilIdle()
-            model.ui.value.viewType shouldBe ViewType.GRID
         }
 
     @Test
@@ -100,33 +78,26 @@ class LibrarySortAndViewTest : MainDispatcherTest() {
             val model = vm(settings = settings)
             model.setSort(SortField.Size, ascending = true)
             advanceUntilIdle()
-            settings.settingsFlow.value?.librarySort shouldBe LibrarySort(SortField.Size, ascending = true)
+            settings.settingsFlow.value.librarySort shouldBe LibrarySort(SortField.Size, ascending = true)
         }
 
     @Test
-    fun persistedSortSeedAppliesWhenUserHasNotChosen() =
+    fun opensOnThePersistedSort() =
         runTest(dispatcher) {
             val settings =
                 FakeSettingsRepository().apply {
                     updateSettings { it.copy(librarySort = LibrarySort(SortField.Name, ascending = true)) }
                 }
             val model = vm(settings = settings)
-            advanceUntilIdle()
             model.ui.value.sort shouldBe LibrarySort(SortField.Name, ascending = true)
         }
 
+    /** The list is laid out as the settings say from its first frame, not on a default first. */
     @Test
-    fun explicitSortChoiceIsNotClobberedByLateSeed() =
+    fun theFirstContentCarriesTheGridWidthFromSettings() =
         runTest(dispatcher) {
-            val settings =
-                FakeSettingsRepository().apply {
-                    updateSettings { it.copy(librarySort = LibrarySort(SortField.Name, ascending = true)) }
-                }
-            val model = vm(settings = settings)
-            // User sorts before the async seed runs.
-            model.setSort(SortField.Size, ascending = false)
-            advanceUntilIdle()
-            model.ui.value.sort shouldBe LibrarySort(SortField.Size, ascending = false)
+            val settings = FakeSettingsRepository().apply { updateSettings { it.copy(gridColumnWidth = 240) } }
+            vm(settings = settings).content.value.gridColumnWidth shouldBe 240
         }
 
     @Test
@@ -136,7 +107,7 @@ class LibrarySortAndViewTest : MainDispatcherTest() {
             val model = vm(settings = settings)
             model.setGridColumnWidth(220)
             advanceUntilIdle()
-            settings.settingsFlow.value?.gridColumnWidth shouldBe 220
+            settings.settingsFlow.value.gridColumnWidth shouldBe 220
         }
 
     /** Sort, view and grid width still apply on screen when saving them fails, and each failure says so. */

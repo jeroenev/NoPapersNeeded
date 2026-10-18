@@ -79,7 +79,8 @@ private fun AiEditUiState.scopeKey(): ScopeKey =
 @OptIn(ExperimentalCoroutinesApi::class)
 class AiEditViewModel(
     session: LibrarySession,
-    private val settings: SettingsRepository,
+    /** The device settings, whose tag limits are the run's defaults. */
+    settings: SettingsRepository,
     /** Documents handed over from the library's selection mode; empty when opened from the rail. */
     selection: List<String> = emptyList(),
     /** The run this page drives, over the same [selection]. */
@@ -105,6 +106,9 @@ class AiEditViewModel(
             AiEditUiState(
                 scope = if (selection.isEmpty()) EditScope.UNTAGGED else EditScope.SELECTION,
                 selectionSize = selection.size,
+                // The per-run overrides start from the Settings defaults.
+                maxTags = settings.settings.value.aiMaxTagsPerDoc,
+                maxNewTags = settings.settings.value.aiMaxNewTagsPerDoc,
             ),
         )
     val ui: StateFlow<AiEditUiState> = _ui.asStateFlow()
@@ -196,20 +200,6 @@ class AiEditViewModel(
                     _ui.update { it.copy(savedViews = views, savedViewId = it.savedViewId ?: views.firstOrNull()?.id) }
                 }
             }.onFailure(::reportSetupFailure)
-        }
-        // Seed the per-run overrides from the persisted Settings defaults (once); keep the
-        // AiTagging defaults on failure.
-        viewModelScope.launch {
-            val snapshot =
-                runCatchingCancellable { settings.settings.first() }
-                    .onFailure(::reportSetupFailure)
-                    .getOrNull()
-            _ui.update {
-                it.copy(
-                    maxTags = snapshot?.aiMaxTagsPerDoc ?: AiTagging.DEFAULT_TAGS_PER_DOC,
-                    maxNewTags = snapshot?.aiMaxNewTagsPerDoc ?: AiTagging.DEFAULT_NEW_TAGS_PER_DOC,
-                )
-            }
         }
     }
 

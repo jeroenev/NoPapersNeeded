@@ -274,8 +274,8 @@ class DocDetailViewModel private constructor(
             }
         }
 
-    /** Whether AI is configured in Settings; false until first read. */
-    private val aiAvailable = MutableStateFlow(false)
+    /** Whether AI is configured in Settings, as it changes. */
+    private val aiAvailable = MutableStateFlow(settings.settings.value.aiConfigured)
 
     private val document: Flow<DocumentSection> =
         combine(loadState, reviewMode, fieldDefs, ocrText, ocrVersions) { state, mode, defs, text, versions ->
@@ -320,6 +320,7 @@ class DocDetailViewModel private constructor(
                     loadState = initialLoadState,
                     highlightTerms = highlightTerms,
                 ),
+            ai = AiPanelState(available = aiAvailable.value),
         )
 
     init {

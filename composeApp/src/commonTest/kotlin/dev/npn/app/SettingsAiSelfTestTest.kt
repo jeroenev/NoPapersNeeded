@@ -58,7 +58,7 @@ class SettingsAiSelfTestTest : MainDispatcherTest() {
             answer.complete(report(AiCheckStatus.FAILED))
             runCurrent()
 
-            settings.settingsFlow.value?.aiOcrAuto shouldBe true
+            settings.settingsFlow.value.aiOcrAuto shouldBe true
             model.paneState.value.aiSelfTest.report shouldBe null
             model.paneState.value.aiSelfTest.running shouldBe false
         }
@@ -77,11 +77,11 @@ class SettingsAiSelfTestTest : MainDispatcherTest() {
             answer.complete(report(AiCheckStatus.FAILED))
             runCurrent()
 
-            settings.settingsFlow.value?.aiOcrAuto shouldBe true
+            settings.settingsFlow.value.aiOcrAuto shouldBe true
             model.paneState.value.aiSelfTest.report shouldBe null
             advanceUntilIdle()
-            settings.settingsFlow.value?.aiModel shouldBe "replacement-vision-model"
-            settings.settingsFlow.value?.aiOcrAuto shouldBe true
+            settings.settingsFlow.value.aiModel shouldBe "replacement-vision-model"
+            settings.settingsFlow.value.aiOcrAuto shouldBe true
         }
 
     private fun aiSettings() =
@@ -110,7 +110,7 @@ class SettingsAiSelfTestTest : MainDispatcherTest() {
             gate.complete(Unit)
             advanceUntilIdle()
 
-            settings.settingsFlow.value?.aiOcrAuto shouldBe true
+            settings.settingsFlow.value.aiOcrAuto shouldBe true
             model.paneState.value.aiSelfTest.report shouldBe null
             model.paneState.value.aiSelfTest.running shouldBe false
         }
@@ -135,7 +135,7 @@ class SettingsAiSelfTestTest : MainDispatcherTest() {
             model.runAiSelfTest()
             advanceUntilIdle()
 
-            settings.settingsFlow.value?.aiOcrAuto shouldBe false
+            settings.settingsFlow.value.aiOcrAuto shouldBe false
             model.paneState.value.aiSelfTest.aiOcrTurnedOff shouldBe true
             model.paneState.value.aiSelfTest.running shouldBe false
         }
@@ -166,7 +166,7 @@ class SettingsAiSelfTestTest : MainDispatcherTest() {
                 model.runAiSelfTest()
                 advanceUntilIdle()
 
-                settings.settingsFlow.value?.aiOcrAuto shouldBe true
+                settings.settingsFlow.value.aiOcrAuto shouldBe true
                 model.paneState.value.aiSelfTest.aiOcrTurnedOff shouldBe false
             }
         }
