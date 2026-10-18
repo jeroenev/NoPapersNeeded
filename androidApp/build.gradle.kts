@@ -35,6 +35,15 @@ android {
         versionCode = npnVersion.code
         versionName = npnVersion.name
     }
+    // `lintDebug` also lints core and composeApp (checkDependencies), so one report covers the
+    // Android code of the whole app. Errors fail the build; lint-baseline.xml grandfathers the
+    // findings that were there when lint joined CI (do not add to it).
+    lint {
+        checkDependencies = true
+        abortOnError = true
+        lintConfig = rootProject.file("config/lint/lint.xml")
+        baseline = file("lint-baseline.xml")
+    }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"

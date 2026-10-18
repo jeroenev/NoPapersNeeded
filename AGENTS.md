@@ -69,13 +69,16 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   Never add a live-endpoint call to a normal test — CI has no credentials.
 - Formatting and lint: `./gradlew spotlessCheck detekt`, then `./gradlew detektTyped` (see
   Detekt below; it compiles first, so keep it a separate invocation from spotless).
+- Android lint: `./gradlew :androidApp:lintDebug` lints the app and, through `checkDependencies`,
+  core's and composeApp's Android code. Errors fail it; `androidApp/lint-baseline.xml`
+  grandfathers old findings (never add to it) and `config/lint/lint.xml` is the one configuration.
 - Fast UI iteration: `mise hot` (Compose Hot Reload on desktop). Android-only paths
   (scanner, share intents, WorkManager) need a device: `mise deploy`.
 - CI (`.github/workflows/ci.yml`) runs: shellcheck (hooks, mise tasks, `.github/scripts`) →
   spotlessCheck → checkLocalization + checkFieldTypeBranches → detekt → tests+coverage (kover
   drives both desktop test suites) → Android-target host tests → compile android+desktop +
   `compileDeviceTests` (the root task that builds every device test without a device; add a new
-  module's there) + `detektTyped` → committed Room schema exports → assembleDebug → desktopApp
+  module's there) + `detektTyped` + `:androidApp:lintDebug` → committed Room schema exports → assembleDebug → desktopApp
   build → packageAppImage. Match that order when verifying larger changes. Actions
   minutes and artifact storage are metered (private repo): PRs stop after compile, packaging runs
   on `main` only, the coverage report uploads only on `main` or after a failure, binaries upload

@@ -92,6 +92,13 @@ dependencies {
     add("kspDesktop", libs.room3.compiler)
 }
 
+// Lint's model lists every component's source directories, KSP's output among them, but AGP does
+// not order the test components' lint tasks after KSP; Gradle then refuses a build that runs both
+// (compileDeviceTests and lintDebug, as CI does).
+tasks.matching { it.name.endsWith("LintModel") || it.name.startsWith("lintAnalyze") }.configureEach {
+    mustRunAfter(tasks.matching { it.name.startsWith("ksp") })
+}
+
 // On a fresh Windows machine PDFBox's first font lookup scans every system font to build its
 // cache, which can outlast runTest's one-minute default in whichever test gets there first.
 if (System.getProperty("os.name").startsWith("Windows")) {

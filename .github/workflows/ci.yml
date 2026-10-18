@@ -62,8 +62,9 @@ jobs:
           :desktopApp:test
 
       # detektTyped is detekt with type resolution: it needs the compiled classpaths, so it shares
-      # this invocation instead of running with the source-only detekt above.
-      - name: Compile (Android and desktop) and typed static analysis
+      # this invocation instead of running with the source-only detekt above, as does Android lint
+      # (lintDebug lints core and composeApp's Android code too).
+      - name: Compile (Android and desktop), typed static analysis and Android lint
         run: >-
           ./gradlew
           :core:compileAndroidMain
@@ -71,6 +72,7 @@ jobs:
           :composeApp:compileAndroidMain
           compileDeviceTests
           detektTyped
+          :androidApp:lintDebug
 
       # KSP re-exports the Room schemas while compiling above. A difference means a schema change
       # whose export was not committed: device.db's DeviceDatabaseSchemaTest only guards what is.
@@ -118,6 +120,7 @@ jobs:
             composeApp/build/reports/tests
             desktopApp/build/reports/tests
             buildSrc/build/reports/tests
+            androidApp/build/reports/lint-results-debug.html
           retention-days: 7
 
       # Artifact storage is metered: coverage is kept for main, and for a run that failed.

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Android lint configuration for every module (npn.kmp-module and androidApp point here). -->
+<lint>
+    <!-- Room's generated DAOs use its restricted adapters by design; only our own code counts. -->
+    <issue id="RestrictedApi">
+        <ignore path="**/build/generated/**" />
+    </issue>
+    <!-- Bytecode of third-party jars (BouncyCastle's test trust managers) is not ours to fix. -->
+    <issue id="TrustAllX509TrustManager">
+        <ignore path="**/*.jar" />
+    </issue>
+    <!-- checkLocalization holds every translation to the default's plural quantities (one, other);
+         Android falls back to `other` for a language's `many`, which reads the same here. -->
+    <issue id="MissingQuantity" severity="ignore" />
+    <!-- Dependency versions are Dependabot's job; these would make lint's result depend on the date. -->
+    <issue id="NewerVersionAvailable" severity="ignore" />
+    <issue id="GradleDependency" severity="ignore" />
+    <issue id="AndroidGradlePluginVersion" severity="ignore" />
+</lint>
