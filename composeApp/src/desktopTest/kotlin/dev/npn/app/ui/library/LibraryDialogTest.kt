@@ -14,10 +14,17 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.state.ToggleableState
 import dev.npn.app.EnglishLocaleTest
+import dev.npn.app.ui.click
 import dev.npn.app.ui.closing
+import dev.npn.app.ui.editableField
+import dev.npn.app.ui.editableText
+import dev.npn.app.ui.isEnabled
+import dev.npn.app.ui.node
 import dev.npn.app.ui.nodes
 import dev.npn.app.ui.onUiThread
+import dev.npn.app.ui.texts
 import dev.npn.app.ui.themedScene
+import dev.npn.app.ui.type
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.SavedView
@@ -48,6 +55,42 @@ class LibraryDialogTest : EnglishLocaleTest() {
         }
         with(LibraryDialogSaver) { scope.save(null) } shouldBe null
     }
+
+    /** Renaming a saved view starts from its name, and confirms only a changed, non-blank one. */
+    @Test
+    fun renamingAViewStartsFromItsName() =
+        onUiThread {
+            val view = SavedView("v1", "Invoices")
+            var renamed: String? = null
+            themedScene(WIDTH, HEIGHT) {
+                LibraryDialogHost(
+                    dialog = LibraryDialog.RenameView(view),
+                    selectedCount = 0,
+                    tagOptions = emptyList(),
+                    onSaveView = {},
+                    onRenameView = { _, name -> renamed = name },
+                    onAddTag = {},
+                    onRemoveTag = {},
+                    onTrash = {},
+                    onDismiss = {},
+                )
+            }.closing {
+                render()
+                editableField()?.editableText() shouldBe "Invoices"
+                renameButton().isEnabled() shouldBe false
+
+                type("  ")
+                renameButton().isEnabled() shouldBe false
+
+                type("Bills ")
+                renameButton().isEnabled() shouldBe true
+                click { "Rename" in it.texts() && it.config.contains(SemanticsActions.OnClick) }
+                renamed shouldBe "Bills"
+            }
+        }
+
+    private fun ImageComposeScene.renameButton(): SemanticsNode =
+        node { "Rename" in it.texts() && it.config.contains(SemanticsActions.OnClick) }
 
     /**
      * An open filter editor with an unapplied change is still open, with the change, after the

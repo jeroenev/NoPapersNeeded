@@ -106,7 +106,9 @@ internal fun LibraryDialogHost(
             TextInputDialog(
                 title = stringResource(Res.string.library_rename_saved_view),
                 label = stringResource(Res.string.library_view_name),
+                initial = dialog.view.name,
                 confirmLabel = stringResource(Res.string.library_rename),
+                confirmEnabled = { it.isNotBlank() && it.trim() != dialog.view.name },
                 onConfirm = { name -> confirmed { onRenameView(dialog.view, name) } },
                 onDismiss = onDismiss,
             )

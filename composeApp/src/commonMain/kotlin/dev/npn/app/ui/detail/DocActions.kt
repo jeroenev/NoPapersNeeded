@@ -124,6 +124,7 @@ fun DocActions(
     )
     DocActionDialogs(
         dialog = dialog,
+        fileName = NpnPaths.stripPdfExtension(NpnPaths.fileName(item.doc.relPath)),
         pageCount = state.pageCount.count,
         aiOcr = state.aiOcr,
         onRename = actions::rename,
@@ -243,6 +244,8 @@ private fun DocActionsMenu(
 @Composable
 private fun DocActionDialogs(
     dialog: DocActionDialog?,
+    /** The document's file name without `.pdf`, which a rename adds back. */
+    fileName: String,
     pageCount: Int,
     aiOcr: AiOcrOffer,
     onRename: (String) -> Unit,
@@ -257,7 +260,9 @@ private fun DocActionDialogs(
             TextInputDialog(
                 title = stringResource(Res.string.detail_rename_file),
                 label = stringResource(Res.string.detail_new_file_name),
+                initial = fileName,
                 confirmLabel = stringResource(Res.string.detail_rename),
+                confirmEnabled = { it.isNotBlank() && it.trim() != fileName },
                 onConfirm = {
                     onRename(it)
                     onDismiss()
