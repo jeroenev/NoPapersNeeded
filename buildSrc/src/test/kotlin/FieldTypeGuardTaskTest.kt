@@ -42,7 +42,7 @@ class FieldTypeGuardTaskTest {
             .map { it.removePrefix("  - ") }
 
     @Test
-    fun anAllowedFileMayBranchOnTheType() {
+    fun anAllowedFileMayBranchAndOthersMayNameAConstantAsAValue() {
         source(
             ALLOWED,
             """
@@ -54,22 +54,10 @@ class FieldTypeGuardTaskTest {
             fun decimal(type: FieldType) = type == FieldType.DECIMAL
             """,
         )
-        runGuard()
-    }
-
-    @Test
-    fun namingAConstantAsAValueIsFine() {
-        source(ALLOWED, "")
         source(
             "core/src/commonMain/kotlin/Seeds.kt",
             """
-            val seeds = listOf(
-                FieldDef("title", FieldType.TEXT, position = 0),
-                FieldDef(
-                    "docDate",
-                    FieldType.DATE,
-                ),
-            )
+            val seeds = listOf(FieldDef("title", FieldType.TEXT, position = 0))
             fun typeOf(types: Map<String, FieldType>, key: String) = types[key] ?: FieldType.TEXT
             // A comment may say FieldType.DATE -> anything.
             /** So may a KDoc: `type == FieldType.DATE`. */

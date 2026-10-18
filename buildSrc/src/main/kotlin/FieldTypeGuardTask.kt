@@ -38,17 +38,13 @@ abstract class FieldTypeGuardTask : DefaultTask() {
     fun checkFieldTypeBranches() {
         val root = rootDirectory.get().asFile
         val allowedPaths = allowed.get()
-        val files = sources.files.filter { it.isFile && it.extension == "kt" }.sortedBy { it.path }
-        val relative = files.associateWith { it.relativeTo(root).invariantSeparatorsPath }
-        val problems = mutableListOf<String>()
-        (allowedPaths - relative.values.toSet()).sorted().forEach {
-            problems += "$it is allowed to branch on FieldType but is not among the scanned sources"
-        }
-        for (file in files) {
-            val path = relative.getValue(file)
-            if (path in allowedPaths) continue
-            problems += findings(file).map { (line, text) -> "$path:$line: $text" }
-        }
+        val files = sources.files.associateBy { it.relativeTo(root).invariantSeparatorsPath }.toSortedMap()
+        val missing = (allowedPaths - files.keys).sorted()
+        val problems =
+            missing.map { "$it is allowed to branch on FieldType but is not among the scanned sources" } +
+                files.filterKeys { it !in allowedPaths }.flatMap { (path, file) ->
+                    findings(file).map { (line, text) -> "$path:$line: $text" }
+                }
         if (problems.isNotEmpty()) {
             throw GradleException(
                 buildString {
@@ -63,14 +59,12 @@ abstract class FieldTypeGuardTask : DefaultTask() {
         }
     }
 
+    /** Each line, outside comments, that branches on the type, with its line number. */
     private fun findings(file: File): List<Pair<Int, String>> =
-        file.readLines().withIndex().mapNotNull { (index, line) ->
+        file.readLines().mapIndexedNotNull { index, line ->
             val code = line.substringBefore("//").trim()
-            when {
-                code.startsWith("*") || code.startsWith("/*") -> null
-                BRANCH.containsMatchIn(code) -> index + 1 to code
-                else -> null
-            }
+            val comment = code.startsWith("*") || code.startsWith("/*")
+            if (!comment && BRANCH.containsMatchIn(code)) index + 1 to code else null
         }
 
     private companion object {
