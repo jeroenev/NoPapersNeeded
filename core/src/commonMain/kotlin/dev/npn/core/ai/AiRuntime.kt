@@ -7,9 +7,6 @@ import ai.koog.prompt.executor.model.PromptExecutor
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.params.LLMParams
 import io.ktor.client.HttpClient
-import io.ktor.client.request.HttpRequestPipeline
-import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
 
 /**
  * Koog executor + model pair built from one [AiConfig]. Rebuilt only when the config
@@ -43,8 +40,6 @@ internal class AiRuntime(
 
     companion object {
         private const val DEFAULT_CONTEXT_LENGTH = 128_000L
-
-        private const val OPENCODE_SESSION_HEADER = "x-opencode-session"
 
         /**
          * Build the runtime for [config]. Every endpoint client the app makes comes from here: the
@@ -86,35 +81,6 @@ internal class AiRuntime(
                 factory,
                 ownedTransport = owned,
             )
-        }
-
-        /**
-         * The OpenCode Go gateway rejects requests that carry no `x-opencode-session` header (one
-         * stable id per conversation), so a client bound for it derives a copy that stamps one.
-         *
-         * Koog's provider clients expose no per-request header hook, so the header is stamped
-         * here, in the request pipeline: each request reports the [AiGatewaySession] its caller
-         * put in the coroutine context — chat passes its chat session id, so one conversation
-         * keeps one id across turns.
-         *
-         * Requests without one (one-shot edit suggestions, the settings model list) share the
-         * per-client [fallbackSessionId]: they send a batch-constant system prompt (see
-         * `AiPrompts.editSystem`), so one id per batch helps the gateway's prefix caching.
-         *
-         * Derived with `HttpClient.config {}`, so it keeps every plugin the receiver already has
-         * and shares its engine; the receiver stays the one that owns that engine.
-         */
-        @OptIn(ExperimentalUuidApi::class)
-        internal fun HttpClient.withOpenCodeSession(): HttpClient {
-            val fallbackSessionId = Uuid.random().toString()
-            return config {
-                install("npn-opencode-session") {
-                    requestPipeline.intercept(HttpRequestPipeline.Before) {
-                        context.headers[OPENCODE_SESSION_HEADER] =
-                            currentGatewaySessionId() ?: fallbackSessionId
-                    }
-                }
-            }
         }
 
         /**

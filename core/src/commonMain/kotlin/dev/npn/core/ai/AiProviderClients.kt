@@ -27,7 +27,6 @@ import ai.koog.prompt.llm.LLMCapability
 import ai.koog.prompt.llm.LLMProvider
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.params.LLMParams
-import dev.npn.core.ai.AiRuntime.Companion.withOpenCodeSession
 import io.ktor.client.HttpClient
 
 /**
