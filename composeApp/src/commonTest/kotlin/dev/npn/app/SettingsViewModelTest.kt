@@ -133,9 +133,9 @@ class SettingsViewModelTest : MainDispatcherTest() {
                 StoragePathSetting("{doc_date:yyyy}/{title}.pdf", enabled = true)
             session.trashRetention.days.value = 14
             val model = settingsVm(settings = settings, session = session)
-            collecting(model.state)
+            collecting(model.paneState)
             advanceUntilIdle()
-            val state = model.state.value
+            val state = model.paneState.value.settings
             val s = state.snapshot
             s.libraryLocation shouldBe "/home/lib"
             s.appLanguage shouldBe "nl"
@@ -161,12 +161,12 @@ class SettingsViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val settings = FakeSettingsRepository()
             val model = settingsVm(settings = settings)
-            collecting(model.state)
+            collecting(model.paneState)
             advanceUntilIdle()
-            model.state.value.snapshot.ocrLanguage shouldBe null
+            model.paneState.value.settings.snapshot.ocrLanguage shouldBe null
             settings.updateSettings { it.copy(ocrLanguage = "fra") }
             advanceUntilIdle()
-            model.state.value.snapshot.ocrLanguage shouldBe "fra"
+            model.paneState.value.settings.snapshot.ocrLanguage shouldBe "fra"
         }
 
     /**
@@ -178,18 +178,18 @@ class SettingsViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val model = settingsVm(session = session)
-            collecting(model.state)
+            collecting(model.paneState)
             for (typed in listOf(1, 14)) {
                 model.setTrashRetentionDays(typed)
                 runCurrent()
-                model.state.value.trashRetentionDays shouldBe typed
+                model.paneState.value.settings.trashRetentionDays shouldBe typed
             }
             session.trashRetention.writes shouldBe emptyList()
 
             advanceUntilIdle()
 
             session.trashRetention.writes shouldContainExactly listOf(14)
-            model.state.value.trashRetentionDays shouldBe 14
+            model.paneState.value.settings.trashRetentionDays shouldBe 14
         }
 
     /** A retention typed just before the screen is left is saved all the same. */
@@ -214,13 +214,13 @@ class SettingsViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { trashRetention.fail = { error("writes blocked") } }
             val model = settingsVm(session = session)
-            collecting(model.state)
+            collecting(model.paneState)
             val messages = collecting(model.messages.map { it.text })
 
             model.setTrashRetentionDays(7)
             advanceUntilIdle()
 
-            model.state.value.trashRetentionDays shouldBe 7
+            model.paneState.value.settings.trashRetentionDays shouldBe 7
             messages shouldContainExactly listOf(failure(Res.string.common_save_setting_failed, "writes blocked"))
         }
 
@@ -246,14 +246,14 @@ class SettingsViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val settings = FakeSettingsRepository()
             val model = settingsVm(settings = settings)
-            collecting(model.state)
+            collecting(model.paneState)
             advanceUntilIdle()
             model.edit { it.copy(appLanguage = "nl") }
             advanceUntilIdle()
-            model.state.value.snapshot.appLanguage shouldBe "nl"
+            model.paneState.value.settings.snapshot.appLanguage shouldBe "nl"
             model.edit { it.copy(appLanguage = null) }
             advanceUntilIdle()
-            model.state.value.snapshot.appLanguage shouldBe null
+            model.paneState.value.settings.snapshot.appLanguage shouldBe null
             settings.settingsFlow.value?.appLanguage shouldBe null
         }
 

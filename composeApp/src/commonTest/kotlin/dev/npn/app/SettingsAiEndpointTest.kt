@@ -50,19 +50,19 @@ class SettingsAiEndpointTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val settings = FakeSettingsRepository()
             val model = settingsVm(settings = settings)
-            collecting(model.state)
+            collecting(model.paneState)
             val writes = collecting(settings.settingsFlow.map { it?.aiBaseUrl })
             for (typed in listOf("http://192", "http://192.168.1.20:11434")) {
                 model.type(TextSetting.AI_BASE_URL, typed)
                 runCurrent()
-                model.state.value.snapshot.aiBaseUrl shouldBe typed
+                model.paneState.value.settings.snapshot.aiBaseUrl shouldBe typed
             }
             settings.settingsFlow.value?.aiBaseUrl shouldBe ""
 
             advanceUntilIdle()
 
             writes shouldContainExactly listOf("", "http://192.168.1.20:11434")
-            model.state.value.snapshot.aiBaseUrl shouldBe "http://192.168.1.20:11434"
+            model.paneState.value.settings.snapshot.aiBaseUrl shouldBe "http://192.168.1.20:11434"
         }
 
     /** Leaving a field, or the screen, saves what was typed in it at once. */
@@ -91,7 +91,7 @@ class SettingsAiEndpointTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val settings = FakeSettingsRepository()
             val model = settingsVm(settings = settings)
-            collecting(model.state)
+            collecting(model.paneState)
             model.setAiProvider(AiProvider.CUSTOM)
             advanceUntilIdle()
 
@@ -100,7 +100,7 @@ class SettingsAiEndpointTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             settings.settingsFlow.value?.aiBaseUrl shouldBe ""
-            model.state.value.snapshot.aiBaseUrl shouldBe ""
+            model.paneState.value.settings.snapshot.aiBaseUrl shouldBe ""
         }
 
     @Test
@@ -120,11 +120,12 @@ class SettingsAiEndpointTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val settings = FakeSettingsRepository()
             val model = settingsVm(settings = settings)
+            collecting(model.paneState)
             model.setAiProvider(AiProvider.OLLAMA)
             advanceUntilIdle()
-            model.aiModels.value.models shouldBe emptyList()
-            model.aiModels.value.error shouldBe null
-            model.aiModels.value.loading shouldBe false
+            model.paneState.value.aiModels.models shouldBe emptyList()
+            model.paneState.value.aiModels.error shouldBe null
+            model.paneState.value.aiModels.loading shouldBe false
         }
 
     @Test

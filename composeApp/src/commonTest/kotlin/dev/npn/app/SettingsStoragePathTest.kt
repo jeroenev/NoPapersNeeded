@@ -99,19 +99,19 @@ class SettingsStoragePathTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val model = settingsVm(session = session)
-            collecting(model.state)
+            collecting(model.paneState)
             for (typed in listOf("{d", "{docType}", "{docType}/{title}.pdf")) {
                 model.setStoragePathTemplate(typed)
                 runCurrent()
                 // The screen follows every keystroke before anything is saved.
-                model.state.value.storagePathTemplate shouldBe typed
+                model.paneState.value.settings.storagePathTemplate shouldBe typed
             }
             session.storagePath.templateWrites shouldBe emptyList()
 
             advanceUntilIdle()
 
             session.storagePath.templateWrites shouldContainExactly listOf("{docType}/{title}.pdf")
-            model.state.value.storagePathTemplate shouldBe "{docType}/{title}.pdf"
+            model.paneState.value.settings.storagePathTemplate shouldBe "{docType}/{title}.pdf"
         }
 
     /** A template whose save failed stays on screen as typed, and the failure is said. */
@@ -120,13 +120,13 @@ class SettingsStoragePathTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { storagePath.failTemplate = { error("read-only file system") } }
             val model = settingsVm(session = session)
-            collecting(model.state)
+            collecting(model.paneState)
             val messages = collecting(model.messages.map { it.text })
 
             model.setStoragePathTemplate("{docType}/{title}.pdf")
             advanceUntilIdle()
 
-            model.state.value.storagePathTemplate shouldBe "{docType}/{title}.pdf"
+            model.paneState.value.settings.storagePathTemplate shouldBe "{docType}/{title}.pdf"
             messages shouldContainExactly
                 listOf(failure(Res.string.common_save_setting_failed, "read-only file system"))
 
@@ -138,7 +138,7 @@ class SettingsStoragePathTest : MainDispatcherTest() {
             // Saved, it is no draft any more: the screen follows the library's template again.
             session.storagePath.storagePathFlow.value = StoragePathSetting("{title}.pdf", true)
             runCurrent()
-            model.state.value.storagePathTemplate shouldBe "{title}.pdf"
+            model.paneState.value.settings.storagePathTemplate shouldBe "{title}.pdf"
         }
 
     @Test

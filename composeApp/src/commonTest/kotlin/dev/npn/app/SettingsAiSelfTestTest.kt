@@ -12,6 +12,7 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -20,10 +21,11 @@ import no_papers_needed.composeapp.generated.resources.common_save_setting_faile
 import kotlin.test.Test
 
 class SettingsAiSelfTestTest : MainDispatcherTest() {
-    private fun vm(
+    /** A model whose pane state is collected, as the screen collects it, so tests can read the self-test's. */
+    private fun TestScope.vm(
         settings: FakeSettingsRepository,
         selfTest: suspend (AiConfig) -> AiSelfTestReport,
-    ) = SettingsViewModel(settings, FakeLibrarySession(), selfTest)
+    ) = SettingsViewModel(settings, FakeLibrarySession(), selfTest).also { collecting(it.paneState) }
 
     /** The self-test asks the endpoint the screen shows, typed values included. */
     @Test
@@ -57,8 +59,8 @@ class SettingsAiSelfTestTest : MainDispatcherTest() {
             runCurrent()
 
             settings.settingsFlow.value?.aiOcrAuto shouldBe true
-            model.aiSelfTest.value.report shouldBe null
-            model.aiSelfTest.value.running shouldBe false
+            model.paneState.value.aiSelfTest.report shouldBe null
+            model.paneState.value.aiSelfTest.running shouldBe false
         }
 
     @Test
@@ -76,7 +78,7 @@ class SettingsAiSelfTestTest : MainDispatcherTest() {
             runCurrent()
 
             settings.settingsFlow.value?.aiOcrAuto shouldBe true
-            model.aiSelfTest.value.report shouldBe null
+            model.paneState.value.aiSelfTest.report shouldBe null
             advanceUntilIdle()
             settings.settingsFlow.value?.aiModel shouldBe "replacement-vision-model"
             settings.settingsFlow.value?.aiOcrAuto shouldBe true
@@ -102,15 +104,15 @@ class SettingsAiSelfTestTest : MainDispatcherTest() {
             val model = vm(settings) { report(AiCheckStatus.FAILED) }
             model.runAiSelfTest()
             runCurrent()
-            model.aiSelfTest.value.running shouldBe true
+            model.paneState.value.aiSelfTest.running shouldBe true
 
             settings.updateSettings { it.copy(aiModel = "replacement-vision-model") }
             gate.complete(Unit)
             advanceUntilIdle()
 
             settings.settingsFlow.value?.aiOcrAuto shouldBe true
-            model.aiSelfTest.value.report shouldBe null
-            model.aiSelfTest.value.running shouldBe false
+            model.paneState.value.aiSelfTest.report shouldBe null
+            model.paneState.value.aiSelfTest.running shouldBe false
         }
 
     private fun report(vision: AiCheckStatus) =
@@ -134,8 +136,8 @@ class SettingsAiSelfTestTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             settings.settingsFlow.value?.aiOcrAuto shouldBe false
-            model.aiSelfTest.value.aiOcrTurnedOff shouldBe true
-            model.aiSelfTest.value.running shouldBe false
+            model.paneState.value.aiSelfTest.aiOcrTurnedOff shouldBe true
+            model.paneState.value.aiSelfTest.running shouldBe false
         }
 
     @Test
@@ -148,8 +150,8 @@ class SettingsAiSelfTestTest : MainDispatcherTest() {
             model.runAiSelfTest()
             advanceUntilIdle()
 
-            model.aiSelfTest.value.aiOcrTurnedOff shouldBe false
-            model.aiSelfTest.value.running shouldBe false
+            model.paneState.value.aiSelfTest.aiOcrTurnedOff shouldBe false
+            model.paneState.value.aiSelfTest.running shouldBe false
             messages shouldContainExactly
                 listOf(failure(Res.string.common_save_setting_failed, "read-only file system"))
         }
@@ -165,7 +167,7 @@ class SettingsAiSelfTestTest : MainDispatcherTest() {
                 advanceUntilIdle()
 
                 settings.settingsFlow.value?.aiOcrAuto shouldBe true
-                model.aiSelfTest.value.aiOcrTurnedOff shouldBe false
+                model.paneState.value.aiSelfTest.aiOcrTurnedOff shouldBe false
             }
         }
 
@@ -179,8 +181,8 @@ class SettingsAiSelfTestTest : MainDispatcherTest() {
             model.runAiSelfTest()
             advanceUntilIdle()
 
-            model.aiSelfTest.value.aiOcrTurnedOff shouldBe false
-            model.aiSelfTest.value.report
+            model.paneState.value.aiSelfTest.aiOcrTurnedOff shouldBe false
+            model.paneState.value.aiSelfTest.report
                 ?.statusOf(AiCheck.VISION) shouldBe AiCheckStatus.FAILED
         }
 }
