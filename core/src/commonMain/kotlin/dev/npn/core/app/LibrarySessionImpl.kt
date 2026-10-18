@@ -23,6 +23,7 @@ import dev.npn.core.util.runLogged
 import dev.npn.core.util.warn
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -33,6 +34,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /**
  * Everything wired for one opened library folder. Constructed by [openSession] (a suspend factory
@@ -316,10 +318,31 @@ class LibrarySessionImpl private constructor(
             writeUndelete: Boolean,
         ): LibrarySessionImpl {
             val lifetime = SessionLifetime(deps.scope)
-            // Before anything reads the device id: an index from before device.db holds it.
-            moveDeviceState(deps)
-            val indexer = Indexer(deps.fs, deps.db, deps.clock, deps.log)
-            val coordinator = createCoordinator(deps, indexer, writeUndelete)
+            var coordinator: JournalCoordinator? = null
+            try {
+                // Before anything reads the device id: an index from before device.db holds it.
+                moveDeviceState(deps)
+                val indexer = Indexer(deps.fs, deps.db, deps.clock, deps.log)
+                val journal = createCoordinator(deps, indexer, writeUndelete).also { coordinator = it }
+                return wire(deps, lifetime, indexer, journal)
+            } catch (failure: Throwable) {
+                // Nothing the open started may outlive it: stop whatever runs on the lifetime (a
+                // cancelled open included), then hand the failure on.
+                withContext(NonCancellable) {
+                    lifetime.close()
+                    coordinator?.close()
+                }
+                throw failure
+            }
+        }
+
+        /** Everything [openSession] builds over its [coordinator], from the device id on. */
+        private suspend fun wire(
+            deps: SessionDeps,
+            lifetime: SessionLifetime,
+            indexer: Indexer,
+            coordinator: JournalCoordinator,
+        ): LibrarySessionImpl {
             val deviceId = DeviceIdentity(deps.deviceDb.keyValueDao(), deps.fs, deps.installationId, deps.log).resolve()
             foldJournal(deps, coordinator)
 
