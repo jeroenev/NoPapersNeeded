@@ -43,6 +43,7 @@ import io.ktor.client.HttpClient
  * @param ocrParams the params of one page transcription (see [AiRuntime.ocrParams]).
  * @param transport derives the Ktor client the provider's requests go through from the runtime's
  *  base one, for a wire requirement of the provider's own; never in place of what the base has.
+ * @param listModels the ids of the models the endpoint offers, asked of a client [client] built.
  */
 internal class ProviderClientFactory(
     val provider: LLMProvider,
@@ -50,6 +51,7 @@ internal class ProviderClientFactory(
     val reasoning: (model: String, level: AiReasoningLevel, toolLoop: Boolean) -> LLMParams? = { _, _, _ -> null },
     val ocrParams: () -> LLMParams = { LLMParams() },
     val transport: (HttpClient) -> HttpClient = { it },
+    val listModels: suspend (LLMClient) -> List<String> = { built -> built.models().map { it.id } },
     val client: (apiKey: String, baseUrl: String, model: LLModel, http: KoogHttpClient.Factory) -> LLMClient,
 )
 
@@ -220,12 +222,16 @@ internal object AiProviderClients {
             OpenRouterLLMClient(apiKey, OpenRouterClientSettings(baseUrl = trimBaseUrl(baseUrl)), http)
         }
 
-    /** Reasoning is only an on/off `think` flag. */
+    /**
+     * Reasoning is only an on/off `think` flag. The local models are listed through Ollama's own
+     * management API rather than `LLMClientAPI.models()`, on the [OllamaClient] this factory builds.
+     */
     private val ollama =
         ProviderClientFactory(
             LLMProvider.Ollama,
             capabilities = { OLLAMA_CAPABILITIES },
             reasoning = { _, level, _ -> OllamaParams(think = level != AiReasoningLevel.NONE) },
+            listModels = { built -> (built as OllamaClient).getModels().map { it.name } },
         ) { _, baseUrl, _, http ->
             OllamaClient(httpClientFactory = http, baseUrl = trimBaseUrl(baseUrl))
         }

@@ -4,7 +4,6 @@ import ai.koog.http.client.ktor.KtorKoogHttpClient
 import ai.koog.prompt.executor.clients.LLMClient
 import ai.koog.prompt.executor.llms.MultiLLMPromptExecutor
 import ai.koog.prompt.executor.model.PromptExecutor
-import ai.koog.prompt.executor.ollama.client.OllamaClient
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.params.LLMParams
 import io.ktor.client.HttpClient
@@ -16,6 +15,7 @@ import kotlin.uuid.Uuid
  * Koog executor + model pair built from one [AiConfig]. Rebuilt only when the config
  * changes (the facade caches it), so the underlying HTTP client is reused across calls.
  *
+ * @param factory what [client] was built by, which also knows how to ask it for its models.
  * @param ownedTransport the base Ktor client this runtime created for itself and must release in
  *  [close]; null when the caller supplied one through [build] and keeps ownership of it.
  */
@@ -23,18 +23,11 @@ internal class AiRuntime(
     val executor: PromptExecutor,
     val model: LLModel,
     private val client: LLMClient,
+    private val factory: ProviderClientFactory,
     private val ownedTransport: HttpClient? = null,
 ) : AutoCloseable {
-    /**
-     * Ids of the models the configured endpoint offers, for the settings model picker.
-     * Ollama exposes its local model list through a dedicated management API instead of
-     * `LLMClientAPI.models()`, so it is special-cased.
-     */
-    suspend fun listModelIds(): List<String> =
-        when (client) {
-            is OllamaClient -> client.getModels().map { it.name }
-            else -> client.models().map { it.id }
-        }.sorted()
+    /** Ids of the models the configured endpoint offers, for the settings model picker. */
+    suspend fun listModelIds(): List<String> = factory.listModels(client).sorted()
 
     /**
      * Release the HTTP resources this runtime owns. Call once the runtime is no longer cached.
@@ -86,7 +79,13 @@ internal class AiRuntime(
                     owned?.close()
                     throw failure
                 }
-            return AiRuntime(MultiLLMPromptExecutor(factory.provider to client), model, client, ownedTransport = owned)
+            return AiRuntime(
+                MultiLLMPromptExecutor(factory.provider to client),
+                model,
+                client,
+                factory,
+                ownedTransport = owned,
+            )
         }
 
         /**
