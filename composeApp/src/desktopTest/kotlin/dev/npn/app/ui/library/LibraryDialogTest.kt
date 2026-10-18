@@ -38,7 +38,7 @@ class LibraryDialogTest : EnglishLocaleTest() {
                 LibraryDialog.SaveView,
                 LibraryDialog.RenameView(view),
                 LibraryDialog.AddTag,
-                LibraryDialog.RemoveTag(listOf("invoice", "tax")),
+                LibraryDialog.RemoveTag,
                 LibraryDialog.ConfirmTrash,
             )
         val scope = SaverScope { true }

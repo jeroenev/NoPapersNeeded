@@ -36,7 +36,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -67,7 +66,6 @@ import io.github.vinceglb.filekit.dialogs.FileKitMode
 import io.github.vinceglb.filekit.dialogs.FileKitType
 import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher
 import io.github.vinceglb.filekit.name
-import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.library_add
 import no_papers_needed.composeapp.generated.resources.library_clear_filters
@@ -113,6 +111,8 @@ fun LibraryScreen(
     // The filter sheet's vocabulary, which the list itself does not show.
     val tags by vm.tags.collectAsStateWithLifecycle()
     val fieldFilters by vm.fieldFilters.collectAsStateWithLifecycle()
+    val selectionTags by vm.selectionTags.collectAsStateWithLifecycle()
+    val tagNames = remember(tags) { tags.map { it.name } }
     val ui = state.ui
     val docs = state.results?.items
 
@@ -218,7 +218,8 @@ fun LibraryScreen(
         LibraryDialogHost(
             dialog = dialog,
             selectedCount = ui.selected.size,
-            tagNames = remember(tags) { tags.map { it.name } },
+            // Removing a tag the selection does not carry is a no-op, so that picker offers only theirs.
+            tagOptions = if (dialog == LibraryDialog.RemoveTag) selectionTags else tagNames,
             onSaveView = vm::saveCurrentView,
             onRenameView = vm::renameSavedView,
             onAddTag = vm::bulkAddTag,
@@ -270,15 +271,11 @@ private fun LibraryContent(
     // this activity was recreated while the scanner was open.
     val scan = LocalDocumentScanner.current?.rememberLauncher(actions::importScan)
 
-    val scope = rememberCoroutineScope()
     // Remembered, like the item wiring built from them below, so they outlive a state change.
     val currentOnDialog by rememberUpdatedState(onDialog)
     val onAddTag: () -> Unit = remember { { currentOnDialog(LibraryDialog.AddTag) } }
     // Only the tags the selection actually carries: removing any other is a no-op.
-    val onRemoveTag: () -> Unit =
-        remember(scope, actions) {
-            { scope.launch { currentOnDialog(LibraryDialog.RemoveTag(actions.tagsInSelection())) } }
-        }
+    val onRemoveTag: () -> Unit = remember { { currentOnDialog(LibraryDialog.RemoveTag) } }
     val onRequestTrash: () -> Unit = remember { { currentOnDialog(LibraryDialog.ConfirmTrash) } }
     // Hand the selection to the AI-edit page and leave selection mode behind.
     val aiEditSelection: (() -> Unit)? =

@@ -50,11 +50,9 @@ sealed interface LibraryDialog {
     @Serializable
     data object AddTag : LibraryDialog
 
-    /** Remove a tag from the selection; [names] are the tags the selection carries. */
+    /** Remove a tag from the selection, picked from the tags the selection carries. */
     @Serializable
-    data class RemoveTag(
-        val names: List<String>,
-    ) : LibraryDialog
+    data object RemoveTag : LibraryDialog
 
     /** Confirm moving the selection to the trash. */
     @Serializable
@@ -82,7 +80,8 @@ internal fun rememberLibraryDialog(): MutableState<LibraryDialog?> =
 internal fun LibraryDialogHost(
     dialog: LibraryDialog?,
     selectedCount: Int,
-    tagNames: List<String>,
+    /** What the open tag picker offers: any of the library's tags to add, the selection's own to remove. */
+    tagOptions: List<String>,
     onSaveView: (String) -> Unit,
     onRenameView: (SavedView, String) -> Unit,
     onAddTag: (String) -> Unit,
@@ -119,7 +118,7 @@ internal fun LibraryDialogHost(
         LibraryDialog.AddTag -> {
             TagPickDialog(
                 title = pluralStringResource(Res.plurals.library_add_tag_to_documents, selectedCount, selectedCount),
-                options = tagNames,
+                options = tagOptions,
                 confirmLabel = stringResource(Res.string.library_add),
                 onConfirm = { tag -> confirmed { onAddTag(tag) } },
                 onDismiss = onDismiss,
@@ -127,11 +126,11 @@ internal fun LibraryDialogHost(
             )
         }
 
-        is LibraryDialog.RemoveTag -> {
+        LibraryDialog.RemoveTag -> {
             TagPickDialog(
                 title =
                     pluralStringResource(Res.plurals.library_remove_tag_from_documents, selectedCount, selectedCount),
-                options = dialog.names,
+                options = tagOptions,
                 confirmLabel = stringResource(Res.string.library_remove),
                 onConfirm = { tag -> confirmed { onRemoveTag(tag) } },
                 onDismiss = onDismiss,

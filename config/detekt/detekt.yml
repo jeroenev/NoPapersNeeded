@@ -25,10 +25,11 @@ complexity:
   TooManyFunctions:
     allowedFunctionsPerFile: 20
     allowedFunctionsPerClass: 20
-    # An actions interface lists every public function of the viewmodel implementing it, which
-    # ignorePrivate does not shrink, so it is not split into sub-interfaces nothing else implements
-    # (LibraryActions has 21).
-    allowedFunctionsPerInterface: 22
+    # A cap on a viewmodel's public surface: an actions interface lists every public function of
+    # the viewmodel implementing it (ignorePrivate does not shrink it), and it is not split into
+    # sub-interfaces nothing else implements. Headroom above the largest (LibraryActions, 20), so
+    # the next action does not force an artificial split.
+    allowedFunctionsPerInterface: 25
     allowedFunctionsPerObject: 20
     allowedFunctionsPerEnum: 20
     ignoreOverridden: true

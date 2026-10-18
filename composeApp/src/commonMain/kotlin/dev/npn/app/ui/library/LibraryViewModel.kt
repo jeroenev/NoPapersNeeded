@@ -36,6 +36,7 @@ import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.settings.SettingsRepository
 import dev.npn.core.settings.aiConfigured
+import dev.npn.core.util.runLogged
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
@@ -50,6 +51,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -190,8 +192,6 @@ interface LibraryActions {
 
     fun importScan(result: ScanResult)
 
-    suspend fun tagsInSelection(): List<String>
-
     fun applySavedView(view: SavedView)
 
     fun toggleSavedViewPin(view: SavedView)
@@ -292,6 +292,32 @@ class LibraryViewModel(
                     flow { emit(documentRepository.searchSuggestions(prefix, SUGGESTION_LIMIT)) }
                 }
             }.stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
+
+    /**
+     * Tag names carried by at least one of the current selection, sorted. The remove-tag picker
+     * offers only these: removing a tag the selection does not carry is a no-op, and the whole
+     * vocabulary would bury the handful actually in play. Read again whenever the selection or the
+     * documents change, from the repository rather than the visible results, so a selection that
+     * survived a filter change still lists completely.
+     */
+    val selectionTags: StateFlow<List<String>> =
+        combine(_ui.map { it.selected }.distinctUntilChanged(), documents) { selected, _ -> selected }
+            .mapLatest { selected ->
+                if (selected.isEmpty()) {
+                    emptyList()
+                } else {
+                    // A failed read offers nothing to remove, and leaves the reason in the log.
+                    log
+                        .runLogged("Reading the selection's tags") {
+                            documentRepository.tagsForDocuments(selected.toList())
+                        }?.values
+                        ?.flatten()
+                        ?.distinct()
+                        ?.sorted()
+                        .orEmpty()
+                }
+            }.distinctUntilChanged()
+            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     /** The library's tags, for the filter sheet and the tag pickers. */
     val tags: StateFlow<List<TagInfo>> =
@@ -499,23 +525,6 @@ class LibraryViewModel(
     fun bulkAddTag(tag: String) = runOnSelection(Res.string.detail_add_tag_failed) { meta.addTag(it, tag) }
 
     fun bulkRemoveTag(tag: String) = runOnSelection(Res.string.detail_remove_tag_failed) { meta.removeTag(it, tag) }
-
-    /**
-     * Tag names carried by at least one of the current selection, sorted. The remove-tag picker
-     * offers only these: removing a tag the selection does not carry is a no-op, and the whole
-     * vocabulary would bury the handful actually in play. Reads the repository rather than the
-     * visible results so a selection that survived a filter change still lists completely.
-     */
-    override suspend fun tagsInSelection(): List<String> {
-        val selected = _ui.value.selected.toList()
-        if (selected.isEmpty()) return emptyList()
-        return documentRepository
-            .tagsForDocuments(selected)
-            .values
-            .flatten()
-            .distinct()
-            .sorted()
-    }
 
     override fun bulkSetReviewed(reviewed: Boolean) =
         runOnSelection(Res.string.library_review_failed) {
