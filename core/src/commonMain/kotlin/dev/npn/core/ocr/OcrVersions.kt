@@ -103,7 +103,7 @@ class OcrVersions internal constructor(
      * listing of its own rather than the one a drain shares.
      */
     suspend fun list(docId: String): List<StoredVersion> =
-        of(docId, sidecars.listForHash(docId))
+        of(docId, listWriterKeys()[docId].orEmpty())
             .mapNotNull { v ->
                 read(docId, v.writerKey)?.let {
                     StoredVersion(v.writerKey, v.deviceId, it.engine, it.lang, it.createdAt)

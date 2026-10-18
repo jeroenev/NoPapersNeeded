@@ -40,7 +40,7 @@ class OcrPipelineRerunTest {
             rig.pipeline("devA", second).processDoc(docId)
 
             second.calls shouldBe 1
-            val keys = OcrSidecarFiles(rig.fs).listForHash(docId).sorted()
+            val keys = OcrSidecarFiles(rig.fs).writerKeysOf(docId).sorted()
             keys shouldHaveSize 2
             keys[0] shouldBe "devA.mlkit"
             keys[1] shouldMatch Regex("""devA\.r\d+\.mlkit""")
@@ -68,7 +68,7 @@ class OcrPipelineRerunTest {
             rig.pipeline("devA", again).processDoc(docId)
 
             again.calls shouldBe 1
-            OcrSidecarFiles(rig.fs).listForHash(docId) shouldContainExactly listOf("devA.mlkit")
+            OcrSidecarFiles(rig.fs).writerKeysOf(docId) shouldContainExactly listOf("devA.mlkit")
         }
 
     @Test
@@ -110,7 +110,7 @@ class OcrPipelineRerunTest {
             rig.pipeline("devA", mlkit).processDoc(docId)
 
             mlkit.calls shouldBe 0
-            OcrSidecarFiles(rig.fs).listForHash(docId) shouldContainExactly listOf("devB")
+            OcrSidecarFiles(rig.fs).writerKeysOf(docId) shouldContainExactly listOf("devB")
             rig.db.ftsDao().searchDocIds("desk") shouldContainExactly listOf(docId)
         }
 

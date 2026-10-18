@@ -41,7 +41,7 @@ class OcrPageResumeTest {
             // Pages 0 and 1 are read; page 2 fails the run.
             pipe.processDoc(docId)
             ai.calls shouldBe 3
-            OcrSidecarFiles(rig.fs).listForHash(docId).shouldBeEmpty()
+            OcrSidecarFiles(rig.fs).writerKeysOf(docId).shouldBeEmpty()
 
             clock.advance(backoffMs(1))
             pipe.processNext() shouldBe true

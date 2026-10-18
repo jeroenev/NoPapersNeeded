@@ -18,6 +18,10 @@ import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 
+/** Writer keys that have a sidecar for [hash], however long [hash] is. */
+internal suspend fun OcrSidecarFiles.writerKeysOf(hash: String): List<String> =
+    list().mapNotNull { meta -> OcrSidecarName.parse(meta.name)?.takeIf { it.hash == hash }?.writerKey }
+
 /**
  * Temp library folder + index for [OcrPipeline] tests: builds pipelines over them and stages
  * documents the way the ingest path would. Shared by the pipeline tests and the `onTextIndexed`

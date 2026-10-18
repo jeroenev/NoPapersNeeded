@@ -1,6 +1,7 @@
 package dev.npn.core.fs
 
 import dev.npn.core.ocr.OcrSidecarFiles
+import dev.npn.core.ocr.writerKeysOf
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
@@ -29,8 +30,8 @@ class AdaptersTest {
             ocr.writeOnce("otherhash", "devA", "{}")
 
             ocr.read(hash, "devA") shouldBe "{\"pages\":[\"a\"]}"
-            ocr.listForHash(hash).shouldContainExactlyInAnyOrder("devA", "devB")
-            ocr.listForHash("otherhash").shouldContainExactlyInAnyOrder("devA")
+            ocr.writerKeysOf(hash).shouldContainExactlyInAnyOrder("devA", "devB")
+            ocr.writerKeysOf("otherhash").shouldContainExactlyInAnyOrder("devA")
 
             ocr.list() shouldHaveSize 3
         }

@@ -172,7 +172,7 @@ class OcrPipelineTest {
             entry.lastError shouldBe "ocr failed: boom"
             entry.nextAttemptAt shouldBe clock.now + backoffMs(1)
             // A failed page is a failed run: nothing is published for it, blank or otherwise.
-            OcrSidecarFiles(fs).listForHash(docId) shouldBe emptyList()
+            OcrSidecarFiles(fs).writerKeysOf(docId) shouldBe emptyList()
 
             // Not retried at once: the row waits out its backoff before the next drain takes it.
             pipe.processNext() shouldBe false

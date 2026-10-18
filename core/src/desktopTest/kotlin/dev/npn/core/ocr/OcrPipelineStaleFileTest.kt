@@ -49,7 +49,7 @@ class OcrPipelineStaleFileTest {
 
             pipeline.processNext()
 
-            OcrSidecarFiles(rig.fs).listForHash(docId).shouldBeEmpty()
+            OcrSidecarFiles(rig.fs).writerKeysOf(docId).shouldBeEmpty()
             stale shouldContainExactly listOf(docId)
             indexed.shouldBeEmpty()
             // Not charged as a failure, and not taken again before the rescan it asked for.
@@ -150,7 +150,7 @@ class OcrPipelineStaleFileTest {
             clock.advance(WriteSettle.QUIET_MILLIS)
             pipeline.processNext() shouldBe true
 
-            OcrSidecarFiles(rig.fs).listForHash(docId) shouldHaveSize 1
+            OcrSidecarFiles(rig.fs).writerKeysOf(docId) shouldHaveSize 1
             queue.getByDocId(docId).shouldNotBeNull().queueState shouldBe QueueState.DONE
         }
 
@@ -220,7 +220,7 @@ class OcrPipelineStaleFileTest {
             val pipeline = rig.pipeline("devA", FakeOcrEngine(isAvailable = true, name = "mlkit"))
             pipeline.processDoc(realId)
             val sidecars = OcrSidecarFiles(rig.fs)
-            val key = sidecars.listForHash(realId).single()
+            val key = sidecars.writerKeysOf(realId).single()
             sidecars.writeOnce(EMPTY, key, sidecars.read(realId, key))
             Files.write(rig.libRoot.resolve("empty.pdf"), ByteArray(0))
             rig.db.documentDao().upsert(

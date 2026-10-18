@@ -38,8 +38,4 @@ class OcrSidecarFiles(
     ) {
         fs.writeBytesOnce(OcrSidecarName(sha256, writerKey).path, json.encodeToByteArray())
     }
-
-    /** Writer keys that have a sidecar for [sha256]. */
-    suspend fun listForHash(sha256: String): List<String> =
-        list().mapNotNull { meta -> OcrSidecarName.parse(meta.name)?.takeIf { it.hash == sha256 }?.writerKey }
 }

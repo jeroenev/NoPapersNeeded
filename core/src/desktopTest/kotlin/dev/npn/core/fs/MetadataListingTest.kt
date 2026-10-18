@@ -1,6 +1,7 @@
 package dev.npn.core.fs
 
 import dev.npn.core.ocr.OcrSidecarFiles
+import dev.npn.core.ocr.writerKeysOf
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.shouldBe
@@ -67,7 +68,7 @@ class MetadataListingTest {
         runTest {
             val sidecars = OcrSidecarFiles(fs)
 
-            sidecars.listForHash(hash) shouldContainExactlyInAnyOrder listOf("dev-a", "dev-b.tesseract")
+            sidecars.writerKeysOf(hash) shouldContainExactlyInAnyOrder listOf("dev-a", "dev-b.tesseract")
             sidecars.list().size shouldBe 3
 
             fs.walkedDirs shouldContainExactly listOf(NpnPaths.OCR_DIR, NpnPaths.OCR_DIR)

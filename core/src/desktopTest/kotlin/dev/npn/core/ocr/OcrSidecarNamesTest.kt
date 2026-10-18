@@ -83,7 +83,7 @@ class OcrSidecarNamesTest {
             sidecar(".devA.json")
             sidecar("$hash.json")
 
-            OcrSidecarFiles(fs).listForHash(hash) shouldBe listOf("devA.mlkit")
+            OcrSidecarFiles(fs).writerKeysOf(hash) shouldBe listOf("devA.mlkit")
         }
 
     @Test

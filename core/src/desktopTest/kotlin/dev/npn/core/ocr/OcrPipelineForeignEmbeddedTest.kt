@@ -31,7 +31,7 @@ class OcrPipelineForeignEmbeddedTest {
             pipe.reconcileSidecars()
             pipe.processDoc(docId)
 
-            OcrSidecarFiles(rig.fs).listForHash(docId) shouldContainExactly listOf("otherdev.embedded")
+            OcrSidecarFiles(rig.fs).writerKeysOf(docId) shouldContainExactly listOf("otherdev.embedded")
             rig.db
                 .documentDao()
                 .requireByDocId(docId)
