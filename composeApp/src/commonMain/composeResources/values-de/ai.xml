@@ -81,6 +81,7 @@
     <string name="ai_edit_summary_tag_removals">Tag-Entfernungen</string>
     <string name="ai_edit_summary_prompt">zusätzliche Anweisungen</string>
     <string name="ai_edit_summary_nothing">Keine Änderungen angefordert</string>
+    <string name="ai_edit_summary_line">%1$s · %2$s</string>
     <string name="ai_edit_blocked_no_task">Wähle, was du tun möchtest</string>
     <string name="ai_edit_blocked_nothing">Wähle mindestens eine Art von Änderung</string>
     <string name="ai_edit_blocked_no_documents">Keine Dokumente in diesem Bereich</string>

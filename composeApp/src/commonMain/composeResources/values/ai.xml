@@ -81,6 +81,7 @@
     <string name="ai_edit_summary_tag_removals">tag removals</string>
     <string name="ai_edit_summary_prompt">extra instructions</string>
     <string name="ai_edit_summary_nothing">No changes requested</string>
+    <string name="ai_edit_summary_line">%1$s · %2$s</string>
     <string name="ai_edit_blocked_no_task">Choose what you want to do</string>
     <string name="ai_edit_blocked_nothing">Choose at least one kind of change</string>
     <string name="ai_edit_blocked_no_documents">No documents match this scope</string>

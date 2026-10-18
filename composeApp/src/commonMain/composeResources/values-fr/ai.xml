@@ -81,6 +81,7 @@
     <string name="ai_edit_summary_tag_removals">retraits d’étiquettes</string>
     <string name="ai_edit_summary_prompt">instructions</string>
     <string name="ai_edit_summary_nothing">Aucune modification demandée</string>
+    <string name="ai_edit_summary_line">%1$s · %2$s</string>
     <string name="ai_edit_blocked_no_task">Choisissez ce que vous voulez faire</string>
     <string name="ai_edit_blocked_nothing">Choisissez au moins un type de modification</string>
     <string name="ai_edit_blocked_no_documents">Aucun document ne correspond à cette sélection</string>

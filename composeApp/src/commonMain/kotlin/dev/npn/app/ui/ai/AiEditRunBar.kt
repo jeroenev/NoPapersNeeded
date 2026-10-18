@@ -37,6 +37,7 @@ import no_papers_needed.composeapp.generated.resources.ai_edit_confirm_large_tit
 import no_papers_needed.composeapp.generated.resources.ai_edit_start
 import no_papers_needed.composeapp.generated.resources.ai_edit_start_background
 import no_papers_needed.composeapp.generated.resources.ai_edit_summary_fields
+import no_papers_needed.composeapp.generated.resources.ai_edit_summary_line
 import no_papers_needed.composeapp.generated.resources.ai_edit_summary_nothing
 import no_papers_needed.composeapp.generated.resources.ai_edit_summary_prompt
 import no_papers_needed.composeapp.generated.resources.ai_edit_summary_requests
@@ -44,16 +45,12 @@ import no_papers_needed.composeapp.generated.resources.ai_edit_summary_tag_remov
 import no_papers_needed.composeapp.generated.resources.ai_edit_summary_tags
 import no_papers_needed.composeapp.generated.resources.ai_edit_too_many_fields
 import no_papers_needed.composeapp.generated.resources.common_cancel
+import no_papers_needed.composeapp.generated.resources.common_join_items
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
 /** Below this the bar stacks its summary above the button instead of sitting on one line. */
 private val RunBarSingleRowWidth = 620.dp
-
-/** How the summary's clauses are joined; a language-neutral separator, like the preview rows. */
-private const val SUMMARY_SEPARATOR = " · "
-
-private const val CLAUSE_SEPARATOR = ", "
 
 /**
  * The standing answer to "what happens if I press this", pinned below the setup form.
@@ -147,9 +144,11 @@ private fun summaryLine(
     // Before a task is chosen the state still carries the defaults, but the user has not asked for
     // them, so listing them here would describe a run nobody configured.
     if (ui.task == null) return scope
-    val changes = changeClauses(ui)
-    val nothing = stringResource(Res.string.ai_edit_summary_nothing)
-    return scope + SUMMARY_SEPARATOR + changes.ifEmpty { listOf(nothing) }.joinToString(CLAUSE_SEPARATOR)
+    val changes =
+        changeClauses(ui)
+            .ifEmpty { listOf(stringResource(Res.string.ai_edit_summary_nothing)) }
+            .reduce { list, clause -> stringResource(Res.string.common_join_items, list, clause) }
+    return stringResource(Res.string.ai_edit_summary_line, scope, changes)
 }
 
 @Composable

@@ -81,6 +81,7 @@
     <string name="ai_edit_summary_tag_removals">etiquetas a quitar</string>
     <string name="ai_edit_summary_prompt">instrucciones adicionales</string>
     <string name="ai_edit_summary_nothing">No se pidió ningún cambio</string>
+    <string name="ai_edit_summary_line">%1$s · %2$s</string>
     <string name="ai_edit_blocked_no_task">Elige qué quieres hacer</string>
     <string name="ai_edit_blocked_nothing">Elige al menos un tipo de cambio</string>
     <string name="ai_edit_blocked_no_documents">Ningún documento coincide con este alcance</string>

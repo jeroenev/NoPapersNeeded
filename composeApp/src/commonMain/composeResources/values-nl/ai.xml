@@ -81,6 +81,7 @@
     <string name="ai_edit_summary_tag_removals">tags verwijderen</string>
     <string name="ai_edit_summary_prompt">extra instructies</string>
     <string name="ai_edit_summary_nothing">Geen wijzigingen gevraagd</string>
+    <string name="ai_edit_summary_line">%1$s · %2$s</string>
     <string name="ai_edit_blocked_no_task">Kies wat je wilt doen</string>
     <string name="ai_edit_blocked_nothing">Kies minstens één soort wijziging</string>
     <string name="ai_edit_blocked_no_documents">Geen documenten in dit bereik</string>
