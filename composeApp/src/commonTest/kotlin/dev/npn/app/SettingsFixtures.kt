@@ -89,4 +89,8 @@ internal open class NoSettingsPaneActions : SettingsPaneActions {
     override fun openAutoMatchRules() = Unit
 
     override fun openFieldDialog(dialog: FieldDialog?) = Unit
+
+    override fun typeOcrLanguage(text: String) = Unit
+
+    override fun confirmInboxMigration(open: Boolean) = Unit
 }

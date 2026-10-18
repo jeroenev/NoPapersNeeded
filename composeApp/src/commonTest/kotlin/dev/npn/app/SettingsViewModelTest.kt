@@ -35,8 +35,9 @@ import kotlin.test.Test
 class SettingsViewModelTest : MainDispatcherTest() {
     /**
      * A restored process shows Settings as the user left it: the pane picked on a wide window, the
-     * search typed into the list, a field being edited with what was typed into its form, and the
-     * offer to go back to a document's unsaved changes.
+     * search typed into the list, a field being edited with what was typed into its form, an OCR
+     * language typed and not added, the inbox migration being asked, and the offer to go back to a
+     * document's unsaved changes.
      */
     @Test
     fun aRestoredProcessKeepsThePaneTheSearchAndTheOpenDialogs() =
@@ -50,6 +51,8 @@ class SettingsViewModelTest : MainDispatcherTest() {
                 searchCategories("field")
                 openFieldDialog(FieldDialog.Edit("invoiceNo", typed, confirmingTypeChange = true))
                 offerDraft("doc-1")
+                typeOcrLanguage("deu+fra")
+                confirmInboxMigration(true)
             }
 
             val restored =

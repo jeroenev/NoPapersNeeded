@@ -5,10 +5,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.NumericField
 import dev.npn.app.ui.common.SettingsSection
@@ -54,6 +50,8 @@ internal fun DocumentSettingsPane(
     SettingsSection(title = stringResource(Res.string.common_settings_review_workflow)) {
         InboxWorkflowToggle(
             current = state.reviewMode,
+            showMigration = state.confirmingInboxMigration,
+            onShowMigration = actions::confirmInboxMigration,
             onUntaggedOnly = actions::setUntaggedOnlyMode,
             onInboxWorkflow = actions::setInboxWorkflowMode,
         )
@@ -78,25 +76,26 @@ internal fun DocumentSettingsPane(
 @Composable
 private fun InboxWorkflowToggle(
     current: ReviewMode,
+    /** Whether it is asking which migration to run; the settings viewmodel keeps it. */
+    showMigration: Boolean,
+    onShowMigration: (Boolean) -> Unit,
     onUntaggedOnly: () -> Unit,
     onInboxWorkflow: (ReviewMigration) -> Unit,
 ) {
-    var showMigration by rememberSaveable { mutableStateOf(false) }
-
     SwitchRow(
         label = stringResource(Res.string.common_settings_enable_inbox),
         help = stringResource(Res.string.common_settings_inbox_help),
         checked = current == ReviewMode.INBOX_WORKFLOW,
-        onCheckedChange = { checked -> if (checked) showMigration = true else onUntaggedOnly() },
+        onCheckedChange = { checked -> if (checked) onShowMigration(true) else onUntaggedOnly() },
     )
     HelpText(stringResource(Res.string.common_settings_syncs_across_devices))
 
     if (showMigration) {
         ReviewMigrationDialog(
-            onDismiss = { showMigration = false },
+            onDismiss = { onShowMigration(false) },
             onChoose = { migration ->
                 onInboxWorkflow(migration)
-                showMigration = false
+                onShowMigration(false)
             },
         )
     }

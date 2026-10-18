@@ -174,16 +174,38 @@ class SettingsViewModel(
 
     internal fun openFieldDialog(dialog: FieldDialog?) = fieldDialog.set(dialog)
 
+    private val ocrLanguageTyped = saved.uiState(OCR_LANGUAGE_KEY, "")
+
+    internal fun typeOcrLanguage(text: String) = ocrLanguageTyped.set(text)
+
+    private val confirmingInboxMigration = saved.uiState(INBOX_MIGRATION_KEY, false)
+
+    internal fun confirmInboxMigration(open: Boolean) = confirmingInboxMigration.set(open)
+
+    /** What the panes have open or typed, which the viewmodel keeps for them. */
+    private val paneUi: Flow<PaneUi> =
+        combine(fieldDialog.flow, ocrLanguageTyped.flow, confirmingInboxMigration.flow, ::PaneUi)
+
     /** Everything a settings pane shows, as one value. */
     internal val paneState: StateFlow<SettingsPaneState> =
-        combine(state, aiModels, aiSelfTest, reviewMode, combine(fields, fieldUsage, fieldDialog.flow, ::Triple)) {
+        combine(state, aiModels, aiSelfTest, reviewMode, combine(fields, fieldUsage, paneUi, ::Triple)) {
             ui,
             models,
             selfTest,
             mode,
-            (defs, usage, dialog),
+            (defs, usage, paneUi),
             ->
-            SettingsPaneState(ui, models, selfTest, mode, defs, usage, dialog)
+            SettingsPaneState(
+                ui,
+                models,
+                selfTest,
+                mode,
+                defs,
+                usage,
+                paneUi.fieldDialog,
+                paneUi.ocrLanguageTyped,
+                paneUi.confirmingInboxMigration,
+            )
         }.stateIn(
             viewModelScope,
             WhileSubscribedTimeout,
@@ -195,6 +217,8 @@ class SettingsViewModel(
                 fields.value,
                 fieldUsage.value,
                 fieldDialog.value,
+                ocrLanguageTyped.value,
+                confirmingInboxMigration.value,
             ),
         )
 
@@ -373,9 +397,18 @@ class SettingsViewModel(
         const val CATEGORY_QUERY_KEY = "settings.categoryQuery"
         const val DRAFT_TO_RESUME_KEY = "settings.draftToResume"
         const val FIELD_DIALOG_KEY = "settings.fieldDialog"
+        const val OCR_LANGUAGE_KEY = "settings.ocrLanguageTyped"
+        const val INBOX_MIGRATION_KEY = "settings.confirmingInboxMigration"
     }
 }
 
 /** This snapshot with each typed value of [drafts] in place of the saved one. */
 private fun SettingsSnapshot.withTyped(drafts: List<Pair<TextSetting, String?>>): SettingsSnapshot =
     drafts.fold(this) { snapshot, (setting, typed) -> typed?.let { setting.with(snapshot, it) } ?: snapshot }
+
+/** What the panes have open or typed, as the viewmodel keeps it for them. */
+private data class PaneUi(
+    val fieldDialog: FieldDialog?,
+    val ocrLanguageTyped: String,
+    val confirmingInboxMigration: Boolean,
+)
