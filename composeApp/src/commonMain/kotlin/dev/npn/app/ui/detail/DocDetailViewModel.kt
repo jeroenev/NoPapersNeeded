@@ -210,6 +210,11 @@ class DocDetailViewModel private constructor(
 
     override fun showTab(tab: PanelTab) = this.tab.set(tab)
 
+    /** Fields the user added to the panel before giving them a value. */
+    private val revealed = saved.uiState(REVEALED_KEY, emptySet<String>())
+
+    override fun revealField(key: String) = revealed.update { it + key }
+
     /**
      * Search terms from the library query that opened this document, used to highlight matches
      * in the OCR text tab.
@@ -337,8 +342,21 @@ class DocDetailViewModel private constructor(
      * test.
      */
     val metadata: StateFlow<MetadataUiState> =
-        combine(document, vocabulary, aiPanel, history, tab.flow) { doc, vocab, ai, history, tab ->
-            MetadataUiState(document = doc, vocabulary = vocab, ai = ai, history = history, tab = tab)
+        combine(document, vocabulary, aiPanel, history, combine(tab.flow, revealed.flow, ::Pair)) {
+            doc,
+            vocab,
+            ai,
+            history,
+            (tab, revealed),
+            ->
+            MetadataUiState(
+                document = doc,
+                vocabulary = vocab,
+                ai = ai,
+                history = history,
+                tab = tab,
+                revealed = revealed,
+            )
         }.stateIn(viewModelScope, WhileSubscribedTimeout, seedState())
 
     /**
@@ -355,6 +373,7 @@ class DocDetailViewModel private constructor(
                 ),
             ai = AiPanelState(available = aiAvailable.value),
             tab = tab.value,
+            revealed = revealed.value,
         )
 
     init {
@@ -576,6 +595,7 @@ class DocDetailViewModel private constructor(
     private companion object {
         const val PAGE_KEY = "document.page"
         const val TAB_KEY = "document.tab"
+        const val REVEALED_KEY = "document.revealed"
     }
 }
 

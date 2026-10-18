@@ -50,7 +50,10 @@ import kotlin.test.Test
 class DocDetailViewModelTest : MainDispatcherTest() {
     private fun tagSuggestions(vararg tags: String): List<TagSuggestion> = tags.map { TagSuggestion(it, isNew = false) }
 
-    /** A restored process shows the document at the page and on the panel tab the user left it at. */
+    /**
+     * A restored process shows the document at the page and on the panel tab the user left it at,
+     * with the field they added from "Add field" and not filled yet.
+     */
     @Test
     fun aRestoredProcessKeepsThePageAndThePanelTab() =
         runTest(dispatcher) {
@@ -64,12 +67,14 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
             screen.vm.goToPage(2)
             screen.vm.showTab(PanelTab.TEXT)
+            screen.vm.revealField(FieldKeys.CORRESPONDENT)
 
             val restored =
                 screen.recreate(this, { combine(it.ui, it.metadata, ::Pair) }) { (ui, metadata) ->
                     Transient.document(ui) to Transient.document(metadata)
                 }
             restored.ui.value.pageIndex shouldBe 2
+            restored.metadata.value.revealed shouldBe setOf(FieldKeys.CORRESPONDENT)
         }
 
     @Test

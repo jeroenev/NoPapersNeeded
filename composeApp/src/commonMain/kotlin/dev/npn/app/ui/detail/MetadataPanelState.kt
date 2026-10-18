@@ -26,6 +26,8 @@ data class MetadataUiState(
     val history: HistoryUiState = HistoryUiState.NotLoaded,
     /** The tab the user picked, which the panel shows where it has one; null shows its first. */
     val tab: PanelTab? = null,
+    /** Fields picked from "Add field" that show although the document carries no value for them yet. */
+    val revealed: Set<String> = emptySet(),
 )
 
 /** The metadata panel's tabs; [PREVIEW] only where the page viewer cannot sit beside them. */
@@ -117,6 +119,12 @@ interface DocumentWrites : AiSuggestionActions {
      * detail screen the side panel expands into, and in a restored process.
      */
     fun showTab(tab: PanelTab)
+
+    /**
+     * Show the field [key] although the document carries no value for it yet, as picked from "Add
+     * field". The viewmodel keeps it, so the empty row stays through recreation until a value lands.
+     */
+    fun revealField(key: String)
 }
 
 /**

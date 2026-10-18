@@ -199,6 +199,7 @@ private fun DetailsTab(
             refused = refused,
             defs = state.document.fieldDefs,
             vocabulary = vocabulary,
+            revealed = state.revealed,
             actions = actions,
         )
         AiMetadataSuggestions(
