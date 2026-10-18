@@ -18,8 +18,7 @@ class SnapshotFormatTest {
     private fun snapshotBytes(
         supersedes: List<String>,
         events: List<JournalEvent>,
-    ): ByteArray =
-        SnapshotCodec.encodeSnapshot(SnapshotManifest(SnapshotCodec.SNAPSHOT_MANIFEST_VERSION, supersedes), events)
+    ): ByteArray = earlierBuildSnapshot(supersedes, events)
 
     @Test
     fun snapshotBucketIsIgnoredByOldObjectClassification() {

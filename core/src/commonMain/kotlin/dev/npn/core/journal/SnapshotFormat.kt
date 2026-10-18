@@ -6,12 +6,11 @@ import dev.npn.core.util.reason
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 /**
- * On-disk format of a compaction snapshot object.
+ * On-disk format of a compaction snapshot object, which builds before this one wrote when they
+ * compacted the journal. This build reads snapshots as journal sources and writes none.
  *
  * A snapshot is a content-addressed JSONL object (same publish flow as a v2 object) living in a
  * DISTINCT bucket namespace (`objects-snap-v2-xx`) so that pre-snapshot readers classify it as
@@ -21,27 +20,19 @@ import kotlinx.serialization.json.jsonPrimitive
  * Line layout:
  * ```
  * {"snap":2,"supersedes":["<hash>", ...]}   # manifest record (line 1)
- * {"v":1,"seq":..,"hlc":..,"dev":..,..}     # surviving events (lines 2..N), VERBATIM
+ * {"v":1,"seq":..,"hlc":..,"dev":..,..}     # surviving events (lines 2..N)
  * ```
  *
- * The surviving events are the exact events (any device, any actor) carried by the objects the
- * snapshot supersedes — NOT a folded projection. Folding {snapshot + newer objects} therefore
- * yields byte-for-byte the same event multiset as before compaction (the accumulator dedupes by
- * `(deviceId, seq)`), so the CRDT result is unchanged and concurrent snapshots converge.
+ * The surviving events are the events (any device, any actor) carried by the objects the snapshot
+ * supersedes — NOT a folded projection — as the compacting build encoded them again, so a copy may
+ * lack payload keys that build did not know ([EventCopies]). Folding {snapshot + newer objects}
+ * yields the same event multiset as before compaction (the accumulator dedupes by `(deviceId, seq)`),
+ * so the CRDT result is unchanged and concurrent snapshots converge.
  */
 internal data class SnapshotManifest(
     val version: Int,
     val supersedes: List<String>,
 ) {
-    fun encode(): String {
-        val obj =
-            buildJsonObject {
-                put(FIELD_SNAP, JsonPrimitive(version))
-                put(FIELD_SUPERSEDES, buildJsonArray { supersedes.forEach { add(JsonPrimitive(it)) } })
-            }
-        return SnapshotCodec.json.encodeToString(JsonObject.serializer(), obj)
-    }
-
     companion object {
         const val FIELD_SNAP = "snap"
         const val FIELD_SUPERSEDES = "supersedes"
@@ -65,18 +56,6 @@ internal object SnapshotCodec {
             }
         require(supersedes.all { SHA256_HEX.matches(it) }) { "Superseded hash is not a SHA-256" }
         return SnapshotManifest(version, supersedes)
-    }
-
-    fun encodeSnapshot(
-        manifest: SnapshotManifest,
-        events: List<JournalEvent>,
-    ): ByteArray {
-        val lines =
-            buildList {
-                add(manifest.encode())
-                events.forEach { add(JournalCodec.encode(it)) }
-            }
-        return lines.joinToString("\n").encodeToByteArray()
     }
 
     const val SNAPSHOT_MANIFEST_VERSION = 2

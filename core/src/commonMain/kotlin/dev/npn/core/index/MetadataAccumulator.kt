@@ -109,7 +109,7 @@ internal sealed interface OpenReconciliation {
 internal class MetadataAccumulator(
     private val fs: LibraryFileSystem,
     db: NpnDatabase,
-    /** Deletes what an applied snapshot on disk superseded; the coordinator's compaction shares it. */
+    /** Deletes what an applied snapshot on disk superseded. */
     private val snapshots: SnapshotSupport = SnapshotSupport(fs, db.metadataProjectionDao()),
 ) {
     private val dao = db.metadataProjectionDao()

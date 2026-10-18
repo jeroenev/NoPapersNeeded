@@ -6,11 +6,9 @@ import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.PendingOp
-import dev.npn.core.journal.SnapshotCodec
-import dev.npn.core.journal.SnapshotManifest
+import dev.npn.core.journal.earlierBuildSnapshot
 import dev.npn.core.journal.journalObjects
 import io.kotest.matchers.booleans.shouldBeTrue
-import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -26,8 +24,7 @@ import kotlin.test.assertFailsWith
  */
 class SnapshotClaimTest {
     private val rig = IndexRig.create()
-    private val coordinator =
-        rig.coordinator(compaction = rig.compaction(3))
+    private val coordinator = rig.coordinator()
 
     @AfterTest
     fun teardown() = rig.close()
@@ -46,11 +43,6 @@ class SnapshotClaimTest {
                 val state = MetadataAccumulator(rig.fs, rebuilt.db).reconcile().state
                 state.shouldNotBeNull().effectiveTags(docId) shouldBe setOf("tag0", "tag1")
             }
-            // A live object again: the next compaction carries it.
-            SnapshotSupport(rig.fs, rig.db.metadataProjectionDao())
-                .compactionSources()
-                .first
-                .map { it.relPath } shouldContain victim
         }
 
     /** The index keeps no claim it found false: the object's loss is a loss, as with no snapshot. */
@@ -86,11 +78,7 @@ class SnapshotClaimTest {
                 .first()
                 .relPath
         val hash = (JournalPaths.classify(victim) as JournalPath.ObjectV2).expectedHash
-        val bytes =
-            SnapshotCodec.encodeSnapshot(
-                SnapshotManifest(SnapshotCodec.SNAPSHOT_MANIFEST_VERSION, listOf(hash)),
-                emptyList(),
-            )
+        val bytes = earlierBuildSnapshot(listOf(hash), emptyList())
         val snapshot = rig.libRoot.resolve(JournalPaths.objectPath(sha256Bytes(bytes), snapshot = true))
         Files.createDirectories(snapshot.parent)
         Files.write(snapshot, bytes)

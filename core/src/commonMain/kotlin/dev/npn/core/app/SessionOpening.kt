@@ -5,16 +5,13 @@ import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.LegacyIndexTables
 import dev.npn.core.db.defs
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
-import dev.npn.core.index.Compaction
 import dev.npn.core.index.DeviceIdentity
 import dev.npn.core.index.Indexer
 import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.index.MetadataAccumulator
-import dev.npn.core.index.SnapshotSupport
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.JournalOp
-import dev.npn.core.journal.SnapshotCompactor
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.warn
@@ -111,18 +108,15 @@ private suspend fun createCoordinator(
     deps: SessionDeps,
     indexer: Indexer,
     writeUndelete: Boolean,
-): JournalCoordinator {
-    val snapshots = SnapshotSupport(deps.fs, deps.db.metadataProjectionDao())
-    return JournalCoordinator(
+): JournalCoordinator =
+    JournalCoordinator(
         writer = createObjectWriter(deps),
         indexer = indexer,
-        accumulator = MetadataAccumulator(deps.fs, deps.db, snapshots),
-        compaction = Compaction(SnapshotCompactor(deps.fs, deps.installationId), snapshots),
+        accumulator = MetadataAccumulator(deps.fs, deps.db),
         clock = deps.clock,
         log = deps.log,
         writeUndelete = writeUndelete,
     )
-}
 
 /**
  * Fold the journal, so the documents are there before the caller's initial rescan, and bring the

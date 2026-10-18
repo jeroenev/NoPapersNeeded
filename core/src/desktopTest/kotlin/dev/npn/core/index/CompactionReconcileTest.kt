@@ -10,6 +10,7 @@ import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.PendingOp
+import dev.npn.core.journal.compactAsAnEarlierBuild
 import dev.npn.core.journal.journalObjects
 import dev.npn.core.journal.journalPaths
 import io.kotest.matchers.booleans.shouldBeFalse
@@ -27,8 +28,8 @@ import kotlin.test.Test
 import kotlin.test.assertFailsWith
 
 /**
- * Compaction at the accumulator + coordinator level: snapshot publish, supersession-aware
- * validation, deletion-before-snapshot ordering, concurrent snapshots, and ping-pong avoidance.
+ * Libraries an earlier build compacted, at the accumulator + coordinator level: their snapshots
+ * fold, and the objects they replaced, deleted or still there, are accounted for.
  */
 class CompactionReconcileTest {
     private val rig = IndexRig.create()
@@ -37,25 +38,30 @@ class CompactionReconcileTest {
     private val db = rig.db
     private val clock = rig.clock
 
-    // A large "now" so that files (real JVM mtimes near epoch-now) are older than the window.
-    private val farFuture = 4_000_000_000_000L
-    private val window = 1_000L
-
     @AfterTest
     fun teardown() = rig.close()
 
-    private fun coordinator(threshold: Int = 3): JournalCoordinator =
-        rig.coordinator(compaction = rig.compaction(threshold, stabilityWindowMs = window))
+    private fun coordinator(): JournalCoordinator = rig.coordinator()
+
+    /**
+     * Compact every object and snapshot on disk as an earlier build did, then let [coordinator]
+     * reconcile what it left; returns the snapshot's path.
+     */
+    private suspend fun compactAll(coordinator: JournalCoordinator): String =
+        fs
+            .compactAsAnEarlierBuild(
+                fs.journalPaths<JournalPath.ObjectV2>() + fs.journalPaths<JournalPath.SnapshotV2>(),
+            ).also { coordinator.reconcileMetadata() }
 
     private suspend fun v2Count() = fs.journalPaths<JournalPath.ObjectV2>().size
 
     private suspend fun snapCount() = fs.journalPaths<JournalPath.SnapshotV2>().size
 
     @Test
-    fun compactionPublishesSnapshotDeletesSupersededAndKeepsProjection() =
+    fun aLibraryAnEarlierBuildCompactedFoldsAndStaysWritable() =
         runTest {
             rig.writePdf("a.pdf", "alpha")
-            val coordinator = coordinator(threshold = 3)
+            val coordinator = coordinator()
             rig.rescan()
             coordinator.refreshState()
             val docId = db.documentDao().requireRowAtPath("a.pdf").docId
@@ -70,8 +76,7 @@ class CompactionReconcileTest {
 
             val tagsBefore = db.tagDao().tagsForDocument(docId).sorted()
 
-            val snapshotHash = coordinator.compact(nowMillis = farFuture)
-            snapshotHash.shouldNotBeNull()
+            compactAll(coordinator)
             snapCount() shouldBe 1
             // Superseded objects were deleted.
             v2Count() shouldBe 0
@@ -89,7 +94,7 @@ class CompactionReconcileTest {
     fun deletionBeforeSnapshotDoesNotBlockThenSnapshotArrivalCleansUp() =
         runTest {
             rig.writePdf("a.pdf", "alpha")
-            val coordinator = coordinator(threshold = 3)
+            val coordinator = coordinator()
             rig.rescan()
             coordinator.refreshState()
             val docId = db.documentDao().requireRowAtPath("a.pdf").docId
@@ -124,7 +129,7 @@ class CompactionReconcileTest {
             // Simpler: restore the objects then compact locally to produce a real snapshot, then delete.
             moved.forEach { (file, target) -> Files.move(target, libRoot.resolve(file.relPath)) }
             coordinator.reconcileMetadata()
-            coordinator.compact(nowMillis = farFuture).shouldNotBeNull()
+            compactAll(coordinator)
 
             // After the snapshot is applied and superseded objects deleted, reconcile stays clean.
             coordinator.reconcileMetadata()
@@ -140,7 +145,7 @@ class CompactionReconcileTest {
     fun aSupersededObjectLeftOnDiskIsDeletedByTheNextReconcile() =
         runTest {
             rig.writePdf("a.pdf", "alpha")
-            val coordinator = coordinator(threshold = 3)
+            val coordinator = coordinator()
             rig.rescan()
             coordinator.refreshState()
             val docId = checkNotNull(db.documentDao().rowAtPath("a.pdf")).docId
@@ -155,7 +160,7 @@ class CompactionReconcileTest {
                 fs.journalObjects().first()
             val kept = rig.scratchDir().resolve(leftover.name)
             Files.copy(libRoot.resolve(leftover.relPath), kept, StandardCopyOption.COPY_ATTRIBUTES)
-            coordinator.compact(nowMillis = farFuture).shouldNotBeNull()
+            compactAll(coordinator)
             Files.copy(kept, libRoot.resolve(leftover.relPath), StandardCopyOption.COPY_ATTRIBUTES)
 
             coordinator.reconcileMetadata()
@@ -175,7 +180,7 @@ class CompactionReconcileTest {
     fun aSupersededObjectLeftOnDiskWithOtherBytesIsDeletedByTheNextReconcile() =
         runTest {
             rig.writePdf("a.pdf", "alpha")
-            val coordinator = coordinator(threshold = 3)
+            val coordinator = coordinator()
             rig.rescan()
             coordinator.refreshState()
             val docId = checkNotNull(db.documentDao().rowAtPath("a.pdf")).docId
@@ -187,7 +192,7 @@ class CompactionReconcileTest {
             val leftover = fs.journalPaths<JournalPath.ObjectV2>().first()
             val kept = rig.scratchDir().resolve(NpnPaths.fileName(leftover))
             Files.copy(libRoot.resolve(leftover), kept, StandardCopyOption.COPY_ATTRIBUTES)
-            coordinator.compact(nowMillis = farFuture).shouldNotBeNull()
+            compactAll(coordinator)
             Files.write(libRoot.resolve(leftover), Files.readAllBytes(kept) + "\n".encodeToByteArray())
 
             coordinator.reconcileMetadata()
@@ -208,7 +213,7 @@ class CompactionReconcileTest {
     fun objectsBackWithoutTheSnapshotThatReplacedThemAreKept() =
         runTest {
             rig.writePdf("a.pdf", "alpha")
-            val coordinator = coordinator(threshold = 3)
+            val coordinator = coordinator()
             rig.rescan()
             coordinator.refreshState()
             val docId = checkNotNull(db.documentDao().rowAtPath("a.pdf")).docId
@@ -226,7 +231,7 @@ class CompactionReconcileTest {
                     StandardCopyOption.COPY_ATTRIBUTES,
                 )
             }
-            coordinator.compact(nowMillis = farFuture).shouldNotBeNull()
+            compactAll(coordinator)
 
             fs.journalPaths<JournalPath.SnapshotV2>().forEach { Files.delete(libRoot.resolve(it)) }
             objects.forEach {
@@ -251,7 +256,7 @@ class CompactionReconcileTest {
     fun aChangedSnapshotFailsThePassBeforeAnythingIsDeleted() =
         runTest {
             rig.writePdf("a.pdf", "alpha")
-            val coordinator = coordinator(threshold = 3)
+            val coordinator = coordinator()
             rig.rescan()
             coordinator.refreshState()
             val docId = checkNotNull(db.documentDao().rowAtPath("a.pdf")).docId
@@ -263,7 +268,7 @@ class CompactionReconcileTest {
             val leftover = fs.journalPaths<JournalPath.ObjectV2>().first()
             val kept = rig.scratchDir().resolve(NpnPaths.fileName(leftover))
             Files.copy(libRoot.resolve(leftover), kept, StandardCopyOption.COPY_ATTRIBUTES)
-            coordinator.compact(nowMillis = farFuture).shouldNotBeNull()
+            compactAll(coordinator)
             Files.copy(kept, libRoot.resolve(leftover), StandardCopyOption.COPY_ATTRIBUTES)
 
             val snapshot = libRoot.resolve(fs.journalPaths<JournalPath.SnapshotV2>().single())
@@ -282,7 +287,7 @@ class CompactionReconcileTest {
     fun aSnapshotReplacedInTurnStillAccountsForTheObjectsItReplaced() =
         runTest {
             rig.writePdf("a.pdf", "alpha")
-            val coordinator = coordinator(threshold = 3)
+            val coordinator = coordinator()
             rig.rescan()
             coordinator.refreshState()
             val docId = checkNotNull(db.documentDao().rowAtPath("a.pdf")).docId
@@ -294,13 +299,13 @@ class CompactionReconcileTest {
             val leftover = fs.journalPaths<JournalPath.ObjectV2>().first()
             val kept = rig.scratchDir().resolve(NpnPaths.fileName(leftover))
             Files.copy(libRoot.resolve(leftover), kept, StandardCopyOption.COPY_ATTRIBUTES)
-            coordinator.compact(nowMillis = farFuture).shouldNotBeNull()
+            compactAll(coordinator)
             repeat(4) { i ->
                 clock.advance()
                 coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "b$i")))
             }
             coordinator.reconcileMetadata()
-            coordinator.compact(nowMillis = farFuture).shouldNotBeNull()
+            compactAll(coordinator)
             snapCount() shouldBe 1
 
             Files.copy(kept, libRoot.resolve(leftover), StandardCopyOption.COPY_ATTRIBUTES)
@@ -382,7 +387,7 @@ class CompactionReconcileTest {
     fun unexplainedObjectLossEventuallyHardBlocks() =
         runTest {
             rig.writePdf("a.pdf", "alpha")
-            val coordinator = coordinator(threshold = 3)
+            val coordinator = coordinator()
             rig.rescan()
             coordinator.refreshState()
             val docId = db.documentDao().requireRowAtPath("a.pdf").docId
@@ -405,65 +410,5 @@ class CompactionReconcileTest {
                 .state()
                 .shouldNotBeNull()
                 .migrationState shouldBe ProjectionStatus.FAILED
-        }
-
-    @Test
-    fun repeatedReconcilesDoNotChurnSnapshots() =
-        runTest {
-            rig.writePdf("a.pdf", "alpha")
-            val coordinator = coordinator(threshold = 3)
-            rig.rescan()
-            coordinator.refreshState()
-            val docId = db.documentDao().requireRowAtPath("a.pdf").docId
-            repeat(6) { i ->
-                clock.advance()
-                coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "tag$i")))
-            }
-            coordinator.reconcileMetadata()
-
-            coordinator.compact(nowMillis = farFuture).shouldNotBeNull()
-            snapCount() shouldBe 1
-
-            // Subsequent compaction passes with no new objects must be no-ops (no ping-pong): a lone
-            // snapshot below-threshold and no second snapshot means nothing to collapse.
-            repeat(5) {
-                coordinator.reconcileMetadata()
-                coordinator.compact(nowMillis = farFuture) shouldBe null
-            }
-            snapCount() shouldBe 1
-        }
-
-    @Test
-    fun chainCompactionCollapsesMultipleSnapshots() =
-        runTest {
-            rig.writePdf("a.pdf", "alpha")
-            val coordinator = coordinator(threshold = 3)
-            rig.rescan()
-            coordinator.refreshState()
-            val docId = db.documentDao().requireRowAtPath("a.pdf").docId
-
-            // First snapshot from 6 objects.
-            repeat(6) { i ->
-                clock.advance()
-                coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "a$i")))
-            }
-            coordinator.reconcileMetadata()
-            coordinator.compact(nowMillis = farFuture).shouldNotBeNull()
-            snapCount() shouldBe 1
-
-            // Simulate a SECOND snapshot arriving from another device (build one via a fresh compactor
-            // over the current snapshot + a couple new objects) by producing more objects then chaining.
-            repeat(4) { i ->
-                clock.advance()
-                coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "b$i")))
-            }
-            coordinator.reconcileMetadata()
-            // Now 1 snapshot + 4 objects. Objects (4) exceed threshold(3) -> chain compaction fires,
-            // superseding both the old snapshot and the new objects into one.
-            coordinator.compact(nowMillis = farFuture).shouldNotBeNull()
-            snapCount() shouldBe 1
-            v2Count() shouldBe 0
-            // All tags survive the chain.
-            db.tagDao().tagsForDocument(docId).size shouldBe 10
         }
 }
