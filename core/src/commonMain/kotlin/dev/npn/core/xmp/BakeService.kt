@@ -137,6 +137,7 @@ class BakeService(
                 if (newSha != docId) emitRelink(docId, newSha)
                 standing = true
             } finally {
+                @Suppress("SuspendFunInFinallySection") // The whole block runs in NonCancellable.
                 if (!standing) restoreOriginal(norm, src, docId, newSha, tmpPath)
             }
             newSha

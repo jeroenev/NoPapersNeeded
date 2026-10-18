@@ -358,6 +358,7 @@ internal class DocumentDrafts(
                     }.also { finished = true }
                 } finally {
                     // Cancelled: clear the saving flag even while cancelling, so the draft is not stuck.
+                    @Suppress("SuspendFunInFinallySection") // NonCancellable, which the rule misses beside Main.
                     if (!finished) {
                         withContext(NonCancellable + Dispatchers.Main) {
                             if (fieldsLanded) settle(docId, captured.fields) else edit(docId) { unlanded(docId, it) }

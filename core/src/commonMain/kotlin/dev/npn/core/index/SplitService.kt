@@ -99,6 +99,7 @@ class SplitService(
             complete = true
             return Result.Done(parts)
         } finally {
+            @Suppress("SuspendFunInFinallySection") // rollBack runs in NonCancellable itself.
             if (!complete) rollBack(parts)
         }
     }

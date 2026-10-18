@@ -259,7 +259,10 @@ class ImportService(
         try {
             placement = record(hash, target, existing, moved = inPlace == null)
         } finally {
-            if (placement == null) unplace(hash, existing, target.takeIf { inPlace == null }, tmpPath)
+            // A cancelled import is taken back as a failed one is.
+            if (placement == null) {
+                withContext(NonCancellable) { unplace(hash, existing, target.takeIf { inPlace == null }, tmpPath) }
+            }
         }
         return checkNotNull(placement)
     }

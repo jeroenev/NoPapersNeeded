@@ -85,6 +85,7 @@ internal class MaintenanceFacadeImpl(
             }
             finished = true
         } finally {
+            @Suppress("SuspendFunInFinallySection") // rollBack runs in NonCancellable itself.
             if (!finished) splitter.rollBack(parts)
         }
         return SplitOutcome.Done(partIds)

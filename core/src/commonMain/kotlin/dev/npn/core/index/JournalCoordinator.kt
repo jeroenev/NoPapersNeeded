@@ -547,6 +547,7 @@ class JournalCoordinator internal constructor(
                     change.optimisticWrite()
                     published = writeTransaction(change.ops)
                 } finally {
+                    @Suppress("SuspendFunInFinallySection") // The whole block runs in NonCancellable.
                     if (published == null && moved) {
                         log.runLogged("Putting back the row of $id") { indexer.putBack(docs, before) }
                         log.runLogged("Moving the file of $id back") { change.undoMove() }

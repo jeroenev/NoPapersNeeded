@@ -9,6 +9,8 @@ import dev.npn.core.util.NpnLog
 import dev.npn.core.util.info
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.warn
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlin.uuid.Uuid
 
 /**
@@ -130,7 +132,7 @@ class DeviceIdentity(
         try {
             publishOnce(NpnPaths.Temp.importPath(nonce()), published, PROBE_BYTES)
         } finally {
-            runCatchingCancellable { fs.delete(published) }
+            withContext(NonCancellable) { runCatchingCancellable { fs.delete(published) } }
         }
     }
 
@@ -146,7 +148,7 @@ class DeviceIdentity(
             fs.publishVerifiedObjectOnce(staging, path, sha256Bytes(bytes))
             published = true
         } finally {
-            if (!published) runCatchingCancellable { fs.delete(staging) }
+            if (!published) withContext(NonCancellable) { runCatchingCancellable { fs.delete(staging) } }
         }
     }
 

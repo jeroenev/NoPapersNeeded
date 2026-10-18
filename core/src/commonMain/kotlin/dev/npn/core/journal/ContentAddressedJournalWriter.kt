@@ -4,6 +4,8 @@ import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.holds
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.util.runCatchingCancellable
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlin.uuid.Uuid
 
 data class PublishedTransaction(
@@ -81,7 +83,7 @@ internal suspend fun stageAndPublishVerifiedObject(
         }
         published = true
     } finally {
-        if (!published) runCatchingCancellable { fs.delete(stagingPath) }
+        if (!published) withContext(NonCancellable) { runCatchingCancellable { fs.delete(stagingPath) } }
     }
     return canonicalPath
 }

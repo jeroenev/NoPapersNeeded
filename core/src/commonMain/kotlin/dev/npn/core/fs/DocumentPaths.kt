@@ -1,6 +1,8 @@
 package dev.npn.core.fs
 
 import dev.npn.core.util.runCatchingCancellable
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlin.uuid.Uuid
 
 /**
@@ -53,7 +55,10 @@ internal class DocumentPaths(
             place(docId, recovery, target)
             return true
         } finally {
-            if (fs.exists(recovery) && !fs.exists(source)) fs.claimDocument(recovery, source)
+            // Cancelled or not, the document's file goes back to its name.
+            withContext(NonCancellable) {
+                if (fs.exists(recovery) && !fs.exists(source)) fs.claimDocument(recovery, source)
+            }
         }
     }
 
@@ -75,7 +80,7 @@ internal class DocumentPaths(
                 fs.copyOnce(recovery, staging)
                 fs.publishVerifiedObjectOnce(staging, target, docId)
             } finally {
-                if (fs.exists(staging)) fs.delete(staging)
+                withContext(NonCancellable) { if (fs.exists(staging)) fs.delete(staging) }
             }
             fs.delete(recovery)
         }
@@ -95,7 +100,10 @@ internal class DocumentPaths(
                 fs.delete(recovery)
             }
         } finally {
-            if (fs.exists(recovery) && !fs.exists(source)) fs.claimDocument(recovery, source)
+            // Cancelled or not, the document's file goes back to its name.
+            withContext(NonCancellable) {
+                if (fs.exists(recovery) && !fs.exists(source)) fs.claimDocument(recovery, source)
+            }
         }
     }
 

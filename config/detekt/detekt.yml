@@ -94,6 +94,10 @@ style:
     comments:
       - reason: "Track and resolve before release"
         value: "FIXME"
+      - reason: "Track it as an issue, or do it now"
+        value: "TODO:"
+      - reason: "Must be resolved before this ships"
+        value: "STOPSHIP:"
 
 naming:
   MatchingDeclarationName:
