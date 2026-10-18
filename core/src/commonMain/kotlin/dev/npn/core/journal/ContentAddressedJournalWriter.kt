@@ -1,11 +1,8 @@
 package dev.npn.core.journal
 
 import dev.npn.core.fs.LibraryFileSystem
-import dev.npn.core.fs.holds
+import dev.npn.core.fs.publishStagedOnce
 import dev.npn.core.fs.sha256Bytes
-import dev.npn.core.util.runCatchingCancellable
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.withContext
 import kotlin.uuid.Uuid
 
 data class PublishedTransaction(
@@ -60,9 +57,10 @@ internal class ContentAddressedJournalWriter(
  * Stage [bytes] under a per-installation `.part` name, then atomically publish them to the
  * content-addressed object path for [hash] (verified create-no-replace). A publish that fails with
  * no object of those bytes in place has the staging file best-effort deleted and the original
- * failure rethrown, so a partial write never lingers; one whose object is in place regardless
- * published it. Shared by [ContentAddressedJournalWriter] (regular objects) and [SnapshotCompactor]
- * (snapshots); [snapshot] selects the bucket namespace. Returns the canonical object path.
+ * failure rethrown, so a partial write never lingers; one whose object is in place regardless (its
+ * staging file left behind, say) published it. Shared by [ContentAddressedJournalWriter] (regular
+ * objects) and [SnapshotCompactor] (snapshots); [snapshot] selects the bucket namespace. Returns
+ * the canonical object path.
  */
 internal suspend fun stageAndPublishVerifiedObject(
     fs: LibraryFileSystem,
@@ -73,17 +71,8 @@ internal suspend fun stageAndPublishVerifiedObject(
 ): String {
     val canonicalPath = JournalPaths.objectPath(hash, snapshot = snapshot)
     val stagingPath = JournalPaths.stagingPath(hash, installationId, Uuid.random().toString(), snapshot = snapshot)
-    fs.writeBytesOnce(stagingPath, bytes)
-    var published = false
-    try {
-        runCatchingCancellable { fs.publishVerifiedObjectOnce(stagingPath, canonicalPath, hash) }.onFailure { failure ->
-            // A failure after the object was installed (its staging file left behind, say) still
-            // published it: readers take it, so the write must not report that it did not.
-            if (!runCatchingCancellable { fs.holds(canonicalPath, hash) }.getOrDefault(false)) throw failure
-        }
-        published = true
-    } finally {
-        if (!published) withContext(NonCancellable) { runCatchingCancellable { fs.delete(stagingPath) } }
+    fs.publishStagedOnce(stagingPath, canonicalPath, hash, targetHeldCounts = true) {
+        fs.writeBytesOnce(stagingPath, bytes)
     }
     return canonicalPath
 }

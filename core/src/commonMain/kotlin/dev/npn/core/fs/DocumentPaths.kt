@@ -76,12 +76,7 @@ internal class DocumentPaths(
             // Taken meanwhile: leave it alone, and the caller puts the source back.
             if (fs.exists(target)) throw failure
             val staging = NpnPaths.Temp.relocationPath(target, Uuid.random().toString())
-            try {
-                fs.copyOnce(recovery, staging)
-                fs.publishVerifiedObjectOnce(staging, target, docId)
-            } finally {
-                withContext(NonCancellable) { if (fs.exists(staging)) fs.delete(staging) }
-            }
+            fs.publishStagedOnce(staging, target, docId) { fs.copyOnce(recovery, staging) }
             fs.delete(recovery)
         }
     }

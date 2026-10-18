@@ -1,7 +1,9 @@
 package dev.npn.core.fs
 
 import dev.npn.core.util.runCatchingCancellable
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
 
 /**
  * Metadata for a single filesystem entry inside the library.
@@ -192,3 +194,30 @@ internal suspend fun LibraryFileSystem.holds(
 ): Boolean =
     stat(relPath)?.isDirectory == false &&
         runCatchingCancellable { sha256(relPath) }.getOrNull() == hash
+
+/**
+ * Write a staging file at [staging] with [stage], then publish it as [target] without replacement,
+ * its bytes verified against [hash] ([LibraryFileSystem.publishVerifiedObjectOnce]). Unless that
+ * publishes, the staging file is deleted, best effort and cancelled or not, and the failure
+ * rethrown, so nothing staged lingers. With [targetHeldCounts], a failure after which [target]
+ * holds the bytes all the same published them: a reader takes such an object, so the write must
+ * not report that it did not.
+ */
+internal suspend fun LibraryFileSystem.publishStagedOnce(
+    staging: String,
+    target: String,
+    hash: String,
+    targetHeldCounts: Boolean = false,
+    stage: suspend () -> Unit,
+) {
+    var published = false
+    try {
+        stage()
+        runCatchingCancellable { publishVerifiedObjectOnce(staging, target, hash) }.onFailure { failure ->
+            if (!targetHeldCounts || !runCatchingCancellable { holds(target, hash) }.getOrDefault(false)) throw failure
+        }
+        published = true
+    } finally {
+        if (!published) withContext(NonCancellable) { runCatchingCancellable { delete(staging) } }
+    }
+}

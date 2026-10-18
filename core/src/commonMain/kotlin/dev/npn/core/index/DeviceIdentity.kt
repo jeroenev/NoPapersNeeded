@@ -4,6 +4,7 @@ import dev.npn.core.db.KeyValueDao
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
+import dev.npn.core.fs.publishStagedOnce
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.info
@@ -141,16 +142,7 @@ class DeviceIdentity(
         staging: String,
         path: String,
         bytes: ByteArray,
-    ) {
-        fs.writeBytesOnce(staging, bytes)
-        var published = false
-        try {
-            fs.publishVerifiedObjectOnce(staging, path, sha256Bytes(bytes))
-            published = true
-        } finally {
-            if (!published) withContext(NonCancellable) { runCatchingCancellable { fs.delete(staging) } }
-        }
-    }
+    ) = fs.publishStagedOnce(staging, path, sha256Bytes(bytes)) { fs.writeBytesOnce(staging, bytes) }
 
     private fun nonce(): String = Uuid.random().toString()
 
