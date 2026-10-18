@@ -24,9 +24,8 @@ import java.nio.file.Path
 /**
  * The one place that knows how to wire a library folder on a plain JVM: java.nio filesystem,
  * PDFBox, Tesseract, a Room index under [dirs]. Every JVM host — the desktop app, a headless
- * service, a test rig — builds its [SessionDeps] here and then calls
- * [LibrarySessionImpl.openSession]; opening, starting and closing stay with the caller, because
- * each host owns that lifecycle differently.
+ * service, a test rig — builds its [SessionDeps] here and then calls [openSession]; opening,
+ * starting and closing stay with the caller, because each host owns that lifecycle differently.
  *
  * Platform adapters default to the production ones and are parameters only so a host can swap
  * the pieces that legitimately vary (a test's no-op OCR engine, a fixed clock, the app's

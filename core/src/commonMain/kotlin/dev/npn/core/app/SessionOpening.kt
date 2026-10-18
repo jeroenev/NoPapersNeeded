@@ -19,24 +19,31 @@ import dev.npn.core.model.FieldKeys
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.warn
 
-// How a session opens: [openLibrarySession], then the steps it takes, in the order it takes them.
-// [LibrarySessionImpl.openSession] is the way in from outside core.
+// How a session opens: [openSession], then the steps it takes, in the order it takes them.
 
 /**
- * Boot a session over [deps]: move device state an older index still holds into the device
- * database, settle the device id ([DeviceIdentity]: a fresh one for a restored or cloned
- * installation), wire the journal engine, repositories, pipelines, then do the initial fold so
- * [LibrarySessionImpl.documents] is populated before the caller's initial rescan. A deleted
- * document's return is recorded as a `doc-undelete` when [writeUndelete].
+ * Open a session over the library [deps] wire: the one way in from outside core. The host then
+ * [starts][LibrarySession.start] it, and [closes][LibrarySession.close] it before it closes the
+ * databases.
  *
  * Refuses, with [VerifiedPublicationUnavailableException], a library on a filesystem that cannot
  * publish without replacement: there is no other journal format to write. Every open publishes
  * through the same primitive before it writes anything ([DeviceIdentity]: this installation's
  * marker, or a throwaway object once that is there), so each one finds out.
  */
-internal suspend fun openLibrarySession(
+suspend fun openSession(deps: SessionDeps): LibrarySession = openSession(deps, JournalOp.DocUndelete.WRITTEN)
+
+/**
+ * Boot a session over [deps]: move device state an older index still holds into the device
+ * database, settle the device id ([DeviceIdentity]: a fresh one for a restored or cloned
+ * installation), wire the journal engine, repositories, pipelines, then do the initial fold so
+ * [LibrarySessionImpl.documents] is populated before the caller's initial rescan. A deleted
+ * document's return is recorded as a `doc-undelete` when [writeUndelete], which only a test sets
+ * apart from [JournalOp.DocUndelete.WRITTEN].
+ */
+internal suspend fun openSession(
     deps: SessionDeps,
-    writeUndelete: Boolean = JournalOp.DocUndelete.WRITTEN,
+    writeUndelete: Boolean,
 ): LibrarySessionImpl {
     val lifetime = SessionLifetime(deps.scope)
     var opened = false
@@ -56,7 +63,7 @@ internal suspend fun openLibrarySession(
     }
 }
 
-/** The session [openLibrarySession] opens over its [coordinator], from the device id on. */
+/** The session [openSession] opens over its [coordinator], from the device id on. */
 private suspend fun wire(
     deps: SessionDeps,
     lifetime: SessionLifetime,

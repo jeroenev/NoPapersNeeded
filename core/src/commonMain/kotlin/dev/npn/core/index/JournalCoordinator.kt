@@ -113,8 +113,8 @@ internal class Compaction(
  *
  * Every transaction is published as one storage-v2 object. There is no other format to fall back
  * to: a filesystem that cannot publish without replacement fails the write, and the session refuses
- * to open such a library in the first place (see [dev.npn.core.app.LibrarySessionImpl.openSession]). Legacy v1
- * segments are still read and folded.
+ * to open such a library in the first place (see [dev.npn.core.app.openSession]). Legacy v1 segments
+ * are still read and folded.
  *
  * Normal commits apply their frozen events directly to the persisted accumulator and bounded DB
  * projection.

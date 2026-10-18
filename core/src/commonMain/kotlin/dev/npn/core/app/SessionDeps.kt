@@ -14,8 +14,8 @@ import dev.npn.core.xmp.PdfXmpIO
 import kotlinx.coroutines.CoroutineScope
 
 /**
- * Bundle of everything a [LibrarySessionImpl] needs, assembled per platform: `jvmSessionDeps` on a
- * plain JVM, `androidSessionDeps` on Android.
+ * Bundle of everything a library session needs ([openSession]), assembled per platform:
+ * `jvmSessionDeps` on a plain JVM, `androidSessionDeps` on Android.
  */
 class SessionDeps(
     val fs: LibraryFileSystem,

@@ -58,7 +58,7 @@ class BeforeTrashListing {
  * A second session on the same library (different deviceId) is built via [secondSession] for
  * convergence tests.
  */
-class AppSessionRig private constructor(
+internal class AppSessionRig private constructor(
     val libRoot: Path,
     val dbDir: File,
     /** What [session] was built from, before `create`'s `files` and `pdfEngine` wrapped its pieces. */
@@ -155,7 +155,7 @@ class AppSessionRig private constructor(
                     deviceTrashRetentionDays = deviceTrashRetentionDays,
                 )
             val session =
-                openLibrarySession(base.copy(fs = files(base.fs), pdfEngine = pdfEngine(base.pdfEngine)), writeUndelete)
+                openSession(base.copy(fs = files(base.fs), pdfEngine = pdfEngine(base.pdfEngine)), writeUndelete)
             storagePath?.let {
                 session.storagePath.setStoragePathTemplate(it.template)
                 session.storagePath.setStoragePathEnabled(it.enabled)
@@ -195,7 +195,7 @@ class AppSessionRig private constructor(
         // Force a distinct deviceId by seeding the kv before openSession.
         deps.deviceDb.keyValueDao().put(DeviceIdentity.KEY_DEVICE_ID, "device-two")
         otherDeps += deps
-        return openLibrarySession(deps, writeUndelete).also { otherSessions += it } to deps.db
+        return openSession(deps, writeUndelete).also { otherSessions += it } to deps.db
     }
 }
 
@@ -226,13 +226,13 @@ fun tagsOf(
 ): List<String> = items.first { it.doc.docId == docId }.tags
 
 /** A journal store from a newer build makes the rescan refuse, which blocks metadata writes. */
-suspend fun AppSessionRig.blockMetadataWrites() {
+internal suspend fun AppSessionRig.blockMetadataWrites() {
     Files.createDirectories(libRoot.resolve(NEWER_STORE))
     assertFailsWith<IllegalStateException> { session.rescan() }
 }
 
 /** Take away what [blockMetadataWrites] put there; the next rescan lets writes through again. */
-fun AppSessionRig.unblockMetadataWrites() {
+internal fun AppSessionRig.unblockMetadataWrites() {
     Files.delete(libRoot.resolve(NEWER_STORE))
 }
 
@@ -243,7 +243,7 @@ private const val NEWER_STORE = "${NpnPaths.JOURNAL_DIR}/objects-v9-00"
  * A test over a fresh [AppSessionRig], built in the test's background scope with these
  * [AppSessionRig.create] options and closed before that scope ends.
  */
-fun appSessionTest(
+internal fun appSessionTest(
     ocr: OcrEngine = FakeOcrEngine.unavailable(),
     storagePath: StoragePathRule? = null,
     log: NpnLog = JvmLog(),
@@ -293,7 +293,7 @@ class LibraryDirs : AutoCloseable {
  * A session over [library] whose app-local state lives in [data], as one device opens it, and
  * again after the last one closed: the index and device databases stay in [data] between opens.
  */
-suspend fun openSession(
+internal suspend fun openSession(
     scope: CoroutineScope,
     library: Path,
     data: File,
@@ -304,7 +304,7 @@ suspend fun openSession(
 ): OpenSession {
     val base = testSessionDeps(scope, library, data, installationId, aiConfig = aiConfig)
     val deps = base.copy(fs = files(base.fs))
-    return OpenSession(openLibrarySession(deps), deps)
+    return OpenSession(openSession(deps, JournalOp.DocUndelete.WRITTEN), deps)
 }
 
 /**
@@ -344,7 +344,7 @@ internal fun testSessionDeps(
     )
 
 /** An [openSession] result: [use] it, and it closes the session and its databases afterwards. */
-class OpenSession(
+internal class OpenSession(
     val session: LibrarySessionImpl,
     private val deps: SessionDeps,
 ) {

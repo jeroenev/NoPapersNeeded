@@ -1,8 +1,8 @@
 package dev.npn.app.di
 
 import dev.npn.core.app.LibrarySession
-import dev.npn.core.app.LibrarySessionImpl
 import dev.npn.core.app.SessionDeps
+import dev.npn.core.app.openSession
 import dev.npn.core.settings.SettingsRepository
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
@@ -40,7 +40,7 @@ import kotlinx.coroutines.withContext
  *  throws is logged and treated as null.
  * @param factory builds the per-library pieces (fs, databases, engines) for a location, throwing
  *  [LibraryUnavailableException] when it can tell why the library cannot open. The environment
- *  drives them into [LibrarySessionImpl.openSession] and closes their databases on a swap.
+ *  drives them into [openSession] and closes their databases on a swap.
  */
 class DefaultAppEnvironment(
     override val settings: SettingsRepository,
@@ -172,7 +172,7 @@ class DefaultAppEnvironment(
         var session: LibrarySession? = null
         var kept = false
         try {
-            session = LibrarySessionImpl.openSession(deps)
+            session = openSession(deps)
             session.start()
             if (settings.settings.first().libraryLocation != location) {
                 settings.edit { it.copy(libraryLocation = location) }

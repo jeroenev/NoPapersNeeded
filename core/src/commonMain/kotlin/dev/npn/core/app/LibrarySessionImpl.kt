@@ -4,7 +4,6 @@ import dev.npn.core.ai.AiChat
 import dev.npn.core.ai.AiSuggest
 import dev.npn.core.app.aiedit.AiEditQueueFacade
 import dev.npn.core.fs.ExternalSource
-import dev.npn.core.fs.VerifiedPublicationUnavailableException
 import dev.npn.core.index.DeviceIdentity
 import dev.npn.core.index.EmptyImportException
 import dev.npn.core.index.ImportResult
@@ -30,8 +29,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
- * Everything wired for one opened library folder. Constructed by [openSession] ([openLibrarySession]:
- * it settles the device identity and runs the initial fold), then [start]ed.
+ * Everything wired for one opened library folder. Constructed by [openSession] (which settles the
+ * device identity and runs the initial fold), then [start]ed.
  *
  * The session itself is the library's lifecycle and its ingest: imports, rescans, the folder watch
  * and the periodic reconcile. Every other facet is its own object, built by its [SessionGraph].
@@ -39,7 +38,7 @@ import kotlinx.coroutines.sync.withLock
  * Everything the session runs — background loops, queue drains, caller-driven operations — belongs
  * to one [SessionLifetime] under [SessionDeps.scope], so [close] stops all of it at once, for good.
  */
-class LibrarySessionImpl internal constructor(
+internal class LibrarySessionImpl(
     private val deps: SessionDeps,
     graph: SessionGraph,
 ) : LibrarySession,
@@ -326,13 +325,5 @@ class LibrarySessionImpl internal constructor(
 
         /** Slack past a deferred file's settle time, so the follow-up does not land just short. */
         private const val SETTLE_RESCAN_MARGIN_MS = 500L
-
-        /**
-         * Boot a session over [deps]: see [openLibrarySession].
-         *
-         * Refuses, with [VerifiedPublicationUnavailableException], a library on a filesystem that
-         * cannot publish without replacement: there is no other journal format to write.
-         */
-        suspend fun openSession(deps: SessionDeps): LibrarySession = openLibrarySession(deps)
     }
 }

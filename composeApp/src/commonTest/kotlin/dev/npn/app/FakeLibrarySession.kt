@@ -10,8 +10,8 @@ import dev.npn.core.testing.FakeTagRepository
 import dev.npn.core.util.NpnLog
 
 /**
- * The per-facet fakes composed into a session, mirroring how [dev.npn.core.app.LibrarySessionImpl]
- * assembles the real ones: every viewmodel takes the session and reads the facets it needs.
+ * The per-facet fakes composed into a session, mirroring how core's own session assembles the real
+ * ones: every viewmodel takes the session and reads the facets it needs.
  *
  * Each property keeps its concrete fake type so tests can reach the recorded calls and injection
  * hooks (e.g. `session.docLifecycle.trashedDocs`, `session.ocr.failReOcr`).

@@ -31,7 +31,7 @@ import kotlinx.coroutines.channels.Channel
  * from and what it is given. Construction only wires; what opening has to do to the library's data
  * before the session starts is [prepare]'s.
  *
- * [openLibrarySession] builds it once the journal is folded ([foldJournal]); the session then
+ * [openSession] builds it once the journal is folded ([foldJournal]); the session then
  * hands its parts out as facets.
  */
 internal class SessionGraph(

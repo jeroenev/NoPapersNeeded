@@ -65,7 +65,7 @@ class HlcSeedingTest {
 
             // Reopen over the same library + cache with the wall clock regressed far behind
             // the HLCs already in the journal (clock correction between sessions).
-            val session2 = LibrarySessionImpl.openSession(rig.deps.copy(clock = MutableClock(1L, autoTick = true)))
+            val session2 = openSession(rig.deps.copy(clock = MutableClock(1L, autoTick = true)))
 
             session2.meta.setField(id, FieldKeys.TITLE, "second")
             rig.db
