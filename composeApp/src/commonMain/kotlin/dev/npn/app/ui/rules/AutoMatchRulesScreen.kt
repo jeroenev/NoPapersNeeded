@@ -53,6 +53,7 @@ import dev.npn.core.model.labelFor
 import dev.npn.core.rules.AutoMatchRule
 import dev.npn.core.rules.MatchAlgorithm
 import dev.npn.core.rules.RuleField
+import dev.npn.core.rules.RuleMatcher
 import dev.npn.core.util.NpnJson
 import kotlinx.serialization.Serializable
 import no_papers_needed.composeapp.generated.resources.Res
@@ -340,9 +341,9 @@ internal data class RuleFormState(
 ) {
     val isNew: Boolean get() = id.isEmpty()
 
-    /** False only for a regex pattern that does not compile. */
+    /** False only for a regex pattern that does not compile, as the matcher will read it. */
     val patternValid: Boolean
-        get() = algorithm != MatchAlgorithm.REGEX || runCatching { Regex(pattern) }.isSuccess
+        get() = RuleMatcher.isValidPattern(algorithm, pattern)
 
     val canSave: Boolean get() = name.isNotBlank() && pattern.isNotBlank() && patternValid
 

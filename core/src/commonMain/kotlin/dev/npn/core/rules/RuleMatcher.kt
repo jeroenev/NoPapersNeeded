@@ -45,6 +45,16 @@ object RuleMatcher {
         return CompiledRule(rule, test)
     }
 
+    /**
+     * Whether [pattern] can match anything under [algorithm], judged as [compile] reads it (trimmed,
+     * a regular expression case-insensitive): false only for a regular expression that does not
+     * compile, which never matches. Blankness is the caller's to judge.
+     */
+    fun isValidPattern(
+        algorithm: MatchAlgorithm,
+        pattern: String,
+    ): Boolean = algorithm != MatchAlgorithm.REGEX || regexOrNull(pattern.trim()) != null
+
     /** One whole-word, case-insensitive expression per word of [pattern]. */
     private fun wordPatterns(pattern: String): List<Regex> =
         pattern

@@ -58,4 +58,13 @@ class RuleFormStateTest {
         // Only a regex pattern has to compile.
         valid.copy(pattern = "(").canSave shouldBe true
     }
+
+    /** The form judges a regex as the matcher will run it: trimmed, as saving trims it. */
+    @Test
+    fun aRegexIsJudgedTrimmedAsTheMatcherReadsIt() {
+        val regex = RuleFormState(name = "n", algorithm = MatchAlgorithm.REGEX, pattern = " inv(oice)? ")
+        regex.patternValid shouldBe true
+        // An escaped trailing space compiles as typed, but trimming leaves a dangling backslash.
+        regex.copy(pattern = "total\\ ").patternValid shouldBe false
+    }
 }

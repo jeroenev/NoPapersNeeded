@@ -57,4 +57,14 @@ class RuleMatcherTest {
         matches(rule(MatchAlgorithm.EXACT, "   "), "text") shouldBe false
         matches(rule(MatchAlgorithm.ANY_WORD, ""), "text") shouldBe false
     }
+
+    /** A pattern is valid when the matcher can run it: only a regular expression can fail to compile. */
+    @Test
+    fun onlyARegexThatDoesNotCompileIsInvalid() {
+        RuleMatcher.isValidPattern(MatchAlgorithm.REGEX, "inv(oice)?") shouldBe true
+        RuleMatcher.isValidPattern(MatchAlgorithm.REGEX, "(") shouldBe false
+        RuleMatcher.isValidPattern(MatchAlgorithm.EXACT, "(") shouldBe true
+        // Judged trimmed, as compile reads it: the escaped trailing space goes, the backslash dangles.
+        RuleMatcher.isValidPattern(MatchAlgorithm.REGEX, "total\\ ") shouldBe false
+    }
 }
