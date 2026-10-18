@@ -19,6 +19,7 @@ import dev.npn.core.pathrules.StoragePathRuleApplicator
 import dev.npn.core.pdf.RenderGate
 import dev.npn.core.pdf.ThumbnailService
 import dev.npn.core.rules.RuleApplier
+import dev.npn.core.work.EndpointHealth
 import dev.npn.core.work.QueueDrainer
 import dev.npn.core.work.drainedQueue
 import dev.npn.core.xmp.BakeService
@@ -66,6 +67,12 @@ internal class SessionGraph(
 
     /** What this device may spend on the endpoint unattended, for enrichment and OCR alike. */
     private val policy = UnattendedAiPolicy(deps.settings.aiConfig)
+
+    /**
+     * The one cooldown of [ai]'s endpoint, shared by every queue that calls it (automatic enrichment
+     * and queued edit runs), so they do not each probe an endpoint that is down.
+     */
+    private val endpointHealth = EndpointHealth()
 
     val documents: DocumentRepository = DocumentRepositoryImpl(db)
     val tags: TagRepository = TagRepositoryImpl(db.tagDao())
@@ -143,7 +150,7 @@ internal class SessionGraph(
                 fieldRegistry = fieldRegistry,
                 policy = policy,
                 clock = deps.clock,
-                health = ai.endpointHealth,
+                health = endpointHealth,
                 canWrite = coordinator::canWrite,
                 onEnqueued = onEnqueued,
             )
@@ -247,7 +254,7 @@ internal class SessionGraph(
                 tags = tags,
                 readConfig = deps.settings.aiConfig,
                 clock = deps.clock,
-                health = ai.endpointHealth,
+                health = endpointHealth,
                 onEnqueued = onEnqueued,
                 ownWrite = { lifetime.owned(it) },
             )

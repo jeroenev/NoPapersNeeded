@@ -9,7 +9,6 @@ import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.ocr.OcrEngineId
 import dev.npn.core.util.EpochClock
 import dev.npn.core.util.SystemEpochClock
-import dev.npn.core.work.EndpointHealth
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
@@ -37,12 +36,6 @@ internal class AiFacadeImpl(
     private val configProvider: suspend () -> AiConfig,
 ) : AiChat,
     AiSuggest {
-    /**
-     * The one cooldown of this facade's endpoint, shared by every queue that calls it (automatic
-     * enrichment and queued edit runs), so they do not each probe an endpoint that is down.
-     */
-    val endpointHealth = EndpointHealth()
-
     private val chatHistoryStore = RoomChatHistoryProvider(chats, ownWrite)
     private val sessions = ChatSessions(chats, ownWrite, chatHistoryStore, clock)
 
