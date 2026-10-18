@@ -3,6 +3,7 @@ package dev.npn.app.di
 import dev.npn.app.FakeSettingsRepository
 import dev.npn.core.app.SessionDeps
 import dev.npn.core.app.jvmSessionDeps
+import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.settings.AppDirs
 import dev.npn.core.settings.SessionSettings
 import dev.npn.core.util.runCatchingCancellable
@@ -10,9 +11,14 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -48,6 +54,24 @@ class DefaultAppEnvironmentTest {
     private suspend fun SessionDeps.isClosed(): Boolean =
         runCatchingCancellable { db.metadataProjectionDao().state() }.isFailure &&
             runCatchingCancellable { deviceDb.keyValueDao().get("probe") }.isFailure
+
+    /** These pieces, on the same databases, with the PDF engine [wrap] makes of theirs. */
+    private fun SessionDeps.withPdfEngine(wrap: (PdfEngine) -> PdfEngine) =
+        SessionDeps(
+            fs = fs,
+            db = db,
+            deviceDb = deviceDb,
+            pdfEngine = wrap(pdfEngine),
+            ocrEngine = ocrEngine,
+            xmpIO = xmpIO,
+            thumbnailStore = thumbnailStore,
+            renderParallelism = renderParallelism,
+            scope = scope,
+            settings = settings,
+            log = log,
+            clock = clock,
+            installationId = installationId,
+        )
 
     @AfterTest
     fun teardown() {
@@ -148,6 +172,60 @@ class DefaultAppEnvironmentTest {
                 closed() shouldBe emptyList()
             } finally {
                 env.closeLibrary()
+            }
+        }
+
+    /**
+     * A caller cancelled while the session closes (an Android viewmodel cleared mid-switch) still
+     * has the whole close done: no closed session is left published as the open one.
+     */
+    @Test
+    fun aCloseWhoseCallerIsCancelledStillClosesTheLibrary() =
+        runTest {
+            val good = library("good")
+            // An import that holds the close up: the session waits out the work it owns.
+            val entered = CompletableDeferred<Unit>()
+            val cancelled = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            val holding =
+                DefaultAppEnvironment(settings, watchedFolder = { null }) { location, scope ->
+                    factory(location, scope).withPdfEngine { real ->
+                        object : PdfEngine by real {
+                            override suspend fun imagesToPdf(images: List<ByteArray>): ByteArray {
+                                entered.complete(Unit)
+                                try {
+                                    awaitCancellation()
+                                } finally {
+                                    cancelled.complete(Unit)
+                                    withContext(NonCancellable) { release.await() }
+                                }
+                            }
+                        }
+                    }
+                }
+            try {
+                holding.openLibrary(good)
+                val session = holding.session.value.shouldNotBeNull()
+                // The close fails it: a session closed under a call is an error for its caller.
+                val import =
+                    holding.appScope.launch {
+                        runCatchingCancellable { session.ingest.importImagesAsPdf(listOf(byteArrayOf(1)), "scan") }
+                    }
+                entered.await()
+
+                val closing = holding.appScope.launch { holding.closeLibrary() }
+                // The close has cancelled the import and now waits for it to finish.
+                cancelled.await()
+                closing.cancel()
+                release.complete(Unit)
+                closing.join()
+                import.join()
+
+                holding.session.value.shouldBeNull()
+                closed() shouldContainExactly listOf(good)
+            } finally {
+                release.complete(Unit)
+                holding.appScope.cancel()
             }
         }
 

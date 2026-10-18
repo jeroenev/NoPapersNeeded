@@ -279,13 +279,20 @@ class LibrarySessionImpl private constructor(
         trashPurge.purgeExpired()
     }
 
+    /**
+     * Stop everything the session runs, for good. Not cancellable: a caller cancelled while it
+     * waits still has the whole close done, or the session would be left half closed, its
+     * coordinator and endpoint client open, under a host that goes on to close the databases.
+     */
     override suspend fun close() {
-        // Background loops, drains and every owned operation, all in one: see SessionLifetime.
-        lifetime.close()
-        // Waits out a coordinator write a caller started outside the lifetime, then refuses more.
-        coordinator.close()
-        aiFacade.close()
-        // DB ownership stays with the environment; it may close the DB after this shutdown barrier.
+        withContext(NonCancellable) {
+            // Background loops, drains and every owned operation, all in one: see SessionLifetime.
+            lifetime.close()
+            // Waits out a coordinator write a caller started outside the lifetime, then refuses more.
+            coordinator.close()
+            aiFacade.close()
+            // DB ownership stays with the environment; it may close the DB after this shutdown barrier.
+        }
     }
 
     private fun map(result: ImportResult): ImportOutcome =

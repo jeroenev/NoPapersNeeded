@@ -2,9 +2,12 @@ package dev.npn.desktop
 
 import dev.npn.core.util.NpnLog
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.time.Duration.Companion.seconds
@@ -29,6 +32,22 @@ class ShutdownTest {
     fun aCloseThatHangsExitsAfterTheTimeout() =
         runTest {
             closeThenExit(close = { awaitCancellation() }, timeout = TIMEOUT, log = log, exit = { exits++ })
+
+            assertEquals(TIMEOUT.inWholeMilliseconds, currentTime)
+            assertEquals(1, exits)
+            assertEquals(1, warnings.size)
+        }
+
+    /** A session's close is not cancellable; the timeout must not wait it out. */
+    @Test
+    fun aCloseThatCannotBeCancelledExitsAfterTheTimeout() =
+        runTest {
+            closeThenExit(
+                close = { withContext(NonCancellable) { delay(TIMEOUT * 2) } },
+                timeout = TIMEOUT,
+                log = log,
+                exit = { exits++ },
+            )
 
             assertEquals(TIMEOUT.inWholeMilliseconds, currentTime)
             assertEquals(1, exits)

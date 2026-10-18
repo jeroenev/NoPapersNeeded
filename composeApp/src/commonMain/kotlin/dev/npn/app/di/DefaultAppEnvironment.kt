@@ -210,11 +210,21 @@ class DefaultAppEnvironment(
             openLibraryLocked(location)
         }
 
+    /**
+     * Close the open session and free its databases. The whole transition happens even for a caller
+     * cancelled meanwhile (an Android viewmodel cleared mid-switch): stopped halfway, it would leave a
+     * closed session published as the open one, which [openPersistedLibrary] then never replaces.
+     */
     private suspend fun closeCurrentInternal() {
-        _session.value?.close()
-        _session.value = null
-        currentDeps?.closeDb()
-        currentDeps = null
-        currentLocation = null
+        withContext(NonCancellable) {
+            try {
+                _session.value?.close()
+            } finally {
+                _session.value = null
+                currentDeps?.closeDb()
+                currentDeps = null
+                currentLocation = null
+            }
+        }
     }
 }
