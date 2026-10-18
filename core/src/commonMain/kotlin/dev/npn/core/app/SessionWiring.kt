@@ -171,6 +171,8 @@ internal suspend fun buildLibrary(
         )
     ruleSource.mirror()
     val bakes = BakeLock()
+    val trash = TrashOps(deps.fs)
+    val retention = JournalTrashRetention(coordinator, lifetime)
     val writer =
         MetadataWriterImpl(
             coordinator,
@@ -184,7 +186,7 @@ internal suspend fun buildLibrary(
             coordinator,
             db,
             deps.fs,
-            TrashOps(deps.fs),
+            trash,
             deps.log,
             bakes,
             clock = deps.clock,
@@ -201,6 +203,8 @@ internal suspend fun buildLibrary(
         ruleApplier = ruleApplier,
         ownedWriter = OwnedWriter(writer, lifecycle, lifetime),
         reviewConfig = JournalReviewConfig(coordinator, db.documentDao(), lifetime),
+        trashRetention = retention,
+        trashPurge = TrashPurge(coordinator, db, trash, retention, deps.clock, deps.log),
         content = buildContent(deps, lifetime, coordinator, relinkBake, bakes),
         imports =
             ImportService(
