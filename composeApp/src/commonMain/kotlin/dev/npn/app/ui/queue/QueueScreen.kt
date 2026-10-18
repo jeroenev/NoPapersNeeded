@@ -44,6 +44,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.LoadingIndicator
+import dev.npn.app.ui.common.SectionHeading
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.StatusBadge
 import dev.npn.app.ui.common.TechnicalDetails
@@ -151,7 +152,13 @@ private fun QueueList(
     }
     LazyColumn(modifier) {
         if (editRuns.isNotEmpty()) {
-            item { SectionHeader(stringResource(Res.string.queue_edit_runs)) }
+            item {
+                SectionHeading(
+                    stringResource(Res.string.queue_edit_runs),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+            }
             items(editRuns, key = { "run:${it.jobId}" }) { run ->
                 EditRunRow(run, onOpenEditRun, onDiscardEditRun)
                 HorizontalDivider()
@@ -169,16 +176,6 @@ private fun QueueList(
             HorizontalDivider()
         }
     }
-}
-
-@Composable
-private fun SectionHeader(title: String) {
-    Text(
-        title,
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-    )
 }
 
 /**

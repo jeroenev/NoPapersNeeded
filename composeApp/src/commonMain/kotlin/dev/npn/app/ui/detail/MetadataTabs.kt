@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.ReviewedBadge
+import dev.npn.app.ui.common.SectionHeading
 import dev.npn.app.ui.common.SuggestedFieldValue
 import dev.npn.app.ui.common.TagEditor
 import dev.npn.app.ui.common.TagSuggestionLabel
@@ -244,11 +245,7 @@ private fun DetailsTab(
 
         HorizontalDivider()
 
-        Text(
-            stringResource(Res.string.detail_tags),
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-        )
+        SectionHeading(stringResource(Res.string.detail_tags), style = MaterialTheme.typography.labelLarge)
         Text(stringResource(Res.string.ux_tags_saved), style = MaterialTheme.typography.bodySmall)
         TagEditor(
             tags = item.tags,
