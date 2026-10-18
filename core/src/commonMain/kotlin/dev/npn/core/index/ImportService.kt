@@ -410,9 +410,7 @@ class ImportService(
      * here already holds what a fold would project.
      */
     private suspend fun indexFileName(row: DocumentEntity) {
-        val tags = db.tagDao().tagsForDocument(row.docId)
-        val fields = db.documentFieldDao().valuesOf(row.docId)
-        db.ftsDao().upsertMetadata(listOf(FtsRows.row(row.docId, row.fileName, tags, fields, content = null)))
+        db.ftsDao().upsertMetadata(listOf(FtsRows.indexed(db, row.docId, row.fileName, content = null)))
     }
 
     /** This row, or this row at its missing sentinel when another row holds its path now. */

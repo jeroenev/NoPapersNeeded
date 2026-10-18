@@ -1,14 +1,11 @@
 package dev.npn.core.ocr
 
-import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.DocumentEntity
-import dev.npn.core.db.DocumentFieldDao
-import dev.npn.core.db.FtsDao
+import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.OcrPageCacheEntity
 import dev.npn.core.db.OcrQueueDao
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.QueueState
-import dev.npn.core.db.TagDao
 import dev.npn.core.db.isLive
 import dev.npn.core.db.queueState
 import dev.npn.core.fs.LibraryFileSystem
@@ -36,7 +33,8 @@ import kotlinx.coroutines.flow.asStateFlow
  * More than one engine can be in play per device (a free local one, optionally a paid vision one);
  * picking between them for a given document is [engines]' job, not this class's.
  *
- * Only touches the `dev.npn.core.ocr`/`dev.npn.core.pdf` surface plus the DAOs it is given.
+ * Only touches the `dev.npn.core.ocr`/`dev.npn.core.pdf` surface plus the [index] and the OCR queue
+ * it is given.
  *
  * @param language the OCR languages a run asks its engine for (`nld+eng`), read once per document so a
  *  change in Settings applies to the next one.
@@ -56,11 +54,8 @@ class OcrPipeline(
     private val fs: LibraryFileSystem,
     private val pdfEngine: PdfEngine,
     private val engines: OcrEngineSelector,
-    private val documentDao: DocumentDao,
-    private val ftsDao: FtsDao,
+    private val index: NpnDatabase,
     private val ocrQueueDao: OcrQueueDao,
-    private val tagDao: TagDao,
-    private val fieldDao: DocumentFieldDao,
     private val deviceId: String,
     private val language: suspend () -> String,
     private val clock: EpochClock = SystemEpochClock,
@@ -97,6 +92,7 @@ class OcrPipeline(
     }
 
     private val retry = QueueRetryPolicy(MAX_ATTEMPTS)
+    private val documentDao = index.documentDao()
 
     /** What is stored for each document, and which version of it to index. */
     private val versions = OcrVersions(OcrSidecarFiles(fs), MIN_EMBEDDED_CHARS_PER_PAGE)
@@ -578,18 +574,8 @@ class OcrPipeline(
     ) {
         // Only the content column is this pipeline's; the fold writes the others. The projection's
         // values are read for a document the index has no FTS row for yet, which gets a whole one.
-        val doc = documentDao.getByDocId(docId)
-        val tags = tagDao.tagsForDocument(docId)
-        val fields = fieldDao.valuesOf(docId)
-        ftsDao.upsertContent(
-            FtsRows.row(
-                docId = docId,
-                fileName = doc?.fileName,
-                tags = tags,
-                fields = fields,
-                content = sidecar.fullText(),
-            ),
-        )
+        val fileName = documentDao.getByDocId(docId)?.fileName
+        index.ftsDao().upsertContent(FtsRows.indexed(index, docId, fileName, content = sidecar.fullText()))
         val state = if (desired.deviceId == deviceId) OcrState.DONE else OcrState.ADOPTED
         setOcrState(docId, state, pageCount = sidecar.pages.size, engine = sidecar.engine, source = desired.writerKey)
     }

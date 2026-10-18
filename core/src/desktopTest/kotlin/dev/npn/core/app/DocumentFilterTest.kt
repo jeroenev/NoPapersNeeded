@@ -443,11 +443,8 @@ class DocumentFilterTest {
             fs = rig.fs,
             pdfEngine = PdfBoxEngine(),
             engines = OcrEngineSelector(local = FakeOcrEngine.unavailable()),
-            documentDao = rig.db.documentDao(),
-            ftsDao = rig.db.ftsDao(),
+            index = rig.db,
             ocrQueueDao = rig.deviceDb.ocrQueueDao(),
-            tagDao = rig.db.tagDao(),
-            fieldDao = rig.db.documentFieldDao(),
             deviceId = rig.session.deviceId,
             language = { "eng" },
         )
