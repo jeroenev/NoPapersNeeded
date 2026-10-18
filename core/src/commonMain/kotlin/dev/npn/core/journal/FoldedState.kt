@@ -195,7 +195,10 @@ class FoldedState {
                 predecessorsCache = null
             }
 
-            else -> {}
+            // Library-wide: [applyLibraryWide] folded these already.
+            is JournalOp.TagRemove, is JournalOp.TagRename, is JournalOp.TagMerge, is JournalOp.TagStyle,
+            is JournalOp.SettingSet, is JournalOp.FieldDefSet, is JournalOp.Unknown,
+            -> {}
         }
     }
 
