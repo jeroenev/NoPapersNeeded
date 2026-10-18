@@ -238,14 +238,12 @@ class ParseEditSuggestionTest {
         tagRemovals: Boolean = true,
     ) = AiText.parseEditSuggestion(
         response,
+        AiEditRequest(tags = tags, tagRemovals = tagRemovals),
+        TagCaps(max = maxTags, maxNew = maxNewTags),
         currentFields,
         fields,
         currentTags,
         vocabulary,
-        maxTags,
-        maxNewTags,
-        tags = tags,
-        tagRemovals = tagRemovals,
     )
 
     @Test

@@ -112,16 +112,15 @@ internal class AiFacadeImpl(
         val vocabulary = db.tagDao().names()
         val fields = fieldSpecs(request)
         val currentFields = db.documentFieldDao().valuesOf(docId)
-        val maxTags = (request.maxTags ?: config.maxTagsPerDoc).coerceIn(AiTagging.RANGE)
-        val maxNew = (request.maxNewTags ?: config.maxNewTagsPerDoc).coerceIn(AiTagging.NEW_TAGS_RANGE)
+        val caps = TagCaps.of(request, config)
         val thePrompt =
             prompt("npn-edit-suggest", AiRuntime.suggestionParams(config)) {
                 system(
                     AiPrompts.editSystem(
                         request = request,
                         fields = fields,
-                        max = maxTags,
-                        maxNew = maxNew,
+                        max = caps.max,
+                        maxNew = caps.maxNew,
                         vocabulary = vocabulary,
                         context = promptContext(config),
                     ),
@@ -131,14 +130,12 @@ internal class AiFacadeImpl(
         val response = suggesting.withPermit { runtime.executor.execute(thePrompt, runtime.model) }
         return AiText.parseEditSuggestion(
             response.textContent(),
+            request = request,
+            caps = caps,
             currentFields = currentFields,
             fields = fields,
             currentTags = currentTags,
             vocabulary = vocabulary,
-            maxTags = maxTags,
-            maxNewTags = maxNew,
-            tags = request.tags,
-            tagRemovals = request.tagRemovals,
         )
     }
 

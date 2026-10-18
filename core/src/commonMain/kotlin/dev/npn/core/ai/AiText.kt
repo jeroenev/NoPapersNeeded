@@ -54,10 +54,10 @@ internal object AiText {
 
     /**
      * Parse a combined edit suggestion object out of a model [response] (first JSON object wins):
-     *  - **add_tags** (alias "tags"): classified/capped via [classifyTags], only when the request
-     *    asked for additions ([tags]);
+     *  - **add_tags** (alias "tags"): classified via [classifyTags] and held to [caps], only when
+     *    the [request] asked for additions ([AiEditRequest.tags]);
      *  - **remove_tags**: filtered to tags actually on the document, canonicalized to their current
-     *    spelling, only when the request asked for removals ([tagRemovals]);
+     *    spelling, only when the [request] asked for removals ([AiEditRequest.tagRemovals]);
      *  - **fields**: one entry per requested [AiFieldSpec], read from the nested `"fields"` object
      *    (or the top level, for models that flatten it) and validated by [parseFieldSuggestion].
      *
@@ -66,30 +66,28 @@ internal object AiText {
      */
     fun parseEditSuggestion(
         response: String,
+        request: AiEditRequest,
+        caps: TagCaps,
         currentFields: Map<String, String>,
         fields: List<AiFieldSpec>,
         currentTags: List<String>,
         vocabulary: List<String>,
-        maxTags: Int,
-        maxNewTags: Int,
-        tags: Boolean,
-        tagRemovals: Boolean,
     ): AiEditSuggestion {
         val obj = firstJsonObject(response) ?: return AiEditSuggestion.EMPTY
         val addTags =
-            if (!tags) {
+            if (!request.tags) {
                 emptyList()
             } else {
                 classifyTags(
                     obj.stringArrayAt("add_tags").ifEmpty { obj.stringArrayAt("tags") },
                     currentTags,
                     vocabulary,
-                    perDocMax = maxTags,
-                    maxNew = maxNewTags,
+                    perDocMax = caps.max,
+                    maxNew = caps.maxNew,
                 )
             }
         val removeTags =
-            if (!tagRemovals) {
+            if (!request.tagRemovals) {
                 emptyList()
             } else {
                 obj
