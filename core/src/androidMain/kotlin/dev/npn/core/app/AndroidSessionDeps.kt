@@ -41,7 +41,8 @@ fun androidSessionDeps(
     log: NpnLog = AndroidLog,
 ): SessionDeps {
     val key = LibraryLocations.key(location)
-    val thumbsDir = File(context.cacheDir, "thumbs/$key").apply { mkdirs() }
+    // DirThumbnailStore creates the directory with its first thumbnail.
+    val thumbsDir = File(context.cacheDir, "thumbs/$key")
     return SessionDeps(
         fs = libraryFileSystem(context, location),
         db = npnDatabase(context, "npn-index-$key.db"),

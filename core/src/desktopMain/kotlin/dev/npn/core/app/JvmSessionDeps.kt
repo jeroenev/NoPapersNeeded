@@ -46,9 +46,8 @@ fun jvmSessionDeps(
     ocrEngine: OcrEngine = TesseractCliEngine(),
     thumbnailStore: ThumbnailStore = DirThumbnailStore(dirs.thumbsDir),
     log: NpnLog = JvmLog(),
-): SessionDeps {
-    File(dirs.thumbsDir).mkdirs()
-    return SessionDeps(
+): SessionDeps =
+    SessionDeps(
         fs = JvmLibraryFileSystem(libraryRoot, PathExternalIo),
         db = npnDatabase(File(dirs.dbDir, "index.db")),
         deviceDb = deviceDatabase(File(dirs.dbDir, "device.db")),
@@ -63,7 +62,6 @@ fun jvmSessionDeps(
         clock = clock,
         installationId = installationId,
     )
-}
 
 /**
  * The desktop app's one log, shared by everything in the process: stderr plus `npn.log` in the
