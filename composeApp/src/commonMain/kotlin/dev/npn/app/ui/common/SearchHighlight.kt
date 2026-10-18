@@ -1,3 +1,4 @@
+// Search highlighting as a whole, not its one class (HighlightSegment), names this file.
 @file:Suppress("MatchingDeclarationName")
 
 package dev.npn.app.ui.common
