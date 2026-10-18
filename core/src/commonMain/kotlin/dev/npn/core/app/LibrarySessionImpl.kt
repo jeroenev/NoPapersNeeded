@@ -252,11 +252,10 @@ class LibrarySessionImpl private constructor(
         when (action) {
             WatchAction.Ignore -> {}
 
+            // A remote OCR-engine override it folds in is re-selected by the ReconcileOcr that
+            // settled() holds for it, once per burst.
             is WatchAction.IngestObject -> {
                 log.runLogged("Journal object ingest") { coordinator.ingestObject(action.relPath) }
-                // A remote OCR-engine override may have just folded in; re-select promptly
-                // instead of waiting for the next rescan.
-                log.runLogged("OCR sidecar reconcile") { ocrFacade.pipeline.reconcileSidecars() }
             }
 
             WatchAction.ReconcileJournal -> {

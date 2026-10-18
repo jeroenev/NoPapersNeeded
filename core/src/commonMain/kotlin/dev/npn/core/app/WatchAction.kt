@@ -27,17 +27,24 @@ internal sealed interface WatchAction {
     data object Ignore : WatchAction
 
     /**
-     * One published journal object, ingested alone and at once: cheap, so it needs no settling,
-     * and an OCR-engine pin it carries is re-selected right after.
+     * One published journal object, ingested alone and at once: cheap, so it needs no settling. An
+     * OCR-engine pin it carries is re-selected by the [ReconcileOcr] that [settled] holds for it, so
+     * a burst of objects costs one pass over the sidecars rather than one each.
      */
     data class IngestObject(
         val relPath: String,
     ) : WatchAction
 
-    /** Work that waits until the folder has gone quiet, so a burst of changes costs one pass. */
+    /**
+     * Work that waits until the folder has gone quiet, so a burst of changes costs one pass. Each
+     * pass does what every pass of a lower [rank] does, and more.
+     */
     sealed interface Settled : WatchAction {
-        /** One pass for a burst holding this and [next]: the same one, or a rescan, which covers every pass. */
-        fun merge(next: Settled): Settled = if (next == this) this else Rescan
+        /** Where this pass stands: [ReconcileOcr], then [ReconcileJournal], then [Rescan]. */
+        val rank: Int
+
+        /** One pass for a burst holding this and [next]: whichever of the two covers the other. */
+        fun merge(next: Settled): Settled = if (next.rank > rank) next else this
     }
 
     /**
@@ -45,13 +52,22 @@ internal sealed interface WatchAction {
      * already applied, and carries many writers' events), a legacy segment, or an unknown file.
      * Refolds the journal, then re-selects OCR.
      */
-    data object ReconcileJournal : Settled
+    data object ReconcileJournal : Settled {
+        override val rank = 1
+    }
 
-    /** Another device's OCR sidecar: re-select the version indexed for search. */
-    data object ReconcileOcr : Settled
+    /** Another device's OCR sidecar, or a journal object's pin: re-select the version indexed for search. */
+    data object ReconcileOcr : Settled {
+        override val rank = 0
+    }
 
-    /** Anything else, a PDF above all, or a watcher that lost track: rescan the library. */
-    data object Rescan : Settled
+    /**
+     * Anything else, a PDF above all, or a watcher that lost track: rescan the library, which
+     * reconciles the journal and re-selects OCR on the way.
+     */
+    data object Rescan : Settled {
+        override val rank = 2
+    }
 }
 
 /** What [event] calls for on the device [deviceId]; see [WatchAction]. */
@@ -98,7 +114,8 @@ internal fun watchAction(
 /**
  * Pass the actions that need no settling straight through, and hold [WatchAction.Settled] ones
  * until the folder has been quiet for [quietMillis] (or [maxWaitMillis] of continuous churn, on
- * [timeSource]), each burst merged into one ([WatchAction.Settled.merge]). Never holds the watcher
+ * [timeSource]), each burst merged into one ([WatchAction.Settled.merge]). A journal object also
+ * holds a [WatchAction.ReconcileOcr], for the pin it may carry. Never holds the watcher
  * up: what the collector has not taken yet waits in an unbounded buffer, as the watcher's own
  * events do.
  */
@@ -115,6 +132,21 @@ internal fun Flow<WatchAction>.settled(
                 .debounced(quietMillis, maxWaitMillis, timeSource) { burst, next -> burst.merge(next) }
                 .collect { send(it) }
         }
-        collect { action -> if (action is WatchAction.Settled) held.send(action) else send(action) }
+        collect { action ->
+            when (action) {
+                is WatchAction.Settled -> {
+                    held.send(action)
+                }
+
+                is WatchAction.IngestObject -> {
+                    send(action)
+                    held.send(WatchAction.ReconcileOcr)
+                }
+
+                WatchAction.Ignore -> {
+                    send(action)
+                }
+            }
+        }
         held.close()
     }.buffer(Channel.UNLIMITED)

@@ -67,11 +67,35 @@ class WatchActionTest {
     }
 
     @Test
-    fun aBurstOfOneKindSettlesIntoOnePassAndAMixedOneIntoARescan() {
+    fun aBurstSettlesIntoThePassThatCoversAllOfIt() {
         WatchAction.ReconcileJournal.merge(WatchAction.ReconcileJournal) shouldBe WatchAction.ReconcileJournal
-        WatchAction.ReconcileJournal.merge(WatchAction.ReconcileOcr) shouldBe WatchAction.Rescan
+        // Refolding the journal re-selects OCR too, and a rescan does both.
+        WatchAction.ReconcileJournal.merge(WatchAction.ReconcileOcr) shouldBe WatchAction.ReconcileJournal
+        WatchAction.ReconcileOcr.merge(WatchAction.ReconcileJournal) shouldBe WatchAction.ReconcileJournal
         WatchAction.ReconcileOcr.merge(WatchAction.Rescan) shouldBe WatchAction.Rescan
+        WatchAction.Rescan.merge(WatchAction.ReconcileJournal) shouldBe WatchAction.Rescan
     }
+
+    /** Each object is ingested at once, but the OCR re-select its pin may need costs one pass a burst. */
+    @Test
+    fun aBurstOfObjectsReselectsOcrOnce() =
+        runTest {
+            val objects =
+                (1..20).map {
+                    WatchAction.IngestObject(
+                        JournalPaths.objectPath(it.toString().padStart(64, '0')),
+                    )
+                }
+            val out =
+                flow {
+                    for (obj in objects) {
+                        emit(obj)
+                        delay(10)
+                    }
+                }.settled(quietMillis = QUIET, maxWaitMillis = 10_000, timeSource = testScheduler.timeSource).toList()
+
+            out shouldContainExactly objects + WatchAction.ReconcileOcr
+        }
 
     @Test
     fun snapshotsSettleIntoOneReconcileWhileObjectsPassStraightThrough() =
