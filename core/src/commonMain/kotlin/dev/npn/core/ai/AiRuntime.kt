@@ -2,18 +2,9 @@ package dev.npn.core.ai
 
 import ai.koog.http.client.ktor.KtorKoogHttpClient
 import ai.koog.prompt.executor.clients.LLMClient
-import ai.koog.prompt.executor.clients.anthropic.AnthropicParams
-import ai.koog.prompt.executor.clients.anthropic.models.AnthropicThinking
-import ai.koog.prompt.executor.clients.google.GoogleParams
-import ai.koog.prompt.executor.clients.google.models.GoogleThinkingConfig
-import ai.koog.prompt.executor.clients.openai.OpenAIChatParams
-import ai.koog.prompt.executor.clients.openai.OpenAIResponsesParams
-import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
-import ai.koog.prompt.executor.clients.openai.models.ReasoningConfig
 import ai.koog.prompt.executor.llms.MultiLLMPromptExecutor
 import ai.koog.prompt.executor.model.PromptExecutor
 import ai.koog.prompt.executor.ollama.client.OllamaClient
-import ai.koog.prompt.executor.ollama.client.OllamaParams
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.params.LLMParams
 import io.ktor.client.HttpClient
@@ -60,28 +51,6 @@ internal class AiRuntime(
     companion object {
         private const val DEFAULT_CONTEXT_LENGTH = 128_000L
 
-        /**
-         * Thinking-token budgets for providers configured through a budget rather than an
-         * effort label (Anthropic, Google). Anthropic requires at least 1024.
-         */
-        private const val THINKING_BUDGET_LOW = 2_048
-        private const val THINKING_BUDGET_MEDIUM = 8_192
-        private const val THINKING_BUDGET_HIGH = 16_384
-
-        /**
-         * Anthropic requires `max_tokens` to exceed the thinking budget (Koog's default is a
-         * flat 2048), so thinking calls raise it to budget + this answer headroom.
-         */
-        private const val ANTHROPIC_ANSWER_HEADROOM = 4_096
-
-        /**
-         * Output budget for one page transcription ([AiFacadeImpl.ocrEngine]). Comfortably more than any single
-         * scanned page holds, and the ceiling every Claude 3+ model accepts — raising it further
-         * would be an API error on the older ones, and costs nothing to leave here since output
-         * tokens are billed as produced, not as reserved.
-         */
-        private const val OCR_ANSWER_MAX_TOKENS = 4_096
-
         private const val OPENCODE_SESSION_HEADER = "x-opencode-session"
 
         /**
@@ -93,7 +62,7 @@ internal class AiRuntime(
          * test seam: Koog layers its own plugins on a derived copy, so plugins installed on it (a
          * test's recorder or redirect) see every call the runtime makes, whichever provider it is
          * for. Provider-specific wire requirements (the OpenCode Go session header) are added on
-         * top here, never in place of what the caller installed.
+         * top here ([ProviderClientFactory.transport]), never in place of what the caller installed.
          *
          * A null [transport] means "a plain client, owned by the runtime": [newTransport] creates it
          * here and [close] releases it — or this does, when a provider factory throws (a malformed
@@ -111,10 +80,7 @@ internal class AiRuntime(
             val model = LLModel(factory.provider, config.model, factory.capabilities(config), DEFAULT_CONTEXT_LENGTH)
             val client =
                 try {
-                    val http =
-                        KtorKoogHttpClient.Factory(
-                            if (config.provider == AiProvider.OPENCODE_GO) base.withOpenCodeSession() else base,
-                        )
+                    val http = KtorKoogHttpClient.Factory(factory.transport(base))
                     factory.client(config.apiKey, config.effectiveBaseUrl, model, http)
                 } catch (failure: Throwable) {
                     owned?.close()
@@ -154,27 +120,13 @@ internal class AiRuntime(
 
         /**
          * Whether this model must be called through OpenAI's Responses API rather than
-         * `chat/completions`. The OpenCode Go gateway serves its OpenAI-family models only on the
-         * Responses API and every other model only on chat/completions, and answers HTTP 500 on the
-         * wrong one (models.dev encodes the same split for `opencode-go`).
-         *
-         * Only for [AiProvider.OPENCODE_GO]: [AiProvider.OPENAI] serves both APIs, and
-         * [AiProvider.CUSTOM] servers implement chat/completions while often naming a model
-         * `gpt-...`. A model id is free text, so this is a heuristic that falls back to
-         * chat/completions for an id it does not recognise.
+         * `chat/completions`: only an OpenAI-family model on [AiProvider.OPENCODE_GO]
+         * ([ProviderClientFactory.responsesApi]).
          */
         internal fun usesResponsesApi(
             provider: AiProvider,
             model: String,
-        ): Boolean {
-            if (provider != AiProvider.OPENCODE_GO) return false
-            // Gateways sometimes qualify ids with the upstream vendor ("openai/gpt-5.1").
-            val id = model.trim().lowercase().substringAfterLast('/')
-            return OPENAI_FAMILY_MODEL_ID.containsMatchIn(id)
-        }
-
-        /** `gpt-4o`, `gpt-5.6-luna`, `o3-mini`, `gpt-5.1-codex-max`, ... */
-        private val OPENAI_FAMILY_MODEL_ID = Regex("^(gpt-|o[134](-|$))|codex")
+        ): Boolean = AiProviderClients.of(provider).responsesApi(model)
 
         /**
          * Params for the one-shot AI-edit/suggestion prompts, from [AiConfig.reasoningEdit].
@@ -193,15 +145,7 @@ internal class AiRuntime(
          * on some models (see [reasoningParams]), and a page that cannot be read at all is worse
          * than an unwanted thought.
          */
-        fun ocrParams(config: AiConfig): LLMParams =
-            if (config.provider == AiProvider.ANTHROPIC) {
-                AnthropicParams(
-                    maxTokens = OCR_ANSWER_MAX_TOKENS,
-                    thinking = AnthropicThinking.Disabled(),
-                )
-            } else {
-                LLMParams()
-            }
+        fun ocrParams(config: AiConfig): LLMParams = AiProviderClients.of(config.provider).ocrParams()
 
         /**
          * Params for the chat assistant, from [AiConfig.reasoningAssistant]; null keeps the
@@ -213,90 +157,19 @@ internal class AiRuntime(
 
         /**
          * Map one user-facing [AiReasoningLevel] onto provider-specific Koog params; null means
-         * "no override" (either [AiReasoningLevel.DEFAULT] or an unsupported combination).
-         *
-         * Provider notes:
-         * - OpenAI/custom/OpenCode Go: `reasoning_effort` label. Ignored by non-reasoning models;
-         *   unsupported labels (e.g. `none` on older models) surface as an endpoint error the user
-         *   can fix by picking Default. The params TYPE has to agree with the endpoint the model is
-         *   called on ([usesResponsesApi]): Koog's `determineParams` treats explicit
-         *   `OpenAIChatParams` as a demand for chat/completions and fails the call when the model
-         *   does not declare that endpoint, so a Responses-API model needs `OpenAIResponsesParams`.
-         * - Anthropic: a thinking budget, plus a raised `max_tokens` (the API requires
-         *   `max_tokens > budget_tokens`). ENABLING thinking is skipped in the tool loop
-         *   ([toolLoop]): Anthropic requires the emitted thinking blocks to be replayed verbatim
-         *   with tool results, and the chat loop replays turns as plain text. Disabling is safe.
-         * - Google: a thinking budget; 0 disables (supported by Flash models). Tool-call replay
-         *   without signatures is covered by the Koog client's fallback thought signature.
-         * - Ollama: only an on/off `think` flag exists.
-         * - OpenRouter/DeepSeek/Mistral: Koog 1.1.1 exposes no reasoning knob for these clients,
-         *   so the level is ignored (endpoint default).
+         * "no override" (either [AiReasoningLevel.DEFAULT] or an unsupported combination). Each
+         * provider's mapping, and why, is its [ProviderClientFactory.reasoning] in [AiProviderClients].
          */
         internal fun reasoningParams(
             provider: AiProvider,
             model: String,
             level: AiReasoningLevel,
             toolLoop: Boolean,
-        ): LLMParams? {
-            if (level == AiReasoningLevel.DEFAULT) return null
-            return when (provider) {
-                AiProvider.OPENAI, AiProvider.CUSTOM, AiProvider.OPENCODE_GO -> {
-                    if (usesResponsesApi(provider, model)) {
-                        OpenAIResponsesParams(reasoning = ReasoningConfig(effort = level.toReasoningEffort()))
-                    } else {
-                        OpenAIChatParams(reasoningEffort = level.toReasoningEffort())
-                    }
-                }
-
-                AiProvider.ANTHROPIC -> {
-                    anthropicReasoningParams(level, toolLoop)
-                }
-
-                AiProvider.GOOGLE -> {
-                    GoogleParams(
-                        thinkingConfig = GoogleThinkingConfig(thinkingBudget = level.toBudget()),
-                    )
-                }
-
-                AiProvider.OLLAMA -> {
-                    OllamaParams(think = level != AiReasoningLevel.NONE)
-                }
-
-                AiProvider.OPENROUTER, AiProvider.DEEPSEEK, AiProvider.MISTRAL -> {
-                    null
-                }
-            }
-        }
-
-        private fun anthropicReasoningParams(
-            level: AiReasoningLevel,
-            toolLoop: Boolean,
-        ): LLMParams? {
-            if (level == AiReasoningLevel.NONE) return AnthropicParams(thinking = AnthropicThinking.Disabled())
-            if (toolLoop) return null
-            val budget = level.toBudget()
-            return AnthropicParams(
-                maxTokens = budget + ANTHROPIC_ANSWER_HEADROOM,
-                thinking = AnthropicThinking.Enabled(budgetTokens = budget),
-            )
-        }
-
-        private fun AiReasoningLevel.toReasoningEffort(): ReasoningEffort =
-            when (this) {
-                AiReasoningLevel.DEFAULT -> error("DEFAULT never maps to params")
-                AiReasoningLevel.NONE -> ReasoningEffort.NONE
-                AiReasoningLevel.LOW -> ReasoningEffort.LOW
-                AiReasoningLevel.MEDIUM -> ReasoningEffort.MEDIUM
-                AiReasoningLevel.HIGH -> ReasoningEffort.HIGH
-            }
-
-        private fun AiReasoningLevel.toBudget(): Int =
-            when (this) {
-                AiReasoningLevel.DEFAULT -> error("DEFAULT never maps to params")
-                AiReasoningLevel.NONE -> 0
-                AiReasoningLevel.LOW -> THINKING_BUDGET_LOW
-                AiReasoningLevel.MEDIUM -> THINKING_BUDGET_MEDIUM
-                AiReasoningLevel.HIGH -> THINKING_BUDGET_HIGH
+        ): LLMParams? =
+            if (level == AiReasoningLevel.DEFAULT) {
+                null
+            } else {
+                AiProviderClients.of(provider).reasoning(model, level, toolLoop)
             }
     }
 }
