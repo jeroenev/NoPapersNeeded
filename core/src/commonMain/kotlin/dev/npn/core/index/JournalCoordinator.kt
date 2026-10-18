@@ -229,22 +229,36 @@ internal class JournalCoordinator(
      * projection is already the fold of exactly the sources on disk and there is nothing to do but
      * seed the write clock and the settings a reader needs. Only a moved journal (or an unusable
      * projection) costs a refold and a whole-DB reprojection here.
+     *
+     * A journal that does not fold whole (a source lost or damaged, [WriteBlock.JOURNAL_DAMAGED], or
+     * a pass that failed otherwise, [WriteBlock.RECONCILE_FAILED]) leaves the session open read-only
+     * while the index shows a library: writes stay blocked, the documents show as last projected,
+     * the synced settings come from the events the index holds, and the next reconcile or ingest
+     * that reads the journal whole lifts the block. It throws for a journal only a newer build
+     * reads, and for an index with no document to show.
      */
     suspend fun refreshState() =
         locked {
-            latching {
-                when (val outcome = accumulator.reconcileOnOpen()) {
-                    is OpenReconciliation.ProjectionCurrent -> {
-                        folded = null
-                        observeSourceHlc(outcome.maxHlc)
-                        syncedSettings.seed(accumulator.loadStateOf(JournalOp.SettingSet.WIRE))
-                        writeBlock = null
-                    }
+            runCatchingCancellable {
+                latching {
+                    when (val outcome = accumulator.reconcileOnOpen()) {
+                        is OpenReconciliation.ProjectionCurrent -> {
+                            folded = null
+                            observeSourceHlc(outcome.maxHlc)
+                            syncedSettings.seed(accumulator.loadStateOf(JournalOp.SettingSet.WIRE))
+                            writeBlock = null
+                        }
 
-                    is OpenReconciliation.Refolded -> {
-                        adopt(outcome.state) { indexer.refreshState(outcome.state) }
+                        is OpenReconciliation.Refolded -> {
+                            adopt(outcome.state) { indexer.refreshState(outcome.state) }
+                        }
                     }
                 }
+            }.getOrElse { failure ->
+                // The failed pass latched its block, dropped the live fold and owes a full refold.
+                val block = writeBlock?.block
+                if (block == null || block == WriteBlock.NEWER_FORMAT || !indexer.hasDocuments()) throw failure
+                syncedSettings.seed(accumulator.loadStateOf(JournalOp.SettingSet.WIRE))
             }
         }
 

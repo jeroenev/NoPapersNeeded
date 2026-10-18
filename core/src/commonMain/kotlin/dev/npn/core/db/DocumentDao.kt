@@ -28,6 +28,10 @@ private const val MISSING_SENTINEL_PREFIX = "${NpnPaths.NPN_DIR}/missing/"
 interface DocumentDao {
     suspend fun upsert(doc: DocumentEntity) = upsertAll(listOf(doc))
 
+    /** Whether the index holds any document row, hidden ones included. */
+    @Query("SELECT EXISTS(SELECT 1 FROM documents)")
+    suspend fun any(): Boolean
+
     /**
      * Write [docs], in order, as whole rows. relPath is unique, and this is where a path's holder is
      * decided: a hidden row (trashed, deleted or missing) gives its path up to a live one and waits

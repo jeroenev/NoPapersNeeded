@@ -85,6 +85,9 @@ internal class Indexer(
     /** The rows of [docIds] as they stand, for [putBack] to restore. */
     suspend fun rowsOf(docIds: Set<String>): List<DocumentEntity> = documentDao.getByDocIds(docIds.toList())
 
+    /** Whether a rescan ever projected a document into the index. */
+    suspend fun hasDocuments(): Boolean = documentDao.any()
+
     /**
      * Write back [rows], which [rowsOf] read for [docIds], undoing what was written to those rows
      * since; a document that had no row then loses the one it has now.

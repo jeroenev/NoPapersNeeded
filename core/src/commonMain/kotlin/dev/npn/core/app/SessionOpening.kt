@@ -125,7 +125,8 @@ private suspend fun createCoordinator(
  * became library data.
  *
  * A new library's first seeding is part of opening it: without it the library has no fields. Every
- * other step is an [upgradeAtOpen].
+ * other step is an [upgradeAtOpen], and so is the first seeding of a library that opens read-only,
+ * its journal not folding whole ([JournalCoordinator.refreshState]).
  */
 private suspend fun foldJournal(
     deps: SessionDeps,
@@ -133,7 +134,7 @@ private suspend fun foldJournal(
 ) {
     coordinator.refreshState()
     val seeds = FieldKeys.seedDefinitions { FieldKeys.SEED_LABELS.getValue(it) }
-    if (coordinator.setting(FieldKeys.SEEDED_SETTING) == null) {
+    if (coordinator.setting(FieldKeys.SEEDED_SETTING) == null && coordinator.canWrite()) {
         coordinator.seedFieldRegistryIfNeeded(seeds)
     } else {
         deps.upgradeAtOpen("Upgrading the seeded field definitions") { coordinator.seedFieldRegistryIfNeeded(seeds) }

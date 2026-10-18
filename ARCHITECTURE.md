@@ -301,9 +301,11 @@ live in `buildSrc`. Hot Reload via `mise hot`.
   supersedes it, directly or through a snapshot it superseded, or, for a gone snapshot, everything
   it superseded back on disk (a folder put back from before a compaction, after which the reconcile
   forgets the snapshot, as a rebuild would). A snapshot the index remembers but the folder no longer
-  holds vouches for nothing. A loss blocks writes at the first pass that sees it (an open that sees
-  it fails), and a pass that reads a journal holding those events again lifts the block;
-  `SourceSetValidator` says why there is no grace window. Builds before storage-v2 wrote per-device v1 segments,
+  holds vouches for nothing. A loss blocks writes at the first pass that sees it, and a pass that
+  reads a journal holding those events again lifts the block; `SourceSetValidator` says why there
+  is no grace window. An open that finds the journal not folding whole opens the library read-only
+  rather than refusing it, unless the index has no document to show
+  (`JournalCoordinator.refreshState`); one that finds an op only a newer build reads refuses it. Builds before storage-v2 wrote per-device v1 segments,
   `.npn/journal/<deviceId>/<seq>.jsonl`: those are still read and folded, never written. There is
   no fallback format. Beside its objects a bucket may hold their staging files and a sync tool's
   file for one still in transfer (`NpnPaths.isSyncTemp`: Syncthing, Nextcloud and ownCloud,
