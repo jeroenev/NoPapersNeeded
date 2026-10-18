@@ -55,7 +55,6 @@ enum class RelinkSignal {
 data class Resurrected(
     val docId: String,
     val relPath: String,
-    val wasDeleted: Boolean,
     val hiddenAtMillis: Long,
 )
 

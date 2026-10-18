@@ -84,7 +84,6 @@ class IndexerResurrectionTest {
             rig.rescan { resurrected += it }
 
             resurrected.map { it.docId } shouldContainExactly listOf(docId)
-            resurrected.single().wasDeleted.shouldBeTrue()
             val returned =
                 rig.db
                     .documentDao()

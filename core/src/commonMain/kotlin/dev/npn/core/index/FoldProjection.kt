@@ -385,7 +385,7 @@ internal class FoldProjection(
                     fileName = NpnPaths.fileName(backAt)
                 }
                 val hiddenAt = state.hiddenBy(doc)?.physicalMillis ?: 0L
-                resurrected.add(Resurrected(doc, relPath, wasDeleted = journalDeleted, hiddenAtMillis = hiddenAt))
+                resurrected.add(Resurrected(doc, relPath, hiddenAtMillis = hiddenAt))
             }
             return Lifecycle(trashed, deleted, missing, relPath, fileName, origPath)
         }
