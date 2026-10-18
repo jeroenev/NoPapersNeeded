@@ -11,7 +11,7 @@ import dev.npn.core.model.SystemProperty
 // a clear included, and their tags were one OR-set). The fold no longer does; a relink's
 // transaction copies the metadata instead (FoldedState.relinkOps). This file is the one place that
 // still computes the inherited view, to write it once as copies into a library such a build relinked
-// in. Nothing else may call it.
+// in. Only the open-time upgrade and, while that has not run, this build's relinks call it.
 
 /**
  * Once per library, guarded by the synced [LibrarySettingKeys.RELINK_COPIES]: give every relink
