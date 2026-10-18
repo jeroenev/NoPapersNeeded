@@ -154,7 +154,7 @@ interface AiEditQueueFacade {
  * The writes a caller drives (queueing a run, finishing or discarding its review) run through
  * [ownWrite]; the drain's own already run as the session's work.
  */
-class AiEditQueue(
+internal class AiEditQueue(
     private val dao: AiEditJobDao,
     private val documents: DocumentRepository,
     content: DocContentFacade,

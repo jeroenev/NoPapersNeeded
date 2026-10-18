@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.map
  * different views both keep theirs. Deleting one clears its setting. They read in name order.
  * Writes run through [SessionLifetime.owned], so the session waits them out before it closes.
  */
-class SavedViewRepositoryImpl internal constructor(
+internal class SavedViewRepositoryImpl(
     private val coordinator: JournalCoordinator,
     private val lifetime: SessionLifetime,
 ) : SavedViewRepository {

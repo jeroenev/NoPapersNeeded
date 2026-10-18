@@ -73,7 +73,7 @@ private fun DocumentEntity.cachedFields(): Map<String, String> =
  * live as underlying tables change (tag edits, new imports).
  */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-class DocumentRepositoryImpl(
+internal class DocumentRepositoryImpl(
     private val db: NpnDatabase,
     /** Where a query's rows are turned into list items. */
     private val mapping: CoroutineDispatcher = Dispatchers.Default,

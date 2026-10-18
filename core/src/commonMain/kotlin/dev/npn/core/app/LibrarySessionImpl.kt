@@ -48,7 +48,8 @@ import kotlinx.coroutines.withContext
  * to one [SessionLifetime] under [SessionDeps.scope], so [close] stops all of it at once, for good.
  */
 class LibrarySessionImpl private constructor(
-    val deviceId: String,
+    /** This installation's device id in the library's journal ([DeviceIdentity]). */
+    internal val deviceId: String,
     private val deps: SessionDeps,
     private val lifetime: SessionLifetime,
     private val coordinator: JournalCoordinator,
@@ -309,13 +310,15 @@ class LibrarySessionImpl private constructor(
          * publishes through the same primitive before it writes anything ([DeviceIdentity]: this
          * installation's marker, or a throwaway object once that is there), so each one finds out.
          */
-        suspend fun openSession(deps: SessionDeps): LibrarySessionImpl =
-            openSession(deps, JournalOp.DocUndelete.WRITTEN)
+        suspend fun openSession(deps: SessionDeps): LibrarySession = open(deps)
 
-        /** [openSession], recording a deleted document's return as a `doc-undelete` when [writeUndelete]. */
-        internal suspend fun openSession(
+        /**
+         * [openSession], as the session itself for this module's own callers, recording a deleted
+         * document's return as a `doc-undelete` when [writeUndelete].
+         */
+        internal suspend fun open(
             deps: SessionDeps,
-            writeUndelete: Boolean,
+            writeUndelete: Boolean = JournalOp.DocUndelete.WRITTEN,
         ): LibrarySessionImpl {
             val lifetime = SessionLifetime(deps.scope)
             var coordinator: JournalCoordinator? = null

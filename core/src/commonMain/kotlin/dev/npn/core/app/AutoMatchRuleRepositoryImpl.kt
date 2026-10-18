@@ -26,7 +26,7 @@ import kotlin.uuid.Uuid
  * Writes, and applying a saved or enabled rule to the documents, run through [SessionLifetime.owned], so the session
  * waits them out before it closes.
  */
-class AutoMatchRuleRepositoryImpl internal constructor(
+internal class AutoMatchRuleRepositoryImpl(
     private val dao: AutoMatchRuleDao,
     private val source: AutoMatchRuleSource,
     private val applier: RuleApplier,

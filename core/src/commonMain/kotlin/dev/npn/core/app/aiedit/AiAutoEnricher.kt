@@ -59,7 +59,7 @@ import dev.npn.core.work.QueueRetryPolicy
  * share the endpoint carry on. While the library refuses writes no call is made at all, since its
  * answer could not be saved.
  */
-class AiAutoEnricher(
+internal class AiAutoEnricher(
     private val documentDao: DocumentDao,
     /** Where a document's extracted text is indexed. */
     private val ftsDao: FtsDao,

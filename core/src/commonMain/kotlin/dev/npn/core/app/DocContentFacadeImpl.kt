@@ -31,7 +31,7 @@ import dev.npn.core.xmp.NpnXmpData
  * [log]. The calls that write (the thumbnail cache, the page-count backfill, an in-place bake) run
  * as the session's owned work, so closing the session waits for them before its database is closed.
  */
-class DocContentFacadeImpl internal constructor(
+internal class DocContentFacadeImpl(
     private val lifetime: SessionLifetime,
     private val db: NpnDatabase,
     private val fs: LibraryFileSystem,

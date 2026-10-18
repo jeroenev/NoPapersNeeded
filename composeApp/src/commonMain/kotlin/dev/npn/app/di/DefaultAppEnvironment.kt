@@ -52,7 +52,7 @@ class DefaultAppEnvironment(
 ) : AppEnvironment {
     override val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + appDispatcher)
 
-    private val _session = MutableStateFlow<LibrarySessionImpl?>(null)
+    private val _session = MutableStateFlow<LibrarySession?>(null)
 
     override val session: StateFlow<LibrarySession?> = _session.asStateFlow()
 
@@ -167,7 +167,7 @@ class DefaultAppEnvironment(
      */
     private suspend fun startSession(location: String) {
         val deps = factory(location, appScope)
-        var session: LibrarySessionImpl? = null
+        var session: LibrarySession? = null
         var kept = false
         try {
             session = LibrarySessionImpl.openSession(deps)

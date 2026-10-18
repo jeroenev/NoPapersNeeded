@@ -15,7 +15,7 @@ package dev.npn.core.ai
  *
  * Both answers are read per call, so flipping a setting takes effect on the next document.
  */
-class UnattendedAiPolicy(
+internal class UnattendedAiPolicy(
     private val readConfig: suspend () -> AiConfig,
 ) {
     /**

@@ -173,7 +173,7 @@ class AppSessionRig private constructor(
                     log = log,
                 )
             val session =
-                LibrarySessionImpl.openSession(base.over(files(base.fs), pdfEngine(base.pdfEngine)), writeUndelete)
+                LibrarySessionImpl.open(base.over(files(base.fs), pdfEngine(base.pdfEngine)), writeUndelete)
             storagePath?.let {
                 session.storagePath.setStoragePathTemplate(it.template)
                 session.storagePath.setStoragePathEnabled(it.enabled)
@@ -228,7 +228,7 @@ class AppSessionRig private constructor(
         // Force a distinct deviceId by seeding the kv before openSession.
         deps.deviceDb.keyValueDao().put(DeviceIdentity.KEY_DEVICE_ID, "device-two")
         otherDeps += deps
-        return LibrarySessionImpl.openSession(deps, writeUndelete).also { otherSessions += it } to deps.db
+        return LibrarySessionImpl.open(deps, writeUndelete).also { otherSessions += it } to deps.db
     }
 }
 
@@ -346,7 +346,7 @@ suspend fun openSession(
             thumbnailStore = FakeThumbStore(File(data, "thumbs")),
         )
     val deps = base.over(files(base.fs), base.pdfEngine)
-    return OpenSession(LibrarySessionImpl.openSession(deps), deps)
+    return OpenSession(LibrarySessionImpl.open(deps), deps)
 }
 
 /** These deps with the library filesystem [fs] and the PDF engine [pdf] in place of their own. */

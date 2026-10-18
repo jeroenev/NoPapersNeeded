@@ -29,7 +29,7 @@ import kotlinx.coroutines.sync.withPermit
  * @param ownWrite runs each write to the chat stores as work the session owns, so closing the
  *  session waits for it instead of closing the database under it.
  */
-class AiFacadeImpl(
+internal class AiFacadeImpl(
     private val db: NpnDatabase,
     chats: KeyValueDao,
     ownWrite: suspend (suspend () -> Unit) -> Unit = { it() },

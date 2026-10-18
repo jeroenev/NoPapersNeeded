@@ -19,7 +19,7 @@ import kotlinx.coroutines.flow.map
  * and the write it guards cannot be split by a concurrent commit. Writes run through [SessionLifetime.owned], so
  * the session waits them out before it closes.
  */
-class FieldRegistryImpl internal constructor(
+internal class FieldRegistryImpl(
     private val db: NpnDatabase,
     private val coordinator: JournalCoordinator,
     private val lifetime: SessionLifetime,

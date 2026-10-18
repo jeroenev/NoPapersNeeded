@@ -25,7 +25,7 @@ import dev.npn.core.util.runLogged
  * document through [followUp]: the write landed whatever they do, so their failure is logged, never
  * thrown.
  */
-class MetadataWriterImpl internal constructor(
+internal class MetadataWriterImpl(
     private val coordinator: JournalCoordinator,
     private val db: NpnDatabase,
     private val pathRuleApplicator: StoragePathRuleApplicator,
