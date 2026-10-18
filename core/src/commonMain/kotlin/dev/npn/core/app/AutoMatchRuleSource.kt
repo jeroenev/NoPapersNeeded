@@ -10,6 +10,9 @@ import dev.npn.core.util.NpnLog
 import dev.npn.core.util.warn
 import kotlinx.coroutines.flow.MutableStateFlow
 
+/** The order rules are stored, listed and run in: by position, then by id. */
+internal val RULE_ORDER: Comparator<AutoMatchRule> = compareBy(AutoMatchRule::position, AutoMatchRule::id)
+
 /**
  * The read side of the library's auto-match rules: the list to match with ([current]), and the
  * rules table in the index kept in step with the journal's list ([mirror]). The journal is the
@@ -47,7 +50,7 @@ internal class AutoMatchRuleSource(
     /** Bring the cache in step with the journal's list; one that does not decode leaves it as it is. */
     suspend fun mirror() {
         val rules = decoded(coordinator.setting(LibrarySettingKeys.AUTO_MATCH_RULES)) ?: return
-        val rows = rules.map { it.toEntity() }.sortedWith(compareBy({ it.position }, { it.id }))
+        val rows = rules.sortedWith(RULE_ORDER).map { it.toEntity() }
         if (dao.getAll() != rows) dao.replaceAll(rows)
     }
 
