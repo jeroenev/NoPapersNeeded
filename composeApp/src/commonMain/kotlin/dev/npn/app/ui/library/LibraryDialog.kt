@@ -1,8 +1,11 @@
 package dev.npn.app.ui.library
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import dev.npn.app.ui.common.ConfirmDialog
@@ -35,6 +38,9 @@ import org.jetbrains.compose.resources.stringResource
  */
 @Serializable
 sealed interface LibraryDialog {
+    /** Whether it acts on the selection, so has nothing to act on without one. */
+    val actsOnSelection: Boolean get() = false
+
     /** The filter editor: a side panel on wide layouts, a bottom sheet on compact ones. */
     @Serializable
     data object Filter : LibraryDialog
@@ -49,15 +55,21 @@ sealed interface LibraryDialog {
 
     /** Add a tag to the selection, picked from the library's whole vocabulary. */
     @Serializable
-    data object AddTag : LibraryDialog
+    data object AddTag : LibraryDialog {
+        override val actsOnSelection get() = true
+    }
 
     /** Remove a tag from the selection, picked from the tags the selection carries. */
     @Serializable
-    data object RemoveTag : LibraryDialog
+    data object RemoveTag : LibraryDialog {
+        override val actsOnSelection get() = true
+    }
 
     /** Confirm moving the selection to the trash. */
     @Serializable
-    data object ConfirmTrash : LibraryDialog
+    data object ConfirmTrash : LibraryDialog {
+        override val actsOnSelection get() = true
+    }
 }
 
 /** Saves the open dialog as JSON; nothing open saves nothing. */
@@ -71,7 +83,9 @@ internal fun rememberLibraryDialog(): MutableState<LibraryDialog?> =
 /**
  * Renders the open [dialog], except [LibraryDialog.Filter]: the filter editor is laid out beside
  * the list on wide layouts, so the screen renders it. Every confirm runs its action and closes
- * the dialog through [onDismiss], once.
+ * the dialog through [onDismiss], once. A dialog that acts on the selection closes when there is
+ * none: the selection is the viewmodel's, so one restored after the process died finds it gone,
+ * and must not offer to act on "0 documents" (or open later over a selection made since).
  */
 @Composable
 internal fun LibraryDialogHost(
@@ -86,11 +100,14 @@ internal fun LibraryDialogHost(
     onTrash: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val orphaned = dialog?.actsOnSelection == true && selectedCount == 0
+    val currentOnDismiss by rememberUpdatedState(onDismiss)
+    LaunchedEffect(orphaned) { if (orphaned) currentOnDismiss() }
     val confirmed = { action: () -> Unit ->
         action()
         onDismiss()
     }
-    when (dialog) {
+    when (val open = dialog.takeUnless { orphaned }) {
         null, LibraryDialog.Filter -> {}
 
         LibraryDialog.SaveView -> {
@@ -106,10 +123,10 @@ internal fun LibraryDialogHost(
             TextInputDialog(
                 title = stringResource(Res.string.library_rename_saved_view),
                 label = stringResource(Res.string.library_view_name),
-                initial = dialog.view.name,
+                initial = open.view.name,
                 confirmLabel = stringResource(Res.string.library_rename),
-                confirmEnabled = { it.isNotBlank() && it.trim() != dialog.view.name },
-                onConfirm = { name -> confirmed { onRenameView(dialog.view, name) } },
+                confirmEnabled = { it.isNotBlank() && it.trim() != open.view.name },
+                onConfirm = { name -> confirmed { onRenameView(open.view, name) } },
                 onDismiss = onDismiss,
             )
         }

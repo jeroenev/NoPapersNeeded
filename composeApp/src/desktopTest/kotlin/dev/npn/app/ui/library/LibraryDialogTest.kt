@@ -30,6 +30,7 @@ import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.SavedView
 import dev.npn.core.app.SortField
 import dev.npn.core.model.ReviewMode
+import io.kotest.assertions.withClue
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
@@ -86,6 +87,38 @@ class LibraryDialogTest : EnglishLocaleTest() {
                 renameButton().isEnabled() shouldBe true
                 click { "Rename" in it.texts() && it.config.contains(SemanticsActions.OnClick) }
                 renamed shouldBe "Bills"
+            }
+        }
+
+    /**
+     * A dialog acting on the selection closes when there is none, as when it comes back after the
+     * process died with the viewmodel's selection gone: it never asks to trash "0 documents".
+     */
+    @Test
+    fun aSelectionDialogWithoutASelectionCloses() =
+        onUiThread {
+            for (dialog in listOf(LibraryDialog.AddTag, LibraryDialog.RemoveTag, LibraryDialog.ConfirmTrash)) {
+                var dismissed = false
+                themedScene(WIDTH, HEIGHT) {
+                    LibraryDialogHost(
+                        dialog = dialog,
+                        selectedCount = 0,
+                        tagOptions = listOf("invoice"),
+                        onSaveView = {},
+                        onRenameView = { _, _ -> },
+                        onAddTag = {},
+                        onRemoveTag = {},
+                        onTrash = {},
+                        onDismiss = { dismissed = true },
+                    )
+                }.closing {
+                    render()
+                    render()
+                    withClue(dialog) {
+                        dismissed shouldBe true
+                        nodes().none { node -> node.texts().any { "0 documents" in it } } shouldBe true
+                    }
+                }
             }
         }
 

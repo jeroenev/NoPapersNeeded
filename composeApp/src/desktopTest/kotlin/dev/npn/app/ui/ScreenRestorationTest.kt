@@ -20,12 +20,15 @@ import dev.npn.app.ui.rules.AutoMatchRulesScreen
 import dev.npn.app.ui.settings.FieldsSettingsPane
 import dev.npn.app.ui.tags.TagManagementScreen
 import dev.npn.app.ui.theme.NpnTheme
+import dev.npn.app.ui.trash.TrashScreen
 import dev.npn.core.app.OcrVersion
 import dev.npn.core.app.TagInfo
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldType
 import dev.npn.core.ocr.OcrEngineId
 import dev.npn.core.ocr.OcrEngineRef
+import dev.npn.core.testing.doc
+import dev.npn.core.testing.listItem
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 
@@ -134,6 +137,27 @@ class ScreenRestorationTest : EnglishLocaleTest() {
                 render()
                 has { it.text() == "Edit field" } shouldBe false
             }
+        }
+
+    /**
+     * A restored process's trash has not loaded when the confirmation comes back: not loaded yet is
+     * not "this document left the trash", so the confirmation stays and shows once the trash is in.
+     */
+    @Test
+    fun anOpenDeleteForeverConfirmationComesBack() =
+        onUiThread {
+            val session =
+                FakeLibrarySession().apply {
+                    documents.trashed.value = listOf(listItem(doc("doc-1", trashed = true)))
+                }
+            restored(
+                content = { TrashScreen(session) },
+                before = { scene ->
+                    scene.tap { it.text() == "Delete" }
+                    scene.has { it.text() == "Delete forever" } shouldBe true
+                },
+                after = { scene -> scene.has { it.text() == "Delete forever" } shouldBe true },
+            )
         }
 
     /** The OCR engine picker comes back open, with a choice of automatic over the pinned engine. */

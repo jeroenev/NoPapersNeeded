@@ -152,10 +152,12 @@ fun TrashScreen(
         onConfirm = { confirm = it },
     )
     // A document that left the trash meanwhile (restored here or on another device) is not there to
-    // delete any more: its confirmation closes rather than stay open to be confirmed.
-    val stale = confirm?.leftTheTrash(state.trashed) == true
+    // delete any more: its confirmation closes rather than stay open to be confirmed. Until the trash
+    // has loaded nothing is known to have left it, so a confirmation restored with the screen waits
+    // for it, unshown, rather than closing or counting an empty trash.
+    val stale = loaded != null && confirm?.leftTheTrash(state.trashed) == true
     LaunchedEffect(stale) { if (stale) confirm = null }
-    confirm?.takeUnless { stale }?.let {
+    confirm?.takeUnless { stale || loaded == null }?.let {
         TrashConfirmDialog(
             confirm = it,
             trashedCount = state.trashed.size,
