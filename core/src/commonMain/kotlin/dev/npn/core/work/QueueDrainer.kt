@@ -136,7 +136,7 @@ fun <Q> drainedQueue(
     scope: CoroutineScope,
     name: String,
     log: NpnLog,
-    ready: Deferred<Unit>?,
+    ready: Deferred<Unit>,
     build: (onEnqueued: () -> Unit) -> Q,
     step: suspend (Q) -> Boolean,
 ): DrainedQueue<Q> {
