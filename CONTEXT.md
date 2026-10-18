@@ -35,17 +35,17 @@ and discussion; sharpen them here when they drift.
   defined). Still stored, searchable and shown in a muted group; "Add to fields"
   promotes the key into the registry.
 - **System property** (`SystemProperty`) — per-document state the app owns rather
-  than the user: `reviewed` and `ocrEngine`. Written as `prop-set`; never a field.
+  than the user: `reviewed`, `ocrEngine` and `storagePath`. Written as `prop-set`; never a field.
 
 ## AI editing
 
 - **Edit Run** — a scoped, batched, reviewable AI edit pass over library
-  documents. Owned by `AiEditRun` (core.app): holds the run's `processed` docId
+  documents. Owned by `AiEditRun` (core.app.aiedit): holds the run's `processed` docId
   set. One run spans a whole edit session
   (its `processed` set survives cancels and scope changes) and is consumed
   batch by batch via `suggestNextBatch` and `apply`.
 - **Queued Edit Run** — an Edit Run whose *suggestion* half was handed to the
-  background: `AiEditQueue` (core.app) persists the run's request and its
+  background: `AiEditQueue` (core.app.aiedit) persists the run's request and its
   documents, buys one model call per document on the `QueueDrainer`, and stores
   each answer verbatim. Nothing is written unattended — the run turns into an
   `EditRunReview` on the processing queue and goes through the same human
@@ -53,7 +53,7 @@ and discussion; sharpen them here when they drift.
   automatic enrichment, which may write because its policy is fixed.
   A queued run covers the WHOLE scope, not one batch: the batch cap exists to
   bound what a human reviews in one sitting, and nobody is sitting. It is the
-  default above `AiTagging.BACKGROUND_THRESHOLD_DOCS` documents, and the user
+  default above `AiEditLimits.BACKGROUND_THRESHOLD_DOCS` (composeApp) documents, and the user
   can flip it either way per run.
   Failure is read two ways: a partly failed chunk is the *documents'* fault and
   charges them attempts (given up on at `MAX_DOC_ATTEMPTS`); a wholly failed one
@@ -62,8 +62,9 @@ and discussion; sharpen them here when they drift.
   whole chunk failed" says nothing once the chunk is one document.
 - **Scope** — which documents an Edit Run covers: `SELECTION`, `UNTAGGED`,
   `REVIEW_QUEUE`, `MISSING_FIELDS`, `SAVED_VIEW`, `ALL`. Resolution to a
-  `LibraryFilter` (including SELECTION's in-memory intersection and
-  MISSING_FIELDS' emptiness guard) lives in `AiEditRun.docsFor(scopeKey)` —
+  `LibraryFilter` (including SELECTION's document ids, an empty selection
+  selecting nothing, and MISSING_FIELDS' emptiness guard) lives in
+  `AiEditRun.docsFor(scopeKey)` —
   the single definition of what each scope means, shared by the preview count
   and the run itself.
 - **Review** — the phase where suggested edits await human acceptance. The
@@ -83,7 +84,7 @@ and discussion; sharpen them here when they drift.
   outcome: a rebuilt Review containing only failed documents, without the
   already-succeeded items; whatever a retry selects, the batch never writes a
   suggestion that landed again.
-  Apply is owned by `ReviewApply` (core.app), one per reviewed batch, shared by
+  Apply is owned by `ReviewApply` (core.app.aiedit), one per reviewed batch, shared by
   the interactive and the queued Edit Run. It also carries what earlier attempts
   of the batch wrote, so the Done that ends a run of retries counts all of it,
   as does the Done of skipping or discarding the rest after a partial Apply.
@@ -119,62 +120,11 @@ the domain vocabulary.
 
 ## Library session facets
 
-`LibrarySession` (core.app) is a pure aggregate of narrow facades plus
-lifecycle (`start`/`close`). Viewmodels take the session and read the facets
-they use from it; code in `core` depends on the facets alone. Each operation has
-exactly one public home:
-
-- **Reads** — `documents` (`DocumentRepository`: lists, filters, counts and a
-  document's history), `tags` (`TagRepository`) and `content` (`DocContentFacade`:
-  thumbnails, page renders, extracted text, baked copies and bake-in-place).
-- **Library settings** — library data kept in the journal, so every device
-  shares it: the storage-path rule (`StoragePathFacade`, session property
-  `storagePath`), the auto-match rules (`AutoMatchRuleRepository`, `rules`) and
-  saved views (`SavedViewRepository`, `savedViews`).
-- **Ingest** (`IngestFacade`) — getting documents into the library: `importPdf`,
-  `importImagesAsPdf`, `rescan`, plus the `scanProgress` and `lastScanReport`
-  flows.
-- **OCR ops** (`OcrFacade`) — text-recognition management per document: `reOcr`,
-  `ocrVersions`, `setOcrEngine` (the single public home for the engine pin),
-  `aiOcrOffer` and `ocrWithAi` (a transcription by the vision model, asked for
-  on this device), plus the `ocrStatus` flow.
-- **Review Config** (`ReviewConfigFacade`) — library-wide review settings:
-  `reviewMode`/`setReviewMode`, `markReviewedForMigration`.
-- **Field Registry** (`FieldRegistry`, session property `fieldRegistry`) — the
-  library's field definitions: the `fields` flow and `current()`, `upsert`,
-  `remove(key, clearValues)`, `reorder`, plus the values vocabulary
-  (`distinctValues`), `orphanKeys` and `usageCounts`.
-- **Maintenance** (`MaintenanceFacade`) — repair and surgery on existing
-  documents: `resolveDuplicate`, `applyRelink`, `splitPdf`.
-- **Metadata writing** (`MetadataWriter`, session property `meta`) — per-doc and
-  bulk edits only: tags on docs, the reviewed flag, and field values by key
-  (`setField`, `applyEdits`), canonicalized against the registry type.
-- **Tag Admin** (`TagAdmin`, session property `tagAdmin`) — vocabulary-level tag
-  operations: `renameTag`, `mergeTag`, `deleteTag`, `setTagStyle`.
-- **Doc Lifecycle** (`DocLifecycle`, session property `docLifecycle`) — a
-  document's existence and location: `trashDoc`, `restoreDoc`,
-  `deleteDocPermanently`, `renameFile`, `moveFile`.
-- **AI chat** (`AiChat`, session property `aiChat`) — the assistant
-  conversation: `ask` plus session management (`chatSessions`,
-  `createChatSession`, `deleteChatSession`, `clearChatSession`,
-  `chatTranscriptFor`).
-- **AI suggestions** (`AiSuggest`, session property `aiSuggest`) — the single
-  suggestion primitive `suggestEdits`. No consumer needs both AI facets.
-- **Work** (`WorkFacade`, session property `work`) — the persisted background
-  queues. Three drains, `drainOcr`, `drainEnrichment` and `drainEditRuns`: each
-  drains until no further progress is possible right now (queue empty, feature
-  off, endpoint unconfigured, or a backoff pending) and returns; it never waits
-  out a backoff. For callers that must hold a process open while background work
-  runs: Android's WorkManager workers. Plus two reads: `queue`, which
-  flattens the per-document tables into `QueuedWork` entries (outstanding work
-  only), and `editRuns`, the queued AI edits at batch grain with finished ones
-  first. The two stay separate because they differ in grain, in lifetime (the
-  first clears itself, the second waits for a human) and in what the user can do
-  with them.
-- **AI edit queue** (`AiEditQueueFacade`, session property `aiEditQueue`) —
-  handing a bulk AI edit to the background and picking it back up:
-  `enqueueEditRun`, `openEditRun`, `discardEditRun`.
+`LibrarySession` (core.app) is a pure aggregate of narrow facets plus lifecycle
+(`start`/`close`); `LibrarySession.kt` lists them, and each facet's contract file
+says what it owns. Viewmodels take the session and read the facets they use from
+it; code in `core` depends on the facets alone.
 
 No endpoint configuration crosses the AI facets: `AiConfig` belongs to settings,
-and a screen that hides or disables AI features until the endpoint is configured
-reads that from the settings it already observes.
+and whether the endpoint is configured, which hides or disables AI features, is
+read from the settings too (`AppViewModel.aiConfigured`, handed to the screens).

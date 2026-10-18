@@ -203,6 +203,7 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
 
 - Read ARCHITECTURE.md for the module/package map, data flow, and where to look
   for common tasks before navigating the codebase.
+- CONTEXT.md is the domain glossary: what terms such as Field, Edit Run or Review mean here.
 - Commit messages: `[main] Imperative summary` (branch name in brackets).
 - Shared Flow subscriptions use `WhileSubscribedTimeout` (`WhileSubscribed(5_000)`, in
   `composeApp`'s `ui/common/StateFlowConfig.kt`) instead of inline timeouts; typed detekt forbids
@@ -219,10 +220,13 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   `GlobalScope` (`GlobalCoroutineUsage`).
 - A viewmodel reports to the user through `MessagesViewModel`: `message(text, action)`, and every
   write through `launchReporting(failed)` (or `reporting` inside a coroutine it launched), where
-  `failed` is the whole failure sentence with the reason as `%1$s`. Never raise a snackbar from a
-  composable. New text is `UiText.Res`/`UiText.Plural` over a whole-sentence resource in all six
-  locales, never a sentence stitched from fragments; `UiText.Raw` is only for untranslated text
-  such as a file name or an exception's message. Viewmodel tests assert on the `UiText` itself.
+  `failed` is the whole failure sentence with the reason as `%1$s`. A write over many items goes
+  through `forEachReporting` with a `BulkFailure` (the reason when one failed, the count when
+  several did), or `countReporting` for a core call that counts its own failures. Never raise a
+  snackbar from a composable. New text is `UiText.Res`/`UiText.Plural` over a whole-sentence
+  resource in all six locales, never a sentence stitched from fragments; `UiText.Raw` is only for
+  untranslated text such as a file name or an exception's message. Viewmodel tests assert on the
+  `UiText` itself.
 - UI is built from the shared pieces in `ui/common` (`SettingsSection`, `SwitchRow`, `HelpText`,
   `Dropdown`, `ExpanderRow`, `SuggestField`, `BackTopBar`, `TooltipIconButton`, ...) rather than a
   screen's own copy, and a screen binds keys only through `keyShortcuts`/`previewKeyShortcuts`.
@@ -230,7 +234,9 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   from `LocalWindowWidthClass`, never a screen's own window-width check.
 - Facets follow the contract in ARCHITECTURE.md: main-safe, expected failures as a typed outcome
   with an error enum (mapped to a string resource in `composeApp`, never English from `core`),
-  throws only for bugs and misuse.
+  throws only for bugs and misuse. The one exception, by design: the AI endpoint's failures
+  (`AiChat.ask`, `AiSuggest.suggestEdits`, `AiModelCatalog`) throw, and the UI shows the server's
+  text. Don't wrap them in an outcome, and don't copy that elsewhere.
 - JSON goes through `NpnJson.Persisted` (what the app writes and reads back) or `NpnJson.Lenient`
   (model output, third-party responses), never a new `Json {}`. Only `JournalCodec` keeps its own;
   typed detekt forbids the `Json {}` builder everywhere else.
