@@ -6,6 +6,7 @@ import dev.npn.core.db.DuplicateDao
 import dev.npn.core.db.isLive
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.fs.hasStoredStat
 
 /**
  * Resolves external duplicates: removes an extra copy of a document's bytes beside its own file.

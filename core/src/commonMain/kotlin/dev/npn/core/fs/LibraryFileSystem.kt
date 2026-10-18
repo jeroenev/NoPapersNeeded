@@ -18,6 +18,18 @@ data class FileMeta(
 )
 
 /**
+ * Whether the file [this] describes still has the [size] and [mtime] stored for it earlier: the
+ * evidence that the bytes there are still the ones known then, without hashing them. A rescan and an
+ * import (`ImportService`) take a document row's stat as that evidence for a document that is not
+ * hidden (a hidden one gave its path up, so a file there is hashed); the trash and duplicate removal
+ * take the stat they saw when they hashed the file.
+ */
+internal fun FileMeta.hasStoredStat(
+    size: Long,
+    mtime: Long,
+): Boolean = this.size == size && mtimeMillis == mtime
+
+/**
  * This filesystem can never publish without replacement: the platform or mount has no primitive
  * for it. A capability, not an incident, so the library refuses to open rather than write.
  */

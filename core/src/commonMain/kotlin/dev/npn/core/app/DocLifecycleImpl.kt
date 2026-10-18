@@ -8,10 +8,10 @@ import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.TrashOps
+import dev.npn.core.fs.hasStoredStat
 import dev.npn.core.fs.holds
 import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.index.LifecycleChange
-import dev.npn.core.index.hasStoredStat
 import dev.npn.core.index.holdsDocument
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.SystemProperty

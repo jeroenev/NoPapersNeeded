@@ -103,8 +103,7 @@ class TrashOps(
         held: Boolean,
     ): Boolean {
         val now = fs.stat(listed.relPath)?.takeIf { !it.isDirectory } ?: return false
-        val unchanged = now.size == listed.size && now.mtimeMillis == listed.mtimeMillis
-        return if (unchanged) held else fs.holds(listed.relPath, docId)
+        return if (now.hasStoredStat(listed.size, listed.mtimeMillis)) held else fs.holds(listed.relPath, docId)
     }
 
     /** The trash entries whose name carries [docId]'s hash prefix, in [listing] or else in the trash now. */

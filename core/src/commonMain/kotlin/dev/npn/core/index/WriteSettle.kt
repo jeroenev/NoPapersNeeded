@@ -2,6 +2,7 @@ package dev.npn.core.index
 
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.fs.hasStoredStat
 import dev.npn.core.util.runCatchingCancellable
 
 /**
