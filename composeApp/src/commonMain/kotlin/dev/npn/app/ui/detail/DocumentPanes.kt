@@ -15,7 +15,9 @@ import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -61,27 +63,49 @@ fun MetadataPanel(
     previewTab: @Composable (Modifier) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // One composition of the tabs, moved between the two layouts rather than built again in each:
+    // what they hold (a dialog open over them, text typed into it, an editor's entry) stays when the
+    // window crosses the wide/compact breakpoint.
+    val tabs =
+        remember {
+            movableContentOf { args: MetadataTabsArgs ->
+                MetadataTabs(
+                    args.state,
+                    args.item,
+                    args.refused,
+                    args.writeBlocked,
+                    args.actions,
+                    args.previewTab,
+                    args.modifier,
+                )
+            }
+        }
     Box(modifier) {
         if (LocalWindowWidthClass.current.isWide) {
             DocumentPanes(
                 preview = previewTab,
                 details = {
-                    MetadataTabs(
-                        state,
-                        item,
-                        refused,
-                        writeBlocked,
-                        actions,
-                        previewTab = null,
-                        modifier = it,
+                    tabs(
+                        MetadataTabsArgs(state, item, refused, writeBlocked, actions, previewTab = null, it),
                     )
                 },
             )
         } else {
-            MetadataTabs(state, item, refused, writeBlocked, actions, previewTab, Modifier.fillMaxSize())
+            tabs(MetadataTabsArgs(state, item, refused, writeBlocked, actions, previewTab, Modifier.fillMaxSize()))
         }
     }
 }
+
+/** What [MetadataTabs] is shown with, as one value its movable content takes. */
+private class MetadataTabsArgs(
+    val state: MetadataUiState,
+    val item: DocListItem,
+    val refused: Set<String>,
+    val writeBlocked: Boolean,
+    val actions: MetadataActions,
+    val previewTab: (@Composable (Modifier) -> Unit)?,
+    val modifier: Modifier,
+)
 
 @Composable
 private fun DocumentPanes(
