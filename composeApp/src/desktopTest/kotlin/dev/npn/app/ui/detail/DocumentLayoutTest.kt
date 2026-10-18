@@ -182,7 +182,7 @@ class DocumentLayoutTest : EnglishLocaleTest() {
                         }
                     }
                 }
-            ProvideWidthClass(widthClass) {
+            ProvideWidthClass(widthClass?.value) {
                 NpnTheme(darkTheme = false) {
                     Surface {
                         DocumentEditor(
@@ -223,13 +223,13 @@ class DocumentLayoutTest : EnglishLocaleTest() {
 
     @Composable
     private fun ProvideWidthClass(
-        widthClass: State<WindowWidthClass>?,
+        widthClass: WindowWidthClass?,
         content: @Composable () -> Unit,
     ) {
         if (widthClass == null) {
             ProvideWindowWidthClass(content)
         } else {
-            CompositionLocalProvider(LocalWindowWidthClass provides widthClass.value, content = content)
+            CompositionLocalProvider(LocalWindowWidthClass provides widthClass, content = content)
         }
     }
 

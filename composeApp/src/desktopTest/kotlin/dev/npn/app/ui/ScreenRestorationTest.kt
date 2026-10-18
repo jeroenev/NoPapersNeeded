@@ -228,8 +228,10 @@ class ScreenRestorationTest : EnglishLocaleTest() {
 
     /** The field manager as the settings screen shows it, its dialog kept in a viewmodel's saved state. */
     @Composable
-    private fun FieldsPane(fields: List<FieldDef>) {
-        val dialogs = viewModel { FieldDialogs(createSavedStateHandle()) }
+    private fun FieldsPane(
+        fields: List<FieldDef>,
+        dialogs: FieldDialogs = viewModel { FieldDialogs(createSavedStateHandle()) },
+    ) {
         val dialog by dialogs.dialog.flow.collectAsStateWithLifecycle()
         Column {
             FieldsSettingsPane(
