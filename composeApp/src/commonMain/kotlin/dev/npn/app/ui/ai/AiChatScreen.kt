@@ -47,7 +47,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,6 +60,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.BackTopBar
 import dev.npn.app.ui.common.ExpandIcon
@@ -109,12 +109,12 @@ fun AiChatScreen(
     /** Hands off to the AI-edit page without preselection; null where the top bar offers no such action. */
     onAiEdit: (() -> Unit)?,
     modifier: Modifier = Modifier,
-    vm: AiChatViewModel = viewModel { AiChatViewModel(session) },
+    vm: AiChatViewModel = viewModel { AiChatViewModel(session, createSavedStateHandle()) },
 ) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     val snackbar = rememberSnackbarMessages(vm.messages)
 
-    var input by rememberSaveable { mutableStateOf("") }
+    val input by vm.draft.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val items = ui.transcript.items
     val lastLen = (items.lastOrNull() as? TranscriptItem.AssistantTurn)?.text?.length ?: 0
@@ -180,10 +180,10 @@ fun AiChatScreen(
                     value = input,
                     busy = ui.busy,
                     enabled = !ui.loading,
-                    onValueChange = { input = it },
+                    onValueChange = vm::type,
                     onSend = {
                         vm.send(input)
-                        input = ""
+                        vm.type("")
                     },
                     onStop = vm::stop,
                 )

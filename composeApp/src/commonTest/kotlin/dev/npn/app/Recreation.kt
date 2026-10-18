@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.viewModelFactory
+import dev.npn.app.ui.ai.AiChatUiState
 import dev.npn.app.ui.library.LibraryContentState
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.Flow
@@ -107,4 +108,14 @@ internal object Transient {
     /** A rescan under way; and the dismissed scan report, which goes with the report ingest kept in memory. */
     fun library(state: LibraryContentState): LibraryContentState =
         state.copy(ui = state.ui.copy(refreshing = false, dismissedScanReport = null))
+
+    /**
+     * An answer streaming in; and a conversation nobody asked anything in but the open one, which the
+     * store keeps only once asked in (so it is untitled until then).
+     */
+    fun chat(state: AiChatUiState): AiChatUiState =
+        state.copy(
+            busy = false,
+            sessions = state.sessions.filter { it.title != null || it.id == state.currentSessionId },
+        )
 }
