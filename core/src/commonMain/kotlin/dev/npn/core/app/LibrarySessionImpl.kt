@@ -269,7 +269,7 @@ class LibrarySessionImpl private constructor(
             }
 
             WatchAction.Rescan -> {
-                log.runLogged("Metadata reconcile") { coordinator.reconcileMetadata() }
+                // The rescan reconciles the journal first itself (JournalCoordinator.rescan).
                 log.runLogged("Watch-triggered rescan") { doWatchTriggeredRescan() }
             }
         }
