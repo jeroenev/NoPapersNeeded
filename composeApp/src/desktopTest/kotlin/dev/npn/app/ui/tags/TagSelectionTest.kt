@@ -52,13 +52,17 @@ class TagSelectionTest : EnglishLocaleTest() {
             tags.tags.value = listOf(TagInfo("invoice", null, null, 2), TagInfo("tax", null, null, 1))
         }
 
-    /** Long-click the nearest long-clickable node at or above the first node [match] finds. */
+    /**
+     * Long-click the nearest long-clickable node at or above the first node [match] finds, and render
+     * twice: once to collect the viewmodel's new selection, once to show it.
+     */
     private fun ImageComposeScene.longClick(match: (SemanticsNode) -> Boolean) {
         generateSequence(nodes().first(match)) { it.parent }
             .first { it.config.getOrNull(SemanticsActions.OnLongClick) != null }
             .config[SemanticsActions.OnLongClick]
             .action
             ?.invoke()
+        render()
         render()
     }
 

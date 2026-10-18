@@ -39,11 +39,9 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -105,30 +103,6 @@ import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * Multi-select state of the tag grid. Only real tags (nodes with a [TagInfo]) are selectable;
- * namespace-only nodes carry no journal state of their own. Saveable, so a selection survives a
- * trip to another tab and back.
- */
-private class TagSelection(
-    initial: Set<String> = emptySet(),
-) {
-    var selected by mutableStateOf(initial)
-
-    fun toggle(name: String) {
-        selected = if (name in selected) selected - name else selected + name
-    }
-
-    fun clear() {
-        selected = emptySet()
-    }
-
-    companion object {
-        val Saver: Saver<TagSelection, List<String>> =
-            Saver(save = { it.selected.toList() }, restore = { TagSelection(it.toSet()) })
-    }
-}
-
-/**
  * The one dialog the tags screen has open, or none. Every action but rename names a list of tags: a
  * card's own menu one, the selection all of it. Saved as JSON, so it is open again after the screen
  * is recreated.
@@ -165,16 +139,17 @@ fun TagManagementScreen(
 ) {
     val tags by vm.tags.collectAsStateWithLifecycle()
     val rows by vm.rows.collectAsStateWithLifecycle()
+    val selected by vm.selection.collectAsStateWithLifecycle()
 
     var dialog by rememberSaveable(stateSaver = jsonSaver(TagDialog.serializer().nullable)) { mutableStateOf(null) }
-    val selection = rememberSaveable(saver = TagSelection.Saver) { TagSelection() }
 
     val snackbar = rememberSnackbarMessages(vm.messages)
 
     TagListScaffold(
         loadedRows = rows,
         snackbar = snackbar,
-        selection = selection,
+        selected = selected,
+        selection = vm,
         onOpen = { dialog = it },
     )
     dialog?.let { open ->
@@ -186,7 +161,7 @@ fun TagManagementScreen(
             // A confirmed action ends the selection it was taken on.
             onDone = {
                 dialog = null
-                selection.clear()
+                vm.clearSelection()
             },
         )
     }
@@ -197,29 +172,20 @@ private fun TagListScaffold(
     /** Null until the first load, which shows a spinner rather than the empty state. */
     loadedRows: List<TagRow>?,
     snackbar: SnackbarHostState,
-    selection: TagSelection,
+    /** The selected tags still in the library, in card order. */
+    selected: List<String>,
+    selection: TagSelectionActions,
     onOpen: (TagDialog) -> Unit,
 ) {
     val rows = loadedRows.orEmpty()
-    // Tags can disappear underneath a selection (another device, auto-pruning after edits): the
-    // screen counts and acts on the ones still there, and forgets the rest once the rows load.
-    val selected = rows.mapNotNull { node -> node.info?.name?.takeIf { it in selection.selected } }
     val selectionActive = selected.isNotEmpty()
-    LaunchedEffect(loadedRows) {
-        if (loadedRows != null) {
-            val names = loadedRows.mapNotNull { it.info?.name }.toSet()
-            if (!names.containsAll(selection.selected)) selection.selected = selection.selected intersect names
-        }
-    }
     Scaffold(
         topBar = {
             if (selectionActive) {
                 TagSelectionTopBar(
                     selected = selected,
-                    onClose = selection::clear,
-                    onSelectAll = {
-                        selection.selected = rows.mapNotNull { it.info?.name }.toSet()
-                    },
+                    onClose = selection::clearSelection,
+                    onSelectAll = selection::selectAll,
                     onOpen = onOpen,
                 )
             } else {
@@ -251,7 +217,7 @@ private fun TagListScaffold(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 items(rows, key = { it.path }) { node ->
-                    val isSelected = node.path in selection.selected
+                    val isSelected = node.path in selected
                     TagCard(
                         node = node,
                         selectionMode = selectionActive,
@@ -259,12 +225,12 @@ private fun TagListScaffold(
                         // With several tags selected, this card among them, its menu acts on the
                         // whole selection; otherwise on this tag alone.
                         targets = if (isSelected && selected.size > 1) selected else listOf(node.path),
-                        onToggleSelect = { selection.toggle(node.path) },
+                        onToggleSelect = { selection.toggleSelected(node.path) },
                         // Opening a menu on an unselected card replaces the selection with that
                         // card, so the menu never silently acts on off-screen tags.
                         onPrepareMenu = {
                             if (selectionActive && node.info != null && !isSelected) {
-                                selection.selected = setOf(node.path)
+                                selection.selectOnly(node.path)
                             }
                         },
                         onOpen = onOpen,

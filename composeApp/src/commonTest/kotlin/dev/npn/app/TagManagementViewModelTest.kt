@@ -97,6 +97,54 @@ class TagManagementViewModelTest : MainDispatcherTest() {
         }
 
     @Test
+    fun theSelectionTogglesSelectsAllAndClears() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            session.tags.tags.value = listOf(tag("finance.tax"), tag("travel"))
+            val model = vm(session)
+            collecting(model.rows) // the screen shows the rows, which the selection follows
+            advanceUntilIdle()
+
+            model.toggleSelected("travel")
+            advanceUntilIdle()
+            model.selection.value shouldContainExactly listOf("travel")
+            model.selectOnly("finance.tax")
+            advanceUntilIdle()
+            model.selection.value shouldContainExactly listOf("finance.tax")
+            // Every real tag, in card order; the "finance" namespace has no tag of its own.
+            model.selectAll()
+            advanceUntilIdle()
+            model.selection.value shouldContainExactly listOf("finance.tax", "travel")
+            model.toggleSelected("travel")
+            advanceUntilIdle()
+            model.selection.value shouldContainExactly listOf("finance.tax")
+            model.clearSelection()
+            advanceUntilIdle()
+            model.selection.value shouldBe emptyList()
+        }
+
+    @Test
+    fun theSelectionForgetsATagThatVanishes() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            session.tags.tags.value = listOf(tag("invoice"), tag("tax"))
+            val model = vm(session)
+            collecting(model.rows) // the screen shows the rows, which the selection follows
+            advanceUntilIdle()
+            model.selectAll()
+            advanceUntilIdle()
+
+            session.tags.tags.value = listOf(tag("invoice"))
+            advanceUntilIdle()
+            model.selection.value shouldContainExactly listOf("invoice")
+
+            // A tag of the old name coming back is not selected again.
+            session.tags.tags.value = listOf(tag("invoice"), tag("tax"))
+            advanceUntilIdle()
+            model.selection.value shouldContainExactly listOf("invoice")
+        }
+
+    @Test
     fun renameMergeDeleteDelegate() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()

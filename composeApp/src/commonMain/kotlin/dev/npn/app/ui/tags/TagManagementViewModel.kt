@@ -6,9 +6,13 @@ import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.TagInfo
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_tags_color_some_failed
@@ -91,11 +95,28 @@ interface TagWrites {
     )
 }
 
-/** The tags screen: the library's tags, and their [TagWrites]. */
+/**
+ * The tags screen's multi-select. Only real tags (rows with a [TagInfo]) are selectable;
+ * namespace-only rows carry no journal state of their own.
+ */
+interface TagSelectionActions {
+    fun toggleSelected(name: String)
+
+    /** Select every tag in the library. */
+    fun selectAll()
+
+    /** Select [name] alone, dropping the rest of the selection. */
+    fun selectOnly(name: String)
+
+    fun clearSelection()
+}
+
+/** The tags screen: the library's tags, its selection of them, and their [TagWrites]. */
 class TagManagementViewModel(
     session: LibrarySession,
 ) : MessagesViewModel(),
-    TagWrites {
+    TagWrites,
+    TagSelectionActions {
     private val tagAdmin = session.tagAdmin
     override val log = session.log
 
@@ -105,9 +126,39 @@ class TagManagementViewModel(
             .observeTags()
             .stateIn(viewModelScope, WhileSubscribedTimeout, null)
 
+    private val selected = MutableStateFlow(emptyList<String>())
+
     /** [tags] as the screen's cards: the namespace tree, flattened depth-first. Null until the first load. */
     val rows: StateFlow<List<TagRow>?> =
-        tags.map { it?.let(::tagRows) }.stateIn(viewModelScope, WhileSubscribedTimeout, null)
+        tags
+            .map { it?.let(::tagRows) }
+            .onEach { rows -> if (rows != null) selected.update { rows.selectable(it) } }
+            .stateIn(viewModelScope, WhileSubscribedTimeout, null)
+
+    /**
+     * The selected tags, in card order. Tags can disappear underneath a selection (another device,
+     * auto-pruning after edits): the selection forgets them once the rows load without them, so a
+     * tag of the same name coming back later is not selected again.
+     */
+    val selection: StateFlow<List<String>> = selected.asStateFlow()
+
+    override fun toggleSelected(name: String) =
+        selected.update { current -> ordered(if (name in current) current - name else current + name) }
+
+    override fun selectAll() {
+        selected.value = rows.value.orEmpty().selectable()
+    }
+
+    override fun selectOnly(name: String) {
+        selected.value = listOf(name)
+    }
+
+    override fun clearSelection() {
+        selected.value = emptyList()
+    }
+
+    /** [names] in card order, as far as the rows are loaded. */
+    private fun ordered(names: List<String>): List<String> = rows.value?.selectable(names) ?: names
 
     // Names arrive trimmed: the dialogs they are typed or picked in trim what they confirm.
 
@@ -142,6 +193,10 @@ class TagManagementViewModel(
         if (names.isEmpty()) return
         viewModelScope.launch { forEachReporting(names, failed, write) }
     }
+
+    /** The real tags among these rows, in order; only those among [among], if given. */
+    private fun List<TagRow>.selectable(among: Collection<String>? = null): List<String> =
+        mapNotNull { row -> row.info?.name?.takeIf { among == null || it in among } }
 
     private companion object {
         val MergeFailed = BulkFailure(Res.string.common_tags_merge_failed, Res.plurals.common_tags_merge_some_failed)

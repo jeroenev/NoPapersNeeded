@@ -11,6 +11,7 @@ import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.getOrNull
+import androidx.lifecycle.ViewModelStoreOwner
 import dev.npn.app.EnglishLocaleTest
 import dev.npn.app.FakeLibrarySession
 import dev.npn.app.ui.rules.AutoMatchRulesScreen
@@ -25,15 +26,17 @@ import kotlin.test.Test
 
 /**
  * What the tags and rules screens are in the middle of comes back when their state is saved and
- * restored: a trip to another tab and back, or the process being restored.
+ * restored: a trip to another tab and back, or the process being restored. A tag selection is the
+ * viewmodel's, as the library's is, so it comes back where the viewmodel outlives the screen.
  */
 class ScreenRestorationTest : EnglishLocaleTest() {
     @Test
-    fun aTagSelectionSurvivesRestoration() =
+    fun aTagSelectionSurvivesRecreation() =
         onUiThread {
             val session = tagSession()
             restored(
                 content = { TagManagementScreen(session) },
+                viewModels = viewModelStoreOwner(),
                 before = { scene ->
                     scene.longClick { it.text() == "tax" }
                     scene.longClick { it.text() == "invoice" }
@@ -111,7 +114,12 @@ class ScreenRestorationTest : EnglishLocaleTest() {
     fun aFieldDialogClosesWhenItsFieldIsGone() =
         onUiThread {
             val fields = mutableStateOf(listOf(field("invoiceNo", "Invoice number")))
-            scene(SaveableStateRegistry(restoredValues = null) { true }) { FieldsPane(fields.value) }.closing {
+            scene(
+                SaveableStateRegistry(restoredValues = null) {
+                    true
+                },
+                viewModelStoreOwner(),
+            ) { FieldsPane(fields.value) }.closing {
                 render()
                 tap { it.text() == "Invoice number" }
                 has { it.text() == "Edit field" } shouldBe true
@@ -148,21 +156,27 @@ class ScreenRestorationTest : EnglishLocaleTest() {
 
     /**
      * Run [before] on [content], save the screen's state, compose [content] again from it and run
-     * [after] on that. Each composition gets its own viewmodels, as after a process restore.
+     * [after] on that. Each composition gets its own viewmodels, as after a process restore, unless
+     * both share [viewModels], as across a configuration change.
      */
     private fun restored(
         content: @Composable () -> Unit,
         before: (ImageComposeScene) -> Unit,
         after: (ImageComposeScene) -> Unit,
+        viewModels: ViewModelStoreOwner? = null,
     ) {
         val first = SaveableStateRegistry(restoredValues = null) { true }
         val saved =
-            scene(first, content).closing {
+            scene(first, viewModels ?: viewModelStoreOwner(), content).closing {
                 render()
                 before(this)
                 first.performSave()
             }
-        scene(SaveableStateRegistry(restoredValues = saved) { true }, content).closing {
+        scene(
+            SaveableStateRegistry(restoredValues = saved) { true },
+            viewModels ?: viewModelStoreOwner(),
+            content,
+        ).closing {
             render()
             render()
             after(this)
@@ -171,9 +185,10 @@ class ScreenRestorationTest : EnglishLocaleTest() {
 
     private fun scene(
         registry: SaveableStateRegistry,
+        viewModels: ViewModelStoreOwner,
         content: @Composable () -> Unit,
     ): ImageComposeScene =
-        hostedScene(WIDTH, HEIGHT, LocalSaveableStateRegistry provides registry) {
+        hostedScene(WIDTH, HEIGHT, LocalSaveableStateRegistry provides registry, viewModels = viewModels) {
             NpnTheme(darkTheme = false) { content() }
         }
 
@@ -183,13 +198,17 @@ class ScreenRestorationTest : EnglishLocaleTest() {
         render()
     }
 
-    /** Long-click the nearest long-clickable node at or above the first node [match] finds. */
+    /**
+     * Long-click the nearest long-clickable node at or above the first node [match] finds, and render
+     * twice: once to collect the viewmodel's new selection, once to show it.
+     */
     private fun ImageComposeScene.longClick(match: (SemanticsNode) -> Boolean) {
         generateSequence(nodes().first(match)) { it.parent }
             .first { it.config.getOrNull(SemanticsActions.OnLongClick) != null }
             .config[SemanticsActions.OnLongClick]
             .action
             ?.invoke()
+        render()
         render()
     }
 
