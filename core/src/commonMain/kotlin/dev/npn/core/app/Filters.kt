@@ -1,6 +1,7 @@
 package dev.npn.core.app
 
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.util.KnownEnumSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -231,7 +232,14 @@ data class LibrarySort(
     val ascending: Boolean = false,
 )
 
+@Serializable(with = ViewTypeSerializer::class)
 enum class ViewType { LIST, GRID }
+
+/**
+ * [ViewType] by name. A saved view of a type this build does not know does not decode, so it is not
+ * listed here, where a rename or a pin would write it back as the default type.
+ */
+object ViewTypeSerializer : KnownEnumSerializer<ViewType>("ViewType", ViewType.entries)
 
 @Serializable
 data class SavedView(

@@ -1,9 +1,11 @@
 package dev.npn.core.rules
 
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.util.KnownEnumSerializer
 import dev.npn.core.util.NpnJson
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
@@ -80,7 +82,11 @@ sealed class RuleField {
     }
 }
 
-/** [RuleField] travels as its [RuleField.wire] string, so the stored rule list stays hand-readable. */
+/**
+ * [RuleField] travels as its [RuleField.wire] string, so the stored rule list stays hand-readable. A
+ * kind of field this build does not know fails the decode: matched against the content instead, the
+ * rule would tag what it was never meant to, and an edit would write it back that way.
+ */
 object RuleFieldSerializer : KSerializer<RuleField> {
     override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("RuleField", PrimitiveKind.STRING)
 
@@ -89,12 +95,14 @@ object RuleFieldSerializer : KSerializer<RuleField> {
         value: RuleField,
     ) = encoder.encodeString(value.wire)
 
-    override fun deserialize(decoder: Decoder): RuleField =
-        RuleField.fromWire(decoder.decodeString()) ?: RuleField.Content
+    override fun deserialize(decoder: Decoder): RuleField {
+        val wire = decoder.decodeString()
+        return RuleField.fromWire(wire) ?: throw SerializationException("No rule field $wire in this build")
+    }
 }
 
 /** Matching algorithm for [AutoMatchRule.pattern]. */
-@Serializable
+@Serializable(with = MatchAlgorithmSerializer::class)
 enum class MatchAlgorithm {
     EXACT,
     ANY_WORD,
@@ -103,10 +111,14 @@ enum class MatchAlgorithm {
     FUZZY,
 }
 
+/** [MatchAlgorithm] by name; one this build does not know fails the decode, as a field kind does. */
+object MatchAlgorithmSerializer : KnownEnumSerializer<MatchAlgorithm>("MatchAlgorithm", MatchAlgorithm.entries)
+
 /**
  * The codec for the stored rule list: the journal setting, and the device setting it was adopted
  * from. Reads the pre-registry shape too, where a rule carried `correspondent` and `docType` as
- * top-level strings instead of [AutoMatchRule.sets].
+ * top-level strings instead of [AutoMatchRule.sets]. A list with a rule this build cannot match as
+ * its writer meant (a field kind or an algorithm it does not know) fails to decode as a whole.
  */
 object AutoMatchRuleJson {
     private val json = NpnJson.Persisted

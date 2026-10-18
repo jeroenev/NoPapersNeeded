@@ -12,7 +12,9 @@ import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.first
+import kotlinx.serialization.SerializationException
 import kotlin.test.Test
+import kotlin.test.assertFailsWith
 
 class AutoMatchRuleIntegrationTest {
     @Test
@@ -243,5 +245,25 @@ class AutoMatchRuleIntegrationTest {
             )
         // The current shape round-trips through the same codec.
         AutoMatchRuleJson.decodeList(AutoMatchRuleJson.encodeList(rules)) shouldBe rules
+    }
+
+    /** The first builds left out what had its default value; those rules still read. */
+    @Test
+    fun ruleJsonWithoutItsDefaultsDecodes() {
+        val first =
+            """[{"id":"r1","name":"Old","pattern":"x"},""" +
+                """{"id":"r2","name":"Name","field":"FILE_NAME","pattern":"y"}]"""
+        AutoMatchRuleJson.decodeList(first).map { it.field to it.algorithm } shouldBe
+            listOf(RuleField.Content to MatchAlgorithm.ANY_WORD, RuleField.FileName to MatchAlgorithm.ANY_WORD)
+    }
+
+    /** A newer build's algorithm or kind of field is not read as the default: the list does not decode. */
+    @Test
+    fun ruleJsonFromANewerBuildDoesNotDecode() {
+        for (newer in listOf(""""algorithm":"SEMANTIC"""", """"field":"tag:inbox"""")) {
+            assertFailsWith<SerializationException> {
+                AutoMatchRuleJson.decodeList("""[{"id":"r1","name":"Newer","pattern":"x",$newer}]""")
+            }
+        }
     }
 }

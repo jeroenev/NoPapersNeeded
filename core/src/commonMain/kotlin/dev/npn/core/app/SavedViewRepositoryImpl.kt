@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.map
  * Saved views are library data: each is one synced setting in the journal, keyed by its id and
  * holding the whole [SavedView], so every device sees the same views and two devices saving
  * different views both keep theirs. Deleting one clears its setting. They read in name order.
+ * A view this build cannot decode (a newer build's) is not listed: a rename or a pin saves the view
+ * as this build read it, and would write over what that build meant.
  * Writes run through [SessionLifetime.owned], so the session waits them out before it closes.
  */
 internal class SavedViewRepositoryImpl(

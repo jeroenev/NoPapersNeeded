@@ -218,30 +218,30 @@ class LibrarySettingsTest {
         }
 
     /**
-     * A list this build cannot read (from a newer version, say) is not "no rules": the cache keeps
-     * the last list that decoded, and an edit is refused rather than written over it.
+     * A list from a newer build, with an algorithm or a kind of field this build does not know, is not
+     * "no rules", nor rules read with the defaults in their place: matching and the cache keep the
+     * last list that decoded, and an edit is refused rather than written over it.
      */
     @Test
-    fun rulesTheJournalCannotDecodeKeepTheCacheAndAreNeverWrittenOver() =
+    fun rulesFromANewerBuildAreNeitherMatchedNorWrittenOver() =
         appSessionTest { rig ->
             rig.session.rules.save(rule("r1", "Invoice rule"))
-            rig
-                .writer("newer-installation")
-                .commit(listOf(PendingOp.settingSet(LibrarySettingKeys.AUTO_MATCH_RULES, "{not json")))
-            rig.session.rescan()
-            rig.session.ruleSource.mirror()
+            for (newer in listOf(NEWER_ALGORITHM, NEWER_FIELD_KIND)) {
+                rig.storeRulesFromANewerBuild(newer)
+                rig.session.ruleSource.mirror()
 
-            rig.session.rules
-                .observeRules()
-                .first()
-                .map { it.name } shouldBe listOf("Invoice rule")
-            val objects = rig.journalObjectCount()
-            assertFailsWith<IllegalStateException> { rig.session.rules.save(rule("", "Added later")) }
-            rig.journalObjectCount() shouldBe objects
-            rig.session.rules
-                .observeRules()
-                .first()
-                .map { it.name } shouldContain "Invoice rule"
+                // What the rule applier matches with.
+                rig.session.ruleSource
+                    .current()
+                    .map(AutoMatchRule::name) shouldBe listOf("Invoice rule")
+                rig.session.rules
+                    .observeRules()
+                    .first()
+                    .map { it.name } shouldBe listOf("Invoice rule")
+                val objects = rig.journalObjectCount()
+                assertFailsWith<IllegalStateException> { rig.session.rules.save(rule("", "Added later")) }
+                rig.journalObjectCount() shouldBe objects
+            }
         }
 
     /**
@@ -258,7 +258,7 @@ class LibrarySettingsTest {
 
                 fun warnings() = log.entries.count { it.message.startsWith("Auto-match rules did not decode") }
 
-                rig.storeRulesFromANewerBuild("{not json")
+                rig.storeRulesFromANewerBuild(NEWER_ALGORITHM)
                 repeat(50) {
                     rig.session.ruleSource
                         .current()
@@ -266,7 +266,7 @@ class LibrarySettingsTest {
                 }
                 warnings() shouldBe 1
 
-                rig.storeRulesFromANewerBuild("[{still not json")
+                rig.storeRulesFromANewerBuild(NEWER_FIELD_KIND)
                 repeat(50) {
                     rig.session.ruleSource
                         .current()
@@ -297,6 +297,16 @@ class LibrarySettingsTest {
     private companion object {
         const val HOUR = 60L * 60L * 1000L
         const val DAY = 24 * HOUR
+
+        /** A newer build's list: a rule with an algorithm this build does not have. */
+        const val NEWER_ALGORITHM =
+            """[{"id":"n1","name":"Newer","field":"content","algorithm":"SEMANTIC","pattern":"invoice",""" +
+                """"tags":["newer"]}]"""
+
+        /** A newer build's list: a rule on a kind of field this build does not have. */
+        const val NEWER_FIELD_KIND =
+            """[{"id":"n1","name":"Newer","field":"tag:inbox","algorithm":"EXACT","pattern":"invoice",""" +
+                """"tags":["newer"]}]"""
     }
 
     private fun junkRow() =
