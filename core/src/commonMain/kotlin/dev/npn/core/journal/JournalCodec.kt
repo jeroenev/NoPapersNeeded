@@ -224,7 +224,6 @@ object EventDecoderRegistry {
                         val char = input[index]
                         if (!escaped && char == '"') break
                         escaped = !escaped && char == '\\'
-                        if (char != '\\') escaped = false
                         index++
                     }
                     require(index < input.length) { "Unterminated JSON string" }

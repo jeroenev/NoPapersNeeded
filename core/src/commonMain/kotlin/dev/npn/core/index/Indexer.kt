@@ -255,7 +255,8 @@ class Indexer(
         for (meta in all) {
             // A name the library cannot address is neither, whatever it looks like.
             if (!NpnPaths.isSafe(meta.relPath)) continue
-            if (!meta.isDirectory && !NpnPaths.isInternal(meta.relPath) && NpnPaths.isSyncConflict(meta.name)) {
+            // The walk leaves `.npn/` out, so nothing here is the app's own.
+            if (!meta.isDirectory && NpnPaths.isSyncConflict(meta.name)) {
                 conflictFiles.add(meta.relPath)
             } else if (NpnPaths.indexable(meta)) {
                 indexable.add(meta)

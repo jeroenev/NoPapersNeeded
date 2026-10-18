@@ -20,8 +20,7 @@ class OcrSidecarFiles(
         val prefix = "${NpnPaths.OCR_DIR}/"
         return fs.listAllUnder(NpnPaths.OCR_DIR).filter { meta ->
             // Only direct children of .npn/ocr are sidecars (no nested dirs).
-            !meta.isDirectory && meta.relPath.startsWith(prefix) && NpnPaths.isSafe(meta.relPath) &&
-                !meta.relPath.removePrefix(prefix).contains('/')
+            !meta.isDirectory && NpnPaths.isSafe(meta.relPath) && !meta.relPath.removePrefix(prefix).contains('/')
         }
     }
 
