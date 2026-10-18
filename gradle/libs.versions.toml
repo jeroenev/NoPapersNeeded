@@ -24,7 +24,7 @@ compose-navigation = "2.9.2"
 # Back handling (system gesture, Esc on desktop); the JetBrains build carries the desktop actual.
 compose-navigationevent = "1.0.1"
 # The Compose ruleset for detekt; each release targets one detekt version (0.6.7: 2.0.0-alpha.6).
-compose-rules = "0.6.7"
+compose-rules = "0.6.8"
 composeMultiplatform = "1.11.1"
 coroutines = "1.11.0"
 detekt = "2.0.0-alpha.6"
