@@ -3,8 +3,10 @@ package dev.npn.app.ui.detail
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -20,7 +22,8 @@ import dev.npn.core.settings.SettingsRepository
  * (given whether the bar is compact), and the editor: the page viewer, with [viewerModifier], and
  * the metadata tabs under one save model.
  *
- * [onClose] runs once the document left the library (trashed, or split into new documents).
+ * [onClose] runs once the document left the library from here (trashed, or split into new
+ * documents), as the viewmodel's [DetailUiState.left] reports.
  * [onReviewNext] and [hasNext] drive the save bar's "mark reviewed" button.
  *
  * The [vm] defaults to one for [docId] in the current [androidx.lifecycle.ViewModelStoreOwner],
@@ -53,13 +56,20 @@ internal fun DocumentView(
     SnackbarMessages(vm.messages, snackbar)
     val ui by vm.ui.collectAsStateWithLifecycle()
     val metadata by vm.metadata.collectAsStateWithLifecycle()
+    val currentOnClose by rememberUpdatedState(onClose)
+    LaunchedEffect(ui.left) {
+        if (ui.left) {
+            vm.closed()
+            currentOnClose()
+        }
+    }
 
     Box(modifier) {
         frame(
             metadata.document.loadState,
             { compact ->
                 metadata.document.item?.let { item ->
-                    DocActions(item = item, state = ui, actions = vm, onClose = onClose, compact = compact)
+                    DocActions(item = item, state = ui, actions = vm, compact = compact)
                 }
             },
             { editorModifier ->

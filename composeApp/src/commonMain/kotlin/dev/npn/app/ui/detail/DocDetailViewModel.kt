@@ -99,6 +99,8 @@ data class DetailUiState(
      * its length first. See [AiOcrOffer].
      */
     val aiOcr: AiOcrOffer = AiOcrOffer.Unavailable,
+    /** The document left the library from here (trashed, or split into new documents): the host closes. */
+    val left: Boolean = false,
 )
 
 sealed interface HistoryUiState {
@@ -433,12 +435,18 @@ class DocDetailViewModel private constructor(
         block: suspend () -> Unit,
     ) = launchReporting(failed) { metadataMutex.withLock { block() } }
 
-    /** On failure [onDone] is not invoked (the screen stays put) and the error is surfaced. */
-    override fun trash(onDone: () -> Unit) =
+    /** On success the document has [DetailUiState.left]; a failure keeps it and is reported. */
+    override fun trash() =
         launchReporting(Res.string.detail_trash_failed) {
             docLifecycle.trashDoc(docId)
-            onDone()
+            _ui.update { it.copy(left = true) }
         }
+
+    /**
+     * The host closed after [DetailUiState.left]. The library's side panel keeps this viewmodel
+     * for the document, so a later showing of it (restored from the trash) must not close at once.
+     */
+    fun closed() = _ui.update { it.copy(left = false) }
 
     /** Rename this document's file; a rename that cannot be carried out says why. */
     override fun rename(newFileName: String) =
@@ -491,17 +499,15 @@ class DocDetailViewModel private constructor(
 
     /**
      * Split into one document per [segments] entry. On success the original is trashed by the
-     * session and [onDone] runs, so the screen can leave; a failure is reported as a message.
+     * session and the document has [DetailUiState.left]; a failure is reported as a message.
      */
-    override fun split(
-        segments: List<IntRange>,
-        onDone: () -> Unit,
-    ) = launchReporting(Res.string.detail_split_failed) {
-        when (val outcome = busy({ copy(splitting = it) }) { maintenance.splitPdf(docId, segments) }) {
-            is SplitOutcome.Done -> onDone()
-            is SplitOutcome.Failed -> message(outcome.reason.text())
+    override fun split(segments: List<IntRange>) =
+        launchReporting(Res.string.detail_split_failed) {
+            when (val outcome = busy({ copy(splitting = it) }) { maintenance.splitPdf(docId, segments) }) {
+                is SplitOutcome.Done -> _ui.update { it.copy(left = true) }
+                is SplitOutcome.Failed -> message(outcome.reason.text())
+            }
         }
-    }
 
     /** Rewrite the library file with this document's metadata, and say how that went. */
     override fun bakeInPlace() =

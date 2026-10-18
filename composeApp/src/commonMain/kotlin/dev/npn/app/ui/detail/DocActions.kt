@@ -67,11 +67,8 @@ interface DocumentActions {
     /** Re-read the text with the AI (vision) engine; a long document is confirmed first. */
     fun ocrWithAi()
 
-    /** Split into one document per [segments] entry; [onDone] runs once the original is in the trash. */
-    fun split(
-        segments: List<IntRange>,
-        onDone: () -> Unit,
-    )
+    /** Split into one document per [segments] entry; the original goes to the trash. */
+    fun split(segments: List<IntRange>)
 
     /** Rewrite the library file with the document's metadata. */
     fun bakeInPlace()
@@ -82,8 +79,8 @@ interface DocumentActions {
     /** Hand a copy carrying the document's metadata to the platform's share sheet through [share]. */
     fun shareBakedCopy(share: suspend (ByteArray) -> Unit)
 
-    /** Move the document to the trash; [onDone] runs once it is there. */
-    fun trash(onDone: () -> Unit)
+    /** Move the document to the trash. */
+    fun trash()
 }
 
 /**
@@ -92,15 +89,15 @@ interface DocumentActions {
  * the library's side-panel preview header, so both surfaces offer the same operations. Owns the
  * confirmation dialogs; [state] says which actions are busy or offered.
  *
- * [onClose] runs after the document left the library (trashed, or split into new documents) so the
- * host can close itself. A [compact] bar keeps every action in the overflow menu.
+ * A document that left the library (trashed, or split into new documents) says so in
+ * [DetailUiState.left], which the host follows to close itself. A [compact] bar keeps every action
+ * in the overflow menu.
  */
 @Composable
 fun DocActions(
     item: DocListItem,
     state: DetailUiState,
     actions: DocumentActions,
-    onClose: () -> Unit,
     compact: Boolean,
 ) {
     var dialog by remember { mutableStateOf<DocActionDialog?>(null) }
@@ -130,10 +127,9 @@ fun DocActions(
         pageCount = state.pageCount.count,
         aiOcr = state.aiOcr,
         onRename = actions::rename,
-        onTrash = { actions.trash(onClose) },
+        onTrash = actions::trash,
         onAiOcr = actions::ocrWithAi,
-        // The original is trashed on success; the host should leave/close.
-        onSplit = { segments -> actions.split(segments, onClose) },
+        onSplit = actions::split,
         onBake = actions::bakeInPlace,
         onDismiss = { dialog = null },
     )

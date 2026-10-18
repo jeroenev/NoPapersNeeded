@@ -37,28 +37,26 @@ import kotlin.test.Test
  */
 class DocDetailActionsTest : MainDispatcherTest() {
     @Test
-    fun trashCallsSessionAndCallback() =
+    fun trashCallsSessionAndLeaves() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val model = docDetailVm(session = session)
-            var done = false
-            model.trash { done = true }
+            model.trash()
             advanceUntilIdle()
             session.docLifecycle.trashedDocs shouldContainExactly listOf("doc-1")
-            done shouldBe true
+            model.ui.value.left shouldBe true
         }
 
     @Test
-    fun trashFailureSkipsCallbackAndEmitsMessage() =
+    fun trashFailureStaysAndEmitsMessage() =
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { docLifecycle.failTrashDocIds = setOf("doc-1") }
             val model = docDetailVm(session = session)
             val messages = collecting(model.messages.map { it.text })
             advanceUntilIdle()
-            var done = false
-            model.trash { done = true }
+            model.trash()
             advanceUntilIdle()
-            done shouldBe false
+            model.ui.value.left shouldBe false
             messages shouldContainExactly listOf(failure(Res.string.detail_trash_failed, "trash failed for doc-1"))
         }
 
@@ -211,12 +209,11 @@ class DocDetailActionsTest : MainDispatcherTest() {
                 }
             val model = docDetailVm(session = session)
             val messages = collecting(model.messages.map { it.text })
-            var left = false
 
-            model.split(listOf(0..0, 1..1)) { left = true }
+            model.split(listOf(0..0, 1..1))
             advanceUntilIdle()
 
-            left shouldBe true
+            model.ui.value.left shouldBe true
             messages shouldBe emptyList()
             model.ui.value.splitting shouldBe false
             session.maintenance.splits shouldContainExactly listOf("doc-1" to listOf(0..0, 1..1))
@@ -231,12 +228,11 @@ class DocDetailActionsTest : MainDispatcherTest() {
                 }
             val model = docDetailVm(session = session)
             val messages = collecting(model.messages.map { it.text })
-            var left = false
 
-            model.split(listOf(0..0, 1..1)) { left = true }
+            model.split(listOf(0..0, 1..1))
             advanceUntilIdle()
 
-            left shouldBe false
+            model.ui.value.left shouldBe false
             messages shouldContainExactly listOf(uiText(Res.string.detail_split_failed_unreadable))
             model.ui.value.splitting shouldBe false
         }
