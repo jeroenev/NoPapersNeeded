@@ -271,95 +271,7 @@ abstract class LocalizationGuardTask : DefaultTask() {
             .toList()
     }
 
-    private fun stripKotlinComments(source: String): String {
-        val result = StringBuilder(source.length)
-        var index = 0
-        var blockDepth = 0
-        var lineComment = false
-        var stringDelimiter: String? = null
-        var escaped = false
-        while (index < source.length) {
-            val delimiter = stringDelimiter
-            val nextTwo = source.substring(index, minOf(index + 2, source.length))
-            val nextThree = source.substring(index, minOf(index + 3, source.length))
-            when {
-                lineComment -> {
-                    val char = source[index]
-                    result.append(if (char == '\n') char else ' ')
-                    if (char == '\n') lineComment = false
-                    index++
-                }
-
-                blockDepth > 0 -> {
-                    when (nextTwo) {
-                        "/*" -> {
-                            result.append("  ")
-                            blockDepth++
-                            index += 2
-                        }
-
-                        "*/" -> {
-                            result.append("  ")
-                            blockDepth--
-                            index += 2
-                        }
-
-                        else -> {
-                            val char = source[index]
-                            result.append(if (char == '\n') char else ' ')
-                            index++
-                        }
-                    }
-                }
-
-                delimiter != null -> {
-                    if (delimiter == "\"\"\"" && nextThree == delimiter) {
-                        result.append(delimiter)
-                        index += 3
-                        stringDelimiter = null
-                    } else {
-                        val char = source[index]
-                        result.append(char)
-                        index++
-                        if (delimiter != "\"\"\"") {
-                            if (!escaped && char.toString() == delimiter) stringDelimiter = null
-                            escaped = !escaped && char == '\\'
-                        }
-                    }
-                }
-
-                nextTwo == "//" -> {
-                    result.append("  ")
-                    lineComment = true
-                    index += 2
-                }
-
-                nextTwo == "/*" -> {
-                    result.append("  ")
-                    blockDepth = 1
-                    index += 2
-                }
-
-                nextThree == "\"\"\"" -> {
-                    result.append(nextThree)
-                    stringDelimiter = nextThree
-                    index += 3
-                }
-
-                source[index] == '"' || source[index] == '\'' -> {
-                    stringDelimiter = source[index].toString()
-                    escaped = false
-                    result.append(source[index])
-                    index++
-                }
-
-                else -> {
-                    result.append(source[index++])
-                }
-            }
-        }
-        return result.toString()
-    }
+    private fun stripKotlinComments(source: String): String = KotlinCommentStripper(source).strip()
 
     private data class ResourceKey(
         val type: String,
@@ -387,5 +299,122 @@ abstract class LocalizationGuardTask : DefaultTask() {
 
         /** The escapes Compose resources read; any other reaches the UI with its backslash. */
         private val COMPOSE_ESCAPE = Regex("\\\\(?:\\\\|n|t|u[a-fA-F0-9]{4})")
+    }
+}
+
+/**
+ * Blanks out a Kotlin source's comments, nested block comments included, and keeps every line break,
+ * so a match in what is left has the line number it had; string and character literals stay as they are.
+ */
+private class KotlinCommentStripper(
+    private val source: String,
+) {
+    private val result = StringBuilder(source.length)
+    private var index = 0
+    private var blockDepth = 0
+    private var lineComment = false
+    private var stringDelimiter: String? = null
+    private var escaped = false
+
+    fun strip(): String {
+        while (index < source.length) {
+            val delimiter = stringDelimiter
+            when {
+                lineComment -> lineCommentStep()
+                blockDepth > 0 -> blockCommentStep()
+                delimiter != null -> stringStep(delimiter)
+                else -> codeStep()
+            }
+        }
+        return result.toString()
+    }
+
+    private fun ahead(count: Int): String = source.substring(index, minOf(index + count, source.length))
+
+    /** Replace [length] characters, a comment's opening or closing, with spaces. */
+    private fun skipMarker(length: Int) {
+        result.append(" ".repeat(length))
+        index += length
+    }
+
+    /** Replace the next character with a space, unless it is a line break. */
+    private fun blank() {
+        val char = source[index++]
+        result.append(if (char == '\n') char else ' ')
+    }
+
+    private fun lineCommentStep() {
+        if (source[index] == '\n') lineComment = false
+        blank()
+    }
+
+    private fun blockCommentStep() {
+        when (ahead(2)) {
+            "/*" -> {
+                skipMarker(2)
+                blockDepth++
+            }
+
+            "*/" -> {
+                skipMarker(2)
+                blockDepth--
+            }
+
+            else -> {
+                blank()
+            }
+        }
+    }
+
+    private fun stringStep(delimiter: String) {
+        if (delimiter == RAW_STRING && ahead(3) == RAW_STRING) {
+            result.append(delimiter)
+            index += 3
+            stringDelimiter = null
+            return
+        }
+        val char = source[index++]
+        result.append(char)
+        if (delimiter != RAW_STRING) {
+            if (!escaped && char.toString() == delimiter) stringDelimiter = null
+            escaped = !escaped && char == '\\'
+        }
+    }
+
+    private fun codeStep() {
+        val char = source[index]
+        when {
+            ahead(2) == "//" -> {
+                skipMarker(2)
+                lineComment = true
+            }
+
+            ahead(2) == "/*" -> {
+                skipMarker(2)
+                blockDepth = 1
+            }
+
+            ahead(3) == RAW_STRING -> {
+                result.append(RAW_STRING)
+                stringDelimiter = RAW_STRING
+                index += 3
+            }
+
+            char == '"' || char == '\'' -> {
+                stringDelimiter = char.toString()
+                escaped = false
+                result.append(char)
+                index++
+            }
+
+            else -> {
+                result.append(char)
+                index++
+            }
+        }
+    }
+
+    private companion object {
+        const val RAW_STRING = "\"\"\""
     }
 }

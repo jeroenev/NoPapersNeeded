@@ -174,4 +174,28 @@ class LocalizationGuardTaskTest {
         assertContains(problems[0], "values-de contains extra string/greeting")
         assertContains(problems[1], "values-de is missing string/greeting")
     }
+
+    /**
+     * Commented-out UI holds no literal, nested block comments included; `//` inside a string or a
+     * quote in a character literal starts nothing; and a reported line keeps its number.
+     */
+    @Test
+    fun reportsHardcodedUiLiteralsOutsideCommentsOnly() {
+        consistentResources()
+        root.resolve("ui").mkdirs()
+        root.resolve("ui/Screen.kt").writeText(
+            """
+            // Text("line comment")
+            /* Text("block") /* nested */ Text("still the block") */
+            val quote = '"'
+            val url = "https://example.com" // Text("after a string")
+            fun Screen() { Text("Hardcoded") }
+            """.trimIndent(),
+        )
+
+        val problems = problems()
+
+        assertEquals(1, problems.size, problems.joinToString("\n"))
+        assertContains(problems.single(), "Screen.kt:5 has hardcoded Text literal \"Hardcoded\"")
+    }
 }
