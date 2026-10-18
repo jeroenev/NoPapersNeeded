@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -17,7 +16,6 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -34,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.CheckboxRow
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.FieldDefForm
 import dev.npn.app.ui.common.FieldDefFormState
@@ -291,20 +290,11 @@ private fun DeleteFieldDialog(
                     ),
                 )
                 if (usage > 0) {
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 48.dp)
-                            .toggleable(
-                                value = clearValues,
-                                role = Role.Checkbox,
-                                onValueChange = { clearValues = it },
-                            ),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Checkbox(checked = clearValues, onCheckedChange = null)
-                        Text(stringResource(Res.string.common_settings_field_clear_values))
-                    }
+                    CheckboxRow(
+                        label = stringResource(Res.string.common_settings_field_clear_values),
+                        checked = clearValues,
+                        onCheckedChange = { clearValues = it },
+                    )
                 }
             }
         },

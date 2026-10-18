@@ -4,9 +4,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
@@ -44,6 +47,44 @@ fun SwitchRow(
         }
         // Null callback: the row is the toggle, so the switch must not be a second target.
         Switch(checked = checked, enabled = enabled, onCheckedChange = null)
+    }
+}
+
+/**
+ * A labelled checkbox. Like [SwitchRow], the whole row is the toggle and the box only shows the
+ * state, so the label is a target too and a screen reader announces one checkbox with its name.
+ */
+@Composable
+fun CheckboxRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    CheckboxRow(checked = checked, onCheckedChange = onCheckedChange, modifier = modifier) {
+        Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+    }
+}
+
+/** [CheckboxRow] with [content] richer than a label beside the box, the row still the one target. */
+@Composable
+fun CheckboxRow(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable RowScope.() -> Unit,
+) {
+    Row(
+        modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .toggleable(value = checked, role = Role.Checkbox, onValueChange = onCheckedChange),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        // Null callback: the row is the toggle, so the box must not be a second target.
+        Checkbox(checked = checked, onCheckedChange = null)
+        content()
     }
 }
 

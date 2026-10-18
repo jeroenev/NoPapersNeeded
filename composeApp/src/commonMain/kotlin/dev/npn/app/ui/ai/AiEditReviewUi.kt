@@ -15,14 +15,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.AddCircleOutline
 import androidx.compose.material.icons.outlined.RemoveCircleOutline
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -42,11 +40,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.CheckboxRow
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.DocThumbnail
 import dev.npn.app.ui.common.ExpanderRow
@@ -289,19 +287,12 @@ private fun ReviewFieldRow(
     field: ReviewField,
     onToggle: () -> Unit,
 ) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .toggleable(value = field.selected, role = Role.Checkbox, onValueChange = { onToggle() }),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // Null callback: the row is the target, so the checkbox must not be a second one.
-        Checkbox(checked = field.selected, onCheckedChange = null)
+    CheckboxRow(checked = field.selected, onCheckedChange = { onToggle() }) {
         SuggestedFieldValue(
             label = field.label,
             value = field.value,
             replaces = field.current,
-            modifier = Modifier.weight(1f).padding(start = 4.dp),
+            modifier = Modifier.weight(1f),
         )
     }
 }

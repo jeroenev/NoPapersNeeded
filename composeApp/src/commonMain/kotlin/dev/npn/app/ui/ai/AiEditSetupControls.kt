@@ -3,26 +3,18 @@ package dev.npn.app.ui.ai
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.toggleable
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.CheckboxRow
 import dev.npn.app.ui.common.Dropdown
 import dev.npn.app.ui.common.SettingsSection
 import dev.npn.core.ai.AiFieldMode
-import dev.npn.core.app.aiedit.EditScope
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_field_mode_all
 import no_papers_needed.composeapp.generated.resources.ai_edit_field_mode_unfilled
@@ -71,20 +63,7 @@ internal fun FieldOption(
     onModeChange: (AiFieldMode) -> Unit,
 ) {
     Column(Modifier.fillMaxWidth()) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .toggleable(
-                    value = option.enabled,
-                    role = Role.Checkbox,
-                    onValueChange = onEnabledChange,
-                ),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Checkbox(checked = option.enabled, onCheckedChange = null)
-            Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-        }
+        CheckboxRow(label = label, checked = option.enabled, onCheckedChange = onEnabledChange)
         if (option.enabled) FieldModePicker(option.mode, onModeChange)
     }
 }
