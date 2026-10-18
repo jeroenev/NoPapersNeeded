@@ -17,24 +17,17 @@ import java.io.ByteArrayOutputStream
  * Like the desktop impl, this only moves raw XMP bytes and doc-info fields; XMP generation and
  * parsing stay in commonMain, sidestepping pdfbox-android's xmpbox gaps.
  *
- * pdfbox-android needs its resource loader before some operations (font/resource loading). The
- * constructor sets it up through the guard the PDF engine shares ([PdfBoxAndroidInit]). A failure
- * here never blocks baking, which does not touch fonts; the next user of the library tries again.
+ * pdfbox-android needs its resource loader before some operations (font/resource loading). Each
+ * call sets it up first, through the guard the PDF engine shares ([PdfBoxAndroidInit]), and fails
+ * as the call when that fails; the next call tries again.
  */
 class PdfBoxAndroidXmpIO(
-    context: Context,
+    private val context: Context,
     private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : PdfXmpIO {
-    init {
-        try {
-            PdfBoxAndroidInit.ensure(context)
-        } catch (_: Throwable) {
-            // Non-fatal: see the class comment.
-        }
-    }
-
     override suspend fun readXmp(pdfBytes: ByteArray): String? =
         withContext(io) {
+            PdfBoxAndroidInit.ensure(context)
             PDDocument.load(pdfBytes).use { doc ->
                 val meta = doc.documentCatalog?.metadata ?: return@withContext null
                 meta.exportXMPMetadata().use { input ->
@@ -51,6 +44,7 @@ class PdfBoxAndroidXmpIO(
         title: String?,
     ): ByteArray =
         withContext(io) {
+            PdfBoxAndroidInit.ensure(context)
             // PDDocument.load throws IOException on invalid input, satisfying the "must throw" contract.
             PDDocument.load(pdfBytes).use { doc ->
                 val xmpBytes = xmp.encodeToByteArray()
