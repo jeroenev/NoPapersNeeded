@@ -13,6 +13,7 @@ import androidx.compose.ui.unit.dp
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
+import kotlinx.serialization.Serializable
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.detail_field_ai_enabled
 import no_papers_needed.composeapp.generated.resources.detail_field_hint
@@ -27,8 +28,9 @@ import org.jetbrains.compose.resources.stringResource
 /**
  * What the user has typed into a field-definition form. [keyEdited] records that the key was set
  * by hand, after which it stops following the label. [perDocument] is not on the form; it is
- * carried so that editing a definition keeps it.
+ * carried so that editing a definition keeps it. Serializable, so an open form survives recreation.
  */
+@Serializable
 data class FieldDefFormState(
     val label: String = "",
     val key: String = "",

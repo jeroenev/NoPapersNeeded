@@ -92,6 +92,22 @@ class ScreenRestorationTest : EnglishLocaleTest() {
         }
 
     @Test
+    fun anOpenFieldEditKeepsWhatWasTyped() =
+        onUiThread {
+            restored(
+                content = { FieldsPane(listOf(field("invoiceNo", "Invoice number"))) },
+                before = { scene ->
+                    scene.tap { it.text() == "Invoice number" }
+                    scene.type("Invoice no.")
+                },
+                after = { scene ->
+                    scene.has { it.text() == "Edit field" } shouldBe true
+                    scene.editableField()?.editableText() shouldBe "Invoice no."
+                },
+            )
+        }
+
+    @Test
     fun aFieldDialogClosesWhenItsFieldIsGone() =
         onUiThread {
             val fields = mutableStateOf(listOf(field("invoiceNo", "Invoice number")))

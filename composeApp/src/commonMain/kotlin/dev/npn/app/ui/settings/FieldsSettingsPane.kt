@@ -23,7 +23,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -239,11 +238,13 @@ private fun FieldDefDialog(
     onConfirm: (FieldDef) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var form by remember { mutableStateOf(def?.let(FieldDefFormState::of) ?: FieldDefFormState()) }
+    var form by rememberSaveable(stateSaver = jsonSaver(FieldDefFormState.serializer())) {
+        mutableStateOf(def?.let(FieldDefFormState::of) ?: FieldDefFormState())
+    }
     // A type change on a field that still carries values is held back until the user confirms:
     // existing values are not converted, so this is the one edit in the pane that can leave
-    // off-type data behind.
-    var pendingTypeChange by remember { mutableStateOf<FieldDef?>(null) }
+    // off-type data behind. The form cannot change under the confirmation, so it confirms [result].
+    var confirmingTypeChange by rememberSaveable { mutableStateOf(false) }
     val result = form.toDef(def?.position ?: FieldDef.PLACE_LAST)
     val canSave = form.canSave(existing, own = def?.key)
     val changesTypeOfUsedField = def != null && usage > 0 && result != null && result.type != def.type
@@ -260,7 +261,7 @@ private fun FieldDefDialog(
                 },
             ),
         onConfirm = {
-            result?.let { next -> if (changesTypeOfUsedField) pendingTypeChange = next else onConfirm(next) }
+            result?.let { next -> if (changesTypeOfUsedField) confirmingTypeChange = true else onConfirm(next) }
         },
         onDismiss = onDismiss,
         confirmLabel = stringResource(Res.string.common_save),
@@ -284,8 +285,7 @@ private fun FieldDefDialog(
         }
     }
 
-    val pending = pendingTypeChange
-    if (pending != null && def != null) {
+    if (confirmingTypeChange && result != null && def != null) {
         ConfirmDialog(
             title = stringResource(Res.string.common_settings_field_type_change_title),
             message =
@@ -296,10 +296,10 @@ private fun FieldDefDialog(
                     usage,
                 ),
             onConfirm = {
-                pendingTypeChange = null
-                onConfirm(pending)
+                confirmingTypeChange = false
+                onConfirm(result)
             },
-            onDismiss = { pendingTypeChange = null },
+            onDismiss = { confirmingTypeChange = false },
         )
     }
 }
@@ -311,7 +311,7 @@ private fun DeleteFieldDialog(
     onConfirm: (clearValues: Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var clearValues by remember { mutableStateOf(false) }
+    var clearValues by rememberSaveable { mutableStateOf(false) }
     ConfirmDialog(
         title = stringResource(Res.string.common_settings_field_delete_title),
         onConfirm = { onConfirm(clearValues) },

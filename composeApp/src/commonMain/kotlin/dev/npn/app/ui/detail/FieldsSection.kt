@@ -211,13 +211,13 @@ internal fun NewFieldDialog(
     onConfirm: (FieldDef, String?) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var form by remember {
+    var form by rememberSaveable(stateSaver = jsonSaver(FieldDefFormState.serializer())) {
         mutableStateOf(FieldDefFormState(label = seed.label, key = seed.key, keyEdited = seed.key.isNotEmpty()))
     }
-    var value by remember { mutableStateOf(seed.value.orEmpty()) }
+    var value by rememberSaveable { mutableStateOf(seed.value.orEmpty()) }
     // The editor's verdict on what it shows: it reads a number the way the user writes it, so only
     // it can tell that `12.34` is none where a comma is the decimal point. [value] is then as typed.
-    var refused by remember { mutableStateOf(false) }
+    var refused by rememberSaveable { mutableStateOf(false) }
     val locale = rememberFieldLocale()
     val draftDef = form.toDef()
     val valueValid = !refused && (value.isBlank() || FieldValues.canonicalize(form.type, value) is FieldParse.Ok)
