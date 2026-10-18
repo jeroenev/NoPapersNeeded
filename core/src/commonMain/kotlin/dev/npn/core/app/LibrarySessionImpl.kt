@@ -18,7 +18,6 @@ import dev.npn.core.util.runLogged
 import dev.npn.core.util.warn
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -29,7 +28,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 
 /**
  * Everything wired for one opened library folder. Constructed by [openSession] ([openLibrarySession]:
@@ -61,7 +59,6 @@ class LibrarySessionImpl internal constructor(
 
     /** Completed once the initial rescan [start] launched has ended, however it ended. */
     private val initialRescanEnded = CompletableDeferred<Unit>()
-    private val aiFacade = graph.ai
     private val importService = graph.imports
     private val fs get() = deps.fs
     override val log: NpnLog get() = deps.log
@@ -92,8 +89,8 @@ class LibrarySessionImpl internal constructor(
     override val meta: MetadataWriter = graph.writer
     override val tagAdmin: TagAdmin = graph.writer
     override val docLifecycle: DocLifecycle = graph.lifecycle
-    override val aiChat: AiChat = aiFacade
-    override val aiSuggest: AiSuggest = aiFacade
+    override val aiChat: AiChat = graph.ai
+    override val aiSuggest: AiSuggest = graph.ai
 
     private val scanReports = MutableStateFlow<ScanReport?>(null)
     override val lastScanReport: Flow<ScanReport?> = scanReports.asStateFlow()
@@ -312,20 +309,11 @@ class LibrarySessionImpl internal constructor(
     }
 
     /**
-     * Stop everything the session runs, for good. Not cancellable: a caller cancelled while it
-     * waits still has the whole close done, or the session would be left half closed, its
-     * coordinator and endpoint client open, under a host that goes on to close the databases.
+     * Stop everything the session runs and release what it holds open (its coordinator, its
+     * endpoint client), for good: see [SessionLifetime.close], which is not cancellable either. The
+     * databases stay the host's, to close once this returns.
      */
-    override suspend fun close() {
-        withContext(NonCancellable) {
-            // Background loops, drains and every owned operation, all in one: see SessionLifetime.
-            lifetime.close()
-            // Waits out a coordinator write a caller started outside the lifetime, then refuses more.
-            coordinator.close()
-            aiFacade.close()
-            // DB ownership stays with the environment; it may close the DB after this shutdown barrier.
-        }
-    }
+    override suspend fun close() = lifetime.close()
 
     private fun map(result: ImportResult): ImportOutcome =
         when (result) {

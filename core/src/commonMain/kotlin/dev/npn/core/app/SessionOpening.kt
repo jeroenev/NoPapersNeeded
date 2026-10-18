@@ -18,8 +18,6 @@ import dev.npn.core.journal.SnapshotCompactor
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.warn
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.withContext
 
 // How a session opens: [openLibrarySession], then the steps it takes, in the order it takes them.
 // [LibrarySessionImpl.openSession] is the way in from outside core.
@@ -41,23 +39,20 @@ internal suspend fun openLibrarySession(
     writeUndelete: Boolean = JournalOp.DocUndelete.WRITTEN,
 ): LibrarySessionImpl {
     val lifetime = SessionLifetime(deps.scope)
-    var coordinator: JournalCoordinator? = null
     var opened = false
     try {
         // Before anything reads the device id: an index from before device.db holds it.
         moveDeviceState(deps)
         val indexer = Indexer(deps.fs, deps.db, deps.clock, deps.log)
-        val journal = createCoordinator(deps, indexer, writeUndelete).also { coordinator = it }
-        return wire(deps, lifetime, indexer, journal).also { opened = true }
+        val coordinator = createCoordinator(deps, indexer, writeUndelete)
+        // Waits out a write a caller started outside the lifetime, then refuses every later one.
+        lifetime.releaseOnClose(coordinator::close)
+        return wire(deps, lifetime, indexer, coordinator).also { opened = true }
     } finally {
-        // Nothing a failed open started may outlive it (a cancelled open included): stop
-        // whatever runs on the lifetime, while the failure goes on to the caller.
-        if (!opened) {
-            withContext(NonCancellable) {
-                lifetime.close()
-                coordinator?.close()
-            }
-        }
+        // Nothing a failed open started may outlive it (a cancelled open included): stop whatever
+        // runs on the lifetime and release what it holds, while the failure goes on to the caller.
+        @Suppress("SuspendFunInFinallySection") // SessionLifetime.close runs in NonCancellable itself.
+        if (!opened) lifetime.close()
     }
 }
 

@@ -62,7 +62,7 @@ internal class SessionGraph(
             ownWrite = { lifetime.owned(it) },
             clock = deps.clock,
             configProvider = deps.settings.aiConfig,
-        )
+        ).also { lifetime.releaseOnClose(it::close) }
 
     /** What this device may spend on the endpoint unattended, for enrichment and OCR alike. */
     private val policy = UnattendedAiPolicy(deps.settings.aiConfig)

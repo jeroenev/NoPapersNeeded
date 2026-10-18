@@ -1,5 +1,6 @@
 package dev.npn.core.app
 
+import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.TimeoutCancellationException
@@ -94,6 +95,87 @@ class SessionLifetimeTest {
             assertTrue(outcome is CancellationException, "was $outcome")
             assertTrue(workStopped)
             lifetime.checkOpen()
+        }
+
+    /** What the session holds open beside its work is released once that work has stopped, in order. */
+    @Test
+    fun closeReleasesInOrderOnceTheOwnedWorkHasStopped() =
+        runTest {
+            val lifetime = SessionLifetime(backgroundScope)
+            val started = CompletableDeferred<Unit>()
+            val events = mutableListOf<String>()
+            lifetime.releaseOnClose { events += "coordinator" }
+            lifetime.releaseOnClose { events += "endpoint client" }
+            val work =
+                launch {
+                    runCatchingCancellable {
+                        lifetime.owned {
+                            try {
+                                started.complete(Unit)
+                                awaitCancellation()
+                            } finally {
+                                events += "work stopped"
+                            }
+                        }
+                    }
+                }
+            started.await()
+
+            lifetime.close()
+            work.join()
+
+            assertEquals(listOf("work stopped", "coordinator", "endpoint client"), events)
+        }
+
+    @Test
+    fun aSecondCloseReleasesNothingAgain() =
+        runTest {
+            val lifetime = SessionLifetime(backgroundScope)
+            var released = 0
+            lifetime.releaseOnClose { released++ }
+
+            lifetime.close()
+            lifetime.close()
+
+            assertEquals(1, released)
+        }
+
+    /** One release that fails leaves the others to run, and the close then reports it. */
+    @Test
+    fun aReleaseThatFailsStillLetsTheNextOneRun() =
+        runTest {
+            val lifetime = SessionLifetime(backgroundScope)
+            var released = false
+            lifetime.releaseOnClose { error("coordinator would not close") }
+            lifetime.releaseOnClose { released = true }
+
+            val failure = assertFailsWith<IllegalStateException> { lifetime.close() }
+
+            assertEquals("coordinator would not close", failure.message)
+            assertTrue(released)
+        }
+
+    /** A caller cancelled while the close waits on a release still has the whole close done. */
+    @Test
+    fun aCloseWhoseCallerIsCancelledStillRunsEveryRelease() =
+        runTest {
+            val lifetime = SessionLifetime(backgroundScope)
+            val releasing = CompletableDeferred<Unit>()
+            val proceed = CompletableDeferred<Unit>()
+            var released = false
+            lifetime.releaseOnClose {
+                releasing.complete(Unit)
+                proceed.await()
+            }
+            lifetime.releaseOnClose { released = true }
+            val closing = launch { lifetime.close() }
+            releasing.await()
+
+            closing.cancel()
+            proceed.complete(Unit)
+            closing.join()
+
+            assertTrue(released)
         }
 
     private companion object {
