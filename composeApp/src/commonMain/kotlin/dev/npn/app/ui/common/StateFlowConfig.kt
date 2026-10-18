@@ -10,4 +10,5 @@ import kotlinx.coroutines.flow.SharingStarted
 const val STATE_FLOW_STOP_TIMEOUT_MILLIS = 5_000L
 
 /** Shared [SharingStarted] policy for viewmodel StateFlows. */
+@Suppress("ForbiddenMethodCall") // The one definition the rule points every other flow to.
 val WhileSubscribedTimeout: SharingStarted = SharingStarted.WhileSubscribed(STATE_FLOW_STOP_TIMEOUT_MILLIS)

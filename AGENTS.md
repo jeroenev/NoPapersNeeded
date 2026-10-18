@@ -189,7 +189,10 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   for common tasks before navigating the codebase.
 - Commit messages: `[main] Imperative summary` (branch name in brackets).
 - Shared Flow subscriptions use `WhileSubscribedTimeout` (`WhileSubscribed(5_000)`, in
-  `composeApp`'s `ui/common/StateFlowConfig.kt`) instead of inline timeouts.
+  `composeApp`'s `ui/common/StateFlowConfig.kt`) instead of inline timeouts; typed detekt forbids
+  `SharingStarted.WhileSubscribed` elsewhere.
+- Wall-clock time comes from an injected `EpochClock` (`SystemEpochClock` in production); outside
+  tests, typed detekt forbids `System.currentTimeMillis`, `Instant.now` and `Clock.System.now`.
 - Use `material-icons-extended` for semantically correct icons (already a dependency).
 - Around suspend code use `runCatchingCancellable` (`core.util`), never `runCatching` or a bare
   `catch (Throwable)`: cancellation must propagate, not be recorded as a failure. Typed detekt's
@@ -213,4 +216,5 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   with an error enum (mapped to a string resource in `composeApp`, never English from `core`),
   throws only for bugs and misuse.
 - JSON goes through `NpnJson.Persisted` (what the app writes and reads back) or `NpnJson.Lenient`
-  (model output, third-party responses), never a new `Json {}`. Only `JournalCodec` keeps its own.
+  (model output, third-party responses), never a new `Json {}`. Only `JournalCodec` keeps its own;
+  typed detekt forbids the `Json {}` builder everywhere else.

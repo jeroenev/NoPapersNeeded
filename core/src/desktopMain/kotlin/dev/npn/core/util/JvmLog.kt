@@ -1,5 +1,7 @@
 package dev.npn.core.util
 
+import dev.npn.core.journal.EpochClock
+import dev.npn.core.journal.SystemEpochClock
 import java.io.IOException
 import java.io.PrintStream
 import java.nio.file.Files
@@ -20,6 +22,7 @@ class JvmLog(
     private val file: Path? = null,
     private val maxBytes: Long = DEFAULT_MAX_BYTES,
     private val stderr: PrintStream = System.err,
+    private val clock: EpochClock = SystemEpochClock,
 ) : NpnLog {
     private val lock = Any()
 
@@ -30,7 +33,7 @@ class JvmLog(
     ) {
         val entry =
             buildString {
-                append(Instant.now())
+                append(Instant.ofEpochMilli(clock.nowMillis()))
                     .append(' ')
                     .append(level)
                     .append(' ')

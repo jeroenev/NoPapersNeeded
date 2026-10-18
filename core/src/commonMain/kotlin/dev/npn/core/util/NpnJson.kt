@@ -9,6 +9,7 @@ import kotlinx.serialization.json.Json
  * The journal is the exception: [dev.npn.core.journal.JournalCodec] keeps a configuration of its
  * own, because every replica must decode an event exactly alike, whatever happens to these.
  */
+@Suppress("ForbiddenMethodCall") // The shared configurations the rule points every other file to.
 object NpnJson {
     /**
      * For what the app writes and reads back later: device-local state, drafts, queued requests,

@@ -22,6 +22,7 @@ object JournalCodec {
      * Pinned here rather than taken from [dev.npn.core.util.NpnJson]: this is the synced wire
      * format, and every replica must encode and decode an event exactly alike.
      */
+    @Suppress("ForbiddenMethodCall") // The journal's own, as the comment above says.
     val json =
         Json {
             ignoreUnknownKeys = true

@@ -11,6 +11,7 @@ import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.ExternalStorageTreePaths
 import dev.npn.core.fs.LocalLibraryFolders
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.settings.LibraryLocations
 import io.github.vinceglb.filekit.AndroidFile
 import io.github.vinceglb.filekit.FileKit
@@ -141,7 +142,7 @@ actual suspend fun sharePdfBytes(
     val context = FileKit.context.applicationContext
     val file =
         withContext(io) {
-            writeShareCopy(File(context.cacheDir, "share"), fileName, bytes, System.currentTimeMillis())
+            writeShareCopy(File(context.cacheDir, "share"), fileName, bytes, SystemEpochClock.nowMillis())
         }
     val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
     val share =
