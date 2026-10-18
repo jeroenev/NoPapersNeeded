@@ -36,7 +36,7 @@ import java.io.File
  * directory and deleted when the handle closes). pdfbox-android's resource loader is set up once,
  * through [PdfBoxAndroidInit].
  */
-class PdfBoxAndroidEngine(
+internal class PdfBoxAndroidEngine(
     private val context: Context,
     private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : PdfEngine {

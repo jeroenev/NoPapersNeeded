@@ -13,7 +13,7 @@ import java.io.ByteArrayOutputStream
  * Only moves raw XMP bytes and doc-info fields; all XMP generation/parsing lives in commonMain
  * ([XmpSerializer]/[XmpParser]), so xmpbox is not used here.
  */
-class PdfBoxXmpIO(
+internal class PdfBoxXmpIO(
     private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : PdfXmpIO {
     override suspend fun readXmp(pdfBytes: ByteArray): String? =

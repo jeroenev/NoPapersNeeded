@@ -20,7 +20,7 @@ import java.io.IOException
  * periodic WorkManager sweep. Listing uses [DocumentFile] — one binder call per child is fine
  * for a scanner-output folder that holds a handful of files.
  */
-class SafWatchedFolder(
+internal class SafWatchedFolder(
     context: Context,
     private val treeUri: Uri,
     private val io: CoroutineDispatcher = Dispatchers.IO,

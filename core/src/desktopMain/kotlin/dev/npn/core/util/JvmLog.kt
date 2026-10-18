@@ -16,7 +16,7 @@ import java.time.Instant
  * Writing the file is best effort. A full disk or an unwritable directory must not turn a log call
  * into a second failure; stderr still gets the entry.
  */
-class JvmLog(
+internal class JvmLog(
     private val file: Path? = null,
     private val maxBytes: Long = DEFAULT_MAX_BYTES,
     private val stderr: PrintStream = System.err,

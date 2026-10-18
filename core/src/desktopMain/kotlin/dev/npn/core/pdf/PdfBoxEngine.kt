@@ -26,7 +26,7 @@ import javax.imageio.ImageIO
  * `Loader.loadPDF(bytes)` (not `PDDocument.load`), and `PDFRenderer.renderImage` returns a
  * `BufferedImage`.
  */
-class PdfBoxEngine(
+internal class PdfBoxEngine(
     private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : PdfEngine {
     override suspend fun open(bytes: ByteArray): PdfDocumentHandle =

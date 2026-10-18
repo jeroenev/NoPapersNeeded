@@ -11,7 +11,7 @@ import java.nio.file.StandardCopyOption
  * [ThumbnailStore] writing PNGs into a plain directory: an app-local cache path (desktop's
  * `AppDirs.thumbsDir`, under `context.cacheDir` on Android), never inside the synced library folder.
  */
-class DirThumbnailStore(
+internal class DirThumbnailStore(
     private val dir: String,
     private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : ThumbnailStore {

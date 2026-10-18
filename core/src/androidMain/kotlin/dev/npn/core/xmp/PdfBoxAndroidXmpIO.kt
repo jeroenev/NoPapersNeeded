@@ -21,7 +21,7 @@ import java.io.ByteArrayOutputStream
  * call sets it up first, through the guard the PDF engine shares ([PdfBoxAndroidInit]), and fails
  * as the call when that fails; the next call tries again.
  */
-class PdfBoxAndroidXmpIO(
+internal class PdfBoxAndroidXmpIO(
     private val context: Context,
     private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : PdfXmpIO {

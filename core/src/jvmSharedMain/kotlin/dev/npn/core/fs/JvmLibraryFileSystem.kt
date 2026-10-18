@@ -56,7 +56,7 @@ internal object HardLinkLinker : NoReplaceLinker {
  *
  * [externalIo] opens the platform's external files for import (see [ExternalIo]).
  */
-class JvmLibraryFileSystem internal constructor(
+internal class JvmLibraryFileSystem(
     private val root: Path,
     private val externalIo: ExternalIo,
     private val linker: NoReplaceLinker,

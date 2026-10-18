@@ -19,7 +19,7 @@ import kotlin.coroutines.resumeWithException
  * Every failure throws rather than answering `""`: an empty string is a page with no text on it,
  * which the pipeline would publish to a write-once sidecar and never retry.
  */
-class MlKitOcrEngine : OcrEngine {
+internal class MlKitOcrEngine : OcrEngine {
     override val name: String = OcrEngineId.MLKIT.column
 
     override suspend fun available(): Boolean = true

@@ -9,7 +9,7 @@ import java.io.InputStream
  * share-sheet and document-picker `content://` uris exactly as the SAF library does. `file://` uris
  * are served by the resolver too.
  */
-class ContentResolverExternalIo(
+internal class ContentResolverExternalIo(
     context: Context,
 ) : ExternalIo {
     private val resolver = context.applicationContext.contentResolver

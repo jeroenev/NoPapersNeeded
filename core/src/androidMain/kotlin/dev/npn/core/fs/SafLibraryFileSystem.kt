@@ -33,7 +33,7 @@ import kotlin.uuid.Uuid
  * existence and guards against SAF's silent rename dedup (e.g. "file (1).pdf"), for the
  * directories it creates as for the file.
  */
-class SafLibraryFileSystem(
+internal class SafLibraryFileSystem(
     private val context: Context,
     private val treeUri: Uri,
     private val io: CoroutineDispatcher = Dispatchers.IO,
