@@ -267,7 +267,6 @@ internal class SessionGraph(
             worker =
                 QueueDrainer(lifetime.scope, "OCR queue", log, ready = rescanned, step = ocrPipeline::processNext),
             clock = deps.clock,
-            staleFiles = staleFiles,
         )
 
     /** Ends a bake in place, handing the document's text on through [ocrPipeline]. */

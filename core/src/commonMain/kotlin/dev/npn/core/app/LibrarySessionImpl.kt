@@ -182,7 +182,7 @@ class LibrarySessionImpl private constructor(
         started = true
         val scope = lifetime.scope
 
-        ocrFacade.watchQueue(scope)
+        ocrFacade.watchQueue()
         // A file the OCR drain read no longer matches its hash: rescan once it has settled.
         scope.launch { staleFiles.consumeEach { scheduleSettleRescan(WriteSettle.QUIET_MILLIS) } }
 

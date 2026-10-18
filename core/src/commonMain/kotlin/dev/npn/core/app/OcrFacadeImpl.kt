@@ -10,8 +10,6 @@ import dev.npn.core.ocr.OcrPipeline
 import dev.npn.core.ocr.OcrState
 import dev.npn.core.util.EpochClock
 import dev.npn.core.work.QueueDrainer
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -38,12 +36,6 @@ internal class OcrFacadeImpl(
     /** Drains the queue through [OcrPipeline.processNext]. */
     val worker: QueueDrainer,
     private val clock: EpochClock,
-    /**
-     * A rescan the pipeline asks for once a file it read no longer hashes to its document (replaced,
-     * or still being written). Conflated, since one rescan sorts out every such file; the session
-     * consumes it once started.
-     */
-    val staleFiles: ReceiveChannel<Unit>,
 ) : OcrFacade {
     /** The document the drain is working on right now; see [OcrPipeline.inFlight]. */
     val inFlight: StateFlow<String?> get() = pipeline.inFlight
@@ -110,9 +102,9 @@ internal class OcrFacadeImpl(
         engine: String?,
     ) = lifetime.owned { pin(docId, engine) }
 
-    /** Kick the drain on every change to the queue while it owes anything, on [scope]. */
-    fun watchQueue(scope: CoroutineScope) {
-        scope.launch {
+    /** Kick the drain on every change to the queue while it owes anything, for the session's lifetime. */
+    fun watchQueue() {
+        lifetime.scope.launch {
             queue.countActive().collect { active ->
                 if (active > 0) worker.kick()
             }
