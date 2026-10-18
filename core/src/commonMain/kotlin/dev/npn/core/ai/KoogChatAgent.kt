@@ -93,9 +93,10 @@ internal class KoogChatAgent(
                                 finished = true
                             } else {
                                 calls.forEach { call ->
-                                    send(AiChatEvent.ToolCallStarted(call.name, call.argsJson))
+                                    val args = toolArgs(call.argsJson)
+                                    send(AiChatEvent.ToolCallStarted(call.name, args))
                                     val result = dispatch(call)
-                                    send(AiChatEvent.ToolCallFinished(call.name, call.argsJson, result))
+                                    send(AiChatEvent.ToolCallFinished(call.name, args, result))
                                     appendPrompt { toolResult(call.name, result, call.id) }
                                 }
                             }

@@ -286,7 +286,7 @@ class AiChatSessionTest {
             facade.chatTranscriptFor("tool-history") shouldContainExactly
                 listOf(
                     AiChatHistoryItem.UserTurn("find tax"),
-                    AiChatHistoryItem.ToolUse("search_documents", "{\"query\":\"tax\"}", "found one"),
+                    AiChatHistoryItem.ToolUse("search_documents", mapOf("query" to "tax"), "found one"),
                 )
         }
 

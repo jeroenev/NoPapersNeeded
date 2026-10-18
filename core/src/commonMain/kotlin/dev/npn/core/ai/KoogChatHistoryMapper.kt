@@ -27,7 +27,7 @@ internal object KoogChatHistoryMapper {
                     }
                     message.parts.filterIsInstance<MessagePart.Tool.Call>().forEach { call ->
                         toolIndexes[call.id ?: "tool-${items.size}"] = items.size
-                        items += AiChatHistoryItem.ToolUse(call.tool, call.args, result = "")
+                        items += AiChatHistoryItem.ToolUse(call.tool, toolArgs(call.args), result = "")
                     }
                 }
 

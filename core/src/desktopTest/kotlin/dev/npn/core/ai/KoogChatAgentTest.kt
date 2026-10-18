@@ -102,9 +102,9 @@ class KoogChatAgentTest {
                 )
             val events = agent(executor).run("find tax", "session-1").collectList()
 
-            events[0] shouldBe AiChatEvent.ToolCallStarted("search_documents", "{\"query\":\"tax\"}")
+            events[0] shouldBe AiChatEvent.ToolCallStarted("search_documents", mapOf("query" to "tax"))
             events[1] shouldBe
-                AiChatEvent.ToolCallFinished("search_documents", "{\"query\":\"tax\"}", NO_TAX_MATCH)
+                AiChatEvent.ToolCallFinished("search_documents", mapOf("query" to "tax"), NO_TAX_MATCH)
             events[2] shouldBe AiChatEvent.TextDelta("Found it")
             events.last().shouldBeInstanceOf<AiChatEvent.Done>().fullText shouldBe "Found it"
         }
@@ -172,9 +172,9 @@ class KoogChatAgentTest {
 
             events.filterIsInstance<AiChatEvent.ToolCallStarted>() shouldContainExactly
                 listOf(
-                    AiChatEvent.ToolCallStarted("list_tags", "{}"),
-                    AiChatEvent.ToolCallStarted("list_tags", "{}"),
-                    AiChatEvent.ToolCallStarted("list_tags", "{}"),
+                    AiChatEvent.ToolCallStarted("list_tags", emptyMap()),
+                    AiChatEvent.ToolCallStarted("list_tags", emptyMap()),
+                    AiChatEvent.ToolCallStarted("list_tags", emptyMap()),
                 )
             events.last().shouldBeInstanceOf<AiChatEvent.Done>()
         }

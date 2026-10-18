@@ -3,22 +3,6 @@ package dev.npn.app.ui.ai
 import dev.npn.core.ai.AiChatEvent
 import dev.npn.core.ai.AiChatHistoryItem
 import dev.npn.core.ai.extractDocRefs
-import dev.npn.core.util.NpnJson
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonObject
-
-/**
- * A tool call's text arguments by name, blank ones left out. Model output, so anything that is not
- * a JSON object (or a value that is not text) reads as no argument rather than failing.
- */
-internal fun toolArgs(argsJson: String): Map<String, String> =
-    runCatching { NpnJson.Lenient.parseToJsonElement(argsJson).jsonObject }
-        .getOrNull()
-        .orEmpty()
-        .mapValues { (_, value) -> (value as? JsonPrimitive)?.contentOrNull }
-        .filterValues { !it.isNullOrBlank() }
-        .mapValues { (_, value) -> value.orEmpty() }
 
 /** One rendered item in the chat transcript: a user turn, a tool use, or an assistant turn. */
 sealed interface TranscriptItem {
@@ -35,9 +19,9 @@ sealed interface TranscriptItem {
     ) : TranscriptItem
 
     /**
-     * One tool invocation. [args] are its arguments' non-blank text values by name, read once from
-     * the call's JSON (the UI picks the one its label names); [result] is empty while [running] and
-     * filled once the tool finished.
+     * One tool invocation. [args] are its arguments' non-blank text values by name, as core read
+     * them from the call (the UI picks the one its label names); [result] is empty while [running]
+     * and filled once the tool finished.
      */
     data class ToolUse(
         override val id: Long,
@@ -83,7 +67,7 @@ data class ChatTranscript(
     operator fun plus(event: AiChatEvent): ChatTranscript =
         when (event) {
             is AiChatEvent.TextDelta -> appendDelta(event.text)
-            is AiChatEvent.ToolCallStarted -> startTool(event.name, event.argsJson)
+            is AiChatEvent.ToolCallStarted -> startTool(event.name, event.args)
             is AiChatEvent.ToolCallFinished -> finishTool(event.name, event.result)
             is AiChatEvent.Done -> completeAssistant(event.fullText)
         }
@@ -124,13 +108,13 @@ data class ChatTranscript(
 
     private fun startTool(
         name: String,
-        argsJson: String,
+        args: Map<String, String>,
     ): ChatTranscript =
         // A tool call ends the current narration turn: finalise the trailing streaming assistant
         // turn (extracting its own docRefs) so pre-tool text is committed once and never merged
         // with post-tool text or overwritten by the run's full answer later.
         appended(finaliseTrailingAssistant(items)) { id ->
-            TranscriptItem.ToolUse(id, name, toolArgs(argsJson), result = "", running = true)
+            TranscriptItem.ToolUse(id, name, args, result = "", running = true)
         }
 
     private fun finishTool(
@@ -205,7 +189,7 @@ data class ChatTranscript(
                             TranscriptItem.ToolUse(
                                 id = id,
                                 name = item.name,
-                                args = toolArgs(item.argsJson),
+                                args = item.args,
                                 result = item.result,
                                 running = false,
                             )

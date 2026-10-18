@@ -38,8 +38,8 @@ class ChatTranscriptTest {
     fun toolEventsCreateAndCompleteToolItems() {
         val transcript =
             fold(
-                AiChatEvent.ToolCallStarted("search_documents", "{\"query\":\"tax\"}"),
-                AiChatEvent.ToolCallFinished("search_documents", "{\"query\":\"tax\"}", "hit1"),
+                AiChatEvent.ToolCallStarted("search_documents", mapOf("query" to "tax")),
+                AiChatEvent.ToolCallFinished("search_documents", mapOf("query" to "tax"), "hit1"),
                 AiChatEvent.TextDelta("Found it."),
                 AiChatEvent.Done("Found it."),
             )
@@ -60,7 +60,7 @@ class ChatTranscriptTest {
             ChatTranscript.fromPersistedHistory(
                 listOf(
                     AiChatHistoryItem.UserTurn("find tax"),
-                    AiChatHistoryItem.ToolUse("search_documents", "{}", "found one"),
+                    AiChatHistoryItem.ToolUse("search_documents", emptyMap(), "found one"),
                 ),
             )
 
@@ -80,8 +80,8 @@ class ChatTranscriptTest {
                 .plusUser("find tax")
                 .plus(AiChatEvent.TextDelta("Let me "))
                 .plus(AiChatEvent.TextDelta("search"))
-                .plus(AiChatEvent.ToolCallStarted("search_documents", "{}"))
-                .plus(AiChatEvent.ToolCallFinished("search_documents", "{}", "hit"))
+                .plus(AiChatEvent.ToolCallStarted("search_documents", emptyMap()))
+                .plus(AiChatEvent.ToolCallFinished("search_documents", emptyMap(), "hit"))
                 .plus(AiChatEvent.TextDelta("Found it"))
                 .plus(AiChatEvent.Done("Let me searchFound it"))
 
@@ -96,8 +96,8 @@ class ChatTranscriptTest {
         val transcript =
             fold(
                 AiChatEvent.TextDelta("Let me search"),
-                AiChatEvent.ToolCallStarted("search_documents", "{\"query\":\"tax\"}"),
-                AiChatEvent.ToolCallFinished("search_documents", "{\"query\":\"tax\"}", "hit"),
+                AiChatEvent.ToolCallStarted("search_documents", mapOf("query" to "tax")),
+                AiChatEvent.ToolCallFinished("search_documents", mapOf("query" to "tax"), "hit"),
                 AiChatEvent.TextDelta("Found it."),
                 AiChatEvent.Done("Let me searchFound it."),
             )
@@ -118,10 +118,10 @@ class ChatTranscriptTest {
     fun multipleToolsInterleaveInOrder() {
         val transcript =
             fold(
-                AiChatEvent.ToolCallStarted("list_tags", "{}"),
-                AiChatEvent.ToolCallFinished("list_tags", "{}", "tags"),
-                AiChatEvent.ToolCallStarted("search_documents", "{}"),
-                AiChatEvent.ToolCallFinished("search_documents", "{}", "hits"),
+                AiChatEvent.ToolCallStarted("list_tags", emptyMap()),
+                AiChatEvent.ToolCallFinished("list_tags", emptyMap(), "tags"),
+                AiChatEvent.ToolCallStarted("search_documents", emptyMap()),
+                AiChatEvent.ToolCallFinished("search_documents", emptyMap(), "hits"),
                 AiChatEvent.TextDelta("done"),
                 AiChatEvent.Done("done"),
             )
@@ -142,9 +142,9 @@ class ChatTranscriptTest {
     fun toolFinishMatchesLastRunningToolOfThatName() {
         val transcript =
             fold(
-                AiChatEvent.ToolCallStarted("search_documents", "{\"q\":\"a\"}"),
-                AiChatEvent.ToolCallStarted("search_documents", "{\"q\":\"b\"}"),
-                AiChatEvent.ToolCallFinished("search_documents", "{}", "second"),
+                AiChatEvent.ToolCallStarted("search_documents", mapOf("q" to "a")),
+                AiChatEvent.ToolCallStarted("search_documents", mapOf("q" to "b")),
+                AiChatEvent.ToolCallFinished("search_documents", emptyMap(), "second"),
             )
 
         transcript.items shouldHaveSize 2
@@ -160,9 +160,9 @@ class ChatTranscriptTest {
     fun toolFinishWithNoMatchingRunningToolIsANoOp() {
         val transcript =
             fold(
-                AiChatEvent.ToolCallStarted("list_tags", "{}"),
-                AiChatEvent.ToolCallFinished("list_tags", "{}", "done"),
-                AiChatEvent.ToolCallFinished("list_tags", "{}", "again"),
+                AiChatEvent.ToolCallStarted("list_tags", emptyMap()),
+                AiChatEvent.ToolCallFinished("list_tags", emptyMap(), "done"),
+                AiChatEvent.ToolCallFinished("list_tags", emptyMap(), "again"),
             )
 
         transcript.items shouldHaveSize 1
@@ -196,8 +196,8 @@ class ChatTranscriptTest {
         // The trailing item is a ToolUse, not an AssistantTurn: Done falls back to fullText.
         val transcript =
             fold(
-                AiChatEvent.ToolCallStarted("list_tags", "{}"),
-                AiChatEvent.ToolCallFinished("list_tags", "{}", "tags"),
+                AiChatEvent.ToolCallStarted("list_tags", emptyMap()),
+                AiChatEvent.ToolCallFinished("list_tags", emptyMap(), "tags"),
                 AiChatEvent.Done("the answer"),
             )
 
@@ -215,8 +215,8 @@ class ChatTranscriptTest {
         val transcript =
             fold(
                 AiChatEvent.TextDelta("See [doc:$hexA]"),
-                AiChatEvent.ToolCallStarted("search_documents", "{}"),
-                AiChatEvent.ToolCallFinished("search_documents", "{}", "hit"),
+                AiChatEvent.ToolCallStarted("search_documents", emptyMap()),
+                AiChatEvent.ToolCallFinished("search_documents", emptyMap(), "hit"),
                 AiChatEvent.TextDelta("Also [doc:$hexB]"),
                 AiChatEvent.Done("See [doc:$hexA]Also [doc:$hexB]"),
             )
@@ -256,8 +256,8 @@ class ChatTranscriptTest {
     fun finalizedIsANoOpWhenTrailingItemIsNotAStreamingAssistantTurn() {
         val transcript =
             fold(
-                AiChatEvent.ToolCallStarted("list_tags", "{}"),
-                AiChatEvent.ToolCallFinished("list_tags", "{}", "tags"),
+                AiChatEvent.ToolCallStarted("list_tags", emptyMap()),
+                AiChatEvent.ToolCallFinished("list_tags", emptyMap(), "tags"),
             )
 
         transcript.finalized() shouldBe transcript
@@ -273,7 +273,7 @@ class ChatTranscriptTest {
 
     @Test
     fun hasVisibleContentTrueForAnyToolRow() {
-        val transcript = ChatTranscript.EMPTY + AiChatEvent.ToolCallStarted("list_tags", "{}")
+        val transcript = ChatTranscript.EMPTY + AiChatEvent.ToolCallStarted("list_tags", emptyMap())
 
         transcript.hasVisibleContent.shouldBeTrue()
     }

@@ -77,7 +77,11 @@ class AiChatScreenTest : EnglishLocaleTest() {
                             chat.id to
                                 listOf(
                                     AiChatHistoryItem.UserTurn("my invoices"),
-                                    AiChatHistoryItem.ToolUse("search_documents", "{query: invoices}", "found one"),
+                                    AiChatHistoryItem.ToolUse(
+                                        "search_documents",
+                                        mapOf("query" to "invoices"),
+                                        "found one",
+                                    ),
                                 ),
                         )
                 }
@@ -120,7 +124,7 @@ class AiChatScreenTest : EnglishLocaleTest() {
     private fun toolChat(query: String) =
         listOf(
             AiChatHistoryItem.UserTurn("about $query"),
-            AiChatHistoryItem.ToolUse("search_documents", "{\"query\":\"$query\"}", "found one"),
+            AiChatHistoryItem.ToolUse("search_documents", mapOf("query" to query), "found one"),
         )
 
     private fun scene(session: FakeLibrarySession): ImageComposeScene =

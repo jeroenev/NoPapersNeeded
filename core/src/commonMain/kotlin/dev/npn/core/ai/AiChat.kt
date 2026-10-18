@@ -1,7 +1,11 @@
 package dev.npn.core.ai
 
+import dev.npn.core.util.NpnJson
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
 
 /** One rendered item restored from a persisted assistant conversation. */
 sealed interface AiChatHistoryItem {
@@ -13,9 +17,13 @@ sealed interface AiChatHistoryItem {
         val text: String,
     ) : AiChatHistoryItem
 
+    /**
+     * A tool the assistant called: [name], its non-blank text arguments by name ([toolArgs], read
+     * from the arguments the stored conversation keeps as the model sent them), and its [result].
+     */
     data class ToolUse(
         val name: String,
-        val argsJson: String,
+        val args: Map<String, String>,
         val result: String,
     ) : AiChatHistoryItem
 }
@@ -55,16 +63,16 @@ sealed interface AiChatEvent {
         val text: String,
     ) : AiChatEvent
 
-    /** The agent decided to call [name] with the raw arguments JSON [argsJson]. */
+    /** The agent decided to call [name] with [args], its non-blank text arguments by name ([toolArgs]). */
     data class ToolCallStarted(
         val name: String,
-        val argsJson: String,
+        val args: Map<String, String>,
     ) : AiChatEvent
 
     /** The tool [name] finished; [result] is its (already bounded) text output. */
     data class ToolCallFinished(
         val name: String,
-        val argsJson: String,
+        val args: Map<String, String>,
         val result: String,
     ) : AiChatEvent
 
@@ -122,6 +130,19 @@ interface AiChat {
 }
 
 private val docRefRegex = Regex("\\[doc:([0-9a-fA-F]{64})]")
+
+/**
+ * A tool call's text arguments by name, blank ones left out, from the arguments JSON the model sent.
+ * Model output, so anything that is not a JSON object (or a value that is not text) reads as no
+ * argument rather than failing.
+ */
+internal fun toolArgs(argsJson: String): Map<String, String> =
+    runCatching { NpnJson.Lenient.parseToJsonElement(argsJson).jsonObject }
+        .getOrNull()
+        .orEmpty()
+        .mapValues { (_, value) -> (value as? JsonPrimitive)?.contentOrNull }
+        .filterValues { !it.isNullOrBlank() }
+        .mapValues { (_, value) -> value.orEmpty() }
 
 /** Full docIds an assistant answer cites as `[doc:<hash>]`, in first-occurrence order. */
 fun extractDocRefs(text: String): List<String> =
