@@ -6,6 +6,7 @@ import dev.npn.core.ai.FakeSseGateway
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.ocr.FakeOcrEngine
 import dev.npn.core.ocr.OcrEngineId
+import dev.npn.core.ocr.OcrEngineRef
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldNotBeEmpty
@@ -42,7 +43,7 @@ class AiOcrPinSyncTest {
                 local.calls shouldBe 1
 
                 // Device A pins the document to the AI engine; B ingests that event.
-                rig.session.ocr.setOcrEngine(docId, OcrEngineId.AI.column)
+                rig.session.ocr.setOcrEngine(docId, OcrEngineRef.Known(OcrEngineId.AI))
                 second.rescan()
                 second.work.drainOcr()
 

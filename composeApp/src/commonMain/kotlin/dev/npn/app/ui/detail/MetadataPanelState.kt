@@ -7,6 +7,7 @@ import dev.npn.core.app.effectiveReviewed
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldParse
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.ocr.OcrEngineRef
 
 /**
  * Everything [MetadataPanel] renders, in four groups assembled by [DocDetailViewModel.metadata].
@@ -99,7 +100,7 @@ interface DocumentWrites : AiSuggestionActions {
     )
 
     /** Pin the searchable OCR version, or null for automatic best-engine selection. */
-    fun setOcrEngine(engine: String?)
+    fun setOcrEngine(engine: OcrEngineRef?)
 
     /** Show the history (its tab opened), or read it again when [refresh] is set. */
     fun loadHistory(refresh: Boolean = false)

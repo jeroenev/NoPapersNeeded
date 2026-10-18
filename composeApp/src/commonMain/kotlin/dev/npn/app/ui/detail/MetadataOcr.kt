@@ -50,8 +50,11 @@ import dev.npn.app.ui.common.HighlightSegment
 import dev.npn.app.ui.common.HighlightText
 import dev.npn.app.ui.common.RadioRow
 import dev.npn.app.ui.common.TooltipIconButton
+import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.formatEpochDate
 import dev.npn.app.ui.common.parseQueryHighlight
+import dev.npn.app.ui.common.resolve
+import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.OcrVersion
 import dev.npn.core.ocr.OcrEngineId
 import dev.npn.core.ocr.OcrEngineRef
@@ -86,6 +89,7 @@ import no_papers_needed.composeapp.generated.resources.detail_text_failed
 import no_papers_needed.composeapp.generated.resources.detail_text_not_extracted
 import no_papers_needed.composeapp.generated.resources.detail_text_queued
 import no_papers_needed.composeapp.generated.resources.detail_text_unavailable
+import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 
 /**
@@ -307,7 +311,7 @@ internal fun OcrEngineRow(
     indexedEngine: OcrEngineRef?,
     pinned: Boolean,
     versions: List<OcrVersion>,
-    onSetEngine: (String?) -> Unit,
+    onSetEngine: (OcrEngineRef?) -> Unit,
 ) {
     var showPicker by remember { mutableStateOf(false) }
     val hasVersions = versions.isNotEmpty()
@@ -318,7 +322,7 @@ internal fun OcrEngineRow(
     ) {
         HelpText(stringResource(Res.string.detail_engine), modifier = Modifier.padding(end = 4.dp))
         Text(
-            indexedEngine?.let { engineLabel(it) } ?: stringResource(Res.string.detail_not_available),
+            indexedEngine?.let { engineLabel(it).resolve() } ?: stringResource(Res.string.detail_not_available),
             style = MaterialTheme.typography.bodySmall,
         )
         if (pinned) {
@@ -340,7 +344,7 @@ internal fun OcrEngineRow(
     if (showPicker) {
         OcrEnginePickerDialog(
             versions = versions,
-            pinnedEngine = if (pinned) indexedEngine?.label else null,
+            pinnedEngine = if (pinned) indexedEngine else null,
             onConfirm = {
                 onSetEngine(it)
                 showPicker = false
@@ -353,8 +357,8 @@ internal fun OcrEngineRow(
 @Composable
 private fun OcrEnginePickerDialog(
     versions: List<OcrVersion>,
-    pinnedEngine: String?,
-    onConfirm: (String?) -> Unit,
+    pinnedEngine: OcrEngineRef?,
+    onConfirm: (OcrEngineRef?) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val engines = remember(versions) { versions.distinctBy { it.engine } }
@@ -372,7 +376,7 @@ private fun OcrEnginePickerDialog(
                 )
                 engines.forEach { version ->
                     OcrEngineOption(
-                        label = engineLabel(OcrEngineRef.of(version.engine)),
+                        label = engineLabel(version.engine).resolve(),
                         secondary =
                             stringResource(
                                 Res.string.detail_engine_source,
@@ -437,25 +441,22 @@ internal fun ocrLabel(state: OcrState): String =
     )
 
 /**
- * Label for any stored engine reference. An engine this build has no [OcrEngineId] for (a legacy
- * "mixed" sidecar, one written by a newer build) shows its raw label rather than being hidden —
- * the document really is indexed with it, so claiming otherwise would be a lie.
+ * Label for any stored engine reference, the one the panel, its picker and the history show. An
+ * engine this build has no [OcrEngineId] for (a legacy "mixed" sidecar, one written by a newer
+ * build) shows its raw label rather than being hidden — the document really is indexed with it,
+ * so claiming otherwise would be a lie.
  */
-@Composable
-private fun engineLabel(engine: OcrEngineRef): String =
+internal fun engineLabel(engine: OcrEngineRef): UiText =
     when (engine) {
-        is OcrEngineRef.Known -> knownEngineLabel(engine.id)
-        is OcrEngineRef.Unknown -> engine.label
+        is OcrEngineRef.Known -> uiText(knownEngineLabel(engine.id))
+        is OcrEngineRef.Unknown -> UiText.Raw(engine.label)
     }
 
 /** Human label for a known engine; exhaustive, so a new [OcrEngineId] cannot ship unlabelled. */
-@Composable
-private fun knownEngineLabel(engine: OcrEngineId): String =
-    stringResource(
-        when (engine) {
-            OcrEngineId.TESSERACT -> Res.string.detail_engine_tesseract
-            OcrEngineId.MLKIT -> Res.string.detail_engine_mlkit
-            OcrEngineId.AI -> Res.string.detail_engine_ai
-            OcrEngineId.EMBEDDED -> Res.string.detail_engine_embedded
-        },
-    )
+private fun knownEngineLabel(engine: OcrEngineId): StringResource =
+    when (engine) {
+        OcrEngineId.TESSERACT -> Res.string.detail_engine_tesseract
+        OcrEngineId.MLKIT -> Res.string.detail_engine_mlkit
+        OcrEngineId.AI -> Res.string.detail_engine_ai
+        OcrEngineId.EMBEDDED -> Res.string.detail_engine_embedded
+    }

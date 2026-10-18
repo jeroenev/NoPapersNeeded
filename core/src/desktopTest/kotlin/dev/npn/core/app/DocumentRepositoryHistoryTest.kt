@@ -11,6 +11,8 @@ import dev.npn.core.journal.JournalCodec
 import dev.npn.core.journal.JournalEvent
 import dev.npn.core.journal.JournalOp
 import dev.npn.core.model.SystemProperty
+import dev.npn.core.ocr.OcrEngineId
+import dev.npn.core.ocr.OcrEngineRef
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
@@ -112,7 +114,10 @@ class DocumentRepositoryHistoryTest {
             JournalOp.PropSet(SystemProperty.REVIEWED, "false") to HistoryEntry.Reviewed(false),
             JournalOp.PropSet(SystemProperty.REVIEWED, null) to HistoryEntry.Reviewed(null),
             JournalOp.PropSet(SystemProperty.REVIEWED, "maybe") to HistoryEntry.ReviewUnreadable("maybe"),
-            JournalOp.PropSet(SystemProperty.OCR_ENGINE, "tesseract") to HistoryEntry.OcrEnginePinned("tesseract"),
+            JournalOp.PropSet(SystemProperty.OCR_ENGINE, "tesseract") to
+                HistoryEntry.OcrEnginePinned(OcrEngineRef.Known(OcrEngineId.TESSERACT)),
+            JournalOp.PropSet(SystemProperty.OCR_ENGINE, "future") to
+                HistoryEntry.OcrEnginePinned(OcrEngineRef.Unknown("future")),
             JournalOp.PropSet(SystemProperty.OCR_ENGINE, null) to HistoryEntry.OcrEnginePinned(null),
             JournalOp.PropSet(SystemProperty.STORAGE_PATH, "a/b.pdf") to HistoryEntry.StoragePathSet("a/b.pdf"),
             JournalOp.DocTrash("orig.pdf") to HistoryEntry.Trashed("orig.pdf"),

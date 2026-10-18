@@ -1,13 +1,18 @@
 package dev.npn.app.ui.detail
 
+import dev.npn.app.english
 import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.DocumentHistoryRecord
 import dev.npn.core.app.HistoryEntry
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.ocr.OcrEngineId
+import dev.npn.core.ocr.OcrEngineRef
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.detail_engine_tesseract
 import no_papers_needed.composeapp.generated.resources.detail_history_document_deleted
 import no_papers_needed.composeapp.generated.resources.detail_history_document_relinked
 import no_papers_needed.composeapp.generated.resources.detail_history_document_restored
@@ -47,7 +52,7 @@ class HistoryMapperTest {
                 HistoryEntry.FieldSet(FieldKeys.DOC_TYPE, "Invoice"),
                 HistoryEntry.FieldSet(FieldKeys.DOC_DATE, "2026-07-20"),
                 HistoryEntry.Reviewed(true),
-                HistoryEntry.OcrEnginePinned("tesseract"),
+                HistoryEntry.OcrEnginePinned(OcrEngineRef.Known(OcrEngineId.TESSERACT)),
                 HistoryEntry.FieldSet("amount", "42"),
                 HistoryEntry.FieldSet("amount", null),
                 HistoryEntry.Trashed("orig.pdf"),
@@ -71,7 +76,7 @@ class HistoryMapperTest {
                 uiText(Res.string.detail_history_field_set, "Document type", "Invoice"),
                 uiText(Res.string.detail_history_field_set, "Document date", "2026-07-20"),
                 uiText(Res.string.detail_history_marked_reviewed),
-                uiText(Res.string.detail_history_ocr_engine_pinned, "tesseract"),
+                uiText(Res.string.detail_history_ocr_engine_pinned, uiText(Res.string.detail_engine_tesseract)),
                 uiText(Res.string.detail_history_field_set, "amount", "42"),
                 uiText(Res.string.detail_history_field_removed, "amount"),
                 uiText(Res.string.detail_history_document_trashed, "orig.pdf"),
@@ -100,6 +105,22 @@ class HistoryMapperTest {
                 HistoryEventKind.UNKNOWN,
             )
     }
+
+    /** A pin names its engine as the OCR panel does; one this build does not know, by its label. */
+    @Test
+    fun anEnginePinNamesTheEngineAsThePanelDoes() =
+        runTest {
+            val items =
+                HistoryMapper.toHistoryItems(
+                    listOf(
+                        record(HistoryEntry.OcrEnginePinned(OcrEngineRef.Known(OcrEngineId.EMBEDDED))),
+                        record(HistoryEntry.OcrEnginePinned(OcrEngineRef.Unknown("future"))),
+                    ),
+                )
+
+            items.map { it.description.english() } shouldContainExactly
+                listOf("Pinned OCR engine to Embedded text", "Pinned OCR engine to future")
+        }
 
     @Test
     fun preservesEventOrder() {

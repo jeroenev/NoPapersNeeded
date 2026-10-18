@@ -5,6 +5,7 @@ import dev.npn.core.db.OcrQueueDao
 import dev.npn.core.db.QueueState
 import dev.npn.core.db.queueState
 import dev.npn.core.ocr.OcrEngineId
+import dev.npn.core.ocr.OcrEngineRef
 import dev.npn.core.ocr.OcrEngineSelector
 import dev.npn.core.ocr.OcrPipeline
 import dev.npn.core.ocr.OcrState
@@ -81,7 +82,7 @@ internal class OcrFacadeImpl(
         val doc = documentDao.getByDocId(docId)
         return pipeline.listVersions(docId).map {
             OcrVersion(
-                engine = it.engine,
+                engine = OcrEngineRef.of(it.engine),
                 deviceId = it.deviceId,
                 lang = it.lang,
                 createdAt = it.createdAt,
@@ -93,8 +94,8 @@ internal class OcrFacadeImpl(
 
     override suspend fun setOcrEngine(
         docId: String,
-        engine: String?,
-    ) = lifetime.owned { pin(docId, engine) }
+        engine: OcrEngineRef?,
+    ) = lifetime.owned { pin(docId, engine?.label) }
 
     /**
      * Kick the drain on every change to the queue while it owes anything, until cancelled; throws

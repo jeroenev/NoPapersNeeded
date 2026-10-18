@@ -5,6 +5,8 @@ import dev.npn.core.index.requireByDocId
 import dev.npn.core.index.requireDoc
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.SystemProperty
+import dev.npn.core.ocr.OcrEngineId
+import dev.npn.core.ocr.OcrEngineRef
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldContain
@@ -223,7 +225,7 @@ class MetadataWriterTest {
             rig.session.rescan()
             val id = rig.docId("a.pdf")
 
-            rig.session.ocr.setOcrEngine(id, "tesseract")
+            rig.session.ocr.setOcrEngine(id, OcrEngineRef.Known(OcrEngineId.TESSERACT))
 
             // Committed as a prop-set event carrying the "ocrEngine" property key.
             val events = rig.db.metadataProjectionDao().allEvents()

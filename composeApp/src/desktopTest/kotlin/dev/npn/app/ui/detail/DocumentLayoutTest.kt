@@ -24,6 +24,7 @@ import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.ocr.OcrEngineRef
 import dev.npn.core.testing.FakeMetadataWriter
 import dev.npn.core.testing.doc
 import dev.npn.core.testing.listItem
@@ -199,7 +200,7 @@ internal object NoWrites : DocumentWrites {
         value: String?,
     ) = Unit
 
-    override fun setOcrEngine(engine: String?) = Unit
+    override fun setOcrEngine(engine: OcrEngineRef?) = Unit
 
     override fun suggestAiTags() = Unit
 

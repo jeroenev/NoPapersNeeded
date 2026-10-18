@@ -6,6 +6,7 @@ import dev.npn.core.ai.FakeSseGateway
 import dev.npn.core.db.AiEnrichedEntity
 import dev.npn.core.ocr.FakeOcrEngine
 import dev.npn.core.ocr.OcrEngineId
+import dev.npn.core.ocr.OcrEngineRef
 import dev.npn.core.ocr.OcrSidecar
 import dev.npn.core.ocr.OcrSidecarCodec
 import dev.npn.core.ocr.OcrSidecarFiles
@@ -49,7 +50,7 @@ class BakedTextTest {
                 // What "OCR with AI" left on this device: the model's transcription, and the pin to it.
                 publishSidecar(rig, original, OcrEngineId.AI, TRANSCRIPTION)
                 rig.session.rescan()
-                rig.session.ocr.setOcrEngine(original, OcrEngineId.AI.column)
+                rig.session.ocr.setOcrEngine(original, OcrEngineRef.Known(OcrEngineId.AI))
                 rig.deviceDb.aiEnrichQueueDao().markEnriched(AiEnrichedEntity(original, ENRICHED_AT))
 
                 rig.session.content.bakeInPlace(original) shouldBe BakeOutcome.Baked
@@ -93,7 +94,7 @@ class BakedTextTest {
 
             rig.session.ocr
                 .ocrVersions(edited)
-                .map { it.engine } shouldNotContain OcrEngineId.AI.column
+                .map { it.engine } shouldNotContain OcrEngineRef.Known(OcrEngineId.AI)
             rig.db.ftsDao().contentForDoc(edited) shouldNotBe TRANSCRIPTION
         }
 

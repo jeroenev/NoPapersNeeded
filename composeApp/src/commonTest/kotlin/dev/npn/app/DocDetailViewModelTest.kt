@@ -19,6 +19,7 @@ import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.ocr.OcrEngineId
 import dev.npn.core.ocr.OcrEngineRef
 import dev.npn.core.ocr.OcrState
 import dev.npn.core.testing.doc
@@ -195,12 +196,12 @@ class DocDetailViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val model = liveDocDetailVm(session = session)
-            model.setOcrEngine("tesseract")
+            model.setOcrEngine(TESSERACT_REF)
             model.setOcrEngine(null)
             advanceUntilIdle()
             session.ocr.ocrEngineSets shouldContainExactly
                 listOf(
-                    "doc-1" to "tesseract",
+                    "doc-1" to TESSERACT_REF,
                     "doc-1" to null,
                 )
         }
@@ -212,7 +213,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             val model = liveDocDetailVm(session = session)
             val messages = collecting(model.messages.map { it.text })
             advanceUntilIdle()
-            model.setOcrEngine("mlkit")
+            model.setOcrEngine(OcrEngineRef.Known(OcrEngineId.MLKIT))
             advanceUntilIdle()
             session.ocr.ocrEngineSets shouldBe emptyList()
             messages shouldContainExactly listOf(failure(Res.string.detail_ocr_engine_failed, "reindex failed"))
@@ -223,7 +224,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session =
                 FakeLibrarySession().apply {
-                    ocr.ocrVersionsList = listOf(OcrVersion("tesseract", "dev-a", "eng", 0L, active = true))
+                    ocr.ocrVersionsList = listOf(OcrVersion(TESSERACT_REF, "dev-a", "eng", 0L, active = true))
                     documents.singleDoc.value = listItem("doc-1")
                 }
             val model = liveDocDetailVm(session = session)
@@ -243,7 +244,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             model.metadata.value.document.ocrVersions shouldBe emptyList()
 
             // A newly-completed OCR run (state -> done) should trigger a reload with the fresh version.
-            val fresh = listOf(OcrVersion("tesseract", "dev-a", "eng", 0L, active = true))
+            val fresh = listOf(OcrVersion(TESSERACT_REF, "dev-a", "eng", 0L, active = true))
             session.ocr.ocrVersionsList = fresh
             session.documents.singleDoc.value = listItem(doc("doc-1", ocrState = OcrState.DONE))
             advanceUntilIdle()
@@ -291,7 +292,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             val model = liveDocDetailVm(session = session)
             advanceUntilIdle()
 
-            val versions = listOf(OcrVersion("tesseract", "laptop", "eng", 0L, active = true))
+            val versions = listOf(OcrVersion(TESSERACT_REF, "laptop", "eng", 0L, active = true))
             session.ocr.ocrVersionsList = versions
             session.content.extractedTextValue = "Text read on the laptop"
             session.documents.singleDoc.value = readBy("laptop.tesseract")
@@ -613,3 +614,5 @@ class DocDetailViewModelTest : MainDispatcherTest() {
                 mapOf("finance" to "#ff0000", "draft" to null)
         }
 }
+
+private val TESSERACT_REF = OcrEngineRef.Known(OcrEngineId.TESSERACT)

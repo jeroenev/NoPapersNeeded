@@ -476,7 +476,7 @@ class DocDetailViewModel private constructor(
         }
 
     /** Pin [engine] as the searchable OCR version (null = automatic best-engine selection). */
-    override fun setOcrEngine(engine: String?) =
+    override fun setOcrEngine(engine: OcrEngineRef?) =
         launchReporting(Res.string.detail_ocr_engine_failed) { ocr.setOcrEngine(docId, engine) }
 
     /**

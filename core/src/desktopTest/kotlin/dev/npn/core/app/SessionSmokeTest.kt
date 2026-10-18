@@ -8,6 +8,8 @@ import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.ocr.OcrEngineId
+import dev.npn.core.ocr.OcrEngineRef
 import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.rules.AutoMatchRule
 import dev.npn.core.util.NpnLog
@@ -273,7 +275,7 @@ class SessionSmokeTest {
                 listOf(
                     { rig.session.start() },
                     { rig.session.ocr.reOcr(id) },
-                    { rig.session.ocr.setOcrEngine(id, "embedded") },
+                    { rig.session.ocr.setOcrEngine(id, OcrEngineRef.Known(OcrEngineId.EMBEDDED)) },
                     { rig.session.ocr.ocrWithAi(id) },
                     { rig.session.reviewConfig.setReviewMode(ReviewMode.UNTAGGED_ONLY) },
                     { rig.session.aiEditQueue.discardEditRun("run") },

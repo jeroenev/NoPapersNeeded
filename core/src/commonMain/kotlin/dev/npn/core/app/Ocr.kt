@@ -1,5 +1,6 @@
 package dev.npn.core.app
 
+import dev.npn.core.ocr.OcrEngineRef
 import kotlinx.coroutines.flow.Flow
 
 /** Per-document OCR management: re-runs, stored versions, and the engine pin. */
@@ -49,11 +50,12 @@ interface OcrFacade {
     /**
      * Pin (or clear, when [engine] is null) the OCR engine used for search on [docId], then
      * immediately re-select and re-index the matching stored version on this device. The pin
-     * itself syncs via the journal; other devices re-select on ingesting the event.
+     * itself syncs via the journal; other devices re-select on ingesting the event. An engine this
+     * build does not know ([OcrEngineRef.Unknown], one a stored version names) pins by its label.
      */
     suspend fun setOcrEngine(
         docId: String,
-        engine: String?,
+        engine: OcrEngineRef?,
     )
 }
 
@@ -111,11 +113,11 @@ enum class AiOcrOutcome {
 }
 
 /**
- * One stored OCR version of a document (an OCR sidecar). [active] marks the version whose
- * text is currently indexed for search on this device.
+ * One stored OCR version of a document (an OCR sidecar), by the [engine] that wrote it. [active]
+ * marks the version whose text is currently indexed for search on this device.
  */
 data class OcrVersion(
-    val engine: String,
+    val engine: OcrEngineRef,
     val deviceId: String,
     val lang: String,
     val createdAt: Long,

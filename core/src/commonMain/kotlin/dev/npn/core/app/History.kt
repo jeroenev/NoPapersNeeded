@@ -2,6 +2,7 @@ package dev.npn.core.app
 
 import dev.npn.core.journal.JournalOp
 import dev.npn.core.model.SystemProperty
+import dev.npn.core.ocr.OcrEngineRef
 
 /**
  * One change in a document's history: when it was made ([timeMillis], the wall time of the device
@@ -39,7 +40,7 @@ sealed interface HistoryEntry {
 
     /** The OCR engine whose text is searched pinned to [engine], or the pin cleared (null). */
     data class OcrEnginePinned(
-        val engine: String?,
+        val engine: OcrEngineRef?,
     ) : HistoryEntry
 
     /** The document's storage path set to [path], or cleared (null). */
@@ -130,7 +131,7 @@ sealed interface HistoryEntry {
                 }
 
                 SystemProperty.OCR_ENGINE -> {
-                    OcrEnginePinned(value)
+                    OcrEnginePinned(OcrEngineRef.ofColumn(value))
                 }
 
                 SystemProperty.STORAGE_PATH -> {

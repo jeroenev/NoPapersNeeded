@@ -24,6 +24,7 @@ import dev.npn.core.fs.ExternalSource
 import dev.npn.core.index.IndexProgress
 import dev.npn.core.index.ScanReport
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.ocr.OcrEngineRef
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
@@ -81,7 +82,7 @@ class FakeOcrFacade : OcrFacade {
 
     /** Backing list returned by [ocrVersions]; tests mutate it to drive the picker. */
     var ocrVersionsList: List<OcrVersion> = emptyList()
-    val ocrEngineSets = mutableListOf<Pair<String, String?>>()
+    val ocrEngineSets = mutableListOf<Pair<String, OcrEngineRef?>>()
     var failSetOcrEngine: (() -> Nothing)? = null
 
     /** What the "read text with assistant" action is offered as; drives whether it appears at all. */
@@ -121,7 +122,7 @@ class FakeOcrFacade : OcrFacade {
 
     override suspend fun setOcrEngine(
         docId: String,
-        engine: String?,
+        engine: OcrEngineRef?,
     ) {
         failSetOcrEngine?.invoke()
         ocrEngineSets += docId to engine

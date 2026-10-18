@@ -4,6 +4,7 @@ import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.DocumentHistoryRecord
 import dev.npn.core.app.HistoryEntry
+import dev.npn.core.ocr.OcrEngineRef
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.detail_history_document_deleted
 import no_papers_needed.composeapp.generated.resources.detail_history_document_relinked
@@ -141,11 +142,11 @@ object HistoryMapper {
             null -> uiText(Res.string.detail_history_review_state_cleared)
         }
 
-    private fun ocrEngineText(engine: String?): UiText =
+    private fun ocrEngineText(engine: OcrEngineRef?): UiText =
         if (engine == null) {
             uiText(Res.string.detail_history_ocr_engine_cleared)
         } else {
-            uiText(Res.string.detail_history_ocr_engine_pinned, engine)
+            uiText(Res.string.detail_history_ocr_engine_pinned, engineLabel(engine))
         }
 
     private fun storagePathText(path: String?): UiText =
