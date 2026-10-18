@@ -102,14 +102,15 @@ class TagManagementViewModel(
     TagWrites {
     private val tagAdmin = session.tagAdmin
 
-    val tags: StateFlow<List<TagInfo>> =
+    /** Null until the first load, so the screen does not flash "no tags" before it. */
+    val tags: StateFlow<List<TagInfo>?> =
         session.tags
             .observeTags()
-            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
+            .stateIn(viewModelScope, WhileSubscribedTimeout, null)
 
-    /** [tags] as the screen's cards: the namespace tree, flattened depth-first. */
-    val rows: StateFlow<List<TagRow>> =
-        tags.map(::tagRows).stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
+    /** [tags] as the screen's cards: the namespace tree, flattened depth-first. Null until the first load. */
+    val rows: StateFlow<List<TagRow>?> =
+        tags.map { it?.let(::tagRows) }.stateIn(viewModelScope, WhileSubscribedTimeout, null)
 
     override fun rename(
         from: String,

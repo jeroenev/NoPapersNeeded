@@ -1,12 +1,14 @@
 package dev.npn.app
 
 import dev.npn.app.ui.common.uiText
+import dev.npn.app.ui.trash.TrashUiState
 import dev.npn.app.ui.trash.TrashViewModel
 import dev.npn.core.index.RelinkCandidate
 import dev.npn.core.index.RelinkSignal
 import dev.npn.core.testing.doc
 import dev.npn.core.testing.listItem
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -21,13 +23,26 @@ import kotlin.test.Test
 class TrashViewModelTest : MainDispatcherTest() {
     private fun vm(session: FakeLibrarySession = FakeLibrarySession()) = TrashViewModel(session)
 
+    /** Not loaded is not empty: the screen shows its empty states only once the trash has loaded. */
+    @Test
+    fun theStateIsNullUntilTheFirstLoadAndThenAnEmptyTrash() =
+        runTest(dispatcher) {
+            val model = vm()
+            model.state.value shouldBe null
+
+            collecting(model.state)
+            advanceUntilIdle()
+
+            model.state.value shouldBe TrashUiState()
+        }
+
     @Test
     fun relinkCandidatesEmptyWhenNoReport() =
         runTest(dispatcher) {
             val model = vm()
             collecting(model.state)
             advanceUntilIdle()
-            model.state.value.relinks shouldBe emptyMap()
+            model.state.value?.relinks shouldBe emptyMap()
         }
 
     @Test
@@ -39,7 +54,7 @@ class TrashViewModelTest : MainDispatcherTest() {
             val model = vm(session)
             collecting(model.state)
             advanceUntilIdle()
-            model.state.value.relinks shouldBe mapOf("old" to listOf(candidate))
+            model.state.value?.relinks shouldBe mapOf("old" to listOf(candidate))
         }
 
     @Test
@@ -52,7 +67,7 @@ class TrashViewModelTest : MainDispatcherTest() {
             val model = vm(session)
             collecting(model.state)
             advanceUntilIdle()
-            val state = model.state.value
+            val state = model.state.value.shouldNotBeNull()
             state.trashed.map { it.doc.docId } shouldContainExactly listOf("d1")
             state.duplicates shouldContainExactly listOf("d2" to "copy/d2.pdf")
             state.missing.map { it.docId } shouldContainExactly listOf("d3")

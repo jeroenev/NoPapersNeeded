@@ -46,6 +46,7 @@ import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.Dropdown
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.HelpText
+import dev.npn.app.ui.common.LoadingIndicator
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.model.FieldDef
@@ -167,7 +168,8 @@ private sealed interface RuleDialog {
 
 @Composable
 private fun AutoMatchRulesScaffold(
-    rules: List<AutoMatchRule>,
+    /** Null until the first load, which shows a spinner rather than the empty state. */
+    rules: List<AutoMatchRule>?,
     fields: List<FieldDef>,
     snackbar: SnackbarHostState,
     onBack: () -> Unit,
@@ -185,7 +187,9 @@ private fun AutoMatchRulesScaffold(
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
-        if (rules.isEmpty()) {
+        if (rules == null) {
+            LoadingIndicator(Modifier.padding(padding))
+        } else if (rules.isEmpty()) {
             EmptyState(
                 icon = Icons.AutoMirrored.Filled.Rule,
                 title = stringResource(Res.string.common_rules_empty_title),

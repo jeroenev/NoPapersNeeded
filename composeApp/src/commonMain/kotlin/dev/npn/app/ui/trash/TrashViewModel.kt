@@ -76,7 +76,8 @@ class TrashViewModel(
     private val docLifecycle = session.docLifecycle
     private val maintenance = session.maintenance
 
-    val state: StateFlow<TrashUiState> =
+    /** Null until the first load, so the screen does not flash its empty states before it. */
+    val state: StateFlow<TrashUiState?> =
         combine(
             session.documents.observeTrashed(),
             session.documents.observeDuplicates(),
@@ -94,7 +95,7 @@ class TrashViewModel(
                         .sortedByDescending { it.score }
                         .groupBy { it.oldDocId },
             )
-        }.stateIn(viewModelScope, WhileSubscribedTimeout, TrashUiState())
+        }.stateIn(viewModelScope, WhileSubscribedTimeout, null)
 
     override fun restore(docId: String) =
         launchReporting(Res.string.common_trash_restore_failed) { docLifecycle.restoreDoc(docId) }
@@ -127,7 +128,11 @@ class TrashViewModel(
         partlyFailed: PluralStringResource,
         op: suspend (List<String>) -> Int,
     ) {
-        val ids = state.value.trashed.map { it.doc.docId }
+        val ids =
+            state.value
+                ?.trashed
+                .orEmpty()
+                .map { it.doc.docId }
         if (ids.isEmpty()) return
         viewModelScope.launch {
             val failed = runCatchingCancellable { op(ids) }.getOrElse { ids.size }

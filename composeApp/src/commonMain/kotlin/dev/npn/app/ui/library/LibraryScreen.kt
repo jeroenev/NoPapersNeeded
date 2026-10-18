@@ -20,7 +20,6 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.UploadFile
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -42,7 +41,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -54,6 +52,7 @@ import dev.npn.app.platform.platformFileToExternalSource
 import dev.npn.app.ui.common.ActionMenuItems
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.FocusOnEntry
+import dev.npn.app.ui.common.LoadingIndicator
 import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.SearchField
 import dev.npn.app.ui.common.SnackbarMessages
@@ -515,9 +514,7 @@ private fun LibraryContent(
                 modifier = Modifier.fillMaxSize(),
             ) {
                 if (results == null) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
+                    LoadingIndicator()
                 } else if (results.items.isEmpty()) {
                     if (ui.filter.isEmpty) {
                         EmptyState(

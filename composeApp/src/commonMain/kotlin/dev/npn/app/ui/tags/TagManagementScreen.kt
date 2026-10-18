@@ -63,6 +63,7 @@ import dev.npn.app.ui.common.ActionMenuItems
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.HelpText
+import dev.npn.app.ui.common.LoadingIndicator
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.TagFormDialog
 import dev.npn.app.ui.common.TagPickDialog
@@ -186,8 +187,7 @@ fun TagManagementScreen(
     SnackbarMessages(vm.messages, snackbar)
 
     TagListScaffold(
-        rows = rows,
-        isEmpty = tags.isEmpty(),
+        loadedRows = rows,
         snackbar = snackbar,
         selection = selection,
         onOpen = { dialog = it },
@@ -195,7 +195,7 @@ fun TagManagementScreen(
     dialog?.let { open ->
         TagDialogHost(
             dialog = open,
-            tags = tags,
+            tags = tags.orEmpty(),
             writes = vm,
             onClose = { dialog = null },
             // A confirmed action ends the selection it was taken on.
@@ -209,12 +209,13 @@ fun TagManagementScreen(
 
 @Composable
 private fun TagListScaffold(
-    rows: List<TagRow>,
-    isEmpty: Boolean,
+    /** Null until the first load, which shows a spinner rather than the empty state. */
+    loadedRows: List<TagRow>?,
     snackbar: SnackbarHostState,
     selection: TagSelection,
     onOpen: (TagDialog) -> Unit,
 ) {
+    val rows = loadedRows.orEmpty()
     // Tags can disappear underneath a selection (another device, auto-pruning after edits).
     val selected = rows.mapNotNull { node -> node.info?.name?.takeIf { it in selection.selected } }
     Scaffold(
@@ -236,7 +237,9 @@ private fun TagListScaffold(
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
-        if (isEmpty) {
+        if (loadedRows == null) {
+            LoadingIndicator(Modifier.padding(padding))
+        } else if (rows.isEmpty()) {
             EmptyState(
                 icon = Icons.Filled.Sell,
                 title = stringResource(Res.string.common_tags_empty_title),

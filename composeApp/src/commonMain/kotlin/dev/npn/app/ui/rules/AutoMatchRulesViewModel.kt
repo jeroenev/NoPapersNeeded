@@ -18,10 +18,11 @@ class AutoMatchRulesViewModel(
 ) : MessagesViewModel() {
     private val repository = session.rules
 
-    val rules: StateFlow<List<AutoMatchRule>> =
+    /** Null until the first load, so the screen does not flash "no rules" before it. */
+    val rules: StateFlow<List<AutoMatchRule>?> =
         repository
             .observeRules()
-            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
+            .stateIn(viewModelScope, WhileSubscribedTimeout, null)
 
     /** The registry, in order: what a rule can match against and what it can set. */
     val fields: StateFlow<List<FieldDef>> =

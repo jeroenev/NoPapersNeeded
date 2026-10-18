@@ -46,6 +46,7 @@ import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.DocThumbnail
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.HelpText
+import dev.npn.app.ui.common.LoadingIndicator
 import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.StatusBadge
@@ -123,7 +124,8 @@ fun TrashScreen(
     session: LibrarySession,
     vm: TrashViewModel = viewModel { TrashViewModel(session) },
 ) {
-    val state by vm.state.collectAsStateWithLifecycle()
+    val loaded by vm.state.collectAsStateWithLifecycle()
+    val state = loaded ?: TrashUiState()
 
     var tab by rememberSaveable(stateSaver = enumNameSaver()) { mutableStateOf(TrashTab.TRASH) }
     var confirm by remember { mutableStateOf<TrashConfirm?>(null) }
@@ -134,6 +136,7 @@ fun TrashScreen(
     TrashScaffold(
         tab = tab,
         state = state,
+        loading = loaded == null,
         content = session.content,
         snackbar = snackbar,
         writes = vm,
@@ -209,6 +212,8 @@ private fun TrashConfirmDialog(
 private fun TrashScaffold(
     tab: TrashTab,
     state: TrashUiState,
+    /** True until the first load; the tabs then show a spinner rather than their empty states. */
+    loading: Boolean,
     content: DocContentFacade,
     snackbar: SnackbarHostState,
     writes: TrashWrites,
@@ -239,24 +244,40 @@ private fun TrashScaffold(
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             TrashTabs(tab, state, onSelectTab)
-            when (tab) {
-                TrashTab.TRASH -> {
-                    TrashList(
-                        items = state.trashed,
-                        content = content,
-                        onRestore = writes::restore,
-                        onDeleteForever = { onConfirm(TrashConfirm.DeleteForever(it)) },
-                    )
-                }
-
-                TrashTab.DUPLICATES -> {
-                    DuplicatesList(state.duplicates, writes::resolveDuplicate)
-                }
-
-                TrashTab.MISSING -> {
-                    MissingList(state.missing, state.relinks, writes::applyRelink)
-                }
+            if (loading) {
+                LoadingIndicator()
+            } else {
+                TrashTabContent(tab, state, content, writes, onConfirm)
             }
+        }
+    }
+}
+
+/** The list [tab] shows. */
+@Composable
+private fun TrashTabContent(
+    tab: TrashTab,
+    state: TrashUiState,
+    content: DocContentFacade,
+    writes: TrashWrites,
+    onConfirm: (TrashConfirm) -> Unit,
+) {
+    when (tab) {
+        TrashTab.TRASH -> {
+            TrashList(
+                items = state.trashed,
+                content = content,
+                onRestore = writes::restore,
+                onDeleteForever = { onConfirm(TrashConfirm.DeleteForever(it)) },
+            )
+        }
+
+        TrashTab.DUPLICATES -> {
+            DuplicatesList(state.duplicates, writes::resolveDuplicate)
+        }
+
+        TrashTab.MISSING -> {
+            MissingList(state.missing, state.relinks, writes::applyRelink)
         }
     }
 }

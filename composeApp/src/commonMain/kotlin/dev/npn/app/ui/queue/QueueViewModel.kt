@@ -28,12 +28,13 @@ class QueueViewModel(
     private val editQueue = session.aiEditQueue
     private val ocr = session.ocr
 
-    val items: StateFlow<List<QueuedWork>> =
-        session.work.queue.stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
+    /** Null until the first load, so the screen does not flash "nothing queued" before it. */
+    val items: StateFlow<List<QueuedWork>?> =
+        session.work.queue.stateIn(viewModelScope, WhileSubscribedTimeout, null)
 
-    /** Queued AI edit runs, finished ones first — see [WorkFacade.editRuns]. */
-    val editRuns: StateFlow<List<QueuedEditRun>> =
-        session.work.editRuns.stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
+    /** Queued AI edit runs, finished ones first — see [WorkFacade.editRuns]. Null until the first load. */
+    val editRuns: StateFlow<List<QueuedEditRun>?> =
+        session.work.editRuns.stateIn(viewModelScope, WhileSubscribedTimeout, null)
 
     /** Abandon a queued edit run and the suggestions it has bought so far. */
     fun discardEditRun(jobId: String) =

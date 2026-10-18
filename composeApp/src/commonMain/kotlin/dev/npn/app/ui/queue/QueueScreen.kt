@@ -43,6 +43,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.HelpText
+import dev.npn.app.ui.common.LoadingIndicator
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.StatusBadge
 import dev.npn.app.ui.common.TechnicalDetails
@@ -111,15 +112,21 @@ fun QueueScreen(
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
-        QueueList(
-            items = items,
-            editRuns = editRuns,
-            onOpenDoc = onOpenDoc,
-            onOpenEditRun = onOpenEditRun,
-            onDiscardEditRun = vm::discardEditRun,
-            onRetry = vm::retry,
-            modifier = Modifier.fillMaxSize().padding(padding),
-        )
+        val loadedItems = items
+        val loadedRuns = editRuns
+        if (loadedItems == null || loadedRuns == null) {
+            LoadingIndicator(Modifier.padding(padding))
+        } else {
+            QueueList(
+                items = loadedItems,
+                editRuns = loadedRuns,
+                onOpenDoc = onOpenDoc,
+                onOpenEditRun = onOpenEditRun,
+                onDiscardEditRun = vm::discardEditRun,
+                onRetry = vm::retry,
+                modifier = Modifier.fillMaxSize().padding(padding),
+            )
+        }
     }
 }
 
