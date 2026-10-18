@@ -100,15 +100,16 @@ class AiFacadeImpl(
         docId: String,
         request: AiEditRequest,
     ): AiEditSuggestion {
-        val config = configProvider()
-        val runtime = runtimes.runtimeFor(config)
         val doc = db.documentDao().getByDocId(docId) ?: return AiEditSuggestion.EMPTY
         val text = db.ftsDao().textOf(docId)
         // No OCR text yet: field extraction is impossible, but a tag-only run can still work off
         // the current tag list and vocabulary. This is the single decided rule for every flow.
         if (text == null && request.fields.isNotEmpty()) return AiEditSuggestion.EMPTY
+        val config = configProvider()
+        val runtime = runtimes.runtimeFor(config)
         val currentTags = db.tagDao().tagsForDocument(docId)
-        val vocabulary = db.tagDao().all().map { it.name }
+        // Sorted, so the system message (which carries it) is byte-identical across a batch.
+        val vocabulary = db.tagDao().names()
         val fields = fieldSpecs(request)
         val currentFields = db.documentFieldDao().valuesOf(docId)
         val maxTags = (request.maxTags ?: config.maxTagsPerDoc).coerceIn(AiTagging.RANGE)
