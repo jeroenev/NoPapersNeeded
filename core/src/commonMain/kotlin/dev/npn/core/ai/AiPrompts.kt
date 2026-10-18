@@ -226,14 +226,13 @@ internal object AiPrompts {
     fun editSystem(
         request: AiEditRequest,
         fields: List<AiFieldSpec>,
-        max: Int,
-        maxNew: Int,
+        caps: TagCaps,
         vocabulary: List<String>,
         context: AiPromptContext,
     ): String =
         buildList {
             add(EDIT_INTRO)
-            add(editRules(request, fields, max, maxNew, context).joinToString("\n"))
+            add(editRules(request, fields, caps, context).joinToString("\n"))
             add(editContract(request, fields))
             if (fields.any { it.def.type.isDate }) add(dateGuidance(context))
             editLibraryContext(request, fields, vocabulary)?.let { add(it) }
@@ -286,12 +285,11 @@ internal object AiPrompts {
     private fun editRules(
         request: AiEditRequest,
         fields: List<AiFieldSpec>,
-        max: Int,
-        maxNew: Int,
+        caps: TagCaps,
         context: AiPromptContext,
     ): List<String> =
         buildList {
-            if (request.tags) add(addTagsRule(max, maxNew, context))
+            if (request.tags) add(addTagsRule(caps, context))
             if (request.tagRemovals) add(REMOVE_TAGS_RULE)
             for (spec in fields) {
                 val description = fieldDescription(spec, context)
@@ -300,22 +298,21 @@ internal object AiPrompts {
         }
 
     private fun addTagsRule(
-        max: Int,
-        maxNew: Int,
+        caps: TagCaps,
         context: AiPromptContext,
     ): String {
         val newTagRule =
-            if (maxNew <= 0) {
+            if (caps.maxNew <= 0) {
                 "Do NOT invent brand-new tags: use ONLY tags from the provided vocabulary."
             } else {
                 val language =
                     context.appLanguage?.let { "Write brand-new tags in $it, the app's language. " }.orEmpty()
-                "${language}Strongly prefer existing vocabulary tags and propose at most $maxNew brand-new tags."
+                "${language}Strongly prefer existing vocabulary tags and propose at most ${caps.maxNew} brand-new tags."
             }
         return "\"add_tags\": tags to ADD to this document (must not already be on it). " +
             "When an existing library tag fits, copy it VERBATIM (exact spelling and case); " +
             "only invent a new tag when none fits. Tags are short lowercase labels (topic, " +
-            "document kind, organisation, year). $newTagRule At most $max, best first."
+            "document kind, organisation, year). $newTagRule At most ${caps.max}, best first."
     }
 
     private const val REMOVE_TAGS_RULE =

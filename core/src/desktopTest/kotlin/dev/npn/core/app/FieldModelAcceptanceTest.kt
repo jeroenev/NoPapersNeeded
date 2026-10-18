@@ -7,6 +7,7 @@ import dev.npn.core.ai.AiFieldSpec
 import dev.npn.core.ai.AiPromptContext
 import dev.npn.core.ai.AiPrompts
 import dev.npn.core.ai.LibraryAiTools
+import dev.npn.core.ai.TagCaps
 import dev.npn.core.db.fieldTypes
 import dev.npn.core.db.searchDocIds
 import dev.npn.core.index.requireDoc
@@ -109,8 +110,7 @@ class FieldModelAcceptanceTest {
                 AiPrompts.editSystem(
                     request = AiEditRequest(fields = listOf(AiFieldConfig("amount"))),
                     fields = specs,
-                    max = 5,
-                    maxNew = 0,
+                    caps = TagCaps(max = 5, maxNew = 0),
                     vocabulary = emptyList(),
                     context = AiPromptContext.of(null),
                 )

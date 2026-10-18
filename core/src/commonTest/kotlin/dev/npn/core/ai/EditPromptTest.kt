@@ -26,7 +26,7 @@ class EditPromptTest {
         fields: List<AiFieldSpec> = emptyList(),
         context: AiPromptContext = dutch,
         vocabulary: List<String> = listOf("invoice"),
-    ) = AiPrompts.editSystem(request, fields, max = 8, maxNew = 5, vocabulary, context)
+    ) = AiPrompts.editSystem(request, fields, TagCaps(max = 8, maxNew = 5), vocabulary, context)
 
     private val dateFields = listOf(spec(FieldKeys.DOC_DATE))
 

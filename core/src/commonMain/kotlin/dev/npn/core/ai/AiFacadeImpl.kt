@@ -119,8 +119,7 @@ internal class AiFacadeImpl(
                     AiPrompts.editSystem(
                         request = request,
                         fields = fields,
-                        max = caps.max,
-                        maxNew = caps.maxNew,
+                        caps = caps,
                         vocabulary = vocabulary,
                         context = promptContext(config),
                     ),
