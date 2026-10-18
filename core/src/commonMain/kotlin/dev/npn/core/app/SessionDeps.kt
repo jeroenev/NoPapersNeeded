@@ -11,7 +11,10 @@ import dev.npn.core.util.EpochClock
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.SystemEpochClock
 import dev.npn.core.xmp.PdfXmpIO
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlin.time.TimeSource
 
 /**
  * Bundle of everything a library session needs ([openSession]), assembled per platform:
@@ -35,6 +38,13 @@ class SessionDeps(
     val log: NpnLog,
     val clock: EpochClock = SystemEpochClock,
     val installationId: String,
+    /**
+     * Where the session's CPU-bound work runs: journal folds and writes, file hashing, list mapping,
+     * page rendering. A test passes its own dispatcher, so all of it runs on virtual time.
+     */
+    val computation: CoroutineDispatcher = Dispatchers.Default,
+    /** What measures the folder watch's settle windows; a test passes its scheduler's. */
+    val timeSource: TimeSource = TimeSource.Monotonic,
 ) {
     /**
      * Close the index and device databases. Exposed here so the composeApp DI layer (which does not

@@ -74,7 +74,7 @@ internal class SessionGraph(
      */
     private val endpointHealth = EndpointHealth()
 
-    val documents: DocumentRepository = DocumentRepositoryImpl(db)
+    val documents: DocumentRepository = DocumentRepositoryImpl(db, mapping = deps.computation)
     val tags: TagRepository = TagRepositoryImpl(db.tagDao())
     val savedViews = SavedViewRepositoryImpl(coordinator, lifetime)
     val fieldRegistry: FieldRegistry = FieldRegistryImpl(db, coordinator, lifetime)
@@ -207,7 +207,7 @@ internal class SessionGraph(
 
     // Single shared gate so thumbnail + page rendering share one bounded concurrency budget and a
     // first-load burst (e.g. 200 PDFs) cannot flood the dispatchers.
-    private val renderGate = RenderGate(deps.renderParallelism)
+    private val renderGate = RenderGate(deps.renderParallelism, deps.computation)
 
     val content =
         DocContentFacadeImpl(
