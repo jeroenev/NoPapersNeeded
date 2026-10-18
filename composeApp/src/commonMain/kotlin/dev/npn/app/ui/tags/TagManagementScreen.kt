@@ -41,6 +41,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -112,8 +113,6 @@ private class TagSelection(
     initial: Set<String> = emptySet(),
 ) {
     var selected by mutableStateOf(initial)
-
-    val active: Boolean get() = selected.isNotEmpty()
 
     fun toggle(name: String) {
         selected = if (name in selected) selected - name else selected + name
@@ -210,11 +209,19 @@ private fun TagListScaffold(
     onOpen: (TagDialog) -> Unit,
 ) {
     val rows = loadedRows.orEmpty()
-    // Tags can disappear underneath a selection (another device, auto-pruning after edits).
+    // Tags can disappear underneath a selection (another device, auto-pruning after edits): the
+    // screen counts and acts on the ones still there, and forgets the rest once the rows load.
     val selected = rows.mapNotNull { node -> node.info?.name?.takeIf { it in selection.selected } }
+    val selectionActive = selected.isNotEmpty()
+    LaunchedEffect(loadedRows) {
+        if (loadedRows != null) {
+            val names = loadedRows.mapNotNull { it.info?.name }.toSet()
+            if (!names.containsAll(selection.selected)) selection.selected = selection.selected intersect names
+        }
+    }
     Scaffold(
         topBar = {
-            if (selection.active) {
+            if (selectionActive) {
                 TagSelectionTopBar(
                     selected = selected,
                     onClose = selection::clear,
@@ -255,7 +262,7 @@ private fun TagListScaffold(
                     val isSelected = node.path in selection.selected
                     TagCard(
                         node = node,
-                        selectionMode = selection.active,
+                        selectionMode = selectionActive,
                         selected = isSelected,
                         // With several tags selected, this card among them, its menu acts on the
                         // whole selection; otherwise on this tag alone.
@@ -264,7 +271,7 @@ private fun TagListScaffold(
                         // Opening a menu on an unselected card replaces the selection with that
                         // card, so the menu never silently acts on off-screen tags.
                         onPrepareMenu = {
-                            if (selection.active && node.info != null && !isSelected) {
+                            if (selectionActive && node.info != null && !isSelected) {
                                 selection.selected = setOf(node.path)
                             }
                         },
