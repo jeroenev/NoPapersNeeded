@@ -160,6 +160,32 @@ class ThumbnailServiceTest {
             dir.toFile().deleteRecursively()
         }
 
+    /**
+     * Another file at the document's path (written over since the index looked) is not drawn for the
+     * document: its thumbnail would be cached under the document's id for good, and its page count
+     * recorded as the document's.
+     */
+    @Test
+    fun aFileThatIsNotTheDocumentsGetsNoThumbnail() =
+        runTest {
+            val bytes = PdfFixtures.embeddedTextPdf("the document")
+            fs.writeBytesOnce("doc.pdf", bytes)
+            val docId = fs.sha256("doc.pdf")
+            db.documentDao().upsert(
+                documentEntity(docId, "doc.pdf", size = bytes.size.toLong(), mtime = 1, addedAt = 1),
+            )
+            fs.delete("doc.pdf")
+            fs.writeBytesOnce("doc.pdf", PdfFixtures.embeddedTextPdf("another document"))
+            val store = RecordingThumbnailStore()
+            val service =
+                ThumbnailService(PdfBoxEngine(), fs, store, db.documentDao(), RenderGate(1))
+
+            service.ensureThumbnail(docId, "doc.pdf") shouldBe null
+
+            store.writes.containsKey(docId).shouldBeFalse()
+            db.documentDao().requireByDocId(docId).pageCount shouldBe null
+        }
+
     @Test
     fun returnsNullWhenFileMissing() =
         runTest {

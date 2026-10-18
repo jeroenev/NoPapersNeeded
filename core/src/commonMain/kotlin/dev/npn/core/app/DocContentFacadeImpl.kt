@@ -4,6 +4,7 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.isLive
 import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.fs.readDocument
 import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.RenderGate
@@ -66,7 +67,7 @@ internal class DocContentFacadeImpl(
     private suspend fun readPageCount(docId: String): Int? {
         val doc = documentDao.getByDocId(docId) ?: return null
         doc.pageCount?.let { return it }
-        val bytes = fs.readBytes(doc.relPath)
+        val bytes = fs.readDocument(doc.relPath, docId) ?: return null
         return pdfEngine.open(bytes).use { handle ->
             handle.pageCount.also { documentDao.fillPageCount(docId, it) }
         }
@@ -94,7 +95,7 @@ internal class DocContentFacadeImpl(
     override suspend fun bakedCopyBytes(docId: String): ByteArray? =
         log.runLogged("Baking a copy of $docId") {
             val doc = documentDao.getByDocId(docId) ?: return@runLogged null
-            bakeService.bakeToBytes(doc.relPath, buildXmpData(doc))
+            bakeService.bakeToBytes(doc.relPath, docId, buildXmpData(doc))
         }
 
     override suspend fun bakeInPlace(docId: String): BakeOutcome = lifetime.owned { bakes.held { bake(docId) } }

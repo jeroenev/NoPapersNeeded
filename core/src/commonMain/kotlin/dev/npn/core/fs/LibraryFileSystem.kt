@@ -196,6 +196,18 @@ internal suspend fun LibraryFileSystem.holds(
         runCatchingCancellable { sha256(relPath) }.getOrNull() == hash
 
 /**
+ * The bytes of [relPath] when they are the document [docId]'s, which they hash to; null when the
+ * file there holds other bytes, written over or replaced since the index last looked. Whatever is
+ * made of a document's bytes and kept as its own (its thumbnail, page count, OCR text, a split or a
+ * bake) reads them here. A file that cannot be read throws, as [LibraryFileSystem.readBytes] does,
+ * so a caller still tells a file it could not read from one that is not the document's.
+ */
+internal suspend fun LibraryFileSystem.readDocument(
+    relPath: String,
+    docId: String,
+): ByteArray? = readBytes(relPath).takeIf { sha256Bytes(it) == docId }
+
+/**
  * Write a staging file at [staging] with [stage], then publish it as [target] without replacement,
  * its bytes verified against [hash] ([LibraryFileSystem.publishVerifiedObjectOnce]). Unless that
  * publishes, the staging file is deleted, best effort and cancelled or not, and the failure

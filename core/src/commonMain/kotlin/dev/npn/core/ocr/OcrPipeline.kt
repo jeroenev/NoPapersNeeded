@@ -9,7 +9,7 @@ import dev.npn.core.db.QueueState
 import dev.npn.core.db.isLive
 import dev.npn.core.db.queueState
 import dev.npn.core.fs.LibraryFileSystem
-import dev.npn.core.fs.sha256Bytes
+import dev.npn.core.fs.readDocument
 import dev.npn.core.index.FtsRows
 import dev.npn.core.index.WriteSettle
 import dev.npn.core.pdf.PdfEngine
@@ -291,10 +291,9 @@ class OcrPipeline(
         var step = "read failed"
         val result =
             runCatchingCancellable {
-                val bytes = fs.readBytes(doc.relPath)
                 // The sidecar is keyed by docId and is write-once and synced, so text from any other
                 // bytes would stick to this document everywhere.
-                if (sha256Bytes(bytes) != doc.docId) return OwnOcr.Stale
+                val bytes = fs.readDocument(doc.relPath, doc.docId) ?: return OwnOcr.Stale
                 step = "ocr failed"
                 extractOrOcr(bytes, doc, aiRequested)
             }.getOrElse { return OwnOcr.Failed(describe(step, it)) }

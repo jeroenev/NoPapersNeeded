@@ -3,6 +3,7 @@ package dev.npn.core.xmp
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.holds
+import dev.npn.core.fs.readDocument
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.error
@@ -36,14 +37,16 @@ class BakeService(
     private val log: NpnLog = NpnLog.None,
 ) {
     /**
-     * Bake [data] into a copy of the library file at [relPath] and return the new bytes.
-     * The library file is not modified. The document id, when present in [data], is written
-     * verbatim (callers typically set it to the current sha256).
+     * Bake [data] into a copy of the document [docId]'s file at [relPath] and return the new bytes,
+     * or null when the file there is not the document's: another file would leave carrying this
+     * document's metadata. The library file is not modified. The document id, when present in
+     * [data], is written verbatim (callers typically set it to [docId]).
      */
     suspend fun bakeToBytes(
         relPath: String,
+        docId: String,
         data: NpnXmpData,
-    ): ByteArray = bake(fs.readBytes(relPath), data)
+    ): ByteArray? = fs.readDocument(relPath, docId)?.let { bake(it, data) }
 
     /** Merge [data] into the XMP already in [src] and write it, with the keywords and title, into a copy. */
     private suspend fun bake(
@@ -96,8 +99,7 @@ class BakeService(
         val norm = NpnPaths.normalize(relPath)
         // Taken before the read, so a file written to during or after it no longer matches.
         val read = fs.stat(norm)?.takeIf { !it.isDirectory } ?: return null
-        val src = fs.readBytes(norm)
-        if (sha256Bytes(src) != docId) return null
+        val src = fs.readDocument(norm, docId) ?: return null
         // Ensure documentId reflects the pre-bake identity when the caller did not set one.
         val effectiveData = if (data.documentId == null) data.copy(documentId = docId) else data
         val bakedBytes =

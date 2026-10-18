@@ -2,6 +2,7 @@ package dev.npn.core.pdf
 
 import dev.npn.core.db.DocumentDao
 import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.fs.readDocument
 import dev.npn.core.util.runCatchingCancellable
 
 /**
@@ -36,7 +37,8 @@ class ThumbnailService(
     /**
      * Return the cache path of [docId]'s thumbnail, generating it from the first page if
      * absent. Also backfills [dev.npn.core.db.DocumentEntity.pageCount] when it is null (the
-     * document is open anyway). Returns null if the file cannot be opened/rendered.
+     * document is open anyway). Returns null if the file cannot be opened/rendered, or is not the
+     * document's: another file at its path would be drawn and counted for it for good.
      */
     suspend fun ensureThumbnail(
         docId: String,
@@ -44,7 +46,7 @@ class ThumbnailService(
     ): String? {
         store.existing(docId)?.let { return it }
 
-        val bytes = runCatchingCancellable { fs.readBytes(relPath) }.getOrElse { return null }
+        val bytes = runCatchingCancellable { fs.readDocument(relPath, docId) }.getOrNull() ?: return null
 
         val (png, pageCount) =
             runCatchingCancellable {

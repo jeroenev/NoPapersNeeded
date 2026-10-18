@@ -52,9 +52,10 @@ class BakeServiceTest {
         runTest {
             fs.writeBytesOnce("doc.pdf", fixturePdf())
             val before = fs.readBytes("doc.pdf")
-            val data = xmp(tags = listOf("t"), documentId = "a".repeat(64))
+            val docId = sha256Bytes(before)
+            val data = xmp(tags = listOf("t"), documentId = docId)
 
-            val baked = BakeService(fs, io).bakeToBytes("doc.pdf", data)
+            val baked = BakeService(fs, io).bakeToBytes("doc.pdf", docId, data).shouldNotBeNull()
 
             // Library file unchanged.
             fs.readBytes("doc.pdf") shouldBe before
@@ -62,6 +63,16 @@ class BakeServiceTest {
             val readXmp = io.readXmp(baked)
             readXmp.shouldNotBeNull()
             XmpParser.parse(readXmp).tags shouldBe listOf("t")
+        }
+
+    /** Another file at the document's path does not leave carrying the document's metadata. */
+    @Test
+    fun bakeToBytesOfAFileThatIsNotTheDocumentsGivesNothing() =
+        runTest {
+            fs.writeBytesOnce("doc.pdf", fixturePdf())
+            val data = xmp(tags = listOf("t"), documentId = "a".repeat(64))
+
+            BakeService(fs, io).bakeToBytes("doc.pdf", "a".repeat(64), data) shouldBe null
         }
 
     @Test
