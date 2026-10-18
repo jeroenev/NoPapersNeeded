@@ -27,10 +27,12 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
+import java.io.IOException
 import java.util.concurrent.Executors
 import kotlin.test.Test
 
@@ -162,6 +164,50 @@ class SessionSmokeTest {
 
                     rig.session.awaitInitialRescan() shouldBe false
                 }
+        }
+
+    /**
+     * A folder watch the platform cannot give (the JVM's watch service out of inotify instances) is
+     * logged: it never escapes the session's scope, which on Android would end the process, and the
+     * rest of the session runs on.
+     */
+    @Test
+    fun aWatchThatCannotStartIsLoggedAndTheSessionRunsOn() =
+        runTest {
+            val reported = CompletableDeferred<Throwable?>()
+            val log =
+                NpnLog { _, message, error ->
+                    if (message == "Watching the library failed") reported.complete(error)
+                }
+            AppSessionRig
+                .create(backgroundScope, log = log) { fs ->
+                    object : LibraryFileSystem by fs {
+                        override fun watch(): Flow<FsEvent> = flow { throw IOException("inotify instances used up") }
+                    }
+                }.use { rig ->
+                    rig.session.start()
+
+                    reported.await().shouldBeInstanceOf<IOException>()
+                    rig.session.awaitInitialRescan() shouldBe true
+                }
+        }
+
+    /** A queue that cannot be read (here its database is closed under the session) is logged, not thrown. */
+    @Test
+    fun anOcrQueueThatCannotBeReadIsLogged() =
+        runTest {
+            val reported = CompletableDeferred<Throwable?>()
+            val log =
+                NpnLog { _, message, error ->
+                    if (message == "Watching the OCR queue failed") reported.complete(error)
+                }
+            AppSessionRig.create(backgroundScope, log = log).use { rig ->
+                rig.deviceDb.close()
+
+                rig.session.start()
+
+                reported.await().shouldNotBeNull()
+            }
         }
 
     /** A name the library cannot address, as the watcher reports it, is passed over; watching goes on. */

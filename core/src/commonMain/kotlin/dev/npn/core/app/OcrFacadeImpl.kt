@@ -12,7 +12,6 @@ import dev.npn.core.util.EpochClock
 import dev.npn.core.work.QueueDrainer
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.launch
 
 /**
  * [OcrFacade] over this device's [OcrPipeline], and the owner of its queue: every pass this device
@@ -97,12 +96,13 @@ internal class OcrFacadeImpl(
         engine: String?,
     ) = lifetime.owned { pin(docId, engine) }
 
-    /** Kick the drain on every change to the queue while it owes anything, for the session's lifetime. */
-    fun watchQueue() {
-        lifetime.scope.launch {
-            queue.countActive().collect { active ->
-                if (active > 0) worker.kick()
-            }
+    /**
+     * Kick the drain on every change to the queue while it owes anything, until cancelled; throws
+     * when the queue cannot be read. The session runs it for its lifetime.
+     */
+    suspend fun watchQueue() {
+        queue.countActive().collect { active ->
+            if (active > 0) worker.kick()
         }
     }
 

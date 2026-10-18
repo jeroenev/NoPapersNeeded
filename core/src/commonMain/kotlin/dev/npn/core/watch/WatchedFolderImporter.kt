@@ -157,7 +157,13 @@ class WatchedFolderImporter(
                 val at = timeSource.markNow() + waitMillis.milliseconds
                 due.update { pending -> if (pending != null && pending > at) pending else at }
             }
-            launch { folder.changes().collect { request(minQuietMillis + CHANGE_SETTLE_MS) } }
+            // Change events are best effort: a watch the platform cannot give (the JVM's watch service
+            // out of inotify instances) is logged, and the poll below sweeps on without it.
+            launch {
+                log.runLogged("Watching the folder for changes") {
+                    folder.changes().collect { request(minQuietMillis + CHANGE_SETTLE_MS) }
+                }
+            }
             launch {
                 while (true) {
                     request(0L)

@@ -188,7 +188,9 @@ class LibrarySessionImpl internal constructor(
         started = true
         val scope = lifetime.scope
 
-        ocrFacade.watchQueue()
+        // Each collector below is logged when it fails rather than left to the scope, which has no
+        // handler: on Android an uncaught failure ends the process.
+        scope.launch { log.runLogged("Watching the OCR queue") { ocrFacade.watchQueue() } }
         // A file the OCR drain read no longer matches its hash: rescan once it has settled.
         scope.launch { staleFiles.consumeEach { scheduleSettleRescan(WriteSettle.QUIET_MILLIS) } }
 
@@ -207,14 +209,18 @@ class LibrarySessionImpl internal constructor(
         queues.kickAll()
 
         // Journal changes are routed apart from PDFs, so journal sync never scans or hashes PDFs. An
-        // event that cannot be read is logged and passed over: one event never ends the watch.
+        // event that cannot be read is logged and passed over: one event never ends the watch. A
+        // watch the platform cannot give (the JVM's watch service out of inotify instances) is
+        // logged and stays off; the periodic reconcile below still runs.
         scope.launch {
-            fs
-                .watch()
-                .mapNotNull { event ->
-                    log.runLogged("Reading the change at ${event.relPath}") { watchAction(event, deviceId) }
-                }.settled()
-                .collect { act(it) }
+            log.runLogged("Watching the library") {
+                fs
+                    .watch()
+                    .mapNotNull { event ->
+                        log.runLogged("Reading the change at ${event.relPath}") { watchAction(event, deviceId) }
+                    }.settled()
+                    .collect { act(it) }
+            }
         }
 
         // Initial rescan. Ended either way, a session closed under it included, for awaitInitialRescan.

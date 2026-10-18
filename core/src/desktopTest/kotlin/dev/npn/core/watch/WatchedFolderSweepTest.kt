@@ -149,6 +149,25 @@ class WatchedFolderSweepTest {
             ingest.imports shouldBe 1
         }
 
+    /**
+     * Change events the platform cannot give (the JVM's watch service out of inotify instances) are
+     * logged, and the poll sweeps the folder on without them.
+     */
+    @Test
+    fun aWatchThatFailsIsLoggedAndThePollSweepsOn() =
+        runTest {
+            val log = RecordingLog()
+            val folder = FakeFolder(emptyList(), flow { throw IOException("inotify instances used up") })
+            val importer =
+                WatchedFolderImporter(FakeIngest { error("nothing to import") }, folder, { false }, log = log)
+
+            importer.start(backgroundScope, pollIntervalMillis = 60_000, timeSource = testScheduler.timeSource)
+            advanceTimeBy(60_001)
+
+            folder.listings shouldBe 2
+            log.entries.single().message shouldBe "Watching the folder for changes failed"
+        }
+
     /** A source the importer could not delete after its import is logged, not dropped. */
     @Test
     fun aFailedDeleteAfterImportIsLogged() =
