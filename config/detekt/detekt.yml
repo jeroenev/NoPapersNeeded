@@ -13,7 +13,10 @@ complexity:
   LongParameterList:
     # Compose composables and DI wiring legitimately take many parameters.
     allowedFunctionParameters: 9
-    allowedConstructorParameters: 12
+    # Constructor injection is where DI-shaped classes legitimately get wide. A cap of 12 forced
+    # bundling for its own sake: an aggregate of facets handed around whole, getters forwarding a
+    # wrapped writer, a repository exposing its collaborators for others to reach through it.
+    allowedConstructorParameters: 16
     ignoreDefaultParameters: true
   CyclomaticComplexMethod:
     allowedComplexity: 20
