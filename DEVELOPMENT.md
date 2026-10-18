@@ -17,9 +17,10 @@ conventions and invariants, [AGENTS.md](AGENTS.md). The user-facing overview is 
   use their complete-file SHA-256 as the filename. No published transaction is modified
   after it is written. Merges are conflict-free: OR-set semantics for tags,
   hybrid-logical-clock last-writer-wins for single-value fields, properties and settings.
-- SQLite is a rebuildable cache. The index (search, thumbnails, source provenance,
-  and incremental metadata projection) lives in device-local storage, never inside
-  the library folder, and is never synced. Delete it and it rebuilds from the folder.
+- SQLite is a rebuildable cache. The index (search, source provenance and incremental
+  metadata projection) and the thumbnail cache live in device-local storage,
+  never inside the library folder, and are never synced. Delete them and they rebuild from
+  the folder.
   What only this device knows (its device id, its OCR and AI queues, AI edit
   runs awaiting review, assistant chats) sits beside it in a separate `device.db`,
   which is never dropped. A `device.db` restored or copied onto another installation
