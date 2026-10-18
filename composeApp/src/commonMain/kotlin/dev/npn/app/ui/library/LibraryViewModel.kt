@@ -630,19 +630,19 @@ class LibraryViewModel(
             is ImportOutcome.Failed -> uiText(Res.string.common_scan_import_failed, outcome.reason.text())
         }
 
-    // Names are trimmed here so the trimming rule lives in one place rather than in each dialog.
+    // Names arrive trimmed: TextInputDialog, which every name is typed into, trims what it confirms.
 
     /** Capture the live filter/sort/view UI state as a new [SavedView] named [name] and persist it. */
     fun saveCurrentView(name: String) =
         launchReporting(Res.string.library_save_view_failed) {
-            savedViewRepository.save(newSavedView(_ui.value, name.trim()))
+            savedViewRepository.save(newSavedView(_ui.value, name))
         }
 
-    /** Persist [view] under a new, whitespace-trimmed [name]. */
+    /** Persist [view] under a new [name]. */
     fun renameSavedView(
         view: SavedView,
         name: String,
-    ) = launchReporting(Res.string.library_save_view_failed) { savedViewRepository.save(view.copy(name = name.trim())) }
+    ) = launchReporting(Res.string.library_save_view_failed) { savedViewRepository.save(view.copy(name = name)) }
 
     /** Flip the pinned state of [view] and persist it. */
     override fun toggleSavedViewPin(view: SavedView) =

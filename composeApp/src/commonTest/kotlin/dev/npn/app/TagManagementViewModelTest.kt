@@ -101,8 +101,8 @@ class TagManagementViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val model = vm(session)
-            model.rename("old", " new ")
-            model.merge(listOf("src"), " dest ")
+            model.rename("old", "new")
+            model.merge(listOf("src"), "dest")
             model.delete(listOf("gone"))
             advanceUntilIdle()
             session.tagAdmin.renamedTags shouldContainExactly listOf("old" to "new")

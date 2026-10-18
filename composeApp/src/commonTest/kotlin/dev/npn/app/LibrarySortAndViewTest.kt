@@ -174,12 +174,12 @@ class LibrarySortAndViewTest : MainDispatcherTest() {
         }
 
     @Test
-    fun renameSavedViewTrimsWhitespace() =
+    fun renameSavedViewSavesTheNewName() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val model = vm(session = session)
             val view = SavedView(id = "v1", name = "Old")
-            model.renameSavedView(view, "  New name  ")
+            model.renameSavedView(view, "New name")
             advanceUntilIdle()
             session.savedViews.saved.single() shouldBe view.copy(name = "New name")
         }

@@ -109,18 +109,17 @@ class TagManagementViewModel(
     val rows: StateFlow<List<TagRow>?> =
         tags.map { it?.let(::tagRows) }.stateIn(viewModelScope, WhileSubscribedTimeout, null)
 
+    // Names arrive trimmed: the dialogs they are typed or picked in trim what they confirm.
+
     override fun rename(
         from: String,
         to: String,
-    ) = launchReporting(Res.string.common_tags_rename_failed) { tagAdmin.renameTag(from, to.trim()) }
+    ) = launchReporting(Res.string.common_tags_rename_failed) { tagAdmin.renameTag(from, to) }
 
     override fun merge(
         names: List<String>,
         into: String,
-    ) {
-        val kept = into.trim()
-        eachTag(names.filter { it != kept }, MergeFailed) { tagAdmin.mergeTag(it, kept) }
-    }
+    ) = eachTag(names.filter { it != into }, MergeFailed) { tagAdmin.mergeTag(it, into) }
 
     override fun delete(names: List<String>) =
         eachTag(names, DeleteFailed) {
