@@ -141,6 +141,10 @@ coroutines:
     # test's finally runs after a failure, not a cancellation, so tests are left out.
     active: true
     excludes: *testSources
+  SuspendFunWithCoroutineScopeReceiver:
+    # A suspend function already has a scope to launch in, coroutineScope { }; a CoroutineScope
+    # receiver on top of it leaves two to choose from. Needs type resolution.
+    active: true
 
 potential-bugs:
   ElseCaseInsteadOfExhaustiveWhen:
@@ -157,7 +161,9 @@ potential-bugs:
   # Low-noise checks for real bugs, on top of the defaults. Tried and left off: MissingUseCall
   # (215 hits, nearly all a Closeable handed to its owner or returned), PropertyUsedBeforeDeclaration
   # (57, reads inside function bodies, which run after every property is initialised) and
-  # NullableToStringCall (9, deliberate "null" in keys and messages, or a smart cast it cannot see).
+  # NullableToStringCall (9, deliberate "null" in keys and messages, or a smart cast it cannot see),
+  # and from the coroutines set CoroutineLaunchedInTestWithoutRunTest (tests that run on real time
+  # under runBlocking on purpose: filesystem watching and publication races, the live AI probe).
   UnconditionalJumpStatementInLoop:
     active: true
   DontDowncastCollectionTypes:
@@ -186,6 +192,13 @@ exceptions:
     active: true
   ThrowingExceptionsWithoutMessageOrCause:
     active: false
+  # An exception as an object shares one stack trace and one mutable cause between every throw;
+  # error(throwable) throws IllegalStateException with only its toString(). Both need type
+  # resolution.
+  ObjectExtendsThrowable:
+    active: true
+  ErrorUsageWithThrowable:
+    active: true
 
 config:
   # The Compose section below is read by the typed run, which loads the Compose ruleset; the

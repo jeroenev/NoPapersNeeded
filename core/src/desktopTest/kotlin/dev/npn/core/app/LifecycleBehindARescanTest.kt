@@ -23,7 +23,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Runnable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.test.runTest
 import kotlin.coroutines.CoroutineContext
 import kotlin.test.AfterTest
@@ -156,10 +156,10 @@ class LifecycleBehindARescanTest {
      * [waitingLifecycle], in a coroutine of its own until it waits for that lock, then [meanwhile],
      * which changes the library before the rescan reads it; then let the rescan go on, and await both.
      */
-    private suspend fun TestScope.behindARescan(
+    private suspend fun behindARescan(
         action: suspend () -> Unit,
         meanwhile: suspend () -> Unit,
-    ) {
+    ) = coroutineScope {
         val reached = journal.pauseNextListing()
         val rescan = async { coordinator.rescan() }
         reached.await()

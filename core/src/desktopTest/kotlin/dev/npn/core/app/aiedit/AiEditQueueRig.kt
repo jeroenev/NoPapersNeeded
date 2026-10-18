@@ -18,7 +18,6 @@ import dev.npn.core.testing.FakeTagRepository
 import dev.npn.core.testing.edit
 import dev.npn.core.testing.listItem
 import dev.npn.core.work.EndpointHealth
-import kotlinx.coroutines.test.TestScope
 
 /**
  * Real device database (the queue owns job and document rows) + the shared AI-edit fakes for the
@@ -114,7 +113,7 @@ internal const val OUTAGE_STEP_MS = 25L * 60L * 60L * 1000L
 /** Enough rounds to burn the systemic budget and then the per-document attempt cap. */
 private const val DRAIN_ROUNDS = AiEditQueue.MAX_JOB_ATTEMPTS + AiEditQueue.MAX_DOC_ATTEMPTS + 2
 
-internal suspend fun TestScope.withQueue(block: suspend (AiEditQueueRig) -> Unit) {
+internal suspend fun withQueue(block: suspend (AiEditQueueRig) -> Unit) {
     AiEditQueueRig(TempIndexDb("npn-edit-queue-db")).use { block(it) }
 }
 

@@ -135,6 +135,8 @@ internal class Rig(
     override fun close() = dbs.close()
 }
 
+// The rig's drainers run in the test's backgroundScope, which only a TestScope has.
+@Suppress("SuspendFunWithCoroutineScopeReceiver")
 internal suspend fun TestScope.withRig(block: suspend (Rig) -> Unit) {
     Rig(TempIndexDb("npn-enrich-db"), backgroundScope).use { block(it) }
 }

@@ -130,7 +130,8 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   callee already is NonCancellable, suppress the hit with that reason.
 - Typed potential-bug rules beyond the defaults: `UnconditionalJumpStatementInLoop`,
   `DontDowncastCollectionTypes`, `CharArrayToStringCall`, `ExitOutsideMain`,
-  `UnnecessaryNotNullCheck` (the config lists the ones tried and left off, with why).
+  `UnnecessaryNotNullCheck`, and `SuspendFunWithCoroutineScopeReceiver`, `ObjectExtendsThrowable`,
+  `ErrorUsageWithThrowable` (the config lists the ones tried and left off, with why).
 
 ## Architecture invariants (do not break)
 
