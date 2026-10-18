@@ -127,7 +127,9 @@ internal fun OcrTextTab(
         return
     }
 
-    val visibleText = text.take(MAX_OCR_DISPLAY_CHARS)
+    // Everything derived from the (up to 200k char) text is remembered on its inputs: a
+    // recomposition for anything else (a keystroke in the find box, a scroll) must not rescan it.
+    val visibleText = remember(text) { text.take(MAX_OCR_DISPLAY_CHARS) }
     var query by remember { mutableStateOf("") }
     // Scanning + re-highlighting the whole (up to 200k char) text is main-thread work, so the
     // expensive part runs on a debounced copy of the query rather than on every keystroke.
@@ -180,16 +182,22 @@ internal fun OcrTextTab(
         ) {
             SelectionContainer {
                 if (matches.isNotEmpty()) {
+                    val matchLength = activeQuery.length
+                    val segments =
+                        remember(visibleText, matches, matchLength, effectiveCurrent) {
+                            buildFindSegments(visibleText, matches, matchLength, effectiveCurrent)
+                        }
                     HighlightText(
-                        segments = buildFindSegments(visibleText, matches, activeQuery.length, effectiveCurrent),
+                        segments = segments,
                         style = MaterialTheme.typography.bodySmall,
                         onTextLayout = { layout = it },
                     )
                 } else if (highlightTerms.isNotEmpty()) {
-                    HighlightText(
-                        segments = parseQueryHighlight(visibleText, highlightTerms.joinToString(" ")),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+                    val segments =
+                        remember(visibleText, highlightTerms) {
+                            parseQueryHighlight(visibleText, highlightTerms.joinToString(" "))
+                        }
+                    HighlightText(segments = segments, style = MaterialTheme.typography.bodySmall)
                 } else {
                     Text(visibleText, style = MaterialTheme.typography.bodySmall)
                 }
