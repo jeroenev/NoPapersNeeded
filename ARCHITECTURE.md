@@ -120,6 +120,28 @@ Shared Compose Multiplatform UI + viewmodels + dependency wiring.
 | `app/ui/` | Screens, one package each: `library/` (list/grid, filters, preview), `detail/` (page viewer, metadata panel, history, split; `DocumentView` is the one wiring of a document to its `DocDetailViewModel`, which the detail screen and the library's side panel each frame with their own chrome, and share, so expanding the panel keeps the document as it was), `tags/`, `rules/`, `settings/`, `trash/`, `update/` (the new-release banner and `UpdateNoticeViewModel`, which offers a newer release once per start), `queue/` (the read-only OCR + AI enrichment backlog and the AI edit runs handed to the background; a top-level destination, on the rail on wide layouts and in the bottom bar's More sheet on compact ones), `onboarding/` (onboarding and the restore-failed screen, which share `LibraryLocationChooser`: the all-files grant, the folder pickers and the SAF switch), `nav/` (shell + routes), `ai/`, `common/` (shared components, one per UI concept: the form building blocks `SettingsSection`, `SwitchRow`, `HelpText`, `Dropdown`, `ExpanderRow` (with the `expander`/`disclosure` semantics every expander uses), `SuggestField` (the one autocomplete; `SearchField` shares its menu), `rememberNumberInput`, `TypedTextField` (text whose owner saves it slower than keys arrive, such as a device setting), `UiLanguage` (the one language-name table); `BackTopBar` and `TooltipIconButton`/`TopBarActions` for top bars, whose `TopBarAction`s also fill menus through `ActionMenuItems`; `keyShortcuts`, the one way a screen binds keys (a `when (event.key)` naming each key's action); `EmptyState`, `TagEditor`, `TagFormDialog`, `TagPickDialog`, `DocThumbnail`; `MessagesViewModel`, `SnackbarMessages`, `UiText`; and `LocalWindowWidthClass`, the window's one wide-or-compact decision that the shell and every screen read), `theme/`. Leaf composables take state plus actions, never a viewmodel: a screen hands its viewmodel down as a small actions interface it implements (`AiEditSetupActions`, `LibraryActions`, `ReviewController`, `SettingsActions`, `TagWrites`, `TrashWrites`, `DocumentWrites`, `DocumentActions`). ViewModels are co-located with their screen (e.g. `LibraryViewModel`, `DocDetailViewModel`). One-shot messages have one path: a `MessagesViewModel` sends `UiMessage`s (text, plus an optional action such as Undo) into an unbounded channel with `message` or `launchReporting`, where they wait for a collector however many pile up, and the screen's one `SnackbarMessages` shows them one at a time, in order. A message's `UiText` names a whole-sentence `StringResource` (or plural) and its arguments; the snackbar resolves it with the suspend `UiText.resolve(environment)` in the composition's resource environment, so it follows the app's language, and composables use the `@Composable` `resolve()`. |
 | `commonMain/composeResources` | `values/` (English) plus `values-nl/`, `values-de/`, `values-fr/`, `values-es/` and `values-pt/` string resources; `checkLocalization` checks every translation for missing keys and placeholder parity. |
 
+**What survives recreation.** A screen is rebuilt far more often than its library changes: a
+recreated window or activity, a restored process on Android, a change of the app's language (which
+rebuilds everything under `LocaleProvider`) and a change of width class (which swaps the layout, and
+with it the composables). A composable's own state, `rememberSaveable` included, survives only the
+first two, and only where it keeps its place in the tree. So whatever the user would miss — a
+selection, text typed into a screen or a dialog, the pane, tab or document a screen shows, an open
+dialog or confirmation and what it is about, a filter being edited, a review under way — is screen
+state, and lives in the screen's viewmodel, never in a composable. Screens' viewmodels live in their
+back-stack entries, whose stores `LibrarySessionUi` holds above `LocaleProvider`, so they outlive
+all of the above but a process death. For that one, a viewmodel takes the `SavedStateHandle` its
+entry hands it (`createSavedStateHandle()` in the `viewModel {}` initializer) and keeps each such
+value in a `SavedUiState` (or saves its own state's worth-keeping part with `saveUiState`): saved as
+`NpnJson.Persisted` JSON on every change, restored when the new viewmodel is built, and dropped when
+too large for Android's saved state. State the screens share or hand each other belongs to the session's `LibrarySessionUi`: the drafts (saved at
+the root, for a restored process) and the hand-offs (not saved). What a composable may keep is what
+nobody misses: hover, focus, an open menu, animation, a gesture under way, scroll positions. What a
+restored process legitimately loses is work in flight (a rescan, a model call, a write), messages
+not yet shown, and what lived only in memory before it (results fetched on demand, the last scan's
+report). Every viewmodel test recreates its viewmodel at least once mid-interaction through
+`Recreatable` (`composeApp` commonTest), which saves and restores the handle as a process death
+does and checks the screen renders the same; its `Transient` lists the exceptions above.
+
 ### `core-testing` — `dev.npn.core.testing`
 
 Test doubles of `core`'s facets (documents, tags, field registry, metadata writes, document content,
