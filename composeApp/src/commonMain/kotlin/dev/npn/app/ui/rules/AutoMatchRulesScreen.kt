@@ -14,13 +14,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Rule
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -47,6 +45,7 @@ import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.LoadingIndicator
 import dev.npn.app.ui.common.NumericField
+import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.rememberSnackbarMessages
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.model.FieldDef
@@ -60,7 +59,6 @@ import kotlinx.serialization.Serializable
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.common_delete
-import no_papers_needed.composeapp.generated.resources.common_edit
 import no_papers_needed.composeapp.generated.resources.common_name
 import no_papers_needed.composeapp.generated.resources.common_rules_actions_set
 import no_papers_needed.composeapp.generated.resources.common_rules_actions_tags
@@ -254,14 +252,8 @@ private fun RuleCard(
             if (rule.tags.isNotEmpty() || rule.sets.isNotEmpty()) {
                 HelpText(buildActionsLabel(rule, fields))
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                IconButton(onClick = { onEdit(rule) }) {
-                    Icon(Icons.Filled.Edit, contentDescription = stringResource(Res.string.common_edit))
-                }
-                IconButton(onClick = { onDelete(rule) }) {
-                    Icon(Icons.Filled.Delete, contentDescription = stringResource(Res.string.common_delete))
-                }
-            }
+            // The card itself opens the rule for editing; only deleting needs a button of its own.
+            TooltipIconButton(Icons.Filled.Delete, stringResource(Res.string.common_delete), { onDelete(rule) })
         }
     }
 }
