@@ -6,6 +6,7 @@ import dev.npn.core.db.FtsQuery
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.defs
 import dev.npn.core.db.isLive
+import dev.npn.core.index.DuplicateReport
 import dev.npn.core.journal.EventDecoderRegistry
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
@@ -203,8 +204,8 @@ internal class DocumentRepositoryImpl(
     override fun observeMissing(): Flow<List<Doc>> =
         documentDao.observeMissing().map { docs -> docs.map { it.toDoc() } }
 
-    override fun observeDuplicates(): Flow<List<Pair<String, String>>> =
-        db.duplicateDao().observeAll().map { rows -> rows.map { it.docId to it.relPath } }
+    override fun observeDuplicates(): Flow<List<DuplicateReport>> =
+        db.duplicateDao().observeAll().map { rows -> rows.map { DuplicateReport(it.docId, it.relPath) } }
 
     override suspend fun history(docId: String): List<DocumentHistoryRecord> {
         val dao = db.metadataProjectionDao()

@@ -8,6 +8,7 @@ import dev.npn.core.app.Doc
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.PermanentDeleteOutcome
+import dev.npn.core.index.DuplicateReport
 import dev.npn.core.index.RelinkCandidate
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -28,7 +29,7 @@ import org.jetbrains.compose.resources.PluralStringResource
 data class TrashUiState(
     val trashed: List<DocListItem> = emptyList(),
     /** Extra copies of a document's bytes: its id, and the path of the copy. */
-    val duplicates: List<Pair<String, String>> = emptyList(),
+    val duplicates: List<DuplicateReport> = emptyList(),
     val missing: List<Doc> = emptyList(),
     /** Where each missing document may have gone, by its id, best match first. */
     val relinks: Map<String, List<RelinkCandidate>> = emptyMap(),

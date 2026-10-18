@@ -57,6 +57,7 @@ import dev.npn.core.app.Doc
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.index.DuplicateReport
 import dev.npn.core.index.RelinkCandidate
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.nullable
@@ -397,7 +398,7 @@ private fun TrashList(
 
 @Composable
 private fun DuplicatesList(
-    duplicates: List<Pair<String, String>>,
+    duplicates: List<DuplicateReport>,
     onResolve: (docId: String, extraRelPath: String) -> Unit,
 ) {
     if (duplicates.isEmpty()) {
@@ -412,7 +413,7 @@ private fun DuplicatesList(
         Modifier.fillMaxSize().padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        items(duplicates, key = { it.first + it.second }) { (docId, extra) ->
+        items(duplicates, key = { it.docId + it.extraRelPath }) { duplicate ->
             Card(Modifier.fillMaxWidth()) {
                 Row(
                     Modifier.padding(12.dp).fillMaxWidth(),
@@ -425,9 +426,9 @@ private fun DuplicatesList(
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary,
                         )
-                        Text(extra, style = MaterialTheme.typography.bodySmall)
+                        Text(duplicate.extraRelPath, style = MaterialTheme.typography.bodySmall)
                     }
-                    TextButton(onClick = { onResolve(docId, extra) }) {
+                    TextButton(onClick = { onResolve(duplicate.docId, duplicate.extraRelPath) }) {
                         Text(stringResource(Res.string.common_trash_remove_extra))
                     }
                 }

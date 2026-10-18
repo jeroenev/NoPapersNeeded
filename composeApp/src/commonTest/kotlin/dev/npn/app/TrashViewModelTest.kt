@@ -3,6 +3,7 @@ package dev.npn.app
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.trash.TrashUiState
 import dev.npn.app.ui.trash.TrashViewModel
+import dev.npn.core.index.DuplicateReport
 import dev.npn.core.index.RelinkCandidate
 import dev.npn.core.index.RelinkSignal
 import dev.npn.core.testing.doc
@@ -62,14 +63,14 @@ class TrashViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             session.documents.trashed.value = listOf(listItem("d1"))
-            session.documents.duplicates.value = listOf("d2" to "copy/d2.pdf")
+            session.documents.duplicates.value = listOf(DuplicateReport("d2", "copy/d2.pdf"))
             session.documents.missing.value = listOf(doc("d3"))
             val model = vm(session)
             collecting(model.state)
             advanceUntilIdle()
             val state = model.state.value.shouldNotBeNull()
             state.trashed.map { it.doc.docId } shouldContainExactly listOf("d1")
-            state.duplicates shouldContainExactly listOf("d2" to "copy/d2.pdf")
+            state.duplicates shouldContainExactly listOf(DuplicateReport("d2", "copy/d2.pdf"))
             state.missing.map { it.docId } shouldContainExactly listOf("d3")
         }
 

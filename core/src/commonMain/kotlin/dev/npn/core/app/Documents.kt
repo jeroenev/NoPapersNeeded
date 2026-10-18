@@ -1,5 +1,6 @@
 package dev.npn.core.app
 
+import dev.npn.core.index.DuplicateReport
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.model.reviewMarkerIsAuthoritative
@@ -102,7 +103,8 @@ interface DocumentRepository {
 
     fun observeMissing(): Flow<List<Doc>>
 
-    fun observeDuplicates(): Flow<List<Pair<String, String>>> // docId to extra relPath
+    /** The extra copies of documents' bytes the last rescan found, each by its document and path. */
+    fun observeDuplicates(): Flow<List<DuplicateReport>>
 
     /**
      * Autocomplete suggestions for a partial search query. Combines terms from the FTS5

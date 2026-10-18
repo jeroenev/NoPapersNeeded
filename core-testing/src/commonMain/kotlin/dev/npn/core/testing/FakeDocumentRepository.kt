@@ -6,6 +6,7 @@ import dev.npn.core.app.DocumentHistoryRecord
 import dev.npn.core.app.DocumentRepository
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySort
+import dev.npn.core.index.DuplicateReport
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.ocr.OcrEngineRef
@@ -83,7 +84,7 @@ class FakeDocumentRepository : DocumentRepository {
     val unreviewedOrUntaggedCount = MutableStateFlow(0)
     val trashed = MutableStateFlow<List<DocListItem>>(emptyList())
     val missing = MutableStateFlow<List<Doc>>(emptyList())
-    val duplicates = MutableStateFlow<List<Pair<String, String>>>(emptyList())
+    val duplicates = MutableStateFlow<List<DuplicateReport>>(emptyList())
 
     /** Records every (filter, sort) a caller subscribed with. */
     val observedFilters = mutableListOf<Pair<LibraryFilter, LibrarySort>>()
@@ -110,7 +111,7 @@ class FakeDocumentRepository : DocumentRepository {
 
     override fun observeMissing(): Flow<List<Doc>> = missing
 
-    override fun observeDuplicates(): Flow<List<Pair<String, String>>> = duplicates
+    override fun observeDuplicates(): Flow<List<DuplicateReport>> = duplicates
 
     /** Backing list returned by [history]; tests mutate it to drive the history panel. */
     var historyList: List<DocumentHistoryRecord> = emptyList()
