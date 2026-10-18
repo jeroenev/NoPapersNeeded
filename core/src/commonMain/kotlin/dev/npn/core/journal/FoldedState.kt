@@ -86,7 +86,7 @@ class FoldedState {
     // --- tag styles: tag -> LWW (color, icon, hlc) ---
     private val tagStyles = HashMap<String, StyleVal>()
 
-    data class StyleVal(
+    internal data class StyleVal(
         val color: String?,
         val icon: String?,
         override val hlc: Hlc,
@@ -251,13 +251,19 @@ class FoldedState {
         return name
     }
 
-    /** Effective value of a single-value property, or null if unset/cleared. */
+    /**
+     * Effective value of [doc]'s own register for a single-value property, or null if unset/cleared.
+     * A test seam: main code reads [inheritedProp].
+     */
     internal fun effectiveProp(
         doc: String,
         key: SystemProperty,
     ): String? = props[doc]?.get(key)?.value
 
-    /** Winning version, including explicit clears, of [doc]'s own register for [key]. */
+    /**
+     * Winning version, including explicit clears, of [doc]'s own register for [key]. A test seam:
+     * main code reads [inheritedPropVersion].
+     */
     internal fun propVersion(
         doc: String,
         key: SystemProperty,
@@ -407,7 +413,7 @@ class FoldedState {
     }
 
     /** Effective style for a tag, or null if none set. */
-    fun tagStyle(tag: String): StyleVal? = tagStyles[tag]
+    internal fun tagStyle(tag: String): StyleVal? = tagStyles[tag]
 
     /** Effective value of a library-wide synced setting, or null if never set/cleared. */
     fun effectiveSetting(key: String): String? = settings[key]?.value
@@ -504,7 +510,8 @@ class FoldedState {
         }
 }
 
-interface HlcStamped {
+/** A last-writer-wins register's value, stamped with the HLC it was written at ([putIfNewerHlc]). */
+internal interface HlcStamped {
     val hlc: Hlc
 }
 
