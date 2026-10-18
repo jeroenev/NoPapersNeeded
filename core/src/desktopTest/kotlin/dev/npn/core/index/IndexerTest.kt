@@ -189,7 +189,7 @@ class IndexerTest {
             rig.clock.advance()
             val coordinator = rig.coordinator(writer)
             coordinator.refreshState()
-            coordinator.commitAndRescan(listOf(PendingOp.relink(oldId, newId)))
+            coordinator.relinkAndRescan(oldId, newId)
 
             rig.db.tagDao().tagsForDocument(newId) shouldContainExactly listOf("invoice")
             rig.db

@@ -86,7 +86,7 @@ internal class SessionGraph(
             coordinator.commitBuilt { state ->
                 // Once per change: a document that cannot follow its location (storage that cannot
                 // move it, a move that keeps failing) would have it journaled again after every write.
-                if (state.inheritedProp(docId, SystemProperty.STORAGE_PATH) == path) {
+                if (state.effectiveProp(docId, SystemProperty.STORAGE_PATH) == path) {
                     emptyList()
                 } else {
                     listOf(PendingOp.propSet(docId, SystemProperty.STORAGE_PATH, path))
@@ -317,11 +317,12 @@ internal class SessionGraph(
 
     /**
      * What opening does to the library's data once everything is wired, before the session starts:
-     * saved views an older index kept move into the journal (best effort), and the rules' cache
-     * catches up with the journal's list.
+     * saved views an older index kept move into the journal and relinks an earlier build wrote get
+     * their copies (each best effort), and the rules' cache catches up with the journal's list.
      */
     suspend fun prepare() {
         deps.upgradeAtOpen("Moving saved views into the journal") { savedViews.adoptIndexViews(db) }
+        deps.upgradeAtOpen("Copying relinked documents' metadata") { coordinator.copyRelinkInheritanceIfNeeded() }
         ruleSource.mirror()
     }
 }

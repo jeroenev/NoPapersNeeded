@@ -524,7 +524,7 @@ internal class MetadataAccumulator(
          * Not needed for changes that only affect ingestion/validation, or for Room schema changes
          * that already drop the affected tables.
          */
-        const val PROJECTION_VERSION = 10
+        const val PROJECTION_VERSION = 11
     }
 }
 

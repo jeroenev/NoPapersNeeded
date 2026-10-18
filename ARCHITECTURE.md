@@ -389,16 +389,29 @@ Kept by `BakeService`, `BakeRelink`, `DocContentFacadeImpl` and `FoldedState`:
   temporary file, and its relink must name the bytes it installed. A trash or delete for good holds
   that lock too, so it waits for a bake and then acts on the document the bake made
   (`changeLifecycle` follows the relink).
-- A relink target shows its predecessors' metadata as its own (`FoldedState.inheritedFields`,
-  `inheritedProp`, `inheritedTags`): per field or property the latest write among them wins, a
-  clear included, and their tags are one OR-set. An edit, a clear or a tag removal on the target
-  reaches what it inherited, and an incremental fold projects it with its predecessors as a rescan
-  does.
+- **A document's metadata is its own.** Every view the fold projects reads the document's own
+  events, a relink target's included. A relink (a bake, or a missing document relinked to the file
+  that took its place) writes, in the same transaction as the `relink` op, ordinary `field-set`,
+  `prop-set` and `tag-add` copies of the old document's effective metadata onto the new one
+  (`FoldedState.relinkOps`, `JournalCoordinator.relinkAndRescan`): every field value, every system
+  property (storage path, review mark, OCR engine pin) and every live tag, a value of the old
+  document's replacing the new one's and their tags joined. The relink op itself only supersedes:
+  the old document is hidden (`resolveDocId`, `isCurrent`) and its bytes are a duplicate of the
+  target while the library shows it (section 6.2).
+- So an edit of the old document made after the relink, by a device that had not seen it, no
+  longer reaches the target, nor does a tag removal from it; such an edit is one the device that
+  has the relink cannot see or make. A document's history is its own events, so a relink target's
+  shows the copies, not its predecessors' edits.
+- Libraries an earlier build relinked in, without copies, get them once at open
+  (`RelinkInheritanceUpgrade.kt`, the one place that still computes the inherited view, guarded by
+  the synced `relinkCopies` setting; a relink carries the upgrade too while it has not run). The
+  upgrade accepts one race: a device that upgrades before an edit to a predecessor reached it
+  copies the older value, which wins when its HLC is later.
 - A bake changes no page, so its relink hands the original's text on: before it, the original's OCR
   versions are published again under the baked hash as this device's (`OcrPipeline.copyText`) and
   its enrichment mark is copied; after it, that text is indexed, so the baked document is
-  searchable at once and is neither OCR'd nor enriched again. A relink to other bytes hands on
-  nothing.
+  searchable at once and is neither OCR'd nor enriched again. A relink to other bytes hands on the
+  copied metadata and nothing else.
 
 ### 6.6 Journal storage
 
@@ -692,7 +705,7 @@ through the injected `EpochClock`; cancellation never swallowed.
   the capabilities the enum constant declares. Older builds refuse a `field-def` of a type they do
   not know, so a build that reads the type ships before any build lets a user pick it.
 - **A new per-document system marker** → a `SystemProperty`, written as `prop-set`, read from the
-  fold by `FoldProjection.kt` into a new `DocumentEntity` column (an index schema bump), a raised
+  fold (`FoldedState.effectiveProp`) by `FoldProjection.kt` into a new `DocumentEntity` column (an index schema bump), a raised
   `PROJECTION_VERSION`, its entry in `HistoryEntry.ofProperty`, and the matching contract file. A
   build that reads it ships before any build writes it.
 - **New persisted state** → by who could rebuild it: library data every device must agree on goes

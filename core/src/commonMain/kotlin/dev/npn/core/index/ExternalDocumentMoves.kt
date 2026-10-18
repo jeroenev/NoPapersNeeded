@@ -40,7 +40,7 @@ internal class ExternalDocumentMoves(
     ) {
         val observable =
             rows.filter { row ->
-                val intended = state.inheritedProp(row.docId, SystemProperty.STORAGE_PATH)
+                val intended = state.effectiveProp(row.docId, SystemProperty.STORAGE_PATH)
                 row.isLive && (intended == null || intended == row.relPath)
             }
         if (observable.isEmpty()) return
@@ -105,8 +105,7 @@ internal class ExternalDocumentMoves(
         docId: String,
         path: String,
         state: FoldedState,
-    ): String =
-        NpnJson.Persisted.encodeToString(Baseline(path, state.inheritedPropVersion(docId, SystemProperty.STORAGE_PATH)))
+    ): String = NpnJson.Persisted.encodeToString(Baseline(path, state.propVersion(docId, SystemProperty.STORAGE_PATH)))
 
     private fun key(docId: String): String = "observed-document-path:$docId"
 }
