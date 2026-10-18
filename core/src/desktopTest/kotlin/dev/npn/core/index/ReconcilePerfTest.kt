@@ -2,9 +2,6 @@ package dev.npn.core.index
 
 import dev.npn.core.app.LibrarySettingKeys
 import dev.npn.core.db.ProjectionStatus
-import dev.npn.core.fs.ExternalSource
-import dev.npn.core.fs.FileMeta
-import dev.npn.core.fs.FsEvent
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
@@ -18,8 +15,6 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
@@ -29,23 +24,15 @@ import kotlin.test.assertFailsWith
 
 /**
  * A [LibraryFileSystem] that delegates everything to a real [JvmLibraryFileSystem] but records
- * every [readBytes] call so tests can assert the reconcile short-circuit avoids re-reading
- * already-applied, unchanged journal sources.
+ * every [readBytes] and [readTail] call so tests can assert the reconcile short-circuit avoids
+ * re-reading already-applied, unchanged journal sources.
  */
 private class CountingFileSystem(
     private val delegate: JvmLibraryFileSystem,
-) : LibraryFileSystem {
+) : LibraryFileSystem by delegate {
     val reads = ArrayList<String>()
 
     fun journalReads(): List<String> = reads.filter { it.startsWith("${NpnPaths.JOURNAL_DIR}/") }
-
-    override suspend fun listAllIndexable(): List<FileMeta> = delegate.listAllIndexable()
-
-    override suspend fun listAllUnder(relPath: String): List<FileMeta> = delegate.listAllUnder(relPath)
-
-    override suspend fun exists(relPath: String): Boolean = delegate.exists(relPath)
-
-    override suspend fun stat(relPath: String): FileMeta? = delegate.stat(relPath)
 
     override suspend fun readBytes(relPath: String): ByteArray {
         reads.add(relPath)
@@ -59,33 +46,6 @@ private class CountingFileSystem(
         reads.add(relPath)
         return delegate.readTail(relPath, maxBytes)
     }
-
-    override suspend fun writeBytesOnce(
-        relPath: String,
-        bytes: ByteArray,
-    ) = delegate.writeBytesOnce(relPath, bytes)
-
-    override suspend fun publishVerifiedObjectOnce(
-        stagingPath: String,
-        canonicalPath: String,
-        expectedHash: String,
-    ) = delegate.publishVerifiedObjectOnce(stagingPath, canonicalPath, expectedHash)
-
-    override suspend fun move(
-        fromRelPath: String,
-        toRelPath: String,
-    ) = delegate.move(fromRelPath, toRelPath)
-
-    override suspend fun delete(relPath: String) = delegate.delete(relPath)
-
-    override suspend fun sha256(relPath: String): String = delegate.sha256(relPath)
-
-    override suspend fun importExternal(
-        source: ExternalSource,
-        toRelPath: String,
-    ) = delegate.importExternal(source, toRelPath)
-
-    override fun watch(): Flow<FsEvent> = emptyFlow()
 }
 
 /**
@@ -151,7 +111,7 @@ class ReconcilePerfTest {
 
             // An older build's v1 segment, as libraries still hold them.
             clock.advance()
-            val segment = LegacySegments(fs, "dev-main", clock).write(listOf(PendingOp.tagAdd(docId, "invoice")))
+            val segment = rig.legacySegments("dev-main").write(listOf(PendingOp.tagAdd(docId, "invoice")))
             val coordinator = rig.coordinator(rig.writer("dev-main"))
             coordinator.refreshState()
             coordinator.reconcileMetadata()
@@ -368,7 +328,7 @@ class ReconcilePerfTest {
             val docId = db.documentDao().requireRowAtPath("a.pdf").docId
 
             clock.advance()
-            val segment = LegacySegments(fs, "dev-main", clock).write(listOf(PendingOp.tagAdd(docId, "invoice")))
+            val segment = rig.legacySegments("dev-main").write(listOf(PendingOp.tagAdd(docId, "invoice")))
             val coordinator = rig.coordinator(rig.writer("dev-main"))
             coordinator.refreshState()
             coordinator.reconcileMetadata()
