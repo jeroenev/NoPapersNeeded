@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.withContext
+import java.io.IOException
 
 /**
  * Android [WatchedFolder] over a SAF tree uri (persistable permission must already be taken).
@@ -29,20 +30,18 @@ class SafWatchedFolder(
     override suspend fun listPdfs(): List<WatchedFolderFile> =
         withContext(io) {
             val root = DocumentFile.fromTreeUri(appContext, treeUri) ?: return@withContext emptyList()
-            runCatching {
-                root
-                    .listFiles()
-                    .filter { it.isFile && isPdf(it) }
-                    .map { child ->
-                        WatchedFolderFile(
-                            id = child.uri.toString(),
-                            name = child.name ?: "document.pdf",
-                            size = child.length(),
-                            mtimeMillis = child.lastModified(),
-                            source = ExternalSource(child.uri),
-                        )
-                    }
-            }.getOrDefault(emptyList())
+            root
+                .listFiles()
+                .filter { it.isFile && isPdf(it) }
+                .map { child ->
+                    WatchedFolderFile(
+                        id = child.uri.toString(),
+                        name = child.name ?: "document.pdf",
+                        size = child.length(),
+                        mtimeMillis = child.lastModified(),
+                        source = ExternalSource(child.uri),
+                    )
+                }
         }
 
     override suspend fun delete(
@@ -50,17 +49,16 @@ class SafWatchedFolder(
         docId: String,
     ): Boolean =
         withContext(io) {
-            runCatching {
-                val uri = file.id.toUri()
-                val doc = DocumentFile.fromSingleUri(appContext, uri) ?: return@runCatching false
-                // A provider that reports no mtime (lastModified 0) has the file read and hashed.
-                val holds =
-                    file.stillHolds(docId, doc.length(), doc.lastModified()) {
-                        val input = checkNotNull(appContext.contentResolver.openInputStream(uri)) { "Cannot open $uri" }
-                        input.use { it.sha256Hex() }
-                    }
-                holds && doc.delete()
-            }.getOrDefault(false)
+            val uri = file.id.toUri()
+            // Gone already, by another hand: nothing to delete.
+            val doc = DocumentFile.fromSingleUri(appContext, uri)?.takeIf { it.exists() } ?: return@withContext false
+            // A provider that reports no mtime (lastModified 0) has the file read and hashed.
+            val holds =
+                file.stillHolds(docId, doc.length(), doc.lastModified()) {
+                    val input = appContext.contentResolver.openInputStream(uri) ?: throw IOException("Cannot open $uri")
+                    input.use { it.sha256Hex() }
+                }
+            holds && (doc.delete() || throw IOException("Could not delete $uri"))
         }
 
     override fun changes(): Flow<Unit> = emptyFlow()

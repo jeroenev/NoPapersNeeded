@@ -6,6 +6,7 @@ import dev.npn.core.fs.ExternalSource
 import dev.npn.core.index.IndexProgress
 import dev.npn.core.index.ScanReport
 import dev.npn.core.journal.EpochClock
+import dev.npn.core.util.RecordingLog
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
@@ -20,6 +21,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import java.io.IOException
 import java.nio.file.Path
 import kotlin.test.Test
 
@@ -37,18 +39,25 @@ class WatchedFolderSweepTest {
     private class FakeFolder(
         private val files: List<WatchedFolderFile>,
         private val events: Flow<Unit> = emptyFlow(),
+        /** How many listings, from the first, fail as an unreadable folder does. */
+        private val failedListings: Int = 0,
+        private val deleteFailure: Exception? = null,
     ) : WatchedFolder {
         var listings = 0
 
         override suspend fun listPdfs(): List<WatchedFolderFile> {
             listings++
+            if (listings <= failedListings) throw IOException("folder unreadable")
             return files.toList()
         }
 
         override suspend fun delete(
             file: WatchedFolderFile,
             docId: String,
-        ) = true
+        ): Boolean {
+            deleteFailure?.let { throw it }
+            return true
+        }
 
         override fun changes(): Flow<Unit> = events
     }
@@ -122,6 +131,41 @@ class WatchedFolderSweepTest {
             sweep.cancelAndJoin()
 
             importer.scanOnce().imported shouldBe 1
+        }
+
+    /** A listing that fails is logged, and the loop sweeps again at the next poll. */
+    @Test
+    fun aFailedListingIsLoggedAndTheNextPollSweepsAgain() =
+        runTest {
+            val log = RecordingLog()
+            val ingest = FakeIngest { ImportOutcome.Imported("doc", it) }
+            val folder = FakeFolder(listOf(file), failedListings = 1)
+            val importer = WatchedFolderImporter(ingest, folder, { false }, log = log, minQuietMillis = 0)
+
+            importer.start(backgroundScope, pollIntervalMillis = 60_000, timeSource = testScheduler.timeSource)
+            runCurrent()
+
+            ingest.imports shouldBe 0
+            log.entries.single().message shouldBe "Watched folder sweep failed"
+
+            advanceTimeBy(60_001)
+
+            folder.listings shouldBe 2
+            ingest.imports shouldBe 1
+        }
+
+    /** A source the importer could not delete after its import is logged, not dropped. */
+    @Test
+    fun aFailedDeleteAfterImportIsLogged() =
+        runTest {
+            val log = RecordingLog()
+            val folder = FakeFolder(listOf(file), deleteFailure = IOException("read-only"))
+            val ingest = FakeIngest { ImportOutcome.Imported("doc", it) }
+            val importer = WatchedFolderImporter(ingest, folder, { true }, log = log, minQuietMillis = 0)
+
+            importer.scanOnce().imported shouldBe 1
+
+            log.entries.single().message shouldBe "Deleting scan.pdf from the watched folder after import failed"
         }
 
     @Test

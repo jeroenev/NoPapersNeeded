@@ -44,14 +44,18 @@ data class WatchedFolderFile(
  * folder of a scanner app). Desktop implements this over java.nio, android over SAF.
  */
 interface WatchedFolder {
-    /** Non-recursive listing of the PDF files currently in the folder. Empty when unreachable. */
+    /**
+     * Non-recursive listing of the PDF files currently in the folder. Empty when the folder is not
+     * there; throws when it cannot be listed, for the sweep to log.
+     */
     suspend fun listPdfs(): List<WatchedFolderFile>
 
     /**
      * Remove [file] from the watched folder (only used when delete-after-import is on), only while
      * it still holds the bytes imported as [docId], or found in the library as it
      * ([WatchedFolderFile.stillHolds]): a file written under its name since was never imported, and
-     * is left for the next sweep. Returns whether it deleted the file.
+     * is left for the next sweep. Returns whether it deleted the file; false for one already gone.
+     * Throws when the file cannot be read or deleted, for the importer to log.
      */
     suspend fun delete(
         file: WatchedFolderFile,
