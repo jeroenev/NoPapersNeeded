@@ -2,7 +2,11 @@ package dev.npn.app
 
 import dev.npn.app.di.LibraryUnavailableException
 import dev.npn.app.di.OpenFailureReason
+import dev.npn.app.ui.nav.QueueStatus
 import dev.npn.core.ai.AiProvider
+import dev.npn.core.app.QueuedWork
+import dev.npn.core.app.WorkStage
+import dev.npn.core.app.WorkState
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
@@ -36,6 +40,28 @@ class AppViewModelTest : MainDispatcherTest() {
     }
 
     private fun TestScope.env(savedLocation: String? = null) = FakeAppEnvironment(backgroundScope, savedLocation)
+
+    /** The shell's queue badge follows the open library's queues, and clears with no library open. */
+    @Test
+    fun theQueueBadgeFollowsTheOpenLibrary() =
+        runTest(dispatcher) {
+            val env = env(savedLocation = "/lib")
+            val vm = model(env)
+            collecting(vm.queueStatus)
+            runCurrent()
+            vm.queueStatus.value shouldBe QueueStatus.None
+
+            env.sessions
+                .getValue("/lib")
+                .work.queueEntries.value =
+                listOf(QueuedWork("d1", "d1.pdf", WorkStage.OCR, WorkState.WAITING, attempts = 0, updatedAt = 0L))
+            runCurrent()
+            vm.queueStatus.value shouldBe QueueStatus(pending = 1)
+
+            env.closeLibrary()
+            runCurrent()
+            vm.queueStatus.value shouldBe QueueStatus.None
+        }
 
     @Test
     fun theSavedLibraryOpensAtStart() =

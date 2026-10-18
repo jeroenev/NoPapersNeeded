@@ -10,6 +10,8 @@ import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.asUiText
 import dev.npn.app.ui.common.clearThumbCache
 import dev.npn.app.ui.common.uiText
+import dev.npn.app.ui.nav.QueueStatus
+import dev.npn.app.ui.nav.queueStatus
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.importAll
 import dev.npn.core.fs.ExternalSource
@@ -19,12 +21,15 @@ import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -74,6 +79,7 @@ sealed interface AppState {
  * Folder work for a new library runs on [io]; [createFolder] is the platform's
  * [createLibraryFolder].
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class AppViewModel(
     private val env: AppEnvironment,
     private val io: CoroutineDispatcher = Dispatchers.IO,
@@ -118,6 +124,16 @@ class AppViewModel(
      */
     val aiConfigured: StateFlow<Boolean> =
         env.settings.aiConfigured().stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    /**
+     * Outstanding background work in the open library, for the shell's queue badge: the only
+     * standing sign that the app is still busy, or, once a background AI edit finishes, that it is
+     * waiting on the user, while on compact layouts the queue itself sits behind the bar's "More".
+     */
+    val queueStatus: StateFlow<QueueStatus> =
+        env.session
+            .flatMapLatest { session -> session?.work?.queueStatus() ?: flowOf(QueueStatus.None) }
+            .stateIn(viewModelScope, WhileSubscribedTimeout, QueueStatus.None)
 
     init {
         restore()

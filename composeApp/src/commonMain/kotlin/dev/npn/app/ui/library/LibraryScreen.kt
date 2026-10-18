@@ -52,6 +52,7 @@ import dev.npn.app.platform.platformFileToExternalSource
 import dev.npn.app.ui.common.ActionMenuItems
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.FocusOnEntry
+import dev.npn.app.ui.common.Handoff
 import dev.npn.app.ui.common.LoadingIndicator
 import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.SearchField
@@ -143,7 +144,8 @@ fun LibraryScreen(
     onOpenQueue: () -> Unit,
     /** Opens the AI-edit page, optionally scoped to the given documents (empty = no preselection). */
     onAiEdit: (List<String>) -> Unit,
-    filterHandoff: LibraryFilterHandoff,
+    /** A filter another screen hands the library to apply when it shows. */
+    filterHandoff: Handoff<LibraryFilter>,
     modifier: Modifier = Modifier,
     vm: LibraryViewModel = viewModel { LibraryViewModel(session, settings) },
 ) {

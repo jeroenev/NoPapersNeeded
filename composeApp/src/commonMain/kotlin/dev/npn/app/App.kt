@@ -32,54 +32,25 @@ import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavDestination.Companion.hasRoute
-import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
-import androidx.navigation.NavOptionsBuilder
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.toRoute
 import dev.npn.app.di.AppEnvironment
-import dev.npn.app.ui.ai.AiChatScreen
-import dev.npn.app.ui.ai.AiEditReviewScreen
-import dev.npn.app.ui.ai.AiEditScreen
-import dev.npn.app.ui.ai.AiEditSelection
 import dev.npn.app.ui.common.DesktopBridge
-import dev.npn.app.ui.common.LocalWindowWidthClass
+import dev.npn.app.ui.common.Handoff
 import dev.npn.app.ui.common.LocaleProvider
 import dev.npn.app.ui.common.ProvideWindowWidthClass
 import dev.npn.app.ui.common.PublishWindowTitle
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.testTagsAsResourceIds
 import dev.npn.app.ui.detail.BrowseContext
-import dev.npn.app.ui.detail.DocDetailScreen
 import dev.npn.app.ui.detail.DocumentDraftHost
 import dev.npn.app.ui.detail.DocumentDrafts
-import dev.npn.app.ui.detail.WithDraftResumeBanner
 import dev.npn.app.ui.detail.rememberDocumentDrafts
-import dev.npn.app.ui.library.LibraryFilterHandoff
-import dev.npn.app.ui.library.LibraryScreen
-import dev.npn.app.ui.nav.AiDestination
-import dev.npn.app.ui.nav.NavigationShell
-import dev.npn.app.ui.nav.QueueStatus
-import dev.npn.app.ui.nav.Route
-import dev.npn.app.ui.nav.TopLevelDestination
-import dev.npn.app.ui.nav.navigateAi
-import dev.npn.app.ui.nav.navigateTopLevel
-import dev.npn.app.ui.nav.queueStatus
+import dev.npn.app.ui.nav.MainNav
 import dev.npn.app.ui.onboarding.OnboardingScreen
 import dev.npn.app.ui.onboarding.OpenFailureMessage
 import dev.npn.app.ui.onboarding.RestoreFailedScreen
-import dev.npn.app.ui.queue.QueueScreen
-import dev.npn.app.ui.rules.AutoMatchRulesScreen
-import dev.npn.app.ui.settings.SettingsCategoryId
-import dev.npn.app.ui.settings.SettingsScreen
-import dev.npn.app.ui.tags.TagManagementScreen
 import dev.npn.app.ui.theme.NpnTheme
-import dev.npn.app.ui.trash.TrashScreen
-import dev.npn.app.ui.update.WithUpdateBanner
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.settings.SettingsRepository
@@ -90,9 +61,6 @@ import no_papers_needed.composeapp.generated.resources.common_app_name
 import no_papers_needed.composeapp.generated.resources.common_could_not_open_library
 import no_papers_needed.composeapp.generated.resources.common_ok
 import no_papers_needed.composeapp.generated.resources.common_opening_library
-import no_papers_needed.composeapp.generated.resources.library_settings
-import no_papers_needed.composeapp.generated.resources.library_tags
-import no_papers_needed.composeapp.generated.resources.library_trash
 import org.jetbrains.compose.resources.stringResource
 import kotlin.random.Random
 
@@ -104,8 +72,9 @@ fun App(env: AppEnvironment) {
 
 /**
  * What the open library's UI keeps when the app's language changes: its unsaved [drafts], where its
- * navigation stands ([nav]), its screens' viewmodels ([viewModels]), and the order the detail
- * screen walks ([browse]). All of it belongs to one session: another library gets its own.
+ * navigation stands ([nav]), its screens' viewmodels ([viewModels]), the order the detail screen
+ * walks ([browse]), and what one screen hands another as it navigates there. All of it belongs to
+ * one session: another library gets its own.
  */
 @Stable
 internal class LibraryUi(
@@ -114,6 +83,12 @@ internal class LibraryUi(
     val viewModels: ViewModelStoreOwner,
 ) {
     val browse = BrowseContext()
+
+    /** A filter for the library to apply when it shows (the assistant's "show in library"). */
+    val libraryFilter = Handoff<LibraryFilter>()
+
+    /** Documents handed from the library's selection mode (or the assistant) to the AI-edit page. */
+    val aiEditSelection = Handoff<List<String>>()
 }
 
 /**
@@ -229,6 +204,7 @@ private fun AppRoot(
 
                     is AppState.Open -> {
                         val aiConfigured by vm.aiConfigured.collectAsStateWithLifecycle()
+                        val queue by vm.queueStatus.collectAsStateWithLifecycle()
                         // Never null here: LocalizedApp remembers it for the session this state opened.
                         // Keyed, so nothing remembered for one library's screens carries over to
                         // another's when the session changes with no screen in between.
@@ -240,6 +216,7 @@ private fun AppRoot(
                                         session = current.session,
                                         library = library,
                                         aiConfigured = aiConfigured,
+                                        queue = queue,
                                         snackbar = snackbar,
                                         onOpenLibrary = vm::open,
                                     )
@@ -283,309 +260,6 @@ private fun OpenFailedDialog(
             TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_ok)) }
         },
     )
-}
-
-@Composable
-private fun MainNav(
-    settings: SettingsRepository,
-    session: LibrarySession,
-    /** The library's navigation and the browse order the detail screen pages through. */
-    library: LibraryUi,
-    aiConfigured: Boolean,
-    /** The shell's own snackbar, for what is reported outside any one screen. */
-    snackbar: SnackbarHostState,
-    onOpenLibrary: (location: String) -> Unit,
-) {
-    val nav = library.nav
-    // Ordered doc list for prev/next-document paging in the detail screen; populated on open.
-    val browse = library.browse
-    // Outstanding background work, for the shell's queue badge. Read here rather than in a screen
-    // because the badge is the only standing sign that the app is still busy — or, once a
-    // background AI edit finishes, that it is waiting on the user — and on compact layouts the
-    // queue itself sits behind the bar's "More" item.
-    val queue by remember(session) { session.work.queueStatus() }
-        .collectAsStateWithLifecycle(QueueStatus.None)
-
-    // Documents handed from the library's selection mode to the AI-edit page (see AiEditSelection).
-    val aiSelection =
-        remember {
-            AiEditSelection()
-        }
-    val libraryFilterHandoff = remember { LibraryFilterHandoff() }
-
-    DriveWindowTitle(nav)
-    WithUpdateBanner(settings, snackbar) {
-        WithDraftResumeBanner(onOpen = { docId -> nav.resumeDraft(docId, browse) }) {
-            // The rail carries AI edit on a wide window, so the chat's top bar offers it only on a
-            // compact one.
-            val aiEditInSidebar = LocalWindowWidthClass.current.isWide
-            NavigationShell(
-                current = nav.currentTopLevelDestination(),
-                aiCurrent = nav.currentAiDestination(),
-                aiConfigured = aiConfigured,
-                queue = queue,
-                onNavigate = { dest -> nav.navigateTopLevel(dest) },
-                onAiChat = { nav.navigateAi(Route.AiChat, restoreState = true) },
-                onAiEdit = { nav.openAiEdit(aiSelection) },
-            ) {
-                LibraryViewModelHost(library) {
-                    MainNavHost(
-                        nav = nav,
-                        settings = settings,
-                        session = session,
-                        browse = browse,
-                        aiSelection = aiSelection,
-                        libraryFilterHandoff = libraryFilterHandoff,
-                        showAiEditTopBar = !aiEditInSidebar,
-                        onOpenLibrary = onOpenLibrary,
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * Open the document a draft was left on, the way the resume banner does: back on Library with the
- * detail on top, so Back returns to the library rather than to wherever the user was.
- */
-private fun NavHostController.resumeDraft(
-    docId: String,
-    browse: BrowseContext,
-) {
-    openDoc(docId, browse) {
-        popUpTo(Route.Library)
-        launchSingleTop = true
-    }
-}
-
-/**
- * Open [docId]'s detail, paging through [order] with [query] highlighted. A document opened on its
- * own (from the queue, the assistant, an AI edit) gets an order of just itself, so the detail never
- * shows the previous list's position, neighbours or search.
- */
-private fun NavHostController.openDoc(
-    docId: String,
-    browse: BrowseContext,
-    order: List<String> = listOf(docId),
-    query: String? = null,
-    options: NavOptionsBuilder.() -> Unit = {},
-) {
-    browse.setOrder(order, query)
-    navigate(Route.DocDetail(docId), options)
-}
-
-@Composable
-private fun MainNavHost(
-    nav: NavHostController,
-    settings: SettingsRepository,
-    session: LibrarySession,
-    browse: BrowseContext,
-    aiSelection: AiEditSelection,
-    libraryFilterHandoff: LibraryFilterHandoff,
-    showAiEditTopBar: Boolean,
-    onOpenLibrary: (location: String) -> Unit,
-) {
-    NavHost(navController = nav, startDestination = Route.Library) {
-        composable<Route.Library> {
-            LibraryScreen(
-                session = session,
-                settings = settings,
-                onOpenDoc = { docId, order, query -> nav.openDoc(docId, browse, order, query) },
-                onTrash = { nav.navigateTopLevel(TopLevelDestination.TRASH) },
-                onOpenQueue = { nav.navigateTopLevel(TopLevelDestination.QUEUE) },
-                onAiEdit = { docIds -> nav.openAiEdit(aiSelection, docIds) },
-                filterHandoff = libraryFilterHandoff,
-            )
-        }
-        composable<Route.DocDetail> { entry ->
-            val route = entry.toRoute<Route.DocDetail>()
-            DocDetailScreen(
-                docId = route.docId,
-                session = session,
-                settings = settings,
-                browse = browse,
-                onBack = { if (nav.currentBackStackEntry == entry) nav.popBackStack() },
-                onNavigateToDoc = { targetId ->
-                    if (nav.currentBackStackEntry != entry) return@DocDetailScreen
-                    // Replace the current detail route so the back stack stays "library -> detail".
-                    nav.navigate(Route.DocDetail(targetId)) {
-                        popUpTo(Route.DocDetail(route.docId)) { inclusive = true }
-                        launchSingleTop = true
-                    }
-                },
-            )
-        }
-        composable<Route.Trash> {
-            TrashScreen(session = session)
-        }
-        composable<Route.TagManagement> {
-            TagManagementScreen(session = session)
-        }
-        composable<Route.Queue> {
-            QueueScreen(
-                session = session,
-                // A queued document is a real document; open it on its own, the way the resume banner
-                // does, so Back from detail returns to the queue.
-                onOpenDoc = { docId -> nav.openDoc(docId, browse) },
-                onOpenEditRun = { jobId -> nav.navigate(Route.AiEditReview(jobId)) },
-            )
-        }
-        settingsRoutes(nav, settings, session, browse, onOpenLibrary)
-        aiRoutes(nav, session, settings, browse, aiSelection, libraryFilterHandoff, showAiEditTopBar)
-    }
-}
-
-/** Settings and the pages only reachable from it. */
-private fun NavGraphBuilder.settingsRoutes(
-    nav: NavHostController,
-    settings: SettingsRepository,
-    session: LibrarySession,
-    browse: BrowseContext,
-    onOpenLibrary: (location: String) -> Unit,
-) {
-    composable<Route.Settings> { entry ->
-        SettingsScreen(
-            settings = settings,
-            session = session,
-            category = SettingsCategoryId.fromRouteKey(entry.toRoute<Route.Settings>().category),
-            onOpenCategory = { id -> nav.navigate(Route.Settings(id.routeKey)) },
-            onBack = { nav.popBackStack() },
-            onOpenLibrary = onOpenLibrary,
-            onResumeDraft = { docId -> nav.resumeDraft(docId, browse) },
-            onAutoMatchRules = { nav.navigate(Route.AutoMatchRules) },
-        )
-    }
-    composable<Route.AutoMatchRules> {
-        AutoMatchRulesScreen(
-            session = session,
-            onBack = { nav.popBackStack() },
-        )
-    }
-}
-
-/** Maps the current back stack entry to a shell destination; null hides the rail/bottom bar. */
-@Composable
-private fun NavHostController.currentTopLevelDestination(): TopLevelDestination? {
-    val entry by currentBackStackEntryAsState()
-    val destination = entry?.destination ?: return TopLevelDestination.LIBRARY
-    return when {
-        destination.hasRoute<Route.Library>() -> TopLevelDestination.LIBRARY
-        destination.hasRoute<Route.TagManagement>() -> TopLevelDestination.TAGS
-        destination.hasRoute<Route.Trash>() -> TopLevelDestination.TRASH
-        destination.hasRoute<Route.Queue>() -> TopLevelDestination.QUEUE
-        destination.hasRoute<Route.Settings>() -> TopLevelDestination.SETTINGS
-        else -> null
-    }
-}
-
-/** The open AI screen, if any; keeps the rail visible and its AI item selected on wide layouts. */
-@Composable
-private fun NavHostController.currentAiDestination(): AiDestination? {
-    val entry by currentBackStackEntryAsState()
-    val destination = entry?.destination ?: return null
-    return when {
-        destination.hasRoute<Route.AiChat>() -> AiDestination.CHAT
-        destination.hasRoute<Route.AiEdit>() -> AiDestination.EDIT
-        else -> null
-    }
-}
-
-/**
- * Drive the native window title from the current route. The document detail route is skipped: that
- * screen publishes the real document title to the same flow once its document has loaded.
- */
-@Composable
-private fun DriveWindowTitle(nav: NavHostController) {
-    val currentEntry by nav.currentBackStackEntryAsState()
-    val destination = currentEntry?.destination
-    val windowTitle: String? =
-        when {
-            destination?.hasRoute<Route.DocDetail>() == true -> {
-                null
-            }
-
-            destination?.hasRoute<Route.Trash>() == true -> {
-                stringResource(Res.string.library_trash)
-            }
-
-            destination?.hasRoute<Route.TagManagement>() == true -> {
-                stringResource(Res.string.library_tags)
-            }
-
-            destination?.hasRoute<Route.Settings>() == true -> {
-                stringResource(Res.string.library_settings)
-            }
-
-            else -> {
-                stringResource(Res.string.common_app_name)
-            }
-        }
-    PublishWindowTitle(windowTitle)
-}
-
-/** Open AI edit on [docIds], handed over through [selection]; none opens it to pick its own scope. */
-private fun NavHostController.openAiEdit(
-    selection: AiEditSelection,
-    docIds: List<String> = emptyList(),
-) {
-    selection.set(docIds)
-    navigateAi(Route.AiEdit)
-}
-
-/** AI assistant + AI tagging destinations (both reached from the library drawer). */
-private fun NavGraphBuilder.aiRoutes(
-    nav: NavHostController,
-    session: LibrarySession,
-    settings: SettingsRepository,
-    browse: BrowseContext,
-    aiSelection: AiEditSelection,
-    libraryFilterHandoff: LibraryFilterHandoff,
-    showAiEditTopBar: Boolean,
-) {
-    composable<Route.AiChat> {
-        AiChatScreen(
-            session = session,
-            settings = settings,
-            onBack = { nav.popBackStack() },
-            onOpenDoc = { docId -> nav.openDoc(docId, browse) },
-            onShowInLibrary = { docIds ->
-                libraryFilterHandoff.set(
-                    LibraryFilter(docIds = docIds),
-                )
-                nav.navigateTopLevel(TopLevelDestination.LIBRARY)
-            },
-            onAiEditDocs = { docIds -> nav.openAiEdit(aiSelection, docIds) },
-            onAiEdit =
-                if (showAiEditTopBar) {
-                    { nav.openAiEdit(aiSelection) }
-                } else {
-                    null
-                },
-        )
-    }
-    composable<Route.AiEdit> {
-        // Consumed once per navigation; remembered so recomposition keeps the same hand-off.
-        val selection = remember { aiSelection.consume() }
-        AiEditScreen(
-            session = session,
-            settings = settings,
-            onBack = { nav.popBackStack() },
-            onOpenQueue = { nav.navigateTopLevel(TopLevelDestination.QUEUE) },
-            // Pushed on top of the review, so coming back finds the batch and its ticked boxes
-            // exactly as they were.
-            onOpenDoc = { docId -> nav.openDoc(docId, browse) },
-            selection = selection,
-        )
-    }
-    composable<Route.AiEditReview> { entry ->
-        AiEditReviewScreen(
-            session = session,
-            jobId = entry.toRoute<Route.AiEditReview>().jobId,
-            onBack = { nav.popBackStack() },
-            onOpenDoc = { docId -> nav.openDoc(docId, browse) },
-        )
-    }
 }
 
 @Composable
