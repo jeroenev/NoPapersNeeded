@@ -25,6 +25,12 @@ internal sealed interface FoldScope {
     ) : FoldScope
 
     /**
+     * A fold of the journal alone, with no listing of the folder at hand: it never prefers a file
+     * over the journal, so it resurrects nothing ([FoldProjection.apply]).
+     */
+    sealed interface Journal : FoldScope
+
+    /**
      * The documents [docs] and the tags [styledTags] some events touched. [preserveLifecycleDocs]
      * keep the lifecycle their row already has, which a commit wrote optimistically.
      */
@@ -32,7 +38,7 @@ internal sealed interface FoldScope {
         val docs: Set<String>,
         val styledTags: Set<String>,
         val preserveLifecycleDocs: Set<String>,
-    ) : FoldScope {
+    ) : Journal {
         companion object {
             /**
              * The scope of [events], already reduced into [state]: their documents and styled
@@ -86,7 +92,7 @@ internal sealed interface FoldScope {
     }
 
     /** Every document the journal or the index knows. */
-    data object WholeDb : FoldScope
+    data object WholeDb : Journal
 }
 
 /**
@@ -103,6 +109,20 @@ internal class FoldProjection(
     private val ftsDao get() = db.ftsDao()
     private val fieldDao get() = db.documentFieldDao()
     private val fieldDefDao get() = db.fieldDefDao()
+
+    /** Apply the folded effective views of the documents [scope] names into Room in one pass. */
+    suspend fun apply(
+        state: FoldedState,
+        scope: FoldScope.Journal,
+    ) {
+        fold(state, scope)
+    }
+
+    /** Apply the folded effective views of every document into Room; returns the resurrected ones. */
+    suspend fun rescan(
+        state: FoldedState,
+        scope: FoldScope.FullRescan,
+    ): List<Resurrected> = fold(state, scope)
 
     /**
      * Apply the folded effective views into Room in one pass and return resurrected docs.
@@ -129,7 +149,7 @@ internal class FoldProjection(
      *   the fold never touches it. A brand-new doc gets a row with no content yet, which the OCR
      *   pipeline fills through its own write.
      */
-    suspend fun apply(
+    private suspend fun fold(
         state: FoldedState,
         scope: FoldScope,
     ): List<Resurrected> {

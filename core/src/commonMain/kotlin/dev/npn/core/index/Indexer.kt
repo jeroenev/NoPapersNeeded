@@ -164,7 +164,7 @@ class Indexer(
                             )
 
                             _scanState.value = IndexProgress(IndexProgress.Phase.FOLDING)
-                            recon.resurrected = folds.apply(metadataState, FoldScope.FullRescan(contentAt))
+                            recon.resurrected = folds.rescan(metadataState, FoldScope.FullRescan(contentAt))
                         }
                     }
                 }
@@ -476,16 +476,17 @@ class Indexer(
         state: FoldedState,
         events: List<JournalEvent>,
         preserveLifecycleDocs: Set<String> = emptySet(),
-    ): List<Resurrected> {
-        if (events.isEmpty()) return emptyList()
-        return folding {
+    ) {
+        if (events.isEmpty()) return
+        folding {
             projection { folds.apply(state, FoldScope.Events.of(state, events, preserveLifecycleDocs)) }
         }
     }
 
     /** Reproject a reconciled mixed-version accumulator without rereading journal sources. */
-    suspend fun refreshState(state: FoldedState): List<Resurrected> =
+    suspend fun refreshState(state: FoldedState) {
         folding { projection { folds.apply(state, FoldScope.WholeDb) } }
+    }
 
     /** Run [fold], showing the folding phase while it runs. */
     private inline fun <T> folding(fold: () -> T): T {
