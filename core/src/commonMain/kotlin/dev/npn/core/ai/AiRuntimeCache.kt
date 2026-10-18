@@ -21,16 +21,18 @@ internal class AiRuntimeCache(
      * — see [AiRuntime.build]). Cache identity is keyed on this so tuning a runtime-irrelevant
      * setting like [AiConfig.maxTagsPerDoc], [AiConfig.maxNewTagsPerDoc] or the reasoning levels
      * (applied per call, not per client) does NOT rebuild the client and abort in-flight requests.
+     * No `enabled`: [runtimeFor] only builds for a configured endpoint, which is always enabled. The
+     * URL is the one the client is built for, so a leftover override another provider ignores
+     * cannot tell two identical runtimes apart.
      */
     private data class RuntimeKey(
-        val enabled: Boolean,
         val provider: AiProvider,
-        val baseUrl: String,
+        val effectiveBaseUrl: String,
         val apiKey: String,
         val model: String,
     )
 
-    private fun AiConfig.runtimeKey() = RuntimeKey(enabled, provider, baseUrl, apiKey, model)
+    private fun AiConfig.runtimeKey() = RuntimeKey(provider, effectiveBaseUrl, apiKey, model)
 
     /**
      * The runtime for [config], built now if the cached one was built for another endpoint. The new
