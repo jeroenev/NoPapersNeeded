@@ -51,7 +51,6 @@ import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.StatusBadge
 import dev.npn.app.ui.common.TopBarAction
 import dev.npn.app.ui.common.TopBarActions
-import dev.npn.app.ui.common.enumNameSaver
 import dev.npn.app.ui.common.rememberSnackbarMessages
 import dev.npn.app.ui.common.resolve
 import dev.npn.core.app.Doc
@@ -144,7 +143,7 @@ fun TrashScreen(
     val loaded by vm.state.collectAsStateWithLifecycle()
     val state = loaded ?: TrashUiState()
 
-    var tab by rememberSaveable(stateSaver = enumNameSaver()) { mutableStateOf(TrashTab.TRASH) }
+    var tab by rememberSaveable { mutableStateOf(TrashTab.TRASH) }
     var confirm by rememberSaveable(stateSaver = TrashConfirm.Saver) { mutableStateOf(null) }
 
     val snackbar = rememberSnackbarMessages(vm.messages)

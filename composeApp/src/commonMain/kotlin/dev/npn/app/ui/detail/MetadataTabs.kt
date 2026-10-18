@@ -37,7 +37,6 @@ import dev.npn.app.ui.common.ReviewedBadge
 import dev.npn.app.ui.common.SectionHeading
 import dev.npn.app.ui.common.TagEditor
 import dev.npn.app.ui.common.TestTags
-import dev.npn.app.ui.common.enumNameSaver
 import dev.npn.app.ui.common.formatEpochDate
 import dev.npn.core.app.DocListItem
 import dev.npn.core.model.ReviewMode
@@ -87,7 +86,7 @@ internal fun MetadataTabs(
         remember(previewTab != null) {
             if (previewTab != null) PanelTab.entries.toList() else PanelTab.entries.filter { it != PanelTab.PREVIEW }
         }
-    var savedTab by rememberSaveable(stateSaver = enumNameSaver()) { mutableStateOf(tabs.first()) }
+    var savedTab by rememberSaveable { mutableStateOf(tabs.first()) }
     val tab = savedTab.takeIf { it in tabs } ?: tabs.first()
     LaunchedEffect(tab) {
         if (tab == PanelTab.HISTORY) {

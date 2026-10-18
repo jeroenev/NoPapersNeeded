@@ -129,19 +129,19 @@ fun SettingsScreen(
     // it must not stack back-stack entries, and it must not reset the search box by tearing
     // the screen down. Compact layouts drill down for real, which is what makes system back
     // return to the list.
-    var picked by rememberSaveable { mutableStateOf<String?>(null) }
+    var picked by rememberSaveable { mutableStateOf<SettingsCategoryId?>(null) }
     SettingsScaffold(
         wide = wide,
         selected =
             if (wide) {
-                SettingsCategoryId.fromRouteKey(picked) ?: category ?: SettingsCategoryId.LIBRARY
+                picked ?: category ?: SettingsCategoryId.LIBRARY
             } else {
                 category
             },
         snackbar = snackbar,
         paneState = paneState,
         paneActions = paneActions,
-        onSelect = { id -> if (wide) picked = id.routeKey else onOpenCategory(id) },
+        onSelect = { id -> if (wide) picked = id else onOpenCategory(id) },
         onBack = onBack,
     )
     draftToResume?.let { docId ->
