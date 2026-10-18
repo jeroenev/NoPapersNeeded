@@ -1,16 +1,13 @@
 package dev.npn.core.app
 
 import dev.npn.core.ai.AiChat
-import dev.npn.core.ai.AiFacadeImpl
 import dev.npn.core.ai.AiSuggest
-import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.app.aiedit.AiEditQueueFacade
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
 import dev.npn.core.index.DeviceIdentity
 import dev.npn.core.index.EmptyImportException
 import dev.npn.core.index.ImportResult
-import dev.npn.core.index.ImportService
 import dev.npn.core.index.IndexProgress
 import dev.npn.core.index.Indexer
 import dev.npn.core.index.JournalCoordinator
@@ -22,13 +19,11 @@ import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
 import dev.npn.core.util.warn
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.isActive
@@ -42,64 +37,61 @@ import kotlinx.coroutines.withContext
  * that settles the device identity and runs the initial fold), then [start]ed.
  *
  * The session itself is the library's lifecycle and its ingest: imports, rescans, the folder watch
- * and the periodic reconcile. Every other facet is its own object, wired by [openSession] from the
- * builders in `SessionWiring.kt`.
+ * and the periodic reconcile. Every other facet is its own object, built by its [SessionGraph].
  *
  * Everything the session runs — background loops, queue drains, caller-driven operations — belongs
  * to one [SessionLifetime] under [SessionDeps.scope], so [close] stops all of it at once, for good.
  */
 class LibrarySessionImpl private constructor(
-    /** This installation's device id in the library's journal ([DeviceIdentity]). */
-    internal val deviceId: String,
     private val deps: SessionDeps,
-    private val lifetime: SessionLifetime,
-    private val coordinator: JournalCoordinator,
-    indexer: Indexer,
-    library: Library,
-    private val scanReports: MutableStateFlow<ScanReport?>,
-    private val ocrFacade: OcrFacadeImpl,
-    override val maintenance: MaintenanceFacade,
-    override val aiEditQueue: AiEditQueueFacade,
-    private val queues: SessionWork,
-    private val aiFacade: AiFacadeImpl,
+    graph: SessionGraph,
 ) : LibrarySession,
     IngestFacade {
+    /** This installation's device id in the library's journal ([DeviceIdentity]). */
+    internal val deviceId: String = graph.deviceId
+    private val lifetime = graph.lifetime
+    private val coordinator = graph.coordinator
+    private val scanReports = graph.scanReports
+    private val ocrFacade = graph.ocr
+    private val staleFiles = graph.staleFiles
+    private val queues = graph.work
+    private val aiFacade = graph.ai
+    private val importService = graph.imports
     private val fs get() = deps.fs
     override val log: NpnLog get() = deps.log
-    private val importService = library.imports
-    private val writer = library.writer
-    private val lifecycle = library.lifecycle
 
-    override val documents: DocumentRepository = library.documents
-    override val tags: TagRepository = library.tags
-    override val savedViews: SavedViewRepository = library.savedViews
-    override val rules: AutoMatchRuleRepository = library.rules
+    override val documents: DocumentRepository = graph.documents
+    override val tags: TagRepository = graph.tags
+    override val savedViews: SavedViewRepository = graph.savedViews
+    override val rules: AutoMatchRuleRepository = graph.rules
 
     /** The rules' cache in the index, mirrored from the journal when another device's list arrives. */
-    internal val ruleSource: AutoMatchRuleSource = library.rules.source
-    override val storagePath: StoragePathFacade = library.storagePath
-    override val fieldRegistry: FieldRegistry = library.fieldRegistry
-    override val content: DocContentFacade = library.content
-    override val reviewConfig: ReviewConfigFacade = library.reviewConfig
-    override val trashRetention: TrashRetentionFacade = library.trashRetention
+    internal val ruleSource: AutoMatchRuleSource = graph.ruleSource
+    override val storagePath: StoragePathFacade = graph.storagePath
+    override val fieldRegistry: FieldRegistry = graph.fieldRegistry
+    override val content: DocContentFacade = graph.content
+    override val reviewConfig: ReviewConfigFacade = graph.reviewConfig
+    override val trashRetention: TrashRetentionFacade = graph.trashRetention
+    override val maintenance: MaintenanceFacade = graph.maintenance
+    override val aiEditQueue: AiEditQueueFacade = graph.edits.queue
 
     /** The trash auto-purge, run after each watch-triggered rescan. */
-    internal val trashPurge: TrashPurge = library.trashPurge
+    internal val trashPurge: TrashPurge = graph.trashPurge
 
     // The facet properties only narrow the type a consumer sees: the session is the ingest facet,
     // [MetadataWriterImpl] backs two write facets, and [AiFacadeImpl] both AI facets.
     override val ingest: IngestFacade get() = this
-    override val ocr: OcrFacade get() = ocrFacade
-    override val work: WorkFacade get() = queues
-    override val meta: MetadataWriter get() = writer
-    override val tagAdmin: TagAdmin get() = writer
-    override val docLifecycle: DocLifecycle get() = lifecycle
-    override val aiChat: AiChat get() = aiFacade
-    override val aiSuggest: AiSuggest get() = aiFacade
+    override val ocr: OcrFacade = ocrFacade
+    override val work: WorkFacade = queues
+    override val meta: MetadataWriter = graph.writer
+    override val tagAdmin: TagAdmin = graph.writer
+    override val docLifecycle: DocLifecycle = graph.lifecycle
+    override val aiChat: AiChat = aiFacade
+    override val aiSuggest: AiSuggest = aiFacade
 
     override val lastScanReport: Flow<ScanReport?> = scanReports.asStateFlow()
 
-    override val scanProgress: Flow<IndexProgress?> = indexer.scanState
+    override val scanProgress: Flow<IndexProgress?> = graph.indexer.scanState
 
     private var started = false
 
@@ -192,7 +184,7 @@ class LibrarySessionImpl private constructor(
 
         ocrFacade.watchQueue(scope)
         // A file the OCR drain read no longer matches its hash: rescan once it has settled.
-        scope.launch { ocrFacade.staleFiles.consumeEach { scheduleSettleRescan(WriteSettle.QUIET_MILLIS) } }
+        scope.launch { staleFiles.consumeEach { scheduleSettleRescan(WriteSettle.QUIET_MILLIS) } }
 
         // Automatic AI enrichment and queued edit runs are NOT driven by an observer of their
         // queue tables. Such an observer cannot distinguish new work from a failed row being
@@ -350,7 +342,7 @@ class LibrarySessionImpl private constructor(
             }
         }
 
-        /** Everything [openSession] builds over its [coordinator], from the device id on. */
+        /** The session [openSession] opens over its [coordinator], from the device id on. */
         private suspend fun wire(
             deps: SessionDeps,
             lifetime: SessionLifetime,
@@ -359,59 +351,9 @@ class LibrarySessionImpl private constructor(
         ): LibrarySessionImpl {
             val deviceId = DeviceIdentity(deps.deviceDb.keyValueDao(), deps.fs, deps.installationId, deps.log).resolve()
             foldJournal(deps, coordinator)
-
-            // A bake's relink hands the document's text on through the OCR pipeline, built after the
-            // library it belongs to; no bake runs before the session is open.
-            lateinit var bakeRelink: BakeRelink
-            val library =
-                buildLibrary(deps, lifetime, coordinator) { original, baked -> bakeRelink.relink(original, baked) }
-            // Built before the OCR pipeline because it is also the pipeline's AI engine: one
-            // facade, so the vision calls share the cached endpoint client with chat and edits.
-            val ai =
-                AiFacadeImpl(
-                    deps.db,
-                    chats = deps.deviceDb.keyValueDao(),
-                    ownWrite = { lifetime.owned(it) },
-                    clock = deps.clock,
-                    configProvider = deps.settings.aiConfig,
-                )
-            // Each drain treats a document without a row as gone and drops this device's work for it,
-            // but until the first rescan an index may not know the library's documents (a rebuilt one
-            // has no rows at all), so no drain starts before then.
-            val rescanned = CompletableDeferred<Unit>()
-            // What this device may spend on the endpoint unattended, for enrichment and OCR alike.
-            val policy = UnattendedAiPolicy(deps.settings.aiConfig)
-            val enrichment = buildEnrichment(deps, lifetime, coordinator, library, ai, policy, rescanned)
-            val edits = buildEditQueue(deps, lifetime, library, ai, rescanned)
-            val ocr =
-                buildOcr(
-                    deps,
-                    lifetime,
-                    deviceId,
-                    library,
-                    ai,
-                    policy,
-                    rescanned,
-                    // Only the *intent* is recorded here: this runs on the OCR queue-drain thread,
-                    // where a network call would stall OCR of every remaining document.
-                    onOcrProduced = { docId -> enrichment.queue.enqueue(docId) },
-                )
-            bakeRelink = BakeRelink(coordinator, ocr.pipeline, deps.deviceDb.aiEnrichQueueDao(), deps.log)
-            val scanReports = MutableStateFlow<ScanReport?>(null)
-            return LibrarySessionImpl(
-                deviceId = deviceId,
-                deps = deps,
-                lifetime = lifetime,
-                coordinator = coordinator,
-                indexer = indexer,
-                library = library,
-                scanReports = scanReports,
-                ocrFacade = ocr,
-                maintenance = buildMaintenance(deps, lifetime, coordinator, library, scanReports),
-                aiEditQueue = edits.queue,
-                queues = buildWork(deps, lifetime, ocr, enrichment, edits, rescanned),
-                aiFacade = ai,
-            )
+            val graph = SessionGraph(deps, lifetime, coordinator, indexer, deviceId)
+            graph.prepare()
+            return LibrarySessionImpl(deps, graph)
         }
     }
 }
