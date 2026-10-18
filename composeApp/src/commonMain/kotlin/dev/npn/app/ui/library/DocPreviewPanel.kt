@@ -1,31 +1,25 @@
 package dev.npn.app.ui.library
 
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import dev.npn.app.ui.common.LocalWindowWidthClass
+import dev.npn.app.ui.common.PanelHeader
 import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.WindowWidthClass
 import dev.npn.app.ui.detail.DocumentView
@@ -84,18 +78,18 @@ internal fun DocPreviewPanel(
                     // row would draw under the Android navigation bar on wide edge-to-edge layouts.
                     // The inset is zero on desktop.
                     Column(Modifier.fillMaxSize().navigationBarsPadding()) {
-                        PreviewHeader(
+                        PanelHeader(
                             title = item.doc.displayTitle,
-                            actions = {
-                                TooltipIconButton(
-                                    Icons.Filled.OpenInFull,
-                                    stringResource(Res.string.ux_expand_document),
-                                    onExpand,
-                                )
-                                actions(true)
-                            },
+                            closeLabel = stringResource(Res.string.library_preview_close),
                             onClose = onClose,
-                        )
+                        ) {
+                            TooltipIconButton(
+                                Icons.Filled.OpenInFull,
+                                stringResource(Res.string.ux_expand_document),
+                                onExpand,
+                            )
+                            actions(true)
+                        }
                         HorizontalDivider()
                         editor(Modifier.fillMaxWidth().weight(1f))
                     }
@@ -122,26 +116,4 @@ private fun ScopedToDoc(
         }
     DisposableEffect(owner) { onDispose { owner.viewModelStore.clear() } }
     CompositionLocalProvider(LocalViewModelStoreOwner provides owner) { content() }
-}
-
-@Composable
-private fun PreviewHeader(
-    title: String,
-    actions: @Composable () -> Unit,
-    onClose: () -> Unit,
-) {
-    Row(
-        Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            title,
-            style = MaterialTheme.typography.titleMedium,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        actions()
-        TooltipIconButton(Icons.Filled.Close, stringResource(Res.string.library_preview_close), onClose)
-    }
 }

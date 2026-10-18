@@ -15,13 +15,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -44,12 +40,12 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.DatePickerField
 import dev.npn.app.ui.common.Dropdown
 import dev.npn.app.ui.common.NumberInputField
+import dev.npn.app.ui.common.PanelHeader
 import dev.npn.app.ui.common.SectionHeading
 import dev.npn.app.ui.common.SwitchRow
 import dev.npn.app.ui.common.rememberFieldLocale
@@ -203,10 +199,13 @@ fun FilterPanel(
 ) {
     Surface(modifier = modifier, tonalElevation = 3.dp) {
         Column(if (fillHeight) Modifier.fillMaxSize() else Modifier.fillMaxWidth()) {
-            FilterPanelHeader(
-                onClearAll = editor::clearAll,
-                onDismiss = onDismiss,
-            )
+            PanelHeader(
+                title = stringResource(Res.string.library_filters),
+                closeLabel = stringResource(Res.string.common_cancel),
+                onClose = onDismiss,
+            ) {
+                TextButton(onClick = editor::clearAll) { Text(stringResource(Res.string.library_clear_all)) }
+            }
 
             Column(
                 Modifier
@@ -256,27 +255,6 @@ private val FilterEditorStateSaver =
             )
         },
     )
-
-/** Title row of the filter panel: the "Filters" heading, the clear-all button and close. */
-@Composable
-private fun FilterPanelHeader(
-    onClearAll: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(stringResource(Res.string.library_filters), style = MaterialTheme.typography.titleLarge)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onClearAll) { Text(stringResource(Res.string.library_clear_all)) }
-            IconButton(onClick = onDismiss) {
-                Icon(Icons.Filled.Close, contentDescription = stringResource(Res.string.common_cancel))
-            }
-        }
-    }
-}
 
 /**
  * The registry fields the filter sheet offers and the values each text field can be matched
