@@ -1,30 +1,17 @@
 package dev.npn.core.app
 
 import dev.npn.core.ai.AiFacadeImpl
-import dev.npn.core.ai.RoomChatHistoryProvider
 import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.app.aiedit.AiAutoEnricher
 import dev.npn.core.app.aiedit.AiEditQueue
-import dev.npn.core.db.DeviceDatabase
-import dev.npn.core.db.LegacyIndexTables
-import dev.npn.core.db.defs
 import dev.npn.core.fs.TrashOps
-import dev.npn.core.fs.VerifiedPublicationUnavailableException
-import dev.npn.core.index.Compaction
-import dev.npn.core.index.DeviceIdentity
 import dev.npn.core.index.DuplicateResolver
 import dev.npn.core.index.ImportService
 import dev.npn.core.index.Indexer
 import dev.npn.core.index.JournalCoordinator
-import dev.npn.core.index.MetadataAccumulator
 import dev.npn.core.index.ScanReport
-import dev.npn.core.index.SnapshotSupport
 import dev.npn.core.index.SplitService
-import dev.npn.core.journal.ContentAddressedJournalWriter
-import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.PendingOp
-import dev.npn.core.journal.SnapshotCompactor
-import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.SystemProperty
 import dev.npn.core.ocr.OcrEngineSelector
 import dev.npn.core.ocr.OcrPipeline
@@ -32,8 +19,6 @@ import dev.npn.core.pathrules.StoragePathRuleApplicator
 import dev.npn.core.pdf.RenderGate
 import dev.npn.core.pdf.ThumbnailService
 import dev.npn.core.rules.RuleApplier
-import dev.npn.core.util.runCatchingCancellable
-import dev.npn.core.util.warn
 import dev.npn.core.work.QueueDrainer
 import dev.npn.core.work.drainedQueue
 import dev.npn.core.xmp.BakeService
@@ -47,7 +32,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
  * from and what it is given. Construction only wires; what opening has to do to the library's data
  * before the session starts is [prepare]'s.
  *
- * [LibrarySessionImpl.open] builds it once the journal is folded ([foldJournal]); the session then
+ * [openLibrarySession] builds it once the journal is folded ([foldJournal]); the session then
  * hands its parts out as facets.
  */
 internal class SessionGraph(
@@ -320,98 +305,5 @@ internal class SessionGraph(
     suspend fun prepare() {
         deps.upgradeAtOpen("Moving saved views into the journal") { savedViews.adoptIndexViews(db) }
         ruleSource.mirror()
-    }
-}
-
-// The steps [LibrarySessionImpl.open] takes before there is a graph, in the order it takes them.
-
-/**
- * The `kv` keys an index from before [DeviceDatabase] kept for this device. The v1 writer's
- * bookkeeping moves too, so the index sheds it; [DeviceIdentity] then drops it.
- */
-private val DEVICE_KEYS = listOf(DeviceIdentity.KEY_DEVICE_ID) + DeviceIdentity.LEGACY_JOURNAL_KEYS
-
-/** Move what an index from before [DeviceDatabase] kept for this device into the device database. */
-internal suspend fun moveDeviceState(deps: SessionDeps) =
-    LegacyIndexTables.moveDeviceState(deps.db, deps.deviceDb, DEVICE_KEYS, RoomChatHistoryProvider.KEY_PREFIX)
-
-/**
- * The journal writer: storage-v2 content-addressed objects are the only format this build writes
- * (v1 segments are still read). A filesystem that cannot publish without replacement throws
- * [VerifiedPublicationUnavailableException] at its first publication, which [DeviceIdentity] makes
- * before anything else is written, rather than be written in a weaker format.
- */
-private suspend fun createObjectWriter(deps: SessionDeps): ContentAddressedJournalWriter {
-    val state = deps.db.metadataProjectionDao().state()
-    return ContentAddressedJournalWriter(
-        fs = deps.fs,
-        installationId = deps.installationId,
-        allocator =
-            HlcWatermarkAllocator(
-                clock = deps.clock,
-                initialPhysicalMillis = state?.allocatorPhysical ?: 0L,
-                initialCounter = state?.allocatorCounter ?: 0,
-            ),
-    )
-}
-
-internal suspend fun createCoordinator(
-    deps: SessionDeps,
-    indexer: Indexer,
-    writeUndelete: Boolean,
-): JournalCoordinator {
-    val snapshots = SnapshotSupport(deps.fs, deps.db.metadataProjectionDao())
-    return JournalCoordinator(
-        writer = createObjectWriter(deps),
-        indexer = indexer,
-        accumulator = MetadataAccumulator(deps.fs, deps.db, snapshots),
-        compaction = Compaction(SnapshotCompactor(deps.fs, deps.installationId), snapshots),
-        clock = deps.clock,
-        log = deps.log,
-        writeUndelete = writeUndelete,
-    )
-}
-
-/**
- * Fold the journal, so the documents are there before the caller's initial rescan, and bring the
- * library's own data up to what this build expects: the seeded fields (with the per-document flag
- * an older build may have dropped since), and the library settings this device kept before they
- * became library data.
- *
- * A new library's first seeding is part of opening it: without it the library has no fields. Every
- * other step is an [upgradeAtOpen].
- */
-internal suspend fun foldJournal(
-    deps: SessionDeps,
-    coordinator: JournalCoordinator,
-) {
-    coordinator.refreshState()
-    val seeds = FieldKeys.seedDefinitions { FieldKeys.SEED_LABELS.getValue(it) }
-    if (coordinator.setting(FieldKeys.SEEDED_SETTING) == null) {
-        coordinator.seedFieldRegistryIfNeeded(seeds)
-    } else {
-        deps.upgradeAtOpen("Upgrading the seeded field definitions") { coordinator.seedFieldRegistryIfNeeded(seeds) }
-    }
-    deps.upgradeAtOpen("Restoring the seeded fields' per-document flag") {
-        coordinator.restoreSeededPerDocument(seeds, projected = deps.db.fieldDefDao().defs())
-    }
-    deps.upgradeAtOpen("Adopting this device's library settings") {
-        coordinator.adoptSettings(deps.settings.legacyLibrarySettings().journalSettings())
-    }
-}
-
-/**
- * Bring the library's data up to this build at open, once per library, as best effort: a failure
- * (read-only or flaky storage) is logged and the next open tries again, rather than refusing this
- * one. Storage that cannot publish without replacement at all still refuses the library, as it
- * does wherever an open finds that out.
- */
-private suspend fun SessionDeps.upgradeAtOpen(
-    what: String,
-    upgrade: suspend () -> Unit,
-) {
-    runCatchingCancellable { upgrade() }.onFailure { failure ->
-        if (failure is VerifiedPublicationUnavailableException) throw failure
-        log.warn("$what failed; trying again at the next open", failure)
     }
 }

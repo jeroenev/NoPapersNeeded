@@ -9,12 +9,9 @@ import dev.npn.core.index.DeviceIdentity
 import dev.npn.core.index.EmptyImportException
 import dev.npn.core.index.ImportResult
 import dev.npn.core.index.IndexProgress
-import dev.npn.core.index.Indexer
-import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.index.ScanReport
 import dev.npn.core.index.SupersededImportException
 import dev.npn.core.index.WriteSettle
-import dev.npn.core.journal.JournalOp
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
@@ -34,8 +31,8 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
- * Everything wired for one opened library folder. Constructed by [openSession] (a suspend factory
- * that settles the device identity and runs the initial fold), then [start]ed.
+ * Everything wired for one opened library folder. Constructed by [openSession] ([openLibrarySession]:
+ * it settles the device identity and runs the initial fold), then [start]ed.
  *
  * The session itself is the library's lifecycle and its ingest: imports, rescans, the folder watch
  * and the periodic reconcile. Every other facet is its own object, built by its [SessionGraph].
@@ -43,7 +40,7 @@ import kotlinx.coroutines.withContext
  * Everything the session runs — background loops, queue drains, caller-driven operations — belongs
  * to one [SessionLifetime] under [SessionDeps.scope], so [close] stops all of it at once, for good.
  */
-class LibrarySessionImpl private constructor(
+class LibrarySessionImpl internal constructor(
     private val deps: SessionDeps,
     graph: SessionGraph,
 ) : LibrarySession,
@@ -315,59 +312,11 @@ class LibrarySessionImpl private constructor(
         private const val SETTLE_RESCAN_MARGIN_MS = 500L
 
         /**
-         * Boot a session over [deps]: move device state an older index still holds into the device
-         * database, settle the device id ([DeviceIdentity]: a fresh one for a restored or cloned
-         * installation), wire the journal engine, repositories, pipelines, then do the initial fold
-         * so [documents] is populated before the caller's initial rescan.
+         * Boot a session over [deps]: see [openLibrarySession].
          *
          * Refuses, with [VerifiedPublicationUnavailableException], a library on a filesystem that
-         * cannot publish without replacement: there is no other journal format to write. Every open
-         * publishes through the same primitive before it writes anything ([DeviceIdentity]: this
-         * installation's marker, or a throwaway object once that is there), so each one finds out.
+         * cannot publish without replacement: there is no other journal format to write.
          */
-        suspend fun openSession(deps: SessionDeps): LibrarySession = open(deps)
-
-        /**
-         * [openSession], as the session itself for this module's own callers, recording a deleted
-         * document's return as a `doc-undelete` when [writeUndelete].
-         */
-        internal suspend fun open(
-            deps: SessionDeps,
-            writeUndelete: Boolean = JournalOp.DocUndelete.WRITTEN,
-        ): LibrarySessionImpl {
-            val lifetime = SessionLifetime(deps.scope)
-            var coordinator: JournalCoordinator? = null
-            var opened = false
-            try {
-                // Before anything reads the device id: an index from before device.db holds it.
-                moveDeviceState(deps)
-                val indexer = Indexer(deps.fs, deps.db, deps.clock, deps.log)
-                val journal = createCoordinator(deps, indexer, writeUndelete).also { coordinator = it }
-                return wire(deps, lifetime, indexer, journal).also { opened = true }
-            } finally {
-                // Nothing a failed open started may outlive it (a cancelled open included): stop
-                // whatever runs on the lifetime, while the failure goes on to the caller.
-                if (!opened) {
-                    withContext(NonCancellable) {
-                        lifetime.close()
-                        coordinator?.close()
-                    }
-                }
-            }
-        }
-
-        /** The session [openSession] opens over its [coordinator], from the device id on. */
-        private suspend fun wire(
-            deps: SessionDeps,
-            lifetime: SessionLifetime,
-            indexer: Indexer,
-            coordinator: JournalCoordinator,
-        ): LibrarySessionImpl {
-            val deviceId = DeviceIdentity(deps.deviceDb.keyValueDao(), deps.fs, deps.installationId, deps.log).resolve()
-            foldJournal(deps, coordinator)
-            val graph = SessionGraph(deps, lifetime, coordinator, indexer, deviceId)
-            graph.prepare()
-            return LibrarySessionImpl(deps, graph)
-        }
+        suspend fun openSession(deps: SessionDeps): LibrarySession = openLibrarySession(deps)
     }
 }
