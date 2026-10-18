@@ -134,7 +134,7 @@ class AiAutoEnricher(
         return enrich(entry, request)
     }
 
-    private suspend fun hasText(docId: String): Boolean = ftsDao.contentForDoc(docId)?.isNotBlank() == true
+    private suspend fun hasText(docId: String): Boolean = ftsDao.textOf(docId) != null
 
     /**
      * The row to work on now; null while the feature is off or the endpoint cools down, and when

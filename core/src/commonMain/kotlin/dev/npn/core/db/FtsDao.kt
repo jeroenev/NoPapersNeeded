@@ -42,6 +42,9 @@ interface FtsDao {
     @Query("SELECT content FROM fts_documents WHERE rowid = (SELECT ftsRowid FROM fts_keys WHERE docId = :docId)")
     suspend fun contentForDoc(docId: String): String?
 
+    /** A document's extracted text when it has some: null for no FTS row, no text yet, or blank text. */
+    suspend fun textOf(docId: String): String? = contentForDoc(docId)?.takeIf { it.isNotBlank() }
+
     /**
      * Which of [docIds] already have an FTS row. Presence only: the fold needs to know whether a
      * document has been indexed yet (a brand-new one has no row), not what its text says.

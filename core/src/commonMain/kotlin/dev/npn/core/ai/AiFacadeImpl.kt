@@ -103,7 +103,7 @@ class AiFacadeImpl(
         val config = configProvider()
         val runtime = runtimes.runtimeFor(config)
         val doc = db.documentDao().getByDocId(docId) ?: return AiEditSuggestion.EMPTY
-        val text = db.ftsDao().contentForDoc(docId)?.takeIf { it.isNotBlank() }
+        val text = db.ftsDao().textOf(docId)
         // No OCR text yet: field extraction is impossible, but a tag-only run can still work off
         // the current tag list and vocabulary. This is the single decided rule for every flow.
         if (text == null && request.fields.isNotEmpty()) return AiEditSuggestion.EMPTY

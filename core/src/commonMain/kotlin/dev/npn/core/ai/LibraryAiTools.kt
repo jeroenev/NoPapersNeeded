@@ -583,7 +583,7 @@ internal object LibraryAiTools {
 
         override suspend fun execute(args: Args): String {
             val text =
-                ftsDao.contentForDoc(args.docId)?.takeIf { it.isNotBlank() }
+                ftsDao.textOf(args.docId)
                     ?: return "Document ${args.docId} has no extracted text (not OCRed yet?)."
             val chunks = (text.length + TEXT_CHUNK_CHARS - 1) / TEXT_CHUNK_CHARS
             val index = args.chunk.coerceIn(0, chunks - 1)

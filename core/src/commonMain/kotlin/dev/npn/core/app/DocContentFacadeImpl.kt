@@ -89,7 +89,7 @@ class DocContentFacadeImpl internal constructor(
         lifetime.owned { log.runLogged("Clearing the thumbnail cache") { thumbnailService.clearCache() } ?: 0 }
 
     override suspend fun extractedText(docId: String): String? =
-        log.runLogged("Reading the text of $docId") { db.ftsDao().contentForDoc(docId)?.takeIf { it.isNotBlank() } }
+        log.runLogged("Reading the text of $docId") { db.ftsDao().textOf(docId) }
 
     override suspend fun bakedCopyBytes(docId: String): ByteArray? =
         log.runLogged("Baking a copy of $docId") {
