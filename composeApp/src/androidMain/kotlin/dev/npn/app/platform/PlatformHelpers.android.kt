@@ -11,8 +11,8 @@ import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.ExternalStorageTreePaths
 import dev.npn.core.fs.LocalLibraryFolders
 import dev.npn.core.fs.NpnPaths
-import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.settings.LibraryLocations
+import dev.npn.core.util.SystemEpochClock
 import io.github.vinceglb.filekit.AndroidFile
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.PlatformFile

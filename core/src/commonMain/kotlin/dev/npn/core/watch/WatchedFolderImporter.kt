@@ -3,9 +3,9 @@ package dev.npn.core.watch
 import dev.npn.core.app.ImportOutcome
 import dev.npn.core.app.ImportTally
 import dev.npn.core.app.IngestFacade
-import dev.npn.core.journal.EpochClock
-import dev.npn.core.journal.SystemEpochClock
+import dev.npn.core.util.EpochClock
 import dev.npn.core.util.NpnLog
+import dev.npn.core.util.SystemEpochClock
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
 import dev.npn.core.util.warn

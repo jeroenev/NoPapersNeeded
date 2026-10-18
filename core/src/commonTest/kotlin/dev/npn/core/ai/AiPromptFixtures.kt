@@ -1,6 +1,6 @@
 package dev.npn.core.ai
 
-import dev.npn.core.journal.EpochClock
+import dev.npn.core.util.EpochClock
 import kotlin.time.Instant
 
 // A prompt's date must be assertable, so every context the prompt tests use is built on a fixed clock.

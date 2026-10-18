@@ -2,9 +2,9 @@ package dev.npn.core.ai
 
 import dev.npn.core.db.KeyValueDao
 import dev.npn.core.db.KeyValueEntity
-import dev.npn.core.journal.EpochClock
-import dev.npn.core.journal.SystemEpochClock
+import dev.npn.core.util.EpochClock
 import dev.npn.core.util.NpnJson
+import dev.npn.core.util.SystemEpochClock
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock

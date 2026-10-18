@@ -4,11 +4,11 @@ import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.OcrQueueDao
 import dev.npn.core.db.QueueState
 import dev.npn.core.db.queueState
-import dev.npn.core.journal.EpochClock
 import dev.npn.core.ocr.OcrEngineId
 import dev.npn.core.ocr.OcrEngineSelector
 import dev.npn.core.ocr.OcrPipeline
 import dev.npn.core.ocr.OcrState
+import dev.npn.core.util.EpochClock
 import dev.npn.core.work.QueueDrainer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.ReceiveChannel

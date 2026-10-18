@@ -2,7 +2,6 @@ package dev.npn.core.index
 
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.journal.ContentAddressedJournalWriter
-import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.JournalEvent
@@ -10,8 +9,9 @@ import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.PublishedTransaction
 import dev.npn.core.journal.SnapshotCompactor
-import dev.npn.core.journal.SystemEpochClock
+import dev.npn.core.util.EpochClock
 import dev.npn.core.util.NpnLog
+import dev.npn.core.util.SystemEpochClock
 import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged

@@ -13,10 +13,10 @@ import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.index.LifecycleChange
 import dev.npn.core.index.hasStoredStat
 import dev.npn.core.index.holdsDocument
-import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.SystemProperty
 import dev.npn.core.pathrules.pathTaken
+import dev.npn.core.util.EpochClock
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.warn

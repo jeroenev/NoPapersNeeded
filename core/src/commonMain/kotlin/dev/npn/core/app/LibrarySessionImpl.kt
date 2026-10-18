@@ -20,15 +20,15 @@ import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.index.ScanReport
 import dev.npn.core.index.SupersededImportException
 import dev.npn.core.index.WriteSettle
-import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.JournalOp
-import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.ThumbnailStore
 import dev.npn.core.rules.RuleApplier
 import dev.npn.core.settings.SessionSettings
+import dev.npn.core.util.EpochClock
 import dev.npn.core.util.NpnLog
+import dev.npn.core.util.SystemEpochClock
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
 import dev.npn.core.util.warn

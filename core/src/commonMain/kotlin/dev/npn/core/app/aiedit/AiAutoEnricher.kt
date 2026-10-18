@@ -14,7 +14,7 @@ import dev.npn.core.db.AiEnrichedEntity
 import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.FtsDao
 import dev.npn.core.db.isLive
-import dev.npn.core.journal.EpochClock
+import dev.npn.core.util.EpochClock
 import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.work.EndpointHealth

@@ -5,10 +5,10 @@ import ai.koog.prompt.dsl.prompt
 import dev.npn.core.db.KeyValueDao
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.defs
-import dev.npn.core.journal.EpochClock
-import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.ocr.OcrEngineId
+import dev.npn.core.util.EpochClock
+import dev.npn.core.util.SystemEpochClock
 import dev.npn.core.work.EndpointHealth
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll

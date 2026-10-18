@@ -13,7 +13,7 @@ import dev.npn.core.app.TagRepository
 import dev.npn.core.db.AiEditJobDao
 import dev.npn.core.db.AiEditJobDocEntity
 import dev.npn.core.db.AiEditJobEntity
-import dev.npn.core.journal.EpochClock
+import dev.npn.core.util.EpochClock
 import dev.npn.core.util.NpnJson
 import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable

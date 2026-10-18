@@ -1,6 +1,7 @@
 package dev.npn.core.journal
 
 import dev.npn.core.model.SystemProperty
+import dev.npn.core.util.EpochClock
 import kotlin.random.Random
 
 /**

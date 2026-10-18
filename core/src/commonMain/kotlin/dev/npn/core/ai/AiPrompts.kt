@@ -2,10 +2,10 @@ package dev.npn.core.ai
 
 import ai.koog.prompt.message.AttachmentContent
 import ai.koog.prompt.message.AttachmentSource
-import dev.npn.core.journal.EpochClock
-import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.model.AppLanguages
 import dev.npn.core.model.FieldDef
+import dev.npn.core.util.EpochClock
+import dev.npn.core.util.SystemEpochClock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant

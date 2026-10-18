@@ -1,5 +1,7 @@
 package dev.npn.core.journal
 
+import dev.npn.core.util.EpochClock
+import dev.npn.core.util.SystemEpochClock
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -30,17 +32,6 @@ data class Hlc(
         val ZERO = Hlc(0L, 0, "")
     }
 }
-
-/** Wall-clock source in epoch milliseconds. */
-fun interface EpochClock {
-    fun nowMillis(): Long
-}
-
-/** Platform wall clock, backed by [systemNowMillis]. */
-val SystemEpochClock: EpochClock = EpochClock { systemNowMillis() }
-
-/** Platform wall clock in epoch milliseconds (actual per target). */
-expect fun systemNowMillis(): Long
 
 /**
  * Single monotonic HLC watermark: tracks the highest (physicalMillis, counter) produced or

@@ -5,7 +5,7 @@ import dev.npn.core.app.IngestFacade
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.index.IndexProgress
 import dev.npn.core.index.ScanReport
-import dev.npn.core.journal.EpochClock
+import dev.npn.core.util.EpochClock
 import dev.npn.core.util.RecordingLog
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CompletableDeferred

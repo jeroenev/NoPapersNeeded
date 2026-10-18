@@ -4,8 +4,8 @@ import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.ThumbnailDao
 import dev.npn.core.db.ThumbnailEntity
 import dev.npn.core.fs.LibraryFileSystem
-import dev.npn.core.journal.EpochClock
-import dev.npn.core.journal.SystemEpochClock
+import dev.npn.core.util.EpochClock
+import dev.npn.core.util.SystemEpochClock
 import dev.npn.core.util.runCatchingCancellable
 
 /**

@@ -15,13 +15,13 @@ import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.PathExternalIo
 import dev.npn.core.journal.ContentAddressedJournalWriter
-import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.JournalCodec
 import dev.npn.core.journal.JournalEvent
 import dev.npn.core.journal.JournalEventVersions
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.SnapshotCompactor
+import dev.npn.core.util.EpochClock
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first

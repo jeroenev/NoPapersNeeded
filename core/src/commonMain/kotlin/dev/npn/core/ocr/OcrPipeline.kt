@@ -12,9 +12,9 @@ import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.index.FtsRows
 import dev.npn.core.index.WriteSettle
-import dev.npn.core.journal.EpochClock
-import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.pdf.PdfEngine
+import dev.npn.core.util.EpochClock
+import dev.npn.core.util.SystemEpochClock
 import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.work.QueueRetryPolicy

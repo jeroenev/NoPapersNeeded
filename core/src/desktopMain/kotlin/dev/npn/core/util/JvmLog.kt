@@ -1,7 +1,5 @@
 package dev.npn.core.util
 
-import dev.npn.core.journal.EpochClock
-import dev.npn.core.journal.SystemEpochClock
 import java.io.IOException
 import java.io.PrintStream
 import java.nio.file.Files

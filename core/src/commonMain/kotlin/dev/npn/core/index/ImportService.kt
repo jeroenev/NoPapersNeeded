@@ -15,8 +15,6 @@ import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.TrashOps
 import dev.npn.core.fs.holds
 import dev.npn.core.fs.uniquifyPath
-import dev.npn.core.journal.EpochClock
-import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.ocr.OcrState
 import dev.npn.core.pathrules.StoragePathContext
 import dev.npn.core.pathrules.StoragePathRule
@@ -24,7 +22,9 @@ import dev.npn.core.pathrules.StoragePathTemplate
 import dev.npn.core.pathrules.pathOrNull
 import dev.npn.core.pathrules.pathTaken
 import dev.npn.core.pathrules.resolveUniqueTarget
+import dev.npn.core.util.EpochClock
 import dev.npn.core.util.NpnLog
+import dev.npn.core.util.SystemEpochClock
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
 import kotlinx.coroutines.NonCancellable

@@ -4,8 +4,6 @@ import dev.npn.core.db.deviceDatabase
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.PathExternalIo
-import dev.npn.core.journal.EpochClock
-import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.ocr.TesseractCliEngine
 import dev.npn.core.pdf.DirThumbnailStore
@@ -15,8 +13,10 @@ import dev.npn.core.pdf.renderParallelism
 import dev.npn.core.settings.AppDirs
 import dev.npn.core.settings.PlatformDirs
 import dev.npn.core.settings.SessionSettings
+import dev.npn.core.util.EpochClock
 import dev.npn.core.util.JvmLog
 import dev.npn.core.util.NpnLog
+import dev.npn.core.util.SystemEpochClock
 import dev.npn.core.xmp.PdfBoxXmpIO
 import kotlinx.coroutines.CoroutineScope
 import java.io.File
