@@ -99,8 +99,7 @@ class OcrPipeline(
     private val retry = QueueRetryPolicy(MAX_ATTEMPTS)
 
     /** What is stored for each document, and which version of it to index. */
-    private val sidecars = OcrSidecarFiles(fs)
-    private val versions = OcrVersions(sidecars, MIN_EMBEDDED_CHARS_PER_PAGE)
+    private val versions = OcrVersions(OcrSidecarFiles(fs), MIN_EMBEDDED_CHARS_PER_PAGE)
 
     private val _inFlight = MutableStateFlow<String?>(null)
 
@@ -128,7 +127,13 @@ class OcrPipeline(
      * pending with it, and the drain takes it again.
      */
     suspend fun processNext(): Boolean {
-        val entry = ocrQueueDao.nextPending(clock.nowMillis()) ?: return false
+        val entry = ocrQueueDao.nextPending(clock.nowMillis())
+        if (entry == null) {
+            // The drain is over: the next one lists `.npn/ocr/` afresh, so it sees what other devices
+            // published meanwhile even where no watch event or rescan announced it.
+            versions.forget()
+            return false
+        }
         _inFlight.value = entry.docId
         try {
             processDoc(entry.docId)
@@ -181,6 +186,7 @@ class OcrPipeline(
 
         val desired = versions.select(stored, doc.ocrEngineOverride)
         val sidecar = desired?.let { versions.read(docId, it.writerKey) }
+        if (desired != null && sidecar == null) versions.forget(docId)
         if (desired == null || sidecar == null) {
             fail(docId, failure ?: "no readable ocr version for $docId", textIndexed = false, seen = entry)
             return
@@ -310,16 +316,10 @@ class OcrPipeline(
                 pages = result.pages,
             )
         val encoded = OcrSidecarCodec.encode(sidecar)
-        return runCatchingCancellable { sidecars.writeOnce(doc.docId, writerKey, encoded) }.fold(
-            onSuccess = { OwnOcr.Published },
-            onFailure = { failure ->
-                // Already exists for this device+engine: keep the published file.
-                if (versions.read(doc.docId, writerKey) == null) {
-                    OwnOcr.Failed(describe("sidecar write/read failed for $writerKey", failure))
-                } else {
-                    OwnOcr.Adopted
-                }
-            },
+        // Already published for this device+engine: the published file is kept.
+        return runCatchingCancellable { versions.publish(doc.docId, writerKey, encoded) }.fold(
+            onSuccess = { written -> if (written) OwnOcr.Published else OwnOcr.Adopted },
+            onFailure = { failure -> OwnOcr.Failed(describe("sidecar write/read failed for $writerKey", failure)) },
         )
     }
 
@@ -445,9 +445,7 @@ class OcrPipeline(
             val sidecar = versions.select(stored, engine)?.let { versions.read(from, it.writerKey) } ?: continue
             val writerKey = OcrSidecarName.writerKey(deviceId, engine)
             val copy = OcrSidecarCodec.encode(sidecar.copy(doc = to, dev = deviceId))
-            runCatchingCancellable { sidecars.writeOnce(to, writerKey, copy) }.getOrElse { failure ->
-                if (versions.read(to, writerKey) == null) throw failure
-            }
+            versions.publish(to, writerKey, copy)
         }
     }
 
@@ -464,7 +462,7 @@ class OcrPipeline(
         val desired = versions.select(stored, doc.ocrEngineOverride) ?: return
         val needsIndex = OcrState.fromColumn(doc.ocrState) in UNPROCESSED_STATES || doc.ocrSource != desired.writerKey
         if (!needsIndex) return
-        val sidecar = versions.read(doc.docId, desired.writerKey) ?: return
+        val sidecar = versions.read(doc.docId, desired.writerKey) ?: return versions.forget(doc.docId)
         indexAndMarkSelected(doc.docId, desired, sidecar)
         // Adoption or re-selection of a stored sidecar: no new text, so no enrichment. A hook
         // failure is discarded rather than recorded, unlike in processDoc: the row is not marked

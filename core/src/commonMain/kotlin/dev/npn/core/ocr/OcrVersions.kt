@@ -43,8 +43,17 @@ class OcrVersions internal constructor(
     /** Whether an `embedded` sidecar has a usable text layer on every page, per `<hash>.<writerKey>`. */
     private val fullTextLayerCache = SidecarFacts<Boolean>()
 
-    /** Hash -> writer keys for every sidecar in `.npn/ocr/` named by a document hash. */
-    suspend fun writerKeysByHash(): Map<String, List<String>> =
+    /** Which writer keys `.npn/ocr/` holds per hash, so a drain lists the directory once, not per document. */
+    private val index = SidecarIndex()
+
+    /**
+     * Hash -> writer keys for every sidecar in `.npn/ocr/` named by a document hash, from a fresh
+     * listing, which also becomes what [of] answers from: a reconcile, which every rescan and every
+     * change under `.npn/ocr/` starts, brings in what other devices published.
+     */
+    suspend fun writerKeysByHash(): Map<String, List<String>> = listWriterKeys().also { index.replace(it) }
+
+    private suspend fun listWriterKeys(): Map<String, List<String>> =
         sidecars
             .list()
             .mapNotNull { meta -> OcrSidecarName.parse(meta.name)?.takeIf { it.hasDocumentHash } }
@@ -56,12 +65,45 @@ class OcrVersions internal constructor(
         writerKeys: List<String>,
     ): List<Version> = writerKeys.mapNotNull { versionFor(hash, it) }
 
-    /** Every readable version of [hash] on disk. */
-    suspend fun of(hash: String): List<Version> = of(hash, sidecars.listForHash(hash))
+    /**
+     * Every readable version of [hash] as of the last listing of `.npn/ocr/`, plus what this device
+     * published since. The first call after [forget] lists the directory again.
+     */
+    suspend fun of(hash: String): List<Version> = of(hash, index.keysFor(hash) { listWriterKeys() })
 
-    /** All stored OCR versions of [docId], decoded, best-ranked first. For UI listing. */
+    /**
+     * Drop the listing [of] answers from, so the next call lists `.npn/ocr/` again: at the end of a
+     * drain, so the next one sees what arrived meanwhile, and when a key it named could not be read.
+     */
+    suspend fun forget(hash: String? = null) {
+        index.forget(hash)
+    }
+
+    /**
+     * Publish [json] as [hash]'s sidecar under [writerKey], write-once, and return whether this call
+     * wrote it. One already published under that key and readable is kept, and counts as not written;
+     * a write that fails otherwise throws. Either way [of] knows the key from here on.
+     */
+    suspend fun publish(
+        hash: String,
+        writerKey: String,
+        json: String,
+    ): Boolean {
+        val written =
+            runCatchingCancellable { sidecars.writeOnce(hash, writerKey, json) }.fold(
+                onSuccess = { true },
+                onFailure = { failure -> if (read(hash, writerKey) == null) throw failure else false },
+            )
+        index.add(hash, writerKey)
+        return written
+    }
+
+    /**
+     * All stored OCR versions of [docId], decoded, best-ranked first. For UI listing, so read from a
+     * listing of its own rather than the one a drain shares.
+     */
     suspend fun list(docId: String): List<StoredVersion> =
-        of(docId)
+        of(docId, sidecars.listForHash(docId))
             .mapNotNull { v ->
                 read(docId, v.writerKey)?.let {
                     StoredVersion(v.writerKey, v.deviceId, it.engine, it.lang, it.createdAt)
@@ -162,5 +204,43 @@ private class SidecarFacts<V : Any> {
         val fact = compute() ?: return null
         lock.withLock { facts[key] = fact }
         return fact
+    }
+}
+
+/**
+ * Writer keys per hash as one listing of `.npn/ocr/` found them, plus the keys this device published
+ * since, which a listing that started before the write may have missed. Sidecars are write-once and
+ * the app never deletes one, so keys only come and go with a new listing.
+ */
+private class SidecarIndex {
+    private val lock = Mutex()
+    private var listed: Map<String, List<String>>? = null
+    private val published = HashMap<String, MutableSet<String>>()
+
+    suspend fun keysFor(
+        hash: String,
+        list: suspend () -> Map<String, List<String>>,
+    ): List<String> {
+        val snapshot = lock.withLock { listed } ?: list().also { fresh -> lock.withLock { listed = listed ?: fresh } }
+        return lock.withLock { (snapshot[hash].orEmpty() + published[hash].orEmpty()).distinct() }
+    }
+
+    suspend fun replace(fresh: Map<String, List<String>>) {
+        lock.withLock { listed = fresh }
+    }
+
+    suspend fun add(
+        hash: String,
+        writerKey: String,
+    ) {
+        lock.withLock { published.getOrPut(hash) { HashSet() }.add(writerKey) }
+    }
+
+    /** Drop the listing; with a [hash], also what was published for it, as a key it named is gone. */
+    suspend fun forget(hash: String?) {
+        lock.withLock {
+            listed = null
+            if (hash != null) published.remove(hash)
+        }
     }
 }
