@@ -96,8 +96,9 @@ internal class ExternalDocumentMoves(
         }
         if (!state.isCurrent(old.docId)) return false
         if (kv.get(key(old.docId)) != encode(old.docId, old.relPath, state)) return false
-        // An omitted listing entry is not evidence of a move. Recheck both endpoints before writing.
-        return !fs.exists(old.relPath) && fs.sha256(target) == old.docId
+        // An omitted listing entry is not evidence of a move. Recheck both endpoints before writing;
+        // a target that cannot be read now is none.
+        return !fs.exists(old.relPath) && fs.holds(target, old.docId)
     }
 
     private fun encode(

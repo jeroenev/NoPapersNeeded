@@ -17,6 +17,8 @@ import dev.npn.core.journal.PendingOp
 import dev.npn.core.util.EpochClock
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.SystemEpochClock
+import dev.npn.core.util.runCatchingCancellable
+import dev.npn.core.util.warn
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
@@ -54,7 +56,7 @@ class Indexer(
     private val fs: LibraryFileSystem,
     private val db: NpnDatabase,
     private val clock: EpochClock = SystemEpochClock,
-    log: NpnLog = NpnLog.None,
+    private val log: NpnLog = NpnLog.None,
     /** Where files are hashed, [HASH_CONCURRENCY] at a time. */
     private val hashing: CoroutineDispatcher = Dispatchers.Default,
 ) {
@@ -141,15 +143,18 @@ class Indexer(
                     }
                 }
 
-            val hashes = hashAll(toHash, settle, deferred)
+            val gone = HashSet<String>()
+            val hashes = hashAll(toHash, settle, deferred, gone)
+            // A file gone by the time it was read is gone, as it would be to a listing a moment later.
+            val present = if (gone.isEmpty()) indexable else indexable.filterNot { it.relPath in gone }
 
             _scanState.value = IndexProgress(IndexProgress.Phase.RECONCILING)
             if (onExternalMoves != null) {
-                val moves = externalMoves.detect(metadataState, dbProjection, indexable, hashes)
+                val moves = externalMoves.detect(metadataState, dbProjection, present, hashes)
                 if (moves.isNotEmpty()) onExternalMoves(moves)
             }
-            val diskPaths = indexable.map { it.relPath }.toHashSet()
-            val contentAt = knownHashes(indexable, changed, byPath, hashes)
+            val diskPaths = present.map { it.relPath }.toHashSet()
+            val contentAt = knownHashes(present, changed, byPath, hashes)
 
             // The reconcile writes and the fold land in one transaction, so no reader sees a row
             // before its tags and fields; the files their intents move wait until it commits.
@@ -188,7 +193,7 @@ class Indexer(
                 duplicates = recon.duplicates,
                 conflictFiles = conflictFiles,
                 relinkCandidates = recon.relinkCandidates,
-                // Every file handed to the pool is hashed, settled or not.
+                // Every file handed to the pool counts, settled, unreadable or gone.
                 hashedCount = toHash.size,
                 durationMillis = clock.nowMillis() - started,
                 pathConflicts = documentPaths.conflicts(metadataState),
@@ -206,11 +211,17 @@ class Indexer(
      * content. A fixed pool of [HASH_CONCURRENCY] workers pulls from a shared queue: that caps read
      * concurrency against the storage provider, and balances the work, since file sizes (and so
      * hash costs) vary by orders of magnitude.
+     *
+     * A file that cannot be read fails nothing: a failed scan would block every write. One gone
+     * since the listing goes to [gone]; any other is logged and left out of this scan, so a row it
+     * has stays as it is. Not deferred: a file that stays unreadable would be retried every few
+     * seconds, where the next rescan is soon enough.
      */
     private suspend fun hashAll(
         toHash: List<FileMeta>,
         settle: WriteSettle,
         deferred: DeferredFiles,
+        gone: MutableSet<String>,
     ): Map<String, String> {
         _scanState.value = IndexProgress(IndexProgress.Phase.HASHING, hashed = 0, total = toHash.size)
         val hashes = HashMap<String, String>()
@@ -224,14 +235,18 @@ class Indexer(
             repeat(minOf(HASH_CONCURRENCY, toHash.size)) {
                 launch(hashing) {
                     for (meta in pending) {
-                        val hash = fs.sha256(meta.relPath)
-                        val stable = settle.unchangedSince(meta)
+                        val hash = runCatchingCancellable { fs.sha256(meta.relPath) }
+                        val stable = hash.isSuccess && settle.unchangedSince(meta)
+                        val vanished = hash.exceptionOrNull()?.let { goneAfter(meta.relPath, it) } == true
                         progressMutex.withLock {
-                            if (stable) {
-                                hashes[meta.relPath] = hash
-                            } else {
-                                deferred.add(meta.relPath, WriteSettle.QUIET_MILLIS)
+                            hash.onSuccess { value ->
+                                if (stable) {
+                                    hashes[meta.relPath] = value
+                                } else {
+                                    deferred.add(meta.relPath, WriteSettle.QUIET_MILLIS)
+                                }
                             }
+                            if (vanished) gone += meta.relPath
                             hashedCount++
                             _scanState.value =
                                 IndexProgress(IndexProgress.Phase.HASHING, hashed = hashedCount, total = toHash.size)
@@ -241,6 +256,16 @@ class Indexer(
             }
         }
         return hashes
+    }
+
+    /** Whether [relPath], whose read failed with [failure], is gone; one still there is logged. */
+    private suspend fun goneAfter(
+        relPath: String,
+        failure: Throwable,
+    ): Boolean {
+        val gone = runCatchingCancellable { fs.stat(relPath) == null }.getOrDefault(false)
+        if (!gone) log.warn("Hashing $relPath failed; it is left as it was until a rescan can read it", failure)
+        return gone
     }
 
     /**

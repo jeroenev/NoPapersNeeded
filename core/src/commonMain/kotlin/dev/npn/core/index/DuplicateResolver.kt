@@ -7,6 +7,7 @@ import dev.npn.core.db.isLive
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.hasStoredStat
+import dev.npn.core.fs.holds
 
 /**
  * Resolves external duplicates: removes an extra copy of a document's bytes beside its own file.
@@ -46,13 +47,16 @@ class DuplicateResolver(
         }
     }
 
-    /** The stat [path] had before it was hashed, when it holds [docId]'s bytes; null otherwise. */
+    /**
+     * The stat [path] had before it was hashed, when it holds [docId]'s bytes; null otherwise, one
+     * that cannot be read included.
+     */
     private suspend fun copyOf(
         docId: String,
         path: String,
     ): FileMeta? {
         val meta = fs.stat(path)?.takeIf { !it.isDirectory } ?: return null
-        return meta.takeIf { fs.sha256(path) == docId }
+        return meta.takeIf { fs.holds(path, docId) }
     }
 
     /**
