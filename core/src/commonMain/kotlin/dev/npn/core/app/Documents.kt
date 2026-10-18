@@ -95,9 +95,8 @@ interface DocumentRepository {
 
     fun observeDoc(docId: String): Flow<DocListItem?>
 
-    fun observeUntaggedCount(): Flow<Int> // UNTAGGED_ONLY review count
-
-    fun observeUnreviewedOrUntaggedCount(): Flow<Int> // INBOX_WORKFLOW review count
+    /** How many documents [mode]'s review queue holds: those its [reviewQueueFilter] lists. */
+    fun observeReviewQueueCount(mode: ReviewMode): Flow<Int>
 
     fun observeTrashed(): Flow<List<DocListItem>>
 

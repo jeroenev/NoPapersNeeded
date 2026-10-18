@@ -7,6 +7,7 @@ import dev.npn.core.app.DocumentRepository
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySort
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.ReviewMode
 import dev.npn.core.ocr.OcrEngineRef
 import dev.npn.core.ocr.OcrState
 import kotlinx.coroutines.flow.Flow
@@ -99,9 +100,11 @@ class FakeDocumentRepository : DocumentRepository {
 
     override fun observeDoc(docId: String): Flow<DocListItem?> = singleDoc
 
-    override fun observeUntaggedCount(): Flow<Int> = untaggedCount
-
-    override fun observeUnreviewedOrUntaggedCount(): Flow<Int> = unreviewedOrUntaggedCount
+    override fun observeReviewQueueCount(mode: ReviewMode): Flow<Int> =
+        when (mode) {
+            ReviewMode.UNTAGGED_ONLY -> untaggedCount
+            ReviewMode.INBOX_WORKFLOW -> unreviewedOrUntaggedCount
+        }
 
     override fun observeTrashed(): Flow<List<DocListItem>> = trashed
 

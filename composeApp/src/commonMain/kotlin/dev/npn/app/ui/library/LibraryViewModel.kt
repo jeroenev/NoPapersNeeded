@@ -26,6 +26,7 @@ import dev.npn.core.app.TrashReceipt
 import dev.npn.core.app.ViewType
 import dev.npn.core.app.WorkStage
 import dev.npn.core.app.importAll
+import dev.npn.core.app.reviewQueueFilter
 import dev.npn.core.app.textFieldValues
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.index.IndexProgress
@@ -296,12 +297,8 @@ class LibraryViewModel(
 
     val needsReviewCount: StateFlow<Int> =
         reviewConfig.reviewMode
-            .flatMapLatest { mode ->
-                when (mode) {
-                    ReviewMode.UNTAGGED_ONLY -> documentRepository.observeUntaggedCount()
-                    ReviewMode.INBOX_WORKFLOW -> documentRepository.observeUnreviewedOrUntaggedCount()
-                }
-            }.stateIn(viewModelScope, WhileSubscribedTimeout, 0)
+            .flatMapLatest(documentRepository::observeReviewQueueCount)
+            .stateIn(viewModelScope, WhileSubscribedTimeout, 0)
 
     val savedViews: StateFlow<List<SavedView>> =
         savedViewRepository
@@ -354,17 +351,9 @@ class LibraryViewModel(
         queryInput.value = ""
     }
 
-    /**
-     * Review queue preset. In UNTAGGED_ONLY mode this filters untagged documents; in INBOX_WORKFLOW
-     * it filters documents that are unreviewed or untagged. Replaces any active filter.
-     */
+    /** Review queue preset: the review mode's [reviewQueueFilter], replacing any active filter. */
     override fun applyReviewPreset() {
-        val filter =
-            when (reviewMode.value) {
-                ReviewMode.UNTAGGED_ONLY -> LibraryFilter(untaggedOnly = true)
-                ReviewMode.INBOX_WORKFLOW -> LibraryFilter(unreviewedOrUntagged = true)
-            }
-        _ui.update { it.copy(filter = filter) }
+        _ui.update { it.copy(filter = reviewMode.value.reviewQueueFilter()) }
         queryInput.value = ""
     }
 

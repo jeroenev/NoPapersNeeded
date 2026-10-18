@@ -1,5 +1,6 @@
 package dev.npn.core.app
 
+import dev.npn.core.model.ReviewMode
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -14,6 +15,17 @@ data class FieldRange(
 ) {
     val isEmpty: Boolean get() = from == null && to == null
 }
+
+/**
+ * The filter that lists this mode's review queue, as the library's review preset applies it and
+ * [DocumentRepository.observeReviewQueueCount] counts it: the untagged documents in
+ * [ReviewMode.UNTAGGED_ONLY], and those unreviewed or untagged in [ReviewMode.INBOX_WORKFLOW].
+ */
+fun ReviewMode.reviewQueueFilter(): LibraryFilter =
+    when (this) {
+        ReviewMode.UNTAGGED_ONLY -> LibraryFilter(untaggedOnly = true)
+        ReviewMode.INBOX_WORKFLOW -> LibraryFilter(unreviewedOrUntagged = true)
+    }
 
 @Serializable
 data class LibraryFilter(

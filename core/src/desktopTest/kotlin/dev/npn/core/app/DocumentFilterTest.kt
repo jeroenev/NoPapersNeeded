@@ -8,6 +8,7 @@ import dev.npn.core.index.rowAtPath
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
+import dev.npn.core.model.ReviewMode
 import dev.npn.core.ocr.FakeOcrEngine
 import dev.npn.core.ocr.OcrEngineSelector
 import dev.npn.core.ocr.OcrPipeline
@@ -96,8 +97,10 @@ class DocumentFilterTest {
                 .shouldContainExactly(listOf(a))
             ids(repo.observeDocuments(LibraryFilter(folder = "inbox"), LibrarySort()).first())
                 .shouldContainExactly(listOf(a))
-            // UNTAGGED_ONLY review count = untagged docs (only a).
-            repo.observeUntaggedCount().first() shouldBe 1
+            // UNTAGGED_ONLY review count = untagged docs (only a), what its review filter lists.
+            repo.observeReviewQueueCount(ReviewMode.UNTAGGED_ONLY).first() shouldBe 1
+            ids(repo.observeDocuments(ReviewMode.UNTAGGED_ONLY.reviewQueueFilter(), LibrarySort()).first())
+                .shouldContainExactly(listOf(a))
         }
 
     @Test
@@ -120,7 +123,9 @@ class DocumentFilterTest {
             val repo = DocumentRepositoryImpl(rig.db)
             ids(repo.observeDocuments(LibraryFilter(unreviewedOrUntagged = true), LibrarySort()).first())
                 .shouldContainExactlyInAnyOrder(listOf(a, b))
-            repo.observeUnreviewedOrUntaggedCount().first() shouldBe 2
+            repo.observeReviewQueueCount(ReviewMode.INBOX_WORKFLOW).first() shouldBe 2
+            ids(repo.observeDocuments(ReviewMode.INBOX_WORKFLOW.reviewQueueFilter(), LibrarySort()).first())
+                .shouldContainExactlyInAnyOrder(listOf(a, b))
         }
 
     @Test

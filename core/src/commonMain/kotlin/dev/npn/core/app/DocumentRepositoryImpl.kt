@@ -8,6 +8,7 @@ import dev.npn.core.db.defs
 import dev.npn.core.db.isLive
 import dev.npn.core.journal.EventDecoderRegistry
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.ReviewMode
 import dev.npn.core.ocr.OcrEngineRef
 import dev.npn.core.ocr.OcrState
 import dev.npn.core.util.runCatchingCancellable
@@ -184,9 +185,11 @@ internal class DocumentRepositoryImpl(
             .mapValues { (_, rows) -> rows.associate { it.fieldKey to it.fieldValue } }
     }
 
-    override fun observeUntaggedCount(): Flow<Int> = documentDao.countUntagged()
-
-    override fun observeUnreviewedOrUntaggedCount(): Flow<Int> = documentDao.countUnreviewedOrUntagged()
+    override fun observeReviewQueueCount(mode: ReviewMode): Flow<Int> =
+        when (mode) {
+            ReviewMode.UNTAGGED_ONLY -> documentDao.countUntagged()
+            ReviewMode.INBOX_WORKFLOW -> documentDao.countUnreviewedOrUntagged()
+        }
 
     override fun observeTrashed(): Flow<List<DocListItem>> =
         documentDao
