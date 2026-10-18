@@ -11,7 +11,6 @@ import dev.npn.core.ai.AiFieldMode
 import dev.npn.core.ai.AiTagging
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.aiedit.AiEditRun
-import dev.npn.core.app.aiedit.AiEditRunImpl
 import dev.npn.core.app.aiedit.ApplyOutcome
 import dev.npn.core.app.aiedit.ApplyResult
 import dev.npn.core.app.aiedit.BatchResult
@@ -84,16 +83,7 @@ class AiEditViewModel(
     /** Documents handed over from the library's selection mode; empty when opened from the rail. */
     selection: List<String> = emptyList(),
     /** The run this page drives, over the same [selection]. */
-    private val edit: AiEditRun =
-        AiEditRunImpl(
-            session.documents,
-            session.meta,
-            session.content,
-            session.aiSuggest,
-            session.fieldRegistry,
-            session.tags,
-            selection,
-        ),
+    private val edit: AiEditRun = AiEditRun(session, selection),
 ) : ReviewViewModel(),
     AiEditSetupActions {
     private val editQueue = session.aiEditQueue

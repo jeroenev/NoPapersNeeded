@@ -7,7 +7,7 @@ import dev.npn.app.collecting
 import dev.npn.app.failure
 import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.ai.TagSuggestion
-import dev.npn.core.app.aiedit.AiEditRunImpl
+import dev.npn.core.app.aiedit.AiEditRun
 import dev.npn.core.app.aiedit.ApplyOutcome
 import dev.npn.core.app.aiedit.ApplyResult
 import dev.npn.core.app.aiedit.ReviewDoc
@@ -60,16 +60,7 @@ class AiEditApplicationTest : MainDispatcherTest() {
                 addTags = listOf(TagSuggestion("invoice", isNew = false)),
                 metadata = FieldSuggestion(mapOf(FieldKeys.CORRESPONDENT to "Acme")),
             )
-        val run =
-            AiEditRunImpl(
-                session.documents,
-                session.meta,
-                session.content,
-                session.aiSuggest,
-                session.fieldRegistry,
-                session.tags,
-            )
-        val model = AiEditViewModel(session, FakeSettingsRepository(), edit = run)
+        val model = AiEditViewModel(session, FakeSettingsRepository(), edit = AiEditRun(session))
         model.setTask(EditTask.CUSTOM)
         model.setBackground(false)
         collecting(model.ui)

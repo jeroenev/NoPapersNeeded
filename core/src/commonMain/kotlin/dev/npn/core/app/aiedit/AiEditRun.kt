@@ -8,6 +8,7 @@ import dev.npn.core.app.DocListItem
 import dev.npn.core.app.DocumentRepository
 import dev.npn.core.app.FieldRegistry
 import dev.npn.core.app.LibraryFilter
+import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.MetadataWriter
 import dev.npn.core.app.SavedView
@@ -95,8 +96,8 @@ sealed interface BatchResult {
  * apply, so deselecting or skipping a document never sends it back through the model. A run handed
  * to the background ([remainingDocs] + [markHandedOff]) counts the same way.
  *
- * An interface so the screen driving it can be tested against a scripted run; [AiEditRunImpl] is
- * the one implementation.
+ * An interface so the screen driving it can be tested against a scripted run; the [AiEditRun]
+ * function builds the one implementation over a session's facets.
  */
 interface AiEditRun {
     /** Documents already reviewed in this run; excluded from every later batch. */
@@ -149,8 +150,26 @@ interface AiEditRun {
     fun landedSoFar(): ApplyResult
 }
 
+/**
+ * A new [AiEditRun] over [session]'s facets. [selection] holds the documents handed over from the
+ * library's selection mode, and is empty when the run was opened standalone.
+ */
+fun AiEditRun(
+    session: LibrarySession,
+    selection: List<String> = emptyList(),
+): AiEditRun =
+    AiEditRunImpl(
+        session.documents,
+        session.meta,
+        session.content,
+        session.aiSuggest,
+        session.fieldRegistry,
+        session.tags,
+        selection,
+    )
+
 /** The [AiEditRun] over a library's facets. */
-class AiEditRunImpl(
+internal class AiEditRunImpl(
     private val documents: DocumentRepository,
     private val meta: MetadataWriter,
     content: DocContentFacade,
