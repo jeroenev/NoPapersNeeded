@@ -15,7 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -77,7 +77,7 @@ fun AiEditScreen(
     // Leaving mid-flight throws away answers that were already paid for, so Back asks first in
     // exactly the phases where that is true: the top-bar arrow, the system gesture and, on
     // desktop, Esc (which the window routes to the same back dispatcher).
-    var confirmingLeave by remember { mutableStateOf(false) }
+    var confirmingLeave by rememberSaveable { mutableStateOf(false) }
     val leavingCostsSuggestions = ui.phase.leavingDiscardsSuggestions
     val requestBack = { if (leavingCostsSuggestions) confirmingLeave = true else onBack() }
     LeaveGuard(guarding = leavingCostsSuggestions, onBack = { confirmingLeave = true })
@@ -171,7 +171,7 @@ private fun SuggestingPhase(
     progress: EditProgress,
     onCancel: () -> Unit,
 ) {
-    var confirming by remember { mutableStateOf(false) }
+    var confirming by rememberSaveable { mutableStateOf(false) }
     Column(
         Modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),

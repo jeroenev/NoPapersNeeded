@@ -7,7 +7,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.NumericField
@@ -79,7 +79,7 @@ private fun InboxWorkflowToggle(
     onUntaggedOnly: () -> Unit,
     onInboxWorkflow: (ReviewMigration) -> Unit,
 ) {
-    var showMigration by remember { mutableStateOf(false) }
+    var showMigration by rememberSaveable { mutableStateOf(false) }
 
     SwitchRow(
         label = stringResource(Res.string.common_settings_enable_inbox),

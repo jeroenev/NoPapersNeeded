@@ -19,6 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -164,7 +165,7 @@ private fun EditorSaveBar(
     hasNext: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    var confirmDiscard by remember { mutableStateOf(false) }
+    var confirmDiscard by rememberSaveable { mutableStateOf(false) }
     Column(modifier) {
         HorizontalDivider()
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {

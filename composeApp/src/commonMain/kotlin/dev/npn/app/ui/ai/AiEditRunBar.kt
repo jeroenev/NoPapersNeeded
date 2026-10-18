@@ -17,7 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,7 +66,7 @@ internal fun RunBar(
     blocker: StartBlocker?,
     onStart: () -> Unit,
 ) {
-    var confirming by remember { mutableStateOf(false) }
+    var confirming by rememberSaveable { mutableStateOf(false) }
     Surface(tonalElevation = 3.dp) {
         BoxWithConstraints(Modifier.fillMaxWidth().padding(16.dp)) {
             val singleRow = maxWidth > RunBarSingleRowWidth
