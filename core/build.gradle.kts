@@ -95,7 +95,8 @@ tasks.matching { it.name.endsWith("LintModel") || it.name.startsWith("lintAnalyz
 // The library simulation (docs/SIMULATION.md) reads how many seeds and steps to run, or the one seed
 // to replay, from these: `./gradlew :core:desktopTest -Dnpn.sim.seed=1234` (or `-Pnpn.sim.seed=`)
 // hands them to the test JVM, and a changed value reruns the task rather than reusing its result.
-val simulationProperties = listOf("npn.sim.seed", "npn.sim.seeds", "npn.sim.firstSeed", "npn.sim.steps")
+val simulationProperties =
+    listOf("npn.sim.seed", "npn.sim.seeds", "npn.sim.firstSeed", "npn.sim.steps", "npn.sim.traceDir")
 tasks.withType<Test>().configureEach {
     simulationProperties.forEach { key ->
         providers

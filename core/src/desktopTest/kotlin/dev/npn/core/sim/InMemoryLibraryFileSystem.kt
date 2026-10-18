@@ -147,7 +147,7 @@ class InMemoryLibraryFileSystem(
 
     override suspend fun listAllIndexable(): List<FileMeta> =
         io(FsMethod.LIST_INDEXABLE, "") {
-            entriesUnder("").filterNot { it.relPath == NpnPaths.NPN_DIR || it.relPath.startsWith("${NpnPaths.NPN_DIR}/") }
+            entriesUnder("").filterNot { it.relPath == NpnPaths.NPN_DIR || it.relPath.startsWith(NPN_PREFIX) }
         }
 
     override suspend fun listAllUnder(relPath: String): List<FileMeta> {
@@ -211,7 +211,7 @@ class InMemoryLibraryFileSystem(
                 "Object staging must be in the canonical bucket"
             }
             val node = files[staging]
-            check(node != null) { "Staging object is missing: $staging" }
+            checkNotNull(node) { "Staging object is missing: $staging" }
             check(sha256Bytes(node.bytes) == expectedHash) { "Staging object hash mismatch: $staging" }
             val existing = files[canonical]
             if (existing != null || dirs.containsKey(canonical)) {
@@ -628,14 +628,15 @@ class InMemoryLibraryFileSystem(
         if (expected != null && expected != hash) writeOnceViolations += "$norm holds bytes hashing to $hash"
     }
 
-    private fun isWriteOnce(norm: String): Boolean =
-        when (JournalPaths.classify(norm)) {
-            is JournalPath.ObjectV2, is JournalPath.SnapshotV2 -> true
-            else -> norm.startsWith("${NpnPaths.OCR_DIR}/") && norm.endsWith(".json") ||
-                norm.startsWith("${NpnPaths.DEVICES_DIR}/") && norm.endsWith(".json")
-        }
+    private fun isWriteOnce(norm: String): Boolean {
+        val kind = JournalPaths.classify(norm)
+        if (kind is JournalPath.ObjectV2 || kind is JournalPath.SnapshotV2) return true
+        return norm.endsWith(".json") &&
+            (norm.startsWith("${NpnPaths.OCR_DIR}/") || norm.startsWith("${NpnPaths.DEVICES_DIR}/"))
+    }
 
     private companion object {
         const val WATCH_BUFFER = 100_000
+        const val NPN_PREFIX = "${NpnPaths.NPN_DIR}/"
     }
 }

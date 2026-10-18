@@ -7,7 +7,10 @@ import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.util.reason
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.TestCoroutineScheduler
+import java.io.File
 import kotlin.random.Random
 
 /** How one run is set up. Everything a seed decides is derived from it in [SimConfig.forSeed]. */
@@ -78,11 +81,36 @@ object KnownIssues {
      * a size no other one has, so a replacement always changes the size.
      */
     const val UNIQUE_PDF_SIZES = true
+
+    /**
+     * Failures that are reported findings, by a phrase of their message. A seed that hits one stops
+     * there (its library is broken from then on), and is counted instead of failing the test, so a
+     * long run goes on to find what else there is. A new finding is never added here before it is
+     * written up; a fixed one is removed.
+     *
+     * Finding 3: two documents deleted for good, and the bytes of the second come back under the
+     * first's old name. The rescan moves the second's (still deleted) row onto the path the first's
+     * deleted row holds; `DocumentDao.upsertAll` releases a path's hidden holders only for the live
+     * rows it writes, so the write fails on the unique `relPath`, the whole rescan with it, and
+     * every rescan after it, until the file goes away.
+     */
+    val knownFailures: Map<String, String> =
+        mapOf(
+            "UNIQUE constraint failed: documents.relPath" to
+                "finding 3: a hidden row relocated onto another hidden row's path",
+        )
+
+    // Finding 4 has no switch: an import stats its target after moving its file there
+    // (`ImportService.record`), so a file another process put at that name in between is recorded
+    // with the document's id, and its stat then vouches for it at every rescan. Long runs hit it
+    // rarely, as "files do not hold their documents' bytes".
 }
 
 /** A broken invariant: the run stops at the first. */
 class SimFailure(
     message: String,
+    /** The [KnownIssues.knownFailures] entry this failure is, or null for a new one. */
+    val known: String? = null,
 ) : AssertionError(message)
 
 /**
@@ -94,6 +122,10 @@ class SimFailure(
 internal class Simulation(
     scheduler: TestCoroutineScheduler,
     val config: SimConfig,
+    /** Runs after each step, before its invariants: the harness's own tests break the library here. */
+    private val afterStep: Simulation.(step: Int) -> Unit = {},
+    /** Changes the copy of the files the rebuild oracle opens: the harness's own tests plant a difference. */
+    private val tamperWithRebuild: (InMemoryLibraryFileSystem) -> Unit = {},
 ) {
     val world = SimWorld(scheduler)
     private val random = Random(config.seed)
@@ -133,11 +165,17 @@ internal class Simulation(
                 val planned = generator.next(snapshot())
                 val outcome = execute(planned)
                 trace += "#$step t=${world.scheduler.currentTime} ${planned.text} -> $outcome"
+                harvest()
+                afterStep(step)
                 checkCheap()
                 if (step % config.quiesceEvery == 0) quiesceAndCheck()
             }
             quiesceAndCheck()
         } finally {
+            // With -Dnpn.sim.traceDir=<dir>, every run leaves its whole trace there, failing or not.
+            System.getProperty(TRACE_DIR_PROPERTY)?.let { dir ->
+                File(dir).apply { mkdirs() }.resolve("seed-${config.seed}.txt").writeText(trace.joinToString("\n"))
+            }
             replica.dispose()
             world.dispose()
         }
@@ -157,9 +195,43 @@ internal class Simulation(
             }
 
             is Planned.Group -> {
+                planned.during.forEach { (at, control) ->
+                    world.launch {
+                        delay(at)
+                        trace += "   at t=${world.scheduler.currentTime}: ${control.text} -> ${control.body()}"
+                    }
+                }
                 runActs(planned.acts).joinToString(" || ")
             }
+
+            is Planned.Background -> {
+                val open = session
+                inFlight += planned.act.text to world.launch { planned.act.body(open) }
+                "started"
+            }
         }
+
+    /** Operations [Planned.Background] started, until [harvest] finds them done. */
+    private val inFlight = ArrayList<Pair<String, Deferred<String>>>()
+
+    /** Record the end of every background operation that ended, failing on one that ended in a bug. */
+    private fun harvest() {
+        val done = inFlight.filter { it.second.isCompleted }
+        inFlight.removeAll(done)
+        done.forEach { (text, deferred) -> trace += "   background '$text' -> ${outcomeOf(text, deferred)}" }
+    }
+
+    /** Drive every background operation to its end, as quiescence needs. */
+    private fun finishBackground() {
+        inFlight.toList().forEach { (text, deferred) ->
+            try {
+                world.drive(deferred, text)
+            } catch (hang: SimHang) {
+                fail("background operation hung: ${hang.message}")
+            }
+        }
+        harvest()
+    }
 
     /** Start [acts] together on the open session and drive them all to their end. */
     private fun runActs(acts: List<Planned.Act>): List<String> {
@@ -172,26 +244,36 @@ internal class Simulation(
                 fail("operation hung: ${hang.message}")
             }
         }
-        return running.map { (act, deferred) ->
-            count(act.text.substringBefore(' '))
-            @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-            val failure = deferred.getCompletionExceptionOrNull()
-            when {
-                failure == null -> {
-                    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-                    deferred.getCompleted()
-                }
+        return running.map { (act, deferred) -> outcomeOf(act.text, deferred) }
+    }
 
-                isBugFailure(failure) -> {
-                    fail(
-                        "operation '${act.text}' threw ${failure::class.qualifiedName}: ${failure.reason()}\n" +
-                            failure.stackTraceToString().lineSequence().take(STACK_LINES).joinToString("\n"),
-                    )
-                }
+    /** What an operation that ended came to; one that ended in a bug fails the run. */
+    private fun outcomeOf(
+        text: String,
+        deferred: Deferred<String>,
+    ): String {
+        count(text.substringBefore(' '))
+        @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+        val failure = deferred.getCompletionExceptionOrNull()
+        return when {
+            failure == null -> {
+                @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+                deferred.getCompleted()
+            }
 
-                else -> {
-                    "threw ${failure::class.simpleName}: ${failure.reason()}"
-                }
+            isBugFailure(failure) -> {
+                fail(
+                    "operation '$text' threw ${failure::class.qualifiedName}: ${failure.reason()}\n" +
+                        failure
+                            .stackTraceToString()
+                            .lineSequence()
+                            .take(STACK_LINES)
+                            .joinToString("\n"),
+                )
+            }
+
+            else -> {
+                "threw ${failure::class.simpleName}: ${failure.reason()}"
             }
         }
     }
@@ -207,7 +289,11 @@ internal class Simulation(
             if (!failure.isInjected() && isBugFailure(failure)) fail("opening the library failed: ${failure.reason()}")
             trace += "   open failed (${failure.reason()}); faults cleared, opening again"
             fs.faults.disarmAll()
-            runCatching { replica.open() }.exceptionOrNull()?.let { fail("opening the library failed again: ${it.reason()}") }
+            runCatching { replica.open() }.exceptionOrNull()?.let {
+                fail(
+                    "opening the library failed again: ${it.reason()}",
+                )
+            }
         }
     }
 
@@ -236,7 +322,11 @@ internal class Simulation(
     private fun snapshot(): Snapshot {
         val open = session
         return world.read("snapshot") {
-            val rows = replica.indexDb.rows("SELECT docId, relPath, trashed, deleted, missing FROM documents ORDER BY docId")
+            val rows =
+                replica.indexDb.rows(
+                    "SELECT docId, relPath, trashed, deleted, missing FROM documents ORDER BY docId",
+                )
+
             fun docs(predicate: (List<String?>) -> Boolean) = rows.filter(predicate).map { SimDoc(it[0]!!, it[1]!!) }
             Snapshot(
                 live = docs { it[2] == "0" && it[3] == "0" && it[4] == "0" },
@@ -252,10 +342,12 @@ internal class Simulation(
 
     /** The invariants cheap enough for every step. */
     private fun checkCheap() {
-        world.uncaught.firstOrNull()?.let { fail("an exception reached a scope's handler: $it") }
-        world.log.bugs.firstOrNull()?.let { fail("a bug was logged: $it\n${it.error?.stackTraceToString()?.take(STACK_CHARS)}") }
         fs.writeOnceViolations.firstOrNull()?.let { fail("write-once broken: $it") }
         fs.misnamedObjects().firstOrNull()?.let { fail("journal object not named by its hash: $it") }
+        world.uncaught.firstOrNull()?.let { fail("an exception reached a scope's handler: $it") }
+        world.log.bugs.firstOrNull()?.let {
+            fail("a bug was logged: $it\n${it.error?.stackTraceToString()?.take(STACK_CHARS)}")
+        }
         if (replica.session == null) return
         val problems =
             world.read("structure") {
@@ -264,20 +356,36 @@ internal class Simulation(
                     val (docId, relPath) = row[0]!! to row[1]!!
                     val live = row[2] == "0" && row[3] == "0" && row[4] == "0"
                     val sentinel = relPath.startsWith("${NpnPaths.NPN_DIR}/missing/")
-                    if (live && !NpnPaths.isDocumentPath(relPath)) out += "live row ${docId.take(ID)} at a path no document may have: '$relPath'"
-                    if (sentinel && relPath != missingSentinel(docId)) out += "row ${docId.take(ID)} waits at another row's sentinel '$relPath'"
+                    if (live &&
+                        !NpnPaths.isDocumentPath(relPath)
+                    ) {
+                        out +=
+                            "live row ${docId.take(ID)} at a path no document may have: '$relPath'"
+                    }
+                    if (sentinel &&
+                        relPath != missingSentinel(docId)
+                    ) {
+                        out +=
+                            "row ${docId.take(ID)} waits at another row's sentinel '$relPath'"
+                    }
                 }
                 val states = QueueState.entries.map { it.column }.toSet()
                 replica.deviceDb.rows("SELECT docId, state, attempts FROM ocr_queue").forEach { row ->
                     if (row[1] !in states) out += "OCR queue row ${row[0]!!.take(ID)} claims state '${row[1]}'"
-                    if ((row[2]?.toIntOrNull() ?: -1) < 0) out += "OCR queue row ${row[0]!!.take(ID)} has attempts ${row[2]}"
+                    if ((row[2]?.toIntOrNull() ?: -1) <
+                        0
+                    ) {
+                        out += "OCR queue row ${row[0]!!.take(ID)} has attempts ${row[2]}"
+                    }
                 }
                 replica.deviceDb.rows("SELECT docId, attempts FROM ai_enrich_queue WHERE attempts < 0").forEach { row ->
                     out += "enrichment queue row ${row[0]!!.take(ID)} has attempts ${row[1]}"
                 }
                 out
             }
-        problems.firstOrNull()?.let { fail("index structure: $it" + problems.drop(1).joinToString("") { "\n  $it" }) }
+        problems.firstOrNull()?.let {
+            fail("index structure: $it" + problems.drop(1).joinToString("") { more -> "\n  $more" })
+        }
     }
 
     /**
@@ -290,9 +398,16 @@ internal class Simulation(
         trace += "   -- quiescence at t=${world.scheduler.currentTime}"
         fs.faults.disarmAll()
         replica.ocr.openGate()
+        finishBackground()
         world.advance(SETTLE_MILLIS)
+        // A fault a concurrent step armed while it ran (Planned.Group.during) may have landed since.
+        fs.faults.disarmAll()
         val rescanned = world.run("quiescent rescan") { session.rescan() }
-        rescanned.exceptionOrNull()?.let { fail("the quiescent rescan failed: ${it::class.simpleName}: ${it.reason()}") }
+        rescanned.exceptionOrNull()?.let {
+            fail(
+                "the quiescent rescan failed: ${it::class.simpleName}: ${it.reason()}",
+            )
+        }
         world.advance(AFTER_RESCAN_MILLIS)
         checkCheap()
         val live = world.read("live view") { LibraryView.read(session, replica.indexDb) }
@@ -308,13 +423,26 @@ internal class Simulation(
                 val bytes = fs.bytesAt(doc.relPath)
                 when {
                     bytes == null -> "live ${docId.take(ID)} has no file at '${doc.relPath}'"
-                    sha256Bytes(bytes) != docId -> "live ${docId.take(ID)} at '${doc.relPath}' holds ${sha256Bytes(bytes).take(ID)}"
+
+                    sha256Bytes(
+                        bytes,
+                    ) != docId -> "live ${docId.take(ID)} at '${doc.relPath}' holds ${sha256Bytes(bytes).take(ID)}"
+
                     else -> null
                 }
             }
         if (wrong.isNotEmpty()) fail("files do not hold their documents' bytes:\n  " + wrong.joinToString("\n  "))
-        val livePaths = view.live.values.map { it.relPath }.toSet()
-        val duplicatePaths = world.read("duplicates") { replica.indexDb.rows("SELECT relPath FROM duplicates").map { it[0]!! }.toSet() }
+        val livePaths =
+            view.live.values
+                .map { it.relPath }
+                .toSet()
+        val duplicatePaths =
+            world.read("duplicates") {
+                replica.indexDb
+                    .rows("SELECT relPath FROM duplicates")
+                    .map { it[0]!! }
+                    .toSet()
+            }
         val unaccounted =
             fs.allFiles().filter { (path, bytes) ->
                 NpnPaths.indexable(FileMeta(path, NpnPaths.fileName(path), bytes.size.toLong(), 0, false)) &&
@@ -325,7 +453,9 @@ internal class Simulation(
         if (unaccounted.isNotEmpty()) {
             fail(
                 "settled PDFs that are neither a live document nor a known duplicate:\n  " +
-                    unaccounted.keys.joinToString("\n  ") { "'$it' (${sha256Bytes(unaccounted.getValue(it)).take(ID)})" },
+                    unaccounted.keys.joinToString(
+                        "\n  ",
+                    ) { "'$it' (${sha256Bytes(unaccounted.getValue(it)).take(ID)})" },
             )
         }
     }
@@ -336,10 +466,14 @@ internal class Simulation(
      * [live] shows ([diff], which says what is compared and what is device-local).
      */
     private fun rebuildOracle(live: LibraryView) {
-        val copy = fs.snapshot()
+        val copy = fs.snapshot().also(tamperWithRebuild)
         val oracle = SimReplica(world, "oracle-installation", copy, GatedOcrEngine().apply { openGate() })
         try {
-            runCatching { oracle.open() }.exceptionOrNull()?.let { fail("the rebuild could not open the library: ${it.reason()}") }
+            runCatching { oracle.open() }.exceptionOrNull()?.let {
+                fail(
+                    "the rebuild could not open the library: ${it.reason()}",
+                )
+            }
             val opened = oracle.session!!
             world.read("rebuild's initial rescan") { opened.awaitInitialRescan() }
             world.advance(AFTER_RESCAN_MILLIS)
@@ -351,9 +485,17 @@ internal class Simulation(
                     live,
                     rebuilt,
                     hiddenOnlyLive = { _, hidden -> hidden != Hidden.TRASHED || KnownIssues.TRASH_IS_NOT_REBUILT },
-                    bothHold = { docId, a, b -> listOf(a, b).all { path -> fs.bytesAt(path)?.let(::sha256Bytes) == docId } },
+                    bothHold = {
+                        docId,
+                        a,
+                        b,
+                        ->
+                        listOf(a, b).all { path -> fs.bytesAt(path)?.let(::sha256Bytes) == docId }
+                    },
                 )
-            if (differences.isNotEmpty()) fail("rebuild oracle: a fresh index shows another library:\n  " + differences.joinToString("\n  "))
+            if (differences.isNotEmpty()) {
+                fail("rebuild oracle: a fresh index shows another library:\n  " + differences.joinToString("\n  "))
+            }
         } finally {
             oracle.dispose()
         }
@@ -361,13 +503,22 @@ internal class Simulation(
 
     // ---- failing --------------------------------------------------------------------------------
 
-    private fun fail(message: String): Nothing = throw SimFailure(report(message))
+    private fun fail(message: String): Nothing =
+        throw SimFailure(
+            report(message),
+            KnownIssues.knownFailures.entries
+                .firstOrNull { message.contains(it.key) }
+                ?.value,
+        )
 
     private fun report(message: String): String =
         buildString {
             appendLine("Simulation failed at step ${world.step} (t=${world.scheduler.currentTime}ms): $message")
             appendLine()
-            appendLine("Replay: ./gradlew :core:desktopTest --tests 'dev.npn.core.sim.LibrarySimulationTest' -Dnpn.sim.seed=${config.seed} -Dnpn.sim.steps=${config.steps}")
+            appendLine(
+                "Replay: ./gradlew :core:desktopTest --tests 'dev.npn.core.sim.LibrarySimulationTest' " +
+                    "-Dnpn.sim.seed=${config.seed} -Dnpn.sim.steps=${config.steps}",
+            )
             appendLine("Config: $config")
             appendLine("Faults armed: ${fs.faults.pending}")
             appendLine()
@@ -375,17 +526,47 @@ internal class Simulation(
             trace.takeLast(TRACE_LINES).forEach { appendLine("  $it") }
             appendLine()
             appendLine("Log (last $LOG_LINES of ${world.log.entries.size}):")
-            world.log.entries.takeLast(LOG_LINES).forEach { appendLine("  $it") }
+            world.log.entries
+                .takeLast(LOG_LINES)
+                .forEach { appendLine("  $it") }
+            appendLine()
+            appendLine("Library files (outside .npn/, and the trash):")
+            fs
+                .allFiles()
+                .filterKeys {
+                    !it.startsWith(
+                        "${NpnPaths.NPN_DIR}/",
+                    ) || it.startsWith("${NpnPaths.TRASH_DIR}/")
+                }.forEach { (path, bytes) ->
+                    appendLine("  '$path' ${sha256Bytes(bytes).take(ID)} (${bytes.size} bytes)")
+                }
+            appendLine()
+            appendLine("Index rows (docId, relPath, trashed, deleted, missing, size, mtime):")
+            val rows =
+                runCatching {
+                    world
+                        .run("rows for the report", budgetMillis = REPORT_READ_MILLIS) {
+                            replica.indexDb.rows(
+                                "SELECT docId, relPath, trashed, deleted, missing, size, mtime " +
+                                    "FROM documents ORDER BY relPath",
+                            )
+                        }.getOrThrow()
+                }
+            rows.getOrNull()?.forEach { row -> appendLine("  ${row[0]!!.take(ID)} ${row.drop(1)}") }
+                ?: appendLine("  (could not be read: ${rows.exceptionOrNull()?.reason()})")
         }
 
-    private companion object {
-        const val ID = 10
-        const val LATENCY_SALT = 31L
-        const val SETTLE_MILLIS = 20L * 60L * 1000L
-        const val AFTER_RESCAN_MILLIS = 2L * 60L * 1000L
-        const val TRACE_LINES = 120
-        const val LOG_LINES = 40
-        const val STACK_LINES = 25
-        const val STACK_CHARS = 3_000
+    companion object {
+        /** The system property naming a directory to write each run's trace to. */
+        const val TRACE_DIR_PROPERTY = "npn.sim.traceDir"
+        private const val ID = 10
+        private const val LATENCY_SALT = 31L
+        private const val SETTLE_MILLIS = 20L * 60L * 1000L
+        private const val AFTER_RESCAN_MILLIS = 2L * 60L * 1000L
+        private const val TRACE_LINES = 120
+        private const val LOG_LINES = 40
+        private const val STACK_LINES = 25
+        private const val STACK_CHARS = 3_000
+        private const val REPORT_READ_MILLIS = 60_000L
     }
 }

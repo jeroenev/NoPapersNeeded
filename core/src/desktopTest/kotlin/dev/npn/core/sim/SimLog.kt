@@ -16,7 +16,8 @@ data class LogEntry(
     val error: Throwable?,
 ) {
     override fun toString(): String =
-        "[step $step, t=${atMillis}ms] ${level.name} $message" + (error?.let { ": ${it::class.simpleName}: ${it.reason()}" } ?: "")
+        "[step $step, t=${atMillis}ms] ${level.name} $message" +
+            error?.let { ": ${it::class.simpleName}: ${it.reason()}" }.orEmpty()
 }
 
 /**
@@ -104,6 +105,9 @@ private val EXPECTED_MESSAGES =
         // A file another process put where the app expected a directory, or the other way round.
         "Is a directory",
         "Not a directory",
+        // An import whose file another process deleted the moment it was placed: the import fails
+        // and is taken back (the same window as finding 4, KnownIssues, where the file is replaced).
+        "Imported file vanished",
     )
 
 private const val CHAIN_DEPTH = 16

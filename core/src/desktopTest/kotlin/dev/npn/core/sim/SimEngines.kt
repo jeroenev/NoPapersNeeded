@@ -29,7 +29,7 @@ object SimPdf {
         text: String? = null,
         size: Int? = null,
     ): ByteArray {
-        val body = HEADER + "%sim $label\n" + (text?.let { "text:$it\n" } ?: "")
+        val body = HEADER + "%sim $label\n" + text?.let { "text:$it\n" }.orEmpty()
         val padding = size?.let { (it - body.length - TRAILER.length - 2).coerceAtLeast(0) } ?: 0
         val padded = if (padding > 0) body + "%" + " ".repeat(padding) + "\n" else body
         return (padded + TRAILER).encodeToByteArray()

@@ -49,16 +49,28 @@ internal data class LibraryView(
             val docs = db.rows("SELECT docId, relPath, trashed, deleted, missing, reviewed FROM documents")
             val tags = db.rows("SELECT docId, tag FROM document_tags").groupBy({ it[0]!! }, { it[1]!! })
             val fields =
-                db.rows("SELECT docId, fieldKey, fieldValue FROM document_fields").groupBy({ it[0]!! }, { it[1]!! to it[2]!! })
+                db.rows("SELECT docId, fieldKey, fieldValue FROM document_fields").groupBy({ it[0]!! }, {
+                    it[1]!! to
+                        it[2]!!
+                })
             val live = HashMap<String, DocView>()
             val hidden = HashMap<String, Hidden>()
             docs.forEach { row ->
                 val docId = row[0]!!
                 when {
-                    row[3] == "1" -> hidden[docId] = Hidden.DELETED
-                    row[2] == "1" -> hidden[docId] = Hidden.TRASHED
-                    row[4] == "1" -> hidden[docId] = Hidden.MISSING
-                    else ->
+                    row[3] == "1" -> {
+                        hidden[docId] = Hidden.DELETED
+                    }
+
+                    row[2] == "1" -> {
+                        hidden[docId] = Hidden.TRASHED
+                    }
+
+                    row[4] == "1" -> {
+                        hidden[docId] = Hidden.MISSING
+                    }
+
+                    else -> {
                         live[docId] =
                             DocView(
                                 relPath = row[1]!!,
@@ -66,12 +78,15 @@ internal data class LibraryView(
                                 fields = fields[docId].orEmpty().toMap().toSortedMap(),
                                 reviewed = row[5] == "1",
                             )
+                    }
                 }
             }
             val defs =
                 db
-                    .rows("SELECT fieldKey, label, type, showByDefault, aiEnabled, position, hint, perDocument FROM field_defs")
-                    .associate { it[0]!! to it.drop(1).joinToString("|") }
+                    .rows(
+                        "SELECT fieldKey, label, type, showByDefault, aiEnabled, position, hint, perDocument " +
+                            "FROM field_defs",
+                    ).associate { it[0]!! to it.drop(1).joinToString("|") }
                     .toSortedMap()
             val styles =
                 db
@@ -87,8 +102,16 @@ internal data class LibraryView(
                 reviewMode = session.reviewConfig.reviewMode.first(),
                 storagePath = "${storage.template}|${storage.enabled}",
                 trashRetentionDays = session.trashRetention.trashRetentionDays.first(),
-                savedViews = session.savedViews.observeSavedViews().first().sortedBy { it.id },
-                rules = session.rules.observeRules().first().sortedBy { it.id },
+                savedViews =
+                    session.savedViews
+                        .observeSavedViews()
+                        .first()
+                        .sortedBy { it.id },
+                rules =
+                    session.rules
+                        .observeRules()
+                        .first()
+                        .sortedBy { it.id },
             )
         }
     }
@@ -100,7 +123,18 @@ internal suspend fun RoomDatabase.rows(sql: String): List<List<String?>> =
         connection.usePrepared(sql) { statement ->
             buildList {
                 while (statement.step()) {
-                    add((0 until statement.getColumnCount()).map { if (statement.isNull(it)) null else statement.getText(it) })
+                    add(
+                        (0 until statement.getColumnCount()).map {
+                            if (statement.isNull(
+                                    it,
+                                )
+                            ) {
+                                null
+                            } else {
+                                statement.getText(it)
+                            }
+                        },
+                    )
                 }
             }
         }
@@ -126,10 +160,19 @@ internal fun diff(
         val a = live.live[id]
         val b = rebuilt.live[id]
         when {
-            a == null -> out += "doc ${id.take(ID)} is live only in the rebuild (live index: ${live.hidden[id] ?: "no row"}): $b"
-            b == null -> out += "doc ${id.take(ID)} is live only in the live index (rebuild: ${rebuilt.hidden[id] ?: "no row"}): $a"
-            a.copy(relPath = b.relPath) != b || (a.relPath != b.relPath && !bothHold(id, a.relPath, b.relPath)) ->
+            a == null -> {
+                out +=
+                    "doc ${id.take(ID)} is live only in the rebuild (live index: ${live.hidden[id] ?: "no row"}): $b"
+            }
+
+            b == null -> {
+                out +=
+                    "doc ${id.take(ID)} is live only in the live index (rebuild: ${rebuilt.hidden[id] ?: "no row"}): $a"
+            }
+
+            a.copy(relPath = b.relPath) != b || (a.relPath != b.relPath && !bothHold(id, a.relPath, b.relPath)) -> {
                 out += "doc ${id.take(ID)} differs:\n    live:    $a\n    rebuilt: $b"
+            }
         }
     }
     (live.hidden.keys + rebuilt.hidden.keys).toSortedSet().forEach { id ->
@@ -141,6 +184,7 @@ internal fun diff(
             else -> out += "doc ${id.take(ID)} hidden state differs: live $a, rebuilt $b"
         }
     }
+
     fun <T> same(
         what: String,
         a: T,
@@ -152,7 +196,9 @@ internal fun diff(
     // A trashed document keeps its tags' rows (TagDao.pruneUnreferenced), so while a rebuild has no
     // trashed rows (KnownIssues.TRASH_IS_NOT_REBUILT) only the styles of tags in use compare.
     val inUse = (live.live.values + rebuilt.live.values).flatMap { it.tags }.toSet()
-    fun styles(view: LibraryView) = if (KnownIssues.TRASH_IS_NOT_REBUILT) view.tagStyles.filterKeys(inUse::contains) else view.tagStyles
+
+    fun styles(view: LibraryView) =
+        if (KnownIssues.TRASH_IS_NOT_REBUILT) view.tagStyles.filterKeys(inUse::contains) else view.tagStyles
     same("tag styles", styles(live), styles(rebuilt))
     same("review mode", live.reviewMode, rebuilt.reviewMode)
     same("storage path", live.storagePath, rebuilt.storagePath)

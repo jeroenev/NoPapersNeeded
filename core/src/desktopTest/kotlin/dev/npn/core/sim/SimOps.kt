@@ -14,6 +14,10 @@ import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.ocr.OcrEngineId
+import dev.npn.core.ocr.OcrSidecar
+import dev.npn.core.ocr.OcrSidecarCodec
+import dev.npn.core.ocr.OcrSidecarName
 import dev.npn.core.util.EpochClock
 import kotlin.random.Random
 
@@ -46,8 +50,10 @@ enum class OpKind(
     RESCAN(3),
     OCR_COMPLETE(4),
 
-    // Several of the above at once, interleaving at their suspension points.
+    // Several of the above at once, interleaving at their suspension points, with what other
+    // processes do landing while they run; or one left running while the next steps go on.
     CONCURRENT(7),
+    IN_BACKGROUND(5),
 
     // Time.
     ADVANCE_SHORT(5),
@@ -64,6 +70,7 @@ enum class OpKind(
     EXT_RESTORE_BACKUP(1),
     EXT_SYNC_TEMP(2),
     EXT_REMOTE_OBJECT(3),
+    EXT_REMOTE_SIDECAR(2),
 
     // Storage failures, and the process's own end.
     FAULT(3),
@@ -82,17 +89,32 @@ internal sealed interface Planned {
         val body: suspend (LibrarySessionImpl) -> String,
     ) : Planned
 
-    /** Something done to the world (time, files, faults, the process) at one instant. */
+    /**
+     * Something done to the world (time, files, faults, the process). An [instant] one acts at one
+     * instant without running the scheduler, so it may also land in the middle of a [Group].
+     */
     class Control(
         override val text: String,
+        val instant: Boolean = false,
         val body: () -> String,
     ) : Planned
 
-    /** Several [Act]s started together. */
+    /** Several [Act]s started together, with [during] landing the given virtual millis after the start. */
     class Group(
         val acts: List<Act>,
+        val during: List<Pair<Long, Control>> = emptyList(),
     ) : Planned {
-        override val text: String get() = "concurrently: " + acts.joinToString(" || ") { it.text }
+        override val text: String
+            get() =
+                "concurrently: " + acts.joinToString(" || ") { it.text } +
+                    during.joinToString("") { (at, control) -> " || at +${at}ms ${control.text}" }
+    }
+
+    /** An [Act] started and left running: later steps go on while it does. */
+    class Background(
+        val act: Act,
+    ) : Planned {
+        override val text: String get() = "in background: ${act.text}"
     }
 }
 
@@ -133,7 +155,7 @@ internal class SimGenerator(
 
     fun next(snapshot: Snapshot): Planned {
         repeat(ATTEMPTS) {
-            plan(pickKind(), snapshot)?.let { return it }
+            plan(pickKind(), snapshot)?.let { planned -> return planned }
         }
         return importNew()
     }
@@ -169,9 +191,10 @@ internal class SimGenerator(
             OpKind.LIBRARY_SETTING -> librarySetting()
             OpKind.STORAGE_PATH_RULE -> storagePathRule()
             OpKind.SAVED_VIEW -> savedView(s)
-            OpKind.RESCAN -> Planned.Act("rescan") { it.rescan().let { r -> "added ${r.added}, retry ${r.retryAfterMillis}" } }
+            OpKind.RESCAN -> rescan()
             OpKind.OCR_COMPLETE -> ocrComplete()
             OpKind.CONCURRENT -> concurrent(s)
+            OpKind.IN_BACKGROUND -> background(s)
             OpKind.ADVANCE_SHORT -> advance(random.nextLong(50, SHORT_MAX_MILLIS))
             OpKind.ADVANCE_TICK -> advance(random.nextLong(TICK_MIN_MILLIS, TICK_MAX_MILLIS))
             OpKind.ADVANCE_DAY -> advance(DAY_MILLIS + random.nextLong(0, TICK_MAX_MILLIS))
@@ -184,11 +207,21 @@ internal class SimGenerator(
             OpKind.EXT_RESTORE_BACKUP -> backups.pickOrNull()?.let(::extRestore)
             OpKind.EXT_SYNC_TEMP -> extSyncTemp(s)
             OpKind.EXT_REMOTE_OBJECT -> s.live.pickOrNull()?.let { extRemoteObject(it, s.fields) }
+            OpKind.EXT_REMOTE_SIDECAR -> s.live.pickOrNull()?.let(::extRemoteSidecar)
             OpKind.FAULT -> fault()
             OpKind.CRASH -> Planned.Control("crash and reopen") { sim.crashAndReopen() }
             OpKind.CLOSE_REOPEN -> Planned.Control("close and reopen") { sim.closeAndReopen() }
-            OpKind.DROP_INDEX -> Planned.Control("drop index.db and reopen") { sim.dropIndexAndReopen(crash = random.chance(50)) }
+            OpKind.DROP_INDEX -> dropIndex()
         }
+
+    private fun rescan() =
+        Planned.Act("rescan") { session ->
+            val report = session.rescan()
+            "added ${report.added}, retry ${report.retryAfterMillis}"
+        }
+
+    private fun dropIndex() =
+        Planned.Control("drop index.db and reopen") { sim.dropIndexAndReopen(crash = random.chance(50)) }
 
     // ---- the app's writes -----------------------------------------------------------------------
 
@@ -215,12 +248,17 @@ internal class SimGenerator(
     ): Planned.Act? {
         val bytes = sim.known[doc.docId] ?: return null
         val name = if (random.chance(50)) NpnPaths.fileName(doc.relPath) else pickName()
-        return Planned.Act("import $what ${doc.docId.take(ID)} as '$name'") { it.importPdfBytes(bytes, name).describe() }
+        return Planned.Act("import $what ${doc.docId.take(ID)} as '$name'") { session ->
+            session.importPdfBytes(bytes, name).describe()
+        }
     }
 
     private fun trash(doc: SimDoc) =
         Planned.Act("trash ${doc.short()}") { session ->
-            session.docLifecycle.trashDoc(doc.docId)?.also { receipts += it }.toString()
+            session.docLifecycle
+                .trashDoc(doc.docId)
+                ?.also { receipts += it }
+                .toString()
         }
 
     private fun restore(doc: SimDoc) =
@@ -241,11 +279,15 @@ internal class SimGenerator(
         Planned.Act("delete for good ${doc.short()}") { it.docLifecycle.deleteDocPermanently(doc.docId).toString() }
 
     private fun emptyTrash(docs: List<SimDoc>) =
-        Planned.Act("empty trash (${docs.size})") { it.docLifecycle.deleteDocsPermanently(docs.map(SimDoc::docId)).toString() }
+        Planned.Act("empty trash (${docs.size})") { session ->
+            session.docLifecycle.deleteDocsPermanently(docs.map(SimDoc::docId)).toString()
+        }
 
     private fun rename(doc: SimDoc): Planned.Act {
         val name = pickName()
-        return Planned.Act("rename ${doc.short()} to '$name'") { it.docLifecycle.renameFile(doc.docId, name).toString() }
+        return Planned.Act("rename ${doc.short()} to '$name'") { session ->
+            session.docLifecycle.renameFile(doc.docId, name).toString()
+        }
     }
 
     private fun move(doc: SimDoc): Planned.Act {
@@ -358,7 +400,7 @@ internal class SimGenerator(
 
     private fun ocrComplete(): Planned.Control {
         val pages = random.nextInt(1, OCR_BURST)
-        return Planned.Control("let $pages OCR page(s) finish") {
+        return Planned.Control("let $pages OCR page(s) finish", instant = true) {
             val done = (1..pages).count { sim.replica.ocr.complete() }
             "$done finished, ${sim.replica.ocr.inFlight} waiting"
         }
@@ -367,9 +409,24 @@ internal class SimGenerator(
     private fun concurrent(s: Snapshot): Planned? {
         val acts =
             (1..random.nextInt(2, CONCURRENCY + 1)).mapNotNull {
-                plan(random.pick(CONCURRENT_KINDS.filter { it in enabled }.ifEmpty { return null }), s) as? Planned.Act
+                val kinds = CONCURRENT_KINDS.filter(enabled::contains)
+                if (kinds.isEmpty()) return null
+                plan(random.pick(kinds), s) as? Planned.Act
             }
-        return if (acts.size >= 2) Planned.Group(acts) else null
+        val during =
+            (0 until random.nextInt(0, DURING + 1)).mapNotNull {
+                val kinds = DURING_KINDS.filter(enabled::contains)
+                if (kinds.isEmpty()) return@mapNotNull null
+                val control = (plan(random.pick(kinds), s) as? Planned.Control)?.takeIf(Planned.Control::instant)
+                control?.let { random.nextLong(0, DURING_MILLIS) to control }
+            }
+        return if (acts.isNotEmpty() && acts.size + during.size >= 2) Planned.Group(acts, during) else null
+    }
+
+    private fun background(s: Snapshot): Planned? {
+        val kinds = CONCURRENT_KINDS.filter { it in enabled }
+        if (kinds.isEmpty()) return null
+        return (plan(random.pick(kinds), s) as? Planned.Act)?.let(Planned::Background)
     }
 
     private fun advance(millis: Long) =
@@ -383,7 +440,7 @@ internal class SimGenerator(
     private fun extDrop(): Planned.Control {
         val bytes = newPdf()
         val path = pathIn(random.pick(DIRS), pickName())
-        return Planned.Control("external: write ${hash(bytes)} at '$path' in one step") {
+        return Planned.Control("external: write ${hash(bytes)} at '$path' in one step", instant = true) {
             sim.fs.externalWriteAtomic(path, bytes)
             "done"
         }
@@ -391,10 +448,15 @@ internal class SimGenerator(
 
     private fun extChunked(s: Snapshot): Planned.Control {
         val bytes = newPdf()
-        val path = s.live.takeIf { random.chance(30) }?.pickOrNull()?.relPath ?: pathIn(random.pick(DIRS), pickName())
+        val path =
+            s.live
+                .takeIf { random.chance(30) }
+                ?.pickOrNull()
+                ?.relPath ?: pathIn(random.pick(DIRS), pickName())
         val chunks = random.nextInt(2, CHUNKS)
         val interval = random.nextLong(100, CHUNK_INTERVAL_MILLIS)
-        return Planned.Control("external: write ${hash(bytes)} at '$path' in place, $chunks chunks ${interval}ms apart") {
+        val text = "external: write ${hash(bytes)} at '$path' in place, $chunks chunks ${interval}ms apart"
+        return Planned.Control(text, instant = true) {
             sim.world.launch { sim.fs.externalWriteInChunks(path, bytes, chunks, interval) }
             "started"
         }
@@ -403,8 +465,13 @@ internal class SimGenerator(
     private fun extOverwrite(doc: SimDoc): Planned.Control {
         val bytes = newPdf()
         val inPlace = random.nextBoolean()
-        return Planned.Control("external: overwrite ${doc.short()} with ${hash(bytes)} ${if (inPlace) "in place" else "by rename"}") {
-            if (inPlace) sim.fs.externalOverwriteInPlace(doc.relPath, bytes) else sim.fs.externalWriteAtomic(doc.relPath, bytes)
+        val how = if (inPlace) "in place" else "by rename"
+        return Planned.Control("external: overwrite ${doc.short()} with ${hash(bytes)} $how", instant = true) {
+            if (inPlace) {
+                sim.fs.externalOverwriteInPlace(doc.relPath, bytes)
+            } else {
+                sim.fs.externalWriteAtomic(doc.relPath, bytes)
+            }
             "done"
         }
     }
@@ -416,7 +483,7 @@ internal class SimGenerator(
             } else {
                 s.live.pickOrNull()?.relPath ?: return null
             }
-        return Planned.Control("external: delete '$path'") {
+        return Planned.Control("external: delete '$path'", instant = true) {
             sim.fs.externalDelete(path)
             "done"
         }
@@ -424,7 +491,7 @@ internal class SimGenerator(
 
     private fun extMove(doc: SimDoc): Planned.Control {
         val to = pathIn(random.pick(DIRS), pickName())
-        return Planned.Control("external: move ${doc.short()} to '$to'") {
+        return Planned.Control("external: move ${doc.short()} to '$to'", instant = true) {
             sim.fs.externalMove(doc.relPath, to)
             "done"
         }
@@ -432,7 +499,7 @@ internal class SimGenerator(
 
     private fun extBackup(): Planned.Control {
         val root = random.pick(DIRS + listOf(NpnPaths.NPN_DIR))
-        return Planned.Control("external: back up '$root'") {
+        return Planned.Control("external: back up '$root'", instant = true) {
             val backup = sim.fs.externalBackup(root)
             backups += backup
             "${backup.files.size} files"
@@ -440,7 +507,7 @@ internal class SimGenerator(
     }
 
     private fun extRestore(backup: InMemoryLibraryFileSystem.Backup) =
-        Planned.Control("external: put '${backup.root}' back from a backup (${backup.files.size} files)") {
+        Planned.Control("external: put '${backup.root}' back from a backup (${backup.files.size} files)", true) {
             sim.fs.externalRestore(backup)
             "done"
         }
@@ -448,13 +515,14 @@ internal class SimGenerator(
     private fun extSyncTemp(s: Snapshot): Planned.Control {
         if (syncTemps.isNotEmpty() && random.chance(40)) {
             val temp = syncTemps.removeAt(random.nextInt(syncTemps.size))
-            return Planned.Control("external: sync tool removes '$temp'") {
+            return Planned.Control("external: sync tool removes '$temp'", instant = true) {
                 sim.fs.externalDelete(temp)
                 "done"
             }
         }
         val beside = s.live.pickOrNull()?.relPath ?: pathIn(random.pick(DIRS), pickName())
-        val dir = if (random.chance(30)) "${NpnPaths.JOURNAL_DIR}/objects-v2-${random.pick(BUCKETS)}" else NpnPaths.parentDir(beside)
+        val bucket = "${NpnPaths.JOURNAL_DIR}/objects-v2-${random.pick(BUCKETS)}"
+        val dir = if (random.chance(30)) bucket else NpnPaths.parentDir(beside)
         val name = NpnPaths.fileName(beside)
         val temp =
             when (random.nextInt(4)) {
@@ -465,7 +533,7 @@ internal class SimGenerator(
             }
         val path = pathIn(dir, temp)
         syncTemps += path
-        return Planned.Control("external: sync tool writes '$path'") {
+        return Planned.Control("external: sync tool writes '$path'", instant = true) {
             sim.fs.externalWriteAtomic(path, SimPdf.bytes("partial").copyOf(PARTIAL))
             "done"
         }
@@ -482,12 +550,37 @@ internal class SimGenerator(
                 else -> listOf(PendingOp.tagStyle(random.pick(TAGS), random.pick(COLORS), null))
             } ?: listOf(PendingOp.tagAdd(doc.docId, random.pick(TAGS)))
         val transfer = random.nextLong(0, TRANSFER_MILLIS)
-        return Planned.Control("external: another device's ${ops.joinToString { it.op::class.simpleName.orEmpty() }} on ${doc.short()} arrives over ${transfer}ms") {
+        val what = ops.joinToString { it.op::class.simpleName.orEmpty() }
+        return Planned.Control("external: another device's $what on ${doc.short()} arrives over ${transfer}ms") {
             val (path, bytes) = remoteObject(ops)
             sim.world.launch { sim.fs.externalSyncDelivery(path, bytes, transfer) }
             path.substringAfterLast('/').take(ID)
         }
     }
+
+    /** Another device's OCR sidecar for [doc], once per document and engine, as a sync tool delivers it. */
+    private fun extRemoteSidecar(doc: SimDoc): Planned.Control? {
+        val engine = random.pick(listOf(OcrEngineId.TESSERACT, OcrEngineId.MLKIT)).column
+        val name = OcrSidecarName(doc.docId, OcrSidecarName.writerKey(REMOTE_DEVICE, engine))
+        if (!remoteSidecars.add(name.path)) return null
+        val transfer = random.nextLong(0, TRANSFER_MILLIS)
+        return Planned.Control("external: another device's $engine OCR of ${doc.short()} arrives over ${transfer}ms") {
+            val sidecar =
+                OcrSidecar(
+                    doc = doc.docId,
+                    dev = REMOTE_DEVICE,
+                    engine = engine,
+                    lang = "eng",
+                    createdAt = remoteClock.nowMillis(),
+                    pages = listOf("remote $engine text of ${doc.docId.take(ID)}"),
+                )
+            val bytes = OcrSidecarCodec.encode(sidecar).encodeToByteArray()
+            sim.world.launch { sim.fs.externalSyncDelivery(name.path, bytes, transfer) }
+            "delivering"
+        }
+    }
+
+    private val remoteSidecars = HashSet<String>()
 
     /** One object another device published, as its bytes and the path they belong at. */
     private fun remoteObject(ops: List<PendingOp>): Pair<String, ByteArray> {
@@ -500,11 +593,11 @@ internal class SimGenerator(
     // ---- faults ---------------------------------------------------------------------------------
 
     private fun fault(): Planned.Control {
-        val method = if (random.chance(70)) random.pick(FsMethod.entries.filter { it.writes }) else random.pick(FsMethod.entries)
-        val prefix = random.pick(listOf(null, null, NpnPaths.JOURNAL_DIR, NpnPaths.TRASH_DIR, NpnPaths.OCR_DIR, NpnPaths.TMP_DIR, "inbox"))
+        val method = random.pick(if (random.chance(70)) FsMethod.entries.filter { it.writes } else FsMethod.entries)
+        val prefix = random.pick(FAULT_PREFIXES)
         val point = if (method.writes && random.chance(30)) SimFaults.Point.AFTER else SimFaults.Point.BEFORE
         val rule = SimFaults.Rule(method, prefix, point, times = random.nextInt(1, FAULT_TIMES))
-        return Planned.Control("arm fault $rule") {
+        return Planned.Control("arm fault $rule", instant = true) {
             sim.fs.faults.arm(rule)
             "armed"
         }
@@ -534,6 +627,7 @@ internal class SimGenerator(
 
     companion object {
         private const val ATTEMPTS = 20
+        private const val REMOTE_DEVICE = "remote-device"
         private const val UNIQUE_SIZE_BASE = 400
         private const val ID = 8
         private const val CLEAR_PERCENT = 20
@@ -548,6 +642,8 @@ internal class SimGenerator(
         private const val FAULT_TIMES = 4
         private const val OCR_BURST = 4
         private const val CONCURRENCY = 3
+        private const val DURING = 2
+        private const val DURING_MILLIS = 600L
         private const val RETENTION_MAX_DAYS = 60
         private const val LABELS = 5
         private const val VIEWS = 3
@@ -564,7 +660,22 @@ internal class SimGenerator(
         private val COLORS = listOf("#ff0000", "#00ff00", null)
         private val BUCKETS = listOf("00", "3f", "a1")
         private val TEMPLATES =
-            listOf("{correspondent}/{title}.pdf", "{doc_date:yyyy}/{title}.pdf", "{tags}/{title}.pdf", "{field:project}/{title}.pdf")
+            listOf(
+                "{correspondent}/{title}.pdf",
+                "{doc_date:yyyy}/{title}.pdf",
+                "{tags}/{title}.pdf",
+                "{field:project}/{title}.pdf",
+            )
+        private val FAULT_PREFIXES =
+            listOf(
+                null,
+                null,
+                NpnPaths.JOURNAL_DIR,
+                NpnPaths.TRASH_DIR,
+                NpnPaths.OCR_DIR,
+                NpnPaths.TMP_DIR,
+                NpnPaths.DEFAULT_INBOX,
+            )
         private val CUSTOM_FIELDS =
             listOf(
                 "amount" to FieldType.DECIMAL,
@@ -572,6 +683,18 @@ internal class SimGenerator(
                 "due" to FieldType.DATE,
                 "project" to FieldType.TEXT,
                 FieldKeys.CORRESPONDENT to FieldType.TEXT,
+            )
+        private val DURING_KINDS =
+            listOf(
+                OpKind.EXT_DROP_PDF,
+                OpKind.EXT_CHUNKED_WRITE,
+                OpKind.EXT_OVERWRITE,
+                OpKind.EXT_DELETE,
+                OpKind.EXT_MOVE,
+                OpKind.EXT_RESTORE_BACKUP,
+                OpKind.EXT_SYNC_TEMP,
+                OpKind.FAULT,
+                OpKind.OCR_COMPLETE,
             )
         private val CONCURRENT_KINDS =
             listOf(

@@ -71,10 +71,11 @@ internal class SimReplica(
                 timeSource = world.scheduler.timeSource,
             )
         val opened = world.run("open $installationId") { openSession(deps, JournalOp.DocUndelete.WRITTEN) }
-        val result = opened.getOrElse { failure ->
-            job.cancel()
-            throw failure
-        }
+        val result =
+            opened.getOrElse { failure ->
+                job.cancel()
+                throw failure
+            }
         scopeJob = job
         session = result
         result.start()
@@ -145,13 +146,18 @@ internal class SimWorld(
     fun uncaughtHandler(owner: String) =
         CoroutineExceptionHandler { _, failure ->
             uncaught += "[step $step] $owner: ${failure::class.qualifiedName}: ${failure.reason()}\n" +
-                failure.stackTraceToString().lineSequence().take(STACK_LINES).joinToString("\n")
+                failure
+                    .stackTraceToString()
+                    .lineSequence()
+                    .take(STACK_LINES)
+                    .joinToString("\n")
         }
 
     /** Where operations run: apart from any session, so a crash leaves them to fail as callers do. */
     val operations = CoroutineScope(dispatcher + SupervisorJob() + uncaughtHandler("operation"))
 
-    fun newIndexDb(): NpnDatabase = NpnDatabase.configure(Room.inMemoryDatabaseBuilder<NpnDatabase>(), dispatcher).build()
+    fun newIndexDb(): NpnDatabase =
+        NpnDatabase.configure(Room.inMemoryDatabaseBuilder<NpnDatabase>(), dispatcher).build()
 
     fun newDeviceDb(): DeviceDatabase =
         DeviceDatabase.configure(Room.inMemoryDatabaseBuilder<DeviceDatabase>(), dispatcher).build()
@@ -198,7 +204,8 @@ internal class SimWorld(
         val deferred = launch(block)
         drive(deferred, what, budgetMillis)
         @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-        return deferred.getCompletionExceptionOrNull()?.let { Result.failure(it) } ?: Result.success(deferred.getCompleted())
+        return deferred.getCompletionExceptionOrNull()?.let { Result.failure(it) }
+            ?: Result.success(deferred.getCompleted())
     }
 
     /** [run], for a read that must not fail. */

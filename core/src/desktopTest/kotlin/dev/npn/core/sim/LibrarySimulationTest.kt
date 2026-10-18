@@ -31,15 +31,27 @@ class LibrarySimulationTest {
                     (first until first + count).toList()
                 }
         val failures = ArrayList<String>()
+        val known = ArrayList<String>()
         for (seed in seeds) {
-            val config = SimConfig.forSeed(seed, steps)
-            val failure = runCatching { runSeed(config) }.exceptionOrNull() ?: continue
-            if (failure !is SimFailure) throw failure
-            failures += failure.message.orEmpty()
+            val failure = runCatching { runSeed(SimConfig.forSeed(seed, steps)) }.exceptionOrNull()
+            if (failure != null && failure !is SimFailure) throw failure
+            val stopped: SimFailure? = failure
+            // A replay of one seed shows its failure, known or not.
+            val knownFinding = stopped?.known?.takeIf { seeds.size > 1 }
+            when {
+                knownFinding != null -> known += "seed $seed: $knownFinding"
+                stopped != null -> failures += stopped.message.orEmpty()
+            }
             if (failures.size >= MAX_REPORTED) break
         }
+        // Seeds that stopped at a reported finding (KnownIssues.knownFailures), so a long run shows how often.
+        if (known.isNotEmpty()) {
+            println("${known.size} of ${seeds.size} seed(s) stopped at a known finding:\n" + known.joinToString("\n"))
+        }
         if (failures.isNotEmpty()) {
-            throw SimFailure("${failures.size} seed(s) failed:\n\n" + failures.joinToString("\n\n" + "=".repeat(RULE) + "\n\n"))
+            throw SimFailure(
+                "${failures.size} seed(s) failed:\n\n" + failures.joinToString("\n\n" + "=".repeat(RULE) + "\n\n"),
+            )
         }
     }
 
@@ -49,8 +61,8 @@ class LibrarySimulationTest {
         }
 
     private companion object {
-        const val CI_SEEDS = 6
-        const val CI_STEPS = 150
+        const val CI_SEEDS = 10
+        const val CI_STEPS = 250
         const val STEPS_PER_MINUTE = 50
         const val MAX_REPORTED = 3
         const val RULE = 80
