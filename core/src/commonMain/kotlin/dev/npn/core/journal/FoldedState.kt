@@ -195,9 +195,7 @@ class FoldedState {
                 predecessorsCache = null
             }
 
-            else -> {
-                Unit
-            }
+            else -> {}
         }
     }
 

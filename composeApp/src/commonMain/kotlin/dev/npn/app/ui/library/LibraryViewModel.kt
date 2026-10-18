@@ -556,9 +556,7 @@ class LibraryViewModel(
                 message(uiText(Res.string.common_scan_capture_failed))
             }
 
-            ScanResult.Cancelled -> {
-                Unit
-            }
+            ScanResult.Cancelled -> {}
         }
     }
 

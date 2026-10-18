@@ -72,9 +72,7 @@ internal sealed interface FoldScope {
                             documents.addAll(state.docsWithMetadata())
                         }
 
-                        else -> {
-                            Unit
-                        }
+                        else -> {}
                     }
                 }
                 for (doc in documents.toList()) {

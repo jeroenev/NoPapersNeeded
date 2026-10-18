@@ -139,9 +139,7 @@ fun AutoMatchRulesScreen(
             )
         }
 
-        null -> {
-            Unit
-        }
+        null -> {}
     }
 }
 

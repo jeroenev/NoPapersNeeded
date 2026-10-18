@@ -12,10 +12,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -115,7 +115,7 @@ internal fun FieldsSection(
                     FieldRow(def = orphanDef(orphan), value = value, onCommit = { actions.commitField(orphan, it) }) {
                         IconButton(onClick = { newField = NewFieldSeed(key = orphan, label = orphan, value = value) }) {
                             Icon(
-                                Icons.Filled.PlaylistAdd,
+                                Icons.AutoMirrored.Filled.PlaylistAdd,
                                 contentDescription = stringResource(Res.string.detail_add_to_fields),
                             )
                         }

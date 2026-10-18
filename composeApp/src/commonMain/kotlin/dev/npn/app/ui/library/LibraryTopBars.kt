@@ -4,6 +4,7 @@ package dev.npn.app.ui.library
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.LabelOff
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.AutoFixHigh
@@ -12,7 +13,6 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.LabelOff
 import androidx.compose.material.icons.filled.NewLabel
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Refresh
@@ -176,7 +176,8 @@ internal fun SelectionTopBar(
     onRequestTrash: () -> Unit,
 ) {
     val addTag = TopBarAction(Icons.Filled.NewLabel, stringResource(Res.string.common_add_tag), onAddTag)
-    val removeTag = TopBarAction(Icons.Filled.LabelOff, stringResource(Res.string.library_remove_tag), onRemoveTag)
+    val removeTag =
+        TopBarAction(Icons.AutoMirrored.Filled.LabelOff, stringResource(Res.string.library_remove_tag), onRemoveTag)
     val aiEdit =
         onAiEdit?.let {
             TopBarAction(Icons.Filled.AutoFixHigh, stringResource(Res.string.library_ai_edit), it)

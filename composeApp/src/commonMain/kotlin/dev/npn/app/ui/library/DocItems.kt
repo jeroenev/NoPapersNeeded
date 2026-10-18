@@ -20,12 +20,12 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.LabelOff
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.LabelOff
 import androidx.compose.material.icons.filled.NewLabel
-import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
@@ -145,7 +145,7 @@ private fun DocContextMenu(
             ActionMenuItems(
                 actions =
                     listOf(
-                        TopBarAction(Icons.Filled.OpenInNew, stringResource(Res.string.library_open), {
+                        TopBarAction(Icons.AutoMirrored.Filled.OpenInNew, stringResource(Res.string.library_open), {
                             wiring.onOpen(docId)
                         }),
                         TopBarAction(
@@ -156,9 +156,11 @@ private fun DocContextMenu(
                         TopBarAction(Icons.Filled.NewLabel, stringResource(Res.string.common_add_tag), {
                             wiring.onAddTag(docId)
                         }),
-                        TopBarAction(Icons.Filled.LabelOff, stringResource(Res.string.library_remove_tag), {
-                            wiring.onRemoveTag(docId)
-                        }),
+                        TopBarAction(
+                            Icons.AutoMirrored.Filled.LabelOff,
+                            stringResource(Res.string.library_remove_tag),
+                            { wiring.onRemoveTag(docId) },
+                        ),
                         TopBarAction(Icons.Filled.Delete, stringResource(Res.string.library_trash), {
                             wiring.onTrash(docId)
                         }),

@@ -95,9 +95,7 @@ internal fun LibraryDialogHost(
         onDismiss()
     }
     when (dialog) {
-        null, LibraryDialog.Filter -> {
-            Unit
-        }
+        null, LibraryDialog.Filter -> {}
 
         LibraryDialog.SaveView -> {
             TextInputDialog(

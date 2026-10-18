@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -17,7 +18,9 @@ import androidx.compose.ui.draganddrop.DragAndDropEvent
 import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.DragData
 import androidx.compose.ui.draganddrop.dragData
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogWindow
@@ -38,6 +41,7 @@ import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_app_name
 import org.jetbrains.compose.resources.stringResource
+import org.jetbrains.skia.Image
 import java.awt.Dimension
 import java.net.URI
 import java.nio.file.Files
@@ -57,6 +61,20 @@ private fun log(message: String) = DesktopLog.info(message)
 /** Held by the running instance; see [SingleInstance]. Per user, so beside every library's data. */
 private fun instanceLockFile(): Path = Path.of(PlatformDirs.appDataDir(), "instance.lock")
 
+/**
+ * The window icon, read from the classpath rather than Compose resources: jpackage installs this
+ * same PNG as the desktop-entry icon, so it stays a plain resource at a fixed path.
+ */
+@Composable
+private fun windowIcon(): Painter =
+    remember {
+        val bytes =
+            checkNotNull(Thread.currentThread().contextClassLoader.getResourceAsStream(WINDOW_ICON)) {
+                "Missing resource $WINDOW_ICON"
+            }.use { it.readBytes() }
+        BitmapPainter(Image.makeFromEncoded(bytes).toComposeImageBitmap())
+    }
+
 fun main() {
     if (SingleInstance.claim(instanceLockFile(), ::log)) runApp() else showAlreadyRunning()
 }
@@ -68,7 +86,7 @@ private fun showAlreadyRunning() =
         DialogWindow(
             onCloseRequest = ::exitApplication,
             title = stringResource(Res.string.common_app_name),
-            icon = painterResource(WINDOW_ICON),
+            icon = windowIcon(),
             resizable = false,
             state = rememberDialogState(size = DpSize(440.dp, 180.dp)),
         ) {
@@ -109,7 +127,7 @@ private fun runApp() =
             visible = !closing,
             title = title ?: appName,
             // Same PNG jpackage installs as the desktop-entry icon; see .mise/tasks/icons.
-            icon = painterResource(WINDOW_ICON),
+            icon = windowIcon(),
             state = rememberWindowState(width = 1200.dp, height = 800.dp),
         ) {
             DisposableEffect(window) {

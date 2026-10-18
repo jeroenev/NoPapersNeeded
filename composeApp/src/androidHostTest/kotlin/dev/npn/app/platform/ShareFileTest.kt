@@ -50,8 +50,8 @@ class ShareFileTest {
         second shouldNotBe first
         first.name shouldBe "Invoice.pdf"
         second.name shouldBe "Invoice.pdf"
-        first.parentFile.parentFile shouldBe share
-        second.parentFile.parentFile shouldBe share
+        first.parentFile?.parentFile shouldBe share
+        second.parentFile?.parentFile shouldBe share
         first.readBytes().decodeToString() shouldBe "first"
         second.readBytes().decodeToString() shouldBe "second"
     }
@@ -74,6 +74,6 @@ class ShareFileTest {
     private fun File.ageBy(age: Duration): File =
         apply {
             setLastModified(now - age.inWholeMilliseconds)
-            if (parentFile != share) parentFile.setLastModified(now - age.inWholeMilliseconds)
+            parentFile?.takeIf { it != share }?.setLastModified(now - age.inWholeMilliseconds)
         }
 }
