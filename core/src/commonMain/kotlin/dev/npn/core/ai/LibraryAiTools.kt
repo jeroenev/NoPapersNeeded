@@ -220,6 +220,22 @@ internal object LibraryAiTools {
             ?: lc
     }
 
+    /**
+     * Every live document with a non-blank value in one of [columns] that contains [needle],
+     * case-insensitively, paired with the first such value; an empty [needle] matches any value.
+     */
+    private suspend fun liveDocsMatching(
+        documentDao: DocumentDao,
+        needle: String,
+        vararg columns: (DocumentEntity) -> String?,
+    ): Sequence<Pair<DocumentEntity, String>> =
+        documentDao.getAllLive().asSequence().mapNotNull { doc ->
+            columns
+                .firstNotNullOfOrNull { column ->
+                    column(doc)?.takeIf { it.isNotBlank() && it.contains(needle, ignoreCase = true) }
+                }?.let { doc to it }
+        }
+
     class SearchDocumentsTool(
         private val ftsDao: FtsDao,
         private val documentDao: DocumentDao,
@@ -322,14 +338,9 @@ internal object LibraryAiTools {
         override suspend fun execute(args: Args): String {
             if (args.pattern.isBlank()) return "Error: pattern must not be blank."
             val lines =
-                documentDao
-                    .getAllLive()
-                    .asSequence()
-                    .filter {
-                        it.fileName.contains(args.pattern, ignoreCase = true) ||
-                            it.relPath.contains(args.pattern, ignoreCase = true)
-                    }.take(MAX_LISTED_DOCS)
-                    .map { docLine(it) }
+                liveDocsMatching(documentDao, args.pattern, { it.fileName }, { it.relPath })
+                    .take(MAX_LISTED_DOCS)
+                    .map { (doc, _) -> docLine(doc) }
                     .toList()
             return if (lines.isEmpty()) {
                 "No file names or paths contain \"${args.pattern}\"."
@@ -474,13 +485,9 @@ internal object LibraryAiTools {
             value: String,
             column: (DocumentEntity) -> String?,
         ): Map<String, Pair<String, String>> =
-            documentDao
-                .getAllLive()
-                .asSequence()
-                .mapNotNull { doc ->
-                    val v = column(doc)?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                    if (v.contains(value, ignoreCase = true)) doc.docId to (key to v) else null
-                }.toMap(LinkedHashMap())
+            liveDocsMatching(documentDao, value, column)
+                .map { (doc, v) -> doc.docId to (key to v) }
+                .toMap(LinkedHashMap())
 
         /**
          * One `document_fields` query serves every registry field and orphan key alike. A range
