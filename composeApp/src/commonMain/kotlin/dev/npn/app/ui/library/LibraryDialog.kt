@@ -2,18 +2,12 @@ package dev.npn.app.ui.library
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.saveable.Saver
-import androidx.compose.runtime.saveable.rememberSaveable
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.TagPickDialog
 import dev.npn.app.ui.common.TextInputDialog
-import dev.npn.app.ui.common.jsonSaver
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.builtins.nullable
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.library_add
 import no_papers_needed.composeapp.generated.resources.library_add_tag_to_documents
@@ -31,9 +25,9 @@ import org.jetbrains.compose.resources.stringResource
 
 /**
  * The one dialog, sheet or side panel the library screen has open over its list, if any. One value
- * rather than a flag per dialog, so two can never be open at once, and saveable, so whatever is
- * open — the filter editor with its unapplied draft included — comes back after the screen is
- * recreated.
+ * rather than a flag per dialog, so two can never be open at once. [LibraryViewModel.dialog] keeps
+ * it, so whatever is open comes back after the screen is recreated; the filter editor's unapplied
+ * draft is the editor's own ([rememberFilterEditorState]).
  */
 @Serializable
 sealed interface LibraryDialog {
@@ -76,20 +70,12 @@ sealed interface LibraryDialog {
     }
 }
 
-/** Saves the open dialog as JSON; nothing open saves nothing. */
-internal val LibraryDialogSaver: Saver<LibraryDialog?, String> = jsonSaver(LibraryDialog.serializer().nullable)
-
-/** The library screen's open dialog, kept across recreation; see [LibraryDialog]. */
-@Composable
-internal fun rememberLibraryDialog(): MutableState<LibraryDialog?> =
-    rememberSaveable(stateSaver = LibraryDialogSaver) { mutableStateOf(null) }
-
 /**
  * Renders the open [dialog], except [LibraryDialog.Filter]: the filter editor is laid out beside
  * the list on wide layouts, so the screen renders it. Every confirm runs its action and closes
  * the dialog through [onDismiss], once. A dialog that acts on the selection closes when there is
- * none: the selection is the viewmodel's, so one restored after the process died finds it gone,
- * and must not offer to act on "0 documents" (or open later over a selection made since).
+ * none: one restored after the process died finds it gone when it was too large to save, and must
+ * not offer to act on "0 documents" (or open later over a selection made since).
  */
 @Composable
 internal fun LibraryDialogHost(

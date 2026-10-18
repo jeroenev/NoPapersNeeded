@@ -1,6 +1,7 @@
 package dev.npn.app
 
 import dev.npn.app.ui.common.uiText
+import dev.npn.app.ui.settings.SettingsCategoryId
 import dev.npn.app.ui.settings.text
 import dev.npn.core.app.StoragePathSetting
 import dev.npn.core.model.FieldDef
@@ -14,6 +15,7 @@ import dev.npn.core.pathrules.pathOrNull
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -26,6 +28,20 @@ import kotlin.test.Test
 
 /** The storage path rule on the Settings screen: its template, its preview and turning it on. */
 class SettingsStoragePathTest : MainDispatcherTest() {
+    /** A restored process shows the storage rule as the user typed it, saved when the old screen went. */
+    @Test
+    fun aRestoredProcessShowsTheTypedTemplate() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val screen = recreatable { settingsVm(session = session, saved = it) }
+            screen.vm.pick(SettingsCategoryId.IMPORT)
+            screen.vm.setStoragePathTemplate("{docType}/{title}.pdf")
+            runCurrent()
+
+            val restored = screen.recreate(this, { combine(it.paneState, it.picked, ::Pair) })
+            restored.paneState.value.settings.storagePathTemplate shouldBe "{docType}/{title}.pdf"
+        }
+
     @Test
     fun storagePathErrorsAreProjectedAsLocalizableData() {
         val result = StoragePathTemplate.expand("{unknown}/{title}.pdf", PREVIEW_CONTEXT)

@@ -1,6 +1,7 @@
 package dev.npn.app.ui.library
 
 import androidx.compose.runtime.Immutable
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.platform.ScanResult
 import dev.npn.app.ui.common.BulkFailure
@@ -12,7 +13,10 @@ import dev.npn.app.ui.common.activeSearchToken
 import dev.npn.app.ui.common.asUiText
 import dev.npn.app.ui.common.colorsByName
 import dev.npn.app.ui.common.completeActiveSearchToken
+import dev.npn.app.ui.common.restored
+import dev.npn.app.ui.common.saveUiState
 import dev.npn.app.ui.common.text
+import dev.npn.app.ui.common.uiState
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.ImportOutcome
@@ -54,8 +58,11 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.SetSerializer
+import kotlinx.serialization.builtins.serializer
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_restore_documents_failed
 import no_papers_needed.composeapp.generated.resources.common_save_setting_failed
@@ -203,10 +210,23 @@ private data class LibraryListCore(
     val suggestions: List<String>,
 )
 
+/**
+ * What a restored process gets back of [LibraryUiState]: the filter, sort and view the list shows.
+ * The selection is saved apart from it, so one too large to save loses only itself.
+ */
+@Serializable
+private data class SavedLibraryView(
+    val filter: LibraryFilter,
+    val sort: LibrarySort,
+    val viewType: ViewType,
+)
+
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 class LibraryViewModel(
     session: LibrarySession,
     private val settings: SettingsRepository,
+    /** What the screen's back-stack entry saves for a restored process; a new one opens it afresh. */
+    private val saved: SavedStateHandle = SavedStateHandle(),
 ) : MessagesViewModel(),
     LibraryActions {
     private val documentRepository = session.documents
@@ -217,26 +237,71 @@ class LibraryViewModel(
     private val reviewConfig = session.reviewConfig
     override val log = session.log
 
-    // Opens on the persisted default view and the last explicitly chosen sort.
+    // Opens on the persisted default view and the last explicitly chosen sort, or, in a restored
+    // process, on what the screen showed.
     private val _ui =
         MutableStateFlow(
-            settings.settings.value.let { LibraryUiState(sort = it.librarySort, viewType = it.defaultViewType) },
+            settings.settings.value.let { defaults ->
+                val view =
+                    saved.restored(
+                        VIEW_KEY,
+                        SavedLibraryView.serializer(),
+                        SavedLibraryView(LibraryFilter(), defaults.librarySort, defaults.defaultViewType),
+                    )
+                LibraryUiState(
+                    filter = view.filter,
+                    sort = view.sort,
+                    viewType = view.viewType,
+                    selected = saved.restored(SELECTION_KEY, SelectionSerializer, emptySet()),
+                )
+            },
         )
     val ui: StateFlow<LibraryUiState> = _ui.asStateFlow()
+
+    /** Change the UI state, saving what a restored process gets back of it. */
+    private fun updateUi(transform: (LibraryUiState) -> LibraryUiState) {
+        val before = _ui.value
+        val after = _ui.updateAndGet(transform)
+        if (after.filter != before.filter || after.sort != before.sort || after.viewType != before.viewType) {
+            val view = SavedLibraryView(after.filter, after.sort, after.viewType)
+            saved.saveUiState(VIEW_KEY, SavedLibraryView.serializer(), view)
+        }
+        if (after.selected != before.selected) saved.saveUiState(SELECTION_KEY, SelectionSerializer, after.selected)
+    }
 
     // Raw query text, debounced before it hits the filter. The search field reads this directly
     // (via [queryText]) so it reflects keystrokes immediately; the debounce only gates the filter.
     // Binding the field to the debounced filter value instead desyncs the Android IME and drops
     // input.
-    private val queryInput = MutableStateFlow("")
+    private val queryInput =
+        saved.uiState(
+            QUERY_KEY,
+            _ui.value.filter.query
+                .orEmpty(),
+        )
+
+    /**
+     * The document previewed in the side panel of a wide window, if any. The window decides whether
+     * there is a side panel; this outlives a turn through compact and back.
+     */
+    private val _preview = saved.uiState<String?>(PREVIEW_KEY, null)
+    val preview: StateFlow<String?> = _preview.flow
+
+    fun preview(docId: String?) = _preview.set(docId)
+
+    /** The dialog, sheet or panel the screen has open over its list; see [LibraryDialog]. */
+    private val _dialog = saved.uiState<LibraryDialog?>(DIALOG_KEY, null)
+    val dialog: StateFlow<LibraryDialog?> = _dialog.flow
+
+    fun openDialog(dialog: LibraryDialog?) = _dialog.set(dialog)
 
     init {
         viewModelScope.launch {
-            queryInput
+            queryInput.flow
                 .debounce(QUERY_DEBOUNCE_MS)
                 .distinctUntilChanged()
                 .collect { q ->
-                    _ui.update { it.copy(filter = it.filter.copy(query = q.ifBlank { null })) }
+                    updateUi { it.copy(filter = it.filter.copy(query = q.ifBlank { null })) }
                 }
         }
     }
@@ -261,7 +326,7 @@ class LibraryViewModel(
      * so suggestions are fast but do not fire on every keystroke.
      */
     private val suggestions: StateFlow<List<String>> =
-        queryInput
+        queryInput.flow
             .debounce(SUGGESTION_DEBOUNCE_MS)
             .distinctUntilChanged()
             .flatMapLatest { q ->
@@ -385,7 +450,7 @@ class LibraryViewModel(
      */
     internal val content: StateFlow<LibraryContentState> =
         combine(
-            combine(_ui, documents, queryInput, suggestions, ::LibraryListCore),
+            combine(_ui, documents, queryInput.flow, suggestions, ::LibraryListCore),
             combine(reviewMode, needsReviewCount, ::Pair),
             banners,
             presentation,
@@ -402,7 +467,7 @@ class LibraryViewModel(
         }.stateIn(viewModelScope, WhileSubscribedTimeout, initialContent)
 
     override fun onQueryChange(text: String) {
-        queryInput.value = text
+        queryInput.set(text)
     }
 
     /**
@@ -411,24 +476,24 @@ class LibraryViewModel(
      */
     override fun acceptSuggestion(text: String) {
         val completed = completeActiveSearchToken(queryInput.value, text)
-        queryInput.value = completed
-        _ui.update { it.copy(filter = it.filter.copy(query = completed.ifBlank { null })) }
+        queryInput.set(completed)
+        updateUi { it.copy(filter = it.filter.copy(query = completed.ifBlank { null })) }
     }
 
     override fun setFilter(filter: LibraryFilter) {
-        _ui.update { it.copy(filter = filter) }
-        queryInput.value = filter.query.orEmpty()
+        updateUi { it.copy(filter = filter) }
+        queryInput.set(filter.query.orEmpty())
     }
 
     override fun clearFilter() {
-        _ui.update { it.copy(filter = LibraryFilter()) }
-        queryInput.value = ""
+        updateUi { it.copy(filter = LibraryFilter()) }
+        queryInput.set("")
     }
 
     /** Review queue preset: the review mode's [reviewQueueFilter], replacing any active filter. */
     override fun applyReviewPreset() {
-        _ui.update { it.copy(filter = reviewMode.value.reviewQueueFilter()) }
-        queryInput.value = ""
+        updateUi { it.copy(filter = reviewMode.value.reviewQueueFilter()) }
+        queryInput.set("")
     }
 
     override fun setSort(
@@ -436,13 +501,13 @@ class LibraryViewModel(
         ascending: Boolean,
     ) {
         val sort = LibrarySort(field, ascending)
-        _ui.update { it.copy(sort = sort) }
+        updateUi { it.copy(sort = sort) }
         // Persist so the choice survives restart.
         launchReporting(Res.string.common_save_setting_failed) { settings.edit { it.copy(librarySort = sort) } }
     }
 
     override fun setViewType(v: ViewType) {
-        _ui.update { it.copy(viewType = v) }
+        updateUi { it.copy(viewType = v) }
         // Persist so the choice becomes the default and survives restart (also keeps the settings
         // screen in sync with the top-bar switcher).
         launchReporting(Res.string.common_save_setting_failed) { settings.edit { it.copy(defaultViewType = v) } }
@@ -450,8 +515,8 @@ class LibraryViewModel(
 
     override fun applySavedView(view: SavedView) {
         // A saved view's sort is part of the view, not a new default, so it is not persisted.
-        _ui.update { it.copy(filter = view.filter, sort = view.sort, viewType = view.viewType) }
-        queryInput.value = view.filter.query.orEmpty()
+        updateUi { it.copy(filter = view.filter, sort = view.sort, viewType = view.viewType) }
+        queryInput.set(view.filter.query.orEmpty())
     }
 
     /**
@@ -462,38 +527,38 @@ class LibraryViewModel(
         launchReporting(Res.string.common_save_setting_failed) { settings.edit { it.copy(gridColumnWidth = dp) } }
 
     override fun toggleSelection(docId: String) {
-        _ui.update { cur ->
+        updateUi { cur ->
             val next = if (docId in cur.selected) cur.selected - docId else cur.selected + docId
             cur.copy(selected = next)
         }
     }
 
     override fun startSelection(docId: String) {
-        _ui.update { it.copy(selected = setOf(docId)) }
+        updateUi { it.copy(selected = setOf(docId)) }
     }
 
     /** Enter selection mode with every visible document selected (desktop Ctrl+A / Select all). */
     override fun selectAll(docIds: List<String>) {
-        _ui.update { it.copy(selected = docIds.toSet()) }
+        updateUi { it.copy(selected = docIds.toSet()) }
     }
 
     override fun clearSelection() {
-        _ui.update { it.copy(selected = emptySet()) }
+        updateUi { it.copy(selected = emptySet()) }
     }
 
     /** Dismiss the issues banner of the scan report shown now, until another report replaces it. */
     override fun dismissBanner() {
-        _ui.update { it.copy(dismissedScanReport = lastScanReport.value) }
+        updateUi { it.copy(dismissedScanReport = lastScanReport.value) }
     }
 
     /** Rescan the library folder (pull to refresh); a rescan that fails says so. */
     override fun refresh() =
         launchReporting(Res.string.library_refresh_failed) {
-            _ui.update { it.copy(refreshing = true) }
+            updateUi { it.copy(refreshing = true) }
             try {
                 ingest.rescan()
             } finally {
-                _ui.update { it.copy(refreshing = false) }
+                updateUi { it.copy(refreshing = false) }
             }
         }
 
@@ -572,7 +637,7 @@ class LibraryViewModel(
      * meanwhile stands; selection mode ends once nothing is left selected.
      */
     private fun deselect(done: Collection<String>) {
-        _ui.update { state ->
+        updateUi { state ->
             state.copy(selected = state.selected - done.toSet())
         }
     }
@@ -656,6 +721,12 @@ class LibraryViewModel(
         const val SUGGESTION_DEBOUNCE_MS = 100L
         const val SUGGESTION_LIMIT = 8
         const val MIN_SUGGESTION_LENGTH = 2
+        const val VIEW_KEY = "library.view"
+        const val SELECTION_KEY = "library.selection"
+        const val QUERY_KEY = "library.query"
+        const val PREVIEW_KEY = "library.preview"
+        const val DIALOG_KEY = "library.dialog"
+        val SelectionSerializer = SetSerializer(String.serializer())
     }
 }
 

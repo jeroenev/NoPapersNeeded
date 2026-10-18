@@ -1,9 +1,11 @@
 package dev.npn.app
 
+import dev.npn.app.ui.library.LibraryDialog
 import dev.npn.app.ui.library.LibraryViewModel
 import dev.npn.core.testing.listItem
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -15,6 +17,24 @@ import kotlin.test.Test
 class LibrarySelectionTagsTest : MainDispatcherTest() {
     private fun vm(session: FakeLibrarySession = FakeLibrarySession()) =
         LibraryViewModel(session, FakeSettingsRepository())
+
+    /** A restored process has the remove-tag picker open again, offering the selection's tags. */
+    @Test
+    fun aRestoredProcessKeepsTheOpenPickerOverTheSelection() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply {
+                    documents.documents.value =
+                        listOf(listItem("d1", tags = listOf("invoices")), listItem("d2", tags = listOf("urgent")))
+                }
+            val screen = recreatable { LibraryViewModel(session, FakeSettingsRepository(), it) }
+            screen.vm.startSelection("d1")
+            screen.vm.toggleSelection("d2")
+            screen.vm.openDialog(LibraryDialog.RemoveTag)
+
+            val restored = screen.recreate(this, { combine(it.selectionTags, it.dialog, ::Pair) })
+            restored.selectionTags.value shouldContainExactly listOf("invoices", "urgent")
+        }
 
     @Test
     fun removeTagPickerListsOnlyTagsCarriedByTheSelection() =

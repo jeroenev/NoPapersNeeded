@@ -4,6 +4,7 @@ import dev.npn.app.FakeLibrarySession
 import dev.npn.app.MainDispatcherTest
 import dev.npn.app.collecting
 import dev.npn.app.failure
+import dev.npn.app.recreatable
 import dev.npn.core.app.aiedit.ApplyOutcome
 import dev.npn.core.app.aiedit.ApplyResult
 import dev.npn.core.app.aiedit.EditRunReview
@@ -82,6 +83,23 @@ private fun sessionWith(review: EditRunReview) =
     FakeLibrarySession().apply { aiEditQueue.reviews[review.jobId] = review }
 
 class AiEditReviewViewModelTest : MainDispatcherTest() {
+    /** A restored process reopens the run with what the user had ticked and unticked, not the stored selection. */
+    @Test
+    fun aRestoredProcessKeepsTheReviewAsTheUserTickedIt() =
+        runTest(dispatcher) {
+            val review = ScriptedReview(docs = listOf(selectedReviewDoc("a"), selectedReviewDoc("b", tag = "tax")))
+            val session = sessionWith(review)
+            val screen = recreatable { AiEditReviewViewModel(session, "job", it) }
+            advanceUntilIdle()
+            screen.vm.toggleChip("a", "invoice")
+            screen.vm.toggleField("b", FieldKeys.TITLE)
+
+            val restored = screen.recreate(this, { it.phase })
+            val phase = restored.phase.value.shouldBeInstanceOf<QueuedReviewPhase.Review>()
+            phase.batch.docs.map { doc -> doc.chips.single().selected to doc.fields.single().selected } shouldBe
+                listOf(false to true, true to false)
+        }
+
     @Test
     fun theStoredSuggestionsAreLoadedIntoAReviewPhase() =
         runTest(dispatcher) {

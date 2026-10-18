@@ -195,6 +195,39 @@ private fun List<ReviewDoc>.mapDoc(
     transform: (ReviewDoc) -> ReviewDoc,
 ): List<ReviewDoc> = map { if (it.docId == docId) transform(it) else it }
 
+/**
+ * Every ticked suggestion of these documents, one entry each: what a restored process needs to tick
+ * them again ([withTicked]) over the same suggestions, which it reads back from where they are kept.
+ */
+internal fun List<ReviewDoc>.ticked(): List<String> =
+    flatMap { doc ->
+        doc.chips.filter { it.selected }.map { tick(doc.docId, ADDED, it.tag) } +
+            doc.removals.filter { it.selected }.map { tick(doc.docId, REMOVED, it.tag) } +
+            doc.fields.filter { it.selected }.map { tick(doc.docId, FIELD, it.key) }
+    }
+
+/** These documents with exactly the suggestions [ticked] names ticked; see [ticked]. */
+internal fun List<ReviewDoc>.withTicked(ticked: Set<String>): List<ReviewDoc> =
+    map { doc ->
+        doc.copy(
+            chips = doc.chips.map { it.copy(selected = tick(doc.docId, ADDED, it.tag) in ticked) },
+            removals = doc.removals.map { it.copy(selected = tick(doc.docId, REMOVED, it.tag) in ticked) },
+            fields = doc.fields.map { it.copy(selected = tick(doc.docId, FIELD, it.key) in ticked) },
+        )
+    }
+
+private fun tick(
+    docId: String,
+    kind: Char,
+    what: String,
+): String = "$docId$TICK_SEPARATOR$kind$TICK_SEPARATOR$what"
+
+/** Between a tick's parts: a control character, which neither ids nor tags nor keys hold. */
+private const val TICK_SEPARATOR = '\u001F'
+private const val ADDED = '+'
+private const val REMOVED = '-'
+private const val FIELD = '='
+
 private fun List<ReviewChip>.flipChip(tag: String): List<ReviewChip> =
     map { if (it.tag == tag) it.copy(selected = !it.selected) else it }
 

@@ -3,6 +3,7 @@ package dev.npn.app.ui.ai
 import dev.npn.app.FakeLibrarySession
 import dev.npn.app.MainDispatcherTest
 import dev.npn.app.collecting
+import dev.npn.app.recreatable
 import dev.npn.core.ai.AiFieldMode
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySort
@@ -28,6 +29,30 @@ class AiEditTaskTest : MainDispatcherTest() {
         session: FakeLibrarySession = FakeLibrarySession(),
         selection: List<String> = emptyList(),
     ) = vm(run, session, selection = selection, background = null, task = null)
+
+    /** A restored process keeps the task the user picked, and its preset as they left it. */
+    @Test
+    fun aRestoredProcessKeepsThePickedTask() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val screen =
+                recreatable {
+                    vm(
+                        FakeAiEditRun().apply { inScope("a") },
+                        session,
+                        task = null,
+                        background = null,
+                        saved = it,
+                    )
+                }
+            collecting(screen.vm.ui)
+            advanceUntilIdle()
+            screen.vm.setTask(EditTask.ORGANIZE_UNTAGGED)
+            screen.vm.setCustomPrompt("Use the sender's name")
+
+            val restored = screen.recreate(this, { it.ui })
+            restored.ui.value.task shouldBe EditTask.ORGANIZE_UNTAGGED
+        }
 
     @Test
     fun organizingUntaggedDocumentsAsksForTagsOnly() =

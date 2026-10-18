@@ -27,13 +27,11 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.BackTopBar
 import dev.npn.app.ui.common.ConfirmDialog
@@ -43,7 +41,6 @@ import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.LoadingIndicator
 import dev.npn.app.ui.common.NumericField
 import dev.npn.app.ui.common.TooltipIconButton
-import dev.npn.app.ui.common.jsonSaver
 import dev.npn.app.ui.common.rememberSnackbarMessages
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.model.FieldDef
@@ -53,7 +50,6 @@ import dev.npn.core.rules.MatchAlgorithm
 import dev.npn.core.rules.RuleField
 import dev.npn.core.rules.RuleMatcher
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.builtins.nullable
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_delete
 import no_papers_needed.composeapp.generated.resources.common_name
@@ -91,23 +87,23 @@ import org.jetbrains.compose.resources.stringResource
 fun AutoMatchRulesScreen(
     session: LibrarySession,
     onBack: () -> Unit,
-    vm: AutoMatchRulesViewModel = viewModel { AutoMatchRulesViewModel(session) },
+    vm: AutoMatchRulesViewModel = viewModel { AutoMatchRulesViewModel(session, createSavedStateHandle()) },
 ) {
     val rules by vm.rules.collectAsStateWithLifecycle()
     val fields by vm.fields.collectAsStateWithLifecycle()
     val snackbar = rememberSnackbarMessages(vm.messages)
 
-    // Saveable, form fields included, so an open dialog is back after the screen is recreated.
-    var dialog by rememberSaveable(stateSaver = jsonSaver(RuleDialog.serializer().nullable)) { mutableStateOf(null) }
+    // The viewmodel's, form fields included, so an open dialog is back after the screen is recreated.
+    val dialog by vm.dialog.collectAsStateWithLifecycle()
 
     AutoMatchRulesScaffold(
         rules = rules,
         fields = fields,
         snackbar = snackbar,
         onBack = onBack,
-        onAdd = { dialog = RuleDialog.Form(RuleFormState()) },
-        onEdit = { dialog = RuleDialog.Form(RuleFormState.of(it)) },
-        onDelete = { dialog = RuleDialog.Delete(it.id) },
+        onAdd = { vm.openDialog(RuleDialog.Form(RuleFormState())) },
+        onEdit = { vm.openDialog(RuleDialog.Form(RuleFormState.of(it))) },
+        onDelete = { vm.openDialog(RuleDialog.Delete(it.id)) },
         onToggle = vm::setEnabled,
     )
 
@@ -116,12 +112,12 @@ fun AutoMatchRulesScreen(
             RuleFormDialog(
                 state = open.form,
                 fields = fields,
-                onChange = { dialog = RuleDialog.Form(it) },
+                onChange = { vm.openDialog(RuleDialog.Form(it)) },
                 onConfirm = {
                     vm.save(open.form.toRule())
-                    dialog = null
+                    vm.openDialog(null)
                 },
-                onDismiss = { dialog = null },
+                onDismiss = { vm.openDialog(null) },
             )
         }
 
@@ -129,28 +125,14 @@ fun AutoMatchRulesScreen(
             DeleteRuleDialog(
                 onConfirm = {
                     vm.delete(open.id)
-                    dialog = null
+                    vm.openDialog(null)
                 },
-                onDismiss = { dialog = null },
+                onDismiss = { vm.openDialog(null) },
             )
         }
 
         null -> {}
     }
-}
-
-/** The one dialog the rules screen has open, or none; saved as JSON. */
-@Serializable
-private sealed interface RuleDialog {
-    @Serializable
-    data class Form(
-        val form: RuleFormState,
-    ) : RuleDialog
-
-    @Serializable
-    data class Delete(
-        val id: String,
-    ) : RuleDialog
 }
 
 @Composable

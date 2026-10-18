@@ -4,10 +4,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -50,9 +55,10 @@ internal fun DocumentView(
     viewerModifier: Modifier = Modifier,
     searchQuery: String? = null,
     initialItem: DocListItem? = null,
+    savedState: DocumentSavedState = rememberDocumentSavedState(docId),
     vm: DocDetailViewModel =
         viewModel(viewModelStoreOwner = viewModels) {
-            DocDetailViewModel(docId, session, settings, searchQuery, initialItem)
+            DocDetailViewModel(docId, session, settings, searchQuery, initialItem, savedState.restored)
         },
     frame: @Composable (
         loadState: DocLoadState,
@@ -60,6 +66,8 @@ internal fun DocumentView(
         editor: @Composable (Modifier) -> Unit,
     ) -> Unit,
 ) {
+    // After composition: saving reads it, and nothing during composition does.
+    SideEffect { savedState.of(vm.savedState) }
     SnackbarMessages(vm.messages, snackbar)
     val ui by vm.ui.collectAsStateWithLifecycle()
     val metadata by vm.metadata.collectAsStateWithLifecycle()
@@ -106,3 +114,41 @@ internal fun DocumentView(
         )
     }
 }
+
+/**
+ * Saves a document viewmodel's [SavedStateHandle] for a restored process. Its viewmodel lives in the
+ * document's own store, which no back-stack entry saves, so each view showing it does: [restored] is
+ * what the last process saved (empty for a document opened afresh), which a new viewmodel starts
+ * from, and the view then saves the handle of the viewmodel it shows ([of]), whichever view built it.
+ */
+internal class DocumentSavedState(
+    val restored: SavedStateHandle,
+) {
+    private var shown: SavedStateHandle? = null
+
+    /** Save [handle], the shown viewmodel's, from now on. */
+    fun of(handle: SavedStateHandle) {
+        shown = handle
+    }
+
+    /** The handle's values as a flat key, value, key, value list; a viewmodel saves only strings. */
+    fun saved(): List<String> {
+        val handle = shown ?: restored
+        return handle.keys().flatMap { key -> handle.get<String>(key)?.let { listOf(key, it) }.orEmpty() }
+    }
+
+    companion object {
+        val Saver: Saver<DocumentSavedState, Any> =
+            listSaver(
+                save = { it.saved() },
+                restore = { values ->
+                    DocumentSavedState(SavedStateHandle(values.chunked(2).associate { (key, value) -> key to value }))
+                },
+            )
+    }
+}
+
+/** The [DocumentSavedState] of [docId]'s viewmodel in this view. */
+@Composable
+internal fun rememberDocumentSavedState(docId: String): DocumentSavedState =
+    rememberSaveable(docId, saver = DocumentSavedState.Saver) { DocumentSavedState(SavedStateHandle()) }

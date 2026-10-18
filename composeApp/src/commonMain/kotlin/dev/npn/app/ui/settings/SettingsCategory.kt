@@ -14,6 +14,7 @@ import dev.npn.app.platform.ocrHasLanguageSetting
 import dev.npn.app.platform.supportsSafStorage
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
+import kotlinx.serialization.Serializable
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_settings_about
 import no_papers_needed.composeapp.generated.resources.common_settings_about_help
@@ -73,6 +74,7 @@ import org.jetbrains.compose.resources.stringResource
  * [dev.npn.app.ui.nav.Route.Settings], so renaming an entry breaks saved back stacks and deep
  * links; add a new one instead.
  */
+@Serializable
 enum class SettingsCategoryId {
     LIBRARY,
     IMPORT,
@@ -102,6 +104,12 @@ internal data class SettingsPaneState(
     val reviewMode: ReviewMode,
     val fields: List<FieldDef>,
     val fieldUsage: Map<String, Int>,
+    /** The field manager's open dialog, if any. */
+    val fieldDialog: FieldDialog? = null,
+    /** An OCR language code typed and not added yet. */
+    val ocrLanguageTyped: String = "",
+    /** Whether turning the inbox workflow on is asking which documents count as reviewed. */
+    val confirmingInboxMigration: Boolean = false,
 )
 
 /** What a settings pane can do: change a setting ([SettingsActions]), or open what one leads to. */
@@ -110,6 +118,15 @@ internal interface SettingsPaneActions : SettingsActions {
     fun changeLibrary()
 
     fun openAutoMatchRules()
+
+    /** Open the field manager's [dialog], or change what it holds; null closes it. */
+    fun openFieldDialog(dialog: FieldDialog?)
+
+    /** What is typed into the field that adds an OCR language. */
+    fun typeOcrLanguage(text: String)
+
+    /** Ask, or stop asking, which documents count as reviewed when the inbox workflow turns on. */
+    fun confirmInboxMigration(open: Boolean)
 }
 
 /**

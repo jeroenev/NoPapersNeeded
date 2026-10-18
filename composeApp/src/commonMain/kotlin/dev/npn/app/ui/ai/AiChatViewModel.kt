@@ -1,8 +1,10 @@
 package dev.npn.app.ui.ai
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.reasonText
+import dev.npn.app.ui.common.uiState
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.AiChatEvent
 import dev.npn.core.ai.AiChatHistoryItem
@@ -17,7 +19,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNot
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_chat_clear_failed
@@ -53,12 +55,29 @@ data class AiChatUiState(
  */
 class AiChatViewModel(
     session: LibrarySession,
+    /** What the screen's back-stack entry saves for a restored process; a new one opens it afresh. */
+    private val saved: SavedStateHandle = SavedStateHandle(),
 ) : MessagesViewModel() {
     private val ai = session.aiChat
     private val documents = session.documents
 
     private val _ui = MutableStateFlow(AiChatUiState())
     val ui: StateFlow<AiChatUiState> = _ui.asStateFlow()
+
+    /**
+     * Change the UI state, saving which conversation is open: a restored process opens that one
+     * again rather than a new one, as long as the store has it (it does once asked in).
+     */
+    private fun updateUi(transform: (AiChatUiState) -> AiChatUiState) {
+        val open = _ui.updateAndGet(transform).currentSessionId
+        if (open != saved.get<String>(SESSION_KEY)) saved[SESSION_KEY] = open
+    }
+
+    /** The question typed and not sent yet. */
+    private val draftState = saved.uiState(DRAFT_KEY, "")
+    val draft: StateFlow<String> = draftState.flow
+
+    fun type(text: String) = draftState.set(text)
 
     private var job: Job? = null
 
@@ -70,12 +89,14 @@ class AiChatViewModel(
             try {
                 reporting(Res.string.ai_chat_new_failed) {
                     val stored = storedSessions()
-                    val created = ai.createChatSession()
-                    _ui.update { it.copy(sessions = listed(stored, created), currentSessionId = created.id) }
-                    loadSession(created.id)
+                    // The conversation a restored process had open, if the store has it; else a new one.
+                    val reopened = saved.get<String>(SESSION_KEY)?.let { id -> stored.firstOrNull { it.id == id } }
+                    val current = reopened ?: ai.createChatSession()
+                    updateUi { it.copy(sessions = listed(stored, current), currentSessionId = current.id) }
+                    loadSession(current.id)
                 }
             } finally {
-                _ui.update { it.copy(loading = false) }
+                updateUi { it.copy(loading = false) }
             }
         }
         // Resolve display titles for cited documents as they appear in the transcript, so the
@@ -102,7 +123,7 @@ class AiChatViewModel(
                 runCatchingCancellable { documents.observeDoc(docId).first() }
                     .getOrNull()
                     ?.let { item ->
-                        _ui.update { it.copy(docTitles = it.docTitles + (docId to item.doc.displayTitle)) }
+                        updateUi { it.copy(docTitles = it.docTitles + (docId to item.doc.displayTitle)) }
                     }
             }
     }
@@ -117,7 +138,7 @@ class AiChatViewModel(
         if (trimmed.isEmpty() || _ui.value.busy || _ui.value.loading) return
         val sessionId = _ui.value.currentSessionId ?: return
 
-        _ui.update {
+        updateUi {
             it.copy(
                 transcript = it.transcript.plusUser(trimmed),
                 busy = true,
@@ -140,7 +161,7 @@ class AiChatViewModel(
                 runCatchingCancellable { collectAnswer(sessionId, trimmed) }
                     .onFailure { e ->
                         finishStreaming()
-                        _ui.update { it.copy(busy = false) }
+                        updateUi { it.copy(busy = false) }
                         message(uiText(Res.string.common_ai_assistant_unreachable, e.reasonText()))
                     }
             }
@@ -151,7 +172,7 @@ class AiChatViewModel(
         job?.cancel()
         job = null
         finishStreaming()
-        _ui.update { it.copy(busy = false) }
+        updateUi { it.copy(busy = false) }
     }
 
     /**
@@ -162,7 +183,7 @@ class AiChatViewModel(
         if (_ui.value.loading) return
         job?.cancel()
         job = null
-        _ui.update {
+        updateUi {
             it.copy(
                 transcript = it.transcript.cleared(),
                 busy = false,
@@ -195,7 +216,7 @@ class AiChatViewModel(
         launchTransition(Res.string.ai_chat_new_failed) {
             val session = ai.createChatSession()
             val stored = storedSessions(ifUnreadable = _ui.value.sessions)
-            _ui.update {
+            updateUi {
                 it.copy(
                     sessions = listed(stored, session),
                     currentSessionId = session.id,
@@ -212,11 +233,11 @@ class AiChatViewModel(
             val stored = storedSessions(ifUnreadable = state.sessions.filterNot { it.id == sessionId })
             if (sessionId != state.currentSessionId) {
                 val current = state.sessions.firstOrNull { it.id == state.currentSessionId }
-                _ui.update { it.copy(sessions = listed(stored, current)) }
+                updateUi { it.copy(sessions = listed(stored, current)) }
                 return@launchTransition
             }
             val next = stored.firstOrNull() ?: ai.createChatSession()
-            _ui.update { it.copy(sessions = listed(stored, next)) }
+            updateUi { it.copy(sessions = listed(stored, next)) }
             // The deleted conversation must not stay on screen when the next one's turns cannot be
             // read: that one shows empty and says so, rather than this transition reporting its
             // delete, which landed.
@@ -232,13 +253,13 @@ class AiChatViewModel(
         block: suspend () -> Unit,
     ) {
         if (_ui.value.busy || _ui.value.loading) return
-        _ui.update { it.copy(loading = true) }
+        updateUi { it.copy(loading = true) }
         viewModelScope.launch {
             try {
                 clearing?.join()
                 reporting(failed, block)
             } finally {
-                _ui.update { it.copy(loading = false) }
+                updateUi { it.copy(loading = false) }
             }
         }
     }
@@ -264,7 +285,7 @@ class AiChatViewModel(
         question: String,
     ) {
         ai.ask(sessionId, question).collect { event ->
-            _ui.update { it.copy(transcript = it.transcript + event) }
+            updateUi { it.copy(transcript = it.transcript + event) }
             if (event is AiChatEvent.Done) {
                 // A run that ends blank with nothing visible (no text bubble, no tool rows) would
                 // leave no trace at all — the finished empty bubble is skipped by the screen — so
@@ -274,11 +295,11 @@ class AiChatViewModel(
                 }
             }
         }
-        _ui.update { it.copy(busy = false) }
+        updateUi { it.copy(busy = false) }
     }
 
     /** Mark any trailing still-streaming assistant turn as complete (keeps partial text). */
-    private fun finishStreaming() = _ui.update { it.copy(transcript = it.transcript.finalized()) }
+    private fun finishStreaming() = updateUi { it.copy(transcript = it.transcript.finalized()) }
 
     /** Show [sessionId]'s turns; a transcript that cannot be read throws, leaving the state as it is. */
     private suspend fun loadSession(sessionId: String) = showSession(sessionId, ai.chatTranscriptFor(sessionId))
@@ -287,12 +308,17 @@ class AiChatViewModel(
         sessionId: String,
         history: List<AiChatHistoryItem>,
     ) {
-        _ui.update {
+        updateUi {
             it.copy(
                 currentSessionId = sessionId,
                 transcript = ChatTranscript.fromPersistedHistory(history),
                 busy = false,
             )
         }
+    }
+
+    private companion object {
+        const val SESSION_KEY = "chat.session"
+        const val DRAFT_KEY = "chat.draft"
     }
 }

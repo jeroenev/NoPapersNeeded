@@ -32,14 +32,12 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.DocThumbnail
@@ -50,7 +48,6 @@ import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.StatusBadge
 import dev.npn.app.ui.common.TopBarAction
 import dev.npn.app.ui.common.TopBarActions
-import dev.npn.app.ui.common.jsonSaver
 import dev.npn.app.ui.common.rememberSnackbarMessages
 import dev.npn.app.ui.common.resolve
 import dev.npn.core.app.Doc
@@ -59,8 +56,6 @@ import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.index.DuplicateReport
 import dev.npn.core.index.RelinkCandidate
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.builtins.nullable
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_delete
 import no_papers_needed.composeapp.generated.resources.common_empty_trash
@@ -91,30 +86,6 @@ import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
-private enum class TrashTab { TRASH, DUPLICATES, MISSING }
-
-/**
- * The confirmation open on the trash screen, if any: each of these writes cannot be undone. Saved as
- * JSON, so it is open again after the screen is recreated.
- */
-@Serializable
-private sealed interface TrashConfirm {
-    @Serializable
-    data class DeleteForever(
-        val docId: String,
-    ) : TrashConfirm
-
-    @Serializable
-    data object RestoreAll : TrashConfirm
-
-    @Serializable
-    data object EmptyTrash : TrashConfirm
-}
-
-/** Whether this confirmation is for a document no longer among [trashed]. */
-private fun TrashConfirm.leftTheTrash(trashed: List<DocListItem>): Boolean =
-    this is TrashConfirm.DeleteForever && trashed.none { it.doc.docId == docId }
-
 @Composable
 private fun trashTabLabel(tab: TrashTab): String = stringResource(tab.labelResource)
 
@@ -131,13 +102,13 @@ private val TrashTab.labelResource: StringResource
 @Composable
 fun TrashScreen(
     session: LibrarySession,
-    vm: TrashViewModel = viewModel { TrashViewModel(session) },
+    vm: TrashViewModel = viewModel { TrashViewModel(session, createSavedStateHandle()) },
 ) {
     val loaded by vm.state.collectAsStateWithLifecycle()
     val state = loaded ?: TrashUiState()
 
-    var tab by rememberSaveable { mutableStateOf(TrashTab.TRASH) }
-    var confirm by rememberSaveable(stateSaver = jsonSaver(TrashConfirm.serializer().nullable)) { mutableStateOf(null) }
+    val tab by vm.tab.collectAsStateWithLifecycle()
+    val confirm by vm.confirm.collectAsStateWithLifecycle()
 
     val snackbar = rememberSnackbarMessages(vm.messages)
 
@@ -148,21 +119,21 @@ fun TrashScreen(
         content = session.content,
         snackbar = snackbar,
         writes = vm,
-        onSelectTab = { tab = it },
-        onConfirm = { confirm = it },
+        onSelectTab = vm::selectTab,
+        onConfirm = vm::confirm,
     )
     // A document that left the trash meanwhile (restored here or on another device) is not there to
     // delete any more: its confirmation closes rather than stay open to be confirmed. Until the trash
     // has loaded nothing is known to have left it, so a confirmation restored with the screen waits
     // for it, unshown, rather than closing or counting an empty trash.
     val stale = loaded != null && confirm?.leftTheTrash(state.trashed) == true
-    LaunchedEffect(stale) { if (stale) confirm = null }
+    LaunchedEffect(stale) { if (stale) vm.confirm(null) }
     confirm?.takeUnless { stale || loaded == null }?.let {
         TrashConfirmDialog(
             confirm = it,
             trashedCount = state.trashed.size,
             writes = vm,
-            onClose = { confirm = null },
+            onClose = { vm.confirm(null) },
         )
     }
 }

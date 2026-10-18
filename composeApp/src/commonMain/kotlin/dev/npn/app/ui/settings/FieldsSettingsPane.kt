@@ -20,11 +20,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
@@ -36,11 +32,8 @@ import dev.npn.app.ui.common.FieldDefFormState
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.fieldTypeLabel
-import dev.npn.app.ui.common.jsonSaver
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.builtins.nullable
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_delete
 import no_papers_needed.composeapp.generated.resources.common_edit
@@ -64,27 +57,6 @@ import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * The one dialog the field manager has open, or none. Edit and Delete name their field by key and
- * are resolved against the current registry, so a field edited on another device meanwhile shows
- * as it is now. Saved as JSON, so it is open again after the screen is recreated.
- */
-@Serializable
-private sealed interface FieldDialog {
-    @Serializable
-    data object Add : FieldDialog
-
-    @Serializable
-    data class Edit(
-        val key: String,
-    ) : FieldDialog
-
-    @Serializable
-    data class Delete(
-        val key: String,
-    ) : FieldDialog
-}
-
-/**
  * The library's field manager: every registered field in display order with its label, key, type
  * and usage count. Tapping a row edits it; the arrows reorder; the bin deletes after a warning
  * that names the usage count and offers to clear the values too. New fields are added at the end.
@@ -93,12 +65,13 @@ private sealed interface FieldDialog {
 internal fun FieldsSettingsPane(
     fields: List<FieldDef>,
     usage: Map<String, Int>,
+    /** The dialog open over the pane, if any; [onDialog] changes it. */
+    dialog: FieldDialog?,
+    onDialog: (FieldDialog?) -> Unit,
     onSave: (FieldDef) -> Unit,
     onRemove: (key: String, clearValues: Boolean) -> Unit,
     onMove: (key: String, delta: Int) -> Unit,
 ) {
-    var dialog by rememberSaveable(stateSaver = jsonSaver(FieldDialog.serializer().nullable)) { mutableStateOf(null) }
-
     HelpText(stringResource(Res.string.common_settings_document_fields_help))
     fields.forEachIndexed { index, def ->
         key(def.key) {
@@ -107,23 +80,23 @@ internal fun FieldsSettingsPane(
                 count = usage[def.key] ?: 0,
                 canMoveUp = index > 0,
                 canMoveDown = index < fields.lastIndex,
-                onEdit = { dialog = FieldDialog.Edit(def.key) },
+                onEdit = { onDialog(FieldDialog.Edit(def.key, FieldDefFormState.of(def))) },
                 onMove = { onMove(def.key, it) },
-                onDelete = { dialog = FieldDialog.Delete(def.key) },
+                onDelete = { onDialog(FieldDialog.Delete(def.key)) },
             )
         }
     }
-    OutlinedButton(onClick = { dialog = FieldDialog.Add }) {
+    OutlinedButton(onClick = { onDialog(FieldDialog.Add()) }) {
         Icon(Icons.Filled.Add, contentDescription = null)
         Text(stringResource(Res.string.detail_add_field), modifier = Modifier.padding(start = 8.dp))
     }
     HelpText(stringResource(Res.string.common_settings_syncs_across_devices))
 
     val open = dialog ?: return
-    val close = { dialog = null }
+    val close = { onDialog(null) }
     val key =
         when (open) {
-            FieldDialog.Add -> null
+            is FieldDialog.Add -> null
             is FieldDialog.Edit -> open.key
             is FieldDialog.Delete -> open.key
         }
@@ -135,11 +108,14 @@ internal fun FieldsSettingsPane(
         return
     }
     when (open) {
-        FieldDialog.Add -> {
+        is FieldDialog.Add -> {
             FieldDefDialog(
                 existing = fields,
                 def = null,
                 usage = 0,
+                form = open.form,
+                confirmingTypeChange = false,
+                onChange = { form, _ -> onDialog(open.copy(form = form)) },
                 onConfirm = {
                     onSave(it)
                     close()
@@ -153,6 +129,9 @@ internal fun FieldsSettingsPane(
                 existing = fields,
                 def = def,
                 usage = usage[open.key] ?: 0,
+                form = open.form,
+                confirmingTypeChange = open.confirmingTypeChange,
+                onChange = { form, confirming -> onDialog(open.copy(form = form, confirmingTypeChange = confirming)) },
                 onConfirm = {
                     onSave(it)
                     close()
@@ -165,6 +144,8 @@ internal fun FieldsSettingsPane(
             DeleteFieldDialog(
                 def = checkNotNull(def),
                 usage = usage[open.key] ?: 0,
+                clearValues = open.clearValues,
+                onClearValuesChange = { onDialog(open.copy(clearValues = it)) },
                 onConfirm = { clear ->
                     onRemove(open.key, clear)
                     close()
@@ -235,16 +216,19 @@ private fun FieldDefDialog(
     existing: List<FieldDef>,
     def: FieldDef?,
     usage: Int,
+    /** The form as typed so far. */
+    form: FieldDefFormState,
+    /**
+     * Whether a type change on a field that still carries values is being confirmed. It is held back
+     * until the user confirms: existing values are not converted, so this is the one edit in the pane
+     * that can leave off-type data behind. The form cannot change under the confirmation, so it
+     * confirms the form's result.
+     */
+    confirmingTypeChange: Boolean,
+    onChange: (form: FieldDefFormState, confirmingTypeChange: Boolean) -> Unit,
     onConfirm: (FieldDef) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var form by rememberSaveable(stateSaver = jsonSaver(FieldDefFormState.serializer())) {
-        mutableStateOf(def?.let(FieldDefFormState::of) ?: FieldDefFormState())
-    }
-    // A type change on a field that still carries values is held back until the user confirms:
-    // existing values are not converted, so this is the one edit in the pane that can leave
-    // off-type data behind. The form cannot change under the confirmation, so it confirms [result].
-    var confirmingTypeChange by rememberSaveable { mutableStateOf(false) }
     val result = form.toDef(def?.position ?: FieldDef.PLACE_LAST)
     val canSave = form.canSave(existing, own = def?.key)
     val changesTypeOfUsedField = def != null && usage > 0 && result != null && result.type != def.type
@@ -261,7 +245,7 @@ private fun FieldDefDialog(
                 },
             ),
         onConfirm = {
-            result?.let { next -> if (changesTypeOfUsedField) confirmingTypeChange = true else onConfirm(next) }
+            result?.let { next -> if (changesTypeOfUsedField) onChange(form, true) else onConfirm(next) }
         },
         onDismiss = onDismiss,
         confirmLabel = stringResource(Res.string.common_save),
@@ -270,7 +254,7 @@ private fun FieldDefDialog(
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
             FieldDefForm(
                 state = form,
-                onChange = { form = it },
+                onChange = { onChange(it, false) },
                 existing = existing,
                 ownKey = def?.key,
                 lockKey = def != null,
@@ -296,10 +280,10 @@ private fun FieldDefDialog(
                     usage,
                 ),
             onConfirm = {
-                confirmingTypeChange = false
+                onChange(form, false)
                 onConfirm(result)
             },
-            onDismiss = { confirmingTypeChange = false },
+            onDismiss = { onChange(form, false) },
         )
     }
 }
@@ -308,10 +292,11 @@ private fun FieldDefDialog(
 private fun DeleteFieldDialog(
     def: FieldDef,
     usage: Int,
+    clearValues: Boolean,
+    onClearValuesChange: (Boolean) -> Unit,
     onConfirm: (clearValues: Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var clearValues by rememberSaveable { mutableStateOf(false) }
     ConfirmDialog(
         title = stringResource(Res.string.common_settings_field_delete_title),
         onConfirm = { onConfirm(clearValues) },
@@ -331,7 +316,7 @@ private fun DeleteFieldDialog(
                 CheckboxRow(
                     label = stringResource(Res.string.common_settings_field_clear_values),
                     checked = clearValues,
-                    onCheckedChange = { clearValues = it },
+                    onCheckedChange = onClearValuesChange,
                 )
             }
         }

@@ -4,6 +4,13 @@ package dev.npn.app.ui.detail
 
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
@@ -12,8 +19,11 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.Density
 import dev.npn.app.EnglishLocaleTest
+import dev.npn.app.ui.click
 import dev.npn.app.ui.closing
+import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.ProvideWindowWidthClass
+import dev.npn.app.ui.common.WindowWidthClass
 import dev.npn.app.ui.editableText
 import dev.npn.app.ui.hostedScene
 import dev.npn.app.ui.nodes
@@ -98,6 +108,39 @@ class DocumentLayoutTest : EnglishLocaleTest() {
         }
 
     /**
+     * A field being defined from the panel keeps its dialog, and what is typed into it, when the
+     * window crosses the wide/compact breakpoint: the panel's tabs move to the other layout rather
+     * than being built again there.
+     */
+    @Test
+    fun anOpenNewFieldDialogKeepsWhatWasTypedAcrossTheBreakpoint() =
+        onUiThread {
+            val widthClass = mutableStateOf(WindowWidthClass.WIDE)
+            scene(1280, 800, widthClass = widthClass).closing {
+                render()
+                click { "Details" in it.texts() }
+                render()
+                click { "Add field" in it.texts() }
+                render()
+                click { "New field…" in it.texts() }
+                render()
+                assertNotNull(text("New field"))
+                nodes()
+                    .last { it.config.getOrNull(SemanticsActions.SetText) != null }
+                    .config[SemanticsActions.SetText]
+                    .action
+                    ?.invoke(AnnotatedString("Invoice no."))
+                render()
+
+                widthClass.value = WindowWidthClass.COMPACT
+                render()
+                render()
+                assertNotNull(text("New field"))
+                assertNotNull(editable("Invoice no."))
+            }
+        }
+
+    /**
      * Accepting a suggestion overwrites the value on screen, so the row says what it replaces, as
      * the bulk Review does. On screen means the draft: what the user typed is what gets replaced.
      */
@@ -121,13 +164,25 @@ class DocumentLayoutTest : EnglishLocaleTest() {
         height: Int,
         fontScale: Float = 1f,
         ai: AiPanelState = AiPanelState(),
+        /** The window's width class, when the test changes it; else the scene's width decides. */
+        widthClass: State<WindowWidthClass>? = null,
     ): ImageComposeScene {
         val store = DocumentDrafts(FakeMetadataWriter(), CoroutineScope(Dispatchers.Unconfined))
         // An actual change, so the scene renders the save bar in its unsaved state.
         store.field("invoice", FieldKeys.TITLE, "Electricity invoice 2026", persisted = "Electricity invoice")
         return hostedScene(width, height, LocalDocumentDrafts provides store, density = Density(1f, fontScale)) {
             // The scene is the window: wide or compact from its width, as the app root decides.
-            ProvideWindowWidthClass {
+            // The panel's tab, kept as the document's viewmodel keeps it.
+            var shownTab by remember { mutableStateOf<PanelTab?>(null) }
+            val writes =
+                remember {
+                    object : DocumentWrites by NoWrites {
+                        override fun showTab(tab: PanelTab) {
+                            shownTab = tab
+                        }
+                    }
+                }
+            ProvideWidthClass(widthClass?.value) {
                 NpnTheme(darkTheme = false) {
                     Surface {
                         DocumentEditor(
@@ -153,8 +208,9 @@ class DocumentLayoutTest : EnglishLocaleTest() {
                                                 },
                                         ),
                                     ai = ai,
+                                    tab = shownTab,
                                 ),
-                            writes = NoWrites,
+                            writes = writes,
                             preview = { Text("PDF preview", modifier = it) },
                             onReviewNext = {},
                             hasNext = true,
@@ -162,6 +218,18 @@ class DocumentLayoutTest : EnglishLocaleTest() {
                     }
                 }
             }
+        }
+    }
+
+    @Composable
+    private fun ProvideWidthClass(
+        widthClass: WindowWidthClass?,
+        content: @Composable () -> Unit,
+    ) {
+        if (widthClass == null) {
+            ProvideWindowWidthClass(content)
+        } else {
+            CompositionLocalProvider(LocalWindowWidthClass provides widthClass, content = content)
         }
     }
 
@@ -221,4 +289,6 @@ internal object NoWrites : DocumentWrites {
     override fun dismissAiMetadata(key: String) = Unit
 
     override fun loadHistory(refresh: Boolean) = Unit
+
+    override fun showTab(tab: PanelTab) = Unit
 }

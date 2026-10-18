@@ -6,16 +6,20 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.LocalSaveableStateRegistry
 import androidx.compose.runtime.saveable.SaveableStateRegistry
-import androidx.compose.runtime.saveable.SaverScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.state.ToggleableState
+import androidx.lifecycle.SavedStateHandle
 import dev.npn.app.EnglishLocaleTest
+import dev.npn.app.afterProcessDeath
 import dev.npn.app.ui.click
 import dev.npn.app.ui.closing
+import dev.npn.app.ui.common.jsonSaver
+import dev.npn.app.ui.common.uiState
 import dev.npn.app.ui.editableField
 import dev.npn.app.ui.editableText
 import dev.npn.app.ui.isEnabled
@@ -28,12 +32,13 @@ import dev.npn.app.ui.type
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.model.ReviewMode
 import io.kotest.assertions.withClue
-import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import kotlinx.serialization.builtins.nullable
 import kotlin.test.Test
 
 /** The library's open dialog, and the filter draft inside it, survive the screen being recreated. */
 class LibraryDialogTest : EnglishLocaleTest() {
+    /** Every dialog the library's viewmodel keeps comes back in a restored process's new viewmodel. */
     @Test
     fun everyDialogSavesAndRestores() {
         val dialogs =
@@ -44,13 +49,13 @@ class LibraryDialogTest : EnglishLocaleTest() {
                 LibraryDialog.AddTag,
                 LibraryDialog.RemoveTag,
                 LibraryDialog.ConfirmTrash,
+                null,
             )
-        val scope = SaverScope { true }
         dialogs.forEach { dialog ->
-            val saved = with(LibraryDialogSaver) { scope.save(dialog) }
-            LibraryDialogSaver.restore(saved.shouldNotBeNull()) shouldBe dialog
+            val saved = SavedStateHandle()
+            saved.uiState<LibraryDialog?>("dialog", null).set(dialog)
+            saved.afterProcessDeath().uiState<LibraryDialog?>("dialog", LibraryDialog.SaveView).value shouldBe dialog
         }
-        with(LibraryDialogSaver) { scope.save(null) } shouldBe null
     }
 
     /** Renaming a saved view starts from its name, and confirms only a changed, non-blank one. */
@@ -238,7 +243,9 @@ class LibraryDialogTest : EnglishLocaleTest() {
         onEditor: (FilterEditorState) -> Unit = {},
         onDialog: (MutableState<LibraryDialog?>) -> Unit,
     ) = themedScene(WIDTH, HEIGHT, LocalSaveableStateRegistry provides registry) {
-        val dialog = rememberLibraryDialog()
+        // The screen keeps it in its viewmodel; saved the same way here, as the filter draft is.
+        val dialog =
+            rememberSaveable(stateSaver = jsonSaver(LibraryDialog.serializer().nullable)) { mutableStateOf(null) }
         onDialog(dialog)
         if (dialog.value == LibraryDialog.Filter) {
             val editor = rememberFilterEditorState(filter)

@@ -22,9 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -86,8 +84,7 @@ internal fun MetadataTabs(
         remember(previewTab != null) {
             if (previewTab != null) PanelTab.entries.toList() else PanelTab.entries.filter { it != PanelTab.PREVIEW }
         }
-    var savedTab by rememberSaveable { mutableStateOf(tabs.first()) }
-    val tab = savedTab.takeIf { it in tabs } ?: tabs.first()
+    val tab = state.tab?.takeIf { it in tabs } ?: tabs.first()
     LaunchedEffect(tab) {
         if (tab == PanelTab.HISTORY) {
             actions.loadHistory()
@@ -99,7 +96,7 @@ internal fun MetadataTabs(
     var findRequestCounter by remember { mutableIntStateOf(0) }
     Column(
         modifier.findKeys {
-            savedTab = PanelTab.TEXT
+            actions.showTab(PanelTab.TEXT)
             findRequestCounter++
         },
     ) {
@@ -107,7 +104,7 @@ internal fun MetadataTabs(
             tabs.forEach { t ->
                 Tab(
                     selected = tab == t,
-                    onClick = { savedTab = t },
+                    onClick = { actions.showTab(t) },
                     modifier = Modifier.testTag(TestTags.panelTab(t.name)),
                     text = {
                         Text(
@@ -171,8 +168,6 @@ internal fun DocumentUnavailable(modifier: Modifier = Modifier) {
         subtitle = stringResource(Res.string.detail_document_unavailable_hint),
     )
 }
-
-private enum class PanelTab { PREVIEW, DETAILS, TEXT, HISTORY }
 
 @Composable
 private fun DetailsTab(

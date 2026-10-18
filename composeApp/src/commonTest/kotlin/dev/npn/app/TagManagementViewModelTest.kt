@@ -1,12 +1,14 @@
 package dev.npn.app
 
 import dev.npn.app.ui.common.uiText
+import dev.npn.app.ui.tags.TagDialog
 import dev.npn.app.ui.tags.TagManagementViewModel
 import dev.npn.app.ui.tags.tagRows
 import dev.npn.core.app.TagInfo
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -27,6 +29,25 @@ class TagManagementViewModelTest : MainDispatcherTest() {
         name: String,
         count: Int = 0,
     ) = TagInfo(name, null, null, count)
+
+    /** A restored process shows the tags as the user left them: the selection, and the merge they were confirming. */
+    @Test
+    fun aRestoredProcessKeepsTheSelectionAndTheOpenDialog() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply {
+                    tags.tags.value = listOf(tag("invoice", 2), tag("tax", 1), tag("travel", 1))
+                }
+            val screen = recreatable { TagManagementViewModel(session, it) }
+            collecting(screen.vm.rows)
+            advanceUntilIdle()
+            screen.vm.toggleSelected("tax")
+            screen.vm.toggleSelected("invoice")
+            screen.vm.openDialog(TagDialog.Merge(listOf("invoice", "tax")))
+
+            val restored = screen.recreate(this, { combine(it.rows, it.selection, it.dialog, ::Triple) })
+            restored.selection.value shouldContainExactly listOf("invoice", "tax")
+        }
 
     @Test
     fun flatTagsAreRowsOfTheirOwn() {

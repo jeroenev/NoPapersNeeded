@@ -16,13 +16,25 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.Density
+import androidx.lifecycle.HasDefaultViewModelProviderFactory
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.SAVED_STATE_REGISTRY_OWNER_KEY
+import androidx.lifecycle.VIEW_MODEL_STORE_OWNER_KEY
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.enableSavedStateHandles
+import androidx.lifecycle.viewmodel.CreationExtras
+import androidx.lifecycle.viewmodel.MutableCreationExtras
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
+import androidx.lifecycle.viewmodel.viewModelFactory
+import androidx.savedstate.SavedState
+import androidx.savedstate.SavedStateRegistry
+import androidx.savedstate.SavedStateRegistryController
+import androidx.savedstate.SavedStateRegistryOwner
+import androidx.savedstate.savedState
 import dev.npn.app.ui.common.LocalAppLocale
 import dev.npn.app.ui.theme.NpnTheme
 import javax.swing.SwingUtilities
@@ -95,11 +107,48 @@ internal inline fun <T> ImageComposeScene.closing(block: ImageComposeScene.() ->
         close()
     }
 
-/** A fresh store for a scene's viewmodels. */
-internal fun viewModelStoreOwner(): ViewModelStoreOwner =
-    object : ViewModelStoreOwner {
-        override val viewModelStore = ViewModelStore()
+/** A fresh store for a scene's viewmodels, which hands them saved state as a back-stack entry does. */
+internal fun viewModelStoreOwner(): ScreenOwner = ScreenOwner()
+
+/**
+ * What a screen's back-stack entry is to its viewmodels: their store, and the saved state their
+ * [androidx.lifecycle.SavedStateHandle]s come from ([androidx.lifecycle.createSavedStateHandle]).
+ * [save] takes that state as the entry saves it for a restored process; a [ScreenOwner] built from
+ * it ([restored]) hands each viewmodel its handle back, as the restored entry does.
+ */
+internal class ScreenOwner(
+    restored: SavedState? = null,
+) : ViewModelStoreOwner,
+    LifecycleOwner,
+    SavedStateRegistryOwner,
+    HasDefaultViewModelProviderFactory {
+    override val lifecycle = LifecycleRegistry.createUnsafe(this)
+    private val controller = SavedStateRegistryController.create(this)
+    override val savedStateRegistry: SavedStateRegistry get() = controller.savedStateRegistry
+    override val viewModelStore = ViewModelStore()
+
+    // Every viewmodel here is built by its own initializer, which the extras below feed.
+    override val defaultViewModelProviderFactory = viewModelFactory { }
+
+    override val defaultViewModelCreationExtras: CreationExtras
+        get() =
+            MutableCreationExtras().apply {
+                set(SAVED_STATE_REGISTRY_OWNER_KEY, this@ScreenOwner)
+                set(VIEW_MODEL_STORE_OWNER_KEY, this@ScreenOwner)
+            }
+
+    init {
+        controller.performAttach()
+        enableSavedStateHandles()
+        controller.performRestore(restored)
+        lifecycle.currentState = Lifecycle.State.RESUMED
     }
+
+    fun save(): SavedState = savedState().also(controller::performSave)
+}
+
+/** A [ScreenOwner] for a restored process: [saved]'s viewmodels get back what they saved, and nothing else. */
+internal fun restored(saved: ScreenOwner): ScreenOwner = ScreenOwner(saved.save())
 
 /** Every semantics node of the scene, its popups and dialogs included. */
 internal fun ImageComposeScene.nodes(): List<SemanticsNode> {

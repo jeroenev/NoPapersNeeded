@@ -8,6 +8,7 @@ import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldParse
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.ocr.OcrEngineRef
+import kotlinx.serialization.Serializable
 
 /**
  * Everything [MetadataPanel] renders, in four groups assembled by [DocDetailViewModel.metadata].
@@ -23,7 +24,13 @@ data class MetadataUiState(
     val vocabulary: VocabularyState = VocabularyState(),
     val ai: AiPanelState = AiPanelState(),
     val history: HistoryUiState = HistoryUiState.NotLoaded,
+    /** The tab the user picked, which the panel shows where it has one; null shows its first. */
+    val tab: PanelTab? = null,
 )
+
+/** The metadata panel's tabs; [PREVIEW] only where the page viewer cannot sit beside them. */
+@Serializable
+enum class PanelTab { PREVIEW, DETAILS, TEXT, HISTORY }
 
 /**
  * The document itself plus the library-wide settings that decide how it is shown. [loadState]
@@ -104,6 +111,12 @@ interface DocumentWrites : AiSuggestionActions {
 
     /** Show the history (its tab opened), or read it again when [refresh] is set. */
     fun loadHistory(refresh: Boolean = false)
+
+    /**
+     * Show [tab]. The viewmodel keeps it, so the panel opens on it again in another layout, in the
+     * detail screen the side panel expands into, and in a restored process.
+     */
+    fun showTab(tab: PanelTab)
 }
 
 /**

@@ -34,6 +34,18 @@ class UpdateNoticeViewModelTest : MainDispatcherTest() {
         platformChecks: Boolean = true,
     ) = UpdateNoticeViewModel(settings, source, current, platformChecks)
 
+    /** A restored process offers the newer release again: it looks it up once per start. */
+    @Test
+    fun aRestoredProcessOffersTheReleaseAgain() =
+        runTest(dispatcher) {
+            val settings = FakeSettingsRepository()
+            val source = CountingSource(release)
+            val screen = recreatable { vm(settings, source) }
+
+            val restored = screen.recreate(this, { it.notice })
+            restored.notice.value shouldBe release
+        }
+
     @Test
     fun offersANewerRelease() =
         runTest(dispatcher) {

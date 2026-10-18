@@ -1,7 +1,10 @@
 package dev.npn.app.ui.ai
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.reasonText
+import dev.npn.app.ui.common.restored
+import dev.npn.app.ui.common.saveUiState
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.aiedit.ApplyResult
@@ -12,8 +15,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.nullable
+import kotlinx.serialization.builtins.serializer
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_review_discard_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_review_open_failed
@@ -66,6 +71,8 @@ sealed interface QueuedReviewPhase {
 class AiEditReviewViewModel(
     session: LibrarySession,
     private val jobId: String,
+    /** What the screen's back-stack entry saves for a restored process; a new one opens it afresh. */
+    private val saved: SavedStateHandle = SavedStateHandle(),
 ) : ReviewViewModel() {
     private val queue = session.aiEditQueue
 
@@ -80,20 +87,29 @@ class AiEditReviewViewModel(
                 runCatchingCancellable { queue.openEditRun(jobId) }
                     .onFailure { message(uiText(Res.string.ai_edit_review_open_failed, it.reasonText())) }
                     .getOrNull()
+            // A restored process gets back what the user had ticked, over the run as it is now.
+            val ticked = saved.restored<List<String>?>(TICKED_KEY, TickedSerializer, null)?.toSet()
             _phase.value =
-                opened?.let { QueuedReviewPhase.Review(ReviewBatchState(it.docs, it.emptyDocs), it) }
-                    ?: QueuedReviewPhase.Unavailable
+                opened?.let {
+                    val docs = ticked?.let(it.docs::withTicked) ?: it.docs
+                    QueuedReviewPhase.Review(ReviewBatchState(docs, it.emptyDocs), it)
+                } ?: QueuedReviewPhase.Unavailable
         }
+    }
+
+    /** Show [review], saving what is ticked in it for a restored process. */
+    private fun show(review: QueuedReviewPhase.Review) {
+        _phase.value = review
+        saved.saveUiState(TICKED_KEY, TickedSerializer, review.batch.docs.ticked())
     }
 
     /** Leaving destroys the only copy of an answer already paid for, so it is a discard. */
     override val reviewExit = ReviewExit.DISCARD_RUN
 
-    override fun updateReview(transform: (List<ReviewDoc>) -> List<ReviewDoc>) =
-        _phase.update { phase ->
-            val current = phase as? QueuedReviewPhase.Review ?: return@update phase
-            current.copy(batch = current.batch.copy(docs = transform(current.batch.docs)))
-        }
+    override fun updateReview(transform: (List<ReviewDoc>) -> List<ReviewDoc>) {
+        val current = _phase.value as? QueuedReviewPhase.Review ?: return
+        show(current.copy(batch = current.batch.copy(docs = transform(current.batch.docs))))
+    }
 
     /**
      * Write the selected suggestions; a fully applied run leaves the queue. A failed write comes back
@@ -111,7 +127,7 @@ class AiEditReviewViewModel(
                     current.batch,
                     Res.string.ai_edit_review_queue_drop_failed,
                     write = current.run::apply,
-                    showReview = { _phase.value = current.copy(batch = it) },
+                    showReview = { show(current.copy(batch = it)) },
                     showDone = { _phase.value = QueuedReviewPhase.Done(it) },
                 )
             }
@@ -134,5 +150,10 @@ class AiEditReviewViewModel(
                     _phase.value = QueuedReviewPhase.Done(opened.landedSoFar())
                 }
             }
+    }
+
+    private companion object {
+        const val TICKED_KEY = "review.ticked"
+        val TickedSerializer = ListSerializer(String.serializer()).nullable
     }
 }

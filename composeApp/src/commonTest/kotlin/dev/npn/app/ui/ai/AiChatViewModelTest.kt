@@ -2,8 +2,10 @@ package dev.npn.app.ui.ai
 
 import dev.npn.app.FakeLibrarySession
 import dev.npn.app.MainDispatcherTest
+import dev.npn.app.Transient
 import dev.npn.app.collecting
 import dev.npn.app.failure
+import dev.npn.app.recreatable
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.AiChatEvent
 import dev.npn.core.ai.AiChatHistoryItem
@@ -13,6 +15,7 @@ import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -32,6 +35,32 @@ import kotlin.test.Test
  */
 class AiChatViewModelTest : MainDispatcherTest() {
     private fun vm(session: FakeLibrarySession = FakeLibrarySession()) = AiChatViewModel(session)
+
+    /**
+     * A restored process opens the conversation the user had open, not a new one, with the
+     * question they were typing.
+     */
+    @Test
+    fun aRestoredProcessReopensTheOpenConversationAndItsTypedQuestion() =
+        runTest(dispatcher) {
+            val saved = AiChatSession("saved", "Previous chat", 2L)
+            val session =
+                FakeLibrarySession().apply {
+                    aiChat.savedChatSessions = listOf(saved)
+                    aiChat.chatTranscripts = mapOf(saved.id to listOf(AiChatHistoryItem.UserTurn("old question")))
+                }
+            val screen = recreatable { AiChatViewModel(session, it) }
+            advanceUntilIdle()
+            screen.vm.switchSession(saved.id)
+            screen.vm.type("and the year before?")
+
+            val restored =
+                screen.recreate(this, { combine(it.ui, it.draft, ::Pair) }) { (ui, draft) ->
+                    Transient.chat(ui) to
+                        draft
+                }
+            restored.ui.value.currentSessionId shouldBe saved.id
+        }
 
     @Test
     fun anUnreadableSessionListIsReportedWhileANewChatCanStillOpen() =

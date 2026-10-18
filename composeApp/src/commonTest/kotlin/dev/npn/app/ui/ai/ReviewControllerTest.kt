@@ -1,9 +1,11 @@
 package dev.npn.app.ui.ai
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.MainDispatcherTest
 import dev.npn.app.collecting
 import dev.npn.app.failure
+import dev.npn.app.recreatable
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.aiedit.ApplyOutcome
 import dev.npn.core.app.aiedit.ApplyResult
@@ -13,6 +15,7 @@ import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -43,15 +46,36 @@ private sealed interface Shown {
  */
 private class BatchUnderReview(
     vararg docs: ReviewDoc,
+    /** Where it keeps what is ticked, as a viewmodel reviewing a stored run does ([ticked]). */
+    private val saved: SavedStateHandle = SavedStateHandle(),
     private val write: suspend (List<ReviewDoc>) -> ApplyOutcome,
 ) : ReviewViewModel() {
-    var shown: Shown = Shown.Review(ReviewBatchState(docs.toList(), emptyDocs = emptyList()))
+    var shown: Shown =
+        Shown.Review(
+            ReviewBatchState(
+                saved
+                    .get<String>(TICKED)
+                    ?.split('\n')
+                    ?.toSet()
+                    ?.let(docs.toList()::withTicked) ?: docs.toList(),
+                emptyDocs = emptyList(),
+            ),
+        )
 
     override val reviewExit = ReviewExit.SKIP_BATCH
 
     override fun updateReview(transform: (List<ReviewDoc>) -> List<ReviewDoc>) {
         val review = shown as? Shown.Review ?: return
         shown = Shown.Review(review.batch.copy(docs = transform(review.batch.docs)))
+        saved[TICKED] =
+            (shown as Shown.Review)
+                .batch.docs
+                .ticked()
+                .joinToString("\n")
+    }
+
+    private companion object {
+        const val TICKED = "ticked"
     }
 
     override fun apply() {
@@ -72,6 +96,31 @@ private class BatchUnderReview(
 
 /** Review → Apply as both AI-edit viewmodels share it ([ReviewViewModel.applyReview]). */
 class ReviewControllerTest : MainDispatcherTest() {
+    /**
+     * What is ticked in a batch comes back from its saved form ([ticked], [withTicked]) over the same
+     * suggestions, as a restored process ticks a stored run again: additions, removals and fields.
+     */
+    @Test
+    fun aRestoredReviewIsTickedAsTheUserLeftIt() =
+        runTest(dispatcher) {
+            val docs =
+                arrayOf(
+                    reviewDoc("a", tags = listOf("t1"), removals = listOf("old")),
+                    reviewDoc("b", fields = mapOf(FieldKeys.TITLE to "Bill")),
+                )
+            val screen = recreatable { BatchUnderReview(*docs, saved = it) { ApplyOutcome.NothingSelected } }
+            screen.vm.toggleChip("a", "t1")
+            screen.vm.toggleChip("a", "old")
+            screen.vm.toggleField("b", FieldKeys.TITLE)
+
+            val restored = screen.recreate(this, { flowOf(it.shown) })
+            restored.shown
+                .shouldBeInstanceOf<Shown.Review>()
+                .batch.docs
+                .ticked() shouldContainExactly
+                listOf("a\u001F-\u001Fold")
+        }
+
     @Test
     fun aDoneApplyShowsWhatLanded() =
         runTest(dispatcher) {

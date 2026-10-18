@@ -1,9 +1,12 @@
 package dev.npn.app.ui.ai
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.reasonText
+import dev.npn.app.ui.common.restored
+import dev.npn.app.ui.common.saveUiState
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiFieldConfig
@@ -33,9 +36,13 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.nullable
+import kotlinx.serialization.builtins.serializer
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_fields_failed
@@ -64,6 +71,76 @@ private fun AiEditUiState.scopeKey(): ScopeKey =
     )
 
 /**
+ * What a restored process gets back of the AI edit page: everything the user configured for the run.
+ * The phase is not: a batch being suggested or applied is work that died with the process, and a
+ * Review's suggestions lived only in its memory, so the page opens on the setup form again.
+ */
+@Serializable
+private data class SavedAiEditSetup(
+    val scope: EditScope,
+    val savedViewId: String?,
+    val task: EditTask?,
+    val maxTags: Int,
+    val maxNewTags: Int,
+    val batchSize: Int,
+    val fieldOptions: Map<String, AiFieldOption>,
+    val includeTags: Boolean,
+    val allowNewTags: Boolean,
+    val includeTagRemovals: Boolean,
+    val customPrompt: String,
+    val backgroundOverride: Boolean?,
+) {
+    constructor(state: AiEditUiState) : this(
+        state.scope,
+        state.savedViewId,
+        state.task,
+        state.maxTags,
+        state.maxNewTags,
+        state.batchSize,
+        state.fieldOptions,
+        state.includeTags,
+        state.allowNewTags,
+        state.includeTagRemovals,
+        state.customPrompt,
+        state.backgroundOverride,
+    )
+
+    fun appliedTo(state: AiEditUiState): AiEditUiState =
+        state.copy(
+            scope = scope,
+            savedViewId = savedViewId,
+            task = task,
+            maxTags = maxTags,
+            maxNewTags = maxNewTags,
+            batchSize = batchSize,
+            fieldOptions = fieldOptions,
+            includeTags = includeTags,
+            allowNewTags = allowNewTags,
+            includeTagRemovals = includeTagRemovals,
+            customPrompt = customPrompt,
+            backgroundOverride = backgroundOverride,
+        )
+}
+
+private const val SETUP_KEY = "aiEdit.setup"
+private const val SELECTION_KEY = "aiEdit.selection"
+private const val PROCESSED_KEY = "aiEdit.processed"
+private val IdsSerializer = ListSerializer(String.serializer())
+
+/**
+ * The documents handed to the page: [selection], saved in [saved], or in a restored process, whose
+ * hand-off is gone, the ones saved then.
+ */
+private fun handedOver(
+    saved: SavedStateHandle,
+    selection: List<String>,
+): List<String> {
+    if (SELECTION_KEY in saved) return saved.restored(SELECTION_KEY, IdsSerializer, selection)
+    saved.saveUiState(SELECTION_KEY, IdsSerializer, selection)
+    return selection
+}
+
+/**
  * Drives the bulk AI-edit screen for one opened library. State machine:
  * `Idle → Suggesting → Review → Applying → Done`.
  *
@@ -82,8 +159,10 @@ class AiEditViewModel(
     settings: SettingsRepository,
     /** Documents handed over from the library's selection mode; empty when opened from the rail. */
     selection: List<String> = emptyList(),
+    /** What the screen's back-stack entry saves for a restored process; a new one opens it afresh. */
+    private val saved: SavedStateHandle = SavedStateHandle(),
     /** The run this page drives, over the same [selection]. */
-    private val edit: AiEditRun = AiEditRun(session, selection),
+    private val edit: AiEditRun = AiEditRun(session, handedOver(saved, selection)),
 ) : ReviewViewModel(),
     AiEditSetupActions {
     private val editQueue = session.aiEditQueue
@@ -91,17 +170,50 @@ class AiEditViewModel(
     private val reviewConfig = session.reviewConfig
     private val savedViewRepository = session.savedViews
 
+    /** The setup a restored process saved, which the registry's first answer must not reseed. */
+    private val restoredSetup =
+        saved.restored<SavedAiEditSetup?>(
+            SETUP_KEY,
+            SavedAiEditSetup.serializer().nullable,
+            null,
+        )
+
     private val _ui =
         MutableStateFlow(
-            AiEditUiState(
-                scope = if (selection.isEmpty()) EditScope.UNTAGGED else EditScope.SELECTION,
-                selectionSize = selection.size,
-                // The per-run overrides start from the Settings defaults.
-                maxTags = settings.settings.value.aiMaxTagsPerDoc,
-                maxNewTags = settings.settings.value.aiMaxNewTagsPerDoc,
-            ),
+            handedOver(saved, selection).let { handed ->
+                AiEditUiState(
+                    scope = if (handed.isEmpty()) EditScope.UNTAGGED else EditScope.SELECTION,
+                    selectionSize = handed.size,
+                    // The per-run overrides start from the Settings defaults.
+                    maxTags = settings.settings.value.aiMaxTagsPerDoc,
+                    maxNewTags = settings.settings.value.aiMaxNewTagsPerDoc,
+                ).let { restoredSetup?.appliedTo(it) ?: it }
+            },
         )
     val ui: StateFlow<AiEditUiState> = _ui.asStateFlow()
+
+    /** Change the UI state, saving the setup form for a restored process when it changed. */
+    private fun updateUi(transform: (AiEditUiState) -> AiEditUiState) {
+        val before = SavedAiEditSetup(_ui.value)
+        val after = SavedAiEditSetup(_ui.updateAndGet(transform))
+        if (after != before) saved.saveUiState(SETUP_KEY, SavedAiEditSetup.serializer(), after)
+    }
+
+    init {
+        // The documents the run already spent, which a restored run must not offer again; but not a
+        // Review's, whose suggestions went with the process before anything was written.
+        saved.restored(PROCESSED_KEY, IdsSerializer, emptyList()).takeIf { it.isNotEmpty() }?.let(edit::markHandedOff)
+        viewModelScope.launch {
+            combine(edit.processed, _ui.map { (it.phase as? EditPhase.Review)?.batch }) { done, review ->
+                done -
+                    review
+                        ?.docs
+                        ?.map { it.docId }
+                        .orEmpty()
+                        .toSet()
+            }.collect { spent -> saved.saveUiState(PROCESSED_KEY, IdsSerializer, spent.toList()) }
+        }
+    }
 
     init {
         // Seed the field options from the registry the first time it arrives: every aiEnabled field
@@ -109,8 +221,15 @@ class AiEditViewModel(
         // the picker, never the user's choices for a run in progress.
         viewModelScope.launch {
             fieldRegistry.fields.collect { defs ->
-                _ui.update { state ->
-                    if (state.registryLoaded) state.copy(fields = defs) else state.seedFields(defs)
+                updateUi { state ->
+                    when {
+                        state.registryLoaded -> state.copy(fields = defs)
+
+                        // A restored setup is the user's: the registry only fills in the labels.
+                        restoredSetup != null -> state.copy(fields = defs, registryLoaded = true)
+
+                        else -> state.seedFields(defs)
+                    }
                 }
             }
         }
@@ -181,13 +300,13 @@ class AiEditViewModel(
                 runCatchingCancellable { reviewConfig.reviewMode.first() }
                     .onFailure(::reportSetupFailure)
                     .getOrDefault(ReviewMode.DEFAULT)
-            _ui.update { it.copy(reviewMode = mode) }
+            updateUi { it.copy(reviewMode = mode) }
         }
         // Saved views double as AI-edit scopes, so keep the list live and preselect the first one.
         viewModelScope.launch {
             runCatchingCancellable {
                 savedViewRepository.observeSavedViews().collect { views ->
-                    _ui.update { it.copy(savedViews = views, savedViewId = it.savedViewId ?: views.firstOrNull()?.id) }
+                    updateUi { it.copy(savedViews = views, savedViewId = it.savedViewId ?: views.firstOrNull()?.id) }
                 }
             }.onFailure(::reportSetupFailure)
         }
@@ -255,7 +374,7 @@ class AiEditViewModel(
      * setter is a no-op there; checked inside the update, so a phase change cannot slip between.
      */
     private fun updateIdle(transform: (AiEditUiState) -> AiEditUiState) =
-        _ui.update { if (it.phase == EditPhase.Idle) transform(it) else it }
+        updateUi { if (it.phase == EditPhase.Idle) transform(it) else it }
 
     /**
      * Editing what a task stands for makes the run custom, so the chosen task never describes a
@@ -292,15 +411,15 @@ class AiEditViewModel(
                     }
                 }.onFailure { failure ->
                     message(uiText(Res.string.ai_edit_start_failed, failure.reasonText()))
-                    _ui.update { s -> if (s.phase is EditPhase.Suggesting) s.copy(phase = EditPhase.Idle) else s }
+                    updateUi { s -> if (s.phase is EditPhase.Suggesting) s.copy(phase = EditPhase.Idle) else s }
                 }
             }
     }
 
     /** A finished run whose next batch has gone (reviewed or removed elsewhere) stops offering it. */
     private fun endWithoutNextBatch() =
-        _ui.update { state ->
-            val done = state.phase as? EditPhase.Done ?: return@update state
+        updateUi { state ->
+            val done = state.phase as? EditPhase.Done ?: return@updateUi state
             state.copy(phase = done.copy(result = done.result.copy(moreRemain = false)))
         }
 
@@ -311,13 +430,13 @@ class AiEditViewModel(
      */
     private suspend fun queueRun(docIds: List<String>) {
         if (!reporting(Res.string.ai_edit_queue_failed) { editQueue.enqueueEditRun(docIds, buildRequest()) }) {
-            _ui.update { it.copy(phase = EditPhase.Idle) }
+            updateUi { it.copy(phase = EditPhase.Idle) }
             return
         }
         // Queued documents are spent as far as this page is concerned: the preview and any later
         // batch must not offer them again while the run is still out there.
         edit.markHandedOff(docIds)
-        _ui.update { it.copy(phase = EditPhase.Queued(docIds.size)) }
+        updateUi { it.copy(phase = EditPhase.Queued(docIds.size)) }
     }
 
     /**
@@ -328,7 +447,7 @@ class AiEditViewModel(
         if (run?.isActive != true || _ui.value.phase !is EditPhase.Suggesting) return
         run?.cancel()
         run = null
-        _ui.update { it.copy(phase = EditPhase.Idle) }
+        updateUi { it.copy(phase = EditPhase.Idle) }
     }
 
     /** Leaving a Review skips the batch: its documents count as reviewed, the scope remains. */
@@ -336,8 +455,8 @@ class AiEditViewModel(
 
     /** The Review phase's batch; a no-op in every other phase. */
     override fun updateReview(transform: (List<ReviewDoc>) -> List<ReviewDoc>) =
-        _ui.update { state ->
-            val review = state.phase as? EditPhase.Review ?: return@update state
+        updateUi { state ->
+            val review = state.phase as? EditPhase.Review ?: return@updateUi state
             state.copy(phase = EditPhase.Review(review.batch.copy(docs = transform(review.batch.docs))))
         }
 
@@ -352,13 +471,13 @@ class AiEditViewModel(
         if (run?.isActive == true) return
         run =
             viewModelScope.launch {
-                _ui.update { it.copy(phase = EditPhase.Applying) }
+                updateUi { it.copy(phase = EditPhase.Applying) }
                 applyReview(
                     review.batch,
                     Res.string.ai_edit_more_remain_failed,
                     write = { docs -> edit.apply(_ui.value.scopeKey(), docs) },
-                    showReview = { batch -> _ui.update { it.copy(phase = EditPhase.Review(batch)) } },
-                    showDone = { result -> _ui.update { it.copy(phase = EditPhase.Done(result)) } },
+                    showReview = { batch -> updateUi { it.copy(phase = EditPhase.Review(batch)) } },
+                    showDone = { result -> updateUi { it.copy(phase = EditPhase.Done(result)) } },
                 )
             }
     }
@@ -377,7 +496,7 @@ class AiEditViewModel(
     fun reconfigure() {
         val phase = _ui.value.phase
         if (phase !is EditPhase.Done && phase !is EditPhase.Queued) return
-        _ui.update { it.copy(phase = EditPhase.Idle) }
+        updateUi { it.copy(phase = EditPhase.Idle) }
     }
 
     private suspend fun suggestBatch() {
@@ -388,11 +507,11 @@ class AiEditViewModel(
         val running = currentCoroutineContext()
         val result =
             edit.suggestNextBatch(_ui.value.scopeKey(), request) { progress ->
-                if (running.isActive) _ui.update { it.copy(phase = EditPhase.Suggesting(progress)) }
+                if (running.isActive) updateUi { it.copy(phase = EditPhase.Suggesting(progress)) }
             }
         when (result) {
             BatchResult.Empty -> {
-                _ui.update { it.copy(phase = EditPhase.Done(ApplyResult(0, 0, moreRemain = false))) }
+                updateUi { it.copy(phase = EditPhase.Done(ApplyResult(0, 0, moreRemain = false))) }
             }
 
             is BatchResult.Review -> {
@@ -401,7 +520,7 @@ class AiEditViewModel(
                         uiText(Res.plurals.ai_edit_suggest_failed, result.total, result.failures, result.total),
                     )
                 }
-                _ui.update { it.copy(phase = EditPhase.Review(ReviewBatchState(result.docs, result.emptyDocs))) }
+                updateUi { it.copy(phase = EditPhase.Review(ReviewBatchState(result.docs, result.emptyDocs))) }
             }
         }
     }
@@ -432,7 +551,7 @@ class AiEditViewModel(
             viewModelScope.launch {
                 var more = false
                 reporting(Res.string.ai_edit_more_remain_failed) { more = edit.moreRemain(_ui.value.scopeKey()) }
-                _ui.update { it.copy(phase = EditPhase.Done(edit.landedSoFar().copy(moreRemain = more))) }
+                updateUi { it.copy(phase = EditPhase.Done(edit.landedSoFar().copy(moreRemain = more))) }
             }
     }
 }

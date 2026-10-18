@@ -42,7 +42,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,6 +52,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.ActionMenuItems
 import dev.npn.app.ui.common.ConfirmDialog
@@ -65,14 +65,11 @@ import dev.npn.app.ui.common.TagPickDialog
 import dev.npn.app.ui.common.TextInputDialog
 import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.TopBarAction
-import dev.npn.app.ui.common.jsonSaver
 import dev.npn.app.ui.common.onSecondaryClick
 import dev.npn.app.ui.common.parseHexColor
 import dev.npn.app.ui.common.rememberSnackbarMessages
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.TagInfo
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.builtins.nullable
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_delete
 import no_papers_needed.composeapp.generated.resources.common_document_count
@@ -102,46 +99,18 @@ import no_papers_needed.composeapp.generated.resources.library_select
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
-/**
- * The one dialog the tags screen has open, or none. Every action but rename names a list of tags: a
- * card's own menu one, the selection all of it. Saved as JSON, so it is open again after the screen
- * is recreated.
- */
-@Serializable
-private sealed interface TagDialog {
-    @Serializable
-    data class Rename(
-        val name: String,
-    ) : TagDialog
-
-    @Serializable
-    data class Merge(
-        val names: List<String>,
-    ) : TagDialog
-
-    @Serializable
-    data class Style(
-        val names: List<String>,
-    ) : TagDialog
-
-    @Serializable
-    data class Delete(
-        val names: List<String>,
-    ) : TagDialog
-}
-
 // The dialogs get the viewmodel only as its TagWrites interface, the hand-down the conventions prescribe.
 @Suppress("ViewModelForwarding")
 @Composable
 fun TagManagementScreen(
     session: LibrarySession,
-    vm: TagManagementViewModel = viewModel { TagManagementViewModel(session) },
+    vm: TagManagementViewModel = viewModel { TagManagementViewModel(session, createSavedStateHandle()) },
 ) {
     val tags by vm.tags.collectAsStateWithLifecycle()
     val rows by vm.rows.collectAsStateWithLifecycle()
     val selected by vm.selection.collectAsStateWithLifecycle()
 
-    var dialog by rememberSaveable(stateSaver = jsonSaver(TagDialog.serializer().nullable)) { mutableStateOf(null) }
+    val dialog by vm.dialog.collectAsStateWithLifecycle()
 
     val snackbar = rememberSnackbarMessages(vm.messages)
 
@@ -150,17 +119,17 @@ fun TagManagementScreen(
         snackbar = snackbar,
         selected = selected,
         selection = vm,
-        onOpen = { dialog = it },
+        onOpen = vm::openDialog,
     )
     dialog?.let { open ->
         TagDialogHost(
             dialog = open,
             tags = tags.orEmpty(),
             writes = vm,
-            onClose = { dialog = null },
+            onClose = { vm.openDialog(null) },
             // A confirmed action ends the selection it was taken on.
             onDone = {
-                dialog = null
+                vm.openDialog(null)
                 vm.clearSelection()
             },
         )

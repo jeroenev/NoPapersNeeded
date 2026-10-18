@@ -1,11 +1,14 @@
 package dev.npn.app
 
 import dev.npn.app.ui.common.uiText
+import dev.npn.app.ui.library.LibraryDialog
 import dev.npn.app.ui.library.LibraryViewModel
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -22,6 +25,27 @@ import kotlin.test.Test
 class LibraryTrashTest : MainDispatcherTest() {
     private fun vm(session: FakeLibrarySession = FakeLibrarySession()) =
         LibraryViewModel(session, FakeSettingsRepository())
+
+    /**
+     * A restored process still asks to trash the selection the user was confirming; the Undo of a
+     * trash already done is a message, which goes with the process (it is transient).
+     */
+    @Test
+    fun aRestoredProcessKeepsTheTrashConfirmationOverTheSelection() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val screen = recreatable { LibraryViewModel(session, FakeSettingsRepository(), it) }
+            screen.vm.startSelection("d1")
+            screen.vm.bulkTrash()
+            advanceUntilIdle()
+            screen.vm.startSelection("d2")
+            screen.vm.toggleSelection("d3")
+            screen.vm.openDialog(LibraryDialog.ConfirmTrash)
+
+            val restored = screen.recreate(this, { combine(it.ui, it.dialog, ::Pair) })
+            restored.ui.value.selected shouldBe setOf("d2", "d3")
+            collecting(restored.messages).shouldBeEmpty()
+        }
 
     @Test
     fun bulkTrashAllSucceedClearsSelection() =

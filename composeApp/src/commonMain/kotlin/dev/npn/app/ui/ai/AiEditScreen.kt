@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
@@ -69,7 +70,7 @@ fun AiEditScreen(
     onOpenDoc: (String) -> Unit,
     modifier: Modifier = Modifier,
     selection: List<String> = emptyList(),
-    vm: AiEditViewModel = viewModel { AiEditViewModel(session, settings, selection) },
+    vm: AiEditViewModel = viewModel { AiEditViewModel(session, settings, selection, createSavedStateHandle()) },
 ) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     val snackbar = rememberSnackbarMessages(vm.messages)
