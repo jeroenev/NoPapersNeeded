@@ -6,10 +6,11 @@ import dev.npn.core.db.FtsQuery
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.defs
 import dev.npn.core.db.isLive
-import dev.npn.core.journal.JournalCodec
+import dev.npn.core.journal.EventDecoderRegistry
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.ocr.OcrEngineRef
 import dev.npn.core.ocr.OcrState
+import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -208,7 +209,8 @@ class DocumentRepositoryImpl(
         return dao
             .eventsForDocument(docId)
             .map { row ->
-                val event = JournalCodec.decodeLineOrNull(row.canonicalJson)
+                // A row an older build recorded may hold what this one cannot read.
+                val event = runCatchingCancellable { EventDecoderRegistry.decodeStored(row.canonicalJson) }.getOrNull()
                 DocumentHistoryRecord(
                     timeMillis = row.hlcPhysical,
                     deviceId = row.deviceId,

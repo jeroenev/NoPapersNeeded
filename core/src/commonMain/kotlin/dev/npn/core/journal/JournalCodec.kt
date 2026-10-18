@@ -11,11 +11,8 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 /**
- * Reads and writes the JSON-lines journal format: one [JournalEvent] per line.
- *
- * [decodeLineOrNull] is tolerant: a blank line, or one that fails to parse (corrupt or a future
- * event shape we cannot handle), gives null. Unknown *ops* still parse into [JournalOp.Unknown] via
- * the serializer; the null only catches structurally-broken lines.
+ * Writes the JSON-lines journal format, one [JournalEvent] per line, and holds the pinned [json]
+ * every reader decodes it with ([EventDecoderRegistry]).
  */
 object JournalCodec {
     /**
@@ -32,17 +29,6 @@ object JournalCodec {
     fun encode(event: JournalEvent): String = json.encodeToString(JournalEventSerializer, event)
 
     fun encodeLines(events: List<JournalEvent>): String = events.joinToString("\n") { encode(it) }
-
-    /** Parse a single line, or null if blank/unparseable. */
-    fun decodeLineOrNull(line: String): JournalEvent? {
-        val trimmed = line.trim()
-        if (trimmed.isEmpty()) return null
-        return try {
-            EventDecoderRegistry.decode(trimmed, allowMissingV1 = true).event
-        } catch (_: Exception) {
-            null
-        }
-    }
 }
 
 class UnsupportedEventVersionException(

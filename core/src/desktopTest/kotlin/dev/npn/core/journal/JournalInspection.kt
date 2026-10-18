@@ -18,4 +18,4 @@ suspend fun LibraryFileSystem.journalObjectTexts(): List<String> =
 
 /** Every event the published journal objects hold. */
 suspend fun LibraryFileSystem.journalObjectEvents(): List<JournalEvent> =
-    journalObjectTexts().flatMap { it.lines() }.mapNotNull(JournalCodec::decodeLineOrNull)
+    journalObjectTexts().flatMap { it.lines() }.mapNotNull { JournalCodec.decodeLineOrNull(it) }
