@@ -16,6 +16,9 @@ import java.security.MessageDigest
  * own hash still matches.
  */
 object VerifiedDownload {
+    private const val CONNECT_TIMEOUT_MS = 30_000
+    private const val READ_TIMEOUT_MS = 60_000
+
     fun fetch(
         url: String,
         sha256: String,
@@ -26,7 +29,12 @@ object VerifiedDownload {
         log("Downloading $url")
         target.absoluteFile.parentFile.mkdirs()
         val partial = File(target.path + ".part")
-        URI(url).toURL().openStream().use { input -> partial.outputStream().use { input.copyTo(it) } }
+        val connection =
+            URI(url).toURL().openConnection().apply {
+                connectTimeout = CONNECT_TIMEOUT_MS
+                readTimeout = READ_TIMEOUT_MS
+            }
+        connection.getInputStream().use { input -> partial.outputStream().use { input.copyTo(it) } }
         val actual = sha256Of(partial)
         if (actual != sha256) {
             partial.delete()
