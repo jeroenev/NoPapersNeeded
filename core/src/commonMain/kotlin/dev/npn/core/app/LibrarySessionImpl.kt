@@ -57,7 +57,7 @@ class LibrarySessionImpl private constructor(
     private val staleFiles = graph.staleFiles
     private val queues = graph.work
 
-    /** The drains' gate, opened by the first rescan that succeeds ([SessionGraph.rescanned]). */
+    /** The drains' gate, opened here by the first rescan that succeeds ([SessionGraph.rescanned]). */
     private val drainsReady = graph.rescanned
 
     /** Completed once the initial rescan [start] launched has ended, however it ended. */
@@ -112,8 +112,8 @@ class LibrarySessionImpl private constructor(
             report.retryAfterMillis?.let { scheduleSettleRescan(it) }
             ocrFacade.reconcileAfterRescan()
             // The index knows the library's documents and has their stored text: from here on a
-            // drain may take a document without a row for one that is gone.
-            queues.rescanned()
+            // drain may take a document without a row for one that is gone, so the drains may start.
+            drainsReady.complete(Unit)
             report
         }
 

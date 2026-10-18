@@ -298,7 +298,6 @@ internal class SessionGraph(
             ocr = ocr.worker,
             enrichment = enrichment.worker,
             edits = edits.worker,
-            firstRescan = rescanned,
             reader =
                 WorkQueueReader(
                     db.documentDao(),
