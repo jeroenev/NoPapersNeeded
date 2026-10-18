@@ -44,7 +44,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -187,19 +186,20 @@ class DocDetailViewModel private constructor(
     private val highlightTerms: List<String> = searchQuery?.let { queryTerms(it) }.orEmpty()
 
     /**
-     * The document's load lifecycle. [observeDoc] emits null both before the first query and when
-     * the document is gone; [onEach] flips [docObserved] on the first emission so the fold can tell
-     * a not-yet-resolved null (→ [DocLoadState.Loading]) from a confirmed absence (→
-     * [DocLoadState.Missing]). A caller that handed us an [initialItem] starts resolved.
+     * The document's load lifecycle. Every [observeDoc] emission is an answer, a row
+     * ([DocLoadState.Present]) or none ([DocLoadState.Missing]), so only the value before the first
+     * one is [DocLoadState.Loading], and the screen never flashes "unavailable" while the query is
+     * still in flight. A caller that handed us an [initialItem] starts resolved.
      */
-    private var docObserved: Boolean = initialItem != null
+    private val initialLoadState: DocLoadState = initialItem?.loadState() ?: DocLoadState.Loading
 
-    private val doc: StateFlow<DocListItem?> =
+    private val loadState: StateFlow<DocLoadState> =
         documents
             .observeDoc(docId)
-            .map { it.forEditor() }
-            .onEach { docObserved = true }
-            .stateIn(viewModelScope, WhileSubscribedTimeout, initialItem.forEditor())
+            .map { it.loadState() }
+            .stateIn(viewModelScope, WhileSubscribedTimeout, initialLoadState)
+
+    private val doc: Flow<DocListItem?> = loadState.map { it.item }.distinctUntilChanged()
 
     private val reviewMode: StateFlow<ReviewMode> =
         session.reviewConfig.reviewMode
@@ -283,28 +283,16 @@ class DocDetailViewModel private constructor(
     private val aiAvailable = MutableStateFlow(false)
 
     private val document: Flow<DocumentSection> =
-        combine(doc, reviewMode, fieldDefs, ocrText, ocrVersions) { item, mode, defs, text, versions ->
+        combine(loadState, reviewMode, fieldDefs, ocrText, ocrVersions) { state, mode, defs, text, versions ->
             DocumentSection(
-                loadState = loadStateOf(item),
-                reviewed = item?.effectiveReviewed(mode) == true,
+                loadState = state,
+                reviewed = state.item?.effectiveReviewed(mode) == true,
                 reviewMode = mode,
                 fieldDefs = defs,
                 ocrText = text,
                 ocrVersions = versions,
                 highlightTerms = highlightTerms,
             )
-        }
-
-    /**
-     * The row's load state from the latest [observeDoc] emission: a row present is [Present], a
-     * null after the first emission is [Missing], and a null before any emission stays [Loading]
-     * so the screen never flashes "unavailable" while the query is still in flight.
-     */
-    private fun loadStateOf(item: DocListItem?): DocLoadState =
-        when {
-            item != null -> DocLoadState.Present(item)
-            docObserved -> DocLoadState.Missing
-            else -> DocLoadState.Loading
         }
 
     private val vocabulary: Flow<VocabularyState> =
@@ -324,24 +312,22 @@ class DocDetailViewModel private constructor(
     val metadata: StateFlow<MetadataUiState> =
         combine(document, vocabulary, aiPanel, history) { doc, vocab, ai, history ->
             MetadataUiState(document = doc, vocabulary = vocab, ai = ai, history = history)
-        }.stateIn(viewModelScope, WhileSubscribedTimeout, seedState(initialItem))
+        }.stateIn(viewModelScope, WhileSubscribedTimeout, seedState())
 
     /**
      * What the panel shows before the first combined emission. [ReviewMode.DEFAULT] matches the
      * initial value of the review-mode flow, so the seeded reviewed badge does not flicker when
      * that emission arrives.
      */
-    private fun seedState(initial: DocListItem?): MetadataUiState {
-        val item = initial.forEditor()
-        return MetadataUiState(
+    private fun seedState(): MetadataUiState =
+        MetadataUiState(
             document =
                 DocumentSection(
-                    loadState = loadStateOf(item),
-                    reviewed = item?.effectiveReviewed(ReviewMode.DEFAULT) == true,
+                    loadState = initialLoadState,
+                    reviewed = initialLoadState.item?.effectiveReviewed(ReviewMode.DEFAULT) == true,
                     highlightTerms = highlightTerms,
                 ),
         )
-    }
 
     init {
         loadPageCount()
@@ -558,7 +544,10 @@ class DocDetailViewModel private constructor(
 }
 
 /** Missing files and bake predecessors still carry editable metadata; lifecycle tombstones do not. */
-private fun DocListItem?.forEditor(): DocListItem? = this?.takeUnless { it.doc.trashed || it.doc.deleted }
+private fun DocListItem?.loadState(): DocLoadState =
+    this?.takeUnless { it.doc.trashed || it.doc.deleted }?.let(DocLoadState::Present) ?: DocLoadState.Missing
+
+private val DocLoadState.item: DocListItem? get() = (this as? DocLoadState.Present)?.item
 
 private fun BakeFailure.text(): UiText =
     when (this) {
