@@ -22,6 +22,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.isActive
@@ -49,10 +50,10 @@ class LibrarySessionImpl internal constructor(
     internal val deviceId: String = graph.deviceId
     private val lifetime = graph.lifetime
     private val coordinator = graph.coordinator
-    private val scanReports = graph.scanReports
     private val ocrFacade = graph.ocr
     private val ocrPipeline = graph.ocrPipeline
     private val staleFiles = graph.staleFiles
+    private val otherRescans = graph.rescans
     private val queues = graph.work
 
     /** The drains' gate, opened here by the first rescan that succeeds ([SessionGraph.rescanned]). */
@@ -80,7 +81,7 @@ class LibrarySessionImpl internal constructor(
     override val maintenance: MaintenanceFacade = graph.maintenance
     override val aiEditQueue: AiEditQueueFacade = graph.edits.queue
 
-    /** The trash auto-purge, run after each watch-triggered rescan. */
+    /** The trash auto-purge, run after each [backgroundRescan]. */
     internal val trashPurge: TrashPurge = graph.trashPurge
 
     // The facet properties only narrow the type a consumer sees: the session is the ingest facet,
@@ -94,6 +95,7 @@ class LibrarySessionImpl internal constructor(
     override val aiChat: AiChat = aiFacade
     override val aiSuggest: AiSuggest = aiFacade
 
+    private val scanReports = MutableStateFlow<ScanReport?>(null)
     override val lastScanReport: Flow<ScanReport?> = scanReports.asStateFlow()
 
     override val scanProgress: Flow<IndexProgress?> = graph.indexer.scanState
@@ -103,17 +105,22 @@ class LibrarySessionImpl internal constructor(
     // Every facet write runs here rather than on the caller's coroutine; see SessionLifetime.owned.
     private suspend fun <T> owned(block: suspend () -> T): T = lifetime.owned(block)
 
-    override suspend fun rescan(): ScanReport =
-        owned {
-            val report = coordinator.rescan()
-            scanReports.value = report
-            report.retryAfterMillis?.let { scheduleSettleRescan(it) }
-            ocrFacade.reconcileAfterRescan()
-            // The index knows the library's documents and has their stored text: from here on a
-            // drain may take a document without a row for one that is gone, so the drains may start.
-            drainsReady.complete(Unit)
-            report
-        }
+    override suspend fun rescan(): ScanReport = owned { coordinator.rescan().also { afterRescan(it) } }
+
+    /**
+     * What follows every rescan that succeeded, this session's own and the one a relink or a bake
+     * runs alike ([SessionGraph.rescans]): its report is the last, a file it deferred as still being
+     * written gets a follow-up rescan, the documents it found without OCR are queued for it, and
+     * the drains may start.
+     */
+    private suspend fun afterRescan(report: ScanReport) {
+        scanReports.value = report
+        report.retryAfterMillis?.let { scheduleSettleRescan(it) }
+        ocrFacade.reconcileAfterRescan()
+        // The index knows the library's documents and has their stored text: from here on a drain
+        // may take a document without a row for one that is gone, so the drains may start.
+        drainsReady.complete(Unit)
+    }
 
     // The one pending follow-up rescan for files a scan deferred as still being written. A file
     // can finish without another watch event, and SAF libraries have no watcher at all.
@@ -128,7 +135,7 @@ class LibrarySessionImpl internal constructor(
                     delay(afterMillis + SETTLE_RESCAN_MARGIN_MS)
                     // Cleared first: the rescan below may schedule the next one.
                     settleRescanLock.withLock { settleRescan = null }
-                    log.runLogged("Follow-up rescan") { doWatchTriggeredRescan() }
+                    log.runLogged("Follow-up rescan") { backgroundRescan() }
                 }
         }
     }
@@ -193,6 +200,10 @@ class LibrarySessionImpl internal constructor(
         scope.launch { log.runLogged("Watching the OCR queue") { ocrFacade.watchQueue() } }
         // A file the OCR drain read no longer matches its hash: rescan once it has settled.
         scope.launch { staleFiles.consumeEach { scheduleSettleRescan(WriteSettle.QUIET_MILLIS) } }
+        // A relink or a bake rescans under the journal's lock itself: what follows is the same.
+        scope.launch {
+            otherRescans.consumeEach { report -> log.runLogged("Following up a rescan") { afterRescan(report) } }
+        }
 
         // Automatic AI enrichment and queued edit runs are NOT driven by an observer of their
         // queue tables. Such an observer cannot distinguish new work from a failed row being
@@ -225,7 +236,7 @@ class LibrarySessionImpl internal constructor(
 
         // Initial rescan. Ended either way, a session closed under it included, for awaitInitialRescan.
         scope
-            .launch { log.runLogged("Initial rescan") { doWatchTriggeredRescan() } }
+            .launch { log.runLogged("Initial rescan") { backgroundRescan() } }
             .invokeOnCompletion { initialRescanEnded.complete(Unit) }
 
         // Another device's rule list arrives as a journal setting; the rules table only caches it.
@@ -247,7 +258,7 @@ class LibrarySessionImpl internal constructor(
                 // An initial rescan that failed keeps every drain at the gate, and on desktop nothing
                 // else rescans until the library folder changes (Android rescans on every resume).
                 if (!drainsReady.isCompleted) {
-                    log.runLogged("Retrying the initial rescan") { doWatchTriggeredRescan() }
+                    log.runLogged("Retrying the initial rescan") { backgroundRescan() }
                 }
                 // OCR retries, enrichment rows and edit runs become due by the passage of time,
                 // which no Room flow can observe; this tick is what actually retries a backed-off
@@ -279,7 +290,7 @@ class LibrarySessionImpl internal constructor(
 
             WatchAction.Rescan -> {
                 // The rescan reconciles the journal first itself (JournalCoordinator.rescan).
-                log.runLogged("Watch-triggered rescan") { doWatchTriggeredRescan() }
+                log.runLogged("Watch-triggered rescan") { backgroundRescan() }
             }
         }
     }
@@ -289,7 +300,12 @@ class LibrarySessionImpl internal constructor(
         return drainsReady.isCompleted
     }
 
-    private suspend fun doWatchTriggeredRescan() {
+    /**
+     * A rescan the session runs itself: at start, for a change in the folder, after a file settled.
+     * Then every queue is kicked, as the rescan may have lifted a write block the AI drains wait out
+     * or settled a file an OCR run waited for, and the trash is purged.
+     */
+    private suspend fun backgroundRescan() {
         rescan()
         queues.kickAll()
         trashPurge.purgeExpired()

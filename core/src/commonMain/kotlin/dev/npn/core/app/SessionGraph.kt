@@ -24,7 +24,6 @@ import dev.npn.core.work.drainedQueue
 import dev.npn.core.xmp.BakeService
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
  * Every part of one open session, each built once, in dependency order, over the journal
@@ -157,6 +156,13 @@ internal class SessionGraph(
      */
     val staleFiles = Channel<Unit>(Channel.CONFLATED)
 
+    /**
+     * The report of a rescan a relink or a bake ran under the journal's lock, which the session then
+     * follows up as it does its own. Conflated, since the latest rescan saw the library last; the
+     * session consumes it once started.
+     */
+    val rescans = Channel<ScanReport>(Channel.CONFLATED)
+
     private val ocrEngines = OcrEngineSelector(local = deps.ocrEngine, ai = ai.ocrEngine, aiAuto = policy::autoOcr)
 
     /**
@@ -183,7 +189,14 @@ internal class SessionGraph(
         )
 
     /** Ends a bake in place, handing the document's text on through [ocrPipeline]. */
-    private val bakeRelink = BakeRelink(coordinator, ocrPipeline, deps.deviceDb.aiEnrichQueueDao(), log)
+    private val bakeRelink =
+        BakeRelink(
+            coordinator,
+            ocrPipeline,
+            deps.deviceDb.aiEnrichQueueDao(),
+            log,
+            rescanned = { rescans.trySend(it) },
+        )
 
     // Single shared gate so thumbnail + page rendering share one bounded concurrency budget and a
     // first-load burst (e.g. 200 PDFs) cannot flood the dispatchers.
@@ -257,8 +270,6 @@ internal class SessionGraph(
             clock = deps.clock,
         )
 
-    val scanReports = MutableStateFlow<ScanReport?>(null)
-
     val maintenance =
         MaintenanceFacadeImpl(
             lifetime = lifetime,
@@ -274,7 +285,7 @@ internal class SessionGraph(
             splitter = SplitService(deps.fs, deps.pdfEngine, imports, db.documentDao(), log),
             writer = writer,
             lifecycle = lifecycle,
-            scanReports = scanReports,
+            rescanned = { rescans.trySend(it) },
             log = log,
         )
 

@@ -3,6 +3,7 @@ package dev.npn.core.app
 import dev.npn.core.db.AiEnrichQueueDao
 import dev.npn.core.db.AiEnrichedEntity
 import dev.npn.core.index.JournalCoordinator
+import dev.npn.core.index.ScanReport
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.ocr.OcrPipeline
 import dev.npn.core.util.NpnLog
@@ -17,12 +18,16 @@ import dev.npn.core.util.runLogged
  * enriched again. Only a bake knows the pages are the same: a relink to other bytes
  * ([MaintenanceFacade.applyRelink]) hands on nothing. A step that fails is logged and the bake goes on;
  * the baked document then gets its text as a new one does.
+ *
+ * @param rescanned takes the report of the relink's rescan, once the text is indexed: the session
+ *  follows it up as its own.
  */
 internal class BakeRelink(
     private val coordinator: JournalCoordinator,
     private val ocr: OcrPipeline,
     private val enrichment: AiEnrichQueueDao,
     private val log: NpnLog,
+    private val rescanned: (ScanReport) -> Unit,
 ) {
     suspend fun relink(
         original: String,
@@ -33,7 +38,8 @@ internal class BakeRelink(
             enrichment.enrichedAt(original)?.let { enrichment.markEnriched(AiEnrichedEntity(baked, it)) }
         }
         // The baked bytes stand once the relink is published, even if the disposable index fails.
-        coordinator.commitAndRescan(listOf(PendingOp.relink(original, baked)))
+        val report = coordinator.commitAndRescan(listOf(PendingOp.relink(original, baked)))
         log.runLogged("Indexing the text of $baked") { ocr.reselect(baked) }
+        report?.let(rescanned)
     }
 }

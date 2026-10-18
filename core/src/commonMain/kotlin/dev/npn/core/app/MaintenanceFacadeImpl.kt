@@ -12,11 +12,11 @@ import dev.npn.core.model.FieldKeys
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.warn
-import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
  * [MaintenanceFacade]: duplicates, relinks and splitting, each run as work the session owns. A
- * relink rescans, so its report lands on [scanReports], the session's last scan report.
+ * relink rescans, and hands that rescan's report to the session ([rescanned]), which follows it up
+ * as its own.
  */
 internal class MaintenanceFacadeImpl(
     private val lifetime: SessionLifetime,
@@ -26,7 +26,7 @@ internal class MaintenanceFacadeImpl(
     private val splitter: SplitService,
     private val writer: MetadataWriterImpl,
     private val lifecycle: DocLifecycleImpl,
-    private val scanReports: MutableStateFlow<ScanReport?>,
+    private val rescanned: (ScanReport) -> Unit,
     private val log: NpnLog,
 ) : MaintenanceFacade {
     override suspend fun resolveDuplicate(
@@ -42,7 +42,7 @@ internal class MaintenanceFacadeImpl(
         // one superseded, which only a rescan projects; commitAndRescan runs both under the lock.
         // Its report is null when the relink stands but the rescan failed (logged); the last stays.
         val report = coordinator.commitAndRescan(listOf(PendingOp.relink(oldDocId, newDocId)))
-        if (report != null) scanReports.value = report
+        if (report != null) rescanned(report)
     }
 
     override suspend fun splitPdf(

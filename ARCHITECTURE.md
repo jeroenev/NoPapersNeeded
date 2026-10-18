@@ -265,8 +265,10 @@ live in `buildSrc`. Hot Reload via `mise hot`.
    existing installs keep serving rows built by the old fold. See the KDoc there.
    A rescan only hashes a PDF once its bytes have settled (`WriteSettle`): files
    written in place (`cp`, scanner apps) are deferred and picked up by a follow-up
-   rescan, and `OcrPipeline` re-checks the hash of the bytes it reads before
-   publishing a sidecar, so a partial file never gets a document identity. A read
+   rescan, whichever rescan deferred them (a relink or a bake hands the report of
+   the rescan it runs to the session, which follows it up as its own), and
+   `OcrPipeline` re-checks the hash of the bytes it reads before publishing a
+   sidecar, so a partial file never gets a document identity. A read
    that finds other bytes asks for that follow-up rescan and leaves its run queued,
    uncharged, until the file has settled; a second one in a row counts as a failure.
 4. **UI reads the cache**: viewmodels subscribe to Room DAO Flows (shared with
@@ -414,8 +416,11 @@ live in `buildSrc`. Hot Reload via `mise hot`.
   which could not tell new work from a failed row being rescheduled. The OCR queue
   is owned by `OcrFacadeImpl`, which kicks on its own enqueues and watches the table
   for rows other writers add (an import, an upgrade). Beyond that the session only
-  kicks every queue at start, to resume what a killed process left, and on its
-  15-minute tick, which is what serves a backoff that has fallen due. No drain
+  kicks every queue at start, to resume what a killed process left; after each
+  rescan it runs itself (at start, for a change in the folder, for a file that
+  settled), which may have lifted a write block the AI drains wait out or settled a
+  file an OCR run waited for; and on its 15-minute tick, which is what serves a
+  backoff that has fallen due. No drain
   starts before the session's first successful rescan (and its OCR reconcile): a
   drain drops this device's work for a document without a row, and until then the
   index may not know the library's documents (a rebuilt one has no rows at all).
