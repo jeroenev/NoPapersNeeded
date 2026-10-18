@@ -392,9 +392,10 @@ does not match `npn.version`, and a tagged commit CI has not passed on unless it
 `npn.version` line on top of a `main` commit CI passed on
 (`.github/scripts/check-release-commit.sh`, which counts runs with the same `ci-status.sh`). It then builds the signed APK, AppImage (with its
 `.zsync`), `.deb`, `.rpm`, `.flatpak`, Linux tarball, `.msi` and `.exe` into a draft release,
-adds `SHA256SUMS` and publishes it. If a build job fails the draft stays
-unpublished: fix the problem, delete the draft and the tag, and release the next patch
-version.
+adds `SHA256SUMS` and publishes it. If a job fails the draft stays unpublished. For a transient
+failure (a download, a runner), re-run the failed jobs: their uploads replace what an earlier
+attempt left on the draft, and the checksums are taken afresh. A failure that needs a code change:
+fix it, delete the draft and the tag, and release the next patch version.
 
 The APK is signed with the release key, read from the environment:
 `NPN_KEYSTORE_FILE`, `NPN_KEYSTORE_PASSWORD` and `NPN_KEY_ALIAS`. The workflow gets them
