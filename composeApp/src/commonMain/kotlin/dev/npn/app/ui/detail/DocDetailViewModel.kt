@@ -1,5 +1,6 @@
 package dev.npn.app.ui.detail
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.MessageSink
 import dev.npn.app.ui.common.MessagesViewModel
@@ -9,6 +10,9 @@ import dev.npn.app.ui.common.colorsByName
 import dev.npn.app.ui.common.newViewModelScope
 import dev.npn.app.ui.common.queryTerms
 import dev.npn.app.ui.common.reasonText
+import dev.npn.app.ui.common.restored
+import dev.npn.app.ui.common.saveUiState
+import dev.npn.app.ui.common.uiState
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.AiOcrOutcome
@@ -45,9 +49,11 @@ import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.builtins.serializer
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_rerun_ocr_failed
 import no_papers_needed.composeapp.generated.resources.detail_add_field_failed
@@ -143,6 +149,7 @@ class DocDetailViewModel private constructor(
     initialItem: DocListItem?,
     scope: CoroutineScope,
     sink: MessageSink,
+    private val saved: SavedStateHandle,
     /** Taken around every metadata write made from here, the AI suggestions' included. */
     private val metadataMutex: Mutex,
     private val aiSuggestions: DocAiSuggestions = DocAiSuggestions(docId, session, scope, sink, metadataMutex),
@@ -163,7 +170,13 @@ class DocDetailViewModel private constructor(
          * every switch. Null when the caller only knows the id.
          */
         initialItem: DocListItem? = null,
-    ) : this(docId, session, settings, searchQuery, initialItem, newViewModelScope(), MessageSink(), Mutex())
+        /**
+         * What a restored process gets back: the page and the tab the document was shown at. The
+         * document's view saves it ([rememberDocumentSavedState]), as no back-stack entry holds this
+         * viewmodel; a new one shows the document afresh.
+         */
+        saved: SavedStateHandle = SavedStateHandle(),
+    ) : this(docId, session, settings, searchQuery, initialItem, newViewModelScope(), MessageSink(), saved, Mutex())
 
     private val documents = session.documents
     private val meta = session.meta
@@ -174,8 +187,16 @@ class DocDetailViewModel private constructor(
     private val maintenance = session.maintenance
     private val fieldRegistry = session.fieldRegistry
 
-    private val _ui = MutableStateFlow(DetailUiState())
+    private val _ui = MutableStateFlow(DetailUiState(pageIndex = saved.restored(PAGE_KEY, Int.serializer(), 0)))
     val ui: StateFlow<DetailUiState> = _ui.asStateFlow()
+
+    /** What the document's view saves of this viewmodel for a restored process. */
+    internal val savedState: SavedStateHandle get() = saved
+
+    /** The metadata panel's tab the user picked; null until they pick one. */
+    private val tab = saved.uiState<PanelTab?>(TAB_KEY, null)
+
+    override fun showTab(tab: PanelTab) = this.tab.set(tab)
 
     /**
      * Search terms from the library query that opened this document, used to highlight matches
@@ -304,8 +325,8 @@ class DocDetailViewModel private constructor(
      * test.
      */
     val metadata: StateFlow<MetadataUiState> =
-        combine(document, vocabulary, aiPanel, history) { doc, vocab, ai, history ->
-            MetadataUiState(document = doc, vocabulary = vocab, ai = ai, history = history)
+        combine(document, vocabulary, aiPanel, history, tab.flow) { doc, vocab, ai, history, tab ->
+            MetadataUiState(document = doc, vocabulary = vocab, ai = ai, history = history, tab = tab)
         }.stateIn(viewModelScope, WhileSubscribedTimeout, seedState())
 
     /**
@@ -321,6 +342,7 @@ class DocDetailViewModel private constructor(
                     highlightTerms = highlightTerms,
                 ),
             ai = AiPanelState(available = aiAvailable.value),
+            tab = tab.value,
         )
 
     init {
@@ -359,9 +381,12 @@ class DocDetailViewModel private constructor(
     fun retryPageCount() = loadPageCount()
 
     fun goToPage(index: Int) {
-        _ui.update { cur ->
-            if (index in 0 until cur.pageCount.count.coerceAtLeast(1)) cur.copy(pageIndex = index) else cur
-        }
+        val page =
+            _ui
+                .updateAndGet { cur ->
+                    if (index in 0 until cur.pageCount.count.coerceAtLeast(1)) cur.copy(pageIndex = index) else cur
+                }.pageIndex
+        saved.saveUiState(PAGE_KEY, Int.serializer(), page)
     }
 
     /**
@@ -535,6 +560,11 @@ class DocDetailViewModel private constructor(
         pageIndex: Int,
         maxDim: Int,
     ): ByteArray? = content.renderPage(docId, pageIndex, maxDim)
+
+    private companion object {
+        const val PAGE_KEY = "document.page"
+        const val TAB_KEY = "document.tab"
+    }
 }
 
 /** Missing files and bake predecessors still carry editable metadata; lifecycle tombstones do not. */

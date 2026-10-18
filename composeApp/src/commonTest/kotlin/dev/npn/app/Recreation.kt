@@ -7,6 +7,11 @@ import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.viewModelFactory
 import dev.npn.app.ui.ai.AiChatUiState
+import dev.npn.app.ui.detail.AiMetadataState
+import dev.npn.app.ui.detail.AiTagState
+import dev.npn.app.ui.detail.DetailUiState
+import dev.npn.app.ui.detail.HistoryUiState
+import dev.npn.app.ui.detail.MetadataUiState
 import dev.npn.app.ui.library.LibraryContentState
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.Flow
@@ -108,6 +113,20 @@ internal object Transient {
     /** A rescan under way; and the dismissed scan report, which goes with the report ingest kept in memory. */
     fun library(state: LibraryContentState): LibraryContentState =
         state.copy(ui = state.ui.copy(refreshing = false, dismissedScanReport = null))
+
+    /** A bake, a re-index or a split under way. */
+    fun document(state: DetailUiState): DetailUiState =
+        state.copy(baking = false, reindexing = false, splitting = false)
+
+    /**
+     * The history, read on demand once its tab shows, which it does again in a restored process; and
+     * the AI suggestions shown, which lived only in memory (not even what they cost survives them).
+     */
+    fun document(state: MetadataUiState): MetadataUiState =
+        state.copy(
+            history = HistoryUiState.NotLoaded,
+            ai = state.ai.copy(tags = AiTagState(), metadata = AiMetadataState()),
+        )
 
     /**
      * An answer streaming in; and a conversation nobody asked anything in but the open one, which the

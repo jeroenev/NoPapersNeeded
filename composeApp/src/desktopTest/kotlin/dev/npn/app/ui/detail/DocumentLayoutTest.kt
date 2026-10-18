@@ -4,6 +4,10 @@ package dev.npn.app.ui.detail
 
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
@@ -127,6 +131,16 @@ class DocumentLayoutTest : EnglishLocaleTest() {
         store.field("invoice", FieldKeys.TITLE, "Electricity invoice 2026", persisted = "Electricity invoice")
         return hostedScene(width, height, LocalDocumentDrafts provides store, density = Density(1f, fontScale)) {
             // The scene is the window: wide or compact from its width, as the app root decides.
+            // The panel's tab, kept as the document's viewmodel keeps it.
+            var shownTab by remember { mutableStateOf<PanelTab?>(null) }
+            val writes =
+                remember {
+                    object : DocumentWrites by NoWrites {
+                        override fun showTab(tab: PanelTab) {
+                            shownTab = tab
+                        }
+                    }
+                }
             ProvideWindowWidthClass {
                 NpnTheme(darkTheme = false) {
                     Surface {
@@ -153,8 +167,9 @@ class DocumentLayoutTest : EnglishLocaleTest() {
                                                 },
                                         ),
                                     ai = ai,
+                                    tab = shownTab,
                                 ),
-                            writes = NoWrites,
+                            writes = writes,
                             preview = { Text("PDF preview", modifier = it) },
                             onReviewNext = {},
                             hasNext = true,
@@ -221,4 +236,6 @@ internal object NoWrites : DocumentWrites {
     override fun dismissAiMetadata(key: String) = Unit
 
     override fun loadHistory(refresh: Boolean) = Unit
+
+    override fun showTab(tab: PanelTab) = Unit
 }

@@ -14,6 +14,7 @@ import dev.npn.app.platform.ocrHasLanguageSetting
 import dev.npn.app.platform.supportsSafStorage
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
+import kotlinx.serialization.Serializable
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_settings_about
 import no_papers_needed.composeapp.generated.resources.common_settings_about_help
@@ -73,6 +74,7 @@ import org.jetbrains.compose.resources.stringResource
  * [dev.npn.app.ui.nav.Route.Settings], so renaming an entry breaks saved back stacks and deep
  * links; add a new one instead.
  */
+@Serializable
 enum class SettingsCategoryId {
     LIBRARY,
     IMPORT,

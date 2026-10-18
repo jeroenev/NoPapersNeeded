@@ -3,6 +3,7 @@ package dev.npn.app
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.detail.DocDetailViewModel
 import dev.npn.app.ui.detail.HistoryUiState
+import dev.npn.app.ui.detail.PanelTab
 import dev.npn.core.ai.AiEditSuggestion
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.FieldSuggestion
@@ -28,6 +29,7 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.maps.shouldContainExactly
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -44,6 +46,28 @@ import kotlin.test.Test
 
 class DocDetailViewModelTest : MainDispatcherTest() {
     private fun tagSuggestions(vararg tags: String): List<TagSuggestion> = tags.map { TagSuggestion(it, isNew = false) }
+
+    /** A restored process shows the document at the page and on the panel tab the user left it at. */
+    @Test
+    fun aRestoredProcessKeepsThePageAndThePanelTab() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply {
+                    content.pageCountValue = 3
+                    documents.singleDoc.value = listItem("doc-1", tags = listOf("invoice"))
+                }
+            val screen = recreatable { DocDetailViewModel("doc-1", session, aiConfiguredSettings(), saved = it) }
+            collecting(screen.vm.metadata)
+            advanceUntilIdle()
+            screen.vm.goToPage(2)
+            screen.vm.showTab(PanelTab.TEXT)
+
+            val restored =
+                screen.recreate(this, { combine(it.ui, it.metadata, ::Pair) }) { (ui, metadata) ->
+                    Transient.document(ui) to Transient.document(metadata)
+                }
+            restored.ui.value.pageIndex shouldBe 2
+        }
 
     @Test
     fun goToPageIgnoresOutOfRange() =
