@@ -12,10 +12,10 @@ import dev.npn.core.fs.TrashOps
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
 import dev.npn.core.index.Compaction
 import dev.npn.core.index.DeviceIdentity
+import dev.npn.core.index.DuplicateResolver
 import dev.npn.core.index.ImportService
 import dev.npn.core.index.Indexer
 import dev.npn.core.index.JournalCoordinator
-import dev.npn.core.index.MaintenanceService
 import dev.npn.core.index.MetadataAccumulator
 import dev.npn.core.index.ScanReport
 import dev.npn.core.index.SnapshotSupport
@@ -278,8 +278,8 @@ internal class SessionGraph(
         MaintenanceFacadeImpl(
             lifetime = lifetime,
             db = db,
-            maintenance =
-                MaintenanceService(
+            duplicates =
+                DuplicateResolver(
                     fs = deps.fs,
                     documentDao = db.documentDao(),
                     duplicateDao = db.duplicateDao(),

@@ -63,8 +63,8 @@ class IndexRig private constructor(
             serialize = unserialized,
         )
 
-    val maintenance =
-        MaintenanceService(fs, db.documentDao(), db.duplicateDao())
+    val duplicates =
+        DuplicateResolver(fs, db.documentDao(), db.duplicateDao(), serialize = { it() })
 
     /**
      * Reconcile metadata through the persisted accumulator, then rescan the file tree. Mirrors

@@ -8,9 +8,9 @@ import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 
 /**
- * Maintenance operations for external duplicates.
+ * Resolves external duplicates: removes an extra copy of a document's bytes beside its own file.
  */
-class MaintenanceService(
+class DuplicateResolver(
     private val fs: LibraryFileSystem,
     private val documentDao: DocumentDao,
     private val duplicateDao: DuplicateDao,
@@ -18,7 +18,7 @@ class MaintenanceService(
      * Runs a removal under the journal coordinator's lock, as imports run, so a rescan cannot list
      * the file, or move a document onto it, while it is checked and deleted.
      */
-    private val serialize: suspend (suspend () -> Unit) -> Unit = { it() },
+    private val serialize: suspend (suspend () -> Unit) -> Unit,
 ) {
     /**
      * Resolve an external duplicate recorded at [extraRelPath] for [docId]: delete the extra copy

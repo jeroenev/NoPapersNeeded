@@ -32,7 +32,7 @@ class DuplicatesTest {
             val doc = recordDuplicate("a.pdf", "inbox/a.pdf")
             rig.writePdf("inbox/a.pdf", "echo, another document")
 
-            rig.maintenance.resolveDuplicate(doc, "inbox/a.pdf")
+            rig.duplicates.resolveDuplicate(doc, "inbox/a.pdf")
 
             rig.exists("inbox/a.pdf").shouldBeTrue()
             rig.db
@@ -93,7 +93,7 @@ class DuplicatesTest {
             val doc = recordDuplicate("a.pdf", "inbox/a.pdf")
             rig.deleteFile("a.pdf")
 
-            rig.maintenance.resolveDuplicate(doc, "inbox/a.pdf")
+            rig.duplicates.resolveDuplicate(doc, "inbox/a.pdf")
 
             rig.exists("inbox/a.pdf").shouldBeTrue()
             rig.rescan()
@@ -113,7 +113,7 @@ class DuplicatesTest {
         runTest {
             val doc = recordDuplicate("a.pdf", "inbox/a.pdf")
 
-            rig.maintenance.resolveDuplicate(doc, "inbox/a.pdf")
+            rig.duplicates.resolveDuplicate(doc, "inbox/a.pdf")
 
             rig.exists("inbox/a.pdf").shouldBeFalse()
             rig.exists("a.pdf").shouldBeTrue()
@@ -133,14 +133,14 @@ class DuplicatesTest {
             val doc = recordDuplicate("a.pdf", "inbox/a.pdf")
             val watched = WatchedFileSystem(rig.fs).also { it.db = rig.db }
             val hashedUnderLock = ArrayList<String>()
-            val maintenance =
-                MaintenanceService(watched, rig.db.documentDao(), rig.db.duplicateDao()) { step ->
+            val resolver =
+                DuplicateResolver(watched, rig.db.documentDao(), rig.db.duplicateDao()) { step ->
                     val before = watched.calls("sha256").size
                     step()
                     hashedUnderLock += watched.calls("sha256").drop(before)
                 }
 
-            maintenance.resolveDuplicate(doc, "inbox/a.pdf")
+            resolver.resolveDuplicate(doc, "inbox/a.pdf")
 
             rig.exists("inbox/a.pdf").shouldBeFalse()
             rig.exists("a.pdf").shouldBeTrue()
@@ -154,13 +154,13 @@ class DuplicatesTest {
         runTest {
             val doc = recordDuplicate("a.pdf", "inbox/a.pdf")
             val edited = "alpha, edited since".encodeToByteArray()
-            val maintenance =
-                MaintenanceService(rig.fs, rig.db.documentDao(), rig.db.duplicateDao()) { step ->
+            val resolver =
+                DuplicateResolver(rig.fs, rig.db.documentDao(), rig.db.duplicateDao()) { step ->
                     rig.writePdf("inbox/a.pdf", edited.decodeToString())
                     step()
                 }
 
-            maintenance.resolveDuplicate(doc, "inbox/a.pdf")
+            resolver.resolveDuplicate(doc, "inbox/a.pdf")
 
             rig.fs.sha256("inbox/a.pdf") shouldBe sha256Bytes(edited)
         }

@@ -1,9 +1,9 @@
 package dev.npn.core.app
 
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.index.DuplicateResolver
 import dev.npn.core.index.ImportResult
 import dev.npn.core.index.JournalCoordinator
-import dev.npn.core.index.MaintenanceService
 import dev.npn.core.index.ScanReport
 import dev.npn.core.index.SplitFailure
 import dev.npn.core.index.SplitService
@@ -21,7 +21,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 internal class MaintenanceFacadeImpl(
     private val lifetime: SessionLifetime,
     private val db: NpnDatabase,
-    private val maintenance: MaintenanceService,
+    private val duplicates: DuplicateResolver,
     private val coordinator: JournalCoordinator,
     private val splitter: SplitService,
     private val writer: MetadataWriterImpl,
@@ -32,7 +32,7 @@ internal class MaintenanceFacadeImpl(
     override suspend fun resolveDuplicate(
         docId: String,
         extraRelPath: String,
-    ) = lifetime.owned { maintenance.resolveDuplicate(docId, extraRelPath) }
+    ) = lifetime.owned { duplicates.resolveDuplicate(docId, extraRelPath) }
 
     override suspend fun applyRelink(
         oldDocId: String,
