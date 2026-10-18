@@ -2,6 +2,7 @@ package dev.npn.app.ui.library
 
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.platform.ScanResult
+import dev.npn.app.ui.common.BulkFailure
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiMessage
 import dev.npn.app.ui.common.UiText
@@ -33,7 +34,6 @@ import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.settings.SettingsRepository
 import dev.npn.core.settings.aiConfigured
-import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
@@ -58,17 +58,18 @@ import no_papers_needed.composeapp.generated.resources.common_scan_already_in_li
 import no_papers_needed.composeapp.generated.resources.common_scan_capture_failed
 import no_papers_needed.composeapp.generated.resources.common_scan_import_failed
 import no_papers_needed.composeapp.generated.resources.common_scan_imported
-import no_papers_needed.composeapp.generated.resources.library_add_tag_failed
+import no_papers_needed.composeapp.generated.resources.detail_add_tag_failed
+import no_papers_needed.composeapp.generated.resources.detail_remove_tag_failed
+import no_papers_needed.composeapp.generated.resources.detail_trash_failed
 import no_papers_needed.composeapp.generated.resources.library_delete_view_failed
 import no_papers_needed.composeapp.generated.resources.library_import_failed
 import no_papers_needed.composeapp.generated.resources.library_moved_to_trash
 import no_papers_needed.composeapp.generated.resources.library_refresh_failed
-import no_papers_needed.composeapp.generated.resources.library_remove_tag_failed
 import no_papers_needed.composeapp.generated.resources.library_review_failed
 import no_papers_needed.composeapp.generated.resources.library_save_view_failed
 import no_papers_needed.composeapp.generated.resources.library_trash_failed
 import no_papers_needed.composeapp.generated.resources.library_undo
-import org.jetbrains.compose.resources.PluralStringResource
+import org.jetbrains.compose.resources.StringResource
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -173,6 +174,7 @@ class LibraryViewModel(
     private val docLifecycle = session.docLifecycle
     private val ingest = session.ingest
     private val reviewConfig = session.reviewConfig
+    override val log = session.log
 
     private val _ui = MutableStateFlow(LibraryUiState())
     val ui: StateFlow<LibraryUiState> = _ui.asStateFlow()
@@ -438,9 +440,9 @@ class LibraryViewModel(
 
     // Tag/reviewed writes are a single batched write call. Trash has its own per-document path
     // below because successful moves must be retained for Undo when another move fails.
-    fun bulkAddTag(tag: String) = runOnSelection(Res.plurals.library_add_tag_failed) { meta.addTag(it, tag) }
+    fun bulkAddTag(tag: String) = runOnSelection(Res.string.detail_add_tag_failed) { meta.addTag(it, tag) }
 
-    fun bulkRemoveTag(tag: String) = runOnSelection(Res.plurals.library_remove_tag_failed) { meta.removeTag(it, tag) }
+    fun bulkRemoveTag(tag: String) = runOnSelection(Res.string.detail_remove_tag_failed) { meta.removeTag(it, tag) }
 
     /**
      * Tag names carried by at least one of the current selection, sorted. The remove-tag picker
@@ -460,7 +462,7 @@ class LibraryViewModel(
     }
 
     override fun bulkSetReviewed(reviewed: Boolean) =
-        runOnSelection(Res.plurals.library_review_failed) {
+        runOnSelection(Res.string.library_review_failed) {
             meta.setReviewed(it, reviewed)
         }
 
@@ -479,13 +481,9 @@ class LibraryViewModel(
         if (ids.isEmpty() || trashing?.isActive == true) return
         trashing =
             viewModelScope.launch {
-                val outcomes = ids.associateWith { runCatchingCancellable { docLifecycle.trashDoc(it) } }
-                val trashed = outcomes.values.mapNotNull { it.getOrNull() }
-                val failed = outcomes.filterValues { it.isFailure }.keys
+                val trashed = mutableListOf<TrashReceipt>()
+                val failed = forEachReporting(ids, TrashFailed) { id -> docLifecycle.trashDoc(id)?.let(trashed::add) }
                 deselect(ids - failed)
-                if (failed.isNotEmpty()) {
-                    message(uiText(Res.plurals.library_trash_failed, ids.size, failed.size, ids.size))
-                }
                 if (trashed.isNotEmpty()) {
                     message(
                         uiText(Res.plurals.library_moved_to_trash, trashed.size, trashed.size),
@@ -502,9 +500,8 @@ class LibraryViewModel(
     fun undoTrash(trashes: List<TrashReceipt>) {
         if (trashes.isEmpty()) return
         viewModelScope.launch {
-            val failed = runCatchingCancellable { docLifecycle.undoTrash(trashes) }.getOrElse { trashes.size }
-            if (failed > 0) {
-                message(uiText(Res.plurals.common_restore_documents_failed, trashes.size, failed, trashes.size))
+            countReporting(trashes.size, Res.plurals.common_restore_documents_failed) {
+                docLifecycle.undoTrash(trashes)
             }
         }
     }
@@ -512,22 +509,18 @@ class LibraryViewModel(
     /**
      * Run a bulk op over the current selection.
      *
-     * [block] receives all selected ids as one batched call. On failure, surface [failed] for the
-     * selection's size and leave the selection as it is, so the user can retry. On success the
-     * documents it covered leave the selection.
+     * [block] receives all selected ids as one batched call, a single write that lands or fails as a
+     * whole. On failure, say why with [failed] and leave the selection as it is, so the user can
+     * retry. On success the documents it covered leave the selection.
      */
     private fun runOnSelection(
-        failed: PluralStringResource,
+        failed: StringResource,
         block: suspend (List<String>) -> Unit,
     ) {
         val ids = _ui.value.selected.toList()
         if (ids.isEmpty()) return
         viewModelScope.launch {
-            if (runCatchingCancellable { block(ids) }.isSuccess) {
-                deselect(ids)
-            } else {
-                message(uiText(failed, ids.size, ids.size))
-            }
+            if (reporting(failed) { block(ids) }) deselect(ids)
         }
     }
 
@@ -610,6 +603,7 @@ class LibraryViewModel(
         )
 
     private companion object {
+        val TrashFailed = BulkFailure(Res.string.detail_trash_failed, Res.plurals.library_trash_failed)
         const val QUERY_DEBOUNCE_MS = 300L
         const val SUGGESTION_DEBOUNCE_MS = 100L
         const val SUGGESTION_LIMIT = 8

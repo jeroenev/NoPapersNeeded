@@ -14,8 +14,10 @@ import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_tags_color_some_failed
 import no_papers_needed.composeapp.generated.resources.common_tags_delete_failed
 import no_papers_needed.composeapp.generated.resources.common_tags_delete_some_failed
+import no_papers_needed.composeapp.generated.resources.common_tags_merge_failed
 import no_papers_needed.composeapp.generated.resources.common_tags_merge_some_failed
 import no_papers_needed.composeapp.generated.resources.common_tags_rename_failed
+import no_papers_needed.composeapp.generated.resources.common_tags_style_failed
 import kotlin.test.Test
 
 class TagManagementViewModelTest : MainDispatcherTest() {
@@ -118,8 +120,9 @@ class TagManagementViewModelTest : MainDispatcherTest() {
             session.tagAdmin.tagStyles shouldContainExactly listOf(Triple("finance", "#abc", null))
         }
 
+    /** One failed tag among several is explained; the others still go through. */
     @Test
-    fun bulkTagActionsContinuePastAFailedTagAndCountIt() =
+    fun bulkTagActionsContinuePastAFailedTagAndSayWhy() =
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { tagAdmin.failTags = setOf("invoices") }
             val model = vm(session)
@@ -134,9 +137,30 @@ class TagManagementViewModelTest : MainDispatcherTest() {
             session.tagAdmin.tagStyles shouldContainExactly listOf(Triple("travel", "#abc", null))
             messages shouldContainExactly
                 listOf(
-                    uiText(Res.plurals.common_tags_delete_some_failed, 3, 1, 3),
-                    uiText(Res.plurals.common_tags_merge_some_failed, 2, 1, 2),
-                    uiText(Res.plurals.common_tags_color_some_failed, 2, 1, 2),
+                    failure(Res.string.common_tags_delete_failed, "cannot write tag invoices"),
+                    failure(Res.string.common_tags_merge_failed, "cannot write tag invoices"),
+                    failure(Res.string.common_tags_style_failed, "cannot write tag invoices"),
+                )
+        }
+
+    /** Several failed tags are counted, "X of Y". */
+    @Test
+    fun bulkTagActionsCountSeveralFailures() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession().apply { tagAdmin.failTags = setOf("invoices", "travel") }
+            val model = vm(session)
+            val messages = collecting(model.messages.map { it.text })
+            advanceUntilIdle()
+            model.delete(listOf("finance", "invoices", "travel"))
+            model.merge(listOf("finance", "invoices", "travel"), into = "finance")
+            model.setStyle(listOf("invoices", "travel"), "#abc")
+            advanceUntilIdle()
+            session.tagAdmin.deletedTags shouldContainExactly listOf("finance")
+            messages shouldContainExactly
+                listOf(
+                    uiText(Res.plurals.common_tags_delete_some_failed, 3, 2, 3),
+                    uiText(Res.plurals.common_tags_merge_some_failed, 2, 2, 2),
+                    uiText(Res.plurals.common_tags_color_some_failed, 2, 2, 2),
                 )
         }
 

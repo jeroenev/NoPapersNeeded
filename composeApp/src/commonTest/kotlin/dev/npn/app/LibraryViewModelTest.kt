@@ -23,7 +23,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_scan_capture_failed
-import no_papers_needed.composeapp.generated.resources.library_add_tag_failed
+import no_papers_needed.composeapp.generated.resources.detail_add_tag_failed
 import no_papers_needed.composeapp.generated.resources.library_refresh_failed
 import kotlin.test.Test
 
@@ -199,7 +199,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
             runCurrent()
             model.bulkAddTag("finance")
             advanceUntilIdle()
-            messages shouldContainExactly listOf(uiText(Res.plurals.library_add_tag_failed, 2, 2))
+            messages shouldContainExactly listOf(failure(Res.string.detail_add_tag_failed, "write failed"))
             // Selection preserved so the user can retry.
             model.ui.value.selected shouldBe setOf("d1", "d2")
             model.ui.value.selectionMode shouldBe true

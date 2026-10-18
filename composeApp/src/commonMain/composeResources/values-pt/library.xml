@@ -145,18 +145,7 @@
     </plurals>
     <string name="library_import_failed">Não foi possível importar os arquivos: %1$s</string>
     <string name="library_drop_needs_library">Abra uma biblioteca primeiro e depois solte os arquivos novamente.</string>
-    <plurals name="library_add_tag_failed">
-        <item quantity="one">Não foi possível adicionar a etiqueta a %1$d documento</item>
-        <item quantity="other">Não foi possível adicionar a etiqueta a %1$d documentos</item>
-    </plurals>
-    <plurals name="library_remove_tag_failed">
-        <item quantity="one">Não foi possível remover a etiqueta de %1$d documento</item>
-        <item quantity="other">Não foi possível remover a etiqueta de %1$d documentos</item>
-    </plurals>
-    <plurals name="library_review_failed">
-        <item quantity="one">Não foi possível alterar o status de revisão de %1$d documento</item>
-        <item quantity="other">Não foi possível alterar o status de revisão de %1$d documentos</item>
-    </plurals>
+    <string name="library_review_failed">Não foi possível alterar o status de revisão: %1$s</string>
     <plurals name="library_trash_failed">
         <item quantity="one">Não foi possível mover %1$d de %2$d documento para a lixeira</item>
         <item quantity="other">Não foi possível mover %1$d de %2$d documentos para a lixeira</item>

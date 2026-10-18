@@ -9,7 +9,6 @@ import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.PermanentDeleteOutcome
 import dev.npn.core.index.RelinkCandidate
-import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
@@ -75,6 +74,7 @@ class TrashViewModel(
     TrashWrites {
     private val docLifecycle = session.docLifecycle
     private val maintenance = session.maintenance
+    override val log = session.log
 
     /** Null until the first load, so the screen does not flash its empty states before it. */
     val state: StateFlow<TrashUiState?> =
@@ -121,8 +121,8 @@ class TrashViewModel(
         }
 
     /**
-     * Run [op] over every trashed document, one bulk call that lists the trash once and returns how
-     * many documents failed; a throw from it counts every one as failed.
+     * Run [op] over every trashed document: one bulk call that lists the trash once and returns how
+     * many documents failed, reported as [countReporting] does.
      */
     private fun runBulk(
         partlyFailed: PluralStringResource,
@@ -134,12 +134,7 @@ class TrashViewModel(
                 .orEmpty()
                 .map { it.doc.docId }
         if (ids.isEmpty()) return
-        viewModelScope.launch {
-            val failed = runCatchingCancellable { op(ids) }.getOrElse { ids.size }
-            if (failed > 0) {
-                message(uiText(partlyFailed, ids.size, failed, ids.size))
-            }
-        }
+        viewModelScope.launch { countReporting(ids.size, partlyFailed) { op(ids) } }
     }
 
     override fun resolveDuplicate(

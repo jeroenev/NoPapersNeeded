@@ -145,18 +145,7 @@
     </plurals>
     <string name="library_import_failed">De bestanden konden niet worden geïmporteerd: %1$s</string>
     <string name="library_drop_needs_library">Open eerst een bibliotheek en sleep de bestanden daarna opnieuw hierheen.</string>
-    <plurals name="library_add_tag_failed">
-        <item quantity="one">De tag kon niet aan %1$d document worden toegevoegd</item>
-        <item quantity="other">De tag kon niet aan %1$d documenten worden toegevoegd</item>
-    </plurals>
-    <plurals name="library_remove_tag_failed">
-        <item quantity="one">De tag kon niet van %1$d document worden verwijderd</item>
-        <item quantity="other">De tag kon niet van %1$d documenten worden verwijderd</item>
-    </plurals>
-    <plurals name="library_review_failed">
-        <item quantity="one">De beoordelingsstatus van %1$d document kon niet worden gewijzigd</item>
-        <item quantity="other">De beoordelingsstatus van %1$d documenten kon niet worden gewijzigd</item>
-    </plurals>
+    <string name="library_review_failed">De beoordelingsstatus kon niet worden gewijzigd: %1$s</string>
     <plurals name="library_trash_failed">
         <item quantity="one">Kon %1$d van %2$d document niet naar de prullenbak verplaatsen</item>
         <item quantity="other">Kon %1$d van de %2$d documenten niet naar de prullenbak verplaatsen</item>

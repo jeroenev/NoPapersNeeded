@@ -12,6 +12,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_restore_documents_failed
+import no_papers_needed.composeapp.generated.resources.detail_trash_failed
 import no_papers_needed.composeapp.generated.resources.library_moved_to_trash
 import no_papers_needed.composeapp.generated.resources.library_trash_failed
 import no_papers_needed.composeapp.generated.resources.library_undo
@@ -221,6 +222,28 @@ class LibraryTrashTest : MainDispatcherTest() {
             model.ui.value.selectionMode shouldBe true
         }
 
+    /** Several failures are counted rather than each explained. */
+    @Test
+    fun bulkTrashCountsSeveralFailures() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession().apply { docLifecycle.failTrashDocIds = setOf("d1", "d2") }
+            val model = vm(session = session)
+            val messages = collecting(model.messages.map { it.text })
+            model.startSelection("d1")
+            model.toggleSelection("d2")
+            model.toggleSelection("d3")
+            runCurrent()
+            model.bulkTrash()
+            advanceUntilIdle()
+
+            messages shouldContainExactly
+                listOf(
+                    uiText(Res.plurals.library_trash_failed, 3, 2, 3),
+                    uiText(Res.plurals.library_moved_to_trash, 1, 1),
+                )
+            model.ui.value.selected shouldBe setOf("d1", "d2")
+        }
+
     @Test
     fun bulkTrashNoSuccessOffersNoUndo() =
         runTest(dispatcher) {
@@ -295,10 +318,10 @@ class LibraryTrashTest : MainDispatcherTest() {
             runCurrent()
             model.bulkTrash()
             advanceUntilIdle()
-            // Both messages show, in order: the failure, then the Undo for what did move.
+            // Both messages show, in order: why the one failed, then the Undo for what did move.
             messages shouldContainExactly
                 listOf(
-                    uiText(Res.plurals.library_trash_failed, 3, 1, 3),
+                    failure(Res.string.detail_trash_failed, "trash failed for d2"),
                     uiText(Res.plurals.library_moved_to_trash, 2, 2),
                 )
             // d1 and d3 succeeded; only d2 kept selected for retry.

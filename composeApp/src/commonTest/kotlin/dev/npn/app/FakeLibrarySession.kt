@@ -7,6 +7,7 @@ import dev.npn.core.testing.FakeDocumentRepository
 import dev.npn.core.testing.FakeFieldRegistry
 import dev.npn.core.testing.FakeMetadataWriter
 import dev.npn.core.testing.FakeTagRepository
+import dev.npn.core.util.NpnLog
 
 /**
  * The per-facet fakes composed into a session, mirroring how [dev.npn.core.app.LibrarySessionImpl]
@@ -35,6 +36,7 @@ class FakeLibrarySession : LibrarySession {
     override val maintenance = FakeMaintenanceFacade()
     override val work = FakeWorkFacade()
     override val aiEditQueue = FakeAiEditQueue()
+    override val log: NpnLog = NpnLog.None
 
     override fun start() = Unit
 

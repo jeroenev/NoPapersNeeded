@@ -18,6 +18,7 @@ import dev.npn.core.index.ScanReport
 import dev.npn.core.index.SupersededImportException
 import dev.npn.core.index.WriteSettle
 import dev.npn.core.journal.JournalOp
+import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
 import dev.npn.core.util.warn
@@ -64,7 +65,7 @@ class LibrarySessionImpl private constructor(
 ) : LibrarySession,
     IngestFacade {
     private val fs get() = deps.fs
-    private val log get() = deps.log
+    override val log: NpnLog get() = deps.log
     private val importService = library.imports
     private val writer = library.ownedWriter
 

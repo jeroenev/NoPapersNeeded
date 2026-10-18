@@ -3,6 +3,7 @@ package dev.npn.core.app
 import dev.npn.core.ai.AiChat
 import dev.npn.core.ai.AiSuggest
 import dev.npn.core.app.aiedit.AiEditQueueFacade
+import dev.npn.core.util.NpnLog
 
 /**
  * Everything scoped to one opened library folder: a pure aggregate of narrow facets plus
@@ -29,6 +30,9 @@ interface LibrarySession {
     val maintenance: MaintenanceFacade
     val work: WorkFacade
     val aiEditQueue: AiEditQueueFacade
+
+    /** Where the session's failures go, for a caller reporting one of its own that nobody awaits. */
+    val log: NpnLog
 
     /**
      * Start folder watching, the queue drains and periodic reconciliation, all on the scope the

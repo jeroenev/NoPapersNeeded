@@ -1,13 +1,11 @@
 package dev.npn.app.ui.tags
 
 import androidx.lifecycle.viewModelScope
+import dev.npn.app.ui.common.BulkFailure
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.WhileSubscribedTimeout
-import dev.npn.app.ui.common.reasonText
-import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.TagInfo
-import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -20,8 +18,6 @@ import no_papers_needed.composeapp.generated.resources.common_tags_merge_failed
 import no_papers_needed.composeapp.generated.resources.common_tags_merge_some_failed
 import no_papers_needed.composeapp.generated.resources.common_tags_rename_failed
 import no_papers_needed.composeapp.generated.resources.common_tags_style_failed
-import org.jetbrains.compose.resources.PluralStringResource
-import org.jetbrains.compose.resources.StringResource
 
 /**
  * One card of the tags screen. Dot-separated tag paths ("a.b.c") form a namespace tree, which the
@@ -101,6 +97,7 @@ class TagManagementViewModel(
 ) : MessagesViewModel(),
     TagWrites {
     private val tagAdmin = session.tagAdmin
+    override val log = session.log
 
     /** Null until the first load, so the screen does not flash "no tags" before it. */
     val tags: StateFlow<List<TagInfo>?> =
@@ -122,44 +119,34 @@ class TagManagementViewModel(
         into: String,
     ) {
         val kept = into.trim()
-        eachTag(
-            names.filter { it != kept },
-            Res.string.common_tags_merge_failed,
-            Res.plurals.common_tags_merge_some_failed,
-        ) { tagAdmin.mergeTag(it, kept) }
+        eachTag(names.filter { it != kept }, MergeFailed) { tagAdmin.mergeTag(it, kept) }
     }
 
     override fun delete(names: List<String>) =
-        eachTag(names, Res.string.common_tags_delete_failed, Res.plurals.common_tags_delete_some_failed) {
+        eachTag(names, DeleteFailed) {
             tagAdmin.deleteTag(it)
         }
 
     override fun setStyle(
         names: List<String>,
         color: String?,
-    ) = eachTag(names, Res.string.common_tags_style_failed, Res.plurals.common_tags_color_some_failed) {
+    ) = eachTag(names, StyleFailed) {
         tagAdmin.setTagStyle(it, color, null)
     }
 
-    /**
-     * Run [write] for each of [names], carrying on past the ones that fail, as Trash's bulk actions
-     * do. A failure of the only tag says why ([oneFailed]); failures among several are counted
-     * ([someFailed], "X of Y").
-     */
+    /** Run [write] for each of [names], carrying on past the ones that fail, reported as [failed] says. */
     private fun eachTag(
         names: List<String>,
-        oneFailed: StringResource,
-        someFailed: PluralStringResource,
+        failed: BulkFailure,
         write: suspend (String) -> Unit,
     ) {
         if (names.isEmpty()) return
-        viewModelScope.launch {
-            val failures = names.mapNotNull { name -> runCatchingCancellable { write(name) }.exceptionOrNull() }
-            when {
-                failures.isEmpty() -> Unit
-                names.size == 1 -> message(uiText(oneFailed, failures.single().reasonText()))
-                else -> message(uiText(someFailed, names.size, failures.size, names.size))
-            }
-        }
+        viewModelScope.launch { forEachReporting(names, failed, write) }
+    }
+
+    private companion object {
+        val MergeFailed = BulkFailure(Res.string.common_tags_merge_failed, Res.plurals.common_tags_merge_some_failed)
+        val DeleteFailed = BulkFailure(Res.string.common_tags_delete_failed, Res.plurals.common_tags_delete_some_failed)
+        val StyleFailed = BulkFailure(Res.string.common_tags_style_failed, Res.plurals.common_tags_color_some_failed)
     }
 }
