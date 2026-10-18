@@ -22,6 +22,7 @@ import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.settings.AppDirs
 import dev.npn.core.settings.LegacyLibrarySettings
 import dev.npn.core.settings.SessionSettings
+import dev.npn.core.testing.copy
 import dev.npn.core.util.EpochClock
 import dev.npn.core.util.JvmLog
 import dev.npn.core.util.NpnLog
@@ -60,14 +61,18 @@ class BeforeTrashListing {
 class AppSessionRig private constructor(
     val libRoot: Path,
     val dbDir: File,
-    val fs: LibraryFileSystem,
-    val db: NpnDatabase,
-    /** This device's own state: queues, edit runs, device id, chats. */
-    val deviceDb: DeviceDatabase,
+    /** What [session] was built from, before `create`'s `files` and `pdfEngine` wrapped its pieces. */
+    val deps: SessionDeps,
     val clock: MutableClock,
     val scope: CoroutineScope,
     val session: LibrarySessionImpl,
 ) {
+    val fs: LibraryFileSystem = deps.fs
+    val db: NpnDatabase = deps.db
+
+    /** This device's own state: queues, edit runs, device id, chats. */
+    val deviceDb: DeviceDatabase = deps.deviceDb
+
     fun writePdf(
         relPath: String,
         bytes: ByteArray,
@@ -150,12 +155,12 @@ class AppSessionRig private constructor(
                     deviceTrashRetentionDays = deviceTrashRetentionDays,
                 )
             val session =
-                openLibrarySession(base.over(files(base.fs), pdfEngine(base.pdfEngine)), writeUndelete)
+                openLibrarySession(base.copy(fs = files(base.fs), pdfEngine = pdfEngine(base.pdfEngine)), writeUndelete)
             storagePath?.let {
                 session.storagePath.setStoragePathTemplate(it.template)
                 session.storagePath.setStoragePathEnabled(it.enabled)
             }
-            return AppSessionRig(libRoot, dbDir, base.fs, base.db, base.deviceDb, clock, scope, session)
+            return AppSessionRig(libRoot, dbDir, base, clock, scope, session)
         }
     }
 
@@ -298,7 +303,7 @@ suspend fun openSession(
     files: (LibraryFileSystem) -> LibraryFileSystem = { it },
 ): OpenSession {
     val base = testSessionDeps(scope, library, data, installationId, aiConfig = aiConfig)
-    val deps = base.over(files(base.fs), base.pdfEngine)
+    val deps = base.copy(fs = files(base.fs))
     return OpenSession(openLibrarySession(deps), deps)
 }
 
@@ -307,7 +312,7 @@ suspend fun openSession(
  * folder gets its own), reading OCR in English, with [deviceTrashRetentionDays] as the trash
  * retention this device stored, if any.
  */
-private fun testSessionDeps(
+internal fun testSessionDeps(
     scope: CoroutineScope,
     library: Path,
     data: File,
@@ -337,26 +342,6 @@ private fun testSessionDeps(
         ocrEngine = ocr,
         log = log,
     )
-
-/** These deps with the library filesystem [fs] and the PDF engine [pdf] in place of their own. */
-private fun SessionDeps.over(
-    fs: LibraryFileSystem,
-    pdf: PdfEngine,
-) = SessionDeps(
-    fs = fs,
-    db = db,
-    deviceDb = deviceDb,
-    pdfEngine = pdf,
-    ocrEngine = ocrEngine,
-    xmpIO = xmpIO,
-    thumbnailStore = thumbnailStore,
-    renderParallelism = renderParallelism,
-    scope = scope,
-    settings = settings,
-    log = log,
-    clock = clock,
-    installationId = installationId,
-)
 
 /** An [openSession] result: [use] it, and it closes the session and its databases afterwards. */
 class OpenSession(

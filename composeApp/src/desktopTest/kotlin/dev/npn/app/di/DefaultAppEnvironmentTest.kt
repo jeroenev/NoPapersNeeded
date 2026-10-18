@@ -6,6 +6,7 @@ import dev.npn.core.app.jvmSessionDeps
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.settings.AppDirs
 import dev.npn.core.settings.SessionSettings
+import dev.npn.core.testing.copy
 import dev.npn.core.util.runCatchingCancellable
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
@@ -54,24 +55,6 @@ class DefaultAppEnvironmentTest {
     private suspend fun SessionDeps.isClosed(): Boolean =
         runCatchingCancellable { db.metadataProjectionDao().state() }.isFailure &&
             runCatchingCancellable { deviceDb.keyValueDao().get("probe") }.isFailure
-
-    /** These pieces, on the same databases, with the PDF engine [wrap] makes of theirs. */
-    private fun SessionDeps.withPdfEngine(wrap: (PdfEngine) -> PdfEngine) =
-        SessionDeps(
-            fs = fs,
-            db = db,
-            deviceDb = deviceDb,
-            pdfEngine = wrap(pdfEngine),
-            ocrEngine = ocrEngine,
-            xmpIO = xmpIO,
-            thumbnailStore = thumbnailStore,
-            renderParallelism = renderParallelism,
-            scope = scope,
-            settings = settings,
-            log = log,
-            clock = clock,
-            installationId = installationId,
-        )
 
     @AfterTest
     fun teardown() {
@@ -189,19 +172,21 @@ class DefaultAppEnvironmentTest {
             val release = CompletableDeferred<Unit>()
             val holding =
                 DefaultAppEnvironment(settings, watchedFolder = { null }) { location, scope ->
-                    factory(location, scope).withPdfEngine { real ->
-                        object : PdfEngine by real {
-                            override suspend fun imagesToPdf(images: List<ByteArray>): ByteArray {
-                                entered.complete(Unit)
-                                try {
-                                    awaitCancellation()
-                                } finally {
-                                    cancelled.complete(Unit)
-                                    withContext(NonCancellable) { release.await() }
+                    val real = factory(location, scope)
+                    real.copy(
+                        pdfEngine =
+                            object : PdfEngine by real.pdfEngine {
+                                override suspend fun imagesToPdf(images: List<ByteArray>): ByteArray {
+                                    entered.complete(Unit)
+                                    try {
+                                        awaitCancellation()
+                                    } finally {
+                                        cancelled.complete(Unit)
+                                        withContext(NonCancellable) { release.await() }
+                                    }
                                 }
-                            }
-                        }
-                    }
+                            },
+                    )
                 }
             try {
                 holding.openLibrary(good)

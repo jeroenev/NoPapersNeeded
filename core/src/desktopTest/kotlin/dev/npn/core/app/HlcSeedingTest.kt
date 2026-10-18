@@ -4,15 +4,9 @@ import dev.npn.core.index.MutableClock
 import dev.npn.core.index.requireByDocId
 import dev.npn.core.index.requireDoc
 import dev.npn.core.model.FieldKeys
-import dev.npn.core.ocr.FakeOcrEngine
-import dev.npn.core.pdf.DirThumbnailStore
-import dev.npn.core.pdf.PdfBoxEngine
 import dev.npn.core.pdf.PdfFixtures
-import dev.npn.core.settings.SessionSettings
-import dev.npn.core.util.NpnLog
-import dev.npn.core.xmp.PdfBoxXmpIO
+import dev.npn.core.testing.copy
 import io.kotest.matchers.shouldBe
-import java.io.File
 import kotlin.test.Test
 
 /**
@@ -71,23 +65,7 @@ class HlcSeedingTest {
 
             // Reopen over the same library + cache with the wall clock regressed far behind
             // the HLCs already in the journal (clock correction between sessions).
-            val deps =
-                SessionDeps(
-                    fs = rig.fs,
-                    db = rig.db,
-                    deviceDb = rig.deviceDb,
-                    pdfEngine = PdfBoxEngine(),
-                    ocrEngine = FakeOcrEngine.unavailable(),
-                    xmpIO = PdfBoxXmpIO(),
-                    thumbnailStore = DirThumbnailStore(File(rig.dbDir, "thumbs-reopen").path),
-                    renderParallelism = 1,
-                    scope = backgroundScope,
-                    settings = SessionSettings(ocrLanguage = { "eng" }),
-                    log = NpnLog.None,
-                    clock = MutableClock(1L, autoTick = true),
-                    installationId = "test-installation",
-                )
-            val session2 = LibrarySessionImpl.openSession(deps)
+            val session2 = LibrarySessionImpl.openSession(rig.deps.copy(clock = MutableClock(1L, autoTick = true)))
 
             session2.meta.setField(id, FieldKeys.TITLE, "second")
             rig.db
