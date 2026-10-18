@@ -8,6 +8,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.SnackbarMessages
@@ -26,10 +27,12 @@ import dev.npn.core.settings.SettingsRepository
  * documents), as the viewmodel's [DetailUiState.left] reports.
  * [onReviewNext] and [hasNext] drive the save bar's "mark reviewed" button.
  *
- * The [vm] defaults to one for [docId] in the current [androidx.lifecycle.ViewModelStoreOwner],
- * seeded with [searchQuery]'s terms and, when the caller already has the row, [initialItem]. Keyed on
- * the document alone: the seeds are read once, so a host showing it again with other seeds (a
- * recreated window whose browse order is gone) finds the same viewmodel rather than a second one.
+ * The [vm] defaults to the one in [viewModels], the document's own store, which every host showing
+ * the document shares: expanding the side panel into the detail screen keeps its page, its loaded
+ * text and history, and AI suggestions already paid for. Built on first use, seeded with
+ * [searchQuery]'s terms and, when the caller already has the row, [initialItem]; the seeds are read
+ * once, so a host showing it again with other seeds (a recreated window whose browse order is gone)
+ * finds the same viewmodel rather than a second one.
  */
 @Suppress("ViewModelForwarding") // vm reaches the editor and the actions only as DocumentWrites and DocumentActions
 @Composable
@@ -37,6 +40,8 @@ internal fun DocumentView(
     docId: String,
     session: LibrarySession,
     settings: SettingsRepository,
+    /** The document's own viewmodel store, shared by the hosts showing it. */
+    viewModels: ViewModelStoreOwner,
     snackbar: SnackbarHostState,
     onClose: () -> Unit,
     onReviewNext: () -> Unit,
@@ -46,7 +51,7 @@ internal fun DocumentView(
     searchQuery: String? = null,
     initialItem: DocListItem? = null,
     vm: DocDetailViewModel =
-        viewModel(key = "detail-$docId") {
+        viewModel(viewModelStoreOwner = viewModels) {
             DocDetailViewModel(docId, session, settings, searchQuery, initialItem)
         },
     frame: @Composable (

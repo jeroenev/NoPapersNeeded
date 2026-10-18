@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModelStoreOwner
 import dev.npn.app.ui.common.BackTopBar
 import dev.npn.app.ui.common.FloatingControls
 import dev.npn.app.ui.common.FocusOnEntry
@@ -36,13 +37,15 @@ import org.jetbrains.compose.resources.stringResource
 /**
  * Full-screen document view: the shared [DocumentView] under a top bar that pages through the
  * library's browse order. Compact layouts (phones, narrow windows) open documents here; wide ones
- * show them in the library's side panel and come here only through its expand button.
+ * show them in the library's side panel and come here only through its expand button, onto the same
+ * viewmodel, the one in the document's own store [viewModels].
  */
 @Composable
 fun DocDetailScreen(
     docId: String,
     session: LibrarySession,
     settings: SettingsRepository,
+    viewModels: ViewModelStoreOwner,
     browse: BrowseContext,
     onBack: () -> Unit,
     onNavigateToDoc: (String) -> Unit,
@@ -61,6 +64,7 @@ fun DocDetailScreen(
         docId = docId,
         session = session,
         settings = settings,
+        viewModels = viewModels,
         snackbar = snackbar,
         onClose = onBack,
         onReviewNext = { goNextDoc?.invoke() ?: onBack() },

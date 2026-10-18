@@ -21,6 +21,7 @@ import dev.npn.app.ui.onUiThread
 import dev.npn.app.ui.viewModelStoreOwner
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeSameInstanceAs
 import io.kotest.matchers.types.shouldNotBeSameInstanceAs
@@ -119,6 +120,33 @@ class LibrarySwitchTest : EnglishLocaleTest() {
         after.libraryFilter.consume() shouldBe LibraryFilter(query = "invoice")
     }
 
+    /**
+     * A recreated window works on the drafts it had, not on a copy built from their saved form: a
+     * save still in flight settles into the drafts the new window shows, which would otherwise show
+     * the values it just wrote as unsaved, and save them twice.
+     */
+    @Test
+    fun aRecreatedWindowKeepsTheDraftsItWasSaving() {
+        val (before, after, _) =
+            afterVisitingADocument { window, _ ->
+                checkNotNull(window.shown).drafts.field("doc-1", FieldKeys.TITLE, "Unsaved title", persisted = null)
+                window.recreate()
+            }
+        after.drafts shouldBeSameInstanceAs before.drafts
+    }
+
+    /** A restored process has none of the session's viewmodels: its drafts come back from their saved form. */
+    @Test
+    fun aRestoredProcessGetsItsDraftsBackFromTheirSavedForm() {
+        val (before, after, _) =
+            afterVisitingADocument { window, _ ->
+                checkNotNull(window.shown).drafts.field("doc-1", FieldKeys.TITLE, "Unsaved title", persisted = null)
+                window.restoreProcess()
+            }
+        after.drafts shouldNotBeSameInstanceAs before.drafts
+        after.drafts.state["doc-1"]?.fields shouldBe mapOf(FieldKeys.TITLE to "Unsaved title")
+    }
+
     @Test
     fun anotherLibraryStartsWithoutTheOldOnesBrowseOrder() {
         val (_, after, _) =
@@ -164,7 +192,7 @@ class LibrarySwitchTest : EnglishLocaleTest() {
     private inner class Window {
         var shown: LibraryUi? = null
         val probes = mutableListOf<Probe>()
-        private val viewModels = viewModelStoreOwner()
+        private var viewModels = viewModelStoreOwner()
         private var registry = SaveableStateRegistry(null) { true }
         private var scene = compose()
 
@@ -177,6 +205,12 @@ class LibrarySwitchTest : EnglishLocaleTest() {
             registry = SaveableStateRegistry(saved) { true }
             scene = compose()
             settle()
+        }
+
+        /** As [recreate], but with none of the viewmodels: a process the system ended, then restored. */
+        fun restoreProcess() {
+            viewModels = viewModelStoreOwner()
+            recreate()
         }
 
         fun close() = scene.close()

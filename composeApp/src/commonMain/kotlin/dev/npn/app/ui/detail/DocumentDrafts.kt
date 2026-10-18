@@ -79,8 +79,9 @@ internal data class DocumentDraft(
 }
 
 /**
- * Library-scoped drafts survive route and preview changes. The host saves their serialized form
- * through rememberSaveable on Android. Writes use the app scope so leaving a screen cannot cancel
+ * Library-scoped drafts survive route and preview changes: the session keeps one instance
+ * (`LibrarySessionUi`) through a recreated window and a change of language, and its serialized form
+ * is saved only for a restored process. Writes use the app scope so leaving a screen cannot cancel
  * an explicitly requested save. Only edited fields are written, preserving concurrent edits.
  *
  * The draft map lives in Compose snapshot state, not a flow: a text field is fully controlled off

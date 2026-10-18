@@ -21,11 +21,13 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
@@ -44,7 +46,6 @@ import dev.npn.app.ui.common.testTagsAsResourceIds
 import dev.npn.app.ui.detail.BrowseContext
 import dev.npn.app.ui.detail.DocumentDraftHost
 import dev.npn.app.ui.detail.DocumentDrafts
-import dev.npn.app.ui.detail.rememberDocumentDrafts
 import dev.npn.app.ui.nav.MainNav
 import dev.npn.app.ui.onboarding.OnboardingScreen
 import dev.npn.app.ui.onboarding.OpenFailureMessage
@@ -69,27 +70,29 @@ fun App(env: AppEnvironment) {
 }
 
 /**
- * What the open library's UI keeps when the app's language changes: its unsaved [drafts], where its
- * navigation stands ([nav]), its screens' viewmodels ([viewModels]), and, through [handover], the
- * order the detail screen walks and what one screen hands another as it navigates there. All of it
- * belongs to one session: another library gets its own.
+ * The open library's UI as its screens use it: where its navigation stands ([nav]) and what its
+ * session keeps for them ([LibrarySessionUi]): its unsaved [drafts], its screens' viewmodels
+ * ([viewModels]) and each document's ([documents]), and what one screen hands another as it
+ * navigates there, such as the order the detail screen walks. All of it belongs to one session:
+ * another library gets its own.
  */
 @Stable
 internal class LibraryUi(
+    held: LibrarySessionUi,
     val drafts: DocumentDrafts,
     val nav: NavHostController,
-    val viewModels: ViewModelStoreOwner,
-    handover: LibraryHandover,
 ) {
-    val browse = handover.browse
-    val libraryFilter = handover.libraryFilter
-    val aiEditSelection = handover.aiEditSelection
+    val viewModels: ViewModelStoreOwner = held
+    val documents = held.documents
+    val browse = held.handover.browse
+    val libraryFilter = held.handover.libraryFilter
+    val aiEditSelection = held.handover.aiEditSelection
 }
 
 /**
- * What the open library's screens hand each other as they navigate. Kept beside the session's
- * viewmodels ([LibraryViewModelStores]), so a window recreated for a configuration change still has
- * it, and dropped with them. A process restore starts without it, as a screen opened afresh would.
+ * What the open library's screens hand each other as they navigate. Kept for the session
+ * ([LibrarySessionUi]), so a window recreated for a configuration change still has it, and dropped
+ * with it. A process restore starts without it, as a screen opened afresh would.
  */
 internal class LibraryHandover {
     /** The order the detail screen walks, and the search it highlights. */
@@ -103,22 +106,44 @@ internal class LibraryHandover {
 }
 
 /**
- * The viewmodel stores of the open library's screens, and what they hand each other, one per
- * session. Held in the window's store (the activity's on Android), so an activity recreated for a
- * configuration change finds its library's screens as they were. [keepOnly] clears every other
- * session's store, so nothing a closed library's screens started runs on against it.
+ * What the open library's UI keeps for as long as its session is open, through a recreated window
+ * and a change of language alike: its screens' viewmodels (this store), each document's viewmodel
+ * ([documents], held by the screens showing the document, so the library's side panel and the detail
+ * screen share one), the unsaved drafts ([drafts]) and what its screens hand each other ([handover]).
+ */
+internal class LibrarySessionUi : ViewModelStoreOwner {
+    override val viewModelStore = ViewModelStore()
+    val documents = KeyedViewModelStores<String>()
+    val handover = LibraryHandover()
+    private var drafts: DocumentDrafts? = null
+
+    /**
+     * The session's drafts, made by [create] the first time they are asked for: empty for a library
+     * opened afresh, the saved ones in a restored process. Every later call gets the same drafts, so
+     * a save still in flight when the window is recreated settles into the drafts the new one shows.
+     */
+    fun drafts(create: () -> DocumentDrafts): DocumentDrafts = drafts ?: create().also { drafts = it }
+
+    /** Clear its screens' viewmodels, and with them the documents' they held. */
+    fun clear() {
+        viewModelStore.clear()
+        documents.clear()
+    }
+}
+
+/**
+ * What the open library's UI keeps ([LibrarySessionUi]), one per session. Held in the window's store
+ * (the activity's on Android), so an activity recreated for a configuration change finds its
+ * library's screens as they were. [keepOnly] clears every other session's, so nothing a closed
+ * library's screens started runs on against it.
  */
 internal class LibraryViewModelStores : ViewModel() {
-    private val stores = KeyedViewModelStores<LibrarySession>()
-    private val handovers = HashMap<LibrarySession, LibraryHandover>()
+    private val sessions = HashMap<LibrarySession, LibrarySessionUi>()
 
-    fun of(session: LibrarySession): ViewModelStoreOwner = stores.of(session)
-
-    fun handoverOf(session: LibrarySession): LibraryHandover = handovers.getOrPut(session) { LibraryHandover() }
+    fun of(session: LibrarySession): LibrarySessionUi = sessions.getOrPut(session) { LibrarySessionUi() }
 
     fun keepOnly(session: LibrarySession?) {
-        stores.keepOnly(session)
-        handovers.keys.retainAll { it == session }
+        for (gone in sessions.keys.filter { it != session }) sessions.remove(gone)?.clear()
     }
 
     override fun onCleared() = keepOnly(null)
@@ -138,7 +163,7 @@ internal fun LocalizedApp(
     stores: LibraryViewModelStores = viewModel { LibraryViewModelStores() },
     content: @Composable (LibraryUi?) -> Unit,
 ) {
-    val library = session?.let { rememberLibraryUi(it, scope, stores.of(it), stores.handoverOf(it)) }
+    val library = session?.let { rememberLibraryUi(it, scope, stores.of(it)) }
     // Side effects run once the composition has let go of what it no longer shows.
     SideEffect { stores.keepOnly(session) }
     LocaleProvider(language) { content(library) }
@@ -148,16 +173,26 @@ internal fun LocalizedApp(
 private fun rememberLibraryUi(
     session: LibrarySession,
     scope: CoroutineScope,
-    viewModels: ViewModelStoreOwner,
-    handover: LibraryHandover,
+    held: LibrarySessionUi,
 ): LibraryUi {
-    val drafts = rememberDocumentDrafts(session, scope)
+    // The session keeps its drafts ([held]); they are saved only for a restored process, whose
+    // [held] is new and starts from them. A recreated window finds the ones it had, saves in flight
+    // included, and its restore leaves them be.
+    val drafts =
+        rememberSaveable(
+            held,
+            saver =
+                Saver(
+                    save = { it.serialize() },
+                    restore = { saved -> held.drafts { DocumentDrafts(session.meta, scope, saved) } },
+                ),
+        ) { held.drafts { DocumentDrafts(session.meta, scope) } }
     // A controller of the session's own, as its back stack holds the session's viewmodel stores: a
     // new one for another session, and the saved one again for the same session in a recreated
     // activity or a restored process. Saved, so the restore finds the key it was saved under.
     val navKey = rememberSaveable(session) { Random.nextLong() }
     val nav = key(navKey) { rememberNavController() }
-    return remember(drafts, nav, viewModels, handover) { LibraryUi(drafts, nav, viewModels, handover) }
+    return remember(held, drafts, nav) { LibraryUi(held, drafts, nav) }
 }
 
 /** [content], with [library]'s screens' viewmodels kept in its store ([LibraryUi.viewModels]). */

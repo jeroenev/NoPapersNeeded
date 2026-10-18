@@ -52,10 +52,12 @@ import dev.npn.app.ui.common.ActionMenuItems
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.FocusOnEntry
 import dev.npn.app.ui.common.Handoff
+import dev.npn.app.ui.common.KeyedViewModelStores
 import dev.npn.app.ui.common.LoadingIndicator
 import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.SearchField
 import dev.npn.app.ui.common.TopBarAction
+import dev.npn.app.ui.common.ViewModelStoreLease
 import dev.npn.app.ui.common.rememberSnackbarMessages
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.LibraryFilter
@@ -108,9 +110,11 @@ fun LibraryScreen(
     onAiEdit: ((List<String>) -> Unit)?,
     /** A filter another screen hands the library to apply when it shows. */
     filterHandoff: Handoff<LibraryFilter>,
+    /** Each document's viewmodel store, shared with the detail screen; the side panel holds the previewed one's. */
+    documents: KeyedViewModelStores<String>,
     modifier: Modifier = Modifier,
     vm: LibraryViewModel = viewModel { LibraryViewModel(session, settings) },
-    previewStores: DocPreviewStores = viewModel { DocPreviewStores() },
+    previewed: ViewModelStoreLease<String> = viewModel { ViewModelStoreLease(documents) },
 ) {
     val state by vm.content.collectAsStateWithLifecycle()
     // The filter sheet's vocabulary, which the list itself does not show.
@@ -146,9 +150,10 @@ fun LibraryScreen(
     BoxWithConstraints(modifier.fillMaxSize()) {
         // Wide layouts preview a tapped document in the side panel; compact ones open it directly.
         var previewDocId by rememberSaveable { mutableStateOf<String?>(null) }
-        // The previewed document keeps its viewmodel while the panel is there to show it; another
-        // document, a closed panel or a compact window clears it once the composition lets go.
-        SideEffect { previewStores.keepOnly(previewDocId.takeIf { wide }) }
+        // The previewed document keeps its viewmodel while the panel is there to show it (and the
+        // detail screen, sharing it, for as long as that is open); another document, a closed panel
+        // or a compact window lets go of it once the composition has.
+        SideEffect { previewed.keepOnly(previewDocId.takeIf { wide }) }
         val onDocClick: (String) -> Unit =
             remember(wide) { { docId -> if (wide) previewDocId = docId else openDoc(docId) } }
 
@@ -209,7 +214,7 @@ fun LibraryScreen(
                     val nextId = items.getOrNull(items.indexOfFirst { it.doc.docId == previewDocId } + 1)?.doc?.docId
                     DocPreviewPanel(
                         item = previewItem,
-                        viewModels = previewStores.of(previewItem.doc.docId),
+                        viewModels = previewed.of(previewItem.doc.docId),
                         session = session,
                         settings = settings,
                         snackbar = snackbar,
@@ -217,6 +222,7 @@ fun LibraryScreen(
                         onExpand = { openDoc(previewItem.doc.docId) },
                         onReviewNext = { if (previewDocId == previewItem.doc.docId) previewDocId = nextId },
                         hasNext = nextId != null,
+                        searchQuery = ui.filter.query,
                         modifier = panel,
                     )
                 }

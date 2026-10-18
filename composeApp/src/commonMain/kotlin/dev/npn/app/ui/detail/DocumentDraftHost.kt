@@ -5,35 +5,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.saveable.Saver
-import androidx.compose.runtime.saveable.rememberSaveable
 import dev.npn.app.ui.common.TopBanner
 import dev.npn.app.ui.common.WithTopBanner
-import dev.npn.core.app.LibrarySession
-import kotlinx.coroutines.CoroutineScope
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ux_drafts_count
 import no_papers_needed.composeapp.generated.resources.ux_resume_draft
 import org.jetbrains.compose.resources.stringResource
-
-/**
- * The open library's drafts, kept for as long as [session] is open, and through Android's process
- * death in their saved form. Remembered above the app's [dev.npn.app.ui.common.LocaleProvider]
- * (`LocalizedApp`): a change of language rebuilds everything below it, and must not lose an edit.
- */
-@Composable
-internal fun rememberDocumentDrafts(
-    session: LibrarySession,
-    scope: CoroutineScope,
-): DocumentDrafts =
-    rememberSaveable(
-        session,
-        saver =
-            Saver(
-                save = { it.serialize() },
-                restore = { DocumentDrafts(session.meta, scope, it) },
-            ),
-    ) { DocumentDrafts(session.meta, scope) }
 
 /** Makes [store] the drafts every document editor in [content] works on. */
 @Composable

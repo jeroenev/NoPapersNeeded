@@ -4,6 +4,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -21,6 +22,7 @@ import dev.npn.app.ui.ai.AiEditReviewScreen
 import dev.npn.app.ui.ai.AiEditScreen
 import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.PublishWindowTitle
+import dev.npn.app.ui.common.ViewModelStoreLease
 import dev.npn.app.ui.detail.BrowseContext
 import dev.npn.app.ui.detail.DocDetailScreen
 import dev.npn.app.ui.detail.WithDraftResumeBanner
@@ -220,14 +222,19 @@ private fun MainNavHost(
                         null
                     },
                 filterHandoff = library.libraryFilter,
+                documents = library.documents,
             )
         }
         composable<Route.DocDetail> { entry ->
             val route = entry.toRoute<Route.DocDetail>()
+            // Held for as long as this entry is on the back stack; shared with the library's side
+            // panel when it shows the same document, so expanding the panel continues where it was.
+            val document = viewModel { ViewModelStoreLease(library.documents) }
             DocDetailScreen(
                 docId = route.docId,
                 session = session,
                 settings = settings,
+                viewModels = document.of(route.docId),
                 browse = browse,
                 onBack = { nav.from(entry) { popBackStack() } },
                 onNavigateToDoc = { targetId ->
