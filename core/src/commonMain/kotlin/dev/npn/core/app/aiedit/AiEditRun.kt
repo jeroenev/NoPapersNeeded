@@ -40,69 +40,6 @@ data class ScopeKey(
 )
 
 /**
- * One suggested (doc, tag) pairing in the review phase. [selected] drives whether Apply writes it;
- * [ReviewDoc.recommended] says which start selected.
- */
-data class ReviewChip(
-    val tag: String,
-    val isNew: Boolean,
-    val selected: Boolean,
-)
-
-/**
- * One suggested field [value] in the review phase, for registry field [key] shown as [label].
- * [selected] drives whether Apply writes it. [current] is the value it would replace, null when the
- * field is empty.
- */
-data class ReviewField(
-    val key: String,
-    val label: String,
-    val value: String,
-    val current: String?,
-    val selected: Boolean,
-) {
-    /** Whether the pre-select policy picks this value: it fills an empty field, replacing nothing. */
-    val recommended: Boolean get() = current == null
-}
-
-/**
- * One document's row in the review phase. [chips] are tag additions, [removals] are tag removals
- * (a tag never appears in both — additions exclude current tags, removals are current tags) and
- * [fields] are the single-value autofill suggestions. Title and file name stay separate because the
- * review rows compare against the raw stored title; [displayTitle] is what to render.
- */
-data class ReviewDoc(
-    val docId: String,
-    val title: String?,
-    val fileName: String,
-    val snippet: String?,
-    val chips: List<ReviewChip>,
-    val removals: List<ReviewChip>,
-    val fields: List<ReviewField>,
-) {
-    /** Same fallback as [Doc.displayTitle]. */
-    val displayTitle: String get() = displayTitleOf(title, fileName)
-
-    /**
-     * How many of this row's suggestions are the kind a person has to decide about: an invented
-     * tag, every removal, every value that would replace one. The policy leaves them unselected.
-     */
-    val needsAttention: Int get() = chips.count { it.isNew } + removals.size + fields.count { !it.recommended }
-
-    /**
-     * This row with the pre-select policy's choice selected (CONTEXT.md, "Review"): additions of a
-     * tag the library already has and values that fill an empty field, and nothing that
-     * [needsAttention].
-     */
-    fun recommended(): ReviewDoc =
-        copy(
-            chips = chips.map { it.copy(selected = !it.isNew) },
-            removals = removals.map { it.copy(selected = false) },
-            fields = fields.map { it.copy(selected = it.recommended) },
-        )
-}
-
-/**
  * Suggestion progress, including structured identity for the most recently completed document.
  */
 data class EditProgress(
@@ -114,17 +51,6 @@ data class EditProgress(
     /** Same fallback as [Doc.displayTitle]. */
     val currentDisplayTitle: String get() = displayTitleOf(currentTitle, currentFileName)
 }
-
-/**
- * Terminal counts after Apply: [applied] suggestions (tags added, tags removed, data fields)
- * written across [docsChanged] documents, plus whether more documents remain in the scope for a
- * follow-up batch.
- */
-data class ApplyResult(
-    val applied: Int,
-    val docsChanged: Int,
-    val moreRemain: Boolean,
-)
 
 /** Outcome of suggesting over the next batch of the scope. */
 sealed interface BatchResult {
@@ -142,34 +68,6 @@ sealed interface BatchResult {
         val failures: Int,
         val total: Int,
     ) : BatchResult
-}
-
-/** Outcome of applying the selected suggestions of a review batch. */
-sealed interface ApplyOutcome {
-    /** No selection was set; nothing was written. */
-    data object NothingSelected : ApplyOutcome
-
-    /**
-     * Every selected suggestion was written (counting earlier retry attempts of this batch). The
-     * writes stand even when what follows them failed: asking whether the scope has documents left
-     * ([ApplyResult.moreRemain] is then false), or dropping a finished queued run from the queue (it
-     * stays queued). [followUpFailure] is that failure, for the caller to report; null when none.
-     */
-    data class Done(
-        val result: ApplyResult,
-        val followUpFailure: Throwable? = null,
-    ) : ApplyOutcome
-
-    /**
-     * Some writes failed: [failedDocs] of [total] documents are retained in [remaining], without the
-     * suggestions that landed, and with selected exactly what is still owed. The batch never writes a
-     * (doc, tag) or (doc, field) that already succeeded again, whatever a retry selects.
-     */
-    data class Retry(
-        val remaining: List<ReviewDoc>,
-        val failedDocs: Int,
-        val total: Int,
-    ) : ApplyOutcome
 }
 
 /**
