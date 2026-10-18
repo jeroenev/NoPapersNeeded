@@ -13,11 +13,6 @@ object RuleMatcher {
 
     private val WHITESPACE = Regex("\\s+")
 
-    fun matches(
-        rule: AutoMatchRule,
-        text: String?,
-    ): Boolean = compile(rule).matches(text)
-
     /** [rule] with its pattern parsed: words, expressions and the fuzzy pattern are built here, once. */
     fun compile(rule: AutoMatchRule): CompiledRule {
         val pattern = rule.pattern.trim()
