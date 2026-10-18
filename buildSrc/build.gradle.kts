@@ -1,5 +1,6 @@
 plugins {
     `kotlin-dsl`
+    alias(libs.plugins.detekt)
 }
 
 repositories {
@@ -45,4 +46,20 @@ tasks.test {
     // JdkPinsTest holds the JDK named outside the catalog to the catalog's.
     inputs.files("../.java-version", "../gradle/gradle-daemon-jvm.properties")
     systemProperty("npn.jdk", libs.versions.jdk.get())
+}
+
+// The root build's npn.detekt does not reach this build: `./gradlew :buildSrc:detekt` is its
+// source-only run, on the same config, and like npn.detekt's it writes no report file.
+detekt {
+    buildUponDefaultConfig = true
+    config.setFrom("../config/detekt/detekt.yml")
+    source.setFrom("src/main/kotlin", "src/test/kotlin")
+}
+tasks.withType<dev.detekt.gradle.Detekt>().configureEach {
+    reports {
+        checkstyle.required.set(false)
+        html.required.set(false)
+        markdown.required.set(false)
+        sarif.required.set(false)
+    }
 }

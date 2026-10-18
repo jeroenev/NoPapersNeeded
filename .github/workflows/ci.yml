@@ -48,8 +48,8 @@ jobs:
 
       # Desktop suites with coverage, then the same commonTest suites against the Android target
       # plus whatever only exists there (androidHostTest). Coverage stays on the desktop run.
-      # buildSrc's tests (the localization guard) and desktopApp's (the single-instance lock) run
-      # only when named, and nothing else in this workflow names them.
+      # buildSrc's tests (the localization guard) and detekt, and desktopApp's tests (the
+      # single-instance lock), run only when named; nothing else in this workflow names them.
       - name: Tests and coverage
         run: >-
           ./gradlew
@@ -57,6 +57,7 @@ jobs:
           :core:testAndroidHostTest
           :composeApp:testAndroidHostTest
           :buildSrc:test
+          :buildSrc:detekt
           :desktopApp:test
 
       # Builds every module's Android code on the way (desktop compiled for the tests above).

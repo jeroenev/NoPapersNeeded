@@ -60,8 +60,9 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   `mise check` cover them; `mise test-fast` deliberately does not.
 - Single test class: `./gradlew :core:desktopTest --tests 'dev.npn.core.journal.OrSetTest'`.
 - Build logic tests (`buildSrc`, e.g. the `checkLocalization` and `checkFieldTypeBranches`
-  guards): `./gradlew :buildSrc:test`. They are not part of `check`; CI runs them with the other
-  tests.
+  guards): `./gradlew :buildSrc:test`, and its source-only detekt run, `./gradlew :buildSrc:detekt`
+  (the root `detekt` does not reach the included build). Neither is part of `check`; CI runs both
+  with the other tests.
 - Desktop shell tests (`desktopApp`, e.g. the single-instance lock): `./gradlew :desktopApp:test`.
   CI runs them with the other tests too.
 - Live AI endpoint checks are opt-in and skipped by default (they cost money):
@@ -77,9 +78,9 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
 - CI (`.github/workflows/ci.yml`) runs, with `+` joining one Gradle invocation's tasks:
   shellcheck (hooks, mise tasks, `.github/scripts`) → spotlessCheck + checkLocalization +
   checkFieldTypeBranches + detekt → tests with coverage (kover drives both desktop test suites) +
-  Android-target host tests + buildSrc and desktopApp tests → `compileDeviceTests` (the root task
-  that builds every device test, and so all Android code, without a device; add a new module's
-  there) → `detektTyped` → `:androidApp:lintDebug` → committed Room schema exports →
+  Android-target host tests + buildSrc tests and detekt + desktopApp tests → `compileDeviceTests`
+  (the root task that builds every device test, and so all Android code, without a device; add a
+  new module's there) → `detektTyped` → `:androidApp:lintDebug` → committed Room schema exports →
   assembleDebug + packageAppImage. Match that order when verifying larger changes. Actions
   minutes and artifact storage are metered (private repo): PRs stop before the APK and packaging,
   which run on `main` only, the coverage report uploads only on `main` or after a failure, binaries
