@@ -16,6 +16,11 @@ object LibraryLocations {
      * A short, stable, filesystem-safe key derived from a library location string. Used to give
      * each opened library its own device-local databases and thumbnails. Not cryptographic; only
      * needs to be stable across runs and collision-resistant enough for a handful of libraries.
+     *
+     * Never change it: the key names where the library's `device.db` lives (its folder on desktop,
+     * its file name on Android), what only this device knows and nothing could rebuild, so a new key
+     * for the same location orphans that data.
+     * `LibraryLocationsTest` pins it.
      */
     fun key(location: String): String {
         // FNV-1a 64-bit over the UTF-8 bytes; rendered as lowercase hex. Deterministic and
