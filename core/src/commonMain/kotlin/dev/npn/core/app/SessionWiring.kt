@@ -199,8 +199,6 @@ internal suspend fun buildLibrary(
         fieldRegistry = FieldRegistryImpl(db, coordinator, lifetime),
         storagePath = storagePath,
         rules = AutoMatchRuleRepositoryImpl(db.autoMatchRuleDao(), ruleSource, ruleApplier, coordinator, lifetime),
-        ruleSource = ruleSource,
-        ruleApplier = ruleApplier,
         ownedWriter = OwnedWriter(writer, lifecycle, lifetime),
         reviewConfig = JournalReviewConfig(coordinator, db.documentDao(), lifetime),
         trashRetention = retention,
@@ -344,7 +342,7 @@ internal fun buildOcr(
             language = deps.settings.ocrLanguage,
             clock = deps.clock,
             // Deterministic local rules run on any newly indexed text, including a re-index.
-            onTextIndexed = { docId, text -> library.ruleApplier.applyToDoc(docId, text) },
+            onTextIndexed = { docId, text -> library.rules.applier.applyToDoc(docId, text) },
             onOcrProduced = onOcrProduced,
             onStaleFile = { staleFiles.trySend(Unit) },
         )

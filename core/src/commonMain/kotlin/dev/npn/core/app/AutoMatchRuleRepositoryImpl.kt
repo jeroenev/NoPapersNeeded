@@ -28,8 +28,10 @@ import kotlin.uuid.Uuid
  */
 internal class AutoMatchRuleRepositoryImpl(
     private val dao: AutoMatchRuleDao,
-    private val source: AutoMatchRuleSource,
-    private val applier: RuleApplier,
+    /** The rules' read side, and their cache in the index. */
+    val source: AutoMatchRuleSource,
+    /** Runs the rules on a document, as indexing new text does. */
+    val applier: RuleApplier,
     private val coordinator: JournalCoordinator,
     private val lifetime: SessionLifetime,
 ) : AutoMatchRuleRepository {

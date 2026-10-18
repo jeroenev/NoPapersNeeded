@@ -74,7 +74,7 @@ class LibrarySessionImpl private constructor(
     override val rules: AutoMatchRuleRepository = library.rules
 
     /** The rules' cache in the index, mirrored from the journal when another device's list arrives. */
-    internal val ruleSource: AutoMatchRuleSource = library.ruleSource
+    internal val ruleSource: AutoMatchRuleSource = library.rules.source
     override val storagePath: StoragePathFacade = library.storagePath
     override val fieldRegistry: FieldRegistry = library.fieldRegistry
     override val content: DocContentFacade = library.content
