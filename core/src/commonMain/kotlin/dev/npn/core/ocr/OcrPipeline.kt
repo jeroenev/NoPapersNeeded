@@ -163,7 +163,10 @@ class OcrPipeline(
         var own: OwnOcr? = null
         val entry = ocrQueueDao.getByDocId(docId)
         val aiRequested = entry?.aiRequested == true
-        if (stored.isEmpty() || canImprove(doc, stored, rerun = entry?.rerun == true, aiRequested)) {
+        // Judged by the versions that read: a sidecar cut short mid-write neither outranks this
+        // device's run nor stands for its try.
+        val readable = versions.readable(docId, stored)
+        if (readable.isEmpty() || canImprove(doc, readable, rerun = entry?.rerun == true, aiRequested)) {
             own = runOwnOcr(doc, stored, aiRequested)
             if (own == OwnOcr.Stale) {
                 // Not this document's bytes, so not its failure either, the first time: the run
@@ -180,15 +183,16 @@ class OcrPipeline(
         }
         val failure = (own as? OwnOcr.Failed)?.error
 
-        val desired = versions.select(stored, doc.ocrEngineOverride)
-        val sidecar = desired?.let { versions.read(docId, it.writerKey) }
-        if (desired != null && sidecar == null) versions.forget(docId)
-        if (desired == null || sidecar == null) {
+        val selected = versions.selectReadable(docId, stored, doc.ocrEngineOverride)
+        if (selected == null) {
+            // A listed key that did not read may be gone: the next pass lists `.npn/ocr/` again.
+            if (stored.isNotEmpty()) versions.forget(docId)
             fail(docId, failure ?: "no readable ocr version for $docId", textIndexed = false, seen = entry)
             return
         }
+        val sidecar = selected.sidecar
         // A failed run still leaves the best stored version searchable meanwhile.
-        indexAndMarkSelected(docId, desired, sidecar)
+        indexAndMarkSelected(docId, selected.version, sidecar)
         // Only a sidecar published for this run counts as new text: by this call, or by an earlier
         // pass of the run cut short before it got here. Being queued is not enough: a rebuilt index
         // re-queues documents, and those runs land here and adopt what is already stored.
@@ -453,15 +457,18 @@ class OcrPipeline(
         stored: List<OcrVersions.Version>,
     ) {
         val desired = versions.select(stored, doc.ocrEngineOverride) ?: return
-        val needsIndex = OcrState.fromColumn(doc.ocrState) in UNPROCESSED_STATES || doc.ocrSource != desired.writerKey
-        if (!needsIndex) return
-        val sidecar = versions.read(doc.docId, desired.writerKey) ?: return versions.forget(doc.docId)
-        indexAndMarkSelected(doc.docId, desired, sidecar)
+        // Asked before reading anything: on almost every reconcile, the indexed version is the one.
+        if (isIndexed(doc, desired)) return
+        // One that does not read is passed over for the next best, which may be the indexed one.
+        val selected =
+            versions.selectReadable(doc.docId, stored, doc.ocrEngineOverride) ?: return versions.forget(doc.docId)
+        if (isIndexed(doc, selected.version)) return
+        indexAndMarkSelected(doc.docId, selected.version, selected.sidecar)
         // Adoption or re-selection of a stored sidecar: no new text, so no enrichment. A hook
         // failure is discarded rather than recorded, unlike in processDoc: the row is not marked
         // done here, and the only hook that can run is onTextIndexed, which reconcile re-fires on
         // every rescan. Nothing is permanently lost by dropping it.
-        notifyTextIndexed(doc.docId, sidecar, ocrProduced = false)
+        notifyTextIndexed(doc.docId, selected.sidecar, ocrProduced = false)
         // Adopted text does not settle a run still owed here, nor one whose sidecar a pass cut short
         // already published; processDoc does, once it is due, and hands that text on as produced.
         val row = ocrQueueDao.getByDocId(doc.docId)
@@ -469,6 +476,12 @@ class OcrPipeline(
             ocrQueueDao.deleteIfUnchanged(doc.docId, row)
         }
     }
+
+    /** Whether [doc] is processed with [version]'s text indexed. */
+    private fun isIndexed(
+        doc: DocumentEntity,
+        version: OcrVersions.Version,
+    ): Boolean = OcrState.fromColumn(doc.ocrState) !in UNPROCESSED_STATES && doc.ocrSource == version.writerKey
 
     /**
      * Whether this row holds what only this device knows about its own run: a request made here

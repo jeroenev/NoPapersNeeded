@@ -127,6 +127,38 @@ class OcrVersions internal constructor(
         )
     }
 
+    /** A version [selectReadable] picked, with its sidecar. */
+    class Selected(
+        val version: Version,
+        val sidecar: OcrSidecar,
+    )
+
+    /**
+     * [select] among the versions of [docId] in [stored] whose sidecars read, with the chosen one's
+     * sidecar; null when none does. A sidecar cut short mid-write (SAF writes at the final name) is
+     * listed like any other, and is passed over here rather than stand in for the next best. Reads
+     * only until one does.
+     */
+    suspend fun selectReadable(
+        docId: String,
+        stored: List<Version>,
+        override: String?,
+    ): Selected? {
+        var pool = stored
+        while (pool.isNotEmpty()) {
+            val version = select(pool, override) ?: return null
+            read(docId, version.writerKey)?.let { return Selected(version, it) }
+            pool = pool - version
+        }
+        return null
+    }
+
+    /** The versions of [docId] in [stored] whose sidecars read. */
+    suspend fun readable(
+        docId: String,
+        stored: List<Version>,
+    ): List<Version> = stored.filter { read(docId, it.writerKey) != null }
+
     /**
      * The writer key [deviceId]'s new sidecar of [engine] is published under: its first run's key,
      * or a re-run key once [stored] holds a version of that engine from it. The re-run is stamped
