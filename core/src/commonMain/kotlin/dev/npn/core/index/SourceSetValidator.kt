@@ -62,22 +62,27 @@ class SourceSetValidator(
         carried: Set<String>,
     ): String? {
         val stillMissing = HashSet<String>()
-        val hardMissing =
-            previous.firstOrNull { source ->
-                if (source.path in files) return@firstOrNull false
-                when (source.kind) {
-                    SourceKind.OBJECT, SourceKind.SNAPSHOT -> {
-                        isUnexplainedObjectLoss(source, carried, stillMissing)
-                    }
+        // Every missing source is judged, not only those before the first hard one: judging one
+        // counts its grace window, and a source left unjudged would lose its count below.
+        val hardLosses =
+            previous
+                .filter { source ->
+                    if (source.path in files) return@filter false
+                    when (source.kind) {
+                        SourceKind.OBJECT, SourceKind.SNAPSHOT -> {
+                            isUnexplainedObjectLoss(source, carried, stillMissing)
+                        }
 
-                    SourceKind.LEGACY_SEGMENT -> {
-                        !hasLegacyReplacement(source, current, files)
+                        SourceKind.LEGACY_SEGMENT -> {
+                            !hasLegacyReplacement(source, current, files)
+                        }
                     }
                 }
-            }
         // Drop pending counters for paths that reappeared or got explained this pass.
         pendingSupersession.keys.retainAll(stillMissing)
-        return hardMissing?.let { "Metadata source disappeared without a validated replacement: ${it.path}" }
+        return hardLosses.firstOrNull()?.let {
+            "Metadata source disappeared without a validated replacement: ${it.path}"
+        }
     }
 
     /**

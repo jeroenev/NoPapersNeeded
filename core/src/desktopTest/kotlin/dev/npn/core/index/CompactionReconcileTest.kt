@@ -349,6 +349,29 @@ class CompactionReconcileTest {
             withoutSnapshot.judge(emptyMap()).shouldNotBeNull()
         }
 
+    /** A pass that hard-blocks on one lost object still counts the grace window of those after it. */
+    @Test
+    fun aHardLossStillCountsTheLossesListedAfterIt() =
+        runTest {
+            val first = "a".repeat(64)
+            val second = "c".repeat(64)
+            val lost =
+                listOf(
+                    source("${NpnPaths.JOURNAL_DIR}/objects-v2-aa/$first.jsonl", SourceKind.OBJECT, first),
+                    source("${NpnPaths.JOURNAL_DIR}/objects-v2-cc/$second.jsonl", SourceKind.OBJECT, second),
+                )
+            val validator = SourceSetValidator(db.metadataProjectionDao())
+
+            suspend fun judge(previous: List<MetadataSourceEntity>) =
+                validator.unexplainedSourceLoss(previous, emptyList(), emptyMap(), emptySet())
+            repeat(SourceSetValidator.PENDING_SUPERSESSION_LIMIT) { judge(lost) shouldBe null }
+
+            judge(lost).shouldNotBeNull()
+
+            // The second object's window was spent in the same passes as the first's, not restarted.
+            judge(lost.drop(1)).shouldNotBeNull()
+        }
+
     private fun source(
         path: String,
         kind: SourceKind,
