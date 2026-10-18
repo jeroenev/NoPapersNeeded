@@ -28,7 +28,11 @@ class RuleApplier(
 ) {
     private val mutex = Mutex()
 
-    /** Apply all rules whose selected field is available for one document. */
+    /**
+     * Apply every rule to one document. [content] is its text when the caller has it at hand (OCR
+     * just indexed it); without it, a rule on the content reads the indexed text, so a write that
+     * is no OCR (a field edit, a rename) matches the same rules a pass over the library does.
+     */
     suspend fun applyToDoc(
         docId: String,
         content: String? = null,
@@ -36,7 +40,8 @@ class RuleApplier(
     ) = mutex.withLock {
         val compiled = enabledRules()
         if (compiled.isEmpty()) return@withLock
-        apply(documentDao.getByDocId(docId) ?: return@withLock, content, compiled, organize)
+        val doc = documentDao.getByDocId(docId) ?: return@withLock
+        apply(doc, content ?: indexedText(docId, compiled), compiled, organize)
     }
 
     /**
@@ -47,12 +52,16 @@ class RuleApplier(
         mutex.withLock {
             val compiled = enabledRules()
             if (compiled.isEmpty()) return@withLock
-            val readsText = compiled.any { it.rule.field == RuleField.Content }
             for (doc in documentDao.getAllLive()) {
-                val content = if (readsText) ftsDao.textOf(doc.docId) else null
-                apply(doc, content, compiled, organize = true)
+                apply(doc, indexedText(doc.docId, compiled), compiled, organize = true)
             }
         }
+
+    /** [docId]'s indexed text when one of [compiled] matches on the content, else null unread. */
+    private suspend fun indexedText(
+        docId: String,
+        compiled: List<CompiledRule>,
+    ): String? = if (compiled.any { it.rule.field == RuleField.Content }) ftsDao.textOf(docId) else null
 
     /** The enabled rules in priority order, compiled for the pass that reads them. */
     private suspend fun enabledRules(): List<CompiledRule> =
