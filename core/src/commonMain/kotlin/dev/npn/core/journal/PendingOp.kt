@@ -11,7 +11,7 @@ import dev.npn.core.model.SystemProperty
  * outside `core` cannot wrap a `tag-remove` of its own making in one.
  */
 @ConsistentCopyVisibility
-data class PendingOp internal constructor(
+internal data class PendingOp internal constructor(
     val doc: String?,
     val op: JournalOp,
 ) {

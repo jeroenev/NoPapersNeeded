@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
  * Shared, so the queues behind one endpoint do not each probe it while it is down: a failure in one
  * holds the others back too.
  */
-class EndpointHealth(
+internal class EndpointHealth(
     private val cooldownMs: Long = ENDPOINT_COOLDOWN_MS,
 ) {
     private val coolingUntil = MutableStateFlow(0L)

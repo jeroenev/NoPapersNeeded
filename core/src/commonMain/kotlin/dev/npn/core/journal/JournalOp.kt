@@ -5,7 +5,7 @@ import dev.npn.core.model.SystemProperty
 import kotlinx.serialization.json.JsonObject
 
 /** A dot uniquely identifies a single event by its author device and per-device sequence. */
-data class Dot(
+internal data class Dot(
     val deviceId: String,
     val seq: Long,
 )
@@ -20,7 +20,7 @@ data class Dot(
  * that build blocks writes and stops opening the library until it updates. A new op therefore ships
  * in a build that reads it before any build writes it.
  */
-sealed interface JournalOp {
+internal sealed interface JournalOp {
     /** The `op` wire string for this operation. */
     val wire: String
 

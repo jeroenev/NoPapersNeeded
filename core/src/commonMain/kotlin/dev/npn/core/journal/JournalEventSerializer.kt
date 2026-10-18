@@ -28,7 +28,7 @@ import kotlinx.serialization.json.jsonPrimitive
  * Field order on write: v, seq, hlc, dev, doc, op, p. Storage readers select and validate the
  * event version before invoking this v1 serializer.
  */
-object JournalEventSerializer : KSerializer<JournalEvent> {
+internal object JournalEventSerializer : KSerializer<JournalEvent> {
     private val hlcSerializer = Hlc.serializer()
 
     override val descriptor: SerialDescriptor =

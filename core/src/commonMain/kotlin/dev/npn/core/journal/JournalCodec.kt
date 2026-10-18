@@ -14,7 +14,7 @@ import kotlinx.serialization.json.jsonPrimitive
  * Writes the JSON-lines journal format, one [JournalEvent] per line, and holds the pinned [json]
  * every reader decodes it with ([EventDecoderRegistry]).
  */
-object JournalCodec {
+internal object JournalCodec {
     /**
      * Pinned here rather than taken from [dev.npn.core.util.NpnJson]: this is the synced wire
      * format, and every replica must encode and decode an event exactly alike.
@@ -31,17 +31,17 @@ object JournalCodec {
     fun encodeLines(events: List<JournalEvent>): String = events.joinToString("\n") { encode(it) }
 }
 
-class UnsupportedEventVersionException(
+internal class UnsupportedEventVersionException(
     val version: Int,
 ) : IllegalArgumentException("Unsupported journal event version: $version")
 
-data class CanonicalJournalEvent(
+internal data class CanonicalJournalEvent(
     val event: JournalEvent,
     val canonicalJson: String,
 )
 
 /** Explicit event decoder registry. Add migrations here before adding a new writer version. */
-object EventDecoderRegistry {
+internal object EventDecoderRegistry {
     val supportedVersions: Set<Int> = setOf(JournalEventVersions.V1)
 
     fun decode(

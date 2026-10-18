@@ -3,12 +3,12 @@ package dev.npn.core.journal
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.util.reason
 
-data class JournalDiagnostic(
+internal data class JournalDiagnostic(
     val line: Int?,
     val message: String,
 )
 
-sealed interface JournalSourceRead {
+internal sealed interface JournalSourceRead {
     /** [manifest] is the snapshot's, for a snapshot object; null for every other source. */
     data class Accepted(
         val events: List<CanonicalJournalEvent>,
@@ -26,7 +26,7 @@ sealed interface JournalSourceRead {
 }
 
 /** Tolerant storage-v1 reader: valid lines remain usable, but malformed lines are reported. */
-object StorageV1Reader {
+internal object StorageV1Reader {
     fun read(bytes: ByteArray): JournalSourceRead {
         val content =
             try {
@@ -57,7 +57,7 @@ object StorageV1Reader {
 }
 
 /** Strict storage-v2 reader. Any integrity or structural failure applies zero events. */
-object StorageV2Reader {
+internal object StorageV2Reader {
     private const val NOUN = "Object"
 
     private val uuidV4 =

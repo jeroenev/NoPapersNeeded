@@ -33,7 +33,7 @@ import kotlinx.coroutines.launch
  * @param ready when given, every drain waits for it before its first [step]: a queue whose steps
  *  are not safe yet (the session's drains, until its first rescan) can still be kicked meanwhile.
  */
-class QueueDrainer(
+internal class QueueDrainer(
     parentScope: CoroutineScope,
     private val name: String = "queue",
     private val log: NpnLog = NpnLog.None,
@@ -118,7 +118,7 @@ class QueueDrainer(
 }
 
 /** A persisted queue and the [worker] that drains it; see [drainedQueue]. */
-class DrainedQueue<Q>(
+internal class DrainedQueue<Q>(
     val queue: Q,
     val worker: QueueDrainer,
 )
@@ -129,7 +129,7 @@ class DrainedQueue<Q>(
  * (see [QueueDrainer]). Built this way, a queue cannot record work that waits for a periodic tick,
  * whoever holds it afterwards.
  */
-fun <Q> drainedQueue(
+internal fun <Q> drainedQueue(
     scope: CoroutineScope,
     name: String,
     log: NpnLog,

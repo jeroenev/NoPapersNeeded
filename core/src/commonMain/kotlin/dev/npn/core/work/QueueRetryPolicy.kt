@@ -6,7 +6,7 @@ package dev.npn.core.work
  * everywhere: the [backoffMs] ramp after each failure, and with [maxAttempts] a cap at which the
  * row is given up on.
  */
-class QueueRetryPolicy(
+internal class QueueRetryPolicy(
     /** Failed attempts after which a row is given up on; null retries for ever. */
     val maxAttempts: Int? = null,
 ) {
@@ -42,6 +42,6 @@ private const val BACKOFF_MAX_SHIFT = 20
  * The doubling only separates the steps above it — which is where the calls being saved actually
  * are.
  */
-fun backoffMs(attempts: Int): Long =
+internal fun backoffMs(attempts: Int): Long =
     (BACKOFF_BASE_MS shl (attempts - 1).coerceIn(0, BACKOFF_MAX_SHIFT))
         .coerceAtMost(BACKOFF_CEILING_MS)

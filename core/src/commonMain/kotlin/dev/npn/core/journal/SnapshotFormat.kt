@@ -29,7 +29,7 @@ import kotlinx.serialization.json.jsonPrimitive
  * yields byte-for-byte the same event multiset as before compaction (the accumulator dedupes by
  * `(deviceId, seq)`), so the CRDT result is unchanged and concurrent snapshots converge.
  */
-data class SnapshotManifest(
+internal data class SnapshotManifest(
     val version: Int,
     val supersedes: List<String>,
 ) {
@@ -48,7 +48,7 @@ data class SnapshotManifest(
     }
 }
 
-object SnapshotCodec {
+internal object SnapshotCodec {
     val json = JournalCodec.json
 
     fun decodeManifest(line: String): SnapshotManifest {
@@ -88,7 +88,7 @@ object SnapshotCodec {
  * Unlike a v2 object it accepts multiple transaction actors (events come from many devices) and
  * does not require a contiguous `1..N` sequence.
  */
-object SnapshotV2Reader {
+internal object SnapshotV2Reader {
     /**
      * Read the snapshot at [relPath]: an accepted read carries its events and its manifest.
      * [contentHash] is [bytes]' SHA-256, when the caller has it already.

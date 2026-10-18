@@ -15,7 +15,7 @@ import kotlinx.serialization.Serializable
  * On-disk wire form is `{"t":<physicalMillis>,"c":<counter>,"d":<deviceId>}`.
  */
 @Serializable
-data class Hlc(
+internal data class Hlc(
     @SerialName("t") val physicalMillis: Long,
     @SerialName("c") val counter: Int,
     @SerialName("d") val deviceId: String,
@@ -51,7 +51,7 @@ data class Hlc(
  *
  * Not thread-safe; callers serialize access (single writer per device).
  */
-class HlcWatermarkAllocator(
+internal class HlcWatermarkAllocator(
     private val clock: EpochClock = SystemEpochClock,
     initialPhysicalMillis: Long = 0L,
     initialCounter: Int = 0,

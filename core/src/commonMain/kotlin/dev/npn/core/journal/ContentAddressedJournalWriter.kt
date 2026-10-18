@@ -5,7 +5,7 @@ import dev.npn.core.fs.publishStagedOnce
 import dev.npn.core.fs.sha256Bytes
 import kotlin.uuid.Uuid
 
-data class PublishedTransaction(
+internal data class PublishedTransaction(
     val relPath: String,
     val contentHash: String,
     val events: List<JournalEvent>,

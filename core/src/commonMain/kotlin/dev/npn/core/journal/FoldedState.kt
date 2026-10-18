@@ -26,7 +26,7 @@ import dev.npn.core.model.SystemProperty
  * is deterministic regardless of the order events were applied.
  */
 @Suppress("TooManyFunctions") // One accumulator answers every view; a split would split the state they share.
-class FoldedState {
+internal class FoldedState {
     // --- raw tag data ---
     // doc -> literal tag name -> (dot -> hlc) of live adds
     private val tagAdds = HashMap<String, HashMap<String, HashMap<Dot, Hlc>>>()

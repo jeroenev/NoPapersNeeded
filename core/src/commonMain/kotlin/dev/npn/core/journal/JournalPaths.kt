@@ -6,7 +6,7 @@ import dev.npn.core.fs.NpnPaths.Temp
 import dev.npn.core.fs.SHA256_HEX
 
 /** What a file under [JOURNAL_DIR] is, as [JournalPaths.classify] tells it from its path alone. */
-sealed interface JournalPath {
+internal sealed interface JournalPath {
     /** A v1 segment, `.npn/journal/<deviceId>/<seq>.jsonl`: still read, never written. */
     data object Legacy : JournalPath
 
@@ -40,7 +40,7 @@ sealed interface JournalPath {
  * and staged, and what an observed file is. Pure string work on library-relative paths, like
  * [NpnPaths].
  */
-object JournalPaths {
+internal object JournalPaths {
     /** Object-store version of the `objects-v2-<xx>` buckets this build reads and writes. */
     const val STORAGE_V2 = 2
 

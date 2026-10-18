@@ -7,21 +7,21 @@ import dev.npn.core.fs.sha256Bytes
  * What planning a compaction knows of one applied object: where it is, its content hash, and its
  * mtime. No events: a plan is made from these alone, and only the objects it picks are loaded.
  */
-data class CompactionSource(
+internal data class CompactionSource(
     val relPath: String,
     val contentHash: String,
     val mtimeMillis: Long,
 )
 
 /** One object considered for compaction: its path, its content hash and the events it contributes. */
-data class CompactionCandidate(
+internal data class CompactionCandidate(
     val relPath: String,
     val contentHash: String,
     val events: List<JournalEvent>,
 )
 
 /** A published snapshot: its path, hash, the hashes it supersedes, and the surviving events. */
-data class PublishedSnapshot(
+internal data class PublishedSnapshot(
     val relPath: String,
     val contentHash: String,
     val supersedes: List<String>,
@@ -36,7 +36,7 @@ data class PublishedSnapshot(
  * through the same verified-publication path as a regular object. The caller (coordinator) is
  * responsible for applying + deleting under its single-writer mutex.
  */
-class SnapshotCompactor(
+internal class SnapshotCompactor(
     private val fs: LibraryFileSystem,
     private val installationId: String,
 ) {

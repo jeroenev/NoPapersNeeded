@@ -207,7 +207,7 @@ internal fun indexTest(block: suspend TestScope.(IndexRig) -> Unit): TestResult 
  * Writes v1 segments, `.npn/journal/<deviceId>/<first seq>.jsonl`, the way builds before storage-v2
  * did. Nothing writes these any more, but libraries still hold them and the reader must fold them.
  */
-class LegacySegments(
+internal class LegacySegments(
     private val fs: LibraryFileSystem,
     private val deviceId: String,
     clock: EpochClock,

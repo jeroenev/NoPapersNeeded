@@ -18,7 +18,7 @@ import kotlin.random.Random
  * The output is a single flat list of every event produced, in generation order. Tests then
  * shuffle it and/or partition it into segments to check order independence.
  */
-class EventHistoryGen(
+internal class EventHistoryGen(
     seed: Long,
     deviceCount: Int,
     private val eventCount: Int,
@@ -165,7 +165,7 @@ class EventHistoryGen(
  * Assertions that two folded states are equivalent for every observable view. Kept as a
  * standalone helper so both the shuffle and compaction properties reuse it.
  */
-object FoldedStateEquivalence {
+internal object FoldedStateEquivalence {
     fun assertEquivalent(
         a: FoldedState,
         b: FoldedState,

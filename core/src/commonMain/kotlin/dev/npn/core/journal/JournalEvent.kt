@@ -17,7 +17,7 @@ import kotlinx.serialization.Serializable
  * - The dot of this event is `Dot(dev, seq)`.
  */
 @Serializable(with = JournalEventSerializer::class)
-data class JournalEvent(
+internal data class JournalEvent(
     val version: Int,
     val seq: Long,
     val hlc: Hlc,
@@ -29,7 +29,7 @@ data class JournalEvent(
 }
 
 /** Event-envelope versions are independent from the journal storage layout version. */
-object JournalEventVersions {
+internal object JournalEventVersions {
     const val V1: Int = 1
     const val CANONICAL: Int = V1
 }
