@@ -1,497 +1,710 @@
 # Architecture
 
-How the codebase is organized and how data flows through it. Read this first,
-then AGENTS.md for build/test/commit conventions and the invariants you must not
-break.
+How the codebase is organized, how data flows through it, and the rules each part keeps. Read
+this first. The other documents each own one thing and this one does not repeat them:
 
-## Big picture
+| Document | Owns |
+|---|---|
+| AGENTS.md | Build and test commands, conventions, detekt, and the short list of invariants you must not break. |
+| CONTEXT.md | The domain glossary: what Field, Edit Run, Review, facet and so on mean here. |
+| DEVELOPMENT.md | Design background, packaging and release mechanics, the library folder layout on disk. |
+| `docs/` | Longer design notes on one topic each, for example `AI_TOOL_DATA_GAPS.md` and `storage-path-reconciliation.md`. |
 
-Local-first paperless document manager. A *library* is a plain folder of PDFs
-plus a `.npn/` metadata directory; everything else is derived state that can be
-rebuilt from the folder, except what one device alone knows (its journal identity,
-its queues of work owed, chats), which it keeps in its own `device.db`. The app runs
-on Android and Linux desktop from one code base:
+The document has four layers. Sections 1 to 3 are the map: what the system is and where the code
+lives. Sections 4 and 5 are how it runs: lifecycle, concurrency, and the paths data takes. Section 6
+is the reference: the rules each concept keeps, grouped by concept, with the class that enforces
+each. Sections 7 to 10 cover the UI, the platform shells, the tests, and recipes for common tasks.
+
+## 1. The system in one page
+
+No Papers Needed is a local-first paperless document manager. A **library** is a plain folder of PDFs
+plus a `.npn/` metadata directory. There is no server: devices share a library through whatever file
+sync tool the user already runs, and every device merges what it finds.
+
+Four kinds of state, and who owns each:
+
+| Store | What it holds | Truth or cache | Where | Synced |
+|---|---|---|---|---|
+| The library folder | The PDFs. A document is identified by the SHA-256 of its bytes; its path is a property. | Truth | In the library | Yes |
+| `.npn/journal/` | Every metadata change as an immutable, content-addressed transaction. Tags, fields, settings, trash, relinks. | Truth for metadata | In the library | Yes |
+| `.npn/ocr/` and `.npn/devices/` | OCR sidecars keyed by document hash and writer; device-identity markers. Write-once. | Truth | In the library | Yes |
+| `index.db` | The Room index: the journal folded onto the documents the folder holds, plus FTS. Disposable; a dropped index rebuilds from the folder. | Cache | Device-local, outside the library | Never |
+| `device.db` | What only this device knows and nothing could rebuild: its journal device id, the OCR and AI queues, enrichment marks, chats. Real migrations only. | Truth, device-owned | Device-local, beside the index | Never |
+| Thumbnails | Rendered pages. | Cache | Device-local | Never |
+
+Merge rules are fixed: tags are an OR-set; single-value fields, system properties, settings, field
+definitions, trash/restore and delete/undelete are last-writer-wins by hybrid logical clock (HLC).
+Everything in `.npn/` the app writes is write-once; nothing is ever appended to or rewritten.
+
+The code is one Kotlin Multiplatform build with two platform shells:
 
 ```
 androidApp ─┐
-            ├─ composeApp (shared UI + viewmodels, KMP commonMain)
-desktopApp ─┘
-                │
-                ▼
-             core (platform-agnostic domain + persistence, KMP commonMain)
-                │
-                └─ platform source sets (androidMain / desktopMain) implement
-                   fs, pdf, ocr, db, app wiring per target
+            ├─ composeApp   shared Compose UI + viewmodels + app wiring   (dev.npn.app.*)
+desktopApp ─┘        │
+                     ▼
+                   core      domain, journal, index, fs, pdf, ocr, ai      (dev.npn.core.*)
+                     │
+                     └─ platform source sets implement fs, pdf, ocr, db and session wiring
 ```
 
-The KMP modules (`core`, `composeApp`, `core-testing`) name their JVM target `desktop`, so their
-source sets are `commonMain`, `androidMain` and `desktopMain` (`core-testing` has only
-`commonMain`). Tests in `core` and `composeApp`: `commonTest` compiles for both targets,
-`desktopTest` runs on the desktop JVM, `androidHostTest` runs the Android target on a host JVM
-(against `android.jar` stubs), and `androidDeviceTest` holds the tests that need a device. `core` also has
-`jvmSharedMain`, shared by the Android and desktop targets, for java.nio code both run:
-the direct-filesystem `JvmLibraryFileSystem` and `JvmWatchedFolder`, and every `actual` the two
-JVMs would otherwise write twice. `androidApp` and
-`desktopApp` are thin entrypoints that launch the shared Compose UI.
+`core` knows nothing about the UI; a headless JVM host can run a library with `core` alone.
 
-Android picks the library implementation from the persisted location string
-(`core.settings.LibraryLocations`): a plain path opens the shared direct filesystem (the default, and
-what Syncthing interoperability relies on; needs the all-files grant), a `content://`
-tree uri opens `SafLibraryFileSystem` (the advanced option for cloud document providers
-and for pre-existing SAF libraries).
+## 2. Modules and source sets
 
-## Modules and package map
+| Module | Packages | Role |
+|---|---|---|
+| `core` | `dev.npn.core.*` | All domain logic and persistence. `commonMain` holds the logic; platform source sets hold implementations. |
+| `core-testing` | `dev.npn.core.testing` | Fakes of `core`'s facets and the `Doc`/`DocListItem` builders, shared by the tests of `core` and `composeApp`. Only test source sets depend on it. |
+| `composeApp` | `dev.npn.app.*` | Shared Compose Multiplatform UI, viewmodels, dependency wiring, string resources in six languages. |
+| `androidApp` | `dev.npn` | Android entrypoint: `MainActivity`, `NpnApplication`, the ML Kit scanner, share-sheet import, WorkManager jobs. |
+| `desktopApp` | `dev.npn.desktop` | Desktop entrypoint, single-instance lock, packaging. |
+| `buildSrc` | | Build logic: convention plugins, packaging tasks, the localization and field-type guards. |
+| `baselineprofile` | | Generates the Android baseline profile on a device; never in CI. |
 
-### `core` — `dev.npn.core.*`
+The KMP modules name their JVM target `desktop`. Source sets:
 
-All domain logic, platform-agnostic. `commonMain` holds the logic; the platform
-source sets hold implementations. Key packages:
+- `commonMain`, `androidMain`, `desktopMain` in `core` and `composeApp`; `core-testing` has only
+  `commonMain`.
+- `core` also has `jvmSharedMain`, shared by the Android and desktop targets, for java.nio code both
+  run: `JvmLibraryFileSystem`, `JvmWatchedFolder`, and every `actual` the two JVMs would otherwise
+  write twice.
+- Tests: `commonTest` compiles for both targets; `desktopTest` runs on the desktop JVM;
+  `androidHostTest` runs the Android target on a host JVM against `android.jar` stubs;
+  `androidDeviceTest` holds what needs a device.
+
+Platform implementations live in the same package as their interface, under `androidMain` or
+`desktopMain`: `core.fs.LibraryFileSystem`, `core.pdf.PdfEngine`, `core.ocr.OcrEngine`,
+`core.db.NpnDatabase`. Android picks its filesystem from the persisted location string
+(`core.settings.LibraryLocations`): a plain path opens the shared direct filesystem, which is the
+default and what Syncthing interoperability relies on; a `content://` tree URI opens
+`SafLibraryFileSystem`, the advanced option for cloud document providers.
+
+## 3. Core package map
+
+One line per package. The rules each package enforces are in section 6.
 
 | Package | Contents |
 |---|---|
-| `core.app` | Public session API and orchestrators, one contract file per concept: `LibrarySession.kt` (the aggregate of facets), `Documents.kt` (`DocumentRepository`, `TagRepository`, `SavedViewRepository`), `History.kt` (a document's history as domain `HistoryEntry`s, so the UI never sees a journal op), `Metadata.kt` (`MetadataWriter`, `TagAdmin`, `DocLifecycle`), `FieldRegistry.kt` (the library's field definitions, values vocabulary and usage), `Ingest.kt`, `Ocr.kt`, `LibrarySettings.kt` (the synced library settings: review workflow, storage path, trash retention, and `LibrarySettingKeys`, every synced setting's key), `Maintenance.kt`, `WorkFacade.kt`, `DocContentFacade.kt`, `Filters.kt`. Viewmodels take the `LibrarySession` and read the facets they use from it; code in `core` depends on the facets alone. The facets stay narrow interfaces so each has a small fake (`core-testing` holds the ones both modules' tests use). `LibrarySessionImpl` (internal: `openSession` opens one) holds only the session's lifecycle and ingest (imports, rescans, the folder watch, the periodic reconcile); the watch decides what each change calls for with the pure `watchAction` (one journal object is ingested at once, everything else waits for the folder to go quiet); every other facet is built in one place, `SessionGraph` (in dependency order, with what opening does to the library's data in its `prepare`), which `openSession` builds once the journal is folded (the open sequence is `SessionOpening.kt`); the three write facets are `MetadataWriterImpl` (metadata and tags) and `DocLifecycleImpl` (trash, restore, delete for good, rename and move), each running every call whole as work the session owns (`SessionLifetime.owned`), as every facet does. `OcrFacadeImpl` owns this device's OCR queue and what the user asks of OCR (re-runs, the AI engine, the engine pin), `MaintenanceFacadeImpl` duplicates, relinks and splits, `SessionWork` the queue drains (`WorkFacade`), and `JournalReviewConfig` (beside its contract in `LibrarySettings.kt`) the review workflow setting and its migration. |
-| `core.app.aiedit` | The AI edit engine, built on the `core.app` facets (`MetadataWriter`, `FieldRegistry`, `DocumentRepository`, `DocContentFacade`) over `core.ai`'s `AiSuggest`: `AiEditRun` (a bulk run the user reviews, then applies; its scope, progress and per-document `ReviewDoc` model; a viewmodel gets one from the `AiEditRun(session, selection)` factory, over the session's facets), `AiEditQueue` (the same run handed to the background, behind the `AiEditQueueFacade` facet, with `EditRunReview` to open a finished run), `AiAutoEnricher` (unattended enrichment after OCR), `AiEditReview.kt` (`ReviewProjector`, which turns a suggestion into a reviewable document, and `ReviewApply`, which writes what was kept) and `SuggestionRunner` (one run's bounded fan-out of requests; the ceiling every asking path shares is `AiFacadeImpl`'s). A subpackage of `core.app` rather than a sibling of `core.ai`: it consumes the session's facets, which sit in `core.app`, and `core.ai` stays the endpoint layer below them. |
-| `core.settings` | This device's own settings and directories, never per library and never synced: `Settings.kt` (`SettingsRepository`, the one read flow and edit seam; `SettingsSnapshot`; `SettingsCodec` with the frozen `SettingsKeys`, the one mapping to stored strings and the clamps; `LegacyLibrarySettings`, what older builds kept per device for library behaviour; `GridSizing`), the two `SettingsRepositoryImpl` actuals (SharedPreferences on Android, a properties file on desktop), `SessionSettings` (the device settings a running session reads), desktop's `AppDirs` (a library's device-local database and thumbnail directories), `LibraryLocations` (what a persisted library location string names, and the key that sets each library's device-local files apart) and desktop's `PlatformDirs` (the app's data and config directories under the XDG / Windows homes). Its stored sort and view type are `core.app`'s `LibrarySort`/`ViewType`. Library settings every device shares are journal data in `core.app` (`LibrarySettings.kt`), not here. |
-| `core.journal` | The metadata journal: content-addressed JSONL transactions (`JournalEvent`, `JournalOp`, `PendingOp`) published as storage-v2 objects (`ContentAddressedJournalWriter`), the object-store layout under `.npn/journal/` and what each file there is (`JournalPaths`, `JournalPath`), the readers for v2 objects, snapshots and legacy v1 segments (`JournalSourceReaders`), codec (`JournalCodec`), HLC (`Hlc`, `HlcWatermarkAllocator`), snapshot compaction (`SnapshotCompactor`, `SnapshotFormat`), and the HLC/OR-set fold (`FoldedState`; its convergence is property-tested by `FoldConvergencePropertyTest`). See "Journal storage" below. |
-| `core.fs` | Filesystem abstraction over the library folder: `LibraryFileSystem` (platform impl), `NpnPaths` (`.npn/` layout, path classification, and the path-safety gate: every path reaches disk through `NpnPaths.normalize`, which refuses traversal; observation-side predicates use `isSafe` to ignore rather than throw; `NpnPaths.Temp` names every temporary file the app writes into the library), `TempFileSweep` (a rescan deletes the temporary files a crash left behind once they are a day old, never a document's recovery file, nor a bake's temporary file unless the file at its document's path holds the same bytes), `ContentIdentity`/`HexEncoding` (hash handling), `TrashOps`. |
-| `core.index` | The rebuildable SQLite cache and maintenance: `Indexer`, `ImportService`, `DuplicateResolver`, `SplitService` (with `SplitFailure`, the reason `MaintenanceFacade.splitPdf` reports), `MetadataAccumulator`, `ScanReport`; `DeviceIdentity`, this installation's device id for the library and the check that no other installation shares it (see "Journal storage"); and `JournalCoordinator`, which writes journal events and folds them into the index. It is the only sanctioned path for writing journal events, enforced at the type level: `ContentAddressedJournalWriter` is `internal` to `core` and the coordinator holds its writer privately. A step it runs under its writer lock reads and writes the journal through `LockedJournal`. It lives here rather than in `core.journal` because it drives the index (`Indexer`, `MetadataAccumulator`, `SnapshotSupport`), and `core.journal` stays free of the index. |
-| `core.db` | Room entities and DAOs for two databases per library. `NpnDatabase` (`index.db`) is the disposable index (one file per DAO, named after it: `DocumentDao`, `TagDao` with every `document_tags` query, `DocumentFieldDao`, `FtsDao` (beside `FtsRows`, the one place an FTS row is built), `MetadataProjectionDao`, ...; the small result types in `Projections`; `LIVE_DOCUMENT` is the one SQL predicate for what the library shows); its builders fall back to a destructive migration, and anything a migration cannot rebuild must not live there. `DeviceDatabase` (`device.db`) is this device's own state, which nothing could rebuild: the `kv` device id (with the installation it belongs to) and chats, the OCR queue and paid-for OCR pages, the enrichment queue and its marks, queued AI edit runs. It has real migrations only, never a destructive fallback. `LegacyIndexTables` moves what older index schemas held into the journal or `device.db` on open. Schema files in `core/schemas/<database>/`. Platform `NpnDatabase.*.kt` / `DeviceDatabase.*.kt` build them, each through its database's `configure` (commonMain), which alone decides the driver, the migrations and whether there is a destructive fallback. |
-| `core.pdf` | PDF rendering/thumbnails: `PdfEngine` (platform impl), `RenderGate`, `ThumbnailService` and its `ThumbnailStore` (`DirThumbnailStore` on both JVMs, an app-local directory). |
-| `core.ocr` | OCR pipeline and sidecars: `OcrEngine` (the engine interface; `MlKitOcrEngine` on android, `TesseractCliEngine` on desktop, `core.ai.AiFacadeImpl.ocrEngine` for a vision model), `OcrEngineId` and `OcrState` (the engine and state vocabularies, the one source of their stored names; an engine's search rank is on the enum), `QueueState` (in `core.db`, beside the queue row), `OcrEngineSelector` (which engine a document's run may use, given `core.ai.UnattendedAiPolicy`'s permission to spend), `OcrPipeline`, `OcrVersions` (the sidecars stored per document, their writer keys, and which version is indexed), `OcrSidecar`, `OcrSidecarFiles` and `OcrSidecarName` (the one reader of a sidecar's file name and writer key, legacy forms included, and of which sidecars this device wrote itself). |
-| `core.update` | The update check: `AppVersions` (whether a release is newer than this build), `LatestReleaseSource` and its `GitHubLatestRelease`, which reads the repository's latest published release and yields null on any failure, so a check never surfaces as an error. `composeApp`'s `ui/update` offers it. |
-| `core.util` | Shared primitives every layer uses: `runCatchingCancellable` (a `runCatching` that rethrows cancellation; use it, never `runCatching`, around suspend code), `Throwable.reason()` (the message, else the class name) and the app-wide wall clock, `EpochClock` (`EpochClock.kt`; `SystemEpochClock` in production, the one read of the system time). `NpnLog`, carried on `SessionDeps.log`, is where work nobody awaits reports a failure, through `runLogged("what") { }`: `AndroidLog` writes to logcat, desktop's `JvmLog` to stderr plus a file rolled over at 1 MB. The desktop app's one log, `npn.log` in the app directory under the platform data home, is `DesktopLog`, which lives beside `jvmSessionDeps` in `core.app` (`desktopMain`) rather than here, since it reads `core.settings.PlatformDirs`. `NpnJson` holds the JSON configurations: `Persisted` for anything the app writes and reads back (tolerates other builds' records), `Lenient` for model output and third-party responses; only the journal codec keeps its own, pinned. |
-| `core.work` | `QueueDrainer`: the single-flight background drain shared by the OCR queue, the automatic AI enrichment queue and queued AI edit runs. One worker loop fed by conflated kicks, so a burst of kicks during a drain costs one more drain; a step that throws is logged and ends that drain, never the loop. `drainedQueue` builds a queue together with its drainer, handing the queue an `onEnqueued` callback that kicks that drainer. `QueueRetryPolicy`: when a persisted queue's failed row is tried again (the shared `backoffMs` ramp, stored as `nextAttemptAt`) and when it is given up on. `EndpointHealth`: the one cooldown of an AI endpoint, held by the session (`SessionGraph`, beside the endpoint's `AiFacadeImpl`) and shared by the enrichment and edit queues, so a failed call in either holds both back and an answer to either lifts it; a write that fails after an answer is its row's own failure. |
-| `core.xmp` | XMP metadata on export/bake-in-place: `PdfXmpIO` (platform, moves the raw packet), `XmpBytes`, `XmpSerializer`, `XmpParser` (reads back only what bake needs: title, document id, tags), `XmpMerger`, `NpnXmpData` with `XmpProperties` (every property name, and which fields get their own), `BakeService`. In-place bakes run one at a time, each whole, under the session's `BakeLock` (`DocContentFacadeImpl`): every bake of a path writes the same temporary file, and its relink must name the bytes it installed. A trash or delete for good holds that lock too, so it waits for a bake and then acts on the document the bake made (`JournalCoordinator.changeLifecycle` follows the relink). Lock order: `BakeLock`, then the coordinator's; nothing that holds the coordinator's, the storage-path applicator's or the rule applier's lock takes it. A bake changes no page, so its relink (`BakeRelink`) hands the original's text on: before it, the original's OCR versions are published again under the baked hash as this device's (`OcrPipeline.copyText`) and its enrichment mark is copied; after it, that text is indexed, so the baked document is searchable at once and is neither OCR'd nor enriched again. A relink to other bytes hands on nothing. |
-| `core.model` | Per-document vocabulary in `Document.kt` (`ReviewMode`, the app-owned `SystemProperty` keys) and the field model: `Field.kt` (`FieldType`, `FieldDef`, `FieldKeys` — well-known keys, seed definitions and their versioned upgrade, the seeded hints a model is told (`SEED_HINTS`; an editor shows its own translation of one while a definition still holds it, `composeApp`'s `hintText`), key normalization) and `FieldValues.kt` (the one authority on a value's canonical form per type); `AppLanguages` reduces an app-language tag to its subtag and knows each language's English name (for prompts) and Tesseract model (for automatic OCR). |
-| `core.rules` / `core.pathrules` | Auto-match rules (`RuleMatcher`, `RuleApplier`, `AutoMatchRule`) and storage-path templates (`StoragePathRule*`, `StoragePathTemplate`, `StoragePathContext`). Both are library data: synced `setting-set` keys in the journal (`LibrarySettingKeys` in `core.app`), so every device files and matches documents alike; the rules table in the index only caches the journal's list (`AutoMatchRuleSource` reads the list and keeps that cache, `AutoMatchRuleRepositoryImpl` edits the list). A device's pre-journal settings are adopted once by a library that has no value yet; the template and its switch are one setting, adopted together or not at all. A template that cannot expand says why with a `StoragePathError`, which Settings maps to its own copy; the context always carries the registry's field types, since they decide which fields take a date pattern. |
-| `core.watch` | Watched inbox folder: `WatchedFolder` (platform), `WatchedFolderImporter`. Delete-after-import removes a source only while it still holds the bytes imported: while it has the size and mtime it was listed with, or, from a provider that listed no mtime (SAF's can be 0), while it hashes to the document. A file written under its name since was never imported. A folder at or inside the library (`liesInLibrary`: real paths, SAF tree document ids, or a tree's device-storage path) is never swept, as its files are the library's own, and Settings refuses one when it is picked. |
-| `core.ai` | Local/AI chat loop and tools over the library (`KoogChatAgent`, `AiFacadeImpl`, `LibraryAiTools`, whose `LibraryToolSet` holds the tools Koog advertises and a call map by tool name); `ChatHistoryWindow` sizes what a conversation keeps and what each request replays, in characters, with old tool results stubbed. Contracts split per concept: `AiChat.kt`, `AiSuggest.kt`, `AiConfig.kt`, `UnattendedAiPolicy.kt` (may this replica spend without being asked); `AiFacadeImpl` implements the two facets and is the vision OCR engine (`ocrEngine`), so all of them share one cached endpoint client (`AiRuntimeCache`). Its `suggestEdits` holds the one ceiling on edit suggestions in flight (`MAX_CONCURRENT_SUGGESTIONS`), which every asking path shares: concurrent runs, the queued drain, automatic enrichment and single-document requests together never exceed it. Every endpoint client is built in one place, `AiRuntime.build(config, transport)`: the facade's cached one, and the short-lived ones the settings self-test (`AiSelfTest`, which makes paid calls) and the model picker (`AiModelCatalog`) build per use. Its `transport` is the test seam: Ktor plugins installed on a base client a test passes in see every call that runtime makes; provider-specific wire needs (the OpenCode Go session header) are layered on top, never in place of it. Consumers in `core.app.aiedit` drive it: `AiEditRun` (bulk, review-then-apply) and `AiEditQueue` (the same, handed to the background), which fan out through `SuggestionRunner`, `AiAutoEnricher` (unattended, queued in `ai_enrich_queue` off the OCR thread), and `OcrPipeline` through `AiFacadeImpl.ocrEngine` (page-image transcription, one call per page). `LibraryAiTools` is the assistant's entire view of the library — see docs/AI_TOOL_DATA_GAPS.md for what it deliberately does not expose. |
+| `core.app` | The public session API and the orchestrators behind it. One contract file per concept: `LibrarySession.kt`, `Documents.kt`, `History.kt`, `Metadata.kt`, `FieldRegistry.kt`, `Ingest.kt`, `Ocr.kt`, `LibrarySettings.kt`, `Maintenance.kt`, `WorkFacade.kt`, `DocContentFacade.kt`, `Filters.kt`. Implementations: `LibrarySessionImpl`, `SessionGraph`, `SessionOpening.kt`, `MetadataWriterImpl`, `DocLifecycleImpl`, `OcrFacadeImpl`, `MaintenanceFacadeImpl`, `SessionWork`, `JournalReviewConfig`, `BakeRelink`. |
+| `core.app.aiedit` | The AI edit engine over the facets: `AiEditRun`, `AiEditQueue`, `AiAutoEnricher`, `AiEditReview.kt` (`ReviewProjector`, `ReviewApply`), `SuggestionRunner`. |
+| `core.journal` | The metadata journal: `JournalEvent`, `JournalOp`, `PendingOp`; `ContentAddressedJournalWriter`; `JournalPaths`; the readers for v2 objects, snapshots and legacy v1 segments (`JournalSourceReaders`); `JournalCodec`; `Hlc`, `HlcWatermarkAllocator`; `SnapshotCompactor`, `SnapshotFormat`; the fold, `FoldedState`. |
+| `core.index` | The rebuildable index and its maintenance: `JournalCoordinator`, `Indexer`, `MetadataAccumulator`, `FoldProjection`, `SnapshotSupport`, `SourceSetValidator`, `ImportService`, `DuplicateResolver`, `SplitService`, `ScanReport`, `DeviceIdentity`, `DocumentPathReconciler`, `ExternalDocumentMoves`. |
+| `core.db` | Room entities and DAOs for the two databases: `NpnDatabase` (`index.db`) and `DeviceDatabase` (`device.db`). One file per DAO. `LegacyIndexTables` moves what older index schemas held into the journal or `device.db`. |
+| `core.fs` | `LibraryFileSystem` and its platform implementations; `NpnPaths` (the `.npn/` layout, path classification, the path-safety gate, every temporary file name); `TempFileSweep`; `ContentIdentity`, `HexEncoding`; `TrashOps`. |
+| `core.model` | `Document.kt` (`ReviewMode`, `SystemProperty`), `Field.kt` (`FieldType`, `FieldDef`, `FieldKeys` with the seeds and their versioned upgrade), `FieldValues.kt` (canonical forms), `AppLanguages`. |
+| `core.ocr` | `OcrEngine` and its implementations, `OcrEngineId`, `OcrState`, `OcrEngineSelector`, `OcrPipeline`, `OcrVersions`, `OcrSidecar`, `OcrSidecarFiles`, `OcrSidecarName`. |
+| `core.pdf` | `PdfEngine`, `RenderGate`, `ThumbnailService`, `ThumbnailStore` (`DirThumbnailStore` on both JVMs). |
+| `core.xmp` | XMP on export and bake-in-place: `PdfXmpIO`, `XmpBytes`, `XmpSerializer`, `XmpParser`, `XmpMerger`, `NpnXmpData`, `XmpProperties`, `BakeService`. |
+| `core.rules`, `core.pathrules` | Auto-match rules (`RuleMatcher`, `RuleApplier`, `AutoMatchRule`, `AutoMatchRuleSource`) and storage-path templates (`StoragePathRule*`, `StoragePathTemplate`, `StoragePathContext`). |
+| `core.watch` | Watched inbox folder: `WatchedFolder` (platform), `WatchedFolderImporter`. |
+| `core.work` | `QueueDrainer`, `drainedQueue`, `QueueRetryPolicy`, `EndpointHealth`. |
+| `core.ai` | The AI layer: `AiChat.kt`, `AiSuggest.kt`, `AiConfig.kt`, `UnattendedAiPolicy.kt`; `AiFacadeImpl`, `KoogChatAgent`, `LibraryAiTools`, `ChatHistoryWindow`, `AiRuntime`, `AiRuntimeCache`, `AiSelfTest`, `AiModelCatalog`, `ProviderClientFactory`. |
+| `core.settings` | This device's own settings and directories, never per library: `Settings.kt` (`SettingsRepository`, `SettingsSnapshot`, `SettingsCodec`, `SettingsKeys`, `LegacyLibrarySettings`, `GridSizing`), `SessionSettings`, `AppDirs`, `LibraryLocations`, `PlatformDirs`. |
+| `core.update` | The update check: `AppVersions`, `LatestReleaseSource`, `GitHubLatestRelease`. |
+| `core.util` | `runCatchingCancellable`, `Throwable.reason()`, `EpochClock`, `NpnLog` and `runLogged`, `NpnJson`. |
 
-Platform impls live in the same package under `androidMain`/`desktopMain` (e.g.
-`core.fs.LibraryFileSystem`, `core.pdf.PdfEngine`, `core.ocr.OcrEngine`,
-`core.db.NpnDatabase`).
+Why two things sit where they do:
+
+- `JournalCoordinator` is in `core.index`, not `core.journal`, because it drives the index;
+  `core.journal` stays free of the index.
+- `core.app.aiedit` is a subpackage of `core.app`, not a sibling of `core.ai`, because it consumes
+  the session's facets, and `core.ai` stays the endpoint layer below them.
+
+## 4. Runtime model
+
+### 4.1 Opening, running and closing a session
+
+A library is opened with `openSession(SessionDeps)` followed by `start()`. `SessionDeps`
+(`core.app`) carries everything a library needs: the filesystem, the two databases, the PDF, OCR
+and XMP engines, the thumbnail store, a coroutine scope, the device settings as one
+`SessionSettings`, a log, a clock and the installation id. On a plain JVM they come from
+`jvmSessionDeps` (`desktopMain`), the one place that wires java.nio, PDFBox, Tesseract and the two
+Room databases under an `AppDirs`; Android's counterpart is `androidSessionDeps` (`androidMain`),
+which dispatches on the location string. The desktop app, the `AppSessionRig` test harness and any
+headless host build sessions the same way.
+
+The open sequence is `SessionOpening.kt`: settle the device identity (`DeviceIdentity`), probe that
+the storage can publish without replacement, fold the journal, then build every facet in dependency
+order in `SessionGraph`, whose `prepare` does what opening does to the library's data (field seed
+upgrades, adoption of this device's pre-journal settings and saved views). Those writes are best
+effort and retried at the next open; only storage that cannot publish without replacement refuses
+the library (`OpenFailureReason.UNSUPPORTED_STORAGE`).
+
+`LibrarySessionImpl` itself holds only the lifecycle and the ingest side: imports, rescans, the
+folder watch and the periodic reconcile. Every other facet is its own object from `SessionGraph`.
+
+Everything the session runs is a child of one `SessionLifetime` job under `SessionDeps.scope`:
+background loops, queue drains, and every facet write, which runs as work the session owns
+(`SessionLifetime.owned`) rather than on the caller's coroutine. `close()` stops and awaits all of
+it, then releases what the session holds open beside it (the coordinator, the endpoint client; each
+registered with `SessionLifetime.releaseOnClose` where it is made, so a failed open releases it
+too). Closing is final. The databases stay the host's, to close once `close()` returns.
+
+### 4.2 What runs in the background
+
+`LibrarySessionImpl.start()` launches, all logged through `runLogged` so a failure never reaches a
+scope with no handler:
+
+| Loop | Trigger | Does |
+|---|---|---|
+| Library watch | `LibraryFileSystem.watch()` events, settled into bursts | `watchAction` (pure) decides per event: ingest one journal object at once; reconcile the journal or the OCR sidecars once the folder goes quiet; rescan for PDF changes. |
+| Initial rescan | Once at start | Opens the drains' gate when it succeeds. |
+| Follow-up rescan | A scan deferred a file still being written, or an OCR read found stale bytes | One pending timer, rescheduled, that rescans after the settle window. |
+| Rule mirror | The `AUTO_MATCH_RULES` setting changes | Caches another device's rule list into the index. |
+| OCR queue watch | Rows other writers add to the OCR queue | Kicks the OCR drain. |
+| Maintenance tick | Every 15 minutes | Metadata reconcile, journal compaction, a retry of a failed initial rescan, and a kick of every queue so backed-off rows come due. |
+
+Each queue (OCR, AI enrichment, queued AI edit runs) has a `QueueDrainer`: one worker loop fed by
+conflated kicks, so a burst of kicks during a drain costs one more drain, and a step that throws is
+logged and ends that drain, never the loop. Every rescan the session runs itself is followed by a
+kick of every queue and the trash purge.
+
+### 4.3 The single writer
+
+`JournalCoordinator` is the only path that writes journal events and folds them into the index.
+That is enforced by types: `ContentAddressedJournalWriter` is `internal` to `core` and the
+coordinator's `writer` is private, so no caller outside `core` can reach a raw writer.
+
+- Every fold, write and rescan runs on the coordinator's own dispatcher under one mutex
+  (`locked`), so every entry point is main-safe and `close()` doubles as the barrier the session
+  needs before its database is closed.
+- The `FoldedState` is folded on demand, not at boot: readers go to the Room projection, and only
+  writers and rescans pay for the replay, once per session.
+- A step that reads and writes the journal under the lock does so through `LockedJournal`, which
+  the coordinator hands to it (`serialized`).
+- Every fold writes in one Room transaction (`Indexer.projection`), which a commit's journal
+  bookkeeping joins, so no reader sees a row before its tags and fields. Moving a PDF to its
+  intended path and recording where documents were seen are filesystem work, after the transaction.
+
+Lock order: `BakeLock` (in-place bakes, trash and delete for good), then the coordinator's mutex.
+Nothing that holds the coordinator's, the storage-path applicator's or the rule applier's lock takes
+`BakeLock`.
+
+### 4.4 The facet contract
 
 Every `core.app` facet keeps one contract, so a caller needs no defensive wrapping:
 
-- **Main-safe.** A viewmodel may call a facet from the main thread. `JournalCoordinator` runs every
-  fold and journal write on its own dispatcher; the filesystem, Room and PDF engines switch for
-  their own work.
-- **Expected failures are typed outcomes.** What normal use can run into — a file that cannot be
-  imported, a split or bake that cannot happen, AI OCR without an endpoint, a deleted document's
-  file that cannot be removed — comes back as an outcome carrying an error enum (`ImportFailure`,
+- **Main-safe.** A viewmodel may call a facet from the main thread; the filesystem, Room and the
+  PDF engines switch dispatchers for their own work.
+- **Expected failures are typed outcomes** carrying an error enum (`ImportFailure`,
   `SplitFailure`, `BakeFailure`, `AiOcrOutcome`, `PermanentDeleteOutcome`), with the cause in the
-  session log. `composeApp` maps each enum to a string resource: no English text built in `core`
-  is shown to the user. `DocContentFacade`'s nullable reads return null for anything they cannot
-  show.
+  session log. `composeApp` maps each enum to a string resource; no English text built in `core`
+  reaches the user. `DocContentFacade`'s nullable reads return null for anything they cannot show.
 - **Bugs and misuse throw**, a closed session included. A viewmodel runs its writes through
   `launchReporting`, which turns a throw into a message instead of a crash.
-- **One exception: the AI endpoint's failures throw.** `AiChat.ask` (as its flow's exception),
-  `AiSuggest.suggestEdits` and `AiModelCatalog.listModels` pass on what the server said, which no
-  enum could list, and the UI shows it as the reason (`Throwable.reason()`). This is by design: do
-  not wrap it in an outcome, and do not copy it for any other facet.
+- **One exception: the AI endpoint's failures throw.** `AiChat.ask`, `AiSuggest.suggestEdits`
+  and `AiModelCatalog.listModels` pass on what the server said, which no enum could list, and the
+  UI shows it as the reason. Do not wrap it in an outcome, and do not copy it for any other facet.
 - **Cancellation is always rethrown** (`runCatchingCancellable`), never reported as a failure.
 
-Opening a library is `openSession(SessionDeps)` (`core.app`, commonMain) followed by
-`start()`. Everything the session runs — background loops, queue drains, every facet write — is a
-child of one `SessionLifetime` job under `SessionDeps.scope`, so `close()` stops and awaits all of
-it before the host closes the databases, then releases what the session holds open beside it (the
-journal coordinator, the endpoint client: each registered with `SessionLifetime.releaseOnClose` where
-it is made, so a failed open releases it too); closing is final. What an open writes to bring an existing
-library up to this build (a newer field seed, this device's old settings and saved views) is best
-effort, retried at the next open; only storage that cannot publish without replacement refuses the
-library. On a plain JVM the `SessionDeps` come
-from `core.app.jvmSessionDeps` (`desktopMain`): the one place that wires java.nio + PDFBox +
-Tesseract + the two Room databases under an `AppDirs`. The desktop app, the `AppSessionRig` test
-harness and any headless JVM host build their sessions through it — nothing in `composeApp` is
-needed to run a library without a UI.
-Android's counterpart is `core.app.androidSessionDeps` (`androidMain`). Both take the device
-settings a session reads while it runs as one `SessionSettings`, which the apps build with
-`SessionSettings.from(settings, systemLanguage)` (`core.settings`; `systemLanguage` defaults to core's `systemLanguage()`); a new session setting is a field there.
+The facets stay narrow interfaces so each has a small fake. CONTEXT.md lists them.
 
-### `composeApp` — `dev.npn.app.*`
+## 5. Data flows
 
-Shared Compose Multiplatform UI + viewmodels + dependency wiring.
+### 5.1 A metadata edit
 
-| Path | Contents |
-|---|---|
-| `app/App.kt`, `app/AppViewModel.kt` | Root composable / app shell, and the viewmodel that opens, restores and switches the library for it: one sealed `AppState` (`Restoring`, `Opening`, `NoLibrary`, `RestoreFailed`, `Open`) that also carries every failure to open, as a localized `OpenFailureReason` with the technical cause as an optional detail. A change of the app's language rebuilds everything under `LocaleProvider`, so `LocalizedApp` remembers what the open library's UI must keep through one above it (`LibraryUi`: the navigation, and what the session keeps for its screens). All of it belongs to one session: the nav controller is keyed on it, and `LibraryViewModelStores` (held in the window's store, the activity's on Android, so a recreated activity finds its screens as they were) keeps one `LibrarySessionUi` per session, the one place that state lives: the viewmodel store its screens use (`LibraryViewModelHost`), each document's store (shared by the screens showing the document, which hold it through a `ViewModelStoreLease` in their own store), the unsaved drafts (saved only to seed a restored process) and what the screens hand each other. It clears a session's once its UI is gone, so nothing a closed library's screens started runs on. |
-| `app/di/` | `AppEnvironment` (session lifecycle: open/close/swap, watched folder; a swap is done once the new location is saved, and a failed one, saving included, closes what it built, reopens the previous library and rethrows) + `DefaultAppEnvironment`. A platform factory that knows why a library cannot open throws `LibraryUnavailableException` with an `OpenFailureReason`. The platform source sets hand it two plain functions, one that builds a location's `SessionDeps` and one that opens its watched folder, in `AppEnvironment.android/desktop.kt`. The per-library wiring itself is `core`'s `jvmSessionDeps`/`androidSessionDeps` (see above); the DI files only check that a location can be opened and bind the session's settings. `androidSessionDeps` dispatches on the location string: direct path → `JvmLibraryFileSystem` with `ContentResolverExternalIo` and exclusive `renameat2(RENAME_NOREPLACE)` publication through JNA, `content://` → `SafLibraryFileSystem`. The DI package imports no UI package. |
-| `app/platform/` | Small shared platform hooks: `PlatformHelpers.kt`, the `expect` functions each platform answers (folder access, whose `FolderPick` gives a SAF folder's location only once Android keeps the app's access to it; library-folder creation; image decoding; sharing; which settings it offers), plus the document scanner, foreground import and direct storage access, and Android's `LaunchImports` (which creation of the activity imports the intent it was launched with). |
-| `app/ui/` | Screens, one package each: `library/` (list/grid, filters, preview), `detail/` (page viewer, metadata panel, history, split; `DocumentView` is the one wiring of a document to its `DocDetailViewModel`, which the detail screen and the library's side panel each frame with their own chrome, and share, so expanding the panel keeps the document as it was), `tags/`, `rules/`, `settings/`, `trash/`, `update/` (the new-release banner and `UpdateNoticeViewModel`, which offers a newer release once per start), `queue/` (the read-only OCR + AI enrichment backlog and the AI edit runs handed to the background; a top-level destination, on the rail on wide layouts and in the bottom bar's More sheet on compact ones), `onboarding/` (onboarding and the restore-failed screen, which share `LibraryLocationChooser`: the all-files grant, the folder pickers and the SAF switch), `nav/` (shell + routes), `ai/`, `common/` (shared components, one per UI concept: the form building blocks `SettingsSection`, `SwitchRow`, `HelpText`, `Dropdown`, `ExpanderRow` (with the `expander`/`disclosure` semantics every expander uses), `SuggestField` (the one autocomplete; `SearchField` shares its menu), `rememberNumberInput`, `TypedTextField` (text whose owner saves it slower than keys arrive, such as a device setting), `UiLanguage` (the one language-name table); `BackTopBar` and `TooltipIconButton`/`TopBarActions` for top bars, whose `TopBarAction`s also fill menus through `ActionMenuItems`; `keyShortcuts`, the one way a screen binds keys (a `when (event.key)` naming each key's action); `EmptyState`, `TagEditor`, `TagFormDialog`, `TagPickDialog`, `DocThumbnail`; `MessagesViewModel`, `SnackbarMessages`, `UiText`; and `LocalWindowWidthClass`, the window's one wide-or-compact decision that the shell and every screen read), `theme/`. Leaf composables take state plus actions, never a viewmodel: a screen hands its viewmodel down as a small actions interface it implements (`AiEditSetupActions`, `LibraryActions`, `ReviewController`, `SettingsActions`, `TagWrites`, `TrashWrites`, `DocumentWrites`, `DocumentActions`). ViewModels are co-located with their screen (e.g. `LibraryViewModel`, `DocDetailViewModel`). One-shot messages have one path: a `MessagesViewModel` sends `UiMessage`s (text, plus an optional action such as Undo) into an unbounded channel with `message` or `launchReporting`, where they wait for a collector however many pile up, and the screen's one `SnackbarMessages` shows them one at a time, in order. A message's `UiText` names a whole-sentence `StringResource` (or plural) and its arguments; the snackbar resolves it with the suspend `UiText.resolve(environment)` in the composition's resource environment, so it follows the app's language, and composables use the `@Composable` `resolve()`. |
-| `commonMain/composeResources` | `values/` (English) plus `values-nl/`, `values-de/`, `values-fr/`, `values-es/` and `values-pt/` string resources; `checkLocalization` checks every translation for missing keys and placeholder parity. |
+```
+viewmodel ──► facet (MetadataWriter, TagAdmin, DocLifecycle, ...)   runs as session-owned work
+                 │
+                 ▼
+          JournalCoordinator.locked { fold on demand → build ops from live dots → write object → project }
+                 │                                   │
+                 │                                   └─► .npn/journal/objects-v2-xx/<sha256>.jsonl   (write-once)
+                 ▼
+          Indexer.projection { refreshEvents }  ──► index.db rows (documents, document_fields, document_tags, fts)
+                 │
+                 ▼
+          Room DAO Flows ──► viewmodels (shared with WhileSubscribedTimeout) ──► Compose, a pure renderer
+```
 
-### `core-testing` — `dev.npn.core.testing`
+A storage-path rule follows metadata writes one at a time (`StoragePathRuleApplicator`), each
+reading after its write committed, and journals a document's intended location once.
 
-Test doubles of `core`'s facets (documents, tags, field registry, metadata writes, document content,
-AI suggestions) and the `Doc`/`DocListItem` builders that feed them. The commonTest of `core` and
-of `composeApp` depend on it, so both suites fake each interface the same way; nothing else does, so
-it never ships.
+### 5.2 Import
 
-### `androidApp` — `dev.npn.*`
+`ImportService` reads PDFs from the picker, the scanner, a share intent or the watched folder,
+hashes the bytes, checks for a duplicate (section 6.2), moves the file into the library, adds its
+index row and queues it for OCR. Its only journal write is the restore of bytes the journal had
+trashed or deleted, in the step under the writer lock that makes the row live. `OcrPipeline` then
+writes the sidecar, after which the auto-match rules and, when enabled, AI enrichment write
+metadata.
 
-Android entrypoint (`MainActivity`, `NpnApplication`), plus Android-only features:
-`MlKitDocumentScanner`, `IntentImport` (share-sheet import, reported as soon as it is done; the
-activity imports its launch intent once, and again only when a process death cut that import
-short, see `LaunchImports`),
-`NpnWork` (WorkManager: the periodic watched-folder sweep, rescan and queue drains, and the
-one-time drain of the OCR and enrichment a share import queued).
+### 5.3 Changes arriving from the folder
 
-### `desktopApp` — `dev.npn.desktop`
+Journal changes are routed apart from PDFs, so journal sync never scans or hashes PDFs:
 
-Desktop entrypoint (`Main.kt`) and packaging. One instance runs per user: `SingleInstance` holds a
-lock file in the app data directory, and a second launch only says so and exits. Closing the window
-closes the library session (bounded by a timeout) before the process exits; `closeThenExit`
-(`Shutdown.kt`) exits even when the close fails, and logs the failure. `DesktopBridge`
-(composeApp) carries the window's two ties to the shared UI: the title the screens publish, which
-the window collects as state, and files dropped on the window, which `AppViewModel` imports and
-reports like any other import. Packaging: deb, rpm, AppImage and uber-jar on Linux, a Flatpak
-bundle (manifest in `desktopApp/flatpak/`), and `.msi`/`.exe` installers on Windows. Every Linux
-package renders its desktop entry from the one template in `desktopApp/linux/`; the task classes
-live in `buildSrc`. Hot Reload via `mise hot`.
+- A new journal object is ingested on its own (`coordinator.ingestObject`).
+- Once the folder goes quiet, the journal is reconciled (`reconcileMetadata`: reads only the
+  metadata directory, skips unchanged source fingerprints, never walks PDFs) and the OCR sidecars
+  are reconciled.
+- A PDF change triggers a rescan (`coordinator.rescan`), which reconciles the journal first, then
+  walks the folder: hashes new or drifted files once their bytes have settled (`WriteSettle`),
+  judges trashed and deleted documents by the journal it folds as well as by the row, moves
+  documents to their intended paths (`DocumentPathReconciler`), records restores (section 6.4),
+  sweeps day-old temporary files (`TempFileSweep`) and reports (`ScanReport`).
 
-## Data flow
+Watch services and sync providers may omit events, so the 15-minute tick reconciles as well. On
+desktop nothing else rescans until the folder changes; Android rescans on every resume.
 
-1. **Import**: `ImportService` (via `LibrarySessionImpl`) reads PDFs from picker /
-   scanner / share intent / watched folder, hashes bytes (`SHA-256` = document
-   identity), dedups, moves the file into the library, adds its index row and
-   queues it for OCR. Only a live document whose file still holds the bytes makes
-   an import a duplicate (whose source the watched folder may delete): the size and
-   mtime its row stored prove that, as they do for a rescan, and only a file whose
-   stat drifted is hashed, under the writer lock the check runs in; the bytes
-   of a trashed, deleted or missing document bring that document back, metadata
-   and all, and any copy of it left in the trash is deleted, under the writer lock
-   and only while the document is still live (a trash of it since put its file
-   there). Its only journal
-   write is the restore of bytes the journal had trashed or deleted, in the step
-   under the writer lock that makes the row live (a failed one takes the import
-   back in that step), so no trash or rescan lands in between. Bytes a
-   relink superseded (a bake's original) are no document of their own: an import
-   of them is a duplicate of the document they became while the library shows
-   it, and is refused otherwise; a rescan gives a file of them no row. `OcrPipeline`
-   then writes the OCR sidecar, after which the auto-match rules (and, when
-   enabled, AI enrichment) write metadata.
-2. **Journal is source of truth for metadata**: every change (tags, field values,
-    field definitions, system properties, library settings — review mode, storage-path
-    rule, auto-match rules, saved views, trash retention — trash, relink) is an immutable,
-    content-addressed JSONL transaction written by
-    `JournalCoordinator`. You cannot write to the journal directly: the underlying
-    `ContentAddressedJournalWriter` is `internal` to `core` and the coordinator's
-    held `writer` is private, so the coordinator is the only reachable write path
-    (enforced at the type level, not by convention).
-    Explicit PDF renames/moves and storage-path rules also write the `storagePath`
-    system property, keyed by document hash, before moving bytes. The rule's follow-ups to
-    metadata writes run one at a time (`StoragePathRuleApplicator`), each reading after its
-    write committed, so the path follows the latest metadata, and journal a location once,
-    not again while the journal holds it. Storage that cannot move a document (SAF:
-    `LibraryFileSystem.supportsDocumentRelocation` is false) refuses a rename or move
-    (`RelocationOutcome.UNSUPPORTED`, nothing written); the rule's location is still journaled
-    there, once, for a replica that can carry it out. HLC LWW chooses
-    the intended location across devices; `DocumentPathReconciler` materializes it
-    on metadata refresh or rescan. The cached `relPath` remains the actual available
-    location, not an unfulfilled intent. Trash/delete suspend path reconciliation. A
-    trash moves the file at the document's path only while it is the document's own
-    (the size and mtime its row stored, else its hash, as an import judges it); a file
-    written over it since the last rescan stays where it is, and the trash is recorded
-    as for a document whose file is gone. Restore and delete for good take a trash
-    entry for the document's only when it hashes to the document: the hash prefix in
-    its name (`NpnPaths.trashPath`) only narrows the search (`TrashOps.copiesOf`).
-    Trash, restore and delete for good read the row, check the file and move it under
-    the writer lock, in one step with their journal write
-    (`JournalCoordinator.changeLifecycle`), so no rescan or storage-path move lands in
-    between: a restore lists and hashes the trash entries before it takes the lock, and
-    under it checks them by a stat, hashing again only one whose stat changed (it lists
-    the trash there only when no copy it found is left, or it found none: a copy can
-    reach the trash after the listing); a delete for good acts on a document in the trash
-    only (one restored meanwhile, here, on another device or by an import, is left alone),
-    and deletes the bytes (its copies in the trash, and a file at its path that holds
-    them) after its tombstone is published, hashed before the lock and
-    deleted under it only while unchanged and while the journal still has the document
-    deleted (an import may have brought it back meanwhile, which it records under the
-    lock; a rescan showing a file still in place records no return so soon, and keeps
-    nothing). A file it cannot remove leaves the document deleted and is reported
-    (`PermanentDeleteOutcome.FILE_LEFT`). Restoring or emptying the whole trash
-    (`DocLifecycle.restoreDocs`, `deleteDocsPermanently`) lists it once for all its
-    documents. The library's Undo of a trash (`DocLifecycle.undoTrash`, handed the
-    `TrashReceipt`s `trashDoc` returned) restores a document only while that trash holds
-    it: a receipt carries the trash time its row had once the trash stood (`trashedAt`,
-    the winning doc-trash's), and a document trashed again since, here or on another
-    device, has another and stays in the trash. The Trash screen's restore is
-    unconditional. The trash auto-purge (after a watch-triggered rescan) lists the trash
-    before the writer lock and deletes an entry under it, in batches, once every
-    document its name's hash prefix ties it to was trashed, or deleted for good, longer
-    ago than the retention by the journal and the rows as they stand there: a restore
-    and a trash again in between reuse the entry's name (`TrashOps.purgeOlderThan`,
-    `TrashPurge`). The retention is the library's
-    (`TrashRetentionFacade`, a synced setting), since the purge deletes from the trash every
-    device shares; one this build cannot read purges nothing. An entry it cannot
-    tie to such a document stays, however old its mtime: another device's trash whose
-    event has not arrived, or a document a crash left there with no event (Empty trash,
-    which works by document, does not reach it either).
-    Restore records its final destination: the path the document was trashed from (the
-    inbox, under its file name, when that is no document path, such as one under `.npn/`), or
-    a `(restored)` name beside it when a file is there now or another live row names it
-    (as for an import: a row whose file went outside the app names its path until a
-    rescan finds it missing). PDFs without
-    a path intent retain their discovered location. A path holds one row: a trashed,
-    deleted or missing row gives it up to a live document and waits on a sentinel path, the
-    `.npn/missing/` prefix plus its document id (`DocumentDao`'s `missingSentinel`; a row path,
-    no folder on disk), with its flags kept (`DocumentDao.upsertAll`, which fails the write
-    rather than drop a row on a path another live row holds; and before a rename or
-    storage-path move onto it, `DocumentPathReconciler`). Only a document whose own
-    file the other bytes replaced goes missing and is offered for relink; a rescan
-    judges trashed and deleted by the journal it folds as well as by the row, since
-    another device's trash can arrive together with the file change.
-3. **Index is a cache**: `Indexer` folds journal state (OR-set tags, HLC LWW) into
-   the Room database (`FoldedState`, `MetadataAccumulator`; `FoldProjection` writes the rows). Field values land in
-   `document_fields` (one row per document × key, canonical string plus a numeric
-   shadow for NUMBER/DECIMAL) and definitions in `field_defs`; the five typed
-   columns on `documents` are written from the same map as a read cache for list
-   queries. A relink target (a bake's result) shows its predecessors' metadata as its own
-   (`FoldedState.inheritedFields`, `inheritedProp`, `inheritedTags`): per field or property the
-   latest write among them wins, a clear included, and their tags are one OR-set, so an edit, a
-   clear or a tag removal on it reaches what it inherited, and an incremental fold projects it
-   with its predecessors as a rescan does; a bake's result also keeps its original's text
-   (`BakeRelink`). One FTS `fields` column indexes every value. FTS5
-   finds a row only by MATCH or
-   rowid, so a document's FTS row is reached through `fts_keys`; the fold writes its metadata
-   columns and `OcrPipeline` its extracted text, and neither rewrites the other's. Every fold
-   writes in one transaction (`Indexer.projection`, which a commit's journal bookkeeping joins), so
-   no reader sees a row before its tags and fields; moving a PDF to its intended path and recording
-   where documents were seen is filesystem work, and runs after that transaction commits. The db
-   lives device-local, outside the library folder, and is rebuildable from the folder: delete
-   `index.db` and the next open refolds the journal and rescans. Its neighbour `device.db` holds
-   what a rebuild could not bring back, keyed by document hash, so it survives one.
-   The projection is a pure function of the applied source set, so
-   `MetadataAccumulator` fingerprints that set and records it alongside the ready
-   marker: opening a library whose fingerprint still matches reuses the stored
-   projection instead of refolding, and `JournalCoordinator` leaves the
-   `FoldedState` unmaterialized until a write or rescan actually needs it.
-   Because of that reuse, **changing what a fold produces from the same events
-   requires bumping `MetadataAccumulator.PROJECTION_VERSION`** — otherwise
-   existing installs keep serving rows built by the old fold. See the KDoc there.
-   A rescan only hashes a PDF once its bytes have settled (`WriteSettle`): files
-   written in place (`cp`, scanner apps) are deferred and picked up by a follow-up
-   rescan, whichever rescan deferred them (a relink or a bake hands the report of
-   the rescan it runs to the session, which follows it up as its own), and
-   `OcrPipeline` re-checks the hash of the bytes it reads before publishing a
-   sidecar, so a partial file never gets a document identity. A read
-   that finds other bytes asks for that follow-up rescan and leaves its run queued,
-   uncharged, until the file has settled; a second one in a row counts as a failure.
-4. **UI reads the cache**: viewmodels subscribe to Room DAO Flows (shared with
-   `WhileSubscribedTimeout`, `WhileSubscribed(5_000)`) and map rows into UI models via the
-   `core.app` facet interfaces; the Compose layer is a pure renderer of those.
-5. **Platform boundaries**: every engine (`PdfEngine`, `OcrEngine`,
-   `LibraryFileSystem`, Room db, `WatchedFolder`) has a common interface with
-   per-target implementations wired in `jvmSessionDeps` / `androidSessionDeps` (the
-   watched folder in `AppEnvironment.android/desktop.kt`).
-   `OcrEngine` is the exception that proves the rule: its implementations are not all
-   platform-specific — the vision engine (`core.ai.AiFacadeImpl.ocrEngine`) lives in `commonMain`
-   and is picked per document rather than per target.
+### 5.4 OCR
 
-## Journal storage
+The OCR queue in `device.db` records work owed per document. `OcrPipeline` drains it: picks the
+engine with `OcrEngineSelector`, reads the document's bytes through `readDocument` (which checks
+the hash), runs the engine, re-checks the hash before publishing a sidecar, indexes the text into
+FTS, and fires `onTextIndexed` (for every indexing, rebuilds included) and `onOcrProduced` (only
+for a sidecar this device wrote for the run it settles). The auto-match rules hang on the first;
+automatic AI enrichment on the second.
 
-- **Formats.** Every transaction is published as one storage-v2 object,
-  `.npn/journal/objects-v2-<xx>/<sha256>.jsonl`, named by the SHA-256 of its bytes, with a fresh
-  actor id per transaction; compaction folds old objects into snapshots
-  (`objects-snap-v2-<xx>/`) and deletes them. An object a snapshot supersedes is deleted later
-  (a delete that failed, a copy put back) only while that snapshot, or one that superseded it in
-  turn, is on disk and the same reconcile pass has read it; what the index remembers of a snapshot
-  vouches for nothing. The pass reads that snapshot instead of the object, so an object a sync
-  conflict wrote over since fails nothing. Nor does a manifest vouch for more than it holds: those
-  snapshots must hold every event the index recorded for the object, including every payload key
-  in its richest copy. This is checked against the snapshot bytes, since the index merges richer
-  copies across sources. An older snapshot that dropped keys cannot justify deleting their original.
-  One that names an object without its events deletes nothing, and the index drops that claim, so the object is live again
-  (its loss counts as one) until a compaction carries it. A source that vanished is a loss only while no listed file holds its
-  events (`carriedByListed`); an unexplained one is tolerated for a grace window
-  (`SourceSetValidator.PENDING_SUPERSESSION_LIMIT` reconciles, for a snapshot still on its way),
-  then blocks writes. A snapshot gone with everything it superseded back on disk (a folder put
-  back from before a compaction) lost nothing: the reconcile forgets it, as a rebuild would, and
-  the next compaction replaces those objects again. Builds before storage-v2 wrote per-device v1 segments,
-  `.npn/journal/<deviceId>/<seq>.jsonl`: those are still read and folded, never written. There is
-  no fallback format. Beside its objects a bucket may hold their staging files and a sync tool's
-  file for one still in transfer (`NpnPaths.isSyncTemp`: Syncthing, Nextcloud and ownCloud,
-  Resilio), which a reconcile passes over and never deletes; any other name there fails the pass.
-  A staging file a crash left behind, on any installation, is the rescan's `TempFileSweep`'s to
-  delete once it is a day old.
-- **Compatibility.** A build folds only the ops it knows. An object, snapshot or segment holding an
-  op it does not know, or a known op it cannot read (a `prop-set` of a newer system property, a
-  `field-def` of a newer field type), is refused there as unsupported: that build blocks writes and
-  stops opening the library until it updates, and says so (`MetadataWriteBlocked` carries
-  `WriteBlock.NEWER_FORMAT`, which the app tells the user as an update to install, not as an
-  unreadable library). There is no skip path, so a new op ships in a build
-  that reads it before any build writes it; `WireFormatTest` pins the op names. A payload key a
-  build does not know breaks less, but lasts only in the object that holds it: that build drops it
-  from every event it writes again, compaction included, which re-encodes the events it carries
-  from its own index. A build from before `perDocument` that compacts the library takes the flag
-  off every field definition it carries. Such a copy is still the same event: two copies of one
-  event identity where one lacks only keys of the other are one event, and the index keeps the
-  richer, whichever it read first (`EventCopies`; a fold that had the poorer one folds again in
-  full). Any other difference is a collision that blocks writes. An index rebuilt once the original
-  object is gone has only the poorer copy.
-- **Publication.** An object is staged under a `.part` name in its bucket, hash-checked, then
-  published without replacement: a hard link, or where the filesystem has none (Android's shared
-  storage, exFAT) an exclusive rename (`renameat2(RENAME_NOREPLACE)` on Linux and Android,
-  `MoveFileExW` without `MOVEFILE_REPLACE_EXISTING` on Windows), or on SAF a rename that is checked
-  by name and hash afterwards, in a bucket whose directories carry exactly their names (a cloud
-  provider keeps a directory's id when another app renames it away). A filesystem with neither primitive throws
-  `VerifiedPublicationUnavailableException`, and the library refuses to open with its own message
-  (`OpenFailureReason.UNSUPPORTED_STORAGE`) rather than writing anything.
-- **Device identity.** `device.id` (in `device.db`) names what this device writes under its own
-  name: OCR sidecars, and the watcher's filter of its own writes. Two installations must never share
-  one, so `DeviceIdentity` ties it to the installation (`SessionDeps.installationId`, which Android
-  keeps in the no-backup directory) twice, and either disagreeing gives a fresh id at open:
-  `device.db` records which installation the id belongs to (Android restores `device.db`, so a
-  restored or reinstalled app gets a new id and keeps its queued, paid-for work), and the library
-  holds one write-once marker per installation that used the id, `.npn/devices/<deviceId>/<installationId>.json`
-  (a second installation's marker means a clone; each moves off the id once it sees the other's).
-  Publishing that marker uses the journal's primitive, and once it is there every open publishes
-  and deletes a throwaway object under `.npn/tmp` the same way, which is how an unsupported
-  filesystem is found out at every open, a remount since the last one included (SAF, whose
-  provider publishes with its own rename, skips that probe: `LibraryFileSystem.publicationMayBeLost`).
-  A fresh id costs nothing: the old id's sidecars are adopted as another device's.
+### 5.5 AI
 
-- **Delete and restore.** `doc-trash`/`doc-restore` and `doc-delete`/`doc-undelete` are
-  last-writer-wins pairs by HLC; an undelete also takes the document out of the trash. When the
-  bytes of a deleted or trashed document come back, the return is recorded in the journal, or the
-  next fold would hide the document again: an import of them writes it under the lock it placed
-  the file under (`LockedJournal.restoreReturned`, handed to it by `JournalCoordinator.serialized`),
-  and a rescan that finds the file back in the library
-  writes it once the event that hid the document is a day old (`RESTORE_SETTLE_MS`), as the scan's
-  last step; a write that fails is logged and left to the next rescan, never failing the scan or
-  blocking writes. Sooner, the file may be one a sync tool has not taken away yet, so the rescan
-  shows it for that scan only.
-  The file wins only with the document's own bytes: the rescan must know the hash of the file at
+`AiFacadeImpl` implements `AiChat` and `AiSuggest` and is the vision OCR engine, so all three share
+one cached endpoint client (`AiRuntimeCache`). Consumers: `AiEditRun` (bulk, review then apply),
+`AiEditQueue` (the same, handed to the background), `AiAutoEnricher` (unattended, queued after
+OCR), and `OcrPipeline` through the vision engine, one call per page. `LibraryAiTools` is the
+assistant's entire view of the library; `docs/AI_TOOL_DATA_GAPS.md` lists what it deliberately
+leaves out.
+
+## 6. Rules by concept
+
+The reference. Each rule names the class that keeps it. AGENTS.md's "Architecture invariants" is
+the short list of these that a change must never break; this section is the complete one.
+
+### 6.1 Document identity and paths
+
+- A document is the SHA-256 of its bytes. Duplicates are forbidden: one canonical path per hash.
+- PDFs are immutable after import; only rename and move change a file. The sole exception is
+  explicit bake-in-place (section 6.5).
+- Every path reaches disk through `NpnPaths.normalize`, which refuses traversal; observation-side
+  predicates use `isSafe` to ignore rather than throw. `NpnPaths.Temp` names every temporary file
+  the app writes into the library.
+- A path holds one row (`DocumentDao.upsertAll`). A trashed, deleted or missing row gives its path
+  up to a live document and waits on a sentinel path, the `.npn/missing/` prefix plus its document
+  id (`DocumentDao`'s `missingSentinel`, a row path with no folder on disk), flags kept. `upsertAll`
+  fails the write rather than drop a row on a path another live row holds; before a rename or
+  storage-path move onto such a path, `DocumentPathReconciler` does the same.
+- Explicit renames and moves, and storage-path rules, write the `storagePath` system property
+  (keyed by hash) before moving bytes. HLC last-writer-wins chooses the intended location across
+  devices; `DocumentPathReconciler` materializes it on metadata refresh or rescan. The cached
+  `relPath` is the actual location, never an unfulfilled intent. Trash and delete suspend path
+  reconciliation. A PDF with no path intent keeps its discovered location.
+- Storage that cannot move a document (SAF, `supportsDocumentRelocation` false) refuses a rename
+  or move with `RelocationOutcome.UNSUPPORTED` and writes nothing; a rule's location is still
+  journaled there, once, for a replica that can carry it out.
+
+### 6.2 Import and duplicates
+
+Kept by `ImportService`:
+
+- An import is a duplicate only of a **live** document whose file holds the bytes. The size and
+  mtime its row stored prove that, as they do for a rescan; a drifted stat means hashing the file,
+  under the writer lock the check runs in. A caller may delete a duplicate's source.
+- The bytes of a trashed, deleted or missing document bring that document back, metadata and all,
+  and any copy of it left in the trash is deleted, under the writer lock and only while the
+  document is still live. The return is recorded in the journal in the same locked step that makes
+  the row live (`LockedJournal.restoreReturned`); a failed one takes the import back in that step,
+  so no trash or rescan lands in between.
+- Bytes a relink superseded (a bake's original) are no document of their own: an import of them is
+  a duplicate of the document they became while the library shows it, and refused otherwise
+  (`SupersededImportException`). A rescan gives a file of them no row.
+- A file is moved, trashed or deleted as a document's only while it holds the document's bytes by
+  the same proof (`holdsDocument`) or a hash; another file at the document's path is left for the
+  next rescan.
+
+### 6.3 Trash, restore and delete for good
+
+Kept by `DocLifecycleImpl`, `TrashOps`, `JournalCoordinator.changeLifecycle` and `TrashPurge`:
+
+- `doc-trash`/`doc-restore` and `doc-delete`/`doc-undelete` are last-writer-wins pairs by HLC; an
+  undelete also takes the document out of the trash.
+- Trash, restore and delete for good read the row, check the file and move it under the writer lock,
+  in one step with their journal write, so no rescan or storage-path move lands in between.
+- A trash moves the file at the document's path only while it is the document's own (stored size
+  and mtime, else its hash). A file written over it since the last rescan stays, and the trash is
+  recorded as for a document whose file is gone.
+- Restore and delete for good take a trash entry as the document's only when it hashes to the
+  document: the hash prefix in its name (`NpnPaths.trashPath`) only narrows the search
+  (`TrashOps.copiesOf`). A restore lists and hashes the entries before the lock and, under it,
+  checks them by a stat, hashing again only one whose stat changed; it lists the trash again there
+  only when no copy it found is left, or it found none.
+- A delete for good acts on a document in the trash only; one restored meanwhile, here, on another
+  device or by an import, is left alone. It deletes the bytes (copies in the trash, and a file at
+  its path that holds them) after its tombstone is published, hashed before the lock and deleted
+  under it only while unchanged and while the journal still has the document deleted. A file it
+  cannot remove leaves the document deleted and is reported (`PermanentDeleteOutcome.FILE_LEFT`).
+- Restoring or emptying the whole trash (`restoreDocs`, `deleteDocsPermanently`) lists it once.
+- Undo of a trash (`undoTrash`, with the `TrashReceipt`s `trashDoc` returned) restores a document
+  only while that trash still holds it: the receipt carries the trash time the row had once the
+  trash stood, and a document trashed again since stays in the trash. The Trash screen's restore is
+  unconditional.
+- Restore records its final destination: the path the document was trashed from (or the inbox under
+  its file name when that is no document path), or a `(restored)` name beside it when a file is
+  there now or another live row names it.
+- The trash auto-purge runs after a watch-triggered rescan. It lists the trash before the writer
+  lock and deletes an entry under it, in batches, once every document its name's hash prefix ties it
+  to was trashed or deleted longer ago than the retention, by the journal and the rows as they
+  stand there. The retention is the library's (`TrashRetentionFacade`, a synced setting); one this
+  build cannot read purges nothing. An entry it cannot tie to such a document stays, however old.
+
+### 6.4 Rescan, settling and resurrection
+
+Kept by `Indexer`, `WriteSettle`, `JournalCoordinator.recordRestores` and `OcrPipeline`:
+
+- A rescan hashes a PDF only once its bytes have settled (`WriteSettle`). Files written in place
+  are deferred and picked up by a follow-up rescan, whichever rescan deferred them; a relink or a
+  bake hands the report of the rescan it ran to the session, which follows it up as its own.
+- `OcrPipeline` re-checks the hash of the bytes it read before publishing a sidecar, so a partial
+  file never gets a document identity. A read that finds other bytes asks for a follow-up rescan
+  and leaves its run queued, uncharged; a second one in a row counts as a failure.
+- A rescan skips a file it cannot read rather than failing, and treats a failed read as not held.
+- When the bytes of a trashed or deleted document come back, the return must be recorded in the
+  journal, or the next fold hides the document again. An import records it at once (section 6.2).
+  A rescan that finds the file back writes it once the event that hid the document is a day old
+  (`RESTORE_SETTLE_MS`), as the scan's last step; sooner, the file may be one a sync tool has not
+  taken away yet, and the rescan shows it for that scan only. A failed write is logged and left to
+  the next rescan.
+- The file wins only with the document's own bytes: the rescan must know the hash of the file at
   the document's path, or at the path it was trashed from when no other row holds that, and the
-  hash must be the document's. Another file under the same name (a second `scan.pdf`) or a file
-  still being written brings nothing back.
-  `doc-undelete` is newer than the other lifecycle ops: a build from before it refuses an object
-  holding one (see Compatibility), so it would stop opening the library once a return is recorded.
-  This build therefore reads and folds it but does not write it: `JournalOp.DocUndelete.WRITTEN`
-  is false, and `JournalCoordinator` takes its `writeUndelete` default from it. Until then a
-  deleted document's return records nothing, as before the op existed: an import of its bytes
-  stands and shows it until a fold of the journal hides it again, and a rescan that finds its file
-  shows it for that scan only, however long ago the delete was. A delete for good still removing
-  the bytes leaves the file of such an import in place: the coordinator remembers, for the session,
-  which deleted documents an import brought back unrecorded. A trashed document's return still
-  writes `doc-restore`. A later build, released once every device runs one that reads the op, turns
-  `WRITTEN` on and nothing else.
+  hash must be the document's. Another file under the same name, or a file still being written,
+  brings nothing back.
+- `doc-undelete` is newer than the other lifecycle ops. This build reads and folds it but does not
+  write it (`JournalOp.DocUndelete.WRITTEN` is false; the coordinator's `writeUndelete` defaults
+  from it), so a build from before the op never meets one. Until it is turned on, a deleted
+  document's return records nothing: an import of its bytes stands until a fold hides it again, a
+  rescan shows its file for that scan only, and a delete for good that still removes the bytes
+  leaves such an import's file in place, since the coordinator remembers, for the session, which
+  deleted documents an import brought back unrecorded. A trashed document's return still writes
+  `doc-restore`.
 
-## Where to look for common tasks
+### 6.5 Relink and bake-in-place
 
-- A new library-wide synced setting → a `setting-set` op under a new key in `LibrarySettingKeys`
-  (`LibrarySettings.kt`, which lists every synced setting), read through
-  `JournalCoordinator.settingFlow(key)` and written with `JournalCoordinator.putSetting` under
-  `SessionLifetime.owned`, behind a facet in `LibrarySettings.kt` (`JournalTrashRetention` is the
-  model). `SessionGraph` builds the facet, `LibrarySession` exposes it, and composeApp's
-  `FakeLibrarySession` gets a fake of it (`FakeSessionFacets.kt`). A setting older builds kept per
-  device is read into `LegacyLibrarySettings`, and `LegacyLibrarySettings.journalSettings()` adopts
-  it once into a library that has no value yet.
-- A new document field is **data, not code**: define it in Settings → Documents (or
-  the panel's "New field…"), which writes a `field-def`; every editor, filter, sort,
-  storage-path placeholder (`{field:key}`), auto-match action, XMP bag entry, AI
-  request and assistant tool follows the registry. A new field *type* changes the three
-  files `checkFieldTypeBranches` lets branch on a type: `FieldValues` (canonical form),
-  `FieldEditor` (control and type label) and `FilterSheet` (filter control), plus the
-  capabilities its enum constant must declare (`aiLiteral`, `isTextual`, `isNumeric`,
-  `isDate`, `singleLine`, `hasVocabulary`), which every other caller reads instead of
-  comparing types. Older builds refuse a `field-def` of a type they do not know (see
-  Compatibility), so a build that reads the type ships before any build lets a user pick it.
-- A new per-document *system* marker (something the app owns, not the user) → a
-  `SystemProperty`, written as a `prop-set` event and read from the fold
-  (`FoldedState.inheritedProp`) by `FoldProjection.kt` into a new `DocumentEntity` column (an
-  index schema bump: `NpnDatabase`'s version and its exported schema), a raised
-  `MetadataAccumulator.PROJECTION_VERSION` so existing indexes fold it, its entry in
-  `HistoryEntry.ofProperty`, and the matching `core.app` contract file. Older builds refuse a
-  `prop-set` of a property they do not know (see Compatibility), so a build that reads it ships
-  before any build writes it.
-- New persisted state → decide where it lives by who could rebuild it. Library data every
-  device must agree on goes in the journal (a `setting-set` key or an op); anything the
-  folder and journal can recreate goes in the index; what only this device knows and
-  nothing could recreate (a request made here, work already paid for) goes in
-  `DeviceDatabase`, with a real migration for every schema change.
-- New screen → package under `app/ui/`, viewmodel + screen in `commonMain`,
-  route in `app/ui/nav/Route.kt` and its `composable<Route.X>` in `app/ui/nav/MainNavGraph.kt`,
-  where every navigation a screen starts runs through `nav.from(entry) { … }` (only while its
-  entry is on top, so a double tap navigates once). A top-level destination (the rail, the
-  bottom bar and its More sheet) is a `TopLevelDestination` (`topLevelDestination()` maps the
-  route to it, and its label is the window title); another screen names its window title in
-  `windowTitle`.
-- New setting → a control in its pane (`app/ui/settings/*Pane.kt`), built from the `ui/common`
-  form blocks, and its label among its category's `keywords` in `SettingsCategory.kt`, so search
-  finds it; `SettingsSearchCoverageTest` fails on a visible label search cannot find.
-- New value or action in the document metadata panel → a field on `MetadataUiState`
-  (assembled once in `DocDetailViewModel.metadata`), or a member of `DocumentWrites` (written
-  at once, implemented by `DocDetailViewModel`) or `MetadataActions` (edits that wait in the
-  document's draft, routed by `DocumentEditor`), both in `MetadataPanelState.kt`. A new document
-  action (beside rename, split, bake) → a member of `DocumentActions` in `DocActions.kt`. Both
-  hosts of `DocumentView` (detail screen, library preview panel) then pick it up for free.
-- New platform behavior → interface in `core` commonMain, impl in each platform
-  source set, wired per library in `jvmSessionDeps` / `androidSessionDeps`, or in
-  `AppEnvironment.*` when it belongs to the app rather than to a library.
-- Background work → `core.watch` importer loops, `NpnWork` (Android), and the
-  `core.work.QueueDrainer` instances the session wires (OCR, AI enrichment,
-  queued AI edit runs), exposed to callers that must await them as `session.work`
-  (`WorkFacade`). A new kind of deferrable work means a queue table + a drain step,
-  not a `launch` at the point of discovery, and the queue triggers its own drain:
-  whatever records new work kicks that queue's drainer itself, so no caller has to
-  remember to. The enrichment and edit queues are built with `drainedQueue`, whose
-  `onEnqueued` callback is that kick; they deliberately have no table observer,
-  which could not tell new work from a failed row being rescheduled. The OCR queue
-  is owned by `OcrFacadeImpl`, which kicks on its own enqueues and watches the table
-  for rows other writers add (an import, an upgrade). Beyond that the session only
-  kicks every queue at start, to resume what a killed process left; after each
-  rescan it runs itself (at start, for a change in the folder, for a file that
-  settled), which may have lifted a write block the AI drains wait out or settled a
-  file an OCR run waited for; and on its 15-minute tick, which is what serves a
-  backoff that has fallen due. No drain
-  starts before the session's first successful rescan (and its OCR reconcile): a
-  drain drops this device's work for a document without a row, and until then the
-  index may not know the library's documents (a rebuilt one has no rows at all).
-  Until one has succeeded, the tick rescans before it kicks: on desktop nothing else
-  rescans until the library folder changes.
-- A queue row records only that work is *owed*, never that it is under way. No queue
-  table has a `running` state: the drain is single-flight in-process, so a row left
-  claiming to be running has nobody alive to withdraw the claim, and every drain
-  thereafter skips it (`OcrQueueEntity` says why). "Who is being worked on right now"
-  is a `StateFlow` on the live queue (`OcrPipeline.inFlight`,
-  `AiEditQueue.inFlight`), which the read seam and `OcrStatus` combine in; it is never
-  inferred from a row's progress. An interrupted pass must leave its
-  row exactly as it found it — including its attempt count, which is why cancellation
-  is rethrown rather than recorded as a failure. A pass that ends leaves a request made
-  while it ran (an OCR re-run, OCR with AI) on its row, owed (`OcrQueueDao.settle`).
-- Showing background work to the user → `WorkQueueReader` joins the queue tables to
-  document names behind `WorkFacade.queue`, again whenever the index's documents table changes (a
-  trash or a new title changes no queue row), and derives whole-run progress behind
-  `WorkFacade.editRuns`; a new queue table joins the same read there so the
-  processing queue view keeps showing everything the app still owes.
-- A new starting point for a bulk AI edit → an `EditTask` constant plus its `preset` in
-  `app/ui/ai/AiEditTask.kt`, which is presentation policy composed out of the run's existing
-  knobs (scope, tag flags, per-field `AiFieldMode`). Nothing in `core` knows about tasks: the
-  page still builds one ordinary `AiEditRequest`. Editing what a task stands for demotes the run
-  to `EditTask.CUSTOM`, so the label never describes a configuration the user edited away.
-- Why the AI-edit page refuses to start → `AiEditUiState.startBlocker`, the one place that
-  answers it, rendered by `RunBar` (`AiEditRunBar.kt`). A disabled Start must always be able to say why.
-- Deferrable work the user must come back to → `AiEditQueue` is the pattern:
-  persist the request and its subjects, buy the expensive part on a drain, store
-  the answer verbatim, and surface it on the processing queue as something to open.
-  Work that writes unattended (`AiAutoEnricher`) is the other pattern; pick by
-  whether a human must confirm the result.
-- Changing *who may spend on AI unattended* → `core.ai.UnattendedAiPolicy`, the one class that
-  answers it for both paid unattended paths (automatic vision OCR and automatic enrichment), from
-  the user's own `AiConfig` toggles. Never read `AiConfig.ocrAuto` / `autoOnOcr` from a consumer
-  directly.
-- Changing when the paid OCR engine runs *for a given document* → `OcrEngineSelector`, not
-  `OcrPipeline`. It layers the per-document rule (engine pin, page threshold) on top of the
-  policy's yes/no, and is the reason the pipeline's "run the best-ranked engine" instinct cannot
-  quietly bill a whole library. Its page threshold binds the *unattended* path only; an
-  asked-for run (`OcrFacade.ocrWithAi`) runs at any length, and `OcrFacade.aiOcrOffer` is what
-  warns the user first. "Asked for" means asked on this device: `ocrWithAi` writes the engine pin,
-  which syncs and only selects which version is searched, plus `ocr_queue.aiRequested` in
-  `device.db`, the local request to pay. An `ai` pin synced from another replica selects that
-  replica's sidecar, or runs the model here only as unattended work (policy plus threshold).
-- Follow-up work after OCR → `OcrPipeline.onTextIndexed` fires whenever text is indexed,
-  including on every index rebuild, so hang free/idempotent work there (auto-match rules).
-  `OcrPipeline.onOcrProduced` fires only for a sidecar this device wrote for the run it settles
-  (also when the pass that wrote it was cut short before its hooks ran); anything
-  that costs money or is externally visible belongs there (automatic AI enrichment).
+Kept by `BakeService`, `BakeRelink`, `DocContentFacadeImpl` and `FoldedState`:
+
+- Bake-in-place replaces only the bytes it read and hashed as the document's, while the file keeps
+  the size and mtime it had then, and records a `relink` journal event for the new hash. Bakes run
+  one at a time, each whole, under the session's `BakeLock`; every bake of a path writes the same
+  temporary file, and its relink must name the bytes it installed. A trash or delete for good holds
+  that lock too, so it waits for a bake and then acts on the document the bake made
+  (`changeLifecycle` follows the relink).
+- A relink target shows its predecessors' metadata as its own (`FoldedState.inheritedFields`,
+  `inheritedProp`, `inheritedTags`): per field or property the latest write among them wins, a
+  clear included, and their tags are one OR-set. An edit, a clear or a tag removal on the target
+  reaches what it inherited, and an incremental fold projects it with its predecessors as a rescan
+  does.
+- A bake changes no page, so its relink hands the original's text on: before it, the original's OCR
+  versions are published again under the baked hash as this device's (`OcrPipeline.copyText`) and
+  its enrichment mark is copied; after it, that text is indexed, so the baked document is
+  searchable at once and is neither OCR'd nor enriched again. A relink to other bytes hands on
+  nothing.
+
+### 6.6 Journal storage
+
+**Formats.** Every transaction is one storage-v2 object,
+`.npn/journal/objects-v2-<xx>/<sha256>.jsonl`, named by the SHA-256 of its bytes, with a fresh
+actor id per transaction. Builds before storage-v2 wrote per-device v1 segments,
+`.npn/journal/<deviceId>/<seq>.jsonl`; those are read and folded, never written. There is no
+fallback format. Beside its objects a bucket may hold their staging files and a sync tool's file for
+one still in transfer (`NpnPaths.isSyncTemp`: Syncthing, Nextcloud and ownCloud, Resilio), which a
+reconcile passes over and never deletes; any other name there fails the pass. A staging file a
+crash left behind, on any installation, is the rescan's `TempFileSweep`'s to delete once a day old.
+
+**Publication.** An object is staged under a `.part` name in its bucket, hash-checked, then
+published without replacement: a hard link, or where the filesystem has none (Android shared
+storage, exFAT) an exclusive rename (`renameat2(RENAME_NOREPLACE)` on Linux and Android,
+`MoveFileExW` without `MOVEFILE_REPLACE_EXISTING` on Windows), or on SAF a rename checked by name
+and hash afterwards, in a bucket whose directories carry exactly their names. A filesystem with
+neither primitive throws `VerifiedPublicationUnavailableException`, and the library refuses to open
+rather than write anything. `stageAndPublishVerifiedObject`, beside `ContentAddressedJournalWriter`,
+is the one helper for it, for objects and snapshots alike.
+
+**Compaction.** Compaction folds old objects into snapshots (`objects-snap-v2-<xx>/`) carrying the
+full surviving event multiset plus a manifest of the hashes superseded, and deletes the objects. An
+object a snapshot supersedes is deleted later (a delete that failed, a copy put back) only while
+that snapshot, or one that superseded it in turn, is on disk and the same reconcile pass has read
+it; what the index remembers of a snapshot vouches for nothing. The pass reads that snapshot
+instead of the object, so an object a sync conflict wrote over since fails nothing. A manifest
+vouches for no more than it holds: the snapshot must hold every event the index recorded for the
+object, including every payload key in its richest copy, checked against the snapshot bytes
+(`SnapshotSupport.supersededLeftovers`). One that names an object without its events deletes
+nothing, and the index drops that claim, so the object is live again until a compaction carries it.
+A source that vanished is a loss only while no listed file holds its events (`carriedByListed`); an
+unexplained one is tolerated for a grace window (`SourceSetValidator.PENDING_SUPERSESSION_LIMIT`
+reconciles), then blocks writes. A snapshot gone with everything it superseded back on disk lost
+nothing: the reconcile forgets it, as a rebuild would.
+
+**Compatibility.** A build folds only the ops it knows. An object, snapshot or segment holding an
+op it does not know, or a known op it cannot read (a `prop-set` of a newer system property, a
+`field-def` of a newer field type, a newer rule algorithm or view type), is refused as unsupported:
+that build blocks writes and stops opening the library until it updates, and says so
+(`MetadataWriteBlocked` carries `WriteBlock.NEWER_FORMAT`, told to the user as an update to
+install). There is no skip path, so a new op ships in a build that reads it before any build writes
+it; `WireFormatTest` pins the op names. A payload key a build does not know lasts only in the
+object that holds it: that build drops it from every event it writes again, compaction included.
+Two copies of one event identity where one lacks only keys of the other are one event, and the
+index keeps the richer, whichever it read first (`EventCopies`). Any other difference is a collision
+that blocks writes.
+
+**Device identity.** `device.id` in `device.db` names what this device writes under its own name:
+OCR sidecars and the watcher's filter of its own writes. Two installations must never share one, so
+`DeviceIdentity` ties it to the installation (`SessionDeps.installationId`, kept on Android in the
+no-backup directory) twice: `device.db` records which installation the id belongs to, and the
+library holds one write-once marker per installation that used it,
+`.npn/devices/<deviceId>/<installationId>.json`. Either disagreeing gives a fresh id at open; a
+fresh id costs nothing, as the old id's sidecars are adopted as another device's. Publishing that
+marker uses the journal's primitive, and once it is there every open publishes and deletes a
+throwaway object under `.npn/tmp` the same way, which is how an unsupported filesystem is found out
+at every open (SAF skips the probe: `LibraryFileSystem.publicationMayBeLost`).
+
+### 6.7 Fold and projection
+
+Kept by `FoldedState`, `MetadataAccumulator`, `FoldProjection`, `Indexer`:
+
+- The fold is OR-set tags and HLC last-writer-wins registers; `FoldConvergencePropertyTest`
+  property-tests its convergence.
+- The projection is a pure function of the applied source set. `MetadataAccumulator` fingerprints
+  that set beside the ready marker: an open whose fingerprint still matches reuses the stored
+  projection instead of refolding. **Changing what a fold produces from the same events requires
+  bumping `MetadataAccumulator.PROJECTION_VERSION`**, or existing installs keep rows built by the
+  old fold.
+- Field values land in `document_fields` (one row per document and key, canonical string plus a
+  numeric shadow for NUMBER and DECIMAL) and definitions in `field_defs`; the five typed columns on
+  `documents` are a read cache written from the same map, never a second source. One FTS `fields`
+  column indexes every value; a document's FTS row is reached through `fts_keys`; the fold writes
+  its metadata columns and `OcrPipeline` its text, and neither rewrites the other's.
+- `LIVE_DOCUMENT` in `core.db` is the one SQL predicate for what the library shows.
+- A pass that failed or was cut short drops the fold and sets `refoldPending`, so the next reconcile
+  or ingest refolds and reprojects in full (`recoverDurableProjection`) rather than build on what it
+  had.
+
+### 6.8 Fields are data, not code
+
+- Title, correspondent, docType, docDate and notes are ordinary `field-set` fields whose definitions
+  the library seeds (`FieldKeys`); there is no per-field Kotlin. A change to the seeds raises
+  `FieldKeys.SEED_VERSION`, and `FieldKeys.upgradeSeeded` brings older libraries up once, never
+  overriding what their users changed.
+- An exhaustive `when (FieldType)` belongs only in `FieldValues` (canonical form), `FieldEditor.kt`
+  (the editor and its type label) and the filter sheet's per-type control. Everything else reads
+  the `FieldDef`'s flags, hint and the capabilities each `FieldType` constant declares (`aiLiteral`,
+  `isTextual`, `isNumeric`, `isDate`, `singleLine`, `hasVocabulary`). `./gradlew
+  checkFieldTypeBranches` fails any other branch on a type.
+- Storage is always the canonical form; a blank value clears the field and is never stored as `""`.
+  Each number has one canonical form, so canonical strings compare as values; the fold reads what
+  older builds stored through `FieldValues.normalized`.
+
+### 6.9 Library settings, storage-path rule and auto-match rules
+
+- Library data every device must agree on is journal data: synced `setting-set` keys listed in
+  `LibrarySettingKeys` (`LibrarySettings.kt`), read through `JournalCoordinator.settingFlow` and
+  written with `putSetting`. This device's own settings (`core.settings`) are never per library and
+  never synced. A device's pre-journal settings are adopted once by a library that has no value
+  yet, as a group adopted whole or not at all (`adoptSettings`).
+- The rules table in the index only caches the journal's list (`AutoMatchRuleSource` mirrors it).
+  A rule is normalized where it is saved or decoded (`AutoMatchRule.normalized`). Content rules
+  match on the indexed text when a write re-runs them.
+- A storage-path template that cannot expand says why with a `StoragePathError`; its context always
+  carries the registry's field types, which decide which fields take a date pattern.
+- A watched inbox folder at or inside the library (`liesInLibrary`) is never swept, and Settings
+  refuses one when picked. Delete-after-import removes a source only while it still holds the bytes
+  imported: while it has the size and mtime it was listed with, or, from a provider that listed no
+  mtime, while it hashes to the document.
+
+### 6.10 OCR sidecars, versions and engine selection
+
+- Sidecars are keyed by document hash and writer (device id plus engine) and are write-once
+  (`OcrVersions`, `OcrSidecarName`, legacy forms included). A sidecar that does not read is passed
+  over for the next best, and this device's run is judged by the ones that do.
+- `OcrEngineSelector`, not `OcrPipeline`, decides when the paid engine runs for a document: the
+  per-document rule (engine pin, page threshold) over `UnattendedAiPolicy`'s yes or no. Its page
+  threshold binds the unattended path only; an asked-for run (`OcrFacade.ocrWithAi`) runs at any
+  length, and `aiOcrOffer` warns the user first. "Asked for" means asked on this device: `ocrWithAi`
+  writes the engine pin, which syncs and only selects which version is searched, plus
+  `ocr_queue.aiRequested` in `device.db`, the local request to pay. An `ai` pin synced from another
+  replica selects that replica's sidecar, or runs the model here only as unattended work.
+- A re-select of OCR happens once per settled burst of journal objects, not once per object.
+
+### 6.11 Queues and drains
+
+- A queue row records only that work is **owed**, never that it is under way. No queue table has a
+  `running` state: the drain is single-flight in-process, and a row left claiming to run would be
+  skipped forever. "Who is being worked on right now" is a `StateFlow` on the live queue
+  (`OcrPipeline.inFlight`, `AiEditQueue.inFlight`).
+- An interrupted pass leaves its row exactly as it found it, attempt count included, which is why
+  cancellation is rethrown rather than recorded as a failure. A pass that ends leaves a request made
+  while it ran on its row, owed (`OcrQueueDao.settle`).
+- No drain starts before the session's first successful rescan and its OCR reconcile: a drain drops
+  this device's work for a document without a row, and until then the index may not know the
+  library's documents. `QueueDrainer` holds its drains at that gate.
+- The enrichment and edit queues have no table observer, which could not tell new work from a
+  failed row being rescheduled; each kicks its own drainer when it records work (`drainedQueue`'s
+  `onEnqueued`). The OCR queue, owned by `OcrFacadeImpl`, kicks on its own enqueues and watches the
+  table for rows other writers add. Time-based retries come from the maintenance tick
+  (`QueueRetryPolicy`'s `backoffMs` ramp, stored as `nextAttemptAt`).
+- `EndpointHealth` is the one cooldown of an AI endpoint, held by `SessionGraph` and shared by the
+  enrichment and edit queues: a failed call in either holds both back, an answer to either lifts
+  it; a write that fails after an answer is its row's own failure.
+
+### 6.12 AI spending and endpoints
+
+- `UnattendedAiPolicy` is the one class that answers whether this replica may spend unattended, for
+  both paid unattended paths (automatic vision OCR, automatic enrichment), from the user's
+  `AiConfig` toggles. Consumers never read `AiConfig.ocrAuto` or `autoOnOcr` directly.
+- `AiFacadeImpl.suggestEdits` holds the one ceiling on edit suggestions in flight
+  (`MAX_CONCURRENT_SUGGESTIONS`); concurrent runs, the queued drain, automatic enrichment and single
+  requests together never exceed it. `SuggestionRunner` bounds one run's fan-out.
+- Every endpoint client is built in `AiRuntime.build(config, transport)`: the facade's cached one,
+  and the short-lived ones `AiSelfTest` (which makes paid calls) and `AiModelCatalog` build per use.
+  `transport` is the test seam. `ProviderClientFactory` is the one table of per-provider behaviour.
+- The AI edit queue is the pattern for deferrable work a human must confirm: persist the request
+  and its subjects, buy the expensive part on a drain, store the answer verbatim, surface it on the
+  processing queue. `AiAutoEnricher` is the pattern for work that writes unattended.
+
+## 7. UI architecture (`composeApp`)
+
+### 7.1 Shell and state ownership
+
+`App.kt` and `AppViewModel` open, restore and switch the library behind one sealed `AppState`
+(`Restoring`, `Opening`, `NoLibrary`, `RestoreFailed`, `Open`), which also carries every failure to
+open as a localized `OpenFailureReason` with the technical cause as an optional detail.
+
+A change of the app's language rebuilds everything under `LocaleProvider`, so `LocalizedApp`
+remembers what the open library's UI must keep through one holder above it, `LibraryUi`: the
+navigation, and what the session keeps for its screens. All of it belongs to one session.
+`LibraryViewModelStores` (held in the window's store, the activity's on Android) keeps one
+`LibrarySessionUi` per session, the one place that state lives: the viewmodel store its screens use
+(`LibraryViewModelHost`), each document's store (shared by the screens showing the document, held
+through a `ViewModelStoreLease`), the unsaved drafts (saved only to seed a restored process), and
+what the screens hand each other. It clears a session's state once its UI is gone, so nothing a
+closed library's screens started runs on. The rule for a new piece of screen state: it lives in a
+viewmodel or in that holder, saved through the shared `jsonSaver`, never in a composable's
+`remember`, unless losing it across recreation would not be a bug.
+
+### 7.2 Dependency wiring (`app/di`)
+
+`AppEnvironment` owns the session lifecycle: open, close, swap, the watched folder. A swap is done
+once the new location is saved; a failed one, saving included, closes what it built, reopens the
+previous library and rethrows. The platform source sets hand it two plain functions in
+`AppEnvironment.android/desktop.kt`: one that builds a location's `SessionDeps`, one that opens its
+watched folder. The per-library wiring itself is `core`'s. The DI package imports no UI package.
+`app/platform/` holds the small `expect` hooks each platform answers (folder access, library-folder
+creation, image decoding, sharing, which settings it offers, the scanner, foreground import,
+Android's `LaunchImports`).
+
+### 7.3 Screens
+
+One package per screen under `app/ui/`: `library/`, `detail/`, `tags/`, `rules/`, `settings/`,
+`trash/`, `queue/`, `onboarding/`, `ai/`, `update/`, `nav/`, `common/`, `theme/`. Viewmodels sit
+beside their screen.
+
+- Leaf composables take state plus an actions interface, never a viewmodel: a screen hands its
+  viewmodel down as a small interface it implements (`LibraryActions`, `DocumentWrites`,
+  `DocumentActions`, `MetadataActions`, `SettingsActions`, `TagWrites`, `TrashWrites`,
+  `ReviewController`, `AiEditSetupActions`).
+- `DocumentView` is the one wiring of a document to its `DocDetailViewModel`; the detail screen and
+  the library's side panel frame it with their own chrome and share it.
+- Wide-or-compact comes from `LocalWindowWidthClass`, never a screen's own check.
+- Shared pieces live in `ui/common`, one per UI concept: the form blocks (`SettingsSection`,
+  `SwitchRow`, `HelpText`, `Dropdown`, `ExpanderRow`), `SuggestField` (the one autocomplete),
+  `TypedTextField`, `rememberNumberInput`, `BackTopBar`, `TooltipIconButton`, `TopBarActions`,
+  `ActionMenuItems`, `keyShortcuts` (the one way a screen binds keys), `EmptyState`, `TagEditor`,
+  `TagFormDialog`, `TagPickDialog`, `DocThumbnail`, `ConfirmDialog`, `LoadingIndicator`,
+  `UiLanguage`, `WhileSubscribedTimeout`.
+
+### 7.4 Messages
+
+One-shot messages have one path. A `MessagesViewModel` sends `UiMessage`s into an unbounded channel
+with `message` or `launchReporting`; `forEachReporting` and `countReporting` report bulk writes; the
+screen's one `SnackbarMessages` shows them one at a time, in order. A message's `UiText` names a
+whole-sentence resource and its arguments and is resolved in the composition's resource environment,
+so it follows the app's language. Never raise a snackbar from a composable.
+
+### 7.5 Navigation
+
+Routes are in `nav/Route.kt`, their composables in `nav/MainNavGraph.kt`. Every navigation a screen
+starts runs through `nav.from(entry) { … }`, only while its entry is on top, so a double tap
+navigates once. A `TopLevelDestination` is on the rail on wide layouts and in the bottom bar or its
+More sheet on compact ones; its label is the window title, and other screens name theirs in
+`windowTitle`.
+
+### 7.6 Resources
+
+`commonMain/composeResources/values/` (English) plus `values-nl`, `-de`, `-fr`, `-es`, `-pt`.
+`checkLocalization` fails on a missing key, a placeholder mismatch or an unescaped Compose
+placeholder. `SettingsSearchCoverageTest` fails on a visible settings label search cannot find.
+
+## 8. Platform shells
+
+**`androidApp`** adds the Android-only features: `MlKitDocumentScanner`; `IntentImport` (share-sheet
+import, reported as soon as it is done; the activity imports its launch intent once, and again only
+when a process death cut that import short, see `LaunchImports`); `NpnWork` (WorkManager: the
+periodic watched-folder sweep, rescan and queue drains, and the one-time drain of what a share import
+queued). The debug build is a separate package, `dev.npn.debug`.
+
+**`desktopApp`** runs one instance per user: `SingleInstance` holds a lock file in the app data
+directory, and a second launch only says so and exits. Closing the window closes the session,
+bounded by a timeout; `closeThenExit` exits even when the close fails, and logs it. `DesktopBridge`
+(in `composeApp`) carries the window's two ties to the shared UI: the title the screens publish and
+files dropped on the window, which `AppViewModel` imports like any other import. Packaging is in
+DEVELOPMENT.md.
+
+## 9. Testing architecture
+
+| Where | What runs there |
+|---|---|
+| `core/src/commonTest` | Tests of platform-agnostic core code, compiled for both targets. `FoldConvergencePropertyTest` lives here. |
+| `core/src/desktopTest` | The bulk of core's tests, on the desktop JVM, including every test over a real session. |
+| `core/src/androidHostTest` | Tests of `androidMain`-only code that needs no framework implementation. |
+| `composeApp/src/commonTest` | Viewmodel tests over `core-testing`'s fakes, asserting on `UiText`. |
+| `desktopApp/src/test`, `buildSrc/src/test` | The single-instance lock; the build guards. |
+
+Rigs and seams in `core/src/desktopTest`: `AppSessionRig` (`AppTestSupport.kt`) opens a real session
+over a temp directory through `jvmSessionDeps`; `IndexTestSupport` builds an index without a session;
+`FileSystemFaults` fails publishes, moves and deletes at chosen points; `AiRuntime`'s `transport` lets
+a test see every endpoint call. `core-testing` holds the facet fakes both suites share
+(`FakeDocumentRepository`, `FakeTagRepository`, `FakeFieldRegistry`, `FakeMetadataWriter`,
+`FakeDocContentFacade`, `FakeAiSuggest`, and `SessionDepsCopy` for copying test deps); `composeApp`'s
+`commonTest` adds `FakeLibrarySession` and `FakeSessionFacets.kt` over them.
+
+Rules for tests, from AGENTS.md: never a live endpoint call in a normal test; wall-clock time only
+through the injected `EpochClock`; cancellation never swallowed.
+
+## 10. Where to look for common tasks
+
+- **A new synced library setting** → a `setting-set` key in `LibrarySettingKeys`, read through
+  `JournalCoordinator.settingFlow(key)` and written with `putSetting` under `SessionLifetime.owned`,
+  behind a facet in `LibrarySettings.kt` (`JournalTrashRetention` is the model). `SessionGraph`
+  builds the facet, `LibrarySession` exposes it, `FakeLibrarySession` gets a fake. A setting older
+  builds kept per device is read into `LegacyLibrarySettings` and adopted once.
+- **A new document field** is data: define it in Settings → Documents or the panel's "New field…".
+  Every editor, filter, sort, storage-path placeholder, auto-match action, XMP entry, AI request and
+  assistant tool follows the registry.
+- **A new field type** changes the three files `checkFieldTypeBranches` allows (section 6.8) plus
+  the capabilities the enum constant declares. Older builds refuse a `field-def` of a type they do
+  not know, so a build that reads the type ships before any build lets a user pick it.
+- **A new per-document system marker** → a `SystemProperty`, written as `prop-set`, read from the
+  fold by `FoldProjection.kt` into a new `DocumentEntity` column (an index schema bump), a raised
+  `PROJECTION_VERSION`, its entry in `HistoryEntry.ofProperty`, and the matching contract file. A
+  build that reads it ships before any build writes it.
+- **New persisted state** → by who could rebuild it: library data every device must agree on goes
+  in the journal; anything the folder and journal recreate goes in the index; what only this device
+  knows goes in `DeviceDatabase`, with a real migration.
+- **A new screen** → a package under `app/ui/`, viewmodel and screen in `commonMain`, a route in
+  `nav/Route.kt` and its `composable<Route.X>` in `nav/MainNavGraph.kt`.
+- **A new setting** → a control in its pane (`app/ui/settings/*Pane.kt`) from the `ui/common` form
+  blocks, and its label among its category's `keywords` in `SettingsCategory.kt`.
+- **A new value or action in the metadata panel** → a field on `MetadataUiState` (assembled in
+  `DocDetailViewModel.metadata`), or a member of `DocumentWrites` or `MetadataActions`
+  (`MetadataPanelState.kt`). A new document action → `DocumentActions` in `DocActions.kt`. Both
+  hosts of `DocumentView` pick it up.
+- **New platform behaviour** → an interface in `core` commonMain, an implementation per platform
+  source set, wired in `jvmSessionDeps` / `androidSessionDeps`, or in `AppEnvironment.*` when it
+  belongs to the app rather than a library.
+- **New background work** → a queue table plus a drain step, never a `launch` at the point of
+  discovery; the queue kicks its own drainer (section 6.11). Showing it to the user →
+  `WorkQueueReader` behind `WorkFacade.queue`.
+- **A new starting point for a bulk AI edit** → an `EditTask` constant plus its `preset` in
+  `app/ui/ai/AiEditTask.kt`; nothing in `core` knows about tasks. Why the page refuses to start →
+  `AiEditUiState.startBlocker`, rendered by `RunBar`.
+- **Follow-up work after OCR** → `OcrPipeline.onTextIndexed` for free, idempotent work;
+  `onOcrProduced` for anything that costs money or is externally visible (section 5.4).
+- **Who may spend on AI unattended** → `UnattendedAiPolicy`. When the paid OCR engine runs for a
+  document → `OcrEngineSelector` (section 6.10).
