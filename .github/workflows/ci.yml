@@ -72,6 +72,18 @@ jobs:
           compileDeviceTests
           detektTyped
 
+      # KSP re-exports the Room schemas while compiling above. A difference means a schema change
+      # whose export was not committed: device.db's DeviceDatabaseSchemaTest only guards what is.
+      - name: Exported Room schemas are committed
+        run: |
+          changes="$(git status --porcelain -- core/schemas)"
+          if [ -n "$changes" ]; then
+            echo "::error::Room schema exports differ from the committed ones; commit core/schemas:"
+            echo "$changes"
+            git diff -- core/schemas
+            exit 1
+          fi
+
       - name: Assemble APK, build and package desktop app
         if: github.event_name != 'pull_request'
         run: >-
