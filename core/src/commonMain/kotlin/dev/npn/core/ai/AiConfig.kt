@@ -16,6 +16,13 @@ enum class AiProvider(
     val requiresApiKey: Boolean,
     /** Whether the settings UI offers the base-URL field (local/self-hosted endpoints). */
     val editableBaseUrl: Boolean,
+    /** Whether the settings UI offers the API-key field: false for a server that takes none. */
+    val acceptsApiKey: Boolean = true,
+    /**
+     * Whether this is a server known only by speaking the OpenAI API, so the settings UI explains
+     * what such a server's URL and model ids look like rather than pointing at a catalog it knows.
+     */
+    val genericEndpoint: Boolean = false,
 ) {
     OPENAI("OpenAI", "https://api.openai.com", requiresApiKey = true, editableBaseUrl = false),
     ANTHROPIC("Anthropic", "https://api.anthropic.com", requiresApiKey = true, editableBaseUrl = false),
@@ -24,8 +31,14 @@ enum class AiProvider(
     DEEPSEEK("DeepSeek", "https://api.deepseek.com", requiresApiKey = true, editableBaseUrl = false),
     OPENROUTER("OpenRouter", "https://openrouter.ai", requiresApiKey = true, editableBaseUrl = false),
     OPENCODE_GO("OpenCode Go", "https://opencode.ai/zen/go", requiresApiKey = true, editableBaseUrl = false),
-    OLLAMA("Ollama", "http://localhost:11434", requiresApiKey = false, editableBaseUrl = true),
-    CUSTOM("Custom (OpenAI-compatible)", null, requiresApiKey = false, editableBaseUrl = true),
+    OLLAMA("Ollama", "http://localhost:11434", requiresApiKey = false, editableBaseUrl = true, acceptsApiKey = false),
+    CUSTOM(
+        "Custom (OpenAI-compatible)",
+        null,
+        requiresApiKey = false,
+        editableBaseUrl = true,
+        genericEndpoint = true,
+    ),
 }
 
 /**

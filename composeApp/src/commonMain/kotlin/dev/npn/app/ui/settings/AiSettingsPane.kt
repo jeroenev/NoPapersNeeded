@@ -153,7 +153,7 @@ private fun AiEndpointSettings(
             onDone = { actions.doneTyping(TextSetting.AI_BASE_URL) },
         )
     }
-    if (state.snapshot.aiProvider != AiProvider.OLLAMA) {
+    if (state.snapshot.aiProvider.acceptsApiKey) {
         AiApiKeyField(
             provider = state.snapshot.aiProvider,
             apiKey = state.snapshot.aiApiKey,
@@ -329,17 +329,17 @@ private fun AiBaseUrlField(
         supportingText = {
             Text(
                 text =
-                    if (provider == AiProvider.OLLAMA) {
-                        stringResource(
-                            Res.string.common_settings_server_url_ollama_help,
-                            provider.defaultBaseUrl.orEmpty(),
-                        )
-                    } else {
+                    if (provider.genericEndpoint) {
                         stringResource(
                             Res.string.common_settings_server_url_help,
                             "https://api.openai.com",
                             "http://localhost:11434",
                             "/v1/chat/completions",
+                        )
+                    } else {
+                        stringResource(
+                            Res.string.common_settings_server_url_ollama_help,
+                            provider.defaultBaseUrl.orEmpty(),
                         )
                     },
             )
@@ -446,7 +446,7 @@ private fun AiModelSupportingText(
             )
         }
 
-        provider == AiProvider.CUSTOM -> {
+        provider.genericEndpoint -> {
             Text(
                 text =
                     stringResource(
