@@ -1,7 +1,7 @@
 package dev.npn.core.watch
 
-import android.net.Uri
 import android.provider.DocumentsContract
+import androidx.core.net.toUri
 import dev.npn.core.fs.ExternalStorageTreePaths
 import dev.npn.core.settings.LibraryLocations
 import kotlinx.coroutines.CoroutineDispatcher
@@ -64,7 +64,7 @@ internal data class TreeDocument(
         /** The tree [location] grants, or null when it is no tree uri. */
         fun of(location: String): TreeDocument? {
             if (!LibraryLocations.isContentUri(location)) return null
-            val uri = Uri.parse(location)
+            val uri = location.toUri()
             val authority = uri.authority ?: return null
             val documentId = runCatching { DocumentsContract.getTreeDocumentId(uri) }.getOrNull() ?: return null
             return TreeDocument(authority, documentId)

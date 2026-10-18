@@ -11,8 +11,9 @@ actual object LocalAppLocale {
     // The system locale, read when the object initializes: before the first provides replaces it.
     private val default: Locale = Locale.getDefault()
 
+    // The provided configuration's locale, which a language change recomposes readers of.
     actual val current: String
-        @Composable get() = Locale.getDefault().toString()
+        @Composable get() = LocalConfiguration.current.locales[0].toString()
 
     @Suppress("DEPRECATION")
     @Composable

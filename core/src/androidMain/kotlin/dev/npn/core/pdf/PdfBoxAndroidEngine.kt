@@ -7,6 +7,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
+import androidx.core.graphics.createBitmap
 import com.tom_roush.pdfbox.cos.COSArray
 import com.tom_roush.pdfbox.cos.COSName
 import com.tom_roush.pdfbox.cos.COSString
@@ -167,7 +168,7 @@ private class RendererPageBackend(
             val scale = pageRenderScale(srcW.toFloat(), srcH.toFloat(), maxDimensionPx)
             val outW = (srcW * scale).toInt().coerceAtLeast(1)
             val outH = (srcH * scale).toInt().coerceAtLeast(1)
-            val bitmap = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888)
+            val bitmap = createBitmap(outW, outH, Bitmap.Config.ARGB_8888)
             // White background: PDF pages are drawn on transparent by default.
             val canvas = Canvas(bitmap)
             canvas.drawColor(Color.WHITE)

@@ -2,6 +2,7 @@ package dev.npn.core.watch
 
 import android.content.Context
 import android.net.Uri
+import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.NpnPaths
@@ -50,7 +51,7 @@ class SafWatchedFolder(
     ): Boolean =
         withContext(io) {
             runCatching {
-                val uri = Uri.parse(file.id)
+                val uri = file.id.toUri()
                 val doc = DocumentFile.fromSingleUri(appContext, uri) ?: return@runCatching false
                 // A provider that reports no mtime (lastModified 0) has the file read and hashed.
                 val holds =
