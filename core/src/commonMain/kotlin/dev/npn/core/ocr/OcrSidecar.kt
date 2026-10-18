@@ -13,7 +13,7 @@ import kotlinx.serialization.Serializable
  *  "lang":"eng","createdAt":1720000000000,"pages":["page 1 text","..."]}
  */
 @Serializable
-data class OcrSidecar(
+internal data class OcrSidecar(
     @SerialName("v") val v: Int = 1,
     @SerialName("doc") val doc: String,
     @SerialName("dev") val dev: String,
@@ -28,7 +28,7 @@ data class OcrSidecar(
 }
 
 /** Serialization codec for [OcrSidecar]. Keeps output compact (no pretty-printing). */
-object OcrSidecarCodec {
+internal object OcrSidecarCodec {
     private val json = NpnJson.Persisted
 
     fun encode(sidecar: OcrSidecar): String = json.encodeToString(OcrSidecar.serializer(), sidecar)

@@ -27,7 +27,7 @@ interface ThumbnailStore {
 }
 
 /** Cached-or-generate first-page thumbnails. Thumbnails are disposable; [ThumbnailStore] holds them. */
-class ThumbnailService(
+internal class ThumbnailService(
     private val engine: PdfEngine,
     private val fs: LibraryFileSystem,
     private val store: ThumbnailStore,

@@ -16,7 +16,7 @@ import dev.npn.core.model.FieldKeys
  * All fields are optional; a `null` (or empty [tags]/[fields]) simply omits the corresponding
  * property from the packet.
  */
-data class NpnXmpData(
+internal data class NpnXmpData(
     val documentId: String? = null,
     val tags: List<String> = emptyList(),
     val reviewed: String? = null,

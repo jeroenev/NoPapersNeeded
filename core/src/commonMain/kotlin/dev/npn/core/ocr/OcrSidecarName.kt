@@ -15,7 +15,7 @@ import dev.npn.core.fs.NpnPaths
  * SHA-256 here, which lookups by a known document hash do not need ([hasDocumentHash] is for
  * callers that discover hashes).
  */
-data class OcrSidecarName(
+internal data class OcrSidecarName(
     val hash: String,
     val writerKey: String,
 ) {

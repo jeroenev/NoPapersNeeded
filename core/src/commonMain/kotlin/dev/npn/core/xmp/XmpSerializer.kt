@@ -15,7 +15,7 @@ package dev.npn.core.xmp
  * Everything is XML-escaped. The packet is wrapped in the standard `<?xpacket ...?>`
  * processing instructions so external tools (exiftool, Zotero) recognize it.
  */
-object XmpSerializer {
+internal object XmpSerializer {
     const val NPN_NAMESPACE = "https://npn.dev/xmp/1.0/"
     const val DC_NAMESPACE = "http://purl.org/dc/elements/1.1/"
 

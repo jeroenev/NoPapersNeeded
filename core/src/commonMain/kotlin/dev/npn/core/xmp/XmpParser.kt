@@ -15,7 +15,7 @@ import dev.npn.core.model.FieldKeys
  *   these prefixes are not handled.
  * - Never throws. Malformed or unrecognized input yields an empty/partial result.
  */
-object XmpParser {
+internal object XmpParser {
     /** The [NpnXmpData.documentId], [NpnXmpData.tags] and [NpnXmpData.title] in [xml]; nothing else. */
     fun parse(xml: String?): NpnXmpData {
         if (xml.isNullOrEmpty()) return NpnXmpData.EMPTY

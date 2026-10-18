@@ -9,7 +9,7 @@ import dev.npn.core.util.runCatchingCancellable
  * their trash episode ([NpnPaths.trashPath]) to keep each episode's entry distinct, so the move
  * stays write-once and the purge can tell a new episode's entry from an old one's.
  */
-class TrashOps(
+internal class TrashOps(
     private val fs: LibraryFileSystem,
 ) {
     /**

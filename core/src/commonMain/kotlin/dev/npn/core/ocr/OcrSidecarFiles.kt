@@ -9,7 +9,7 @@ import dev.npn.core.fs.NpnPaths
  * Single-writer by construction (writer key in the name) and write-once. Devices adopt one
  * another's sidecars instead of re-OCRing with the same or a worse engine.
  */
-class OcrSidecarFiles(
+internal class OcrSidecarFiles(
     private val fs: LibraryFileSystem,
 ) {
     /**

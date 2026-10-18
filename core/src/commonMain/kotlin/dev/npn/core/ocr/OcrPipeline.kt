@@ -50,7 +50,7 @@ import kotlinx.coroutines.flow.asStateFlow
  * @param onStaleFile called when a document's file no longer hashes to its docId: it was replaced
  *  or is still being written. Nothing is published for it; a rescan sorts out what the file now is.
  */
-class OcrPipeline(
+internal class OcrPipeline(
     private val fs: LibraryFileSystem,
     private val pdfEngine: PdfEngine,
     private val engines: OcrEngineSelector,

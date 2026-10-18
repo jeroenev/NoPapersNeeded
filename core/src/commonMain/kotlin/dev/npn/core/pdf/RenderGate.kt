@@ -23,7 +23,7 @@ import kotlinx.coroutines.withContext
  * A single shared instance should back both thumbnail and page rendering so their combined load
  * stays bounded.
  */
-class RenderGate(
+internal class RenderGate(
     parallelism: Int,
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {

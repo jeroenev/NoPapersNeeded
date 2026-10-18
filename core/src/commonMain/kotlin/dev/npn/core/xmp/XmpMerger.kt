@@ -11,7 +11,7 @@ import dev.npn.core.model.FieldKeys
  * *export* of npn's own metadata, and keeping foreign properties would need a full XMP model and
  * merge semantics.
  */
-object XmpMerger {
+internal object XmpMerger {
     /** What to bake: [data], with the title of [existingXmp] when [data] has none. */
     fun merge(
         existingXmp: String?,

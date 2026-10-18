@@ -13,7 +13,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 
 /** The PDF cannot carry baked metadata, or the rewrite did not verify; the library file is untouched. */
-class BakeRefusedException(
+internal class BakeRefusedException(
     message: String,
     cause: Throwable? = null,
 ) : IllegalStateException(message, cause)
@@ -31,7 +31,7 @@ class BakeRefusedException(
  * [dev.npn.core.app.BakeRelink] (a `relink` [dev.npn.core.journal.JournalOp]) without this package
  * importing the journal.
  */
-class BakeService(
+internal class BakeService(
     private val fs: LibraryFileSystem,
     private val io: PdfXmpIO,
     private val log: NpnLog = NpnLog.None,
