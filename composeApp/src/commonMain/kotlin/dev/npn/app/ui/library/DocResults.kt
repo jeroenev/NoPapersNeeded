@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -20,10 +19,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.ZoomOut
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -37,8 +32,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.EchoTracker
+import dev.npn.app.ui.common.FloatingControls
 import dev.npn.app.ui.common.ScrollToTopOnNewResults
 import dev.npn.app.ui.common.ScrollbarWidth
+import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.VerticalScrollbar
 import dev.npn.app.ui.common.ctrlScrollZoom
 import dev.npn.app.ui.common.isLandscape
@@ -247,25 +244,19 @@ private fun GridZoomControls(
     onZoomIn: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        modifier = modifier,
-        shape = MaterialTheme.shapes.large,
-        tonalElevation = 3.dp,
-    ) {
-        Row {
-            IconButton(onClick = onZoomOut, enabled = canZoomOut) {
-                Icon(
-                    Icons.Filled.ZoomOut,
-                    contentDescription = stringResource(Res.string.library_smaller_grid_items),
-                )
-            }
-            IconButton(onClick = onZoomIn, enabled = canZoomIn) {
-                Icon(
-                    Icons.Filled.ZoomIn,
-                    contentDescription = stringResource(Res.string.library_larger_grid_items),
-                )
-            }
-        }
+    FloatingControls(modifier) {
+        TooltipIconButton(
+            icon = Icons.Filled.ZoomOut,
+            label = stringResource(Res.string.library_smaller_grid_items),
+            onClick = onZoomOut,
+            enabled = canZoomOut,
+        )
+        TooltipIconButton(
+            icon = Icons.Filled.ZoomIn,
+            label = stringResource(Res.string.library_larger_grid_items),
+            onClick = onZoomIn,
+            enabled = canZoomIn,
+        )
     }
 }
 

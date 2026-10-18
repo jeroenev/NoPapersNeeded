@@ -5,7 +5,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -13,17 +12,12 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.ZoomOut
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -51,6 +45,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.FloatingControls
+import dev.npn.app.ui.common.PositionStepper
+import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.detectDragWhenZoomed
 import dev.npn.app.ui.common.detectPinchTransform
 import dev.npn.app.ui.common.viewerScroll
@@ -474,22 +471,22 @@ private fun ZoomControls(
     onReset: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        modifier = modifier,
-        shape = MaterialTheme.shapes.large,
-        tonalElevation = 3.dp,
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onZoomOut, enabled = transform.zoom > MIN_ZOOM) {
-                Icon(Icons.Filled.ZoomOut, contentDescription = stringResource(Res.string.detail_zoom_out))
-            }
-            TextButton(onClick = onReset, enabled = transform.isZoomed) {
-                Text(stringResource(Res.string.detail_zoom_percent, (transform.zoom * 100).roundToInt()))
-            }
-            IconButton(onClick = onZoomIn, enabled = transform.zoom < MAX_ZOOM) {
-                Icon(Icons.Filled.ZoomIn, contentDescription = stringResource(Res.string.detail_zoom_in))
-            }
+    FloatingControls(modifier) {
+        TooltipIconButton(
+            icon = Icons.Filled.ZoomOut,
+            label = stringResource(Res.string.detail_zoom_out),
+            onClick = onZoomOut,
+            enabled = transform.zoom > MIN_ZOOM,
+        )
+        TextButton(onClick = onReset, enabled = transform.isZoomed) {
+            Text(stringResource(Res.string.detail_zoom_percent, (transform.zoom * 100).roundToInt()))
         }
+        TooltipIconButton(
+            icon = Icons.Filled.ZoomIn,
+            label = stringResource(Res.string.detail_zoom_in),
+            onClick = onZoomIn,
+            enabled = transform.zoom < MAX_ZOOM,
+        )
     }
 }
 
@@ -502,31 +499,15 @@ private fun PageIndicator(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        modifier = modifier,
-        shape = MaterialTheme.shapes.large,
-        tonalElevation = 3.dp,
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onPrev, enabled = pageIndex > 0) {
-                Icon(
-                    Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                    contentDescription = stringResource(Res.string.detail_previous_page),
-                )
-            }
-            TextButton(onClick = onClick) {
-                Text(
-                    stringResource(Res.string.detail_page_position, pageIndex + 1, pageCount),
-                    style = MaterialTheme.typography.labelLarge,
-                )
-            }
-            IconButton(onClick = onNext, enabled = pageIndex < pageCount - 1) {
-                Icon(
-                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    contentDescription = stringResource(Res.string.detail_next_page),
-                )
-            }
-        }
+    FloatingControls(modifier) {
+        PositionStepper(
+            position = stringResource(Res.string.detail_page_position, pageIndex + 1, pageCount),
+            previousLabel = stringResource(Res.string.detail_previous_page),
+            nextLabel = stringResource(Res.string.detail_next_page),
+            onPrevious = onPrev.takeIf { pageIndex > 0 },
+            onNext = onNext.takeIf { pageIndex < pageCount - 1 },
+            onPositionClick = onClick,
+        )
     }
 }
 

@@ -5,20 +5,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -27,9 +20,10 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.BackTopBar
+import dev.npn.app.ui.common.FloatingControls
 import dev.npn.app.ui.common.FocusOnEntry
+import dev.npn.app.ui.common.PositionStepper
 import dev.npn.app.ui.common.PublishWindowTitle
-import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.settings.SettingsRepository
 import no_papers_needed.composeapp.generated.resources.Res
@@ -186,21 +180,13 @@ private fun DocumentNav(
     onNextDoc: (() -> Unit)?,
     position: Pair<Int, Int>? = null,
 ) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        TooltipIconButton(
-            icon = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-            label = stringResource(Res.string.detail_previous_document),
-            onClick = { onPrevDoc?.invoke() },
-            enabled = onPrevDoc != null,
-        )
-        position?.let { Text(positionText(it), style = MaterialTheme.typography.labelLarge) }
-        TooltipIconButton(
-            icon = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-            label = stringResource(Res.string.detail_next_document),
-            onClick = { onNextDoc?.invoke() },
-            enabled = onNextDoc != null,
-        )
-    }
+    PositionStepper(
+        position = position?.let { positionText(it) },
+        previousLabel = stringResource(Res.string.detail_previous_document),
+        nextLabel = stringResource(Res.string.detail_next_document),
+        onPrevious = onPrevDoc,
+        onNext = onNextDoc,
+    )
 }
 
 /**
@@ -214,11 +200,7 @@ private fun DocumentNavPill(
     onNextDoc: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        modifier = modifier,
-        shape = MaterialTheme.shapes.large,
-        tonalElevation = 3.dp,
-    ) {
+    FloatingControls(modifier) {
         DocumentNav(onPrevDoc, onNextDoc, browsePosition)
     }
 }
