@@ -2,6 +2,7 @@ package dev.npn.core.app.aiedit
 
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.app.SavedView
+import dev.npn.core.model.ReviewMode
 import dev.npn.core.testing.FakeAiSuggest
 import dev.npn.core.testing.FakeDocContentFacade
 import dev.npn.core.testing.FakeDocumentRepository
@@ -31,7 +32,8 @@ internal fun key(
     savedView: SavedView? = null,
     missing: List<String> = emptyList(),
     batchSize: Int = 50,
-): ScopeKey = ScopeKey(scope, savedView, missing, batchSize)
+    reviewMode: ReviewMode = ReviewMode.INBOX_WORKFLOW,
+): ScopeKey = ScopeKey(scope, savedView, missing, batchSize, reviewMode)
 
 internal suspend fun AiEditRun.suggest(
     key: ScopeKey,

@@ -136,14 +136,19 @@ class AiEditScopeTest : MainDispatcherTest() {
     @Test
     fun theReviewQueueScopeComesWithTheInboxWorkflow() =
         runTest(dispatcher) {
+            val run = FakeAiEditRun()
             val session = FakeLibrarySession().apply { reviewConfig.reviewModeFlow.value = ReviewMode.INBOX_WORKFLOW }
-            val model = vm(session = session)
+            val model = vm(run, session)
             collecting(model.ui)
+            collecting(model.preview)
             advanceUntilIdle()
 
             model.ui.value.reviewQueueAvailable shouldBe true
             model.setScope(EditScope.REVIEW_QUEUE)
+            advanceUntilIdle()
             model.ui.value.scope shouldBe EditScope.REVIEW_QUEUE
+            // The run lists the queue the library's mode defines.
+            run.keys.last().reviewMode shouldBe ReviewMode.INBOX_WORKFLOW
         }
 
     @Test

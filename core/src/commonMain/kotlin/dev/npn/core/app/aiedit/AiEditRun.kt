@@ -13,6 +13,8 @@ import dev.npn.core.app.MetadataWriter
 import dev.npn.core.app.SavedView
 import dev.npn.core.app.TagRepository
 import dev.npn.core.app.displayTitleOf
+import dev.npn.core.app.reviewQueueFilter
+import dev.npn.core.model.ReviewMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -37,6 +39,8 @@ data class ScopeKey(
     /** Field keys whose absence selects a document for the MISSING_FIELDS scope. */
     val missing: List<String>,
     val batchSize: Int,
+    /** The library's review mode, whose [reviewQueueFilter] the REVIEW_QUEUE scope lists. */
+    val reviewMode: ReviewMode,
 )
 
 /**
@@ -198,7 +202,7 @@ class AiEditRunImpl(
             }
 
             EditScope.REVIEW_QUEUE -> {
-                documents.observeDocuments(LibraryFilter(unreviewedOrUntagged = true), SORT)
+                documents.observeDocuments(key.reviewMode.reviewQueueFilter(), SORT)
             }
 
             EditScope.ALL -> {

@@ -4,7 +4,9 @@ import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.SavedView
 import dev.npn.core.app.SortField
+import dev.npn.core.app.reviewQueueFilter
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.ReviewMode
 import dev.npn.core.testing.doc
 import dev.npn.core.testing.listItem
 import io.kotest.matchers.collections.shouldContainExactly
@@ -112,5 +114,17 @@ class AiEditRunScopeTest {
                     LibraryFilter(unreviewedOrUntagged = true),
                     LibraryFilter(),
                 )
+        }
+
+    /** The review queue lists what the library's review preset lists, in either review mode. */
+    @Test
+    fun reviewQueueScopeFollowsTheReviewMode() =
+        runTest {
+            val h = AiEditRunHarness()
+
+            for (mode in ReviewMode.entries) h.run.docsFor(key(scope = EditScope.REVIEW_QUEUE, reviewMode = mode))
+
+            h.documents.observedFilters.map { it.first } shouldContainExactly
+                ReviewMode.entries.map { it.reviewQueueFilter() }
         }
 }

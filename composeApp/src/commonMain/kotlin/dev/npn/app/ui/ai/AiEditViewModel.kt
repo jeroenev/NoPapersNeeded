@@ -20,7 +20,6 @@ import dev.npn.core.app.aiedit.ReviewDoc
 import dev.npn.core.app.aiedit.ScopeKey
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
-import dev.npn.core.model.reviewMarkerIsAuthoritative
 import dev.npn.core.settings.SettingsRepository
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -62,6 +61,7 @@ private fun AiEditUiState.scopeKey(): ScopeKey =
         savedView = savedViews.firstOrNull { it.id == savedViewId },
         missing = enabledFieldKeys(),
         batchSize = batchSize,
+        reviewMode = reviewMode,
     )
 
 /**
@@ -187,7 +187,7 @@ class AiEditViewModel(
                 runCatchingCancellable { reviewConfig.reviewMode.first() }
                     .onFailure(::reportSetupFailure)
                     .getOrDefault(ReviewMode.DEFAULT)
-            _ui.update { it.copy(reviewQueueAvailable = mode.reviewMarkerIsAuthoritative) }
+            _ui.update { it.copy(reviewMode = mode) }
         }
         // Saved views double as AI-edit scopes, so keep the list live and preselect the first one.
         viewModelScope.launch {

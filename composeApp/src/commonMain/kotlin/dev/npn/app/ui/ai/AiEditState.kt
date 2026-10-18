@@ -9,6 +9,8 @@ import dev.npn.core.app.aiedit.ApplyResult
 import dev.npn.core.app.aiedit.EditProgress
 import dev.npn.core.app.aiedit.EditScope
 import dev.npn.core.model.FieldDef
+import dev.npn.core.model.ReviewMode
+import dev.npn.core.model.reviewMarkerIsAuthoritative
 import kotlinx.coroutines.flow.map
 
 /**
@@ -114,7 +116,7 @@ val EditPhase.leavingDiscardsSuggestions: Boolean
     get() = this is EditPhase.Suggesting || this is EditPhase.Review
 
 /**
- * Full UI state. [scope] and [reviewQueueAvailable] drive the Idle controls; [phase] is the current
+ * Full UI state. [scope] and [reviewMode] drive the Idle controls; [phase] is the current
  * step. Selection toggles live inside [EditPhase.Review.docs].
  *
  * [maxTags], [maxNewTags] and [batchSize] are per-run overrides, seeded from the Settings defaults
@@ -128,7 +130,11 @@ val EditPhase.leavingDiscardsSuggestions: Boolean
  */
 data class AiEditUiState(
     val scope: EditScope = EditScope.UNTAGGED,
-    val reviewQueueAvailable: Boolean = false,
+    /**
+     * The library's review mode, read once when the page opens: whether the review queue is a scope
+     * at all ([reviewQueueAvailable]), and what it lists.
+     */
+    val reviewMode: ReviewMode = ReviewMode.DEFAULT,
     /** Documents handed over from the library selection; 0 when the page was opened standalone. */
     val selectionSize: Int = 0,
     val savedViews: List<SavedView> = emptyList(),
@@ -195,6 +201,9 @@ internal fun AiEditUiState.startBlocker(preview: ScopePreview): StartBlocker? =
         preview.total == 0 -> StartBlocker.NO_DOCUMENTS
         else -> null
     }
+
+/** Whether the review queue is a scope: only where the review marker is real. */
+val AiEditUiState.reviewQueueAvailable: Boolean get() = reviewMode.reviewMarkerIsAuthoritative
 
 /** Whether [scope] can be picked: the hand-off, review mode and saved views gate three of them. */
 fun AiEditUiState.scopeAvailable(scope: EditScope): Boolean =
