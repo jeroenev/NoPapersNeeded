@@ -113,22 +113,26 @@ internal object AiPrompts {
         manager. The user's scanned documents (PDFs) are indexed locally: OCR text, tags,
         filenames, and metadata fields. The fields in this library are:
         ${LibraryAiTools.fieldVocabulary(fields)}. Documents may also carry field keys that
-        have no definition yet. ocrEngine is maintained by the app rather than the user: it
+        have no definition yet. ${LibraryAiTools.OCR_ENGINE_FIELD} is maintained by the app rather than the user: it
         names the engine whose transcription is indexed for search, so it answers questions
         about how a document was read, not what it says.
         """.trimIndent()
 
+    // Tool names come from [ChatTools], so a renamed tool cannot leave the prompt naming the old one.
     private val CHAT_TOOLS =
-        """
-        Use the provided tools to find documents before answering; never invent documents
-        or their contents. Prefer search_documents for content questions, list_tags /
-        documents_with_tag for organisation questions, search_filenames when the user
-        remembers a file name, search_fields to look documents up by a field value — including
-        "has a field" queries like "documents with a test2 field" (call list_fields when unsure
-        of a key; leave search_fields' value empty to match any document that has the field) and
-        date or number ranges via from/to — and get_document_text to read a specific document.
-        Field values are also part of the full-text search_documents index; field keys are not.
-        """.trimIndent()
+        with(ChatTools) {
+            """
+            Use the provided tools to find documents before answering; never invent documents
+            or their contents. Prefer $SEARCH_DOCUMENTS for content questions, $LIST_TAGS /
+            $DOCUMENTS_WITH_TAG for organisation questions, $SEARCH_FILENAMES when the user
+            remembers a file name, $SEARCH_FIELDS to look documents up by a field value — including
+            "has a field" queries like "documents with a test2 field" (call $LIST_FIELDS when unsure
+            of a key; leave $SEARCH_FIELDS' value empty to match any document that has the field) and
+            date or number ranges via from/to — $GET_DOCUMENT for a specific document's tags and
+            fields, and $GET_DOCUMENT_TEXT to read a specific document.
+            Field values are also part of the full-text $SEARCH_DOCUMENTS index; field keys are not.
+            """.trimIndent()
+        }
 
     private val CHAT_STYLE =
         """
