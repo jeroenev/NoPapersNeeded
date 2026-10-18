@@ -1,10 +1,12 @@
 package dev.npn.app.ui.settings
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.platform.FolderPick
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.reasonText
+import dev.npn.app.ui.common.uiState
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiModelCatalog
@@ -26,7 +28,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -68,6 +69,8 @@ class SettingsViewModel(
     private val selfTest: suspend (AiConfig) -> AiSelfTestReport = AiSelfTest::run,
     /** Whether a folder lies in the library; see [liesInLibrary]. */
     private val inLibrary: suspend (folder: String, library: String) -> Boolean = ::liesInLibrary,
+    /** What the screen's back-stack entry saves for a restored process; a new one opens it afresh. */
+    saved: SavedStateHandle = SavedStateHandle(),
 ) : MessagesViewModel(),
     SettingsActions {
     private val content = session.content
@@ -146,23 +149,41 @@ class SettingsViewModel(
      * ([SettingsScreen]). Kept here rather than in the screen: the change of the app's language
      * that the Appearance pane makes rebuilds the screen, and must leave that pane open.
      */
-    private val _picked = MutableStateFlow<SettingsCategoryId?>(null)
-    val picked: StateFlow<SettingsCategoryId?> = _picked.asStateFlow()
+    private val pickedState = saved.uiState<SettingsCategoryId?>(PICKED_KEY, null)
+    val picked: StateFlow<SettingsCategoryId?> = pickedState.flow
 
-    fun pick(id: SettingsCategoryId?) {
-        _picked.value = id
-    }
+    fun pick(id: SettingsCategoryId?) = pickedState.set(id)
+
+    /**
+     * What is typed into the table of contents' search. Kept here, as [picked] is: the list leaves
+     * the screen when a compact window shows a pane, and a change of language rebuilds it.
+     */
+    private val categoryQueryState = saved.uiState(CATEGORY_QUERY_KEY, "")
+    val categoryQuery: StateFlow<String> = categoryQueryState.flow
+
+    fun searchCategories(query: String) = categoryQueryState.set(query)
+
+    /** The document whose unsaved changes are offered back before the library changes, if any. */
+    private val draftToResumeState = saved.uiState<String?>(DRAFT_TO_RESUME_KEY, null)
+    val draftToResume: StateFlow<String?> = draftToResumeState.flow
+
+    fun offerDraft(docId: String?) = draftToResumeState.set(docId)
+
+    /** The field manager's open dialog, with what is typed or ticked in it; see [FieldDialog]. */
+    private val fieldDialog = saved.uiState<FieldDialog?>(FIELD_DIALOG_KEY, null)
+
+    internal fun openFieldDialog(dialog: FieldDialog?) = fieldDialog.set(dialog)
 
     /** Everything a settings pane shows, as one value. */
     internal val paneState: StateFlow<SettingsPaneState> =
-        combine(state, aiModels, aiSelfTest, reviewMode, combine(fields, fieldUsage, ::Pair)) {
+        combine(state, aiModels, aiSelfTest, reviewMode, combine(fields, fieldUsage, fieldDialog.flow, ::Triple)) {
             ui,
             models,
             selfTest,
             mode,
-            (defs, usage),
+            (defs, usage, dialog),
             ->
-            SettingsPaneState(ui, models, selfTest, mode, defs, usage)
+            SettingsPaneState(ui, models, selfTest, mode, defs, usage, dialog)
         }.stateIn(
             viewModelScope,
             WhileSubscribedTimeout,
@@ -173,6 +194,7 @@ class SettingsViewModel(
                 reviewMode.value,
                 fields.value,
                 fieldUsage.value,
+                fieldDialog.value,
             ),
         )
 
@@ -345,6 +367,13 @@ class SettingsViewModel(
             }
             reviewConfig.setReviewMode(ReviewMode.INBOX_WORKFLOW)
         }
+
+    private companion object {
+        const val PICKED_KEY = "settings.picked"
+        const val CATEGORY_QUERY_KEY = "settings.categoryQuery"
+        const val DRAFT_TO_RESUME_KEY = "settings.draftToResume"
+        const val FIELD_DIALOG_KEY = "settings.fieldDialog"
+    }
 }
 
 /** This snapshot with each typed value of [drafts] in place of the saved one. */

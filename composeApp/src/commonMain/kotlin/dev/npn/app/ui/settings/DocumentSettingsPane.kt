@@ -43,6 +43,8 @@ internal fun DocumentSettingsPane(
         FieldsSettingsPane(
             fields = state.fields,
             usage = state.fieldUsage,
+            dialog = state.fieldDialog,
+            onDialog = actions::openFieldDialog,
             onSave = actions::saveField,
             onRemove = actions::removeField,
             onMove = actions::moveField,

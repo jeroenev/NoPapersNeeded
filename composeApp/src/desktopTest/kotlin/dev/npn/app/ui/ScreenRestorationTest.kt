@@ -4,6 +4,7 @@ package dev.npn.app.ui
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.LocalSaveableStateRegistry
 import androidx.compose.runtime.saveable.SaveableStateRegistry
@@ -12,12 +13,20 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
+import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.createSavedStateHandle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.EnglishLocaleTest
 import dev.npn.app.FakeLibrarySession
+import dev.npn.app.ui.common.uiState
 import dev.npn.app.ui.detail.OcrEngineRow
 import dev.npn.app.ui.rules.AutoMatchRulesScreen
+import dev.npn.app.ui.settings.FieldDialog
 import dev.npn.app.ui.settings.FieldsSettingsPane
+import dev.npn.app.ui.settings.SettingsViewModel
 import dev.npn.app.ui.tags.TagManagementScreen
 import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.app.ui.trash.TrashScreen
@@ -210,12 +219,24 @@ class ScreenRestorationTest : EnglishLocaleTest() {
         label: String,
     ) = FieldDef(key, label, FieldType.TEXT, showByDefault = false, aiEnabled = false, position = 0)
 
+    /** Keeps the field manager's dialog as the settings screen's viewmodel does ([SettingsViewModel.openFieldDialog]). */
+    private class FieldDialogs(
+        saved: SavedStateHandle,
+    ) : ViewModel() {
+        val dialog = saved.uiState<FieldDialog?>("fieldDialog", null)
+    }
+
+    /** The field manager as the settings screen shows it, its dialog kept in a viewmodel's saved state. */
     @Composable
     private fun FieldsPane(fields: List<FieldDef>) {
+        val dialogs = viewModel { FieldDialogs(createSavedStateHandle()) }
+        val dialog by dialogs.dialog.flow.collectAsStateWithLifecycle()
         Column {
             FieldsSettingsPane(
                 fields = fields,
                 usage = emptyMap(),
+                dialog = dialog,
+                onDialog = dialogs.dialog::set,
                 onSave = {},
                 onRemove = { _, _ -> },
                 onMove = { _, _ -> },

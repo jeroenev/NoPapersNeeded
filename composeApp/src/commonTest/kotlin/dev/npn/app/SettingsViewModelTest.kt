@@ -2,8 +2,11 @@ package dev.npn.app
 
 import androidx.lifecycle.ViewModelStore
 import dev.npn.app.platform.FolderPick
+import dev.npn.app.ui.common.FieldDefFormState
 import dev.npn.app.ui.common.uiText
+import dev.npn.app.ui.settings.FieldDialog
 import dev.npn.app.ui.settings.ReviewMigration
+import dev.npn.app.ui.settings.SettingsCategoryId
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiReasoningLevel
 import dev.npn.core.app.StoragePathSetting
@@ -14,6 +17,7 @@ import dev.npn.core.model.FieldType
 import dev.npn.core.model.ReviewMode
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -29,6 +33,40 @@ import no_papers_needed.composeapp.generated.resources.common_settings_thumbnail
 import kotlin.test.Test
 
 class SettingsViewModelTest : MainDispatcherTest() {
+    /**
+     * A restored process shows Settings as the user left it: the pane picked on a wide window, the
+     * search typed into the list, a field being edited with what was typed into its form, and the
+     * offer to go back to a document's unsaved changes.
+     */
+    @Test
+    fun aRestoredProcessKeepsThePaneTheSearchAndTheOpenDialogs() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val settings = FakeSettingsRepository()
+            val screen = recreatable { settingsVm(settings, session, it) }
+            val typed = FieldDefFormState(label = "Invoice no.", key = "invoiceNo", keyEdited = true)
+            screen.vm.apply {
+                pick(SettingsCategoryId.DOCUMENTS)
+                searchCategories("field")
+                openFieldDialog(FieldDialog.Edit("invoiceNo", typed, confirmingTypeChange = true))
+                offerDraft("doc-1")
+            }
+
+            val restored =
+                screen.recreate(this, { model ->
+                    combine(
+                        model.paneState,
+                        model.picked,
+                        model.categoryQuery,
+                        model.draftToResume,
+                    ) { pane, picked, query, draft ->
+                        listOf(pane, picked, query, draft)
+                    }
+                })
+            restored.paneState.value.fieldDialog shouldBe
+                FieldDialog.Edit("invoiceNo", typed, confirmingTypeChange = true)
+        }
+
     @Test
     fun clearingTheThumbnailCacheSaysWhatItCleared() =
         runTest(dispatcher) {

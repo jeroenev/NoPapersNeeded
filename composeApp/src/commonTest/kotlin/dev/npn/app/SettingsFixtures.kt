@@ -1,8 +1,10 @@
 package dev.npn.app
 
+import androidx.lifecycle.SavedStateHandle
 import dev.npn.app.platform.FolderPick
 import dev.npn.app.ui.settings.AiModelListState
 import dev.npn.app.ui.settings.AiSelfTestState
+import dev.npn.app.ui.settings.FieldDialog
 import dev.npn.app.ui.settings.ReviewMigration
 import dev.npn.app.ui.settings.SettingsPaneActions
 import dev.npn.app.ui.settings.SettingsPaneState
@@ -18,10 +20,12 @@ import dev.npn.core.settings.SettingsSnapshot
 internal fun settingsVm(
     settings: FakeSettingsRepository = FakeSettingsRepository(),
     session: FakeLibrarySession = FakeLibrarySession(),
+    saved: SavedStateHandle = SavedStateHandle(),
 ) = SettingsViewModel(
     settings,
     session,
     inLibrary = { folder, library -> folder == library || folder.startsWith("$library/") },
+    saved = saved,
 )
 
 /** What a settings pane shows for [snapshot], with no AI models, self-test or fields loaded. */
@@ -83,4 +87,6 @@ internal open class NoSettingsPaneActions : SettingsPaneActions {
     override fun changeLibrary() = Unit
 
     override fun openAutoMatchRules() = Unit
+
+    override fun openFieldDialog(dialog: FieldDialog?) = Unit
 }

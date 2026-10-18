@@ -27,16 +27,13 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.saveable.Saver
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
@@ -92,14 +89,14 @@ fun SettingsScreen(
     onOpenLibrary: (location: String) -> Unit,
     onResumeDraft: (docId: String) -> Unit,
     onAutoMatchRules: () -> Unit,
-    vm: SettingsViewModel = viewModel { SettingsViewModel(settings, session) },
+    vm: SettingsViewModel = viewModel { SettingsViewModel(settings, session, saved = createSavedStateHandle()) },
 ) {
     val paneState by vm.paneState.collectAsStateWithLifecycle()
 
     val snackbar = rememberSnackbarMessages(vm.messages)
 
     val drafts = LocalDocumentDrafts.current
-    var draftToResume by rememberSaveable { mutableStateOf<String?>(null) }
+    val draftToResume by vm.draftToResume.collectAsStateWithLifecycle()
     val pickLibrary =
         rememberLibraryFolderPicker(
             useSaf = paneState.settings.snapshot.useSafStorage,
@@ -111,7 +108,7 @@ fun SettingsScreen(
         // Resolved with the same predicate the dialog acts on, so "Continue editing" always has a
         // document to go to, even when the only unsaved work is a save still in flight.
         val pending = drafts.state.entries.firstOrNull { it.value.dirty || it.value.saving }
-        if (pending != null) draftToResume = pending.key else pickLibrary()
+        if (pending != null) vm.offerDraft(pending.key) else pickLibrary()
     }
 
     // The viewmodel's writes, plus the two ways out of a pane; one object for the screen's life,
@@ -124,6 +121,8 @@ fun SettingsScreen(
                 override fun changeLibrary() = currentChangeLibrary()
 
                 override fun openAutoMatchRules() = currentAutoMatchRules()
+
+                override fun openFieldDialog(dialog: FieldDialog?) = vm.openFieldDialog(dialog)
             }
         }
 
@@ -133,17 +132,10 @@ fun SettingsScreen(
     // the screen down. Compact layouts drill down for real, which is what makes system back
     // return to the list. A pane picked while wide stays open when the window turns compact,
     // without a route of its own, so Back there closes it rather than leaving Settings. The
-    // viewmodel holds it, so the rebuild a change of language makes keeps it; it is saved as well,
-    // for the new viewmodel of a restored process.
-    rememberSaveable(
-        vm,
-        saver =
-            Saver(
-                save = { it.picked.value?.routeKey },
-                restore = { key -> vm.also { it.pick(SettingsCategoryId.fromRouteKey(key)) } },
-            ),
-    ) { vm }
+    // viewmodel holds it, so the rebuild a change of language makes keeps it, and saves it for a
+    // restored process.
     val picked by vm.picked.collectAsStateWithLifecycle()
+    val query by vm.categoryQuery.collectAsStateWithLifecycle()
     val closePicked = !wide && category == null && picked != null
     NavigationBackHandler(
         state = rememberNavigationEventState(NavigationEventInfo.None),
@@ -161,6 +153,8 @@ fun SettingsScreen(
         snackbar = snackbar,
         paneState = paneState,
         paneActions = paneActions,
+        query = query,
+        onQueryChange = vm::searchCategories,
         onSelect = { id -> if (wide) vm.pick(id) else onOpenCategory(id) },
         onBack = { if (closePicked) vm.pick(null) else onBack() },
     )
@@ -170,10 +164,10 @@ fun SettingsScreen(
             message = stringResource(Res.string.ux_library_draft_warning),
             confirmLabel = stringResource(Res.string.ux_resume_draft),
             onConfirm = {
-                draftToResume = null
+                vm.offerDraft(null)
                 onResumeDraft(docId)
             },
-            onDismiss = { draftToResume = null },
+            onDismiss = { vm.offerDraft(null) },
         )
     }
 }
@@ -185,6 +179,9 @@ private fun SettingsScaffold(
     snackbar: SnackbarHostState,
     paneState: SettingsPaneState,
     paneActions: SettingsPaneActions,
+    /** What is typed into the table of contents' search. */
+    query: String,
+    onQueryChange: (String) -> Unit,
     onSelect: (SettingsCategoryId) -> Unit,
     onBack: () -> Unit,
 ) {
@@ -210,6 +207,8 @@ private fun SettingsScaffold(
                     Row(Modifier.fillMaxSize()) {
                         SettingsCategoryList(
                             selected = selected,
+                            query = query,
+                            onQueryChange = onQueryChange,
                             onSelect = onSelect,
                             modifier = Modifier.width(CategoryListWidth).fillMaxHeight(),
                         )
@@ -231,6 +230,8 @@ private fun SettingsScaffold(
                 else -> {
                     SettingsCategoryList(
                         selected = null,
+                        query = query,
+                        onQueryChange = onQueryChange,
                         onSelect = onSelect,
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -260,16 +261,17 @@ private fun SettingsTopBar(
 @Composable
 private fun SettingsCategoryList(
     selected: SettingsCategoryId?,
+    query: String,
+    onQueryChange: (String) -> Unit,
     onSelect: (SettingsCategoryId) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var query by rememberSaveable { mutableStateOf("") }
     val labels = settingsCategoryLabels()
     val results = labels.filter { it.matches(query) }
     Column(modifier) {
         SearchField(
             value = query,
-            onValueChange = { query = it },
+            onValueChange = onQueryChange,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             placeholder = stringResource(Res.string.common_settings_search),
         )

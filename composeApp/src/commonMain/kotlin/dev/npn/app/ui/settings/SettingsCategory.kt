@@ -102,6 +102,8 @@ internal data class SettingsPaneState(
     val reviewMode: ReviewMode,
     val fields: List<FieldDef>,
     val fieldUsage: Map<String, Int>,
+    /** The field manager's open dialog, if any. */
+    val fieldDialog: FieldDialog? = null,
 )
 
 /** What a settings pane can do: change a setting ([SettingsActions]), or open what one leads to. */
@@ -110,6 +112,9 @@ internal interface SettingsPaneActions : SettingsActions {
     fun changeLibrary()
 
     fun openAutoMatchRules()
+
+    /** Open the field manager's [dialog], or change what it holds; null closes it. */
+    fun openFieldDialog(dialog: FieldDialog?)
 }
 
 /**
