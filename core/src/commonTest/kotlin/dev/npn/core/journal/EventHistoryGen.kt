@@ -163,7 +163,7 @@ internal class EventHistoryGen(
 
 /**
  * Assertions that two folded states are equivalent for every observable view. Kept as a
- * standalone helper so both the shuffle and compaction properties reuse it.
+ * standalone helper so every fold property can reuse it.
  */
 internal object FoldedStateEquivalence {
     fun assertEquivalent(

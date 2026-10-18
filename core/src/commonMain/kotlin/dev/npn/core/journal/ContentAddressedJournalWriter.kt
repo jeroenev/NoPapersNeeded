@@ -48,7 +48,7 @@ internal class ContentAddressedJournalWriter(
             }
         val bytes = JournalCodec.encodeLines(events).encodeToByteArray()
         val hash = sha256Bytes(bytes)
-        val canonicalPath = stageAndPublishVerifiedObject(fs, installationId, hash, bytes, snapshot = false)
+        val canonicalPath = stageAndPublishVerifiedObject(fs, installationId, hash, bytes)
         return PublishedTransaction(canonicalPath, hash, events)
     }
 }
@@ -58,19 +58,16 @@ internal class ContentAddressedJournalWriter(
  * content-addressed object path for [hash] (verified create-no-replace). A publish that fails with
  * no object of those bytes in place has the staging file best-effort deleted and the original
  * failure rethrown, so a partial write never lingers; one whose object is in place regardless (its
- * staging file left behind, say) published it. Shared by [ContentAddressedJournalWriter] (regular
- * objects) and [SnapshotCompactor] (snapshots); [snapshot] selects the bucket namespace. Returns
- * the canonical object path.
+ * staging file left behind, say) published it. Returns the canonical object path.
  */
 internal suspend fun stageAndPublishVerifiedObject(
     fs: LibraryFileSystem,
     installationId: String,
     hash: String,
     bytes: ByteArray,
-    snapshot: Boolean,
 ): String {
-    val canonicalPath = JournalPaths.objectPath(hash, snapshot = snapshot)
-    val stagingPath = JournalPaths.stagingPath(hash, installationId, Uuid.random().toString(), snapshot = snapshot)
+    val canonicalPath = JournalPaths.objectPath(hash)
+    val stagingPath = JournalPaths.stagingPath(hash, installationId, Uuid.random().toString())
     fs.publishStagedOnce(stagingPath, canonicalPath, hash, targetHeldCounts = true) {
         fs.writeBytesOnce(stagingPath, bytes)
     }

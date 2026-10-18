@@ -6,7 +6,6 @@ import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.index.MetadataWriteBlocked
 import dev.npn.core.index.WriteBlock
 import dev.npn.core.index.requireByDocId
-import dev.npn.core.journal.CompactionCandidate
 import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.JournalCodec
 import dev.npn.core.journal.JournalEvent
@@ -14,8 +13,8 @@ import dev.npn.core.journal.JournalEventVersions
 import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.JournalSourceRead
-import dev.npn.core.journal.SnapshotCompactor
 import dev.npn.core.journal.StorageV2Reader
+import dev.npn.core.journal.compactAsAnEarlierBuild
 import dev.npn.core.journal.journalObjects
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldContain
@@ -122,8 +121,8 @@ class MetadataReplicationTest {
         }
 
     /**
-     * A snapshot produced by device 1 (superseding several of its objects, with those objects
-     * deleted) is folded by device 2 via a plain rescan, and the superseded-object deletions do
+     * A snapshot an earlier build produced on device 1 (superseding several of its objects, with
+     * those objects deleted) is folded by device 2 via a plain rescan, and the superseded-object deletions do
      * NOT block device 2 because an applied snapshot lists their hashes.
      */
     @Test
@@ -139,25 +138,8 @@ class MetadataReplicationTest {
             session2.rescan()
             db2.tagDao().tagsForDocument(id).size shouldBe 5
 
-            // Build a snapshot over device 1's objects, publish it, and delete the objects.
-            val objects =
-                rig.fs.journalObjects()
-            val candidates =
-                objects.map { file ->
-                    val bytes = rig.fs.readBytes(file.relPath)
-                    CompactionCandidate(
-                        file.relPath,
-                        sha256Bytes(bytes),
-                        StorageV2Reader
-                            .read(file.relPath, bytes)
-                            .let { it as JournalSourceRead.Accepted }
-                            .events
-                            .map { c -> c.event },
-                    )
-                }
-            val compactor = SnapshotCompactor(rig.fs, "test-installation")
-            compactor.publish(candidates)
-            objects.forEach { rig.fs.delete(it.relPath) }
+            // An earlier build on device 1 compacts its objects into a snapshot and deletes them.
+            rig.fs.compactAsAnEarlierBuild(rig.fs.journalObjects().map { it.relPath })
 
             // Device 2 rescans: applies the snapshot, tolerates the now-missing objects.
             session2.rescan()

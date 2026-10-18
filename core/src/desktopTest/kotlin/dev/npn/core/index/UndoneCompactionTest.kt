@@ -6,10 +6,8 @@ import dev.npn.core.fs.NpnPaths
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.PendingOp
+import dev.npn.core.journal.compactAsAnEarlierBuild
 import io.kotest.matchers.booleans.shouldBeTrue
-import io.kotest.matchers.collections.shouldBeEmpty
-import io.kotest.matchers.collections.shouldContain
-import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -22,16 +20,12 @@ import kotlin.test.Test
 import kotlin.test.assertFailsWith
 
 /**
- * A folder put back from a backup taken before a compaction: the objects the compaction replaced
- * are back, and the snapshot that replaced them is gone.
+ * A folder put back from a backup taken before an earlier build compacted it: the objects the
+ * compaction replaced are back, and the snapshot that replaced them is gone.
  */
 class UndoneCompactionTest {
     private val rig = IndexRig.create()
-    private val coordinator =
-        rig.coordinator(compaction = rig.compaction(3))
-
-    // A large "now" so that files (real JVM mtimes near epoch-now) are older than the window.
-    private val farFuture = 4_000_000_000_000L
+    private val coordinator = rig.coordinator()
 
     @AfterTest
     fun teardown() = rig.close()
@@ -82,6 +76,12 @@ class UndoneCompactionTest {
         }
     }
 
+    /** Compact every object and snapshot on disk as an earlier build did, and reconcile what it left. */
+    private suspend fun compactAll() {
+        rig.fs.compactAsAnEarlierBuild(journalFiles<JournalPath.ObjectV2>() + journalFiles<JournalPath.SnapshotV2>())
+        coordinator.reconcileMetadata()
+    }
+
     /** The tags a library rebuilt from the folder alone gives [docId]. */
     private suspend fun rebuiltTags(docId: String): Set<String> =
         TempIndexDb("npn-compact-rebuild").use { rebuilt ->
@@ -89,26 +89,23 @@ class UndoneCompactionTest {
             state.shouldNotBeNull().effectiveTags(docId)
         }
 
-    private suspend fun reconcilePastTheGraceWindow() =
-        repeat(SourceSetValidator.PENDING_SUPERSESSION_LIMIT + 1) { coordinator.reconcileMetadata() }
-
     /**
-     * The objects hold every event the snapshot did, so its loss is explained: writes go on past the
-     * grace window, and the next compaction replaces the objects again.
+     * The objects hold every event the snapshot did, so its loss is explained: writes go on, and the
+     * index forgets the snapshot, as a rebuild from the folder would.
      */
     @Test
-    fun aCompactionUndoneByARestoreBlocksNothingAndCompactsAgain() =
+    fun aCompactionUndoneByARestoreBlocksNothing() =
         runTest {
             val docId = aDocument()
             tagOneByOne(docId, List(6) { "tag$it" })
             val objects = journalFiles<JournalPath.ObjectV2>()
             val backup = backUp(objects)
-            coordinator.compact(nowMillis = farFuture).shouldNotBeNull()
+            compactAll()
             val snapshot = journalFiles<JournalPath.SnapshotV2>().single()
 
             Files.delete(rig.libRoot.resolve(snapshot))
             putBack(backup, objects)
-            reconcilePastTheGraceWindow()
+            repeat(2) { coordinator.reconcileMetadata() }
 
             val dao = rig.db.metadataProjectionDao()
             checkNotNull(dao.state()).migrationState shouldBe ProjectionStatus.READY
@@ -124,17 +121,6 @@ class UndoneCompactionTest {
                 .tagsForDocument(docId)
                 .size shouldBe 7
             rebuiltTags(docId).size shouldBe 7
-
-            coordinator.reconcileMetadata()
-            coordinator.compact(nowMillis = farFuture).shouldNotBeNull()
-            journalFiles<JournalPath.SnapshotV2>() shouldHaveSize 1
-            journalFiles<JournalPath.ObjectV2>().shouldBeEmpty()
-            coordinator.reconcileMetadata()
-            rig.db
-                .tagDao()
-                .tagsForDocument(docId)
-                .size shouldBe 7
-            rebuiltTags(docId).size shouldBe 7
         }
 
     /**
@@ -143,48 +129,44 @@ class UndoneCompactionTest {
      * first, which is gone too.
      */
     @Test
-    fun aChainOfCompactionsUndoneByARestoreBlocksNothingAndCompactsAgain() =
+    fun aChainOfCompactionsUndoneByARestoreBlocksNothing() =
         runTest {
             val docId = aDocument()
             tagOneByOne(docId, List(6) { "a$it" })
             val first = journalFiles<JournalPath.ObjectV2>()
             val firstBackup = backUp(first)
-            coordinator.compact(nowMillis = farFuture).shouldNotBeNull()
+            compactAll()
             tagOneByOne(docId, List(4) { "b$it" })
             val second = journalFiles<JournalPath.ObjectV2>()
             val secondBackup = backUp(second)
-            coordinator.compact(nowMillis = farFuture).shouldNotBeNull()
+            compactAll()
 
             Files.delete(rig.libRoot.resolve(journalFiles<JournalPath.SnapshotV2>().single()))
             putBack(firstBackup, first)
             putBack(secondBackup, second)
-            reconcilePastTheGraceWindow()
+            repeat(2) { coordinator.reconcileMetadata() }
 
             checkNotNull(rig.db.metadataProjectionDao().state()).migrationState shouldBe ProjectionStatus.READY
             rig.db
                 .tagDao()
                 .tagsForDocument(docId)
                 .size shouldBe 10
-            coordinator.compact(nowMillis = farFuture).shouldNotBeNull()
-            journalFiles<JournalPath.ObjectV2>().shouldBeEmpty()
-            coordinator.reconcileMetadata()
             rebuiltTags(docId).size shouldBe 10
         }
 
-    /** A snapshot gone with one of the objects it replaced still escalates: its events are not all on disk. */
+    /** A snapshot gone with one of the objects it replaced still blocks writes: its events are not all on disk. */
     @Test
-    fun aSnapshotGoneWithOneOfItsObjectsStillHardBlocks() =
+    fun aSnapshotGoneWithOneOfItsObjectsStillBlocksWrites() =
         runTest {
             val docId = aDocument()
             tagOneByOne(docId, List(6) { "tag$it" })
             val objects = journalFiles<JournalPath.ObjectV2>()
             val backup = backUp(objects)
-            coordinator.compact(nowMillis = farFuture).shouldNotBeNull()
+            compactAll()
             val snapshot = journalFiles<JournalPath.SnapshotV2>().single()
 
             Files.delete(rig.libRoot.resolve(snapshot))
             putBack(backup, objects.drop(1))
-            repeat(SourceSetValidator.PENDING_SUPERSESSION_LIMIT) { coordinator.reconcileMetadata() }
 
             val blocked = assertFailsWith<MetadataWriteBlocked> { coordinator.reconcileMetadata() }
             blocked.message shouldContain snapshot

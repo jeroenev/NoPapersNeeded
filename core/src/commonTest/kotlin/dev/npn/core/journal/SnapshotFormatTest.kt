@@ -18,8 +18,7 @@ class SnapshotFormatTest {
     private fun snapshotBytes(
         supersedes: List<String>,
         events: List<JournalEvent>,
-    ): ByteArray =
-        SnapshotCodec.encodeSnapshot(SnapshotManifest(SnapshotCodec.SNAPSHOT_MANIFEST_VERSION, supersedes), events)
+    ): ByteArray = earlierBuildSnapshot(supersedes, events)
 
     @Test
     fun snapshotBucketIsIgnoredByOldObjectClassification() {
@@ -34,7 +33,7 @@ class SnapshotFormatTest {
     }
 
     @Test
-    fun snapshotReaderAcceptsMultiActorEventsAndManifest() {
+    fun snapshotReaderAcceptsMultiActorEventsUnderAManifest() {
         val events = listOf(event("dev-a", 1, 1000), event("dev-b", 1, 2000))
         val supersedes = listOf("11".repeat(32), "22".repeat(32))
         val bytes = snapshotBytes(supersedes, events)
@@ -42,7 +41,6 @@ class SnapshotFormatTest {
 
         val accepted = assertIs<JournalSourceRead.Accepted>(SnapshotV2Reader.read(path, bytes))
         assertEquals(events, accepted.events.map { it.event })
-        assertEquals(supersedes.sorted(), accepted.manifest?.supersedes?.sorted())
     }
 
     @Test

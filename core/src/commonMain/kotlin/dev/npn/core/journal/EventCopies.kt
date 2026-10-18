@@ -6,8 +6,13 @@ import kotlinx.serialization.json.JsonObject
 
 /**
  * Two canonical forms of one event identity (device, seq). A build drops the payload keys it does not
- * know from every event it encodes again, its compaction included, so its copy of an event can lack
- * keys the original holds. That copy is still the same event, not a collision.
+ * know from every event it encodes again, so its copy of an event can lack keys the original holds.
+ * That copy is still the same event, not a collision.
+ *
+ * Only compaction encoded an event again, and this build never compacts, but the snapshots earlier
+ * builds wrote stay in libraries and keep arriving: one from a build that did not know a key (the
+ * field definitions' `perDocument`) beside the object it superseded, or beside a richer snapshot of
+ * the same event from another device. The index keeps the richer copy, whichever it read first.
  */
 internal object EventCopies {
     /**

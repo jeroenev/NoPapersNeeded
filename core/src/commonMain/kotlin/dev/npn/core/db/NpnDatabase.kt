@@ -51,7 +51,8 @@ import kotlinx.coroutines.Dispatchers
     //      ai_edit_jobs, ai_edit_job_docs and documents.aiEnrichedAt.
     // v25: adds field_defs.perDocument.
     // v26: drops thumbnails; the thumbnail store answers from its files alone.
-    version = 26,
+    // v27: drops metadata_superseded; a gone journal source is judged by who holds its events.
+    version = 27,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 3, to = 4),
@@ -75,6 +76,7 @@ import kotlinx.coroutines.Dispatchers
         AutoMigration(from = 21, to = 22, spec = NpnDatabase.FtsKeys::class),
         AutoMigration(from = 24, to = 25),
         AutoMigration(from = 25, to = 26, spec = NpnDatabase.DropThumbnails::class),
+        AutoMigration(from = 26, to = 27, spec = NpnDatabase.DropSuperseded::class),
     ],
     entities = [
         DocumentEntity::class,
@@ -91,7 +93,6 @@ import kotlinx.coroutines.Dispatchers
         MetadataSourceEventEntity::class,
         MetadataTransactionActorEntity::class,
         MetadataProjectionStateEntity::class,
-        MetadataSupersededEntity::class,
         AutoMatchRuleEntity::class,
     ],
 )
@@ -132,6 +133,14 @@ abstract class NpnDatabase : RoomDatabase() {
      */
     @DeleteTable(tableName = "thumbnails")
     class DropThumbnails : AutoMigrationSpec
+
+    /**
+     * v26 -> v27: drop `metadata_superseded`. It held the manifests of the snapshots earlier builds
+     * compacted into, which explained a source gone from the folder; the event tables now say
+     * whether a listed source holds each of its events, which the manifests could only claim.
+     */
+    @DeleteTable(tableName = "metadata_superseded")
+    class DropSuperseded : AutoMigrationSpec
 
     /**
      * v14 -> v15: the per-property FTS columns give way to one `fields` column. The index is

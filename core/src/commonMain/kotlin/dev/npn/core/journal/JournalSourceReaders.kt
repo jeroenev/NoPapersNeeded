@@ -9,11 +9,9 @@ internal data class JournalDiagnostic(
 )
 
 internal sealed interface JournalSourceRead {
-    /** [manifest] is the snapshot's, for a snapshot object; null for every other source. */
     data class Accepted(
         val events: List<CanonicalJournalEvent>,
         val diagnostics: List<JournalDiagnostic> = emptyList(),
-        val manifest: SnapshotManifest? = null,
     ) : JournalSourceRead
 
     data class Retryable(

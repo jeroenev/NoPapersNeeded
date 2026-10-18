@@ -130,7 +130,7 @@ internal class SafDirectoryCache(
      * it still addresses the directory we mean.
      *
      * A refused or empty listing is the tell — but both are also legitimate (a journal shard whose
-     * objects were compacted away really is empty), so this re-resolves that subtree and believes
+     * objects an earlier build compacted away really is empty), so this re-resolves that subtree and believes
      * the second answer rather than treating an empty directory as cache damage.
      */
     fun childrenOfDir(dirSegments: List<String>): List<Entry>? {

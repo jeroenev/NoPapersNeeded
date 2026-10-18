@@ -7,8 +7,7 @@ import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.PublishedTransaction
-import dev.npn.core.journal.SnapshotCodec
-import dev.npn.core.journal.SnapshotManifest
+import dev.npn.core.journal.earlierBuildSnapshot
 import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -44,11 +43,7 @@ class OlderBuildSnapshotTest {
                 val op = event.op as JournalOp.FieldDefSet
                 event.copy(op = op.copy(def = op.def?.copy(perDocument = false)))
             }
-        val bytes =
-            SnapshotCodec.encodeSnapshot(
-                SnapshotManifest(SnapshotCodec.SNAPSHOT_MANIFEST_VERSION, listOf(x.contentHash)),
-                events,
-            )
+        val bytes = earlierBuildSnapshot(listOf(x.contentHash), events)
         val snapshot = rig.libRoot.resolve(JournalPaths.objectPath(sha256Bytes(bytes), snapshot = true))
         Files.createDirectories(snapshot.parent)
         Files.write(snapshot, bytes)

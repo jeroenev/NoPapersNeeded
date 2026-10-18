@@ -8,7 +8,6 @@ import dev.npn.core.journal.JournalEvent
 import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.PublishedTransaction
-import dev.npn.core.journal.SnapshotCompactor
 import dev.npn.core.util.EpochClock
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.SystemEpochClock
@@ -91,18 +90,6 @@ internal class LifecycleChange(
 }
 
 /**
- * How [JournalCoordinator.compact] compacts: [compactor] publishes the snapshot, [snapshots] is the
- * source bookkeeping it plans from and records into, and only once more than [threshold] live objects
- * exist does it fold those older than [stabilityWindowMs] into one.
- */
-internal class Compaction(
-    val compactor: SnapshotCompactor,
-    val snapshots: SnapshotSupport,
-    val threshold: Int = JournalCoordinator.DEFAULT_COMPACTION_THRESHOLD,
-    val stabilityWindowMs: Long = JournalCoordinator.DEFAULT_COMPACTION_STABILITY_WINDOW_MS,
-)
-
-/**
  * Single point of serialization for all journal writes and the live [FoldedState] they depend on.
  *
  * Why this exists: building a correct OR-set `tag-remove` needs the dots currently observed for
@@ -114,7 +101,8 @@ internal class Compaction(
  * Every transaction is published as one storage-v2 object. There is no other format to fall back
  * to: a filesystem that cannot publish without replacement fails the write, and the session refuses
  * to open such a library in the first place (see [dev.npn.core.app.openSession]). Legacy v1 segments
- * are still read and folded.
+ * and the compaction snapshots earlier builds wrote are still read and folded; this build writes
+ * neither, and never deletes a journal object.
  *
  * Normal commits apply their frozen events directly to the persisted accumulator and bounded DB
  * projection.
@@ -134,8 +122,6 @@ internal class JournalCoordinator(
     private val writer: ContentAddressedJournalWriter,
     private val indexer: Indexer,
     private val accumulator: MetadataAccumulator,
-    /** How [compact] compacts; null for a coordinator that never does. */
-    private val compaction: Compaction? = null,
     /** Where folds and writes run, whatever dispatcher the caller is on. */
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
     /** How long ago a document was hidden, when a rescan finds its file back (see [recordRestores]). */
@@ -243,22 +229,36 @@ internal class JournalCoordinator(
      * projection is already the fold of exactly the sources on disk and there is nothing to do but
      * seed the write clock and the settings a reader needs. Only a moved journal (or an unusable
      * projection) costs a refold and a whole-DB reprojection here.
+     *
+     * A journal that does not fold whole (a source lost or damaged, [WriteBlock.JOURNAL_DAMAGED], or
+     * a pass that failed otherwise, [WriteBlock.RECONCILE_FAILED]) leaves the session open read-only
+     * while the index shows a library: writes stay blocked, the documents show as last projected,
+     * the synced settings come from the events the index holds, and the next reconcile or ingest
+     * that reads the journal whole lifts the block. It throws for a journal only a newer build
+     * reads, and for an index with no document to show.
      */
     suspend fun refreshState() =
         locked {
-            latching {
-                when (val outcome = accumulator.reconcileOnOpen()) {
-                    is OpenReconciliation.ProjectionCurrent -> {
-                        folded = null
-                        observeSourceHlc(outcome.maxHlc)
-                        syncedSettings.seed(accumulator.loadStateOf(JournalOp.SettingSet.WIRE))
-                        writeBlock = null
-                    }
+            runCatchingCancellable {
+                latching {
+                    when (val outcome = accumulator.reconcileOnOpen()) {
+                        is OpenReconciliation.ProjectionCurrent -> {
+                            folded = null
+                            observeSourceHlc(outcome.maxHlc)
+                            syncedSettings.seed(accumulator.loadStateOf(JournalOp.SettingSet.WIRE))
+                            writeBlock = null
+                        }
 
-                    is OpenReconciliation.Refolded -> {
-                        adopt(outcome.state) { indexer.refreshState(outcome.state) }
+                        is OpenReconciliation.Refolded -> {
+                            adopt(outcome.state) { indexer.refreshState(outcome.state) }
+                        }
                     }
                 }
+            }.getOrElse { failure ->
+                // The failed pass latched its block, dropped the live fold and owes a full refold.
+                val block = writeBlock?.block
+                if (block == null || block == WriteBlock.NEWER_FORMAT || !indexer.hasDocuments()) throw failure
+                syncedSettings.seed(accumulator.loadStateOf(JournalOp.SettingSet.WIRE))
             }
         }
 
@@ -326,46 +326,6 @@ internal class JournalCoordinator(
                     } else if (reconciliation.sourcesRead > 0) {
                         indexer.refreshState(current)
                     }
-                }
-            }
-        }
-
-    /**
-     * Compact old, stable storage-v2 objects into one supersession snapshot, then delete the
-     * superseded files. Runs under the single-writer mutex so the snapshot write and deletions are
-     * serialized against every other journal write. A no-op without a [compaction], while writes are
-     * blocked, or when the threshold/stability gate is not met. That gate is decided from the source
-     * table alone, so the usual tick reads no event and no file; only the objects a plan picks are
-     * checked on disk and have their events loaded.
-     *
-     * The snapshot ingest uses the full-refold path implicitly on the NEXT reconcile if needed;
-     * here we record it directly (its events already exist in the DB, so the fold is unchanged) and
-     * only delete superseded files that are covered by the applied snapshot.
-     *
-     * Returns the snapshot's content hash if one was published, else null.
-     */
-    suspend fun compact(nowMillis: Long = clock.nowMillis()): String? =
-        locked {
-            val compaction = compaction ?: return@locked null
-            if (writeBlock != null) return@locked null
-            val support = compaction.snapshots
-            val (objects, snapshots) = support.compactionSources()
-            val chosen =
-                compaction.compactor.plan(
-                    objects = objects,
-                    snapshots = snapshots,
-                    threshold = compaction.threshold,
-                    nowMillis = nowMillis,
-                    stabilityWindowMs = compaction.stabilityWindowMs,
-                ) ?: return@locked null
-            val plan = support.candidates(chosen) ?: return@locked null
-            withContext(NonCancellable) {
-                val published = compaction.compactor.publish(plan)
-                withDurableProjectionRecovery {
-                    support.recordLocalSnapshot(published)
-                    // The snapshot supersedes every candidate, so every one of them goes.
-                    support.deleteSupersededFiles(plan.map { it.relPath })
-                    published.contentHash
                 }
             }
         }
@@ -792,12 +752,6 @@ internal class JournalCoordinator(
     }
 
     companion object {
-        /** Compact once the live (non-superseded) content-addressed object count exceeds this. */
-        const val DEFAULT_COMPACTION_THRESHOLD = 64
-
-        /** Only compact objects whose mtime is older than this, to avoid racing an in-flight sync. */
-        const val DEFAULT_COMPACTION_STABILITY_WINDOW_MS = 24L * 60L * 60L * 1000L
-
         /** How long a document must have been hidden before a rescan records its file's return. */
         const val RESTORE_SETTLE_MS = 24L * 60L * 60L * 1000L
     }

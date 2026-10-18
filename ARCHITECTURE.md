@@ -88,8 +88,8 @@ One line per package. The rules each package enforces are in section 6.
 |---|---|
 | `core.app` | The public session API and the orchestrators behind it. One contract file per concept: `LibrarySession.kt`, `Documents.kt`, `History.kt`, `Metadata.kt`, `FieldRegistry.kt`, `Ingest.kt`, `Ocr.kt`, `LibrarySettings.kt`, `Maintenance.kt`, `WorkFacade.kt`, `DocContentFacade.kt`, `Filters.kt`. Implementations: `LibrarySessionImpl`, `SessionGraph`, `SessionOpening.kt`, `MetadataWriterImpl`, `DocLifecycleImpl`, `OcrFacadeImpl`, `MaintenanceFacadeImpl`, `SessionWork`, `JournalReviewConfig`, `BakeRelink`. |
 | `core.app.aiedit` | The AI edit engine over the facets: `AiEditRun`, `AiEditQueue`, `AiAutoEnricher`, `AiEditReview.kt` (`ReviewProjector`, `ReviewApply`), `SuggestionRunner`. |
-| `core.journal` | The metadata journal: `JournalEvent`, `JournalOp`, `PendingOp`; `ContentAddressedJournalWriter`; `JournalPaths`; the readers for v2 objects, snapshots and legacy v1 segments (`JournalSourceReaders`); `JournalCodec`; `Hlc`, `HlcWatermarkAllocator`; `SnapshotCompactor`, `SnapshotFormat`; the fold, `FoldedState`. |
-| `core.index` | The rebuildable index and its maintenance: `JournalCoordinator`, `Indexer`, `MetadataAccumulator`, `FoldProjection`, `SnapshotSupport`, `SourceSetValidator`, `ImportService`, `DuplicateResolver`, `SplitService`, `ScanReport`, `DeviceIdentity`, `DocumentPathReconciler`, `ExternalDocumentMoves`. |
+| `core.journal` | The metadata journal: `JournalEvent`, `JournalOp`, `PendingOp`; `ContentAddressedJournalWriter`; `JournalPaths`; the readers for v2 objects, snapshots and legacy v1 segments (`JournalSourceReaders`); `JournalCodec`; `Hlc`, `HlcWatermarkAllocator`; `SnapshotFormat` (the compaction snapshots earlier builds wrote, read and never written); `EventCopies` (two copies of one event); the fold, `FoldedState`. |
+| `core.index` | The rebuildable index and its maintenance: `JournalCoordinator`, `Indexer`, `MetadataAccumulator`, `FoldProjection`, `SourceSetValidator`, `ImportService`, `DuplicateResolver`, `SplitService`, `ScanReport`, `DeviceIdentity`, `DocumentPathReconciler`, `ExternalDocumentMoves`. |
 | `core.db` | Room entities and DAOs for the two databases: `NpnDatabase` (`index.db`) and `DeviceDatabase` (`device.db`). One file per DAO. `LegacyIndexTables` moves what older index schemas held into the journal or `device.db`. |
 | `core.fs` | `LibraryFileSystem` and its platform implementations; `NpnPaths` (the `.npn/` layout, path classification, the path-safety gate, every temporary file name); `TempFileSweep`; `ContentIdentity`, `HexEncoding`; `TrashOps`. |
 | `core.model` | `Document.kt` (`ReviewMode`, `SystemProperty`), `Field.kt` (`FieldType`, `FieldDef`, `FieldKeys` with the seeds and their versioned upgrade), `FieldValues.kt` (canonical forms), `AppLanguages`. |
@@ -128,8 +128,11 @@ The open sequence is `SessionOpening.kt`: settle the device identity (`DeviceIde
 the storage can publish without replacement, fold the journal, then build every facet in dependency
 order in `SessionGraph`, whose `prepare` does what opening does to the library's data (field seed
 upgrades, adoption of this device's pre-journal settings and saved views). Those writes are best
-effort and retried at the next open; only storage that cannot publish without replacement refuses
-the library (`OpenFailureReason.UNSUPPORTED_STORAGE`).
+effort and retried at the next open. An open refuses the library only for storage that cannot
+publish without replacement (`OpenFailureReason.UNSUPPORTED_STORAGE`), a journal holding what only
+a newer build reads (`NEEDS_NEWER_APP`), or a damaged journal over an index with no document to
+show; a damaged journal otherwise opens the library read-only, writes blocked until a later pass
+reads it whole (section 6.6).
 
 `LibrarySessionImpl` itself holds only the lifecycle and the ingest side: imports, rescans, the
 folder watch and the periodic reconcile. Every other facet is its own object from `SessionGraph`.
@@ -153,7 +156,7 @@ scope with no handler:
 | Follow-up rescan | A scan deferred a file still being written, or an OCR read found stale bytes | One pending timer, rescheduled, that rescans after the settle window. |
 | Rule mirror | The `AUTO_MATCH_RULES` setting changes | Caches another device's rule list into the index. |
 | OCR queue watch | Rows other writers add to the OCR queue | Kicks the OCR drain. |
-| Maintenance tick | Every 15 minutes | Metadata reconcile, journal compaction, a retry of a failed initial rescan, and a kick of every queue so backed-off rows come due. |
+| Maintenance tick | Every 15 minutes | Metadata reconcile, a retry of a failed initial rescan, and a kick of every queue so backed-off rows come due. |
 
 Each queue (OCR, AI enrichment, queued AI edit runs) has a `QueueDrainer`: one worker loop fed by
 conflated kicks, so a burst of kicks during a drain costs one more drain, and a step that throws is
@@ -415,22 +418,27 @@ storage, exFAT) an exclusive rename (`renameat2(RENAME_NOREPLACE)` on Linux and 
 and hash afterwards, in a bucket whose directories carry exactly their names. A filesystem with
 neither primitive throws `VerifiedPublicationUnavailableException`, and the library refuses to open
 rather than write anything. `stageAndPublishVerifiedObject`, beside `ContentAddressedJournalWriter`,
-is the one helper for it, for objects and snapshots alike.
+is the one helper for it.
 
-**Compaction.** Compaction folds old objects into snapshots (`objects-snap-v2-<xx>/`) carrying the
-full surviving event multiset plus a manifest of the hashes superseded, and deletes the objects. An
-object a snapshot supersedes is deleted later (a delete that failed, a copy put back) only while
-that snapshot, or one that superseded it in turn, is on disk and the same reconcile pass has read
-it; what the index remembers of a snapshot vouches for nothing. The pass reads that snapshot
-instead of the object, so an object a sync conflict wrote over since fails nothing. A manifest
-vouches for no more than it holds: the snapshot must hold every event the index recorded for the
-object, including every payload key in its richest copy, checked against the snapshot bytes
-(`SnapshotSupport.supersededLeftovers`). One that names an object without its events deletes
-nothing, and the index drops that claim, so the object is live again until a compaction carries it.
-A source that vanished is a loss only while no listed file holds its events (`carriedByListed`); an
-unexplained one is tolerated for a grace window (`SourceSetValidator.PENDING_SUPERSESSION_LIMIT`
-reconciles), then blocks writes. A snapshot gone with everything it superseded back on disk lost
-nothing: the reconcile forgets it, as a rebuild would.
+**Nothing is deleted; snapshots are read, never written.** The app never deletes a journal object
+and never writes a snapshot. Earlier builds compacted the journal: they folded old objects into a
+snapshot (`objects-snap-v2-<xx>/`) whose manifest names the hashes it supersedes, and deleted those
+objects. Snapshots are still read and folded as sources; an object one supersedes that is still on
+disk (a delete that failed, a copy put back) is read like any other.
+
+**A lost source.** A source the index applied that is gone from the folder is a loss unless every
+event it held, by device id and sequence, is held by an applied source the reconcile listed
+(`SourceSetValidator.unheldEvents`, from the event tables): the snapshot an earlier build compacted
+it into, directly or through a later one, or, for a gone snapshot, the objects it replaced, back on
+disk (a folder put back from before a compaction). Such a source is forgotten, as a rebuild would;
+the events, and the fold, stay as they were. A manifest vouches for nothing it does not hold. A loss
+blocks writes (`WriteBlock.JOURNAL_DAMAGED`) at the first pass that sees it, and a pass that reads
+a journal holding those events again lifts the block; there is no grace window, since objects are
+write-once and named by their hash, a sync tool never swaps one in place, and a file still in
+transfer shows under its temp name rather than as a gap (`SourceSetValidator`'s KDoc has the
+reasoning). An open that finds the journal not folding whole opens the library read-only rather than
+refusing it, with writes blocked until a pass lifts them, unless the index has no document to show
+(`JournalCoordinator.refreshState`); one that finds an op only a newer build reads refuses it.
 
 **Compatibility.** A build folds only the ops it knows. An object, snapshot or segment holding an
 op it does not know, or a known op it cannot read (a `prop-set` of a newer system property, a
@@ -438,11 +446,14 @@ op it does not know, or a known op it cannot read (a `prop-set` of a newer syste
 that build blocks writes and stops opening the library until it updates, and says so
 (`MetadataWriteBlocked` carries `WriteBlock.NEWER_FORMAT`, told to the user as an update to
 install). There is no skip path, so a new op ships in a build that reads it before any build writes
-it; `WireFormatTest` pins the op names. A payload key a build does not know lasts only in the
-object that holds it: that build drops it from every event it writes again, compaction included.
-Two copies of one event identity where one lacks only keys of the other are one event, and the
-index keeps the richer, whichever it read first (`EventCopies`). Any other difference is a collision
-that blocks writes.
+it; `WireFormatTest` pins the op names. A payload key a build does not know breaks less: its fold
+ignores the key, and the object keeps it. Earlier builds' compaction encoded the events it carried
+again from their own index, without such keys, so a snapshot from a build before `perDocument`
+holds field definitions without the flag. Such a copy is still the same event: two copies of one
+event identity where one lacks only keys of the other are one event, and the index keeps the
+richer, whichever it read first (`EventCopies`; a fold that had the poorer one folds again in
+full). Any other difference is a collision that blocks writes. An index rebuilt once the original
+object is gone has only the poorer copy.
 
 **Device identity.** `device.id` in `device.db` names what this device writes under its own name:
 OCR sidecars and the watcher's filter of its own writes. Two installations must never share one, so

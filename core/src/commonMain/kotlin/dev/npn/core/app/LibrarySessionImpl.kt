@@ -248,9 +248,6 @@ internal class LibrarySessionImpl(
             while (isActive) {
                 delay(METADATA_RECONCILIATION_INTERVAL_MS)
                 log.runLogged("Periodic metadata reconcile") { coordinator.reconcileMetadata() }
-                // Compaction runs under the same single-writer mutex; it only fires when the stable
-                // object count exceeds the threshold, so most reconciles are a cheap no-op.
-                log.runLogged("Journal compaction") { coordinator.compact() }
                 // An initial rescan that failed keeps every drain at the gate, and on desktop nothing
                 // else rescans until the library folder changes (Android rescans on every resume).
                 if (!drainsReady.isCompleted) {

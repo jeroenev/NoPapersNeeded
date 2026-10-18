@@ -6,11 +6,9 @@ import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.PendingOp
-import dev.npn.core.journal.SnapshotCodec
-import dev.npn.core.journal.SnapshotManifest
+import dev.npn.core.journal.earlierBuildSnapshot
 import dev.npn.core.journal.journalObjects
 import io.kotest.matchers.booleans.shouldBeTrue
-import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -22,19 +20,19 @@ import kotlin.test.assertFailsWith
 
 /**
  * A snapshot whose manifest names an object it holds none of the events of, as another build's or a
- * faulty one's could: a manifest vouches for an object only with that object's events.
+ * faulty one's could: the object stays an object like any other, and the manifest vouches for none of
+ * its events.
  */
 class SnapshotClaimTest {
     private val rig = IndexRig.create()
-    private val coordinator =
-        rig.coordinator(compaction = rig.compaction(3))
+    private val coordinator = rig.coordinator()
 
     @AfterTest
     fun teardown() = rig.close()
 
-    /** Such a snapshot deletes nothing, and the folder alone still folds every event of the object. */
+    /** Such a snapshot changes nothing, and the folder alone still folds every event of the object. */
     @Test
-    fun aSnapshotListingAnObjectWithoutItsEventsDeletesNothing() =
+    fun aSnapshotListingAnObjectWithoutItsEventsChangesNothing() =
         runTest {
             val (docId, victim) = anObjectAndASnapshotThatOnlyNamesIt()
 
@@ -46,14 +44,9 @@ class SnapshotClaimTest {
                 val state = MetadataAccumulator(rig.fs, rebuilt.db).reconcile().state
                 state.shouldNotBeNull().effectiveTags(docId) shouldBe setOf("tag0", "tag1")
             }
-            // A live object again: the next compaction carries it.
-            SnapshotSupport(rig.fs, rig.db.metadataProjectionDao())
-                .compactionSources()
-                .first
-                .map { it.relPath } shouldContain victim
         }
 
-    /** The index keeps no claim it found false: the object's loss is a loss, as with no snapshot. */
+    /** The snapshot explains nothing: the object's loss is a loss, as with no snapshot. */
     @Test
     fun anObjectASnapshotOnlyNamesIsMissedWhenItGoes() =
         runTest {
@@ -62,8 +55,10 @@ class SnapshotClaimTest {
 
             rig.deleteFile(victim)
 
-            repeat(SourceSetValidator.PENDING_SUPERSESSION_LIMIT) { coordinator.reconcileMetadata() }
-            assertFailsWith<MetadataWriteBlocked> { coordinator.reconcileMetadata() }.message shouldContain victim
+            assertFailsWith<MetadataWriteBlocked> {
+                coordinator.reconcileMetadata()
+            }.message.shouldNotBeNull() shouldContain
+                victim
         }
 
     /**
@@ -86,11 +81,7 @@ class SnapshotClaimTest {
                 .first()
                 .relPath
         val hash = (JournalPaths.classify(victim) as JournalPath.ObjectV2).expectedHash
-        val bytes =
-            SnapshotCodec.encodeSnapshot(
-                SnapshotManifest(SnapshotCodec.SNAPSHOT_MANIFEST_VERSION, listOf(hash)),
-                emptyList(),
-            )
+        val bytes = earlierBuildSnapshot(listOf(hash), emptyList())
         val snapshot = rig.libRoot.resolve(JournalPaths.objectPath(sha256Bytes(bytes), snapshot = true))
         Files.createDirectories(snapshot.parent)
         Files.write(snapshot, bytes)

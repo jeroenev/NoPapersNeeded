@@ -20,7 +20,6 @@ import dev.npn.core.journal.JournalCodec
 import dev.npn.core.journal.JournalEvent
 import dev.npn.core.journal.JournalEventVersions
 import dev.npn.core.journal.PendingOp
-import dev.npn.core.journal.SnapshotCompactor
 import dev.npn.core.util.EpochClock
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -91,26 +90,13 @@ internal class IndexRig private constructor(
 
     /**
      * Build a [JournalCoordinator] over [writer] backed by this rig's indexer and [accumulator],
-     * compacting with [compaction] when one is given and running on [dispatcher].
+     * running on [dispatcher].
      */
     internal fun coordinator(
         writer: ContentAddressedJournalWriter = writer(),
         accumulator: MetadataAccumulator = this.accumulator,
-        compaction: Compaction? = null,
         dispatcher: CoroutineDispatcher = Dispatchers.Default,
-    ): JournalCoordinator = JournalCoordinator(writer, indexer, accumulator, compaction, dispatcher)
-
-    /** Compaction over this library once more than [threshold] objects have settled for [stabilityWindowMs]. */
-    internal fun compaction(
-        threshold: Int,
-        stabilityWindowMs: Long = 1_000L,
-    ): Compaction =
-        Compaction(
-            SnapshotCompactor(fs, "test-installation"),
-            SnapshotSupport(fs, db.metadataProjectionDao()),
-            threshold = threshold,
-            stabilityWindowMs = stabilityWindowMs,
-        )
+    ): JournalCoordinator = JournalCoordinator(writer, indexer, accumulator, dispatcher = dispatcher)
 
     /** v1 segments for [deviceId] in this library, as builds before storage-v2 wrote them. */
     fun legacySegments(deviceId: String): LegacySegments = LegacySegments(fs, deviceId, clock)

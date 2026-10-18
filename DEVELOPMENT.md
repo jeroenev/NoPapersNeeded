@@ -428,7 +428,7 @@ Library/
   .npn/
     journal/objects-v2-<00..ff>/
       <sha256>.jsonl                    # content-addressed metadata transactions
-    journal/objects-snap-v2-<00..ff>/   # compaction snapshots of older transactions
+    journal/objects-snap-v2-<00..ff>/   # snapshots earlier builds compacted (read, never written)
     ocr/<sha256>.<deviceId>.<engine>.json # OCR sidecars, adopted across devices
     devices/<deviceId>/<installationId>.json # which installations use a device id
     trash/                              # soft-deleted files (synced, not indexed)
