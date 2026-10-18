@@ -2,7 +2,7 @@ package dev.npn.core.model
 
 /**
  * Library-wide review workflow, a synced setting (see [dev.npn.core.journal.JournalOp.SettingSet],
- * key [WIRE_KEY]). Determines how the review queue and the per-doc reviewed marker behave.
+ * key `reviewMode`, `LibrarySettingKeys.REVIEW_MODE`). Determines how the review queue and the per-doc reviewed marker behave.
  *
  * - [UNTAGGED_ONLY] (default): no manual marker. A document "needs review" while it has no tags;
  *   the stored `reviewed` flag is ignored and reviewed is derived as (has any tag).
@@ -17,7 +17,6 @@ enum class ReviewMode(
     ;
 
     companion object {
-        const val WIRE_KEY = "reviewMode"
         val DEFAULT = UNTAGGED_ONLY
 
         fun fromWire(value: String?): ReviewMode = entries.firstOrNull { it.wire == value } ?: DEFAULT

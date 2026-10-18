@@ -23,8 +23,9 @@ internal class SavedViewRepositoryImpl(
     override fun observeSavedViews(): Flow<List<SavedView>> =
         coordinator
             .settings()
-            .map { settings -> settings.filterKeys { it.startsWith(KEY_PREFIX) }.values.mapNotNull(::decode) }
-            .distinctUntilChanged()
+            .map { settings ->
+                settings.filterKeys { it.startsWith(LibrarySettingKeys.SAVED_VIEW_PREFIX) }.values.mapNotNull(::decode)
+            }.distinctUntilChanged()
             .map { views -> views.sortedWith(compareBy(SavedView::name, SavedView::id)) }
 
     /** Save [view], writing nothing when the journal already holds it as it is. */
@@ -55,9 +56,5 @@ internal class SavedViewRepositoryImpl(
             }
         }
 
-    private fun key(id: String): String = KEY_PREFIX + id
-
-    private companion object {
-        const val KEY_PREFIX = "savedView:"
-    }
+    private fun key(id: String): String = LibrarySettingKeys.SAVED_VIEW_PREFIX + id
 }

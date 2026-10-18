@@ -1,5 +1,6 @@
 package dev.npn.core.index
 
+import dev.npn.core.app.LibrarySettingKeys
 import dev.npn.core.db.ProjectionStatus
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.FileMeta
@@ -246,7 +247,7 @@ class ReconcilePerfTest {
         coordinator.commitAndApply(
             listOf(
                 PendingOp.tagAdd(docId, "invoice"),
-                PendingOp.settingSet(ReviewMode.WIRE_KEY, ReviewMode.UNTAGGED_ONLY.wire),
+                PendingOp.settingSet(LibrarySettingKeys.REVIEW_MODE, ReviewMode.UNTAGGED_ONLY.wire),
                 PendingOp.settingSet("someLaterSetting", "on"),
             ),
         )
@@ -299,7 +300,7 @@ class ReconcilePerfTest {
             db.tagDao().tagsForDocument(docId) shouldContainExactly listOf("invoice")
             // ...the synced settings were seeded without folding the whole journal, every one of
             // them rather than a list of known keys...
-            reopened.settingFlow(ReviewMode.WIRE_KEY).first() shouldBe ReviewMode.UNTAGGED_ONLY.wire
+            reopened.settingFlow(LibrarySettingKeys.REVIEW_MODE).first() shouldBe ReviewMode.UNTAGGED_ONLY.wire
             reopened.settingFlow("someLaterSetting").first() shouldBe "on"
             // ...and the ready marker (with its watermark) was left as the last session wrote it.
             val after = db.metadataProjectionDao().state().shouldNotBeNull()
