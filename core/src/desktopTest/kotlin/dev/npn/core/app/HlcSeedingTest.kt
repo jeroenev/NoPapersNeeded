@@ -84,6 +84,7 @@ class HlcSeedingTest {
                     settings = SessionSettings(ocrLanguage = { "eng" }),
                     log = NpnLog.None,
                     clock = MutableClock(1L, autoTick = true),
+                    installationId = "test-installation",
                 )
             val session2 = LibrarySessionImpl.openSession(deps)
 

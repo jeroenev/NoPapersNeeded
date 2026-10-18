@@ -221,6 +221,7 @@ class AppSessionRig private constructor(
                         aiConfig = aiConfig,
                     ),
                 clock = clock,
+                installationId = "second-installation",
                 ocrEngine = ocr,
                 thumbnailStore = FakeThumbStore(File(dbDir, "thumbs2")),
             )

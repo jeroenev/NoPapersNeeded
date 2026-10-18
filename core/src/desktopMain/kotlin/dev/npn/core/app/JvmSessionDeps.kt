@@ -42,7 +42,7 @@ fun jvmSessionDeps(
     scope: CoroutineScope,
     settings: SessionSettings,
     clock: EpochClock = SystemEpochClock,
-    installationId: String = "local-installation",
+    installationId: String,
     ocrEngine: OcrEngine = TesseractCliEngine(),
     thumbnailStore: ThumbnailStore = DirThumbnailStore(dirs.thumbsDir),
     log: NpnLog = JvmLog(),

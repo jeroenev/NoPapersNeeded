@@ -411,7 +411,7 @@ class SessionDeps(
     /** Where the session reports what fails in the background, with no caller to tell. */
     val log: NpnLog,
     val clock: EpochClock = SystemEpochClock,
-    val installationId: String = "local-installation",
+    val installationId: String,
 ) {
     /**
      * Close the index and device databases. Exposed here so the composeApp DI layer (which does not
