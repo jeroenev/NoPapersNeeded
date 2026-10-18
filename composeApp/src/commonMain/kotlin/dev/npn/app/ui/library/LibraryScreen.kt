@@ -491,7 +491,7 @@ private fun LibraryContent(
             )
             Banners(
                 banners = state.banners,
-                dismissed = ui.bannerDismissed,
+                dismissed = ui.scanIssuesDismissed(state.banners.lastScan),
                 onDismiss = actions::dismissBanner,
                 onGoToTrash = onOpenTrash,
                 onOpenQueue = onOpenQueue,

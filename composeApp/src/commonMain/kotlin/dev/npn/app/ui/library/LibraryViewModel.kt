@@ -97,10 +97,14 @@ data class LibraryUiState(
     val viewType: ViewType = ViewType.LIST,
     val selected: Set<String> = emptySet(),
     val refreshing: Boolean = false,
-    val bannerDismissed: Boolean = false,
+    /** The scan report whose issues banner the user dismissed; a later report brings it back. */
+    val dismissedScanReport: ScanReport? = null,
 ) {
     /** Selection mode lasts exactly as long as something is selected. */
     val selectionMode: Boolean get() = selected.isNotEmpty()
+
+    /** Whether the user dismissed the issues banner of [report], and not only that of an earlier scan. */
+    fun scanIssuesDismissed(report: ScanReport?): Boolean = report != null && report == dismissedScanReport
 }
 
 /** The grid's minimum cell width (dp) until the settings have loaded. */
@@ -339,7 +343,7 @@ class LibraryViewModel(
     }
 
     override fun setFilter(filter: LibraryFilter) {
-        _ui.update { it.copy(filter = filter, bannerDismissed = false) }
+        _ui.update { it.copy(filter = filter) }
         queryInput.value = filter.query.orEmpty()
     }
 
@@ -416,8 +420,9 @@ class LibraryViewModel(
         _ui.update { it.copy(selected = emptySet()) }
     }
 
+    /** Dismiss the issues banner of the scan report shown now, until another report replaces it. */
     override fun dismissBanner() {
-        _ui.update { it.copy(bannerDismissed = true) }
+        _ui.update { it.copy(dismissedScanReport = lastScanReport.value) }
     }
 
     /** Rescan the library folder (pull to refresh); a rescan that fails says so. */

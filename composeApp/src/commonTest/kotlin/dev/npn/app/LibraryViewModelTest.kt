@@ -300,7 +300,41 @@ class LibraryViewModelTest : MainDispatcherTest() {
             model.setFilter(LibraryFilter(query = "taxes", untaggedOnly = true))
             model.ui.value.filter shouldBe LibraryFilter(query = "taxes", untaggedOnly = true)
             model.queryText.value shouldBe "taxes"
-            model.ui.value.bannerDismissed shouldBe false
+        }
+
+    /** A dismissed issues banner stays dismissed through a filter change, which has nothing to do with scans. */
+    @Test
+    fun aDismissedScanBannerStaysDismissedWhenTheFilterChanges() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            session.ingest.lastScanReportFlow.value = emptyScanReport().copy(conflictFiles = listOf("a.pdf"))
+            val model = vm(session = session)
+            collecting(model.lastScanReport)
+            runCurrent()
+
+            model.dismissBanner()
+            model.setFilter(LibraryFilter(untaggedOnly = true))
+
+            model.ui.value.scanIssuesDismissed(model.lastScanReport.value) shouldBe true
+        }
+
+    /** A new scan's report brings the banner back, even one listing the same issues. */
+    @Test
+    fun aNewScanReportBringsADismissedBannerBack() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val issues = emptyScanReport().copy(conflictFiles = listOf("a.pdf"))
+            session.ingest.lastScanReportFlow.value = issues
+            val model = vm(session = session)
+            collecting(model.lastScanReport)
+            runCurrent()
+            model.dismissBanner()
+            model.ui.value.scanIssuesDismissed(model.lastScanReport.value) shouldBe true
+
+            session.ingest.lastScanReportFlow.value = issues.copy(durationMillis = 5)
+            runCurrent()
+
+            model.ui.value.scanIssuesDismissed(model.lastScanReport.value) shouldBe false
         }
 
     @Test
