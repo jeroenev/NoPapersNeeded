@@ -180,8 +180,6 @@ class Indexer(
             // duplicates or its sweep if it fails.
             if (recon.resurrected.isNotEmpty()) onResurrected(recon.resurrected)
 
-            _scanState.value = IndexProgress(IndexProgress.Phase.DONE)
-
             ScanReport(
                 added = recon.added,
                 moved = recon.moved,

@@ -78,12 +78,13 @@ data class ScanReport(
 
 /**
  * Lightweight progress surface for a rescan. [phase] moves through listing -> hashing ->
- * reconciling -> folding -> done. During hashing, [hashed]/[total] track file hashing progress.
+ * reconciling -> folding; once the scan ends there is no progress at all. During hashing,
+ * [hashed]/[total] track file hashing progress.
  */
 data class IndexProgress(
     val phase: Phase,
     val hashed: Int = 0,
     val total: Int = 0,
 ) {
-    enum class Phase { LISTING, HASHING, RECONCILING, FOLDING, DONE }
+    enum class Phase { LISTING, HASHING, RECONCILING, FOLDING }
 }

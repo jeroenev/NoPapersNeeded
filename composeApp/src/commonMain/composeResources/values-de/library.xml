@@ -60,7 +60,6 @@
 
     <string name="library_scan_folding">Bibliothek wird aktualisiert…</string>
 
-    <string name="library_scan_done">Scan abgeschlossen</string>
     <string name="library_path_conflict">%1$s konnte nicht nach %2$s verschoben werden. Die aktuelle Datei bleibt erhalten. Behebe den Konflikt am Zielort oder wähle einen anderen Ort; NPN versucht es beim nächsten Scan erneut.</string>
     <plurals name="library_conflict_file_count">
         <item quantity="one">%1$d Konfliktdatei.</item>

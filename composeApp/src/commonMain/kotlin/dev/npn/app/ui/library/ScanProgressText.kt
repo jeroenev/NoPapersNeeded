@@ -4,7 +4,6 @@ import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.index.IndexProgress
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.library_scan_done
 import no_papers_needed.composeapp.generated.resources.library_scan_folding
 import no_papers_needed.composeapp.generated.resources.library_scan_hashing
 import no_papers_needed.composeapp.generated.resources.library_scan_listing
@@ -17,5 +16,4 @@ internal fun IndexProgress.bannerText(): UiText =
         IndexProgress.Phase.HASHING -> uiText(Res.string.library_scan_hashing, hashed, total)
         IndexProgress.Phase.RECONCILING -> uiText(Res.string.library_scan_reconciling)
         IndexProgress.Phase.FOLDING -> uiText(Res.string.library_scan_folding)
-        IndexProgress.Phase.DONE -> uiText(Res.string.library_scan_done)
     }

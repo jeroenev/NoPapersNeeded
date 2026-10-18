@@ -60,7 +60,6 @@
 
     <string name="library_scan_folding">Actualizando la biblioteca…</string>
 
-    <string name="library_scan_done">Análisis terminado</string>
     <string name="library_path_conflict">No se pudo mover %1$s a %2$s. Se conserva el archivo actual. Resuelve el conflicto en el destino o elige otra ubicación; NPN lo reintentará en el siguiente análisis.</string>
     <plurals name="library_conflict_file_count">
         <item quantity="one">%1$d archivo en conflicto.</item>

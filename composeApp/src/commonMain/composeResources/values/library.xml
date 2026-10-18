@@ -60,7 +60,6 @@
 
     <string name="library_scan_folding">Updating the library…</string>
 
-    <string name="library_scan_done">Scan finished</string>
     <string name="library_path_conflict">Could not move %1$s to %2$s. The current file is retained. Resolve the destination conflict or choose another location; NPN will retry on rescan.</string>
     <plurals name="library_conflict_file_count">
         <item quantity="one">%1$d conflict file.</item>
