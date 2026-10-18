@@ -48,7 +48,7 @@ data class RunPlan(
         /**
          * Above this many model calls, Start asks for confirmation.
          *
-         * Deliberately well above [AiTagging.BACKGROUND_THRESHOLD_DOCS]: that threshold answers
+         * Deliberately well above [AiEditLimits.BACKGROUND_THRESHOLD_DOCS]: that threshold answers
          * "should a person wait for this", which is true of runs far too small to be worth a
          * dialog. This one answers "is this a bulk commitment of the user's money" — a scope
          * picked by filter can be the whole library, and "All documents" is one tap away from the
@@ -148,7 +148,7 @@ data class AiEditUiState(
     val registryLoaded: Boolean = false,
     val maxTags: Int = AiTagging.DEFAULT_TAGS_PER_DOC,
     val maxNewTags: Int = AiTagging.DEFAULT_NEW_TAGS_PER_DOC,
-    val batchSize: Int = AiTagging.DEFAULT_BATCH_DOCS,
+    val batchSize: Int = AiEditLimits.DEFAULT_BATCH_DOCS,
     /** The registry, for labels and the "add a field to this run" picker. */
     val fields: List<FieldDef> = emptyList(),
     /**
@@ -254,7 +254,7 @@ interface AiEditSetupActions {
     /** Set the per-run max new tags per document; clamped to [AiTagging.NEW_TAGS_RANGE]. */
     fun setMaxNewTags(value: Int)
 
-    /** Set the per-run batch size; clamped to [AiTagging.BATCH_RANGE]. */
+    /** Set the per-run batch size; clamped to [AiEditLimits.BATCH_RANGE]. */
     fun setBatchSize(value: Int)
 
     /** Toggle whether field [key] participates in the run. */

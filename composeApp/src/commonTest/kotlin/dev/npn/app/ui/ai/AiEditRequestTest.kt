@@ -39,7 +39,7 @@ class AiEditRequestTest : MainDispatcherTest() {
 
             model.ui.value.maxTags shouldBe 12
             model.ui.value.maxNewTags shouldBe 3
-            model.ui.value.batchSize shouldBe AiTagging.DEFAULT_BATCH_DOCS
+            model.ui.value.batchSize shouldBe AiEditLimits.DEFAULT_BATCH_DOCS
         }
 
     @Test
@@ -59,7 +59,7 @@ class AiEditRequestTest : MainDispatcherTest() {
             request.tags shouldBe true
             request.tagRemovals shouldBe false
             request.customPrompt shouldBe null
-            run.keys.last().batchSize shouldBe AiTagging.DEFAULT_BATCH_DOCS
+            run.keys.last().batchSize shouldBe AiEditLimits.DEFAULT_BATCH_DOCS
         }
 
     @Test
@@ -245,7 +245,7 @@ class AiEditRequestTest : MainDispatcherTest() {
             model.setFieldEnabled(FieldKeys.TITLE, false)
             model.setCustomPrompt("ignored")
             model.ui.value.maxTags shouldBe 11
-            model.ui.value.batchSize shouldBe AiTagging.DEFAULT_BATCH_DOCS
+            model.ui.value.batchSize shouldBe AiEditLimits.DEFAULT_BATCH_DOCS
             model.ui.value.includeTags shouldBe true
             model.ui.value.allowNewTags shouldBe true
             model.ui.value.fieldOptions
@@ -266,6 +266,6 @@ class AiEditRequestTest : MainDispatcherTest() {
             model.setBatchSize(9999)
             model.ui.value.maxTags shouldBe AiTagging.MAX_TAGS_PER_DOC
             model.ui.value.maxNewTags shouldBe AiTagging.MIN_NEW_TAGS_PER_DOC
-            model.ui.value.batchSize shouldBe AiTagging.MAX_BATCH_DOCS
+            model.ui.value.batchSize shouldBe AiEditLimits.MAX_BATCH_DOCS
         }
 }

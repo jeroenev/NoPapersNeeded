@@ -4,7 +4,6 @@ import dev.npn.app.FakeLibrarySession
 import dev.npn.app.MainDispatcherTest
 import dev.npn.app.collecting
 import dev.npn.app.failure
-import dev.npn.core.ai.AiTagging
 import dev.npn.core.app.aiedit.EditScope
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
@@ -32,7 +31,7 @@ class AiEditBackgroundTest : MainDispatcherTest() {
     @Test
     fun aScopeOverTheThresholdIsQueuedByDefault() =
         runTest(dispatcher) {
-            val run = runOver(AiTagging.BACKGROUND_THRESHOLD_DOCS + 1)
+            val run = runOver(AiEditLimits.BACKGROUND_THRESHOLD_DOCS + 1)
             val session = FakeLibrarySession()
             val model = vm(run, session, background = null)
             collecting(model.ui)
@@ -45,14 +44,14 @@ class AiEditBackgroundTest : MainDispatcherTest() {
             run.requests.shouldBeEmpty()
             session.aiEditQueue.queued
                 .single()
-                .first shouldHaveSize AiTagging.BACKGROUND_THRESHOLD_DOCS + 1
-            model.ui.value.phase shouldBe EditPhase.Queued(AiTagging.BACKGROUND_THRESHOLD_DOCS + 1)
+                .first shouldHaveSize AiEditLimits.BACKGROUND_THRESHOLD_DOCS + 1
+            model.ui.value.phase shouldBe EditPhase.Queued(AiEditLimits.BACKGROUND_THRESHOLD_DOCS + 1)
         }
 
     @Test
     fun aScopeAtOrUnderTheThresholdRunsHere() =
         runTest(dispatcher) {
-            val run = runOver(AiTagging.BACKGROUND_THRESHOLD_DOCS)
+            val run = runOver(AiEditLimits.BACKGROUND_THRESHOLD_DOCS)
             val session = FakeLibrarySession()
             val model = vm(run, session, background = null)
             collecting(model.ui)
@@ -72,7 +71,7 @@ class AiEditBackgroundTest : MainDispatcherTest() {
     fun anExplicitChoiceBeatsTheSizeDefaultInBothDirections() =
         runTest(dispatcher) {
             val big = FakeLibrarySession()
-            val foreground = vm(runOver(AiTagging.BACKGROUND_THRESHOLD_DOCS + 1), big, background = false)
+            val foreground = vm(runOver(AiEditLimits.BACKGROUND_THRESHOLD_DOCS + 1), big, background = false)
             collecting(foreground.ui)
             advanceUntilIdle()
             foreground.setScope(EditScope.ALL)
@@ -96,7 +95,7 @@ class AiEditBackgroundTest : MainDispatcherTest() {
     fun aQueuedRunCoversTheWholeScopeNotOneBatch() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
-            val model = vm(runOver(AiTagging.DEFAULT_BATCH_DOCS + 7), session, background = true)
+            val model = vm(runOver(AiEditLimits.DEFAULT_BATCH_DOCS + 7), session, background = true)
             collecting(model.ui)
             advanceUntilIdle()
             model.setScope(EditScope.ALL)
@@ -106,7 +105,7 @@ class AiEditBackgroundTest : MainDispatcherTest() {
 
             session.aiEditQueue.queued
                 .single()
-                .first shouldHaveSize AiTagging.DEFAULT_BATCH_DOCS + 7
+                .first shouldHaveSize AiEditLimits.DEFAULT_BATCH_DOCS + 7
         }
 
     @Test
@@ -149,7 +148,7 @@ class AiEditBackgroundTest : MainDispatcherTest() {
     @Test
     fun aRunPlanCountsWhatOneStartActuallySpends() =
         runTest(dispatcher) {
-            val model = vm(runOver(AiTagging.DEFAULT_BATCH_DOCS + 10), background = false)
+            val model = vm(runOver(AiEditLimits.DEFAULT_BATCH_DOCS + 10), background = false)
             collecting(model.ui)
             collecting(model.plan)
             advanceUntilIdle()
@@ -157,12 +156,12 @@ class AiEditBackgroundTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             // Reviewed here: one batch is bought now, however big the scope is.
-            model.plan.value.documents shouldBe AiTagging.DEFAULT_BATCH_DOCS + 10
-            model.plan.value.requests shouldBe AiTagging.DEFAULT_BATCH_DOCS
+            model.plan.value.documents shouldBe AiEditLimits.DEFAULT_BATCH_DOCS + 10
+            model.plan.value.requests shouldBe AiEditLimits.DEFAULT_BATCH_DOCS
 
             // Queued: the whole scope is bought, so that is what the user is told.
             model.setBackground(true)
             advanceUntilIdle()
-            model.plan.value.requests shouldBe AiTagging.DEFAULT_BATCH_DOCS + 10
+            model.plan.value.requests shouldBe AiEditLimits.DEFAULT_BATCH_DOCS + 10
         }
 }

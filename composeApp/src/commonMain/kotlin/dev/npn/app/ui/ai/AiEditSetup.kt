@@ -421,13 +421,13 @@ private fun AdvancedSection(
             NumericField(
                 value = ui.batchSize,
                 onValueChange = setup::setBatchSize,
-                range = AiTagging.BATCH_RANGE,
+                range = AiEditLimits.BATCH_RANGE,
                 label = stringResource(Res.string.ai_edit_documents_per_batch),
                 supportingText =
                     stringResource(
                         Res.string.ai_edit_range,
-                        AiTagging.MIN_BATCH_DOCS,
-                        AiTagging.MAX_BATCH_DOCS,
+                        AiEditLimits.MIN_BATCH_DOCS,
+                        AiEditLimits.MAX_BATCH_DOCS,
                     ),
             )
         }

@@ -50,11 +50,11 @@ import no_papers_needed.composeapp.generated.resources.ai_edit_suggest_failed
 
 /**
  * Whether a run over [count] documents goes to the background queue: the user's choice when they
- * made one, otherwise [AiTagging.BACKGROUND_THRESHOLD_DOCS]. Private so the threshold policy stays
+ * made one, otherwise [AiEditLimits.BACKGROUND_THRESHOLD_DOCS]. Private so the threshold policy stays
  * in the viewmodel; the UI reads [AiEditViewModel.runsInBackground] instead.
  */
 private fun AiEditUiState.runsInBackground(count: Int): Boolean =
-    backgroundOverride ?: (count > AiTagging.BACKGROUND_THRESHOLD_DOCS)
+    backgroundOverride ?: (count > AiEditLimits.BACKGROUND_THRESHOLD_DOCS)
 
 private fun AiEditUiState.scopeKey(): ScopeKey =
     ScopeKey(
@@ -231,7 +231,7 @@ class AiEditViewModel(
     override fun setMaxNewTags(value: Int) =
         updateIdle { it.copy(maxNewTags = value.coerceIn(AiTagging.NEW_TAGS_RANGE)) }
 
-    override fun setBatchSize(value: Int) = updateIdle { it.copy(batchSize = value.coerceIn(AiTagging.BATCH_RANGE)) }
+    override fun setBatchSize(value: Int) = updateIdle { it.copy(batchSize = value.coerceIn(AiEditLimits.BATCH_RANGE)) }
 
     override fun setFieldEnabled(
         key: String,
