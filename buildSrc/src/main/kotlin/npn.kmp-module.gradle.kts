@@ -13,9 +13,12 @@ plugins {
 val levels = NpnBuildLevels.of(project)
 val catalog = extensions.getByType<VersionCatalogsExtension>().named("libs")
 
-// The same lint configuration for the desktop (JVM) lint that `check` runs here.
+// The one lint configuration, set on both lint extensions: the project's (the desktop lint `check`
+// runs here) and the Android target's (its lint, and androidApp's lintDebug through
+// checkDependencies). Neither reaches the other's lint model.
+val lintXml = rootProject.file("config/lint/lint.xml")
 extensions.configure<com.android.build.api.dsl.Lint> {
-    lintConfig = rootProject.file("config/lint/lint.xml")
+    lintConfig = lintXml
 }
 
 fun library(alias: String) = catalog.findLibrary(alias).orElseThrow { error("No library '$alias' in the catalog") }
@@ -26,8 +29,7 @@ kotlin {
     android {
         compileSdk = levels.compileSdk
         minSdk = levels.minSdk
-        // The one lint configuration; androidApp's lintDebug lints this module's Android code too.
-        lint.lintConfig = rootProject.file("config/lint/lint.xml")
+        lint.lintConfig = lintXml
     }
 
     compilerOptions {
