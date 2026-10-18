@@ -54,6 +54,7 @@ class LibrarySessionImpl private constructor(
     private val coordinator = graph.coordinator
     private val scanReports = graph.scanReports
     private val ocrFacade = graph.ocr
+    private val ocrPipeline = graph.ocrPipeline
     private val staleFiles = graph.staleFiles
     private val queues = graph.work
 
@@ -260,11 +261,11 @@ class LibrarySessionImpl private constructor(
 
             WatchAction.ReconcileJournal -> {
                 log.runLogged("Metadata reconcile") { coordinator.reconcileMetadata() }
-                log.runLogged("OCR sidecar reconcile") { ocrFacade.pipeline.reconcileSidecars() }
+                log.runLogged("OCR sidecar reconcile") { ocrPipeline.reconcileSidecars() }
             }
 
             WatchAction.ReconcileOcr -> {
-                log.runLogged("OCR sidecar reconcile") { ocrFacade.pipeline.reconcileSidecars() }
+                log.runLogged("OCR sidecar reconcile") { ocrPipeline.reconcileSidecars() }
             }
 
             WatchAction.Rescan -> {

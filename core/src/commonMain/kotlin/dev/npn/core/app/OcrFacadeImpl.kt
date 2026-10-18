@@ -11,7 +11,6 @@ import dev.npn.core.ocr.OcrState
 import dev.npn.core.util.EpochClock
 import dev.npn.core.work.QueueDrainer
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
@@ -27,19 +26,15 @@ internal class OcrFacadeImpl(
     private val lifetime: SessionLifetime,
     private val documentDao: DocumentDao,
     private val queue: OcrQueueDao,
-    /** The pipeline the queue drains through, for the session's reconciles and a bake's relink. */
-    val pipeline: OcrPipeline,
+    private val pipeline: OcrPipeline,
     /** Same instance the pipeline runs on, so the AI-OCR offer answers from the real policy. */
     private val engines: OcrEngineSelector,
     private val writer: MetadataWriterImpl,
     private val content: DocContentFacade,
-    /** Drains the queue through [OcrPipeline.processNext]. */
-    val worker: QueueDrainer,
+    /** Drains the queue through [OcrPipeline.processNext]; the session's work facet drains it too. */
+    private val worker: QueueDrainer,
     private val clock: EpochClock,
 ) : OcrFacade {
-    /** The document the drain is working on right now; see [OcrPipeline.inFlight]. */
-    val inFlight: StateFlow<String?> get() = pipeline.inFlight
-
     // `running` is asked of the pipeline rather than inferred from the count. The two are not the
     // same question — a queue can be full while nothing is draining it (nothing has kicked yet, or
     // the endpoint is down) — and inferring it made the indicator claim work was under way whenever

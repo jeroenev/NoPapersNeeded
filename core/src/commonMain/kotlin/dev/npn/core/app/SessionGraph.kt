@@ -253,6 +253,10 @@ internal class SessionGraph(
             onStaleFile = { staleFiles.trySend(Unit) },
         )
 
+    /** Drains the OCR queue, for [ocr] and [work] alike. */
+    private val ocrWorker =
+        QueueDrainer(lifetime.scope, "OCR queue", log, ready = rescanned, step = ocrPipeline::processNext)
+
     val ocr =
         OcrFacadeImpl(
             lifetime = lifetime,
@@ -262,8 +266,7 @@ internal class SessionGraph(
             engines = ocrEngines,
             writer = writer,
             content = content,
-            worker =
-                QueueDrainer(lifetime.scope, "OCR queue", log, ready = rescanned, step = ocrPipeline::processNext),
+            worker = ocrWorker,
             clock = deps.clock,
         )
 
@@ -295,7 +298,7 @@ internal class SessionGraph(
     val work =
         SessionWork(
             lifetime = lifetime,
-            ocr = ocr.worker,
+            ocr = ocrWorker,
             enrichment = enrichment.worker,
             edits = edits.worker,
             reader =
@@ -304,7 +307,7 @@ internal class SessionGraph(
                     deps.deviceDb.ocrQueueDao(),
                     deps.deviceDb.aiEnrichQueueDao(),
                     deps.deviceDb.aiEditJobDao(),
-                    ocr.inFlight,
+                    ocrPipeline.inFlight,
                     edits.queue.inFlight,
                     db.invalidationTracker.createFlow("documents"),
                 ),
