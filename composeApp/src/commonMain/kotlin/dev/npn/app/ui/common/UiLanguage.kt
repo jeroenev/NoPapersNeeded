@@ -17,7 +17,8 @@ import org.jetbrains.compose.resources.stringResource
 /**
  * The languages the app is translated into, in picker order, each named in itself: the one table
  * both the app-language picker and the OCR language chips read. A language's OCR model comes from
- * [AppLanguages]. [ocrName] differs only where the app speaks a regional variant: its Portuguese is
+ * [AppLanguages], which lists the same languages in the same order (`UiLanguageTest` holds them to
+ * it). [ocrName] differs only where the app speaks a regional variant: its Portuguese is
  * Brazilian, while the OCR model reads any Portuguese.
  */
 enum class UiLanguage(

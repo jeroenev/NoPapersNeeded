@@ -22,7 +22,8 @@ object AppLanguages {
 
     /**
      * By subtag. Deliberately not exhaustive: a caller falls back for any language not listed. In
-     * the order the OCR language picker lists their models ([tesseractModels]).
+     * the order the OCR language picker lists their models ([tesseractModels]), which is the order of
+     * composeApp's `UiLanguage` too (its `UiLanguageTest` holds the two lists to each other).
      */
     private val KNOWN: Map<String, Known> =
         mapOf(
