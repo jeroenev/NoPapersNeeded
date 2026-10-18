@@ -196,7 +196,7 @@ class FilterEditorState internal constructor(
 @Composable
 fun rememberFilterEditorState(filter: LibraryFilter): FilterEditorState {
     val editor =
-        rememberSaveable(saver = FilterEditorStateSaver) {
+        rememberSaveable(saver = filterEditorStateSaver(filter.docIds)) {
             FilterEditorState(draft = filter, live = filter, tagQuery = "", matchAll = filter.tagsAny.isEmpty())
         }
     // After composition rather than during it: the editor's state is not written while composing.
@@ -256,21 +256,34 @@ fun FilterPanel(
     }
 }
 
-/** Filter edits are a user-authored draft and must survive destination recreation until applied. */
-private val FilterEditorStateSaver =
+/**
+ * Filter edits are a user-authored draft and must survive destination recreation until applied.
+ *
+ * The documents a filter is restricted to ([LibraryFilter.docIds]) are not saved: they can number
+ * thousands (every document a scan could not move), more than Android's saved state carries. The
+ * editor cannot edit them, only clear them with everything else, so its draft holds the live
+ * filter's or none, and only which of the two is saved. They come back from [liveDocIds], those of
+ * the live filter the editor is restored under.
+ */
+private fun filterEditorStateSaver(liveDocIds: List<String>) =
     listSaver<FilterEditorState, String>(
         save = {
             listOf(
-                NpnJson.Persisted.encodeToString(it.draft),
-                NpnJson.Persisted.encodeToString(it.live),
+                NpnJson.Persisted.encodeToString(it.draft.copy(docIds = emptyList())),
+                NpnJson.Persisted.encodeToString(it.live.copy(docIds = emptyList())),
                 it.tagQuery,
                 it.matchAll.toString(),
+                (it.draft.docIds == it.live.docIds).toString(),
             )
         },
         restore = {
+            val draftKeepsDocIds = it[4].toBoolean()
             FilterEditorState(
-                draft = NpnJson.Persisted.decodeFromString(it[0]),
-                live = NpnJson.Persisted.decodeFromString(it[1]),
+                draft =
+                    NpnJson.Persisted
+                        .decodeFromString<LibraryFilter>(it[0])
+                        .copy(docIds = if (draftKeepsDocIds) liveDocIds else emptyList()),
+                live = NpnJson.Persisted.decodeFromString<LibraryFilter>(it[1]).copy(docIds = liveDocIds),
                 tagQuery = it[2],
                 matchAll = it[3].toBoolean(),
             )

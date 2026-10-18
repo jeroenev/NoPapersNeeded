@@ -160,6 +160,51 @@ class LibraryDialogTest : EnglishLocaleTest() {
         }
 
     /**
+     * An open filter editor over a filter restricted to thousands of documents (the scan banner's
+     * link to every document a scan could not move) saves none of their ids, which would outgrow
+     * Android's saved state, and comes back restricted to them, under the live filter that still is.
+     * A draft cleared of the restriction comes back cleared.
+     */
+    @Test
+    fun anOpenFilterSavesNoDocumentIdsAndComesBackRestricted() =
+        onUiThread {
+            val docIds = List(5_000) { "doc-${it.toString().padStart(60, '0')}" }
+            val live = LibraryFilter(docIds = docIds, tagsAll = listOf("invoice"))
+            for (cleared in listOf(false, true)) {
+                val first = SaveableStateRegistry(restoredValues = null) { true }
+                lateinit var dialog: MutableState<LibraryDialog?>
+                lateinit var editor: FilterEditorState
+                val saved =
+                    scene(first, filter = live, onEditor = { editor = it }) { dialog = it }.closing {
+                        render()
+                        dialog.value = LibraryDialog.Filter
+                        render()
+                        if (cleared) editor.clearAll()
+                        editor.draft = editor.draft.copy(untaggedOnly = true)
+                        render()
+                        first.performSave()
+                    }
+                withClue("cleared: $cleared") {
+                    saved.values.flatten().none { value -> docIds.any { it in value.toString() } } shouldBe true
+                }
+
+                val restored = SaveableStateRegistry(restoredValues = saved) { true }
+                scene(restored, filter = live, onEditor = { editor = it }) { dialog = it }.closing {
+                    render()
+                    withClue("cleared: $cleared") {
+                        editor.live shouldBe live
+                        editor.draft shouldBe
+                            if (cleared) {
+                                LibraryFilter(untaggedOnly = true)
+                            } else {
+                                live.copy(untaggedOnly = true)
+                            }
+                    }
+                }
+            }
+        }
+
+    /**
      * An open filter editor keeps its unapplied draft when it moves between the side panel's call
      * site and the sheet's: the window crossing the wide/compact breakpoint disposes one subtree and
      * composes the other, and the draft lives above that split.
@@ -194,12 +239,15 @@ class LibraryDialogTest : EnglishLocaleTest() {
     private fun scene(
         registry: SaveableStateRegistry,
         sidePanel: MutableState<Boolean> = mutableStateOf(true),
+        filter: LibraryFilter = LibraryFilter(),
+        onEditor: (FilterEditorState) -> Unit = {},
         onDialog: (MutableState<LibraryDialog?>) -> Unit,
     ) = themedScene(WIDTH, HEIGHT, LocalSaveableStateRegistry provides registry) {
         val dialog = rememberLibraryDialog()
         onDialog(dialog)
         if (dialog.value == LibraryDialog.Filter) {
-            val editor = rememberFilterEditorState(LibraryFilter())
+            val editor = rememberFilterEditorState(filter)
+            onEditor(editor)
             if (sidePanel.value) {
                 FilterPanel(
                     editor = editor,
