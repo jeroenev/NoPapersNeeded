@@ -16,7 +16,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -161,9 +160,11 @@ private fun SavedViewMenuItem(
             },
         trailingIcon = {
             Box {
-                IconButton(onClick = { actions = true }) {
-                    Icon(Icons.Filled.MoreVert, contentDescription = stringResource(Res.string.library_view_actions))
-                }
+                TooltipIconButton(
+                    Icons.Filled.MoreVert,
+                    stringResource(Res.string.library_view_actions),
+                    onClick = { actions = true },
+                )
                 DropdownMenu(expanded = actions, onDismissRequest = { actions = false }) {
                     ActionMenuItems(
                         listOf(

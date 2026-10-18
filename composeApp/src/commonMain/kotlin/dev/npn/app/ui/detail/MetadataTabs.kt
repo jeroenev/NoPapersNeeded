@@ -22,7 +22,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -55,6 +54,7 @@ import dev.npn.app.ui.common.SuggestedFieldValue
 import dev.npn.app.ui.common.TagEditor
 import dev.npn.app.ui.common.TagSuggestionLabel
 import dev.npn.app.ui.common.TestTags
+import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.enumNameSaver
 import dev.npn.app.ui.common.formatEpochDate
 import dev.npn.core.ai.TagSuggestion
@@ -360,9 +360,11 @@ private fun AiTagChip(
             label = { TagSuggestionLabel(tag = tag, isNew = suggestion.isNew) },
             leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp)) },
         )
-        IconButton(onClick = { onDismiss(tag) }) {
-            Icon(Icons.Filled.Close, contentDescription = stringResource(Res.string.detail_dismiss_tag, tag))
-        }
+        TooltipIconButton(
+            Icons.Filled.Close,
+            stringResource(Res.string.detail_dismiss_tag, tag),
+            onClick = { onDismiss(tag) },
+        )
     }
 }
 
@@ -451,18 +453,17 @@ private fun AiMetadataSuggestionRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SuggestedFieldValue(label = label, value = value, replaces = replaces, modifier = Modifier.weight(1f))
-        IconButton(onClick = { onAccept(key) }, enabled = acceptEnabled) {
-            Icon(
-                Icons.Filled.Check,
-                contentDescription = stringResource(Res.string.detail_use_suggestion, label),
-            )
-        }
-        IconButton(onClick = { onDismiss(key) }) {
-            Icon(
-                Icons.Filled.Close,
-                contentDescription = stringResource(Res.string.detail_dismiss_suggestion, label),
-            )
-        }
+        TooltipIconButton(
+            Icons.Filled.Check,
+            stringResource(Res.string.detail_use_suggestion, label),
+            onClick = { onAccept(key) },
+            enabled = acceptEnabled,
+        )
+        TooltipIconButton(
+            Icons.Filled.Close,
+            stringResource(Res.string.detail_dismiss_suggestion, label),
+            onClick = { onDismiss(key) },
+        )
     }
 }
 

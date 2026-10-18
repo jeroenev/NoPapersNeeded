@@ -35,7 +35,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -304,12 +303,14 @@ private fun ChatHistoryMenu(
                         onSession(session.id)
                     },
                     trailingIcon = {
-                        IconButton(onClick = {
-                            expanded = false
-                            onDeleteSession(session.id)
-                        }) {
-                            Icon(Icons.Outlined.Delete, contentDescription = stringResource(Res.string.ai_delete_chat))
-                        }
+                        TooltipIconButton(
+                            Icons.Outlined.Delete,
+                            stringResource(Res.string.ai_delete_chat),
+                            onClick = {
+                                expanded = false
+                                onDeleteSession(session.id)
+                            },
+                        )
                     },
                 )
             }
@@ -498,16 +499,14 @@ private fun InputRow(
             keyboardActions = KeyboardActions(onSend = { send() }),
         )
         if (busy) {
-            IconButton(onClick = onStop) {
-                Icon(Icons.Filled.Stop, contentDescription = stringResource(Res.string.ai_stop))
-            }
+            TooltipIconButton(Icons.Filled.Stop, stringResource(Res.string.ai_stop), onClick = onStop)
         } else {
-            IconButton(
+            TooltipIconButton(
+                Icons.AutoMirrored.Filled.Send,
+                stringResource(Res.string.ai_send),
                 onClick = onSend,
                 enabled = enabled && value.isNotBlank(),
-            ) {
-                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(Res.string.ai_send))
-            }
+            )
         }
     }
 }

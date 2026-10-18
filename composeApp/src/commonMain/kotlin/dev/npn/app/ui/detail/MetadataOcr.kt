@@ -23,7 +23,6 @@ import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -51,6 +50,7 @@ import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.HighlightSegment
 import dev.npn.app.ui.common.HighlightText
 import dev.npn.app.ui.common.RadioRow
+import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.formatEpochDate
 import dev.npn.app.ui.common.parseQueryHighlight
 import dev.npn.core.app.OcrVersion
@@ -230,18 +230,18 @@ private fun FindBar(
             keyboardActions = KeyboardActions(onSearch = { onNext() }),
             modifier = Modifier.weight(1f).focusRequester(focusRequester),
         )
-        IconButton(onClick = onPrev, enabled = matchCount > 0) {
-            Icon(
-                Icons.Filled.ArrowUpward,
-                contentDescription = stringResource(Res.string.detail_find_previous),
-            )
-        }
-        IconButton(onClick = onNext, enabled = matchCount > 0) {
-            Icon(
-                Icons.Filled.ArrowDownward,
-                contentDescription = stringResource(Res.string.detail_find_next),
-            )
-        }
+        TooltipIconButton(
+            Icons.Filled.ArrowUpward,
+            stringResource(Res.string.detail_find_previous),
+            onClick = onPrev,
+            enabled = matchCount > 0,
+        )
+        TooltipIconButton(
+            Icons.Filled.ArrowDownward,
+            stringResource(Res.string.detail_find_next),
+            onClick = onNext,
+            enabled = matchCount > 0,
+        )
         // The find status changes as the user types; announce it politely so a screen reader
         // reports "3 / 12" or "No matches found" without the user leaving the field.
         val status =
@@ -253,12 +253,12 @@ private fun FindBar(
         status?.let {
             HelpText(it, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
         }
-        IconButton(onClick = onClear, enabled = query.isNotEmpty()) {
-            Icon(
-                Icons.Filled.Close,
-                contentDescription = stringResource(Res.string.common_clear_search),
-            )
-        }
+        TooltipIconButton(
+            Icons.Filled.Close,
+            stringResource(Res.string.common_clear_search),
+            onClick = onClear,
+            enabled = query.isNotEmpty(),
+        )
     }
 }
 

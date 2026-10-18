@@ -31,8 +31,6 @@ import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
@@ -67,6 +65,7 @@ import dev.npn.app.ui.common.SelectionTopBar
 import dev.npn.app.ui.common.TagFormDialog
 import dev.npn.app.ui.common.TagPickDialog
 import dev.npn.app.ui.common.TextInputDialog
+import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.TopBarAction
 import dev.npn.app.ui.common.onSecondaryClick
 import dev.npn.app.ui.common.parseHexColor
@@ -602,9 +601,7 @@ private fun TagCardMenu(
             ),
         )
     Box {
-        IconButton(onClick = onExpand) {
-            Icon(Icons.Filled.MoreVert, contentDescription = stringResource(Res.string.common_tags_actions))
-        }
+        TooltipIconButton(Icons.Filled.MoreVert, stringResource(Res.string.common_tags_actions), onClick = onExpand)
         DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
             ActionMenuItems(actions, onDismiss)
         }

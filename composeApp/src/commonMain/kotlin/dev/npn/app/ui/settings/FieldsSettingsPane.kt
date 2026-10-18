@@ -17,7 +17,6 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -37,6 +36,7 @@ import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.FieldDefForm
 import dev.npn.app.ui.common.FieldDefFormState
 import dev.npn.app.ui.common.HelpText
+import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.fieldTypeLabel
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
@@ -170,21 +170,19 @@ private fun FieldRow(
                 ),
             )
         }
-        IconButton(onClick = { onMove(-1) }, enabled = canMoveUp) {
-            Icon(
-                Icons.Filled.KeyboardArrowUp,
-                contentDescription = stringResource(Res.string.common_settings_field_move_up),
-            )
-        }
-        IconButton(onClick = { onMove(1) }, enabled = canMoveDown) {
-            Icon(
-                Icons.Filled.KeyboardArrowDown,
-                contentDescription = stringResource(Res.string.common_settings_field_move_down),
-            )
-        }
-        IconButton(onClick = onDelete) {
-            Icon(Icons.Filled.Delete, contentDescription = stringResource(Res.string.common_delete))
-        }
+        TooltipIconButton(
+            Icons.Filled.KeyboardArrowUp,
+            stringResource(Res.string.common_settings_field_move_up),
+            onClick = { onMove(-1) },
+            enabled = canMoveUp,
+        )
+        TooltipIconButton(
+            Icons.Filled.KeyboardArrowDown,
+            stringResource(Res.string.common_settings_field_move_down),
+            onClick = { onMove(1) },
+            enabled = canMoveDown,
+        )
+        TooltipIconButton(Icons.Filled.Delete, stringResource(Res.string.common_delete), onClick = onDelete)
     }
 }
 

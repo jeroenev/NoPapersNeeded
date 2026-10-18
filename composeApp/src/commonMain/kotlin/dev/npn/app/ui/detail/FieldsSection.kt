@@ -20,8 +20,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -41,6 +39,7 @@ import dev.npn.app.ui.common.FieldDefForm
 import dev.npn.app.ui.common.FieldDefFormState
 import dev.npn.app.ui.common.FieldEditor
 import dev.npn.app.ui.common.HelpText
+import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.rememberFieldLocale
 import dev.npn.core.app.Doc
 import dev.npn.core.model.FieldDef
@@ -114,12 +113,11 @@ internal fun FieldsSection(
                     val value = doc.fields.getValue(orphan)
                     // Shown verbatim as text: without a definition there is no type to judge it by.
                     FieldRow(def = orphanDef(orphan), value = value, onCommit = { actions.commitField(orphan, it) }) {
-                        IconButton(onClick = { newField = NewFieldSeed(key = orphan, label = orphan, value = value) }) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.PlaylistAdd,
-                                contentDescription = stringResource(Res.string.detail_add_to_fields),
-                            )
-                        }
+                        TooltipIconButton(
+                            Icons.AutoMirrored.Filled.PlaylistAdd,
+                            stringResource(Res.string.detail_add_to_fields),
+                            onClick = { newField = NewFieldSeed(key = orphan, label = orphan, value = value) },
+                        )
                         RemoveFieldButton(orphan) { actions.removeField(orphan) }
                     }
                 }
@@ -183,9 +181,7 @@ private fun RemoveFieldButton(
     label: String,
     onRemove: () -> Unit,
 ) {
-    IconButton(onClick = onRemove) {
-        Icon(Icons.Filled.Close, contentDescription = stringResource(Res.string.detail_remove_field, label))
-    }
+    TooltipIconButton(Icons.Filled.Close, stringResource(Res.string.detail_remove_field, label), onClick = onRemove)
 }
 
 /** A stand-in definition for an unregistered key: plain text, labelled by its key. */

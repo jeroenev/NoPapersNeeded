@@ -25,7 +25,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -51,6 +50,7 @@ import dev.npn.app.ui.common.ExpanderRow
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.SuggestedFieldValue
 import dev.npn.app.ui.common.TagSuggestionLabel
+import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.aiedit.ApplyResult
 import dev.npn.core.app.aiedit.ReviewDoc
@@ -182,12 +182,11 @@ private fun ReviewRow(
                 // The snippet is two lines of OCR text, which is not enough to judge a date or a
                 // correspondent against. This is the way to the page itself; the review survives
                 // the trip, because the screen stays on the back stack.
-                IconButton(onClick = { onOpenDoc(doc.docId) }) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.OpenInNew,
-                        contentDescription = stringResource(Res.string.ai_edit_open_document),
-                    )
-                }
+                TooltipIconButton(
+                    Icons.AutoMirrored.Filled.OpenInNew,
+                    stringResource(Res.string.ai_edit_open_document),
+                    onClick = { onOpenDoc(doc.docId) },
+                )
             }
             doc.snippet?.let {
                 HelpText(it, maxLines = 2, overflow = TextOverflow.Ellipsis)
