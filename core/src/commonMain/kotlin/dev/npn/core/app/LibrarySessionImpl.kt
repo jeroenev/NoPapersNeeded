@@ -5,10 +5,7 @@ import dev.npn.core.ai.AiFacadeImpl
 import dev.npn.core.ai.AiSuggest
 import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.app.aiedit.AiEditQueueFacade
-import dev.npn.core.db.DeviceDatabase
-import dev.npn.core.db.NpnDatabase
 import dev.npn.core.fs.ExternalSource
-import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
 import dev.npn.core.index.DeviceIdentity
 import dev.npn.core.index.EmptyImportException
@@ -21,20 +18,10 @@ import dev.npn.core.index.ScanReport
 import dev.npn.core.index.SupersededImportException
 import dev.npn.core.index.WriteSettle
 import dev.npn.core.journal.JournalOp
-import dev.npn.core.ocr.OcrEngine
-import dev.npn.core.pdf.PdfEngine
-import dev.npn.core.pdf.ThumbnailStore
-import dev.npn.core.rules.RuleApplier
-import dev.npn.core.settings.SessionSettings
-import dev.npn.core.util.EpochClock
-import dev.npn.core.util.NpnLog
-import dev.npn.core.util.SystemEpochClock
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
 import dev.npn.core.util.warn
-import dev.npn.core.xmp.PdfXmpIO
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.delay
@@ -390,67 +377,4 @@ class LibrarySessionImpl private constructor(
             )
         }
     }
-}
-
-/**
- * Bundle of everything a [LibrarySessionImpl] needs, assembled per platform: `jvmSessionDeps` on a
- * plain JVM, `androidSessionDeps` on Android.
- */
-class SessionDeps(
-    val fs: LibraryFileSystem,
-    /** The disposable index: dropped and rebuilt from the library whenever it must be. */
-    val db: NpnDatabase,
-    /** This device's own state for the library, which nothing could rebuild ([DeviceDatabase]). */
-    val deviceDb: DeviceDatabase,
-    val pdfEngine: PdfEngine,
-    val ocrEngine: OcrEngine,
-    val xmpIO: PdfXmpIO,
-    val thumbnailStore: ThumbnailStore,
-    /** How many pages render at once, thumbnails and page views together; the platform's pick. */
-    val renderParallelism: Int,
-    val scope: CoroutineScope,
-    val settings: SessionSettings,
-    /** Where the session reports what fails in the background, with no caller to tell. */
-    val log: NpnLog,
-    val clock: EpochClock = SystemEpochClock,
-    val installationId: String,
-) {
-    /**
-     * Close the index and device databases. Exposed here so the composeApp DI layer (which does not
-     * depend on the androidx.room3 runtime directly) can free them on a library swap without
-     * touching their room supertype.
-     */
-    fun closeDb() {
-        db.close()
-        deviceDb.close()
-    }
-}
-
-/**
- * The library's metadata layer over its journal: the repositories and writers the session hands
- * out as facets, the auto-match rules OCR runs, and the import path.
- */
-internal class Library(
-    val documents: DocumentRepository,
-    val tags: TagRepository,
-    val savedViews: SavedViewRepository,
-    val fieldRegistry: FieldRegistry,
-    val storagePath: StoragePathFacade,
-    val rules: AutoMatchRuleRepository,
-    val ruleSource: AutoMatchRuleSource,
-    val ruleApplier: RuleApplier,
-    /** [writer] and [lifecycle] for a caller outside the session: each call owned by its lifetime. */
-    val ownedWriter: OwnedWriter,
-    val reviewConfig: ReviewConfigFacade,
-    val trashRetention: JournalTrashRetention,
-    /** The trash auto-purge by [trashRetention]. */
-    val trashPurge: TrashPurge,
-    val content: DocContentFacade,
-    val imports: ImportService,
-) {
-    /** The writer itself, for work that already runs as the session's: the drains, owned facet calls. */
-    val writer: MetadataWriterImpl get() = ownedWriter.writer
-
-    /** The document lifecycle itself, for work that already runs as the session's (a split's trash). */
-    val lifecycle: DocLifecycleImpl get() = ownedWriter.lifecycle
 }
