@@ -19,6 +19,7 @@ import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
 import dev.npn.core.util.warn
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.consumeEach
@@ -55,6 +56,12 @@ class LibrarySessionImpl private constructor(
     private val ocrFacade = graph.ocr
     private val staleFiles = graph.staleFiles
     private val queues = graph.work
+
+    /** The drains' gate, opened by the first rescan that succeeds ([SessionGraph.rescanned]). */
+    private val drainsReady = graph.rescanned
+
+    /** Completed once the initial rescan [start] launched has ended, however it ended. */
+    private val initialRescanEnded = CompletableDeferred<Unit>()
     private val aiFacade = graph.ai
     private val importService = graph.imports
     private val fs get() = deps.fs
@@ -211,8 +218,10 @@ class LibrarySessionImpl private constructor(
                 .collect { act(it) }
         }
 
-        // Initial rescan.
-        scope.launch { log.runLogged("Initial rescan") { doWatchTriggeredRescan() } }
+        // Initial rescan. Ended either way, a session closed under it included, for awaitInitialRescan.
+        scope
+            .launch { log.runLogged("Initial rescan") { doWatchTriggeredRescan() } }
+            .invokeOnCompletion { initialRescanEnded.complete(Unit) }
 
         // Another device's rule list arrives as a journal setting; the rules table only caches it.
         scope.launch {
@@ -264,6 +273,11 @@ class LibrarySessionImpl private constructor(
                 log.runLogged("Watch-triggered rescan") { doWatchTriggeredRescan() }
             }
         }
+    }
+
+    override suspend fun awaitInitialRescan(): Boolean {
+        initialRescanEnded.await()
+        return drainsReady.isCompleted
     }
 
     private suspend fun doWatchTriggeredRescan() {

@@ -40,5 +40,7 @@ class FakeLibrarySession : LibrarySession {
 
     override fun start() = Unit
 
+    override suspend fun awaitInitialRescan() = true
+
     override suspend fun close() = Unit
 }

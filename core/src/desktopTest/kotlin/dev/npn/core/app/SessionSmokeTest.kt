@@ -139,6 +139,31 @@ class SessionSmokeTest {
                 }
         }
 
+    /** Work started with the session learns that its initial rescan let the drains run. */
+    @Test
+    fun anInitialRescanThatSucceededLetsTheDrainsRun() =
+        appSessionTest { rig ->
+            rig.session.start()
+
+            rig.session.awaitInitialRescan() shouldBe true
+        }
+
+    /** Work started with the session learns that its initial rescan failed, not to wait at the drains' gate. */
+    @Test
+    fun anInitialRescanThatFailedKeepsTheDrainsWaiting() =
+        runTest {
+            AppSessionRig
+                .create(backgroundScope) { fs ->
+                    object : LibraryFileSystem by fs {
+                        override suspend fun listAllIndexable(): List<FileMeta> = error("library unreadable")
+                    }
+                }.use { rig ->
+                    rig.session.start()
+
+                    rig.session.awaitInitialRescan() shouldBe false
+                }
+        }
+
     /** A name the library cannot address, as the watcher reports it, is passed over; watching goes on. */
     @Test
     fun anUnsafePathFromTheWatcherLeavesTheWatchRunning() =

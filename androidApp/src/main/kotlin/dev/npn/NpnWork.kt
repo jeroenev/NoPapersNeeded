@@ -25,7 +25,9 @@ private const val DRAIN_TIMEOUT_MS = 8L * 60L * 1000L
  * Periodic background maintenance: rescan the library folder (picks up externally synced files and
  * foreign OCR sidecars) and process the OCR queue. Uses the process-wide [AppEnvironment] singleton
  * from [NpnApplication] so it shares the same session/DB/scope as the UI. A session the worker had
- * to open (a cold start) is not rescanned again: opening it already started its initial rescan.
+ * to open (a cold start) is not rescanned again: opening it already started its initial rescan,
+ * which the worker awaits instead, asking for a retry when it failed rather than leaving the drains
+ * waiting for a rescan that does not come.
  *
  * [LibrarySession.rescan] already adopts foreign sidecars and queues pending OCR; the worker then
  * drains (bounded) the OCR queue, the automatic AI enrichment queue and the queued AI edit runs
@@ -39,6 +41,7 @@ class RescanOcrWorker(
     override suspend fun doWork(): Result {
         val env = NpnApplication.environment(applicationContext)
         // A session this opened starts with a rescan of its own, which the drains below wait for.
+        // When that one failed, they would wait out the timeout: retry instead, as a failed rescan here does.
         val wasOpen = env.session.value != null
         val session = env.openedLibrary() ?: return Result.success() // no library to maintain
         return runCatchingCancellable {
@@ -46,7 +49,11 @@ class RescanOcrWorker(
             // rescan + OCR drain (no-op when no watched folder is configured).
             AndroidLog.runLogged("Watched-folder sweep") { env.scanWatchedFolder() }
 
-            if (wasOpen) session.ingest.rescan()
+            if (wasOpen) {
+                session.ingest.rescan()
+            } else {
+                check(session.awaitInitialRescan()) { "The initial rescan failed" }
+            }
 
             // Drain OCR, then enrichment of the documents it produced, then queued edit runs.
             // The timeout bounds only how long we *wait*: on timeout the work carries on under

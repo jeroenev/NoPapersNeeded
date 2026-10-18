@@ -41,6 +41,13 @@ interface LibrarySession {
     fun start()
 
     /**
+     * Wait until the initial rescan [start] launched has ended, however it ended, and say whether
+     * the queue drains may run: false when it failed or the session closed first, which leaves the
+     * drains waiting for a later rescan to succeed. Call only after [start].
+     */
+    suspend fun awaitInitialRescan(): Boolean
+
+    /**
      * Stop and await all work owned by this session. Final: the session cannot be started again,
      * and its operations fail from then on. Does not close environment-owned resources.
      */
