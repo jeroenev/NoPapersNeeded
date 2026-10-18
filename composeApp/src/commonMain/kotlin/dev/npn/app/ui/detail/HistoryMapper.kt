@@ -31,40 +31,16 @@ import no_papers_needed.composeapp.generated.resources.detail_history_unknown_ev
 import no_papers_needed.composeapp.generated.resources.detail_history_unknown_event_payload
 
 /**
- * UI-facing kind of a document history event. Kept separate from the icon choice so tests can
- * assert against stable enum values instead of [androidx.compose.ui.graphics.vector.ImageVector]
- * identity.
- */
-enum class HistoryEventKind {
-    TAG_ADD,
-    TAG_REMOVE,
-    TAG_RENAME,
-    TAG_MERGE,
-    TAG_STYLE,
-    PROP_REVIEWED,
-    PROP_OCR_ENGINE,
-    PROP_STORAGE_PATH,
-    FIELD_SET,
-    FIELD_REMOVE,
-    TRASH,
-    RESTORE,
-    DELETE,
-    RELINK,
-    SETTING,
-    UNKNOWN,
-}
-
-/**
  * One human-readable entry in the document history timeline.
  *
  * @property timeMillis When the change was made, on the clock of the device that made it.
- * @property kind Stable classifier for iconography and tests.
+ * @property entry The change itself, which the timeline picks the row's icon from.
  * @property description Sentence describing the change, resolved in the app's language.
  * @property deviceId Authoring device for this event.
  */
 data class HistoryItem(
     val timeMillis: Long,
-    val kind: HistoryEventKind,
+    val entry: HistoryEntry,
     val description: UiText,
     val deviceId: String,
 )
@@ -85,7 +61,7 @@ object HistoryMapper {
         records.map { record ->
             HistoryItem(
                 timeMillis = record.timeMillis,
-                kind = kind(record.entry),
+                entry = record.entry,
                 description = description(record.entry, fieldLabel),
                 deviceId = record.deviceId,
             )
@@ -113,26 +89,6 @@ object HistoryMapper {
             is HistoryEntry.SettingChanged -> uiText(Res.string.detail_history_setting_changed, entry.key)
             is HistoryEntry.Unknown -> unknownText(entry)
             is HistoryEntry.Undecodable -> uiText(Res.string.detail_history_undecodable, entry.operation)
-        }
-
-    private fun kind(entry: HistoryEntry): HistoryEventKind =
-        when (entry) {
-            is HistoryEntry.TagAdded -> HistoryEventKind.TAG_ADD
-            is HistoryEntry.TagRemoved -> HistoryEventKind.TAG_REMOVE
-            is HistoryEntry.TagRenamed -> HistoryEventKind.TAG_RENAME
-            is HistoryEntry.TagMerged -> HistoryEventKind.TAG_MERGE
-            is HistoryEntry.TagStyled -> HistoryEventKind.TAG_STYLE
-            is HistoryEntry.Reviewed, is HistoryEntry.ReviewUnreadable -> HistoryEventKind.PROP_REVIEWED
-            is HistoryEntry.OcrEnginePinned -> HistoryEventKind.PROP_OCR_ENGINE
-            is HistoryEntry.StoragePathSet -> HistoryEventKind.PROP_STORAGE_PATH
-            is HistoryEntry.FieldSet if entry.value == null -> HistoryEventKind.FIELD_REMOVE
-            is HistoryEntry.FieldSet -> HistoryEventKind.FIELD_SET
-            is HistoryEntry.Trashed -> HistoryEventKind.TRASH
-            HistoryEntry.Restored -> HistoryEventKind.RESTORE
-            HistoryEntry.Deleted -> HistoryEventKind.DELETE
-            is HistoryEntry.Relinked -> HistoryEventKind.RELINK
-            is HistoryEntry.SettingChanged -> HistoryEventKind.SETTING
-            is HistoryEntry.Unknown, is HistoryEntry.Undecodable -> HistoryEventKind.UNKNOWN
         }
 
     private fun reviewedText(reviewed: Boolean?): UiText =

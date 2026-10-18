@@ -31,10 +31,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.formatEpochDateTime
 import dev.npn.app.ui.common.resolve
+import dev.npn.core.app.HistoryEntry
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_retry
 import no_papers_needed.composeapp.generated.resources.detail_history_load_failed
@@ -87,7 +89,7 @@ internal fun HistoryTab(
 private fun HistoryRow(item: HistoryItem) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Icon(
-            imageVector = item.kind.icon(),
+            imageVector = item.entry.icon(),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(20.dp),
@@ -105,22 +107,21 @@ private fun HistoryRow(item: HistoryItem) {
     }
 }
 
-private fun HistoryEventKind.icon() =
+private fun HistoryEntry.icon(): ImageVector =
     when (this) {
-        HistoryEventKind.TAG_ADD -> Icons.AutoMirrored.Filled.Label
-        HistoryEventKind.TAG_REMOVE -> Icons.AutoMirrored.Filled.LabelOff
-        HistoryEventKind.TAG_RENAME -> Icons.Filled.Edit
-        HistoryEventKind.TAG_MERGE -> Icons.AutoMirrored.Filled.CallMerge
-        HistoryEventKind.TAG_STYLE -> Icons.Filled.Palette
-        HistoryEventKind.PROP_REVIEWED -> Icons.Filled.CheckCircle
-        HistoryEventKind.PROP_OCR_ENGINE -> Icons.Filled.Settings
-        HistoryEventKind.PROP_STORAGE_PATH -> Icons.AutoMirrored.Filled.DriveFileMove
-        HistoryEventKind.FIELD_SET -> Icons.Filled.TextFields
-        HistoryEventKind.FIELD_REMOVE -> Icons.Filled.TextFields
-        HistoryEventKind.TRASH -> Icons.Filled.Delete
-        HistoryEventKind.RESTORE -> Icons.Filled.RestoreFromTrash
-        HistoryEventKind.DELETE -> Icons.Filled.DeleteForever
-        HistoryEventKind.RELINK -> Icons.Filled.Link
-        HistoryEventKind.SETTING -> Icons.Filled.Tune
-        HistoryEventKind.UNKNOWN -> Icons.AutoMirrored.Filled.Help
+        is HistoryEntry.TagAdded -> Icons.AutoMirrored.Filled.Label
+        is HistoryEntry.TagRemoved -> Icons.AutoMirrored.Filled.LabelOff
+        is HistoryEntry.TagRenamed -> Icons.Filled.Edit
+        is HistoryEntry.TagMerged -> Icons.AutoMirrored.Filled.CallMerge
+        is HistoryEntry.TagStyled -> Icons.Filled.Palette
+        is HistoryEntry.Reviewed, is HistoryEntry.ReviewUnreadable -> Icons.Filled.CheckCircle
+        is HistoryEntry.OcrEnginePinned -> Icons.Filled.Settings
+        is HistoryEntry.StoragePathSet -> Icons.AutoMirrored.Filled.DriveFileMove
+        is HistoryEntry.FieldSet -> Icons.Filled.TextFields
+        is HistoryEntry.Trashed -> Icons.Filled.Delete
+        HistoryEntry.Restored -> Icons.Filled.RestoreFromTrash
+        HistoryEntry.Deleted -> Icons.Filled.DeleteForever
+        is HistoryEntry.Relinked -> Icons.Filled.Link
+        is HistoryEntry.SettingChanged -> Icons.Filled.Tune
+        is HistoryEntry.Unknown, is HistoryEntry.Undecodable -> Icons.AutoMirrored.Filled.Help
     }

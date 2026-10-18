@@ -85,25 +85,7 @@ class HistoryMapperTest {
                 uiText(Res.string.detail_history_document_relinked, "bbbbbbbb..."),
                 uiText(Res.string.detail_history_unknown_event, "future-op"),
             )
-        items.map { it.kind } shouldContainExactly
-            listOf(
-                HistoryEventKind.TAG_ADD,
-                HistoryEventKind.TAG_REMOVE,
-                HistoryEventKind.FIELD_SET,
-                HistoryEventKind.FIELD_SET,
-                HistoryEventKind.FIELD_SET,
-                HistoryEventKind.FIELD_SET,
-                HistoryEventKind.FIELD_SET,
-                HistoryEventKind.PROP_REVIEWED,
-                HistoryEventKind.PROP_OCR_ENGINE,
-                HistoryEventKind.FIELD_SET,
-                HistoryEventKind.FIELD_REMOVE,
-                HistoryEventKind.TRASH,
-                HistoryEventKind.RESTORE,
-                HistoryEventKind.DELETE,
-                HistoryEventKind.RELINK,
-                HistoryEventKind.UNKNOWN,
-            )
+        items.map { it.entry } shouldContainExactly entries
     }
 
     /** A pin names its engine as the OCR panel does; one this build does not know, by its label. */
@@ -175,20 +157,14 @@ class HistoryMapperTest {
                 uiText(Res.string.detail_history_tag_styled, "invoice"),
                 uiText(Res.string.detail_history_setting_changed, "reviewMode"),
             )
-        items.map { it.kind } shouldContainExactly
-            listOf(
-                HistoryEventKind.TAG_RENAME,
-                HistoryEventKind.TAG_MERGE,
-                HistoryEventKind.TAG_STYLE,
-                HistoryEventKind.SETTING,
-            )
+        items.map { it.entry } shouldContainExactly entries
     }
 
     @Test
     fun mapsUndecodableRecord() {
         val item = HistoryMapper.toHistoryItems(listOf(record(HistoryEntry.Undecodable("future-op")))).single()
 
-        item.kind shouldBe HistoryEventKind.UNKNOWN
+        item.entry shouldBe HistoryEntry.Undecodable("future-op")
         item.description shouldBe uiText(Res.string.detail_history_undecodable, "future-op")
     }
 
