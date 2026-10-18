@@ -27,8 +27,8 @@ import kotlinx.serialization.json.jsonObject
  * silently lost.
  *
  * A chunk with no `choices` cannot produce a [ai.koog.prompt.streaming.StreamFrame] (Koog skips
- * it), so it decodes to a well-formed empty-choices response instead, and so does any chunk that
- * fails the strict decode. The override uses only Koog's multiplatform API
+ * it), so it decodes to a well-formed empty-choices response instead. Any other chunk still goes
+ * through the strict decode, and one that fails it still ends the stream. The override uses only Koog's multiplatform API
  * (`decodeStreamingResponse` is `protected` in Koog 1.1.1); Koog's own `Json` is module-internal,
  * so a lenient one reads the `choices` field.
  */
@@ -74,20 +74,15 @@ internal class TolerantOpenAILLMClient(
     /**
      * Testable core of [decodeStreamingResponse] (the override is `protected`, so tests exercise
      * this `internal` entry point). A choiceless chunk cannot yield a frame, so it is short-circuited
-     * to a benign empty response; otherwise strict decoding runs, and a strict failure on a chunk
-     * that turns out to be choiceless anyway is swallowed the same way rather than aborting the
-     * stream.
+     * to a benign empty response; every other chunk is decoded strictly, and a failure names the
+     * chunk.
      */
     internal fun decodeStreamingResponseTolerant(data: String): OpenAIChatCompletionStreamResponse {
         if (hasNoChoices(data)) return EMPTY_STREAM_RESPONSE
         return try {
             super.decodeStreamingResponse(data)
         } catch (e: Exception) {
-            if (hasNoChoices(data)) {
-                EMPTY_STREAM_RESPONSE
-            } else {
-                throw IllegalStateException("Failed to decode streaming chunk: ${data.take(CHUNK_PREVIEW)}", e)
-            }
+            throw IllegalStateException("Failed to decode streaming chunk: ${data.take(CHUNK_PREVIEW)}", e)
         }
     }
 
