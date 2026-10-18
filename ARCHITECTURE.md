@@ -304,6 +304,8 @@ live in `buildSrc`. Hot Reload via `mise hot`.
   no fallback format. Beside its objects a bucket may hold their staging files and a sync tool's
   file for one still in transfer (`NpnPaths.isSyncTemp`: Syncthing, Nextcloud and ownCloud,
   Resilio), which a reconcile passes over and never deletes; any other name there fails the pass.
+  A staging file a crash left behind, on any installation, is the rescan's `TempFileSweep`'s to
+  delete once it is a day old.
 - **Compatibility.** A build folds only the ops it knows. An object, snapshot or segment holding an
   op it does not know, or a known op it cannot read (a `prop-set` of a newer system property, a
   `field-def` of a newer field type), is refused there as unsupported: that build blocks writes and

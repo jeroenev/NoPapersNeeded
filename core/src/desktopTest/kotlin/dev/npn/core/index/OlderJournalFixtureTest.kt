@@ -45,7 +45,7 @@ class OlderJournalFixtureTest {
                         .shouldBeTrue()
                     coordinator.commitAndApply(listOf(PendingOp.settingSet("compatibility-probe", "ok"))).shouldBeTrue()
                     TempIndexDb("npn-frozen-compatibility").use { fresh ->
-                        val rebuilt = MetadataAccumulator(rig.fs, fresh.db, installationId = "rebuilt")
+                        val rebuilt = MetadataAccumulator(rig.fs, fresh.db)
                         rebuilt.reconcile()
                         rebuilt
                             .loadState()

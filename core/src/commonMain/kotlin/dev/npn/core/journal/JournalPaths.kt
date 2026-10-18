@@ -55,7 +55,6 @@ object JournalPaths {
 
     private val objectNamePattern = Regex("^([0-9a-f]{64})\\.jsonl$")
     private val embeddedHashPattern = Regex("(?:^|[^0-9a-f])([0-9a-f]{64})(?=[^0-9a-f]|$)")
-    private val objectStagingPattern = Regex("^\\.[0-9a-f]{64}\\.[^.]+\\.[^.]+\\.part$")
     private val legacySegmentPattern = Regex("^[0-9]+(?:-[0-9]+\\.snap)?\\.jsonl$")
 
     /** `.npn/journal/objects-v2-<xx>/<hash>.jsonl`, or the snapshot bucket's when [snapshot]. */
@@ -74,7 +73,8 @@ object JournalPaths {
         installationId: String,
         nonce: String,
         snapshot: Boolean = false,
-    ): String = NpnPaths.parentDir(objectPath(hash, snapshot)) + "/.$hash.$installationId.$nonce.part"
+    ): String =
+        NpnPaths.parentDir(objectPath(hash, snapshot)) + "/" + Temp.journalStagingName(hash, installationId, nonce)
 
     /**
      * Classify direct journal source files without letting object buckets masquerade as devices. A
@@ -124,7 +124,7 @@ object JournalPaths {
 
             // The direct filesystem stages a write beside its target, so publishing an object's
             // staging file can leave one of its own in the bucket too.
-            objectStagingPattern.matches(name) || Temp.kindOf(name) == Temp.Kind.WRITE -> JournalPath.Staging
+            Temp.isJournalStagingName(name) || Temp.kindOf(name) == Temp.Kind.WRITE -> JournalPath.Staging
 
             NpnPaths.isSyncTemp(name) -> JournalPath.SyncTemp
 

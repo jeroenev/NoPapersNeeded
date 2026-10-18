@@ -202,7 +202,7 @@ class LifecycleCommitFailureTest {
         val coordinator =
             rig.coordinator(
                 rig.writer(files = journalFs),
-                MetadataAccumulator(journalFs, rig.db, installationId = "test-installation"),
+                MetadataAccumulator(journalFs, rig.db),
             )
 
         val docs =

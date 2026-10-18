@@ -363,7 +363,7 @@ internal suspend fun createCoordinator(
     return JournalCoordinator(
         writer = createObjectWriter(deps),
         indexer = indexer,
-        accumulator = MetadataAccumulator(deps.fs, deps.db, deps.installationId, deps.clock, snapshots),
+        accumulator = MetadataAccumulator(deps.fs, deps.db, snapshots),
         compaction = Compaction(SnapshotCompactor(deps.fs, deps.installationId), snapshots),
         clock = deps.clock,
         log = deps.log,

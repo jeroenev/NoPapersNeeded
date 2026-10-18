@@ -1,6 +1,7 @@
 package dev.npn.core.index
 
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.PendingOp
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
@@ -58,6 +59,9 @@ class TempFileSweepTest {
                     file("${NpnPaths.TMP_DIR}/.npn-tmp-42.part"),
                     file("${NpnPaths.OCR_DIR}/.npn-tmp-7.part"),
                     file("${NpnPaths.DEVICES_DIR}/device/" + NpnPaths.Temp.markerStagingName("install", NONCE)),
+                    // Journal staging a crash left, here or on an installation that is gone since.
+                    file(JournalPaths.stagingPath(HASH, "test-installation", NONCE)),
+                    file(JournalPaths.stagingPath(HASH, "another-installation", NONCE, snapshot = true)),
                 )
 
             rig.coordinator().rescan()
@@ -75,6 +79,7 @@ class TempFileSweepTest {
                     file("inbox/.npn-tmp-123456.part", ageMillis = HOUR),
                     file(NpnPaths.Temp.importPath(NONCE), ageMillis = HOUR),
                     file("inbox/" + NpnPaths.Temp.moveName(NONCE), ageMillis = HOUR),
+                    file(JournalPaths.stagingPath(HASH, "another-installation", NONCE), ageMillis = HOUR),
                 )
             // A move interrupted mid-way: the document's only copy, under its recovery name.
             val recovery = file("docs/" + NpnPaths.Temp.recoveryName(NONCE))
@@ -158,5 +163,6 @@ class TempFileSweepTest {
         const val HOUR = 60L * 60L * 1000L
         const val STALE = 48L * HOUR
         const val NONCE = "0f8fad5b-d9cb-469f-a165-70867728950e"
+        val HASH = "ab".repeat(32)
     }
 }

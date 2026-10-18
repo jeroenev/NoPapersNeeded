@@ -129,7 +129,7 @@ class ReconcileRetryTest {
             tagsOf(docId) shouldContainExactlyInAnyOrder listOf("remote", "local")
             transfers.forEach { rig.exists(it).shouldBeTrue() }
             TempIndexDb("npn-transfer-open").use { fresh ->
-                val opened = MetadataAccumulator(rig.fs, fresh.db, installationId = "fresh").reconcileOnOpen()
+                val opened = MetadataAccumulator(rig.fs, fresh.db).reconcileOnOpen()
                 opened
                     .shouldBeInstanceOf<OpenReconciliation.Refolded>()
                     .state

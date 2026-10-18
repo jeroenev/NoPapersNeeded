@@ -52,7 +52,7 @@ class IndexRig private constructor(
     val indexer = Indexer(fs, db, clock)
 
     /** Real persisted accumulator: reads the same journal objects the writers publish. */
-    val accumulator = MetadataAccumulator(fs, db, installationId = "test-installation")
+    val accumulator = MetadataAccumulator(fs, db)
 
     val importService =
         ImportService(

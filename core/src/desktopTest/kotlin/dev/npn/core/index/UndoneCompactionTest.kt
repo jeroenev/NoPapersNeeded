@@ -85,7 +85,7 @@ class UndoneCompactionTest {
     /** The tags a library rebuilt from the folder alone gives [docId]. */
     private suspend fun rebuiltTags(docId: String): Set<String> =
         TempIndexDb("npn-compact-rebuild").use { rebuilt ->
-            val state = MetadataAccumulator(rig.fs, rebuilt.db, installationId = "rebuild").reconcile().state
+            val state = MetadataAccumulator(rig.fs, rebuilt.db).reconcile().state
             state.shouldNotBeNull().effectiveTags(docId)
         }
 

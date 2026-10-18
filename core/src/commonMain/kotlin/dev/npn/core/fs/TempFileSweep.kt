@@ -57,6 +57,7 @@ internal class TempFileSweep(
                     NpnPaths.Temp.Kind.RELOCATION,
                     NpnPaths.Temp.Kind.IMPORT,
                     NpnPaths.Temp.Kind.MARKER_STAGING,
+                    NpnPaths.Temp.Kind.JOURNAL_STAGING,
                     -> true
                 }
             if (deletable) {

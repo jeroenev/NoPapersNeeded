@@ -88,9 +88,9 @@ object NpnPaths {
 
     /**
      * The app's own temporary files in the library. Each kind is named here alone, so a rescan can
-     * tell one a crash left behind from a user's file ([kindOf]) and sweep it once it is old.
-     * Journal staging has its own names ([dev.npn.core.journal.JournalPaths.stagingPath]) and its own
-     * cleanup.
+     * tell one a crash left behind from a user's file ([kindOf]) and sweep it once it is old, whoever
+     * wrote it: a sync tool carries one to every device, where only another device's sweep may
+     * ever see it again.
      */
     object Temp {
         /**
@@ -103,13 +103,14 @@ object NpnPaths {
         private const val RELOCATION_INFIX = ".npn-"
         private const val RELOCATION_SUFFIX = ".tmp"
         private const val BAKE_SUFFIX = ".npnbake.tmp"
+        private val journalStagingPattern = Regex("^\\.[0-9a-f]{64}\\.[^.]+\\.[^.]+\\.part$")
         private val relocationPattern = Regex("\\.npn-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\\.tmp$")
 
         /** Names a document file claimed mid-move ([recoveryName]); never mistaken for a move the user made. */
         const val RECOVERY_PREFIX = "npn-recovery-"
 
         /** The kinds [kindOf] tells apart. */
-        enum class Kind { WRITE, MOVE, RELOCATION, BAKE, IMPORT, MARKER_STAGING }
+        enum class Kind { WRITE, MOVE, RELOCATION, BAKE, IMPORT, MARKER_STAGING, JOURNAL_STAGING }
 
         /** A SAF move's verified copy in its target folder: `.npn-move-<nonce>.part`. */
         fun moveName(nonce: String): String = "$MOVE_PREFIX$nonce$PART"
@@ -134,6 +135,19 @@ object NpnPaths {
             installationId: String,
             nonce: String,
         ): String = ".$installationId.$nonce$PART"
+
+        /**
+         * A journal object's or snapshot's staging file in its bucket,
+         * `.<hash>.<installationId>.<nonce>.part` ([dev.npn.core.journal.JournalPaths.stagingPath]).
+         */
+        fun journalStagingName(
+            hash: String,
+            installationId: String,
+            nonce: String,
+        ): String = ".$hash.$installationId.$nonce$PART"
+
+        /** Whether [name] is a [journalStagingName]. */
+        fun isJournalStagingName(name: String): Boolean = journalStagingPattern.matches(name)
 
         /**
          * The name a document file is claimed under while it moves, `npn-recovery-<nonce>.pdf`. Not
@@ -175,6 +189,10 @@ object NpnPaths {
 
                 relPath.startsWith("$DEVICES_DIR/") && name.startsWith('.') && name.endsWith(PART) -> {
                     Kind.MARKER_STAGING
+                }
+
+                relPath.startsWith("$JOURNAL_DIR/") && isJournalStagingName(name) -> {
+                    Kind.JOURNAL_STAGING
                 }
 
                 else -> {

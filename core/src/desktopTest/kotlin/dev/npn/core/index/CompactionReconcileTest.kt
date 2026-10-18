@@ -241,7 +241,7 @@ class CompactionReconcileTest {
             fs.journalPaths<JournalPath.ObjectV2>() shouldContainExactlyInAnyOrder objects
             db.tagDao().tagsForDocument(docId).size shouldBe 6
             TempIndexDb("npn-compact-rebuild").use { rebuilt ->
-                val state = MetadataAccumulator(fs, rebuilt.db, installationId = "rebuild").reconcile().state
+                val state = MetadataAccumulator(fs, rebuilt.db).reconcile().state
                 state.shouldNotBeNull().effectiveTags(docId).size shouldBe 6
             }
         }

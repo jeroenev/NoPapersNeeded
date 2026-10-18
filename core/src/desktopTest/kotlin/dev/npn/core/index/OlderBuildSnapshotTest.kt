@@ -141,7 +141,7 @@ class OlderBuildSnapshotTest {
             shouldKeepPerDocument()
             shouldProjectPerDocument()
             TempIndexDb("npn-older-build").use { fresh ->
-                val accumulator = MetadataAccumulator(rig.fs, fresh.db, installationId = "fresh")
+                val accumulator = MetadataAccumulator(rig.fs, fresh.db)
                 accumulator.reconcile()
                 shouldKeepPerDocument(accumulator)
             }

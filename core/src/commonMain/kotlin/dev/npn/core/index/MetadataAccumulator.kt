@@ -26,9 +26,6 @@ import dev.npn.core.journal.PublishedTransaction
 import dev.npn.core.journal.SnapshotV2Reader
 import dev.npn.core.journal.StorageV1Reader
 import dev.npn.core.journal.StorageV2Reader
-import dev.npn.core.util.EpochClock
-import dev.npn.core.util.SystemEpochClock
-import dev.npn.core.util.runCatchingCancellable
 
 class MetadataWriteBlocked(
     message: String,
@@ -89,14 +86,10 @@ sealed interface OpenReconciliation {
 class MetadataAccumulator(
     private val fs: LibraryFileSystem,
     db: NpnDatabase,
-    /** Marks the journal staging files this installation wrote; the first reconcile deletes stale ones. */
-    private val installationId: String,
-    private val clock: EpochClock = SystemEpochClock,
     /** Deletes what an applied snapshot on disk superseded; the coordinator's compaction shares it. */
     private val snapshots: SnapshotSupport = SnapshotSupport(fs, db.metadataProjectionDao()),
 ) {
     private val dao = db.metadataProjectionDao()
-    private var stagingCleaned = false
 
     /** Judges whether the source set is safe to fold; see [SourceSetValidator]. */
     private val validator = SourceSetValidator(dao)
@@ -238,7 +231,6 @@ class MetadataAccumulator(
             dao.clearAccumulator()
         }
         val entries = fs.listAllUnder(NpnPaths.JOURNAL_DIR)
-        cleanOwnedStaging(entries)
         validator.unsupportedStorage(entries)?.let { fail(it) }
         val previous = dao.allSources()
         val listed = entries.filter { !it.isDirectory }.associateBy { it.relPath }
@@ -386,19 +378,6 @@ class MetadataAccumulator(
         dao.upsertState(current.copy(allocatorPhysical = physicalMillis, allocatorCounter = counter))
     }
 
-    private suspend fun cleanOwnedStaging(entries: List<FileMeta>) {
-        if (stagingCleaned) return
-        stagingCleaned = true
-        val marker = ".$installationId."
-        val cutoff = clock.nowMillis() - STAGING_MAX_AGE_MS
-        entries
-            .asSequence()
-            .filter { JournalPaths.classify(it.relPath) is JournalPath.Staging }
-            .filter { it.name.contains(marker) }
-            .filter { it.mtimeMillis in 1 until cutoff }
-            .forEach { runCatchingCancellable { fs.delete(it.relPath) } }
-    }
-
     /** Running result of an [ingestFiles] pass. */
     private class IngestBatch {
         var read = 0
@@ -526,7 +505,6 @@ class MetadataAccumulator(
          * that already drop the affected tables.
          */
         const val PROJECTION_VERSION = 10
-        private const val STAGING_MAX_AGE_MS = 60L * 60L * 1000L
     }
 }
 

@@ -43,7 +43,7 @@ class SnapshotClaimTest {
             rig.exists(victim).shouldBeTrue()
             checkNotNull(rig.db.metadataProjectionDao().state()).migrationState shouldBe ProjectionStatus.READY
             TempIndexDb("npn-compact-rebuild").use { rebuilt ->
-                val state = MetadataAccumulator(rig.fs, rebuilt.db, installationId = "rebuild").reconcile().state
+                val state = MetadataAccumulator(rig.fs, rebuilt.db).reconcile().state
                 state.shouldNotBeNull().effectiveTags(docId) shouldBe setOf("tag0", "tag1")
             }
             // A live object again: the next compaction carries it.

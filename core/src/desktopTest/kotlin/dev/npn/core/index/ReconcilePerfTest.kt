@@ -113,8 +113,7 @@ class ReconcilePerfTest {
     private fun reopen(deviceId: String = "dev-main"): JournalCoordinator =
         JournalCoordinator(rig.writer(deviceId), Indexer(fs, db, clock), freshAccumulator())
 
-    private fun freshAccumulator(): MetadataAccumulator =
-        MetadataAccumulator(fs, db, installationId = "test-installation")
+    private fun freshAccumulator(): MetadataAccumulator = MetadataAccumulator(fs, db)
 
     @Test
     fun secondReconcileDoesNotRereadUnchangedAppliedSources() =
