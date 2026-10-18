@@ -155,7 +155,7 @@ class MetadataReplicationTest {
                     )
                 }
             val compactor = SnapshotCompactor(rig.fs, "test-installation")
-            compactor.publish(candidates).shouldNotBeNull()
+            compactor.publish(candidates)
             objects.forEach { rig.fs.delete(it.relPath) }
 
             // Device 2 rescans: applies the snapshot, tolerates the now-missing objects.

@@ -81,9 +81,12 @@ class SnapshotCompactor(
         return out.sortedBy { it.hlc }
     }
 
-    /** Encode + verify-publish one snapshot superseding [candidates]. Returns null for empty input. */
-    suspend fun publish(candidates: List<CompactionCandidate>): PublishedSnapshot? {
-        if (candidates.isEmpty()) return null
+    /**
+     * Encode + verify-publish one snapshot superseding [candidates], which a [plan] chose and so are
+     * never empty.
+     */
+    suspend fun publish(candidates: List<CompactionCandidate>): PublishedSnapshot {
+        require(candidates.isNotEmpty()) { "A snapshot supersedes at least one source" }
         val events = survivingEvents(candidates)
         val supersedes = candidates.map { it.contentHash }.sorted()
         val manifest = SnapshotManifest(SnapshotCodec.SNAPSHOT_MANIFEST_VERSION, supersedes)

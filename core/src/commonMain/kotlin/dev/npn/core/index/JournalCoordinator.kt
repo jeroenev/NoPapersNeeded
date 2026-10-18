@@ -354,7 +354,7 @@ class JournalCoordinator internal constructor(
                 ) ?: return@locked null
             val plan = support.candidates(chosen) ?: return@locked null
             withContext(NonCancellable) {
-                val published = compaction.compactor.publish(plan) ?: return@withContext null
+                val published = compaction.compactor.publish(plan)
                 withDurableProjectionRecovery {
                     support.recordLocalSnapshot(published)
                     // The snapshot supersedes every candidate, so every one of them goes.
