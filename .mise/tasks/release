@@ -20,8 +20,8 @@ die() {
 # and minor/patch stay below 100 so the Android versionCode keeps increasing.
 [[ "$version" =~ ^(0|[1-9][0-9]{0,2})\.(0|[1-9][0-9]?)\.(0|[1-9][0-9]?)$ ]] ||
     die "version must be major.minor.patch without leading zeros (major 0-255, minor and patch 0-99), got '$version'"
-((10#${BASH_REMATCH[1]} <= 255 && 10#${BASH_REMATCH[2]} <= 99 && 10#${BASH_REMATCH[3]} <= 99)) ||
-    die "out of range: major 0-255, minor and patch 0-99"
+# The pattern already caps minor and patch at 99; only major's 255 needs arithmetic.
+((BASH_REMATCH[1] <= 255)) || die "out of range: major 0-255"
 
 cd "$(git rev-parse --show-toplevel)"
 
