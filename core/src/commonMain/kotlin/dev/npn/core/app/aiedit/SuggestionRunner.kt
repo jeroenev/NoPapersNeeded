@@ -15,11 +15,13 @@ import kotlinx.coroutines.sync.withPermit
 
 /**
  * One [AiSuggest.suggestEdits] call per document, at most [CONCURRENCY] of one run's documents at
- * once. Used by the interactive [AiEditRun] and the queued [AiEditQueue], so a run in the
- * background never asks the endpoint harder than one the user watches. This bounds one run's
- * fan-out (and the answers it holds while [suggest]'s `then` handles them); the ceiling every
- * asking path shares, runs and the background drains together, is the AI facade's
- * ([AiFacadeImpl.MAX_CONCURRENT_SUGGESTIONS]).
+ * once. Used by the interactive [AiEditRun] and the queued [AiEditQueue].
+ *
+ * What the slots bound is the work a large interactive batch holds at once: the answers waiting
+ * on [suggest]'s `then` and the projection it does for them. They do not cap the load on the
+ * endpoint; the AI facade does that, for every asking path together
+ * ([AiFacadeImpl.MAX_CONCURRENT_SUGGESTIONS]). The queue asks about chunks of exactly
+ * [CONCURRENCY] documents, so on its path the slots never make a call wait.
  */
 internal class SuggestionRunner(
     private val ai: AiSuggest,
