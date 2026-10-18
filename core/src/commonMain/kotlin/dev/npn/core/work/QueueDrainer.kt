@@ -15,8 +15,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 
 /**
  * Background drainer for a persisted work queue: repeatedly runs [step] until it reports there is
@@ -24,11 +22,12 @@ import kotlinx.coroutines.sync.withLock
  * runs.
  *
  * [step] must process at most one unit of work and return whether it did, leaving the queue row
- * updated so the next call makes progress. Draining is single-flight, which is what keeps a queue
- * whose step writes shared state (sidecars, the journal) free of concurrent writers.
+ * updated so the next call makes progress.
  *
  * One worker loop does the draining, fed by a conflated channel: a [kick] while a drain runs asks
- * for exactly one more drain after it, however many kicks arrive meanwhile. A step that throws is
+ * for exactly one more drain after it, however many kicks arrive meanwhile. Being the one loop is
+ * what makes draining single-flight, and keeps a queue whose step writes shared state (sidecars,
+ * the journal) free of concurrent writers. A step that throws is
  * logged to [log] and ends that drain; the loop carries on, and the next kick drains again.
  *
  * @param ready when given, every drain waits for it before its first [step]: a queue whose steps
@@ -41,7 +40,6 @@ class QueueDrainer(
     private val ready: Deferred<Unit>? = null,
     private val step: suspend () -> Boolean,
 ) {
-    private val mutex = Mutex()
     private val workerJob = SupervisorJob(parentScope.coroutineContext[Job])
     private val scope = CoroutineScope(parentScope.coroutineContext + workerJob)
     private val kicks = Channel<Unit>(Channel.CONFLATED)
@@ -96,16 +94,15 @@ class QueueDrainer(
 
     /**
      * Drain on the calling coroutine and return the items processed. A step that throws is logged
-     * and ends the drain; cancellation is rethrown.
+     * and ends the drain; cancellation is rethrown. Only the worker loop calls it, one drain at a
+     * time; a test that drives it directly must not overlap two either.
      */
     internal suspend fun drain(): Int {
         var count = 0
-        mutex.withLock {
-            ready?.await()
-            runCatchingCancellable {
-                while (step()) count++
-            }.onFailure { log.warn("$name drain stopped after $count item(s)", it) }
-        }
+        ready?.await()
+        runCatchingCancellable {
+            while (step()) count++
+        }.onFailure { log.warn("$name drain stopped after $count item(s)", it) }
         return count
     }
 
