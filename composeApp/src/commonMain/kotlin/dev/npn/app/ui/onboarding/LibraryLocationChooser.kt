@@ -24,6 +24,7 @@ import dev.npn.app.platform.supportsSafStorage
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.StorageAccessState
 import dev.npn.app.ui.common.TestTags
+import dev.npn.app.ui.common.disclosure
 import dev.npn.app.ui.common.rememberLibraryFolderPicker
 import dev.npn.app.ui.common.rememberStorageAccess
 import no_papers_needed.composeapp.generated.resources.Res
@@ -106,7 +107,8 @@ internal fun LibraryLocationChooser(
             )
         }
         if (supportsSafStorage()) {
-            TextButton(onClick = { showAdvanced = !showAdvanced }) {
+            val toggleAdvanced = { showAdvanced = !showAdvanced }
+            TextButton(onClick = toggleAdvanced, modifier = Modifier.disclosure(showAdvanced, toggleAdvanced)) {
                 Text(stringResource(Res.string.common_settings_advanced))
             }
             if (showAdvanced) {

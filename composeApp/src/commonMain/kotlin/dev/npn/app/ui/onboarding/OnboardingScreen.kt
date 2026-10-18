@@ -28,6 +28,7 @@ import dev.npn.app.platform.defaultLibraryLocation
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.TestTags
 import dev.npn.app.ui.common.TextInputDialog
+import dev.npn.app.ui.common.disclosure
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_app_name
 import no_papers_needed.composeapp.generated.resources.common_choose_library_folder
@@ -78,7 +79,8 @@ fun OnboardingScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
-        TextButton(onClick = { showSyncHelp = !showSyncHelp }) {
+        val toggleSyncHelp = { showSyncHelp = !showSyncHelp }
+        TextButton(onClick = toggleSyncHelp, modifier = Modifier.disclosure(showSyncHelp, toggleSyncHelp)) {
             Text(stringResource(Res.string.ux_sync_help))
         }
         if (showSyncHelp) {
