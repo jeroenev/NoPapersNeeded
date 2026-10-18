@@ -1,10 +1,12 @@
 package dev.npn.core.pathrules
 
+import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.fieldTypes
 import dev.npn.core.db.isLive
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.uniquifyPath
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -54,4 +56,47 @@ class StoragePathRuleApplicator(
         val target = resolveUniqueTarget(fs, documentDao, docId, expanded)
         if (NpnPaths.normalize(target) != NpnPaths.normalize(doc.relPath)) setPath(docId, target)
     }
+}
+
+/**
+ * Build a unique library-relative path starting from [target], a `.pdf` added when it has none,
+ * suffixing `-1`, `-2`, ... until [pathTaken] says it is free for [currentDocId].
+ */
+internal suspend fun resolveUniqueTarget(
+    fs: LibraryFileSystem,
+    documentDao: DocumentDao,
+    currentDocId: String?,
+    target: String,
+): String {
+    val normalized = NpnPaths.normalize(target)
+    val withExtension =
+        if (NpnPaths.isPdf(NpnPaths.fileName(normalized))) {
+            normalized
+        } else {
+            "$normalized.pdf"
+        }
+    return uniquifyPath(
+        path = withExtension,
+        startIndex = 1,
+        suffix = { "-$it" },
+        exists = { pathTaken(fs, documentDao, currentDocId, it) },
+    )
+}
+
+/**
+ * Whether [candidate] is taken for [currentDocId], the document about to occupy it (null for a file
+ * that is no document yet): a file is there, or another live document's row names it. A live row
+ * whose file went outside the app names its path until a rescan finds it missing; a trashed,
+ * deleted or missing row gives its path up to a live document.
+ */
+internal suspend fun pathTaken(
+    fs: LibraryFileSystem,
+    documentDao: DocumentDao,
+    currentDocId: String?,
+    candidate: String,
+): Boolean {
+    // relPath has a unique index (DocumentEntity), so at most one row can own a candidate.
+    val owner = documentDao.getByRelPath(candidate)
+    if (owner != null && owner.docId == currentDocId) return false
+    return fs.exists(candidate) || owner?.isLive == true
 }

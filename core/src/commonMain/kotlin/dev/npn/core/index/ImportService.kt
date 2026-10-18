@@ -471,7 +471,7 @@ class ImportService(
         val normDir = NpnPaths.normalize(dir)
         val target = if (normDir.isEmpty()) name else "$normDir/$name"
         return uniquifyPath(target, startIndex = 2, suffix = { " ($it)" }) { candidate ->
-            pathTaken(fs, documentDao, currentDocId = null, candidate) { it.isLive }
+            pathTaken(fs, documentDao, currentDocId = null, candidate)
         }
     }
 

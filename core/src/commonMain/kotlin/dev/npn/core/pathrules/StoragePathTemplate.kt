@@ -1,10 +1,6 @@
 package dev.npn.core.pathrules
 
-import dev.npn.core.db.DocumentDao
-import dev.npn.core.db.DocumentEntity
-import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
-import dev.npn.core.fs.uniquifyPath
 import dev.npn.core.model.FieldKeys
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.Month
@@ -253,49 +249,4 @@ object StoragePathTemplate {
     }
 
     private fun monthName(month: Month): String = month.name.lowercase().replaceFirstChar { it.uppercase() }
-}
-
-/**
- * Build a unique library-relative path starting from [target].
- *
- * [currentDocId] is the document that is about to occupy the path; paths owned by other
- * documents (including missing files whose row still exists) are treated as occupied.
- */
-suspend fun resolveUniqueTarget(
-    fs: LibraryFileSystem,
-    documentDao: DocumentDao,
-    currentDocId: String?,
-    target: String,
-): String {
-    val normalized = NpnPaths.normalize(target)
-    val withExtension =
-        if (NpnPaths.isPdf(NpnPaths.fileName(normalized))) {
-            normalized
-        } else {
-            "$normalized.pdf"
-        }
-    return uniquifyPath(
-        path = withExtension,
-        startIndex = 1,
-        suffix = { "-$it" },
-        exists = { pathTaken(fs, documentDao, currentDocId, it) },
-    )
-}
-
-/**
- * Whether [candidate] is taken for [currentDocId], the document about to occupy it (null for a file
- * that is no document yet): a file is there, or another document's row names it. [holds] says which
- * rows count; by default every one does, a missing file's row included.
- */
-internal suspend fun pathTaken(
-    fs: LibraryFileSystem,
-    documentDao: DocumentDao,
-    currentDocId: String?,
-    candidate: String,
-    holds: (DocumentEntity) -> Boolean = { true },
-): Boolean {
-    // relPath has a unique index (DocumentEntity), so at most one row can own a candidate.
-    val owner = documentDao.getByRelPath(candidate)
-    if (owner != null && owner.docId == currentDocId) return false
-    return fs.exists(candidate) || (owner != null && holds(owner))
 }

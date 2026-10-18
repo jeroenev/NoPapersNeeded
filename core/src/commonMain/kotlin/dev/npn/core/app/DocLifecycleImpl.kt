@@ -155,8 +155,7 @@ internal class DocLifecycleImpl(
      * whose file went outside the app names its path until a rescan finds it missing, and the
      * restored row could not take the path from it. The trashed row itself is never live.
      */
-    private suspend fun takenForRestore(path: String): Boolean =
-        pathTaken(fs, documentDao, currentDocId = null, path) { it.isLive }
+    private suspend fun takenForRestore(path: String): Boolean = pathTaken(fs, documentDao, currentDocId = null, path)
 
     /**
      * Whether [doc] can come back at [path] with no copy to move there: no live row names it, and
