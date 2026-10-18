@@ -28,6 +28,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -39,6 +42,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.LoadingIndicator
@@ -53,6 +57,10 @@ import dev.npn.core.app.QueuedWork
 import dev.npn.core.app.WorkStage
 import dev.npn.core.app.WorkState
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.ai_edit_cancel_confirm
+import no_papers_needed.composeapp.generated.resources.ai_edit_cancel_keep
+import no_papers_needed.composeapp.generated.resources.ai_edit_cancel_message
+import no_papers_needed.composeapp.generated.resources.ai_edit_cancel_title
 import no_papers_needed.composeapp.generated.resources.common_retry
 import no_papers_needed.composeapp.generated.resources.queue_attempts
 import no_papers_needed.composeapp.generated.resources.queue_edit_run_discard
@@ -178,7 +186,8 @@ private fun QueueList(
 /**
  * One background edit run. A finished run is the whole point of the section, so it is the one that
  * is clickable and leads with its call to action; a run still being suggested shows how far along
- * it is and offers only the way out.
+ * it is and offers only the way out, which asks first once answers were already paid for, as the
+ * interactive run's Cancel does.
  */
 @Composable
 private fun EditRunRow(
@@ -187,6 +196,7 @@ private fun EditRunRow(
     onDiscard: (String) -> Unit,
 ) {
     val ready = run.state == WorkState.READY
+    var confirmingDiscard by rememberSaveable(run.jobId) { mutableStateOf(false) }
     Row(
         Modifier
             .fillMaxWidth()
@@ -227,10 +237,25 @@ private fun EditRunRow(
                 Text(stringResource(Res.string.queue_edit_run_review))
             }
         } else {
-            TextButton(onClick = { onDiscard(run.jobId) }) {
+            TextButton(onClick = { if (run.done > 0) confirmingDiscard = true else onDiscard(run.jobId) }) {
                 Text(stringResource(Res.string.queue_edit_run_discard))
             }
         }
+    }
+    // A run that finished meanwhile has nothing left to stop: the row offers its review instead.
+    if (confirmingDiscard && !ready) {
+        ConfirmDialog(
+            title = stringResource(Res.string.ai_edit_cancel_title),
+            message = pluralStringResource(Res.plurals.ai_edit_cancel_message, run.done, run.done),
+            confirmLabel = stringResource(Res.string.ai_edit_cancel_confirm),
+            dismissLabel = stringResource(Res.string.ai_edit_cancel_keep),
+            destructive = true,
+            onConfirm = {
+                confirmingDiscard = false
+                onDiscard(run.jobId)
+            },
+            onDismiss = { confirmingDiscard = false },
+        )
     }
 }
 
