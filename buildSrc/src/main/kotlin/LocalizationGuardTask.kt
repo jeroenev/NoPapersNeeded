@@ -61,10 +61,13 @@ abstract class LocalizationGuardTask : DefaultTask() {
             if (translations.isEmpty()) {
                 problems += "No values-<language> directories found under ${root.path}"
             }
-            translations.forEach { directory ->
-                checkTranslation(directory.name, defaults, readResources(listOf(directory), problems), problems)
+            val translated = translations.associate { it.name to readResources(listOf(it), problems) }
+            translated.forEach { (directory, translation) ->
+                checkTranslation(directory, defaults, translation, problems)
             }
-            if (root in composeResourceRoots.files) checkComposeEscapes(root, problems)
+            if (root in composeResourceRoots.files) {
+                (translated.values + defaults).forEach { checkComposeEscapes(it, problems) }
+            }
         }
 
         checkHardcodedComposeStrings(problems)
@@ -93,38 +96,15 @@ abstract class LocalizationGuardTask : DefaultTask() {
      * literal backslash.
      */
     private fun checkComposeEscapes(
-        root: File,
+        resources: Map<ResourceKey, ResourceEntry>,
         problems: MutableList<String>,
     ) {
-        val valueDirectories =
-            root
-                .listFiles()
-                .orEmpty()
-                .toList()
-                .filter { it.isDirectory && (it.name == "values" || TRANSLATION.matches(it.name)) }
-        resourceXmlFiles(valueDirectories).forEach { file ->
-            val document =
-                try {
-                    newDocumentBuilderFactory().newDocumentBuilder().parse(file)
-                } catch (exception: Exception) {
-                    return@forEach // Already reported by readResources.
-                }
-            val resources = document.documentElement ?: return@forEach
-            childElements(resources).filter { it.tagName == "string" || it.tagName == "plurals" }.forEach { element ->
-                val key = "${element.tagName}/${element.getAttribute("name")}"
-                val texts =
-                    if (element.tagName == "string") {
-                        listOf(element.textContent)
-                    } else {
-                        childElements(element).filter { it.tagName == "item" }.map { it.textContent }
-                    }
-                texts.forEach { text ->
-                    val stripped = COMPOSE_ESCAPE.replace(text, "")
-                    ESCAPE.findAll(stripped).forEach { match ->
-                        problems +=
-                            "$key in ${file.path} uses the escape ${match.value}: Compose resources read " +
-                            "only \\n, \\t, \\uXXXX and \\\\; write a plain ${'\''} for an apostrophe"
-                    }
+        resources.forEach { (key, entry) ->
+            entry.values.values.forEach { text ->
+                ESCAPE.findAll(COMPOSE_ESCAPE.replace(text, "")).forEach { match ->
+                    problems +=
+                        "${key.displayName} in ${entry.file.path} uses the escape ${match.value}: Compose " +
+                        "resources read only \\n, \\t, \\uXXXX and \\\\; write a plain ${'\''} for an apostrophe"
                 }
             }
         }
