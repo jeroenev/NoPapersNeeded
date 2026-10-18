@@ -33,7 +33,6 @@ class RuleFormStateTest {
                 pattern = " statement ",
                 tags = " a, ,b ,",
                 sets = mapOf("docType" to " letter ", "title" to "  "),
-                position = "x",
             )
         val rule = form.toRule()
         form.isNew shouldBe true

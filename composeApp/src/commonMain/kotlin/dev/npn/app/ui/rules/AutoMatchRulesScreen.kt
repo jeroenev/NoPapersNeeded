@@ -46,6 +46,7 @@ import dev.npn.app.ui.common.Dropdown
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.LoadingIndicator
+import dev.npn.app.ui.common.NumericField
 import dev.npn.app.ui.common.rememberSnackbarMessages
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.model.FieldDef
@@ -337,7 +338,7 @@ internal data class RuleFormState(
     val tags: String = "",
     /** Field key -> value the rule sets; blank values are dropped on save. */
     val sets: Map<String, String> = emptyMap(),
-    val position: String = "0",
+    val position: Int = 0,
 ) {
     val isNew: Boolean get() = id.isEmpty()
 
@@ -357,7 +358,7 @@ internal data class RuleFormState(
             pattern = pattern.trim(),
             tags = tags.split(',').map { it.trim() }.filter { it.isNotEmpty() },
             sets = sets.mapValues { it.value.trim() }.filterValues { it.isNotEmpty() },
-            position = position.toIntOrNull() ?: 0,
+            position = position,
         )
 
     companion object {
@@ -371,7 +372,7 @@ internal data class RuleFormState(
                 pattern = rule.pattern,
                 tags = rule.tags.joinToString(", "),
                 sets = rule.sets,
-                position = rule.position.toString(),
+                position = rule.position,
             )
     }
 }
@@ -412,9 +413,12 @@ private fun RuleFormFields(
             isError = !regexValid,
             singleLine = true,
         )
-        FormTextField(state.position, stringResource(Res.string.common_rules_priority)) {
-            onChange(state.copy(position = it.filter(Char::isDigit)))
-        }
+        NumericField(
+            value = state.position,
+            onValueChange = { onChange(state.copy(position = it)) },
+            range = RULE_PRIORITIES,
+            label = stringResource(Res.string.common_rules_priority),
+        )
         FormTextField(state.tags, stringResource(Res.string.common_rules_tags_to_add)) {
             onChange(state.copy(tags = it))
         }
@@ -427,6 +431,9 @@ private fun RuleFormFields(
         }
     }
 }
+
+/** The priorities a rule can have; rules run in priority order, lowest first. */
+private val RULE_PRIORITIES = 0..9999
 
 @Composable
 private fun FormTextField(

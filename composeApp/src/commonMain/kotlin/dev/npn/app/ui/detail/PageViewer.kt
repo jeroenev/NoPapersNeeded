@@ -6,18 +6,15 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.ZoomOut
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -31,6 +28,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -43,9 +41,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.FloatingControls
+import dev.npn.app.ui.common.NumericField
 import dev.npn.app.ui.common.PositionStepper
 import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.detectDragWhenZoomed
@@ -111,7 +109,7 @@ fun PageViewer(
         snapshotFlow { pagerState.settledPage }.collect { reportPage(it) }
     }
 
-    var showGoToPage by remember { mutableStateOf(false) }
+    var showGoToPage by rememberSaveable { mutableStateOf(false) }
     var containerSize by remember { mutableStateOf(Size.Zero) }
 
     // The interactive page is whichever the pager currently shows; its transform is owned per-page
@@ -255,7 +253,7 @@ fun PageViewer(
             current = current,
             onGo = {
                 showGoToPage = false
-                scope.launch { pagerState.animateScrollToPage(it) }
+                goToPage(it)
             },
             onDismiss = { showGoToPage = false },
         )
@@ -518,24 +516,21 @@ private fun GoToPageDialog(
     onGo: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var text by remember { mutableStateOf((current + 1).toString()) }
-    val page = text.toIntOrNull()?.takeIf { it in 1..pageCount }
+    // The page number as shown (1-based); the field commits only a page the document has.
+    var page by rememberSaveable { mutableIntStateOf(current + 1) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(Res.string.detail_go_to_page)) },
         text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it.filter(Char::isDigit) },
-                label = { Text(stringResource(Res.string.detail_page_range, pageCount)) },
-                singleLine = true,
-                isError = text.isNotEmpty() && page == null,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth(),
+            NumericField(
+                value = page,
+                onValueChange = { page = it },
+                range = 1..pageCount,
+                label = stringResource(Res.string.detail_page_range, pageCount),
             )
         },
         confirmButton = {
-            TextButton(enabled = page != null, onClick = { page?.let { onGo(it - 1) } }) {
+            TextButton(onClick = { onGo(page - 1) }) {
                 Text(stringResource(Res.string.detail_go))
             }
         },
