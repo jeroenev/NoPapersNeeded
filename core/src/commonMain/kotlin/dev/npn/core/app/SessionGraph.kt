@@ -147,43 +147,6 @@ internal class SessionGraph(
             followUp = writer::followUpRelocation,
         )
 
-    // Single shared gate so thumbnail + page rendering share one bounded concurrency budget and a
-    // first-load burst (e.g. 200 PDFs) cannot flood the dispatchers.
-    private val renderGate = RenderGate(deps.renderParallelism)
-
-    val content =
-        DocContentFacadeImpl(
-            lifetime,
-            db,
-            deps.fs,
-            deps.pdfEngine,
-            ThumbnailService(
-                engine = deps.pdfEngine,
-                fs = deps.fs,
-                store = deps.thumbnailStore,
-                documentDao = db.documentDao(),
-                renderGate = renderGate,
-            ),
-            BakeService(deps.fs, deps.xmpIO, log),
-            coordinator,
-            // Built below, from the OCR pipeline; no bake runs before the session is open.
-            relinkBake = { original, baked -> bakeRelink.relink(original, baked) },
-            renderGate,
-            bakes,
-            log,
-        )
-
-    val imports =
-        ImportService(
-            fs = deps.fs,
-            db = db,
-            ocrQueueDao = deps.deviceDb.ocrQueueDao(),
-            clock = deps.clock,
-            ruleProvider = storagePath::rule,
-            serialize = { coordinator.serialized(it) },
-            log = log,
-        )
-
     /** Automatic AI enrichment: unattended, so it writes through [writer] without review. */
     val enrichment =
         drainedQueue(lifetime.scope, "AI enrichment queue", log, ready = rescanned, build = { onEnqueued ->
@@ -201,25 +164,6 @@ internal class SessionGraph(
                 onEnqueued = onEnqueued,
             )
         }, step = AiAutoEnricher::processNext)
-
-    /** Bulk AI edits handed to the background; their writes wait for a human review. */
-    val edits =
-        drainedQueue(lifetime.scope, "AI edit queue", log, ready = rescanned, build = { onEnqueued ->
-            AiEditQueue(
-                dao = deps.deviceDb.aiEditJobDao(),
-                documents = documents,
-                content = content,
-                meta = writer,
-                ai = ai,
-                fieldRegistry = fieldRegistry,
-                tags = tags,
-                readConfig = deps.settings.aiConfig,
-                clock = deps.clock,
-                health = ai.endpointHealth,
-                onEnqueued = onEnqueued,
-                ownWrite = { lifetime.owned(it) },
-            )
-        }, step = AiEditQueue::processNext)
 
     /**
      * A rescan the OCR pipeline asks for once a file it read no longer hashes to its document
@@ -253,6 +197,64 @@ internal class SessionGraph(
             onStaleFile = { staleFiles.trySend(Unit) },
         )
 
+    /** Ends a bake in place, handing the document's text on through [ocrPipeline]. */
+    private val bakeRelink = BakeRelink(coordinator, ocrPipeline, deps.deviceDb.aiEnrichQueueDao(), log)
+
+    // Single shared gate so thumbnail + page rendering share one bounded concurrency budget and a
+    // first-load burst (e.g. 200 PDFs) cannot flood the dispatchers.
+    private val renderGate = RenderGate(deps.renderParallelism)
+
+    val content =
+        DocContentFacadeImpl(
+            lifetime,
+            db,
+            deps.fs,
+            deps.pdfEngine,
+            ThumbnailService(
+                engine = deps.pdfEngine,
+                fs = deps.fs,
+                store = deps.thumbnailStore,
+                documentDao = db.documentDao(),
+                renderGate = renderGate,
+            ),
+            BakeService(deps.fs, deps.xmpIO, log),
+            coordinator,
+            relinkBake = bakeRelink::relink,
+            renderGate,
+            bakes,
+            log,
+        )
+
+    val imports =
+        ImportService(
+            fs = deps.fs,
+            db = db,
+            ocrQueueDao = deps.deviceDb.ocrQueueDao(),
+            clock = deps.clock,
+            ruleProvider = storagePath::rule,
+            serialize = { coordinator.serialized(it) },
+            log = log,
+        )
+
+    /** Bulk AI edits handed to the background; their writes wait for a human review. */
+    val edits =
+        drainedQueue(lifetime.scope, "AI edit queue", log, ready = rescanned, build = { onEnqueued ->
+            AiEditQueue(
+                dao = deps.deviceDb.aiEditJobDao(),
+                documents = documents,
+                content = content,
+                meta = writer,
+                ai = ai,
+                fieldRegistry = fieldRegistry,
+                tags = tags,
+                readConfig = deps.settings.aiConfig,
+                clock = deps.clock,
+                health = ai.endpointHealth,
+                onEnqueued = onEnqueued,
+                ownWrite = { lifetime.owned(it) },
+            )
+        }, step = AiEditQueue::processNext)
+
     /** Drains the OCR queue, for [ocr] and [work] alike. */
     private val ocrWorker =
         QueueDrainer(lifetime.scope, "OCR queue", log, ready = rescanned, step = ocrPipeline::processNext)
@@ -269,9 +271,6 @@ internal class SessionGraph(
             worker = ocrWorker,
             clock = deps.clock,
         )
-
-    /** Ends a bake in place, handing the document's text on through [ocrPipeline]. */
-    private val bakeRelink = BakeRelink(coordinator, ocrPipeline, deps.deviceDb.aiEnrichQueueDao(), log)
 
     val scanReports = MutableStateFlow<ScanReport?>(null)
 
