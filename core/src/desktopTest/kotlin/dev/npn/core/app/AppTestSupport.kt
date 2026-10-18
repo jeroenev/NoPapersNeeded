@@ -18,11 +18,11 @@ import dev.npn.core.journal.journalObjects
 import dev.npn.core.ocr.FakeOcrEngine
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.pathrules.StoragePathRule
-import dev.npn.core.pdf.DirThumbnailStore
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.settings.AppDirs
 import dev.npn.core.settings.LegacyLibrarySettings
 import dev.npn.core.settings.SessionSettings
+import dev.npn.core.util.EpochClock
 import dev.npn.core.util.JvmLog
 import dev.npn.core.util.NpnLog
 import kotlinx.coroutines.CoroutineScope
@@ -137,23 +137,17 @@ class AppSessionRig private constructor(
             val dbDir = Files.createTempDirectory("npn-app-db").toFile()
             val clock = MutableClock(autoTick = true)
             val base =
-                jvmSessionDeps(
-                    libraryRoot = libRoot,
-                    dirs = appDirs(dbDir, "first"),
+                testSessionDeps(
                     scope = scope,
-                    settings =
-                        SessionSettings(
-                            ocrLanguage = { "eng" },
-                            legacyLibrarySettings = {
-                                legacyLibrarySettings().copy(trashRetentionDays = deviceTrashRetentionDays)
-                            },
-                            aiConfig = aiConfig,
-                        ),
-                    clock = clock,
+                    library = libRoot,
+                    data = File(dbDir, "first"),
                     installationId = "test-installation",
-                    ocrEngine = ocr,
-                    thumbnailStore = DirThumbnailStore(File(dbDir, "thumbs").path),
+                    clock = clock,
+                    ocr = ocr,
                     log = log,
+                    aiConfig = aiConfig,
+                    legacyLibrarySettings = legacyLibrarySettings,
+                    deviceTrashRetentionDays = deviceTrashRetentionDays,
                 )
             val session =
                 openLibrarySession(base.over(files(base.fs), pdfEngine(base.pdfEngine)), writeUndelete)
@@ -162,15 +156,6 @@ class AppSessionRig private constructor(
                 session.storagePath.setStoragePathEnabled(it.enabled)
             }
             return AppSessionRig(libRoot, dbDir, base.fs, base.db, base.deviceDb, clock, scope, session)
-        }
-
-        /** One device's app-local dirs; each session over the folder gets its own. */
-        private fun appDirs(
-            dbDir: File,
-            device: String,
-        ): AppDirs {
-            val base = File(dbDir, device).path
-            return AppDirs(dbDir = base, thumbsDir = "$base/thumbs")
         }
     }
 
@@ -191,22 +176,16 @@ class AppSessionRig private constructor(
         writeUndelete: Boolean = JournalOp.DocUndelete.WRITTEN,
     ): Pair<LibrarySessionImpl, NpnDatabase> {
         val deps =
-            jvmSessionDeps(
-                libraryRoot = libRoot,
-                dirs = appDirs(dbDir, "second"),
+            testSessionDeps(
                 scope = scope,
-                settings =
-                    SessionSettings(
-                        ocrLanguage = { "eng" },
-                        legacyLibrarySettings = {
-                            legacyLibrarySettings().copy(trashRetentionDays = deviceTrashRetentionDays)
-                        },
-                        aiConfig = aiConfig,
-                    ),
-                clock = clock,
+                library = libRoot,
+                data = File(dbDir, "second"),
                 installationId = "second-installation",
-                ocrEngine = ocr,
-                thumbnailStore = DirThumbnailStore(File(dbDir, "thumbs2").path),
+                clock = clock,
+                ocr = ocr,
+                aiConfig = aiConfig,
+                legacyLibrarySettings = legacyLibrarySettings,
+                deviceTrashRetentionDays = deviceTrashRetentionDays,
             )
         // Force a distinct deviceId by seeding the kv before openSession.
         deps.deviceDb.keyValueDao().put(DeviceIdentity.KEY_DEVICE_ID, "device-two")
@@ -318,21 +297,46 @@ suspend fun openSession(
     /** The library filesystem the session sees, over the real one. */
     files: (LibraryFileSystem) -> LibraryFileSystem = { it },
 ): OpenSession {
-    val base =
-        jvmSessionDeps(
-            libraryRoot = library,
-            dirs = AppDirs(dbDir = data.path, thumbsDir = "$data/thumbs"),
-            scope = scope,
-            settings = SessionSettings(ocrLanguage = { "eng" }, aiConfig = aiConfig),
-            // Far behind the files' real mtimes, so a just-written PDF counts as settled.
-            clock = MutableClock(autoTick = true),
-            installationId = installationId,
-            ocrEngine = FakeOcrEngine.unavailable(),
-            thumbnailStore = DirThumbnailStore(File(data, "thumbs").path),
-        )
+    val base = testSessionDeps(scope, library, data, installationId, aiConfig = aiConfig)
     val deps = base.over(files(base.fs), base.pdfEngine)
     return OpenSession(openLibrarySession(deps), deps)
 }
+
+/**
+ * One device's [jvmSessionDeps] over [library], its app-local state in [data] (each session over the
+ * folder gets its own), reading OCR in English, with [deviceTrashRetentionDays] as the trash
+ * retention this device stored, if any.
+ */
+private fun testSessionDeps(
+    scope: CoroutineScope,
+    library: Path,
+    data: File,
+    installationId: String,
+    /** By default far behind the files' real mtimes, so a just-written PDF counts as settled. */
+    clock: EpochClock = MutableClock(autoTick = true),
+    ocr: OcrEngine = FakeOcrEngine.unavailable(),
+    log: NpnLog = JvmLog(),
+    aiConfig: suspend () -> AiConfig = { AiConfig.DISABLED },
+    legacyLibrarySettings: suspend () -> LegacyLibrarySettings = { LegacyLibrarySettings() },
+    deviceTrashRetentionDays: Int? = null,
+): SessionDeps =
+    jvmSessionDeps(
+        libraryRoot = library,
+        dirs = AppDirs(dbDir = data.path, thumbsDir = "$data/thumbs"),
+        scope = scope,
+        settings =
+            SessionSettings(
+                ocrLanguage = { "eng" },
+                legacyLibrarySettings = {
+                    legacyLibrarySettings().copy(trashRetentionDays = deviceTrashRetentionDays)
+                },
+                aiConfig = aiConfig,
+            ),
+        clock = clock,
+        installationId = installationId,
+        ocrEngine = ocr,
+        log = log,
+    )
 
 /** These deps with the library filesystem [fs] and the PDF engine [pdf] in place of their own. */
 private fun SessionDeps.over(

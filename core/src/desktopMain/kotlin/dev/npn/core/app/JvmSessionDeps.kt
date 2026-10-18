@@ -8,7 +8,6 @@ import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.ocr.TesseractCliEngine
 import dev.npn.core.pdf.DirThumbnailStore
 import dev.npn.core.pdf.PdfBoxEngine
-import dev.npn.core.pdf.ThumbnailStore
 import dev.npn.core.pdf.renderParallelism
 import dev.npn.core.settings.AppDirs
 import dev.npn.core.settings.PlatformDirs
@@ -44,7 +43,6 @@ fun jvmSessionDeps(
     clock: EpochClock = SystemEpochClock,
     installationId: String,
     ocrEngine: OcrEngine = TesseractCliEngine(),
-    thumbnailStore: ThumbnailStore = DirThumbnailStore(dirs.thumbsDir),
     log: NpnLog = JvmLog(),
 ): SessionDeps =
     SessionDeps(
@@ -54,7 +52,7 @@ fun jvmSessionDeps(
         pdfEngine = PdfBoxEngine(),
         ocrEngine = ocrEngine,
         xmpIO = PdfBoxXmpIO(),
-        thumbnailStore = thumbnailStore,
+        thumbnailStore = DirThumbnailStore(dirs.thumbsDir),
         renderParallelism = renderParallelism(max = 4),
         scope = scope,
         settings = settings,
