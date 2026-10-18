@@ -37,6 +37,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
 import dev.npn.app.ui.common.BackTopBar
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.HelpText
@@ -127,21 +130,28 @@ fun SettingsScreen(
     // Wide layouts keep the list on screen, so switching panes is a selection, not navigation:
     // it must not stack back-stack entries, and it must not reset the search box by tearing
     // the screen down. Compact layouts drill down for real, which is what makes system back
-    // return to the list.
+    // return to the list. A pane picked while wide stays open when the window turns compact,
+    // without a route of its own, so Back there closes it rather than leaving Settings.
     var picked by rememberSaveable { mutableStateOf<SettingsCategoryId?>(null) }
+    val closePicked = !wide && category == null && picked != null
+    NavigationBackHandler(
+        state = rememberNavigationEventState(NavigationEventInfo.None),
+        isBackEnabled = closePicked,
+        onBackCompleted = { picked = null },
+    )
     SettingsScaffold(
         wide = wide,
         selected =
             if (wide) {
                 picked ?: category ?: SettingsCategoryId.LIBRARY
             } else {
-                category
+                category ?: picked
             },
         snackbar = snackbar,
         paneState = paneState,
         paneActions = paneActions,
         onSelect = { id -> if (wide) picked = id else onOpenCategory(id) },
-        onBack = onBack,
+        onBack = { if (closePicked) picked = null else onBack() },
     )
     draftToResume?.let { docId ->
         ConfirmDialog(
