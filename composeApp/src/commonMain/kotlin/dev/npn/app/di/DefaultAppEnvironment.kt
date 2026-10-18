@@ -98,7 +98,9 @@ class DefaultAppEnvironment(
                     val importer = buildImporter(session, folder, location)
                     runningImporter.value = RunningImporter(session, location, importer)
                     try {
-                        coroutineScope { importer.start(this) }
+                        // An importer that fails is logged and stays stopped until the session or the
+                        // folder changes, rather than end this loop and every importer after it.
+                        log.runLogged("Watched folder import") { coroutineScope { importer.start(this) } }
                     } finally {
                         runningImporter.value = null
                     }

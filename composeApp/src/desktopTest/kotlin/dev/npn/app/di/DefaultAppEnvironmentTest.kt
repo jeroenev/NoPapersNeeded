@@ -8,6 +8,8 @@ import dev.npn.core.settings.AppDirs
 import dev.npn.core.settings.SessionSettings
 import dev.npn.core.testing.copy
 import dev.npn.core.util.runCatchingCancellable
+import dev.npn.core.watch.WatchedFolder
+import dev.npn.core.watch.WatchedFolderFile
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -17,6 +19,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
@@ -213,6 +218,60 @@ class DefaultAppEnvironmentTest {
                 holding.appScope.cancel()
             }
         }
+
+    /**
+     * A folder watch that fails (the JVM's watch service out of inotify instances) is logged: it
+     * ends neither the app nor the loop that starts an importer for each folder chosen after it.
+     */
+    @Test
+    fun aFailedFolderWatchIsLoggedAndTheNextFolderIsStillSwept() =
+        runTest {
+            val good = library("good")
+            val failed = CompletableDeferred<Unit>()
+            val swept = CompletableDeferred<Unit>()
+            val folders =
+                mapOf(
+                    "broken" to EmptyFolder(changes = flow { throw IOException("inotify instances used up") }),
+                    "working" to EmptyFolder(onListing = { swept.complete(Unit) }),
+                )
+            val watching =
+                DefaultAppEnvironment(
+                    settings,
+                    watchedFolder = { folders[it] },
+                    log = { _, _, error -> if (error is IOException) failed.complete(Unit) },
+                    factory = factory,
+                )
+            try {
+                watching.openLibrary(good)
+                settings.updateSettings { it.copy(watchedFolder = "broken") }
+                failed.await()
+
+                settings.updateSettings { it.copy(watchedFolder = "working") }
+
+                swept.await()
+            } finally {
+                watching.closeLibrary()
+                watching.appScope.cancel()
+            }
+        }
+
+    /** A watched folder with no PDFs in it, which says when it is listed. */
+    private class EmptyFolder(
+        private val changes: Flow<Unit> = emptyFlow(),
+        private val onListing: () -> Unit = {},
+    ) : WatchedFolder {
+        override suspend fun listPdfs(): List<WatchedFolderFile> {
+            onListing()
+            return emptyList()
+        }
+
+        override suspend fun delete(
+            file: WatchedFolderFile,
+            docId: String,
+        ) = false
+
+        override fun changes(): Flow<Unit> = changes
+    }
 
     @Test
     fun aFailedFirstOpenHasNothingToGoBackTo() =
