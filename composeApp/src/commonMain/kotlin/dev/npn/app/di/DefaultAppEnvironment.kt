@@ -211,19 +211,22 @@ class DefaultAppEnvironment(
         }
 
     /**
-     * Close the open session and free its databases. The whole transition happens even for a caller
-     * cancelled meanwhile (an Android viewmodel cleared mid-switch): stopped halfway, it would leave a
-     * closed session published as the open one, which [openPersistedLibrary] then never replaces.
+     * Close the open session and free its databases. It stops being the open one first, so nothing
+     * picks up a session that is closing (the watched-folder importer stops at once, too). The whole
+     * transition happens even for a caller cancelled meanwhile (an Android viewmodel cleared
+     * mid-switch): stopped halfway, it would leave the session or its databases open.
      */
     private suspend fun closeCurrentInternal() {
         withContext(NonCancellable) {
+            val closing = _session.value
+            val deps = currentDeps
+            _session.value = null
+            currentDeps = null
+            currentLocation = null
             try {
-                _session.value?.close()
+                closing?.close()
             } finally {
-                _session.value = null
-                currentDeps?.closeDb()
-                currentDeps = null
-                currentLocation = null
+                deps?.closeDb()
             }
         }
     }
