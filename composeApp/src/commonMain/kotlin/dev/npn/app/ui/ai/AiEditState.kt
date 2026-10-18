@@ -12,6 +12,7 @@ import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.model.reviewMarkerIsAuthoritative
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.Serializable
 
 /**
  * The documents the next batch would process ([batch]) out of [total] still in scope.
@@ -70,6 +71,7 @@ enum class StartBlocker {
 }
 
 /** UI-level per-field autofill configuration for a run. */
+@Serializable
 data class AiFieldOption(
     val enabled: Boolean = true,
     val mode: AiFieldMode = AiFieldMode.UNFILLED,

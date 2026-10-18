@@ -1,5 +1,6 @@
 package dev.npn.app.ui.ai
 
+import androidx.lifecycle.SavedStateHandle
 import dev.npn.app.FakeLibrarySession
 import dev.npn.app.FakeSettingsRepository
 import dev.npn.core.ai.AiEditRequest
@@ -166,7 +167,8 @@ internal fun vm(
     selection: List<String> = emptyList(),
     background: Boolean? = false,
     task: EditTask? = EditTask.CUSTOM,
-) = AiEditViewModel(session, settings, selection, run).also { model ->
+    saved: SavedStateHandle = SavedStateHandle(),
+) = AiEditViewModel(session, settings, selection, saved, run).also { model ->
     task?.let(model::setTask)
     background?.let(model::setBackground)
 }
