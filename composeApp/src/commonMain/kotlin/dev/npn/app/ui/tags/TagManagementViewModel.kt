@@ -1,19 +1,19 @@
 package dev.npn.app.ui.tags
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.BulkFailure
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.WhileSubscribedTimeout
+import dev.npn.app.ui.common.uiState
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.TagInfo
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_tags_color_some_failed
 import no_papers_needed.composeapp.generated.resources.common_tags_delete_failed
@@ -111,9 +111,39 @@ interface TagSelectionActions {
     fun clearSelection()
 }
 
+/**
+ * The one dialog the tags screen has open, or none. Every action but rename names a list of tags: a
+ * card's own menu one, the selection all of it. [TagManagementViewModel.dialog] keeps it, so it is
+ * open again after the screen is recreated.
+ */
+@Serializable
+internal sealed interface TagDialog {
+    @Serializable
+    data class Rename(
+        val name: String,
+    ) : TagDialog
+
+    @Serializable
+    data class Merge(
+        val names: List<String>,
+    ) : TagDialog
+
+    @Serializable
+    data class Style(
+        val names: List<String>,
+    ) : TagDialog
+
+    @Serializable
+    data class Delete(
+        val names: List<String>,
+    ) : TagDialog
+}
+
 /** The tags screen: the library's tags, its selection of them, and their [TagWrites]. */
 class TagManagementViewModel(
     session: LibrarySession,
+    /** What the screen's back-stack entry saves for a restored process; a new one opens it afresh. */
+    saved: SavedStateHandle = SavedStateHandle(),
 ) : MessagesViewModel(),
     TagWrites,
     TagSelectionActions {
@@ -126,7 +156,7 @@ class TagManagementViewModel(
             .observeTags()
             .stateIn(viewModelScope, WhileSubscribedTimeout, null)
 
-    private val selected = MutableStateFlow(emptyList<String>())
+    private val selected = saved.uiState(SELECTION_KEY, emptyList<String>())
 
     /** [tags] as the screen's cards: the namespace tree, flattened depth-first. Null until the first load. */
     val rows: StateFlow<List<TagRow>?> =
@@ -140,21 +170,28 @@ class TagManagementViewModel(
      * auto-pruning after edits): the selection forgets them once the rows load without them, so a
      * tag of the same name coming back later is not selected again.
      */
-    val selection: StateFlow<List<String>> = selected.asStateFlow()
+    val selection: StateFlow<List<String>> = selected.flow
+
+    private val dialogState = saved.uiState<TagDialog?>(DIALOG_KEY, null)
+
+    /** The dialog the screen has open; see [TagDialog]. */
+    internal val dialog: StateFlow<TagDialog?> = dialogState.flow
+
+    internal fun openDialog(dialog: TagDialog?) = dialogState.set(dialog)
 
     override fun toggleSelected(name: String) =
         selected.update { current -> ordered(if (name in current) current - name else current + name) }
 
     override fun selectAll() {
-        selected.value = rows.value.orEmpty().selectable()
+        selected.set(rows.value.orEmpty().selectable())
     }
 
     override fun selectOnly(name: String) {
-        selected.value = listOf(name)
+        selected.set(listOf(name))
     }
 
     override fun clearSelection() {
-        selected.value = emptyList()
+        selected.set(emptyList())
     }
 
     /** [names] in card order, as far as the rows are loaded. */
@@ -202,5 +239,7 @@ class TagManagementViewModel(
         val MergeFailed = BulkFailure(Res.string.common_tags_merge_failed, Res.plurals.common_tags_merge_some_failed)
         val DeleteFailed = BulkFailure(Res.string.common_tags_delete_failed, Res.plurals.common_tags_delete_some_failed)
         val StyleFailed = BulkFailure(Res.string.common_tags_style_failed, Res.plurals.common_tags_color_some_failed)
+        const val SELECTION_KEY = "tags.selection"
+        const val DIALOG_KEY = "tags.dialog"
     }
 }

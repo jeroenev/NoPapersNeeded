@@ -33,9 +33,10 @@ import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 
 /**
- * What the tags and rules screens are in the middle of comes back when their state is saved and
- * restored: a trip to another tab and back, or the process being restored. A tag selection is the
- * viewmodel's, as the library's is, so it comes back where the viewmodel outlives the screen.
+ * What the screens are in the middle of comes back when their state is saved and restored: a trip
+ * to another tab and back, or the process being restored. A tag selection is the viewmodel's, as
+ * the library's is, so it comes back where the viewmodel outlives the screen, and from the
+ * viewmodel's saved state where it does not.
  */
 class ScreenRestorationTest : EnglishLocaleTest() {
     @Test
@@ -45,6 +46,21 @@ class ScreenRestorationTest : EnglishLocaleTest() {
             restored(
                 content = { TagManagementScreen(session) },
                 viewModels = viewModelStoreOwner(),
+                before = { scene ->
+                    scene.longClick { it.text() == "tax" }
+                    scene.longClick { it.text() == "invoice" }
+                    scene.has { it.text() == "2 selected" } shouldBe true
+                },
+                after = { scene -> scene.has { it.text() == "2 selected" } shouldBe true },
+            )
+        }
+
+    @Test
+    fun aTagSelectionSurvivesAProcessRestore() =
+        onUiThread {
+            val session = tagSession()
+            restored(
+                content = { TagManagementScreen(session) },
                 before = { scene ->
                     scene.longClick { it.text() == "tax" }
                     scene.longClick { it.text() == "invoice" }
@@ -214,8 +230,9 @@ class ScreenRestorationTest : EnglishLocaleTest() {
 
     /**
      * Run [before] on [content], save the screen's state, compose [content] again from it and run
-     * [after] on that. Each composition gets its own viewmodels, as after a process restore, unless
-     * both share [viewModels], as across a configuration change.
+     * [after] on that. Each composition gets its own viewmodels, as after a process restore, which
+     * get back only what they saved, unless both share [viewModels], as across a configuration
+     * change.
      */
     private fun restored(
         content: @Composable () -> Unit,
@@ -224,15 +241,16 @@ class ScreenRestorationTest : EnglishLocaleTest() {
         viewModels: ViewModelStoreOwner? = null,
     ) {
         val first = SaveableStateRegistry(restoredValues = null) { true }
+        val firstViewModels = viewModels ?: viewModelStoreOwner()
         val saved =
-            scene(first, viewModels ?: viewModelStoreOwner(), content).closing {
+            scene(first, firstViewModels, content).closing {
                 render()
                 before(this)
                 first.performSave()
             }
         scene(
             SaveableStateRegistry(restoredValues = saved) { true },
-            viewModels ?: viewModelStoreOwner(),
+            viewModels ?: restored(firstViewModels as ScreenOwner),
             content,
         ).closing {
             render()
