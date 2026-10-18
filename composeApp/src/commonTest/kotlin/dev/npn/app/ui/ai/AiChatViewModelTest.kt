@@ -16,7 +16,6 @@ import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -34,7 +33,6 @@ import kotlin.test.Test
  * config probe, history capture, and the blank-answer message. The fold rules themselves live in
  * [ChatTranscriptTest] — do not re-assert them here.
  */
-@OptIn(ExperimentalCoroutinesApi::class)
 class AiChatViewModelTest : MainDispatcherTest() {
     private fun vm(
         session: FakeLibrarySession = FakeLibrarySession(),

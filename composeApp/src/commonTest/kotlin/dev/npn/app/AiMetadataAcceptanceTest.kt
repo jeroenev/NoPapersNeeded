@@ -15,7 +15,6 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -25,7 +24,6 @@ import no_papers_needed.composeapp.generated.resources.common_save_field_failed
 import kotlin.test.Test
 
 /** Accepting a suggestion must retain its retry and the user's draft until the write lands. */
-@OptIn(ExperimentalCoroutinesApi::class)
 class AiMetadataAcceptanceTest : MainDispatcherTest() {
     @Test
     fun aFailedAcceptanceKeepsTheSuggestionAndDraftForRetry() =

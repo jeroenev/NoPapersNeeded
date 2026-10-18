@@ -1,7 +1,6 @@
 package dev.npn.app
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -15,7 +14,6 @@ import kotlin.test.BeforeTest
  * bodies with `runTest(dispatcher) { ... }` so scheduler advancement (advanceUntilIdle,
  * advanceTimeBy for the debounce) works against the same dispatcher.
  */
-@OptIn(ExperimentalCoroutinesApi::class)
 abstract class MainDispatcherTest {
     protected val dispatcher: TestDispatcher = StandardTestDispatcher()
 

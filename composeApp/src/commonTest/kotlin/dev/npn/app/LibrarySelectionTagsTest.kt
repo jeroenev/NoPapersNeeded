@@ -4,7 +4,6 @@ import dev.npn.app.ui.library.LibraryViewModel
 import dev.npn.core.testing.listItem
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 
@@ -12,7 +11,6 @@ import kotlin.test.Test
  * The remove-tag picker's candidate list. Kept out of the already-large [LibraryViewModelTest]
  * because it is a self-contained read over the selection.
  */
-@OptIn(ExperimentalCoroutinesApi::class)
 class LibrarySelectionTagsTest : MainDispatcherTest() {
     private fun vm(session: FakeLibrarySession = FakeLibrarySession()) =
         LibraryViewModel(session, FakeSettingsRepository())

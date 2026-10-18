@@ -26,6 +26,10 @@ kotlin {
     }
 
     sourceSets {
+        // Tests drive virtual time and test dispatchers, kotlinx-coroutines-test's experimental API.
+        matching { it.name.endsWith("Test") }.configureEach {
+            languageSettings.optIn("kotlinx.coroutines.ExperimentalCoroutinesApi")
+        }
         // commonTest asserts through kotest matchers, so they belong to every test target that
         // compiles it, not just `desktopTest`.
         commonTest.dependencies {

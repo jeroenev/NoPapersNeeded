@@ -7,7 +7,6 @@ import dev.npn.core.app.ImportFailure
 import dev.npn.core.app.ImportOutcome
 import dev.npn.core.fs.ExternalSource
 import io.kotest.matchers.collections.shouldContainExactly
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -18,7 +17,6 @@ import kotlin.test.Test
  * What a finished scan says once its PDF is imported. Lives on the desktop target only because a
  * scanned PDF arrives as an [ExternalSource], which common code cannot construct.
  */
-@OptIn(ExperimentalCoroutinesApi::class)
 class LibraryScanTest : MainDispatcherTest() {
     private val scanned = ScannedPdf(ExternalSource(Path.of("scan.pdf")), "scan.pdf")
 

@@ -14,7 +14,6 @@ import dev.npn.core.model.FieldType
 import dev.npn.core.model.ReviewMode
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -29,7 +28,6 @@ import no_papers_needed.composeapp.generated.resources.common_settings_thumbnail
 import no_papers_needed.composeapp.generated.resources.common_settings_thumbnails_cleared
 import kotlin.test.Test
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelTest : MainDispatcherTest() {
     @Test
     fun clearingTheThumbnailCacheSaysWhatItCleared() =

@@ -12,7 +12,6 @@ import dev.npn.core.model.FieldKeys
 import dev.npn.core.testing.listItem
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
@@ -20,7 +19,6 @@ import no_papers_needed.composeapp.generated.resources.detail_history_field_set
 import no_papers_needed.composeapp.generated.resources.detail_history_tag_added
 import kotlin.test.Test
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class DocDetailViewModelHistoryTest : MainDispatcherTest() {
     @Test
     fun loadHistoryPopulatesStateFromSession() =

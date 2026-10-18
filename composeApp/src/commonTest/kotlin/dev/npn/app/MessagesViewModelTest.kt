@@ -3,7 +3,6 @@ package dev.npn.app
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiText
 import io.kotest.matchers.collections.shouldContainExactly
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -13,7 +12,6 @@ import no_papers_needed.composeapp.generated.resources.common_save_setting_faile
 import kotlin.test.Test
 
 /** The one message path every screen's viewmodel reports through. */
-@OptIn(ExperimentalCoroutinesApi::class)
 class MessagesViewModelTest : MainDispatcherTest() {
     private class Messages : MessagesViewModel() {
         fun say(vararg texts: String) = texts.forEach { message(UiText.Raw(it)) }

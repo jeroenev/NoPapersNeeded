@@ -6,7 +6,6 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -19,7 +18,6 @@ import no_papers_needed.composeapp.generated.resources.library_undo
 import kotlin.test.Test
 
 /** Bulk trash from the library selection, and the Undo message that takes it back. */
-@OptIn(ExperimentalCoroutinesApi::class)
 class LibraryTrashTest : MainDispatcherTest() {
     private fun vm(session: FakeLibrarySession = FakeLibrarySession()) =
         LibraryViewModel(session, FakeSettingsRepository())

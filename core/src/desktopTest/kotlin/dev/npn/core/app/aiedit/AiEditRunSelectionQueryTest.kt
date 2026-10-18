@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalCoroutinesApi::class)
-
 package dev.npn.core.app.aiedit
 
 import dev.npn.core.app.DocumentRepositoryImpl
@@ -13,7 +11,6 @@ import dev.npn.core.testing.FakeTagRepository
 import dev.npn.core.testing.doc
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlin.test.Test
 

@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalCoroutinesApi::class)
-
 package dev.npn.core.app.aiedit
 
 import dev.npn.core.app.LibraryFilter
@@ -11,7 +9,6 @@ import dev.npn.core.testing.doc
 import dev.npn.core.testing.listItem
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test

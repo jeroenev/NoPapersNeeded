@@ -10,7 +10,6 @@ import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.maps.shouldContainExactly
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -21,7 +20,6 @@ import no_papers_needed.composeapp.generated.resources.library_save_view_failed
 import kotlin.test.Test
 
 /** How the library shows its documents: view type, sort and grid width, kept in settings, and saved views. */
-@OptIn(ExperimentalCoroutinesApi::class)
 class LibrarySortAndViewTest : MainDispatcherTest() {
     private fun vm(
         session: FakeLibrarySession = FakeLibrarySession(),

@@ -7,7 +7,6 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -16,7 +15,6 @@ import kotlinx.coroutines.test.runTest
 import kotlin.coroutines.ContinuationInterceptor
 import kotlin.test.Test
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class AppViewModelTest : MainDispatcherTest() {
     private val io = StandardTestDispatcher(dispatcher.scheduler, name = "io")
 

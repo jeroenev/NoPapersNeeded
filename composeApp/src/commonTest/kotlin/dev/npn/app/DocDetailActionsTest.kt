@@ -11,7 +11,6 @@ import dev.npn.core.index.SplitFailure
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -36,7 +35,6 @@ import kotlin.test.Test
  * The document actions menu (trash, rename, OCR, split, bake, export and share): each runs in the
  * viewmodel and reports through its message channel, so a result outlives the dialog that started it.
  */
-@OptIn(ExperimentalCoroutinesApi::class)
 class DocDetailActionsTest : MainDispatcherTest() {
     @Test
     fun trashCallsSessionAndCallback() =

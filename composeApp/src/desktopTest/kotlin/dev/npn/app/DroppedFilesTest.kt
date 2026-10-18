@@ -3,7 +3,6 @@ package dev.npn.app
 import dev.npn.core.app.ImportOutcome
 import dev.npn.core.fs.ExternalSource
 import io.kotest.matchers.collections.shouldContainExactly
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -16,7 +15,6 @@ import kotlin.test.Test
  * showing, and reported in the app's own messages rather than only to the log. Desktop-only
  * because a dropped file arrives as an [ExternalSource], which common code cannot construct.
  */
-@OptIn(ExperimentalCoroutinesApi::class)
 class DroppedFilesTest : MainDispatcherTest() {
     private val dropped = listOf("a.pdf", "b.pdf").map { ExternalSource(Path.of(it)) to it }
 

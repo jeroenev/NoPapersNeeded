@@ -7,7 +7,6 @@ import dev.npn.core.ai.AiReasoningLevel
 import dev.npn.core.ai.AiTagging
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -15,7 +14,6 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 
 /** The AI endpoint on the Settings screen: provider, base URL, key, model and tagging limits. */
-@OptIn(ExperimentalCoroutinesApi::class)
 class SettingsAiEndpointTest : MainDispatcherTest() {
     @Test
     fun aiEditsPersistThroughRepository() =

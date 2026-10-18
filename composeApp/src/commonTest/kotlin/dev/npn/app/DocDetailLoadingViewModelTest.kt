@@ -6,12 +6,10 @@ import dev.npn.app.ui.detail.PageCountState
 import dev.npn.core.testing.doc
 import dev.npn.core.testing.listItem
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class DocDetailLoadingViewModelTest : MainDispatcherTest() {
     @Test
     fun pageCountResolvedOnInit() =

@@ -16,7 +16,6 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.maps.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -28,7 +27,6 @@ import no_papers_needed.composeapp.generated.resources.library_add_tag_failed
 import no_papers_needed.composeapp.generated.resources.library_refresh_failed
 import kotlin.test.Test
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class LibraryViewModelTest : MainDispatcherTest() {
     private fun vm(
         session: FakeLibrarySession = FakeLibrarySession(),

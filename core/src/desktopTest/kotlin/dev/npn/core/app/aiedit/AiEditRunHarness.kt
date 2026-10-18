@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalCoroutinesApi::class)
-
 package dev.npn.core.app.aiedit
 
 import dev.npn.core.ai.AiEditRequest
@@ -11,7 +9,6 @@ import dev.npn.core.testing.FakeFieldRegistry
 import dev.npn.core.testing.FakeMetadataWriter
 import dev.npn.core.testing.FakeTagRepository
 import dev.npn.core.testing.edit
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 
 /** An [AiEditRunImpl] over the shared AI-edit fakes, with [selection] as the documents the user selected. */
 internal class AiEditRunHarness(

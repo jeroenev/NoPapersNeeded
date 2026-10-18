@@ -7,7 +7,6 @@ import dev.npn.core.app.TagInfo
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -19,7 +18,6 @@ import no_papers_needed.composeapp.generated.resources.common_tags_merge_some_fa
 import no_papers_needed.composeapp.generated.resources.common_tags_rename_failed
 import kotlin.test.Test
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class TagManagementViewModelTest : MainDispatcherTest() {
     private fun vm(session: FakeLibrarySession = FakeLibrarySession()) = TagManagementViewModel(session)
 

@@ -5,7 +5,6 @@ import dev.npn.core.app.ImportFailure
 import dev.npn.core.app.ImportOutcome
 import dev.npn.core.fs.ExternalSource
 import io.kotest.matchers.collections.shouldContainExactly
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -13,7 +12,6 @@ import java.nio.file.Path
 import kotlin.test.Test
 
 /** The library's picker import: one summary for the batch, whatever each file came to. */
-@OptIn(ExperimentalCoroutinesApi::class)
 class LibraryImportTest : MainDispatcherTest() {
     private val sources = listOf("a.pdf", "b.pdf", "c.pdf").map { ExternalSource(Path.of(it)) to it }
 

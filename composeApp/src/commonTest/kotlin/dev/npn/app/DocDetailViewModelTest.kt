@@ -26,7 +26,6 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.maps.shouldContainExactly
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -40,7 +39,6 @@ import no_papers_needed.composeapp.generated.resources.detail_suggest_details_fa
 import no_papers_needed.composeapp.generated.resources.detail_suggest_tags_failed
 import kotlin.test.Test
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class DocDetailViewModelTest : MainDispatcherTest() {
     private fun tagSuggestions(vararg tags: String): List<TagSuggestion> = tags.map { TagSuggestion(it, isNew = false) }
 

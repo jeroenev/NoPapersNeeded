@@ -8,7 +8,6 @@ import dev.npn.core.testing.doc
 import dev.npn.core.testing.listItem
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -19,7 +18,6 @@ import no_papers_needed.composeapp.generated.resources.common_trash_delete_file_
 import no_papers_needed.composeapp.generated.resources.common_trash_restore_failed
 import kotlin.test.Test
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class TrashViewModelTest : MainDispatcherTest() {
     private fun vm(session: FakeLibrarySession = FakeLibrarySession()) = TrashViewModel(session)
 

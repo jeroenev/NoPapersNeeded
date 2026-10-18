@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalCoroutinesApi::class)
-
 package dev.npn.core.app.aiedit
 
 import dev.npn.core.ai.AiConfig
@@ -20,7 +18,6 @@ import dev.npn.core.testing.FakeTagRepository
 import dev.npn.core.testing.edit
 import dev.npn.core.testing.listItem
 import dev.npn.core.work.EndpointHealth
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 
 /**

@@ -14,7 +14,6 @@ import dev.npn.core.pathrules.pathOrNull
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -26,7 +25,6 @@ import no_papers_needed.composeapp.generated.resources.common_settings_storage_r
 import kotlin.test.Test
 
 /** The storage path rule on the Settings screen: its template, its preview and turning it on. */
-@OptIn(ExperimentalCoroutinesApi::class)
 class SettingsStoragePathTest : MainDispatcherTest() {
     @Test
     fun storagePathErrorsAreProjectedAsLocalizableData() {

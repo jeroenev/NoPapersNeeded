@@ -11,7 +11,6 @@ import dev.npn.core.ai.AiSelfTestReport
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -20,7 +19,6 @@ import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_save_setting_failed
 import kotlin.test.Test
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class SettingsAiSelfTestTest : MainDispatcherTest() {
     private fun vm(
         settings: FakeSettingsRepository,

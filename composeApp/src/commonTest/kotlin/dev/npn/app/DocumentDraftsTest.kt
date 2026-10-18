@@ -23,7 +23,6 @@ import kotlin.test.assertTrue
  * The store hands its completion callback back on the Main dispatcher (callers navigate from it),
  * so these run against an installed test Main dispatcher.
  */
-@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class DocumentDraftsTest : MainDispatcherTest() {
     @Test
     fun restoredDraftsKeepEachDocumentsFieldsAndNotes() =
