@@ -16,6 +16,8 @@ import dev.npn.app.EnglishLocaleTest
 import dev.npn.app.NoSettingsPaneActions
 import dev.npn.app.paneState
 import dev.npn.app.ui.closing
+import dev.npn.app.ui.editableText
+import dev.npn.app.ui.isEditable
 import dev.npn.app.ui.nodes
 import dev.npn.app.ui.onUiThread
 import dev.npn.app.ui.theme.NpnTheme
@@ -117,14 +119,14 @@ class AiEndpointFieldsTest : EnglishLocaleTest() {
 
         fun field(field: Field): SemanticsNode =
             scene.nodes().first { node ->
-                node.config.getOrNull(SemanticsProperties.EditableText) != null &&
+                node.isEditable() &&
                     node.config
                         .getOrNull(SemanticsProperties.Text)
                         .orEmpty()
                         .any { it.text == field.label }
             }
 
-        fun shown(field: Field): String? = field(field).config.getOrNull(SemanticsProperties.EditableText)?.text
+        fun shown(field: Field): String? = field(field).editableText()
 
         /** Type [key] at the end of what [field] shows, as a keyboard does, and let the screen draw it. */
         fun type(

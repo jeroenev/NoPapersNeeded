@@ -16,11 +16,10 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
-import androidx.compose.ui.semantics.SemanticsProperties
-import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.text.AnnotatedString
 import dev.npn.app.EnglishLocaleTest
 import dev.npn.app.ui.closing
+import dev.npn.app.ui.editableText
 import dev.npn.app.ui.has
 import dev.npn.app.ui.isEditable
 import dev.npn.app.ui.nodes
@@ -65,9 +64,7 @@ class SuggestFieldTest : EnglishLocaleTest() {
                 press(Key.Backspace)
                 render()
                 keyField()
-                    .config
-                    .getOrNull(SemanticsProperties.EditableText)
-                    ?.text shouldBe "i"
+                    .editableText() shouldBe "i"
             }
         }
 
@@ -114,9 +111,7 @@ class SuggestFieldTest : EnglishLocaleTest() {
                 picked shouldBe emptyList()
                 formEnters shouldBe 1
                 keyField()
-                    .config
-                    .getOrNull(SemanticsProperties.EditableText)
-                    ?.text shouldBe "zz"
+                    .editableText() shouldBe "zz"
             }
         }
 

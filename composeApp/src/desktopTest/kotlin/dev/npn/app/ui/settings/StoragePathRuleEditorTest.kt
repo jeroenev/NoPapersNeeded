@@ -10,6 +10,8 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.text.AnnotatedString
 import dev.npn.app.ui.click
 import dev.npn.app.ui.closing
+import dev.npn.app.ui.editableText
+import dev.npn.app.ui.isEditable
 import dev.npn.app.ui.isEnabled
 import dev.npn.app.ui.node
 import dev.npn.app.ui.nodes
@@ -62,7 +64,7 @@ class StoragePathRuleEditorTest {
             }.closing {
                 render()
 
-                fun field() = nodes().single { it.config.getOrNull(SemanticsProperties.EditableText) != null }
+                fun field() = nodes().single { it.isEditable() }
                 field().config[SemanticsActions.RequestFocus].action?.invoke()
                 render()
                 for (key in listOf("a", "b")) {
@@ -73,7 +75,7 @@ class StoragePathRuleEditorTest {
                     render()
                 }
                 typed shouldContainExactly listOf("{title}.pdfa", "{title}.pdfab")
-                field().config[SemanticsProperties.EditableText].text shouldBe "{title}.pdfab"
+                field().editableText() shouldBe "{title}.pdfab"
             }
         }
 

@@ -22,6 +22,7 @@ import dev.npn.app.ui.closing
 import dev.npn.app.ui.common.LocalAppLocale
 import dev.npn.app.ui.common.ProvideWindowWidthClass
 import dev.npn.app.ui.contentDescription
+import dev.npn.app.ui.editableText
 import dev.npn.app.ui.has
 import dev.npn.app.ui.hasError
 import dev.npn.app.ui.hostedScene
@@ -229,8 +230,7 @@ class NumberFieldEntryTest : EnglishLocaleTest() {
 
         fun field(label: String = LABEL): SemanticsNode = scene.node { it.isEditable() && label in it.texts() }
 
-        fun shown(label: String = LABEL): String? =
-            field(label).config.getOrNull(SemanticsProperties.EditableText)?.text
+        fun shown(label: String = LABEL): String? = field(label).editableText()
 
         fun committed(): String? = store.state[item.doc.docId]?.fields?.get(KEY)
 

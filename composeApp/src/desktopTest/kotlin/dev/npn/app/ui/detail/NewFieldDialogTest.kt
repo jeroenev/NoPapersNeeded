@@ -5,13 +5,13 @@ package dev.npn.app.ui.detail
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
-import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.text.AnnotatedString
 import dev.npn.app.EnglishLocaleTest
 import dev.npn.app.resourcesIn
 import dev.npn.app.ui.click
 import dev.npn.app.ui.closing
+import dev.npn.app.ui.editableText
 import dev.npn.app.ui.hasError
 import dev.npn.app.ui.isEditable
 import dev.npn.app.ui.isEnabled
@@ -119,7 +119,7 @@ class NewFieldDialogTest : EnglishLocaleTest() {
         /** The value's editor, labelled with the new field's label (the form's label field shows it as its text). */
         fun field(): SemanticsNode = scene.nodes().first { it.isEditable() && LABEL in it.texts() }
 
-        fun shown(): String? = field().config.getOrNull(SemanticsProperties.EditableText)?.text
+        fun shown(): String? = field().editableText()
 
         fun saveButton(): SemanticsNode =
             scene.nodes().first { words.save in it.texts() && it.config.contains(SemanticsActions.OnClick) }

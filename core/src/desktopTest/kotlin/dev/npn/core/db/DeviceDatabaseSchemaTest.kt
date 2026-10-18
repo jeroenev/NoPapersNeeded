@@ -29,7 +29,6 @@ class DeviceDatabaseSchemaTest {
         val exported = schemaFiles()
         exported.keys shouldBe SHIPPED.keys
         exported.forEach { (version, file) -> identityHash(file) shouldBe SHIPPED.getValue(version) }
-        exported.keys.max() shouldBe SHIPPED.keys.max()
     }
 
     @Test

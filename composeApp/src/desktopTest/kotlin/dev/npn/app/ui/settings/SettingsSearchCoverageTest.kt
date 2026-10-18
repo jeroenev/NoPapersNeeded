@@ -11,6 +11,7 @@ import dev.npn.app.EnglishLocaleTest
 import dev.npn.app.NoSettingsPaneActions
 import dev.npn.app.paneState
 import dev.npn.app.ui.closing
+import dev.npn.app.ui.isEditable
 import dev.npn.app.ui.nodes
 import dev.npn.app.ui.onUiThread
 import dev.npn.app.ui.theme.NpnTheme
@@ -67,7 +68,7 @@ class SettingsSearchCoverageTest : EnglishLocaleTest() {
                     config.getOrNull(SemanticsProperties.Heading) != null ||
                         role == Role.Switch ||
                         role == Role.Button ||
-                        config.getOrNull(SemanticsProperties.EditableText) != null
+                        node.isEditable()
                 if (!isLabel) return@mapNotNull null
                 config.getOrNull(SemanticsProperties.Text)?.firstOrNull()?.text
                     ?: config.getOrNull(SemanticsProperties.ContentDescription)?.firstOrNull()
