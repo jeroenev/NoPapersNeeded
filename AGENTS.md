@@ -74,17 +74,17 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   `config/lint/lint.xml` is the one configuration.
 - Fast UI iteration: `mise hot` (Compose Hot Reload on desktop). Android-only paths
   (scanner, share intents, WorkManager) need a device: `mise deploy`.
-- CI (`.github/workflows/ci.yml`) runs: shellcheck (hooks, mise tasks, `.github/scripts`) →
-  spotlessCheck → checkLocalization + checkFieldTypeBranches → detekt → tests+coverage (kover
-  drives both desktop test suites) → Android-target host tests → `compileDeviceTests` (the root
-  task that builds every device test, and so all Android code, without a device; add a new
-  module's there) → `detektTyped` → `:androidApp:lintDebug` (each its own Gradle invocation) →
-  committed Room schema exports → assembleDebug → desktopApp
-  build → packageAppImage. Match that order when verifying larger changes. Actions
-  minutes and artifact storage are metered (private repo): PRs stop after compile, packaging runs
-  on `main` only, the coverage report uploads only on `main` or after a failure, binaries upload
-  only on a manual run, and the Windows build (`windows.yml`) and CodeQL run weekly or on demand.
-  Keep it that way. `mise release` refuses unless CI passed on the `main` commit it bumps; the
+- CI (`.github/workflows/ci.yml`) runs, with `+` joining one Gradle invocation's tasks:
+  shellcheck (hooks, mise tasks, `.github/scripts`) → spotlessCheck + checkLocalization +
+  checkFieldTypeBranches + detekt → tests with coverage (kover drives both desktop test suites) +
+  Android-target host tests + buildSrc and desktopApp tests → `compileDeviceTests` (the root task
+  that builds every device test, and so all Android code, without a device; add a new module's
+  there) → `detektTyped` → `:androidApp:lintDebug` → committed Room schema exports →
+  assembleDebug + packageAppImage. Match that order when verifying larger changes. Actions
+  minutes and artifact storage are metered (private repo): PRs stop before the APK and packaging,
+  which run on `main` only, the coverage report uploads only on `main` or after a failure, binaries
+  upload only on a manual run, and the Windows build (`windows.yml`) and CodeQL run weekly or on
+  demand. Keep it that way. `mise release` refuses unless CI passed on the `main` commit it bumps; the
   tagged commit changes only `npn.version`, and `release.yml` builds it without waiting for CI.
   Its draft job builds nothing unless CI passed on the tagged commit, or the tag only bumps
   `npn.version` on top of a `main` commit CI passed on (`.github/scripts/check-release-commit.sh`).

@@ -8,11 +8,9 @@ on:
     branches: [main]
     paths-ignore:
       - "**.md"
-      - "docs/**"
   pull_request:
     paths-ignore:
       - "**.md"
-      - "docs/**"
   workflow_dispatch:
 
 permissions:
@@ -50,8 +48,8 @@ jobs:
 
       # Desktop suites with coverage, then the same commonTest suites against the Android target
       # plus whatever only exists there (androidHostTest). Coverage stays on the desktop run.
-      # buildSrc's own tests (the localization guard) never run as part of the main build, and
-      # desktopApp's (the single-instance lock) would otherwise only run in the main-only build below.
+      # buildSrc's tests (the localization guard) and desktopApp's (the single-instance lock) run
+      # only when named, and nothing else in this workflow names them.
       - name: Tests and coverage
         run: >-
           ./gradlew
@@ -89,12 +87,12 @@ jobs:
             exit 1
           fi
 
-      - name: Assemble APK, build and package desktop app
+      # packageAppImage builds the desktop jar on the way.
+      - name: Assemble APK and package desktop app
         if: github.event_name != 'pull_request'
         run: >-
           ./gradlew
           :androidApp:assembleDebug
-          :desktopApp:assemble
           :desktopApp:packageAppImage
 
       - name: Upload debug APK
