@@ -16,14 +16,12 @@ import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -37,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.AddFieldMenu
+import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.FieldDefForm
 import dev.npn.app.ui.common.FieldDefFormState
 import dev.npn.app.ui.common.FieldEditor
@@ -52,7 +51,6 @@ import dev.npn.core.model.FieldValues
 import dev.npn.core.util.NpnJson
 import kotlinx.serialization.Serializable
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.common_save
 import no_papers_needed.composeapp.generated.resources.detail_add_field
 import no_papers_needed.composeapp.generated.resources.detail_add_to_fields
@@ -248,46 +246,41 @@ internal fun NewFieldDialog(
         refused = false
     }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(Res.string.detail_new_field)) },
-        text = {
-            Column(
-                Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                FieldDefForm(
-                    state = form,
-                    onChange = { form = it },
-                    existing = existing,
-                    keySuggestions = keySuggestions,
-                )
-                draftDef?.let { def ->
-                    key(def.type) {
-                        FieldEditor(
-                            def = def,
-                            value = value,
-                            refused = refused,
-                            locale = locale,
-                            onCommit = { entry ->
-                                refused = entry is FieldParse.Invalid
-                                value =
-                                    when (entry) {
-                                        is FieldParse.Ok -> entry.canonical.orEmpty()
-                                        is FieldParse.Invalid -> entry.raw
-                                    }
-                            },
-                        )
-                    }
+    ConfirmDialog(
+        title = stringResource(Res.string.detail_new_field),
+        onConfirm = { draftDef?.let { onConfirm(it, value.ifBlank { null }) } },
+        onDismiss = onDismiss,
+        confirmLabel = stringResource(Res.string.common_save),
+        confirmEnabled = canSave,
+    ) {
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            FieldDefForm(
+                state = form,
+                onChange = { form = it },
+                existing = existing,
+                keySuggestions = keySuggestions,
+            )
+            draftDef?.let { def ->
+                key(def.type) {
+                    FieldEditor(
+                        def = def,
+                        value = value,
+                        refused = refused,
+                        locale = locale,
+                        onCommit = { entry ->
+                            refused = entry is FieldParse.Invalid
+                            value =
+                                when (entry) {
+                                    is FieldParse.Ok -> entry.canonical.orEmpty()
+                                    is FieldParse.Invalid -> entry.raw
+                                }
+                        },
+                    )
                 }
             }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { draftDef?.let { onConfirm(it, value.ifBlank { null }) } },
-                enabled = canSave,
-            ) { Text(stringResource(Res.string.common_save)) }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) } },
-    )
+        }
+    }
 }

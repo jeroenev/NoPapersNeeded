@@ -14,7 +14,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Rule
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -26,7 +25,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -57,7 +55,6 @@ import dev.npn.core.rules.RuleMatcher
 import dev.npn.core.util.NpnJson
 import kotlinx.serialization.Serializable
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.common_delete
 import no_papers_needed.composeapp.generated.resources.common_name
 import no_papers_needed.composeapp.generated.resources.common_rules_actions_set
@@ -296,23 +293,18 @@ private fun RuleFormDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                stringResource(
-                    if (state.isNew) Res.string.common_rules_new_title else Res.string.common_rules_edit_title,
-                ),
-            )
-        },
-        text = {
-            RuleFormFields(state, fields, onChange)
-        },
-        confirmButton = {
-            TextButton(onClick = onConfirm, enabled = state.canSave) { Text(stringResource(Res.string.common_save)) }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) } },
-    )
+    ConfirmDialog(
+        title =
+            stringResource(
+                if (state.isNew) Res.string.common_rules_new_title else Res.string.common_rules_edit_title,
+            ),
+        onConfirm = onConfirm,
+        onDismiss = onDismiss,
+        confirmLabel = stringResource(Res.string.common_save),
+        confirmEnabled = state.canSave,
+    ) {
+        RuleFormFields(state, fields, onChange)
+    }
 }
 
 /**

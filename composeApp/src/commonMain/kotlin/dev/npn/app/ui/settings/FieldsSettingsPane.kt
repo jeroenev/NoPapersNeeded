@@ -14,13 +14,10 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -46,7 +43,6 @@ import dev.npn.core.model.FieldKeys
 import dev.npn.core.util.NpnJson
 import kotlinx.serialization.Serializable
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.common_delete
 import no_papers_needed.composeapp.generated.resources.common_edit
 import no_papers_needed.composeapp.generated.resources.common_save
@@ -260,43 +256,41 @@ private fun FieldDefDialog(
     val canSave = form.canSave(existing, own = def?.key)
     val changesTypeOfUsedField = def != null && usage > 0 && result != null && result.type != def.type
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            val title = if (def == null) Res.string.detail_new_field else Res.string.common_settings_field_edit_title
-            Text(stringResource(title))
-        },
-        text = {
-            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
-                FieldDefForm(
-                    state = form,
-                    onChange = { form = it },
-                    existing = existing,
-                    ownKey = def?.key,
-                    lockKey = def != null,
-                    lockType = def != null && def.key in FieldKeys.WELL_KNOWN,
-                    typeWarning =
-                        if (def != null && usage > 0 && form.type != def.type) {
-                            stringResource(Res.string.common_settings_field_type_change_warning)
-                        } else {
-                            null
-                        },
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    val next = result ?: return@TextButton
-                    if (changesTypeOfUsedField) pendingTypeChange = next else onConfirm(next)
+    ConfirmDialog(
+        title =
+            stringResource(
+                if (def ==
+                    null
+                ) {
+                    Res.string.detail_new_field
+                } else {
+                    Res.string.common_settings_field_edit_title
                 },
-                enabled = canSave,
-            ) {
-                Text(stringResource(Res.string.common_save))
-            }
+            ),
+        onConfirm = {
+            result?.let { next -> if (changesTypeOfUsedField) pendingTypeChange = next else onConfirm(next) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) } },
-    )
+        onDismiss = onDismiss,
+        confirmLabel = stringResource(Res.string.common_save),
+        confirmEnabled = canSave,
+    ) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+            FieldDefForm(
+                state = form,
+                onChange = { form = it },
+                existing = existing,
+                ownKey = def?.key,
+                lockKey = def != null,
+                lockType = def != null && def.key in FieldKeys.WELL_KNOWN,
+                typeWarning =
+                    if (def != null && usage > 0 && form.type != def.type) {
+                        stringResource(Res.string.common_settings_field_type_change_warning)
+                    } else {
+                        null
+                    },
+            )
+        }
+    }
 
     val pending = pendingTypeChange
     if (pending != null && def != null) {
@@ -326,33 +320,28 @@ private fun DeleteFieldDialog(
     onDismiss: () -> Unit,
 ) {
     var clearValues by remember { mutableStateOf(false) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(Res.string.common_settings_field_delete_title)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    stringResource(
-                        Res.string.common_settings_field_delete_message,
-                        def.label,
-                        pluralStringResource(Res.plurals.common_settings_field_usage, usage, usage),
-                    ),
+    ConfirmDialog(
+        title = stringResource(Res.string.common_settings_field_delete_title),
+        onConfirm = { onConfirm(clearValues) },
+        onDismiss = onDismiss,
+        confirmLabel = stringResource(Res.string.common_delete),
+        destructive = true,
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                stringResource(
+                    Res.string.common_settings_field_delete_message,
+                    def.label,
+                    pluralStringResource(Res.plurals.common_settings_field_usage, usage, usage),
+                ),
+            )
+            if (usage > 0) {
+                CheckboxRow(
+                    label = stringResource(Res.string.common_settings_field_clear_values),
+                    checked = clearValues,
+                    onCheckedChange = { clearValues = it },
                 )
-                if (usage > 0) {
-                    CheckboxRow(
-                        label = stringResource(Res.string.common_settings_field_clear_values),
-                        checked = clearValues,
-                        onCheckedChange = { clearValues = it },
-                    )
-                }
             }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onConfirm(clearValues) },
-                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-            ) { Text(stringResource(Res.string.common_delete)) }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) } },
-    )
+        }
+    }
 }
