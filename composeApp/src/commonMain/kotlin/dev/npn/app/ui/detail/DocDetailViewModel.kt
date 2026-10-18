@@ -425,8 +425,8 @@ class DocDetailViewModel private constructor(
         }
 
     /**
-     * The host closed after [DetailUiState.left]. The library's side panel keeps this viewmodel
-     * for the document, so a later showing of it (restored from the trash) must not close at once.
+     * The host closed after [DetailUiState.left]. This viewmodel can outlive the host's composition
+     * (a recreated window, a change of language), so a later showing of it must not close at once.
      */
     fun closed() = _ui.update { it.copy(left = false) }
 

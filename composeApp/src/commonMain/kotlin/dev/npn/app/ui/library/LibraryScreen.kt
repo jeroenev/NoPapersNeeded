@@ -33,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -109,6 +110,7 @@ fun LibraryScreen(
     filterHandoff: Handoff<LibraryFilter>,
     modifier: Modifier = Modifier,
     vm: LibraryViewModel = viewModel { LibraryViewModel(session, settings) },
+    previewStores: DocPreviewStores = viewModel { DocPreviewStores() },
 ) {
     val state by vm.content.collectAsStateWithLifecycle()
     // The filter sheet's vocabulary, which the list itself does not show.
@@ -144,6 +146,9 @@ fun LibraryScreen(
     BoxWithConstraints(modifier.fillMaxSize()) {
         // Wide layouts preview a tapped document in the side panel; compact ones open it directly.
         var previewDocId by rememberSaveable { mutableStateOf<String?>(null) }
+        // The previewed document keeps its viewmodel while the panel is there to show it; another
+        // document, a closed panel or a compact window clears it once the composition lets go.
+        SideEffect { previewStores.keepOnly(previewDocId.takeIf { wide }) }
         val onDocClick: (String) -> Unit =
             remember(wide) { { docId -> if (wide) previewDocId = docId else openDoc(docId) } }
 
@@ -204,6 +209,7 @@ fun LibraryScreen(
                     val nextId = items.getOrNull(items.indexOfFirst { it.doc.docId == previewDocId } + 1)?.doc?.docId
                     DocPreviewPanel(
                         item = previewItem,
+                        viewModels = previewStores.of(previewItem.doc.docId),
                         session = session,
                         settings = settings,
                         snackbar = snackbar,

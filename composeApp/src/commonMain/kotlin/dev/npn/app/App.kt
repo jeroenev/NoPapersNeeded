@@ -26,7 +26,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
@@ -36,6 +35,7 @@ import androidx.navigation.compose.rememberNavController
 import dev.npn.app.di.AppEnvironment
 import dev.npn.app.ui.common.DesktopBridge
 import dev.npn.app.ui.common.Handoff
+import dev.npn.app.ui.common.KeyedViewModelStores
 import dev.npn.app.ui.common.LocaleProvider
 import dev.npn.app.ui.common.ProvideWindowWidthClass
 import dev.npn.app.ui.common.PublishWindowTitle
@@ -110,20 +110,15 @@ internal class LibraryHandover {
  * session's store, so nothing a closed library's screens started runs on against it.
  */
 internal class LibraryViewModelStores : ViewModel() {
-    private val owners = HashMap<LibrarySession, ViewModelStoreOwner>()
+    private val stores = KeyedViewModelStores<LibrarySession>()
     private val handovers = HashMap<LibrarySession, LibraryHandover>()
 
-    fun of(session: LibrarySession): ViewModelStoreOwner =
-        owners.getOrPut(session) {
-            object : ViewModelStoreOwner {
-                override val viewModelStore = ViewModelStore()
-            }
-        }
+    fun of(session: LibrarySession): ViewModelStoreOwner = stores.of(session)
 
     fun handoverOf(session: LibrarySession): LibraryHandover = handovers.getOrPut(session) { LibraryHandover() }
 
     fun keepOnly(session: LibrarySession?) {
-        for (gone in owners.keys.filter { it != session }) owners.remove(gone)?.viewModelStore?.clear()
+        stores.keepOnly(session)
         handovers.keys.retainAll { it == session }
     }
 

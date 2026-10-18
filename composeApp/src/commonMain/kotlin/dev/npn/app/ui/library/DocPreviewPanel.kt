@@ -11,13 +11,12 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
+import dev.npn.app.ui.common.KeyedViewModelStores
 import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.PanelHeader
 import dev.npn.app.ui.common.TooltipIconButton
@@ -38,13 +37,14 @@ import org.jetbrains.compose.resources.stringResource
  * split, bake, trash). Opening a document on a wide layout shows it here; the header's expand
  * button ([onExpand]) opens the full-screen detail route.
  *
- * The panel hosts the document's viewmodel in a store scoped to the previewed document, so
- * switching documents (or closing the panel) disposes the previous view model instead of piling
- * them up in the library screen's store.
+ * The document's viewmodel lives in [viewModels], the previewed document's own store in
+ * [DocPreviewStores], so a recreated window or a change of language finds it as it was, and
+ * switching documents or closing the panel clears it rather than piling them up.
  */
 @Composable
 internal fun DocPreviewPanel(
     item: DocListItem,
+    viewModels: ViewModelStoreOwner,
     session: LibrarySession,
     settings: SettingsRepository,
     snackbar: SnackbarHostState,
@@ -58,7 +58,7 @@ internal fun DocPreviewPanel(
         // A column beside the list, never wider than the wide breakpoint (see SidePanelMaxWidth):
         // the document view inside lays out as it would on a compact window, one tab at a time.
         CompositionLocalProvider(LocalWindowWidthClass provides WindowWidthClass.COMPACT) {
-            ScopedToDoc(docId = item.doc.docId) {
+            CompositionLocalProvider(LocalViewModelStoreOwner provides viewModels) {
                 DocumentView(
                     docId = item.doc.docId,
                     session = session,
@@ -68,9 +68,9 @@ internal fun DocPreviewPanel(
                     onClose = onClose,
                     onReviewNext = onReviewNext,
                     hasNext = hasNext,
-                    // Seeded with the row the library list already loaded: the viewmodel is rebuilt
-                    // for every document the user selects (see ScopedToDoc), so without the seed the
-                    // panel would blank for one index query on every switch.
+                    // Seeded with the row the library list already loaded: the viewmodel is built
+                    // for every document the user selects, so without the seed the panel would
+                    // blank for one index query on every switch.
                     initialItem = item,
                 ) { _, actions, editor ->
                     // This panel is a sibling of the library's Scaffold, so nothing applies the
@@ -100,20 +100,17 @@ internal fun DocPreviewPanel(
 }
 
 /**
- * Runs [content] under a [ViewModelStoreOwner] tied to [docId]: a new store per previewed
- * document, cleared when the document changes or the panel leaves composition.
+ * The side panel's viewmodel stores, one per previewed document, kept in the library screen's own
+ * store: they outlive the panel's composition (a recreated window, a change of language) and are
+ * cleared with the library's screens. The screen [DocPreviewStores.keepOnly]s the document it
+ * previews, so switching documents or closing the panel clears the one before.
  */
-@Composable
-private fun ScopedToDoc(
-    docId: String,
-    content: @Composable () -> Unit,
-) {
-    val owner =
-        remember(docId) {
-            object : ViewModelStoreOwner {
-                override val viewModelStore = ViewModelStore()
-            }
-        }
-    DisposableEffect(owner) { onDispose { owner.viewModelStore.clear() } }
-    CompositionLocalProvider(LocalViewModelStoreOwner provides owner) { content() }
+class DocPreviewStores : ViewModel() {
+    private val stores = KeyedViewModelStores<String>()
+
+    fun of(docId: String): ViewModelStoreOwner = stores.of(docId)
+
+    fun keepOnly(docId: String?) = stores.keepOnly(docId)
+
+    override fun onCleared() = keepOnly(null)
 }
