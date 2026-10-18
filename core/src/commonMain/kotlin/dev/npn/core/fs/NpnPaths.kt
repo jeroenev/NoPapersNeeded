@@ -35,13 +35,10 @@ object NpnPaths {
 
     private val trashNamePattern = Regex("__([0-9a-f]{$TRASH_HASH_PREFIX_LENGTH})(-[0-9]+)?(\\.[^.]*)?$")
 
-    /**
-     * Sync-conflict filename markers, shared between detection ([isSyncConflict]) and stripping
-     * (MaintenanceService.cleanConflictName) so the two never drift.
-     */
-    const val MARKER_SYNCTHING = ".sync-conflict-"
-    const val MARKER_CONFLICTED_COPY = " (conflicted copy"
-    const val MARKER_CASE_CONFLICT = " (Case Conflict"
+    /** Sync-conflict filename markers that [isSyncConflict] detects. */
+    private const val MARKER_SYNCTHING = ".sync-conflict-"
+    private const val MARKER_CONFLICTED_COPY = " (conflicted copy"
+    private const val MARKER_CASE_CONFLICT = " (Case Conflict"
 
     /**
      * `.npn/trash/<baseName>__<first 8 hash chars>-<episode>.<ext>`
@@ -265,7 +262,8 @@ object NpnPaths {
      * - Dropbox: `* (conflicted copy*` and `* (Case Conflict*`
      * - Nextcloud / ownCloud: `* (conflicted copy *)`
      *
-     * These files must be excluded from the index; the UI offers keep/discard/import-as-new.
+     * These files are excluded from the index; a rescan reports them (`ScanReport.conflictFiles`),
+     * and the library shows how many there are.
      */
     fun isSyncConflict(name: String): Boolean {
         if (name.contains(MARKER_SYNCTHING)) return true

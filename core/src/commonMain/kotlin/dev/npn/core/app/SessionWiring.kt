@@ -384,7 +384,6 @@ internal fun buildMaintenance(
                 fs = deps.fs,
                 documentDao = deps.db.documentDao(),
                 duplicateDao = deps.db.duplicateDao(),
-                importService = library.imports,
                 serialize = { step -> coordinator.serialized { step() } },
             ),
         coordinator = coordinator,

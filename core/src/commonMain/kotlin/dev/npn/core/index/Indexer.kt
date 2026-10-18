@@ -246,8 +246,8 @@ class Indexer(
 
     /**
      * Split all on-disk entries into indexable documents and sync-conflict files. Conflict files
-     * are surfaced separately (the UI offers keep/discard/import-as-new); everything else runs
-     * through the shared [NpnPaths.indexable] predicate.
+     * are reported separately (the library shows their count) and never indexed; everything else
+     * runs through the shared [NpnPaths.indexable] predicate.
      */
     private fun partition(all: List<FileMeta>): Pair<List<FileMeta>, List<String>> {
         val indexable = ArrayList<FileMeta>()

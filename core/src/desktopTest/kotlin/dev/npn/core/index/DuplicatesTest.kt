@@ -134,7 +134,7 @@ class DuplicatesTest {
             val watched = WatchedFileSystem(rig.fs).also { it.db = rig.db }
             val hashedUnderLock = ArrayList<String>()
             val maintenance =
-                MaintenanceService(watched, rig.db.documentDao(), rig.db.duplicateDao(), rig.importService) { step ->
+                MaintenanceService(watched, rig.db.documentDao(), rig.db.duplicateDao()) { step ->
                     val before = watched.calls("sha256").size
                     step()
                     hashedUnderLock += watched.calls("sha256").drop(before)
@@ -155,7 +155,7 @@ class DuplicatesTest {
             val doc = recordDuplicate("a.pdf", "inbox/a.pdf")
             val edited = "alpha, edited since".encodeToByteArray()
             val maintenance =
-                MaintenanceService(rig.fs, rig.db.documentDao(), rig.db.duplicateDao(), rig.importService) { step ->
+                MaintenanceService(rig.fs, rig.db.documentDao(), rig.db.duplicateDao()) { step ->
                     rig.writePdf("inbox/a.pdf", edited.decodeToString())
                     step()
                 }

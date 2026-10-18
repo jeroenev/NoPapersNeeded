@@ -9,7 +9,6 @@ import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
-import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
 import org.junit.Assume.assumeTrue
@@ -239,7 +238,7 @@ class IndexerTest {
         }
 
     @Test
-    fun conflictFileReportedDiscardAndImport() =
+    fun conflictFileReported() =
         runTest {
             rig.writePdf("a.pdf", "alpha")
             rig.writePdf("b.sync-conflict-20260101-120000-ABCDEFG.pdf", "conflicted")
@@ -247,34 +246,6 @@ class IndexerTest {
             val report = rig.rescan()
             report.conflictFiles shouldContain "b.sync-conflict-20260101-120000-ABCDEFG.pdf"
             report.added shouldBe 1 // only a.pdf indexed
-
-            // Discard deletes.
-            rig.writePdf("c.sync-conflict-20260101-120000-XYZ0000.pdf", "junk")
-            rig.maintenance.resolveConflictFile("c.sync-conflict-20260101-120000-XYZ0000.pdf", ConflictAction.Discard)
-            rig.exists("c.sync-conflict-20260101-120000-XYZ0000.pdf").shouldBeFalse()
-
-            // ImportAsNew imports the conflict file.
-            val imported =
-                rig.maintenance.resolveConflictFile(
-                    "b.sync-conflict-20260101-120000-ABCDEFG.pdf",
-                    ConflictAction.ImportAsNew,
-                )
-            imported.shouldNotBeNull()
-            rig.exists("b.sync-conflict-20260101-120000-ABCDEFG.pdf").shouldBeFalse()
-            rig.exists(imported).shouldBeTrue()
-        }
-
-    @Test
-    fun conflictFileKeepStripsSuffix() =
-        runTest {
-            rig.writePdf("report.sync-conflict-20260101-120000-ABCDEFG.pdf", "data")
-            val kept =
-                rig.maintenance.resolveConflictFile(
-                    "report.sync-conflict-20260101-120000-ABCDEFG.pdf",
-                    ConflictAction.Keep,
-                )
-            kept shouldBe "report.pdf"
-            rig.exists("report.pdf").shouldBeTrue()
         }
 
     @Test
