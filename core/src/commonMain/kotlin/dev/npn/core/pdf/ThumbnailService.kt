@@ -10,7 +10,8 @@ import dev.npn.core.util.runCatchingCancellable
 
 /**
  * Writes/reads first-page thumbnail PNGs into an app-local cache directory (never inside the
- * synced library folder). Implemented by the app layer per platform.
+ * synced library folder). `DirThumbnailStore` implements it on both JVM targets; the session's
+ * wiring (`jvmSessionDeps`, `androidSessionDeps`) picks the directory.
  */
 interface ThumbnailStore {
     /** Persist [png] for [docId]; returns the absolute cache path. */
