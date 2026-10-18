@@ -25,6 +25,8 @@
     <string name="common_view_grid">Grid</string>
     <string name="common_unknown_error">unknown error</string>
     <string name="common_writes_need_newer_app">the library has changes from a newer version of the app; update the app to make changes</string>
+    <string name="common_writes_journal_incomplete">the library's change history is missing a file that sync has not delivered yet, or one that was lost; the library is read-only until it is complete</string>
+    <string name="common_writes_reconcile_failed">reading the library's change history failed; the library is read-only until the next check succeeds</string>
     <string name="common_could_not_open_library">Could not open the library.</string>
 
     <string name="common_opening_library">Opening library...</string>

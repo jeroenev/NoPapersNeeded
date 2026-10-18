@@ -24,6 +24,8 @@
     <string name="common_view_grid">Grade</string>
     <string name="common_unknown_error">erro desconhecido</string>
     <string name="common_writes_need_newer_app">a biblioteca tem alterações de uma versão mais recente do app; atualize o app para fazer alterações</string>
+    <string name="common_writes_journal_incomplete">falta ao histórico de alterações da biblioteca um arquivo que a sincronização ainda não entregou, ou que se perdeu; a biblioteca fica somente leitura até ele estar completo</string>
+    <string name="common_writes_reconcile_failed">não foi possível ler o histórico de alterações da biblioteca; a biblioteca fica somente leitura até a próxima verificação dar certo</string>
     <string name="common_could_not_open_library">Não foi possível abrir a biblioteca.</string>
 
     <string name="common_opening_library">Abrindo biblioteca...</string>

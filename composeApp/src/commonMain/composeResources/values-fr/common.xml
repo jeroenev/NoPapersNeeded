@@ -24,6 +24,8 @@
     <string name="common_view_grid">Grille</string>
     <string name="common_unknown_error">erreur inconnue</string>
     <string name="common_writes_need_newer_app">la bibliothèque contient des modifications d’une version plus récente de l’application ; mettez l’application à jour pour la modifier</string>
+    <string name="common_writes_journal_incomplete">il manque à l’historique des modifications de la bibliothèque un fichier que la synchronisation n’a pas encore livré, ou qui a été perdu ; la bibliothèque est en lecture seule jusqu’à ce qu’il soit complet</string>
+    <string name="common_writes_reconcile_failed">la lecture de l’historique des modifications de la bibliothèque a échoué ; la bibliothèque est en lecture seule jusqu’à la prochaine vérification réussie</string>
     <string name="common_could_not_open_library">Impossible d’ouvrir la bibliothèque.</string>
 
     <string name="common_opening_library">Ouverture de la bibliothèque…</string>

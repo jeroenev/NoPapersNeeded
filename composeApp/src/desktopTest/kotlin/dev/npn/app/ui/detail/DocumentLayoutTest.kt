@@ -291,4 +291,6 @@ internal object NoWrites : DocumentWrites {
     override fun loadHistory(refresh: Boolean) = Unit
 
     override fun showTab(tab: PanelTab) = Unit
+
+    override fun revealField(key: String) = Unit
 }
