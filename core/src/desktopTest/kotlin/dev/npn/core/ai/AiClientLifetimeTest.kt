@@ -88,8 +88,27 @@ class AiClientLifetimeTest {
             runtimes.close()
         }
 
+    /** Closing is final: a call racing the close builds no client that nobody would close. */
     @Test
-    fun aFacadeCallAfterCloseBuildsAFreshRuntime() =
+    fun aCallAfterCloseIsRefusedAndBuildsNothing() =
+        runTest {
+            val built = AtomicInteger()
+            val runtimes =
+                AiRuntimeCache {
+                    built.incrementAndGet()
+                    AiRuntime.build(it)
+                }
+            runtimes.runtimeFor(custom("http://localhost:1"))
+
+            runtimes.close()
+
+            val failure = assertFailsWith<IllegalStateException> { runtimes.runtimeFor(custom("http://localhost:1")) }
+            failure.message shouldBe AiRuntimeCache.CLOSED
+            built.get() shouldBe 1
+        }
+
+    @Test
+    fun aFacadeCallAfterCloseReachesNoEndpoint() =
         runTest {
             val gateway = FakeSseGateway(FakeSseGateway.zenGoResponsesStream()).start()
             try {
@@ -102,7 +121,7 @@ class AiClientLifetimeTest {
                 facade.close()
                 runCatchingCancellable { facade.ocrEngine.recognizePng(ByteArray(1), "eng") }
 
-                (gateway.requestedPaths.size > before) shouldBe true
+                gateway.requestedPaths.size shouldBe before
             } finally {
                 gateway.stop()
             }

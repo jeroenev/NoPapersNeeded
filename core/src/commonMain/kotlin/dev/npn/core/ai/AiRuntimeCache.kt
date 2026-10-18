@@ -16,6 +16,9 @@ internal class AiRuntimeCache(
     private val mutex = Mutex()
     private var cached: Pair<RuntimeKey, AiRuntime>? = null
 
+    /** Set by [close], under [mutex]: from then on nothing is built, so nothing is left open. */
+    private var closed = false
+
     /**
      * The subset of [AiConfig] that actually shapes the built [AiRuntime] (endpoint client + model
      * — see [AiRuntime.build]). Cache identity is keyed on this so tuning a runtime-irrelevant
@@ -38,11 +41,13 @@ internal class AiRuntimeCache(
      * The runtime for [config], built now if the cached one was built for another endpoint. The new
      * one is built first: only once that succeeded is the old one closed and replaced, so a config
      * that cannot build (a malformed URL) throws and leaves the working runtime cached, and open.
+     * After [close] it throws [IllegalStateException] ([CLOSED]).
      */
     suspend fun runtimeFor(config: AiConfig): AiRuntime {
         check(config.configured) { "AI endpoint is not configured (see Settings > AI assistant)" }
         val key = config.runtimeKey()
         return mutex.withLock {
+            check(!closed) { CLOSED }
             val current = cached
             current?.takeIf { it.first == key }?.second ?: run {
                 val built = build(config)
@@ -56,13 +61,19 @@ internal class AiRuntimeCache(
     }
 
     /**
-     * Release the cached runtime's HTTP client. The session calls this when it closes; without it
-     * every library swap would leave a client and its engine behind. A call after this simply
-     * builds a fresh runtime.
+     * Release the cached runtime's HTTP client, for good. The session calls this when it closes;
+     * without it every library swap would leave a client and its engine behind. Closing is final: a
+     * call racing the close (an `ask` the session no longer owns) is refused rather than building a
+     * client nobody would close.
      */
     suspend fun close() =
         mutex.withLock {
+            closed = true
             cached?.second?.close()
             cached = null
         }
+
+    companion object {
+        const val CLOSED = "The AI endpoint client is closed"
+    }
 }
