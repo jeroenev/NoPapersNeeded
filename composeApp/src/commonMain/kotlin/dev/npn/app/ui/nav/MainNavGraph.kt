@@ -4,6 +4,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavGraphBuilder
@@ -169,6 +170,21 @@ private fun NavHostController.openDoc(
     navigate(Route.DocDetail(docId), options)
 }
 
+/**
+ * Runs [action] on this controller only while [entry] is the destination on top; every navigation a
+ * screen starts goes through it. Otherwise a second tap lands before the first one's screen is gone:
+ * a double tap on Back pops the screen beneath too (the library, leaving nothing), and a double tap
+ * on a document opens it twice. Not `dropUnlessResumed`: a desktop window that is not focused only
+ * starts its screens, which would drop what a screen starts on its own meanwhile, such as a trashed
+ * document's detail closing, or "reviewed, next" once its save is in.
+ */
+private inline fun NavHostController.from(
+    entry: NavBackStackEntry,
+    action: NavHostController.() -> Unit,
+) {
+    if (currentBackStackEntry == entry) action()
+}
+
 /** Open AI edit on [docIds], handed over through [library]; none opens it to pick its own scope. */
 private fun NavHostController.openAiEdit(
     library: LibraryUi,
@@ -190,14 +206,19 @@ private fun MainNavHost(
     val nav = library.nav
     val browse = library.browse
     NavHost(navController = nav, startDestination = Route.Library) {
-        composable<Route.Library> {
+        composable<Route.Library> { entry ->
             LibraryScreen(
                 session = session,
                 settings = settings,
-                onOpenDoc = { docId, order, query -> nav.openDoc(docId, browse, order, query) },
-                onTrash = { nav.navigateTopLevel(TopLevelDestination.TRASH) },
-                onOpenQueue = { nav.navigateTopLevel(TopLevelDestination.QUEUE) },
-                onAiEdit = if (aiConfigured) ({ docIds -> nav.openAiEdit(library, docIds) }) else null,
+                onOpenDoc = { docId, order, query -> nav.from(entry) { openDoc(docId, browse, order, query) } },
+                onTrash = { nav.from(entry) { navigateTopLevel(TopLevelDestination.TRASH) } },
+                onOpenQueue = { nav.from(entry) { navigateTopLevel(TopLevelDestination.QUEUE) } },
+                onAiEdit =
+                    if (aiConfigured) {
+                        { docIds -> nav.from(entry) { openAiEdit(library, docIds) } }
+                    } else {
+                        null
+                    },
                 filterHandoff = library.libraryFilter,
             )
         }
@@ -208,13 +229,14 @@ private fun MainNavHost(
                 session = session,
                 settings = settings,
                 browse = browse,
-                onBack = { if (nav.currentBackStackEntry == entry) nav.popBackStack() },
+                onBack = { nav.from(entry) { popBackStack() } },
                 onNavigateToDoc = { targetId ->
-                    if (nav.currentBackStackEntry != entry) return@DocDetailScreen
-                    // Replace the current detail route so the back stack stays "library -> detail".
-                    nav.navigate(Route.DocDetail(targetId)) {
-                        popUpTo(Route.DocDetail(route.docId)) { inclusive = true }
-                        launchSingleTop = true
+                    nav.from(entry) {
+                        // Replace the current detail route so the back stack stays "library -> detail".
+                        navigate(Route.DocDetail(targetId)) {
+                            popUpTo(Route.DocDetail(route.docId)) { inclusive = true }
+                            launchSingleTop = true
+                        }
                     }
                 },
             )
@@ -225,13 +247,13 @@ private fun MainNavHost(
         composable<Route.TagManagement> {
             TagManagementScreen(session = session)
         }
-        composable<Route.Queue> {
+        composable<Route.Queue> { entry ->
             QueueScreen(
                 session = session,
                 // A queued document is a real document; open it on its own, the way the resume banner
                 // does, so Back from detail returns to the queue.
-                onOpenDoc = { docId -> nav.openDoc(docId, browse) },
-                onOpenEditRun = { jobId -> nav.navigate(Route.AiEditReview(jobId)) },
+                onOpenDoc = { docId -> nav.from(entry) { openDoc(docId, browse) } },
+                onOpenEditRun = { jobId -> nav.from(entry) { navigate(Route.AiEditReview(jobId)) } },
             )
         }
         settingsRoutes(nav, settings, session, browse, onOpenLibrary)
@@ -252,17 +274,17 @@ private fun NavGraphBuilder.settingsRoutes(
             settings = settings,
             session = session,
             category = SettingsCategoryId.fromRouteKey(entry.toRoute<Route.Settings>().category),
-            onOpenCategory = { id -> nav.navigate(Route.Settings(id.routeKey)) },
-            onBack = { nav.popBackStack() },
+            onOpenCategory = { id -> nav.from(entry) { navigate(Route.Settings(id.routeKey)) } },
+            onBack = { nav.from(entry) { popBackStack() } },
             onOpenLibrary = onOpenLibrary,
-            onResumeDraft = { docId -> nav.resumeDraft(docId, browse) },
-            onAutoMatchRules = { nav.navigate(Route.AutoMatchRules) },
+            onResumeDraft = { docId -> nav.from(entry) { resumeDraft(docId, browse) } },
+            onAutoMatchRules = { nav.from(entry) { navigate(Route.AutoMatchRules) } },
         )
     }
-    composable<Route.AutoMatchRules> {
+    composable<Route.AutoMatchRules> { entry ->
         AutoMatchRulesScreen(
             session = session,
-            onBack = { nav.popBackStack() },
+            onBack = { nav.from(entry) { popBackStack() } },
         )
     }
 }
@@ -277,36 +299,38 @@ private fun NavGraphBuilder.aiRoutes(
 ) {
     val nav = library.nav
     val browse = library.browse
-    composable<Route.AiChat> {
+    composable<Route.AiChat> { entry ->
         AiChatScreen(
             session = session,
             configured = aiConfigured,
-            onBack = { nav.popBackStack() },
-            onOpenDoc = { docId -> nav.openDoc(docId, browse) },
+            onBack = { nav.from(entry) { popBackStack() } },
+            onOpenDoc = { docId -> nav.from(entry) { openDoc(docId, browse) } },
             onShowInLibrary = { docIds ->
-                library.libraryFilter.set(LibraryFilter(docIds = docIds))
-                nav.navigateTopLevel(TopLevelDestination.LIBRARY)
+                nav.from(entry) {
+                    library.libraryFilter.set(LibraryFilter(docIds = docIds))
+                    navigateTopLevel(TopLevelDestination.LIBRARY)
+                }
             },
-            onAiEditDocs = { docIds -> nav.openAiEdit(library, docIds) },
+            onAiEditDocs = { docIds -> nav.from(entry) { openAiEdit(library, docIds) } },
             onAiEdit =
                 if (showAiEditTopBar) {
-                    { nav.openAiEdit(library) }
+                    { nav.from(entry) { openAiEdit(library) } }
                 } else {
                     null
                 },
         )
     }
-    composable<Route.AiEdit> {
+    composable<Route.AiEdit> { entry ->
         // Consumed once per navigation; remembered so recomposition keeps the same hand-off.
         val selection = remember { library.aiEditSelection.consume().orEmpty() }
         AiEditScreen(
             session = session,
             settings = settings,
-            onBack = { nav.popBackStack() },
-            onOpenQueue = { nav.navigateTopLevel(TopLevelDestination.QUEUE) },
+            onBack = { nav.from(entry) { popBackStack() } },
+            onOpenQueue = { nav.from(entry) { navigateTopLevel(TopLevelDestination.QUEUE) } },
             // Pushed on top of the review, so coming back finds the batch and its ticked boxes
             // exactly as they were.
-            onOpenDoc = { docId -> nav.openDoc(docId, browse) },
+            onOpenDoc = { docId -> nav.from(entry) { openDoc(docId, browse) } },
             selection = selection,
         )
     }
@@ -314,8 +338,8 @@ private fun NavGraphBuilder.aiRoutes(
         AiEditReviewScreen(
             session = session,
             jobId = entry.toRoute<Route.AiEditReview>().jobId,
-            onBack = { nav.popBackStack() },
-            onOpenDoc = { docId -> nav.openDoc(docId, browse) },
+            onBack = { nav.from(entry) { popBackStack() } },
+            onOpenDoc = { docId -> nav.from(entry) { openDoc(docId, browse) } },
         )
     }
 }
