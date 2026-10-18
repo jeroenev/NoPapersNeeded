@@ -1,18 +1,15 @@
 package dev.npn.app.ui.detail
 
 import androidx.lifecycle.viewModelScope
+import dev.npn.app.ui.common.MessageSink
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.colorsByName
+import dev.npn.app.ui.common.newViewModelScope
 import dev.npn.app.ui.common.queryTerms
 import dev.npn.app.ui.common.reasonText
 import dev.npn.app.ui.common.uiText
-import dev.npn.core.ai.AiEditRequest
-import dev.npn.core.ai.AiFieldConfig
-import dev.npn.core.ai.AiFieldMode
-import dev.npn.core.ai.FieldSuggestion
-import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.AiOcrOutcome
 import dev.npn.core.app.BakeFailure
@@ -34,6 +31,7 @@ import dev.npn.core.settings.SettingsRepository
 import dev.npn.core.settings.aiConfigured
 import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -54,10 +52,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.common_no_ai_metadata_suggestions
-import no_papers_needed.composeapp.generated.resources.common_no_ai_tag_suggestions
 import no_papers_needed.composeapp.generated.resources.common_rerun_ocr_failed
-import no_papers_needed.composeapp.generated.resources.common_save_field_failed
 import no_papers_needed.composeapp.generated.resources.detail_add_field_failed
 import no_papers_needed.composeapp.generated.resources.detail_add_tag_failed
 import no_papers_needed.composeapp.generated.resources.detail_ai_ocr_failed
@@ -85,8 +80,6 @@ import no_papers_needed.composeapp.generated.resources.detail_split_failed_inval
 import no_papers_needed.composeapp.generated.resources.detail_split_failed_not_completed
 import no_papers_needed.composeapp.generated.resources.detail_split_failed_unavailable
 import no_papers_needed.composeapp.generated.resources.detail_split_failed_unreadable
-import no_papers_needed.composeapp.generated.resources.detail_suggest_details_failed
-import no_papers_needed.composeapp.generated.resources.detail_suggest_tags_failed
 import no_papers_needed.composeapp.generated.resources.detail_trash_failed
 import org.jetbrains.compose.resources.StringResource
 
@@ -124,24 +117,6 @@ sealed interface HistoryUiState {
     ) : HistoryUiState
 }
 
-/**
- * AI tag-suggestion state for the detail screen. [suggesting] is the in-flight busy flag, and
- * [suggestions] are the not-yet-accepted new-tag proposals.
- */
-data class AiTagState(
-    val suggesting: Boolean = false,
-    val suggestions: List<TagSuggestion> = emptyList(),
-)
-
-/**
- * AI field-suggestion state for the detail screen. [suggesting] is the in-flight busy flag, and
- * [suggestion] holds the not-yet-accepted per-field proposals.
- */
-data class AiMetadataState(
-    val suggesting: Boolean = false,
-    val suggestion: FieldSuggestion = FieldSuggestion.EMPTY,
-)
-
 /** Which OCR text a document has indexed: its OCR state, and the engine and writer of that text. */
 private data class IndexedOcr(
     val state: OcrState,
@@ -161,35 +136,47 @@ private data class IndexedOcr(
  * the review flag go through the document's draft ([DocumentDrafts]), never through here.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-class DocDetailViewModel(
+class DocDetailViewModel private constructor(
     val docId: String,
     session: LibrarySession,
-    /** The device settings, followed for whether AI is configured. */
     private val settings: SettingsRepository,
-    searchQuery: String? = null,
-    /**
-     * The document row a caller already has in hand (the library list feeds its preview panel one).
-     * Seeds [metadata] so the panel renders immediately instead of blanking for the first
-     * `observeDoc` query, which a caller that recreates this viewmodel per document would pay on
-     * every switch. Null when the caller only knows the id.
-     */
-    initialItem: DocListItem? = null,
-) : MessagesViewModel(),
+    searchQuery: String?,
+    initialItem: DocListItem?,
+    scope: CoroutineScope,
+    sink: MessageSink,
+    /** Taken around every metadata write made from here, the AI suggestions' included. */
+    private val metadataMutex: Mutex,
+    private val aiSuggestions: DocAiSuggestions = DocAiSuggestions(docId, session, scope, sink, metadataMutex),
+) : MessagesViewModel(scope, sink),
     DocumentWrites,
+    AiSuggestionActions by aiSuggestions,
     DocumentActions {
+    constructor(
+        docId: String,
+        session: LibrarySession,
+        /** The device settings, followed for whether AI is configured. */
+        settings: SettingsRepository,
+        searchQuery: String? = null,
+        /**
+         * The document row a caller already has in hand (the library list feeds its preview panel
+         * one). Seeds [metadata] so the panel renders immediately instead of blanking for the first
+         * `observeDoc` query, which a caller that recreates this viewmodel per document would pay on
+         * every switch. Null when the caller only knows the id.
+         */
+        initialItem: DocListItem? = null,
+    ) : this(docId, session, settings, searchQuery, initialItem, newViewModelScope(), MessageSink(), Mutex())
+
     private val documents = session.documents
     private val meta = session.meta
     private val tagAdmin = session.tagAdmin
     private val docLifecycle = session.docLifecycle
     private val content = session.content
-    private val ai = session.aiSuggest
     private val ocr = session.ocr
     private val maintenance = session.maintenance
     private val fieldRegistry = session.fieldRegistry
 
     private val _ui = MutableStateFlow(DetailUiState())
     val ui: StateFlow<DetailUiState> = _ui.asStateFlow()
-    private val metadataMutex = Mutex()
 
     /**
      * Search terms from the library query that opened this document, used to highlight matches
@@ -293,10 +280,6 @@ class DocDetailViewModel(
     /** Whether AI is configured in Settings; false until first read. */
     private val aiAvailable = MutableStateFlow(false)
 
-    private val aiTags = MutableStateFlow(AiTagState())
-
-    private val aiMetadata = MutableStateFlow(AiMetadataState())
-
     private val document: Flow<DocumentSection> =
         combine(doc, reviewMode, fieldDefs, ocrText, ocrVersions) { item, mode, defs, text, versions ->
             DocumentSection(
@@ -328,7 +311,7 @@ class DocDetailViewModel(
         }
 
     private val aiPanel: Flow<AiPanelState> =
-        combine(aiAvailable, aiTags, aiMetadata, ::AiPanelState)
+        combine(aiAvailable, aiSuggestions.tags, aiSuggestions.metadata, ::AiPanelState)
 
     /**
      * The single state the metadata panel renders. Assembled here rather than in the composable
@@ -432,120 +415,6 @@ class DocDetailViewModel(
         launchMetadata(Res.string.detail_remove_tag_failed) {
             meta.removeTag(listOf(docId), tag)
         }
-
-    /**
-     * Ask the AI endpoint for new-tag suggestions from this doc's indexed text. No-op while a
-     * request is already in flight. Empty results surface an informational message (the document
-     * likely has no OCR text yet); failures surface the error via [messages].
-     */
-    override fun suggestAiTags() {
-        if (aiTags.value.suggesting) return
-        aiTags.update { it.copy(suggesting = true) }
-        viewModelScope.launch {
-            val suggestions =
-                suggest(
-                    failed = Res.string.detail_suggest_tags_failed,
-                    nothing = Res.string.common_no_ai_tag_suggestions,
-                    isEmpty = List<TagSuggestion>::isEmpty,
-                ) { ai.suggestEdits(docId, AiEditRequest(tags = true)).addTags }
-            aiTags.value = AiTagState(suggestions = suggestions.orEmpty())
-        }
-    }
-
-    /**
-     * Ask the AI endpoint for this document's suggestions through [ask]: the answer, or null when it
-     * failed, which is reported with [failed]. An answer with nothing in it says [nothing].
-     */
-    private suspend fun <T : Any> suggest(
-        failed: StringResource,
-        nothing: StringResource,
-        isEmpty: (T) -> Boolean,
-        ask: suspend () -> T,
-    ): T? {
-        var answer: T? = null
-        reporting(failed) { answer = ask() }
-        if (answer?.let(isEmpty) == true) message(uiText(nothing))
-        return answer
-    }
-
-    /** Accept a suggestion: add it as a real tag (normal journal path) and drop it from the list. */
-    override fun acceptAiTag(tag: String) =
-        launchMetadata(Res.string.detail_add_tag_failed) {
-            meta.addTag(listOf(docId), tag)
-            dismissAiTag(tag)
-        }
-
-    override fun dismissAiTag(tag: String) {
-        aiTags.update { state ->
-            state.copy(suggestions = state.suggestions.filterNot { it.tag == tag })
-        }
-    }
-
-    override fun clearAiTagSuggestions() {
-        aiTags.update { it.copy(suggestions = emptyList()) }
-    }
-
-    /**
-     * Ask the AI endpoint for a value for every aiEnabled field from this doc's indexed text.
-     * No-op while a request is already in flight. Empty results surface an informational message
-     * (no OCR text yet, or nothing beyond the current values); failures surface via [messages].
-     */
-    override fun suggestAiMetadata() {
-        if (aiMetadata.value.suggesting) return
-        aiMetadata.update { it.copy(suggesting = true) }
-        viewModelScope.launch {
-            val suggestion =
-                suggest(
-                    failed = Res.string.detail_suggest_details_failed,
-                    nothing = Res.string.common_no_ai_metadata_suggestions,
-                    isEmpty = FieldSuggestion::isEmpty,
-                ) {
-                    // Every field the user marked for AI, in ALL mode: this is an explicit request to
-                    // second-guess what is there, unlike the automatic pass which only fills gaps.
-                    val fields =
-                        fieldRegistry.current().filter { it.aiEnabled }.map {
-                            AiFieldConfig(
-                                it.key,
-                                AiFieldMode.ALL,
-                            )
-                        }
-                    ai.suggestEdits(docId, AiEditRequest(fields = fields)).metadata
-                }
-            aiMetadata.value = AiMetadataState(suggestion = suggestion ?: FieldSuggestion.EMPTY)
-        }
-    }
-
-    /** Accept one field's suggestion: write it via the normal journal path and drop it. */
-    override fun acceptAiMetadata(
-        key: String,
-        onStart: (String) -> Boolean,
-        onFinished: (Boolean) -> Unit,
-    ) {
-        val suggested = aiMetadata.value.suggestion[key] ?: return
-        if (!onStart(suggested)) return
-        var accepted = false
-        val operation =
-            viewModelScope.launch {
-                accepted =
-                    reporting(Res.string.common_save_field_failed) {
-                        metadataMutex.withLock { meta.setField(docId, key, suggested) }
-                    }
-                // A newer suggestion for the field, asked for while the write ran, stays.
-                if (accepted) {
-                    aiMetadata.update { state ->
-                        if (state.suggestion[key] != suggested) return@update state
-                        state.copy(suggestion = state.suggestion.without(key))
-                    }
-                }
-            }
-        // A cancelled scope may prevent the launch body from starting, so a finally inside it
-        // cannot release a guard acquired synchronously by onStart.
-        operation.invokeOnCompletion { onFinished(accepted) }
-    }
-
-    override fun dismissAiMetadata(key: String) {
-        aiMetadata.update { it.copy(suggestion = it.suggestion.without(key)) }
-    }
 
     /**
      * Register [def] and, when [value] is non-blank, set it on this document. The definition goes

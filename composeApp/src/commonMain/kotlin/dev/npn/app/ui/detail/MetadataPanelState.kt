@@ -78,7 +78,7 @@ data class AiPanelState(
  * The writes the metadata panel makes at once: tags, AI suggestions, new field definitions, the
  * searchable OCR version, and the history it shows. [DocDetailViewModel] implements it.
  */
-interface DocumentWrites {
+interface DocumentWrites : AiSuggestionActions {
     fun addTag(tag: String)
 
     fun removeTag(tag: String)
@@ -97,28 +97,6 @@ interface DocumentWrites {
 
     /** Pin the searchable OCR version, or null for automatic best-engine selection. */
     fun setOcrEngine(engine: String?)
-
-    fun suggestAiTags()
-
-    fun acceptAiTag(tag: String)
-
-    fun dismissAiTag(tag: String)
-
-    fun clearAiTagSuggestions()
-
-    fun suggestAiMetadata()
-
-    /**
-     * Accept a field's suggestion if [onStart] permits its value. [onFinished] releases the caller's
-     * write guard on success, failure or cancellation, saying whether the write landed.
-     */
-    fun acceptAiMetadata(
-        key: String,
-        onStart: (String) -> Boolean = { true },
-        onFinished: (Boolean) -> Unit = {},
-    )
-
-    fun dismissAiMetadata(key: String)
 
     /** Show the history (its tab opened), or read it again when [refresh] is set. */
     fun loadHistory(refresh: Boolean = false)

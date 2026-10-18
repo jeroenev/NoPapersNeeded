@@ -5,6 +5,9 @@ import androidx.lifecycle.viewModelScope
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.warn
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -23,33 +26,80 @@ class BulkFailure(
 )
 
 /**
- * Base for view models that surface one-shot user-facing messages, shown by [SnackbarMessages].
+ * The one-shot user-facing messages a [MessagesViewModel] sends its screen.
  *
  * Messages go through one unbounded channel: each is delivered exactly once, in the order sent, to
  * the one collector the screen runs. A message sent while no screen collects (between lifecycles,
  * during navigation) waits for the next collector instead of being dropped, however many pile up,
  * and two sent together both show, one after the other.
  *
- * Write operations are journal appends and file moves, so they can genuinely fail (SAF I/O errors,
- * full disk, permissions). Fire-and-forget writes must go through [launchReporting] so a failure
- * is reported to the user instead of silently swallowed, or crashing the app.
+ * Its own class so that a helper a viewmodel delegates to, built before the viewmodel, reports
+ * through the same messages (see the [MessagesViewModel] constructor taking one).
  */
-abstract class MessagesViewModel : ViewModel() {
+class MessageSink {
     private val channel = Channel<UiMessage>(Channel.UNLIMITED)
-
-    /** Where a bulk action's failures are logged, beside what the user is told; the session's log. */
-    protected open val log: NpnLog get() = NpnLog.None
 
     /** The messages to show; collect it from one place only, normally [SnackbarMessages]. */
     val messages: Flow<UiMessage> = channel.receiveAsFlow()
 
     /** Send a one-shot user-facing message, optionally with an [action] such as Undo. */
-    protected fun message(
+    fun message(
         text: UiText,
         action: UiMessage.Action? = null,
     ) {
         channel.trySend(UiMessage(text, action))
     }
+
+    /**
+     * Run [block]; on failure send [failed], a whole sentence with the failure's reason as `%1$s`.
+     * Cancellation is rethrown so it is not misreported as a failure. Returns whether [block] completed.
+     */
+    suspend fun reporting(
+        failed: StringResource,
+        block: suspend () -> Unit,
+    ): Boolean =
+        runCatchingCancellable { block() }
+            .onFailure { message(uiText(failed, it.reasonText())) }
+            .isSuccess
+}
+
+/** A new scope as [viewModelScope] makes one, for a viewmodel that hands it to helpers built before it. */
+fun newViewModelScope(): CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+/**
+ * Base for view models that surface one-shot user-facing messages ([MessageSink]), shown by
+ * [SnackbarMessages].
+ *
+ * Write operations are journal appends and file moves, so they can genuinely fail (SAF I/O errors,
+ * full disk, permissions). Fire-and-forget writes must go through [launchReporting] so a failure
+ * is reported to the user instead of silently swallowed, or crashing the app.
+ */
+abstract class MessagesViewModel : ViewModel {
+    private val sink: MessageSink
+
+    constructor() : super() {
+        sink = MessageSink()
+    }
+
+    /**
+     * For a viewmodel that delegates to helpers it builds before itself: they get [scope], which
+     * becomes the [viewModelScope], and report through [sink], whose messages are this viewmodel's.
+     */
+    protected constructor(scope: CoroutineScope, sink: MessageSink) : super(scope) {
+        this.sink = sink
+    }
+
+    /** Where a bulk action's failures are logged, beside what the user is told; the session's log. */
+    protected open val log: NpnLog get() = NpnLog.None
+
+    /** The messages to show; collect it from one place only, normally [SnackbarMessages]. */
+    val messages: Flow<UiMessage> get() = sink.messages
+
+    /** Send a one-shot user-facing message, optionally with an [action] such as Undo. */
+    protected fun message(
+        text: UiText,
+        action: UiMessage.Action? = null,
+    ) = sink.message(text, action)
 
     /**
      * Run a fire-and-forget write in [viewModelScope]; on failure send [failed], a whole sentence
@@ -70,10 +120,7 @@ abstract class MessagesViewModel : ViewModel() {
     protected suspend fun reporting(
         failed: StringResource,
         block: suspend () -> Unit,
-    ): Boolean =
-        runCatchingCancellable { block() }
-            .onFailure { message(uiText(failed, it.reasonText())) }
-            .isSuccess
+    ): Boolean = sink.reporting(failed, block)
 
     /**
      * Run [op] for each of [items] in turn, carrying on past the ones that fail, and report the
