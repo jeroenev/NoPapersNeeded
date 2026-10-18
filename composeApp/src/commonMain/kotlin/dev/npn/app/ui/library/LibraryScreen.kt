@@ -373,7 +373,7 @@ private fun LibraryContent(
                             savedViews = state.savedViews,
                             actions = actions,
                             onSaveCurrentView = { onDialog(LibraryDialog.SaveView) },
-                            onRenameSavedView = { onDialog(LibraryDialog.RenameView(it)) },
+                            onRenameSavedView = { onDialog(LibraryDialog.RenameView(it.id, it.name)) },
                         )
                     },
                     onOpenFilter = { onDialog(LibraryDialog.Filter) },

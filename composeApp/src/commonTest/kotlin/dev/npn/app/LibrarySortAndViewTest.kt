@@ -144,13 +144,20 @@ class LibrarySortAndViewTest : MainDispatcherTest() {
             saved.sort shouldBe LibrarySort(SortField.Name, ascending = true)
         }
 
+    /**
+     * A rename names only the view; the rest is the view as the library holds it when the rename is
+     * confirmed, its documents and a pin made since included. A view deleted meanwhile stays deleted.
+     */
     @Test
     fun renameSavedViewSavesTheNewName() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val model = vm(session = session)
-            val view = SavedView(id = "v1", name = "Old")
-            model.renameSavedView(view, "New name")
+            val view =
+                SavedView(id = "v1", name = "Old", filter = LibraryFilter(docIds = listOf("a", "b")), pinned = true)
+            session.savedViews.views.value = listOf(view)
+            model.renameSavedView("v1", "New name")
+            model.renameSavedView("gone", "Other name")
             advanceUntilIdle()
             session.savedViews.saved.single() shouldBe view.copy(name = "New name")
         }

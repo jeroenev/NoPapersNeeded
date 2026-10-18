@@ -12,7 +12,6 @@ import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.TagPickDialog
 import dev.npn.app.ui.common.TextInputDialog
 import dev.npn.app.ui.common.jsonSaver
-import dev.npn.core.app.SavedView
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.nullable
 import no_papers_needed.composeapp.generated.resources.Res
@@ -48,9 +47,14 @@ sealed interface LibraryDialog {
     @Serializable
     data object SaveView : LibraryDialog
 
+    /**
+     * Rename the saved view [id], named [name] when the dialog opened. Not the view itself: its
+     * filter may restrict it to thousands of documents, more than saved state can carry.
+     */
     @Serializable
     data class RenameView(
-        val view: SavedView,
+        val id: String,
+        val name: String,
     ) : LibraryDialog
 
     /** Add a tag to the selection, picked from the library's whole vocabulary. */
@@ -94,7 +98,7 @@ internal fun LibraryDialogHost(
     /** What the open tag picker offers: any of the library's tags to add, the selection's own to remove. */
     tagOptions: List<String>,
     onSaveView: (String) -> Unit,
-    onRenameView: (SavedView, String) -> Unit,
+    onRenameView: (id: String, name: String) -> Unit,
     onAddTag: (String) -> Unit,
     onRemoveTag: (String) -> Unit,
     onTrash: () -> Unit,
@@ -123,10 +127,10 @@ internal fun LibraryDialogHost(
             TextInputDialog(
                 title = stringResource(Res.string.library_rename_saved_view),
                 label = stringResource(Res.string.library_view_name),
-                initial = open.view.name,
+                initial = open.name,
                 confirmLabel = stringResource(Res.string.library_rename),
-                confirmEnabled = { it.isNotBlank() && it.trim() != open.view.name },
-                onConfirm = { name -> confirmed { onRenameView(open.view, name) } },
+                confirmEnabled = { it.isNotBlank() && it.trim() != open.name },
+                onConfirm = { name -> confirmed { onRenameView(open.id, name) } },
                 onDismiss = onDismiss,
             )
         }

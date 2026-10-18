@@ -26,9 +26,6 @@ import dev.npn.app.ui.texts
 import dev.npn.app.ui.themedScene
 import dev.npn.app.ui.type
 import dev.npn.core.app.LibraryFilter
-import dev.npn.core.app.LibrarySort
-import dev.npn.core.app.SavedView
-import dev.npn.core.app.SortField
 import dev.npn.core.model.ReviewMode
 import io.kotest.assertions.withClue
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -39,12 +36,11 @@ import kotlin.test.Test
 class LibraryDialogTest : EnglishLocaleTest() {
     @Test
     fun everyDialogSavesAndRestores() {
-        val view = SavedView("v1", "Invoices", LibraryFilter(tagsAll = listOf("invoice")), LibrarySort(SortField.Name))
         val dialogs =
             listOf(
                 LibraryDialog.Filter,
                 LibraryDialog.SaveView,
-                LibraryDialog.RenameView(view),
+                LibraryDialog.RenameView("v1", "Invoices"),
                 LibraryDialog.AddTag,
                 LibraryDialog.RemoveTag,
                 LibraryDialog.ConfirmTrash,
@@ -61,15 +57,14 @@ class LibraryDialogTest : EnglishLocaleTest() {
     @Test
     fun renamingAViewStartsFromItsName() =
         onUiThread {
-            val view = SavedView("v1", "Invoices")
             var renamed: String? = null
             themedScene(WIDTH, HEIGHT) {
                 LibraryDialogHost(
-                    dialog = LibraryDialog.RenameView(view),
+                    dialog = LibraryDialog.RenameView("v1", "Invoices"),
                     selectedCount = 0,
                     tagOptions = emptyList(),
                     onSaveView = {},
-                    onRenameView = { _, name -> renamed = name },
+                    onRenameView = { id, name -> renamed = "$id: $name" },
                     onAddTag = {},
                     onRemoveTag = {},
                     onTrash = {},
@@ -86,7 +81,7 @@ class LibraryDialogTest : EnglishLocaleTest() {
                 type("Bills ")
                 renameButton().isEnabled() shouldBe true
                 click { "Rename" in it.texts() && it.config.contains(SemanticsActions.OnClick) }
-                renamed shouldBe "Bills"
+                renamed shouldBe "v1: Bills"
             }
         }
 

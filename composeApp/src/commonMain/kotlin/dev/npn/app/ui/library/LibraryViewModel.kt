@@ -47,6 +47,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -614,11 +615,17 @@ class LibraryViewModel(
             savedViewRepository.save(newSavedView(_ui.value, name))
         }
 
-    /** Persist [view] under a new [name]. */
+    /**
+     * Persist the saved view [id] under a new [name], as the library holds it now, so a change made
+     * since the rename began (a pin, on another device too) stands. One deleted meanwhile stays deleted.
+     */
     fun renameSavedView(
-        view: SavedView,
+        id: String,
         name: String,
-    ) = launchReporting(Res.string.library_save_view_failed) { savedViewRepository.save(view.copy(name = name)) }
+    ) = launchReporting(Res.string.library_save_view_failed) {
+        val view = savedViewRepository.observeSavedViews().first().find { it.id == id }
+        if (view != null) savedViewRepository.save(view.copy(name = name))
+    }
 
     /** Flip the pinned state of [view] and persist it. */
     override fun toggleSavedViewPin(view: SavedView) =
