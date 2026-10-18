@@ -21,9 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -115,16 +113,7 @@ fun PageViewer(
     // The interactive page is whichever the pager currently shows; its transform is owned per-page
     // so zooming one page and swiping away resets cleanly.
     val current = pagerState.currentPage
-    val transforms = remember { mutableStateMapOf<Int, ViewerTransform>() }
-
-    fun transformOf(page: Int) = transforms[page] ?: ViewerTransform()
-
-    fun setTransform(
-        page: Int,
-        t: ViewerTransform,
-    ) {
-        transforms[page] = t
-    }
+    val gestures = remember { PageViewerState() }
 
     // The scroll/zoom gesture lambdas below are captured once by pointerInput and never refreshed,
     // so they must read the current page through State, not the composition-time `current` local
@@ -135,10 +124,6 @@ fun PageViewer(
         scope.launch { pagerState.animateScrollToPage(target.coerceIn(0, count - 1)) }
     }
 
-    // Accumulates fractional touchpad scroll toward one page flip when at 1x (a mouse wheel notch
-    // arrives as a single event with |delta| >= 1 and flips immediately).
-    val pageScrollAccum = remember { mutableFloatStateOf(0f) }
-
     Box(
         modifier =
             modifier
@@ -147,8 +132,8 @@ fun PageViewer(
                 .viewerKeys(
                     pagerState = pagerState,
                     pageCount = count,
-                    transform = { transformOf(currentPage.value) },
-                    onTransform = { setTransform(currentPage.value, it) },
+                    transform = { gestures.transformOf(currentPage.value) },
+                    onTransform = { gestures.setTransform(currentPage.value, it) },
                     containerSize = { containerSize },
                     fittedSize = { cache.fittedSizeFor(currentPage.value, containerSize) },
                     onPage = { goToPage(it) },
@@ -157,9 +142,9 @@ fun PageViewer(
                     onZoom = { delta, position ->
                         val page = currentPage.value
                         val fitted = cache.fittedSizeFor(page, containerSize)
-                        setTransform(
+                        gestures.setTransform(
                             page,
-                            transformOf(page).applyGesture(
+                            gestures.transformOf(page).applyGesture(
                                 zoomChange = 1f - delta * CTRL_SCROLL_ZOOM_STEP,
                                 pan = Offset.Zero,
                                 centroid = position,
@@ -171,10 +156,10 @@ fun PageViewer(
                     // Plain wheel: pan vertically when zoomed, otherwise page up/down (PDF-reader style).
                     onScroll = { delta, _ ->
                         val page = currentPage.value
-                        val t = transformOf(page)
+                        val t = gestures.transformOf(page)
                         if (t.isZoomed) {
                             val fitted = cache.fittedSizeFor(page, containerSize)
-                            setTransform(
+                            gestures.setTransform(
                                 page,
                                 t.copy(
                                     offset =
@@ -188,15 +173,9 @@ fun PageViewer(
                             )
                             true
                         } else {
-                            val acc = pageScrollAccum.floatValue
-                            val sameDir = acc == 0f || (acc > 0f) == (delta > 0f)
-                            val next = if (sameDir) acc + delta else delta
-                            if (kotlin.math.abs(next) >= 1f) {
-                                goToPage(page + if (next > 0f) 1 else -1)
-                                pageScrollAccum.floatValue = 0f
-                            } else {
-                                pageScrollAccum.floatValue = next
-                            }
+                            // At 1x the wheel pages; a touchpad's fractional scroll adds up to a flip.
+                            val pages = gestures.wheelPages(delta)
+                            if (pages != 0) goToPage(page + pages)
                             true
                         }
                     },
@@ -208,7 +187,8 @@ fun PageViewer(
             modifier = Modifier.fillMaxSize(),
             // While zoomed, drag belongs to pan until the page hits its horizontal edge.
             userScrollEnabled =
-                transformOf(current)
+                gestures
+                    .transformOf(current)
                     .canPagerConsumeHorizontal(cache.fittedSizeFor(current, containerSize), containerSize),
             beyondViewportPageCount = 1,
         ) { page ->
@@ -218,20 +198,20 @@ fun PageViewer(
                 render = render,
                 cache = cache,
                 container = containerSize,
-                transform = if (page == current) transformOf(current) else ViewerTransform(),
-                onTransformChange = { setTransform(page, it) },
+                transform = if (page == current) gestures.transformOf(current) else ViewerTransform(),
+                onTransformChange = { gestures.setTransform(page, it) },
             )
         }
 
         fun zoomButton(delta: Float) {
             val fitted = cache.fittedSizeFor(current, containerSize)
-            setTransform(current, zoomAtCenter(transformOf(current), delta, containerSize, fitted))
+            gestures.setTransform(current, zoomAtCenter(gestures.transformOf(current), delta, containerSize, fitted))
         }
         ZoomControls(
-            transform = transformOf(current),
+            transform = gestures.transformOf(current),
             onZoomOut = { zoomButton(-ZOOM_STEP) },
             onZoomIn = { zoomButton(ZOOM_STEP) },
-            onReset = { setTransform(current, ViewerTransform()) },
+            onReset = { gestures.setTransform(current, ViewerTransform()) },
             modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp),
         )
 
