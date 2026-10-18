@@ -15,7 +15,6 @@ import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
@@ -25,6 +24,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.test.runTest
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.CoroutineContext
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -160,37 +160,28 @@ class LifecycleBehindARescanTest {
         action: suspend () -> Unit,
         meanwhile: suspend () -> Unit,
     ) = coroutineScope {
-        val reached = journal.pauseNextListing()
+        journal.pauseNextListing()
         val rescan = async { coordinator.rescan() }
-        reached.await()
+        journal.reached.await()
         val waiter = async { action() }
         waiting.parked.receive()
         meanwhile()
-        journal.resume()
+        journal.release()
         rescan.await()
         waiter.await()
     }
 
-    /** [fs], whose next listing of the journal waits, once [pauseNextListing] asks it to, until [resume]. */
+    /** [fs], whose next listing of the journal, once [pauseNextListing] asks it to, pauses at its gate. */
     private class PausingJournal(
         private val fs: LibraryFileSystem,
-    ) : LibraryFileSystem by fs {
-        @Volatile private var pause: CompletableDeferred<Unit>? = null
-        private val resumed = CompletableDeferred<Unit>()
+    ) : FsGate(),
+        LibraryFileSystem by fs {
+        private val armed = AtomicBoolean(false)
 
-        /** Pause the next journal listing; the result completes once it has started. */
-        fun pauseNextListing(): CompletableDeferred<Unit> = CompletableDeferred<Unit>().also { pause = it }
-
-        fun resume() = resumed.complete(Unit)
+        fun pauseNextListing() = armed.set(true)
 
         override suspend fun listAllUnder(relPath: String): List<FileMeta> {
-            if (relPath == NpnPaths.JOURNAL_DIR) {
-                pause?.let { reached ->
-                    pause = null
-                    reached.complete(Unit)
-                    resumed.await()
-                }
-            }
+            if (relPath == NpnPaths.JOURNAL_DIR && armed.getAndSet(false)) pause()
             return fs.listAllUnder(relPath)
         }
     }

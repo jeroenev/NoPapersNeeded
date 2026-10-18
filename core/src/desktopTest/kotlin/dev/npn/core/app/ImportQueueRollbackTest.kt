@@ -12,7 +12,6 @@ import dev.npn.core.pdf.PdfDocumentHandle
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -51,7 +50,7 @@ class ImportQueueRollbackTest {
                 pdf.reached.await()
                 val requested = queue.getByDocId(id)
                 requested?.rerun shouldBe true
-                publication.release.complete(Unit)
+                publication.release()
 
                 importing.await() shouldBe ImportOutcome.Failed(ImportFailure.COPY_FAILED)
 
@@ -62,16 +61,14 @@ class ImportQueueRollbackTest {
                     .getByDocId(id)
                     ?.trashed shouldBe true
             } finally {
-                publication.release.complete(Unit)
-                pdf.release.complete(Unit)
+                publication.release()
+                pdf.release()
                 rig.close()
             }
         }
 
-    private class PausedPublication {
+    private class PausedPublication : FsGate() {
         var armed = false
-        val reached = CompletableDeferred<Unit>()
-        val release = CompletableDeferred<Unit>()
 
         fun over(fs: LibraryFileSystem): LibraryFileSystem =
             object : LibraryFileSystem by fs {
@@ -82,8 +79,7 @@ class ImportQueueRollbackTest {
                 ) {
                     if (armed && JournalPaths.classify(canonicalPath) is JournalPath.ObjectV2) {
                         armed = false
-                        reached.complete(Unit)
-                        release.await()
+                        pause()
                         throw VerifiedPublicationFailedException("restore publication failed")
                     }
                     fs.publishVerifiedObjectOnce(stagingPath, canonicalPath, expectedHash)
@@ -91,18 +87,13 @@ class ImportQueueRollbackTest {
             }
     }
 
-    private class PausedPdf {
+    private class PausedPdf : FsGate() {
         var armed = false
-        val reached = CompletableDeferred<Unit>()
-        val release = CompletableDeferred<Unit>()
 
         fun over(pdf: PdfEngine): PdfEngine =
             object : PdfEngine by pdf {
                 override suspend fun open(bytes: ByteArray): PdfDocumentHandle {
-                    if (armed) {
-                        reached.complete(Unit)
-                        release.await()
-                    }
+                    if (armed) pause()
                     return pdf.open(bytes)
                 }
             }
