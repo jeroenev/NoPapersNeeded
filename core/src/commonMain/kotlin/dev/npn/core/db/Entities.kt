@@ -299,25 +299,6 @@ data class MetadataTransactionActorEntity(
     val objectHash: String,
 )
 
-/**
- * Supersession fact recorded by an APPLIED compaction snapshot, which an earlier build wrote:
- * [snapshotPath] supersedes the v2 object (or older snapshot) whose content hash is [supersededHash].
- * Rows are keyed by the pair so two concurrent snapshots superseding the same object are both
- * idempotently recorded. A missing previously-applied source is tolerated iff its content hash
- * appears here for an applied snapshot still on disk, directly or through a snapshot that one
- * superseded, or, for a missing snapshot, when what it superseded is on disk (see
- * `SnapshotSupport.carriedByListed`).
- */
-@Entity(
-    tableName = "metadata_superseded",
-    primaryKeys = ["snapshotPath", "supersededHash"],
-    indices = [Index(value = ["supersededHash"])],
-)
-data class MetadataSupersededEntity(
-    val snapshotPath: String,
-    val supersededHash: String,
-)
-
 @Entity(tableName = "metadata_projection_state")
 data class MetadataProjectionStateEntity(
     @PrimaryKey val id: Int = SINGLETON_ID,

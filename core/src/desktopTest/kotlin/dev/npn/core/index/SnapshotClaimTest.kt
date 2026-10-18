@@ -11,14 +11,17 @@ import dev.npn.core.journal.journalObjects
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.test.assertFailsWith
 
 /**
  * A snapshot whose manifest names an object it holds none of the events of, as another build's or a
- * faulty one's could: the object stays an object like any other.
+ * faulty one's could: the object stays an object like any other, and the manifest vouches for none of
+ * its events.
  */
 class SnapshotClaimTest {
     private val rig = IndexRig.create()
@@ -41,6 +44,21 @@ class SnapshotClaimTest {
                 val state = MetadataAccumulator(rig.fs, rebuilt.db).reconcile().state
                 state.shouldNotBeNull().effectiveTags(docId) shouldBe setOf("tag0", "tag1")
             }
+        }
+
+    /** The snapshot explains nothing: the object's loss is a loss, as with no snapshot. */
+    @Test
+    fun anObjectASnapshotOnlyNamesIsMissedWhenItGoes() =
+        runTest {
+            val (_, victim) = anObjectAndASnapshotThatOnlyNamesIt()
+            coordinator.reconcileMetadata()
+
+            rig.deleteFile(victim)
+
+            assertFailsWith<MetadataWriteBlocked> {
+                coordinator.reconcileMetadata()
+            }.message.shouldNotBeNull() shouldContain
+                victim
         }
 
     /**

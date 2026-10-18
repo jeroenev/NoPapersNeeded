@@ -69,8 +69,10 @@ internal object SnapshotCodec {
  */
 internal object SnapshotV2Reader {
     /**
-     * Read the snapshot at [relPath]: an accepted read carries its events and its manifest.
-     * [contentHash] is [bytes]' SHA-256, when the caller has it already.
+     * Read the snapshot at [relPath]: an accepted read carries its events. Its manifest is checked,
+     * and read for its version alone: whether the snapshot holds what it names is the event
+     * tables' to say ([dev.npn.core.index.SourceSetValidator]). [contentHash] is [bytes]' SHA-256,
+     * when the caller has it already.
      */
     fun read(
         relPath: String,
@@ -96,10 +98,7 @@ internal object SnapshotV2Reader {
                     "Snapshot manifest version ${manifest.version} is unsupported",
                 )
             }
-            when (val events = StrictLines.decodeEvents(lines.drop(1), NOUN, firstLine = 2)) {
-                is JournalSourceRead.Accepted -> events.copy(manifest = manifest)
-                else -> events
-            }
+            StrictLines.decodeEvents(lines.drop(1), NOUN, firstLine = 2)
         }
     }
 

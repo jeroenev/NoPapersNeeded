@@ -1,12 +1,12 @@
 package dev.npn.core.index
 
+import dev.npn.core.db.MetadataEventEntity
 import dev.npn.core.db.MetadataSourceEntity
 import dev.npn.core.db.ProjectionStatus
 import dev.npn.core.db.SourceFingerprint
 import dev.npn.core.db.SourceKind
 import dev.npn.core.db.SourceStatus
 import dev.npn.core.db.TempIndexDb
-import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.PendingOp
@@ -219,40 +219,40 @@ class CompactionReconcileTest {
             db.tagDao().tagsForDocument(docId).size shouldBe 10
         }
 
-    /** Only a snapshot on disk explains an object's loss; one the index remembers but is gone does not. */
+    /**
+     * Only a listed source holding every event of a gone one explains its loss: a snapshot the index
+     * remembers but the folder lost does not, nor one on disk that names the object without its events.
+     */
     @Test
-    fun aLossIsExplainedOnlyByASnapshotStillOnDisk() =
+    fun aLossIsExplainedOnlyByAListedSourceHoldingEachOfItsEvents() =
         runTest {
             val dao = db.metadataProjectionDao()
-            val objectHash = "a".repeat(64)
-            val snapshotHash = "b".repeat(64)
-            val objectPath = "${NpnPaths.JOURNAL_DIR}/objects-v2-aa/$objectHash.jsonl"
-            val snapshotPath = "${NpnPaths.JOURNAL_DIR}/objects-snap-v2-bb/$snapshotHash.jsonl"
-            dao.ingest(source(objectPath, SourceKind.OBJECT, objectHash), emptyList())
-            dao.ingest(
-                source(snapshotPath, SourceKind.SNAPSHOT, snapshotHash),
-                emptyList(),
-                supersedes = listOf(objectHash),
-            )
-            val lost = listOf(checkNotNull(dao.source(objectPath)))
-            val snapshotOnDisk = mapOf(snapshotPath to FileMeta(snapshotPath, "$snapshotHash.jsonl", 1, 1, false))
+            val objectPath = "${NpnPaths.JOURNAL_DIR}/objects-v2-aa/${"a".repeat(64)}.jsonl"
+            val holding = "${NpnPaths.JOURNAL_DIR}/objects-snap-v2-bb/${"b".repeat(64)}.jsonl"
+            val namingOnly = "${NpnPaths.JOURNAL_DIR}/objects-snap-v2-cc/${"c".repeat(64)}.jsonl"
+            dao.ingest(source(objectPath, SourceKind.OBJECT), listOf(event(1), event(2)))
+            dao.ingest(source(holding, SourceKind.SNAPSHOT), listOf(event(1), event(2), event(3)))
+            dao.ingest(source(namingOnly, SourceKind.SNAPSHOT), listOf(event(1)))
+            val gone = listOf(checkNotNull(dao.source(objectPath)))
             val validator = SourceSetValidator(dao)
 
-            suspend fun judge(files: Map<String, FileMeta>): String? {
-                val current = dao.allSources()
-                val carried = SnapshotSupport(dao).carriedByListed(files.keys, current).hashes
-                return validator.unexplainedSourceLoss(lost, current, files, carried)
-            }
-
-            judge(snapshotOnDisk) shouldBe null
-            judge(emptyMap()).shouldNotBeNull() shouldContain objectPath
+            validator.unheldEvents(gone, setOf(holding)) shouldBe null
+            validator.unheldEvents(gone, setOf(holding, namingOnly)) shouldBe null
+            validator.unheldEvents(gone, setOf(namingOnly)).shouldNotBeNull() shouldContain objectPath
+            validator.unheldEvents(gone, emptySet()).shouldNotBeNull() shouldContain objectPath
         }
+
+    /** An event of device `dev-a` with sequence [seq], as the index stores it. */
+    private fun event(seq: Long) =
+        MetadataEventEntity("dev-a", seq, """{"seq":$seq}""", seq, 0, "dev-a", null, "tag-add")
 
     private fun source(
         path: String,
         kind: SourceKind,
-        hash: String,
-    ) = MetadataSourceEntity(path, kind, SourceFingerprint(1, 1, hash), hash, SourceStatus.APPLIED)
+    ): MetadataSourceEntity {
+        val hash = NpnPaths.fileName(path).substringBefore('.')
+        return MetadataSourceEntity(path, kind, SourceFingerprint(1, 1, hash), hash, SourceStatus.APPLIED)
+    }
 
     /** An object gone with no snapshot superseding it is damage: writes stop at once, until it is back. */
     @Test

@@ -2,16 +2,12 @@ package dev.npn.core.index
 
 import dev.npn.core.db.MetadataProjectionDao
 import dev.npn.core.db.MetadataSourceEntity
-import dev.npn.core.db.SourceKind
-import dev.npn.core.db.SourceStatus
 import dev.npn.core.fs.FileMeta
-import dev.npn.core.fs.NpnPaths
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
 
 /**
- * Decides whether a metadata source set is safe to fold. [MetadataAccumulator] does the ingestion,
- * and [SnapshotSupport] says what the snapshots earlier builds wrote account for.
+ * Decides whether a metadata source set is safe to fold. [MetadataAccumulator] does the ingestion.
  *
  * Every check reports a failure REASON rather than failing outright. Latching that reason into the
  * projection state (and so blocking writes) stays with [MetadataAccumulator], which owns the DB
@@ -30,6 +26,13 @@ import dev.npn.core.journal.JournalPaths
  * Each blocks writes ([WriteBlock.JOURNAL_DAMAGED]) until a pass reads a journal that holds every
  * applied event again. Waiting would help none of them, and would only let writes go on over a
  * journal that lost events.
+ *
+ * Whether a listed file holds a gone source's events is read off the event tables, by event identity
+ * (device and sequence); no snapshot manifest is taken at its word. That covers every way a source
+ * can go without a loss alike: the objects an earlier build compacted, which its snapshot holds, or a
+ * later snapshot that compacted that one in turn; a snapshot gone with the objects it replaced back
+ * on disk (a folder put back from before a compaction); a v1 segment whose events another holds. A
+ * snapshot that names an object without holding its events explains nothing.
  */
 internal class SourceSetValidator(
     private val dao: MetadataProjectionDao,
@@ -61,51 +64,23 @@ internal class SourceSetValidator(
     }
 
     /**
-     * A reason to reject the set because a previously-applied source vanished without a validated
-     * replacement, or null when every loss is explained. [files] is what the pass listed and read,
-     * [previous] the source table before it and [current] after it, and [carried] the content hashes
-     * whose events [files] hold ([SnapshotSupport.carriedByListed]).
-     *
-     * A content-addressed source's loss is explained when [carried] holds its hash: a hash-identical
-     * replacement is listed, an applied snapshot on disk carries it, or, for a snapshot, the sources
-     * it superseded are back. A snapshot the index remembers but the folder no longer holds explains
-     * nothing.
+     * A reason to reject the set because a source applied before the pass is gone from the folder and
+     * an event it held is held by no applied source the pass listed, or null when every event of each
+     * of [gone] is. [gone] are the applied sources the pass did not list, and [listed] the paths of
+     * the applied sources it did.
      */
-    suspend fun unexplainedSourceLoss(
-        previous: List<MetadataSourceEntity>,
-        current: List<MetadataSourceEntity>,
-        files: Map<String, FileMeta>,
-        carried: Set<String>,
+    suspend fun unheldEvents(
+        gone: List<MetadataSourceEntity>,
+        listed: Set<String>,
     ): String? {
-        val lost =
-            previous.firstOrNull { source ->
-                // A source that never read as valid recorded nothing, so its loss loses nothing.
-                source.status == SourceStatus.APPLIED && source.path !in files &&
-                    when (source.kind) {
-                        SourceKind.OBJECT, SourceKind.SNAPSHOT -> source.contentHash !in carried
-                        SourceKind.LEGACY_SEGMENT -> !hasLegacyReplacement(source, current, files)
-                    }
-            }
-        return lost?.let { "Metadata source disappeared without a validated replacement: ${it.path}" }
-    }
-
-    private suspend fun hasLegacyReplacement(
-        missing: MetadataSourceEntity,
-        current: List<MetadataSourceEntity>,
-        files: Map<String, FileMeta>,
-    ): Boolean {
-        val deviceDir = NpnPaths.parentDir(missing.path)
-        val required = dao.sourceEvents(missing.path).map { it.eventDeviceId to it.eventSequence }.toSet()
-        val replacements =
-            current.filter { source ->
-                source.path in files && NpnPaths.parentDir(source.path) == deviceDir &&
-                    source.status == SourceStatus.APPLIED
-            }
-        val covered =
-            replacements
-                .flatMap { dao.sourceEvents(it.path) }
-                .mapTo(HashSet()) { it.eventDeviceId to it.eventSequence }
-        return required.isNotEmpty() && covered.containsAll(required)
+        if (gone.isEmpty()) return null
+        val unheld =
+            dao
+                .eventHolders(gone.map { it.path })
+                .groupBy { Triple(it.sourcePath, it.eventDeviceId, it.eventSequence) }
+                .entries
+                .firstOrNull { (_, holders) -> holders.none { it.holderPath in listed } }
+        return unheld?.let { "Metadata source disappeared without a validated replacement: ${it.key.first}" }
     }
 
     private companion object {

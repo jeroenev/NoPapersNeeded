@@ -21,6 +21,14 @@ private fun validateActor(
     }
 }
 
+/** One event of the source at [sourcePath], and another source that holds it too, if any. */
+data class EventHolder(
+    val sourcePath: String,
+    val eventDeviceId: String,
+    val eventSequence: Long,
+    val holderPath: String?,
+)
+
 /** What recording a source's events changed in the event table ([MetadataProjectionDao.ingest]). */
 data class IngestedEvents(
     /** The events new to the table: the ones no fold has seen yet. */
@@ -128,14 +136,13 @@ interface MetadataProjectionDao {
     suspend fun deleteSource(path: String)
 
     /**
-     * Drop the source at [path]: its row, the supersessions it recorded, and its claim on its
-     * events, deleting those no other source references. For a source gone from the folder whose
-     * events other sources hold, so the fold stays as it was.
+     * Drop the source at [path]: its row and its claim on its events, deleting those no other source
+     * references. For a source gone from the folder whose events other sources hold, so the fold
+     * stays as it was.
      */
     @Transaction
     suspend fun forgetSource(path: String) {
         replaceSourceEvents(path, emptyList())
-        deleteSupersededBy(path)
         deleteSource(path)
     }
 
@@ -155,6 +162,21 @@ interface MetadataProjectionDao {
     @Query("SELECT * FROM metadata_source_events WHERE sourcePath = :sourcePath")
     suspend fun sourceEvents(sourcePath: String): List<MetadataSourceEventEntity>
 
+    @Query(
+        "SELECT g.sourcePath AS sourcePath, g.eventDeviceId AS eventDeviceId, g.eventSequence AS eventSequence, " +
+            "h.sourcePath AS holderPath FROM metadata_source_events g " +
+            "LEFT JOIN metadata_source_events h ON h.eventDeviceId = g.eventDeviceId " +
+            "AND h.eventSequence = g.eventSequence AND h.sourcePath != g.sourcePath " +
+            "WHERE g.sourcePath IN (:paths)",
+    )
+    suspend fun eventHoldersChunk(paths: List<String>): List<EventHolder>
+
+    /**
+     * Each event of the sources at [paths], once for every other source that holds it too, and once
+     * with no holder when none does; in one join per bind-limit slice.
+     */
+    suspend fun eventHolders(paths: List<String>): List<EventHolder> = paths.chunkedBind { eventHoldersChunk(it) }
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertSourceEvents(events: List<MetadataSourceEventEntity>)
 
@@ -169,23 +191,6 @@ interface MetadataProjectionDao {
 
     @Upsert
     suspend fun upsertState(state: MetadataProjectionStateEntity)
-
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertSuperseded(rows: List<MetadataSupersededEntity>)
-
-    @Query("DELETE FROM metadata_superseded WHERE snapshotPath = :snapshotPath")
-    suspend fun deleteSupersededBy(snapshotPath: String)
-
-    /** Every supersession a CURRENTLY-APPLIED snapshot source records. */
-    @Query(
-        "SELECT s.* FROM metadata_superseded s " +
-            "JOIN metadata_sources src ON src.path = s.snapshotPath " +
-            "WHERE src.status = '$SOURCE_APPLIED'",
-    )
-    suspend fun appliedSupersessions(): List<MetadataSupersededEntity>
-
-    @Query("DELETE FROM metadata_superseded")
-    suspend fun clearSuperseded()
 
     @Query("DELETE FROM metadata_source_events")
     suspend fun clearSourceEvents()
@@ -205,22 +210,18 @@ interface MetadataProjectionDao {
         clearActors()
         clearEvents()
         clearSources()
-        clearSuperseded()
     }
 
     /**
-     * Record [source] as applied with [events], with the [transactionActor] of a v2 object and,
-     * for a snapshot, the hashes it [supersedes]. Returns what it changed in the event table: nothing
-     * when the source was already applied unchanged.
-     * Idempotent: two overlapping snapshots each record their own (path, hash) rows and share event
-     * identities harmlessly.
+     * Record [source] as applied with [events], with the [transactionActor] of a v2 object. Returns
+     * what it changed in the event table: nothing when the source was already applied unchanged.
+     * Idempotent: two overlapping snapshots share event identities harmlessly.
      */
     @Transaction
     suspend fun ingest(
         source: MetadataSourceEntity,
         events: List<MetadataEventEntity>,
         transactionActor: MetadataTransactionActorEntity? = null,
-        supersedes: List<String> = emptyList(),
     ): IngestedEvents {
         val existing = source(source.path)
         if (existing?.fingerprint == source.fingerprint && existing.status == SourceStatus.APPLIED) {
@@ -232,10 +233,6 @@ interface MetadataProjectionDao {
         }
         val ingested = insertNewEvents(events)
         replaceSourceEvents(source.path, events)
-        if (source.kind == SourceKind.SNAPSHOT) {
-            deleteSupersededBy(source.path)
-            insertSuperseded(supersedes.map { MetadataSupersededEntity(source.path, it) })
-        }
         upsertSource(source.copy(status = SourceStatus.APPLIED))
         return ingested
     }

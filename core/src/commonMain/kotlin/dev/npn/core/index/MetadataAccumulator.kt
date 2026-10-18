@@ -112,9 +112,6 @@ internal class MetadataAccumulator(
 ) {
     private val dao = db.metadataProjectionDao()
 
-    /** What the snapshots earlier builds compacted into account for; see [SnapshotSupport]. */
-    private val snapshots = SnapshotSupport(dao)
-
     /** Judges whether the source set is safe to fold; see [SourceSetValidator]. */
     private val validator = SourceSetValidator(dao)
 
@@ -211,8 +208,7 @@ internal class MetadataAccumulator(
                         .firstOrNull()
                         ?.takeIf { staged.kind == SourceKind.OBJECT }
                         ?.let { MetadataTransactionActorEntity(it.event.dev, staged.contentHash) }
-                val supersedes = result.manifest?.supersedes.orEmpty()
-                val ingested = dao.ingest(source, result.events.map { it.toEventEntity() }, actor, supersedes)
+                val ingested = dao.ingest(source, result.events.map { it.toEventEntity() }, actor)
                 RecordedSource(unseen(result.events, ingested.inserted), ingested.enriched)
             }
 
@@ -245,7 +241,6 @@ internal class MetadataAccumulator(
     private class ReconcilePass(
         val projectionCleared: Boolean,
         val ingest: IngestBatch,
-        val sourceRemoved: Boolean,
     )
 
     /**
@@ -263,39 +258,33 @@ internal class MetadataAccumulator(
         val previous = dao.allSources()
         val files = entries.filter { !it.isDirectory }.associateBy { it.relPath }
         val ingest = ingestFiles(files.values)
-        val current = dao.allSources()
-        val carried = snapshots.carriedByListed(files.keys, current)
-        validator.unexplainedSourceLoss(previous, current, files, carried.hashes)?.let {
-            fail(WriteBlock.JOURNAL_DAMAGED, it)
-        }
-        // A compaction a restore undid: its objects are back and hold its events, so the index
-        // forgets the snapshot as a rebuild would.
-        carried.undone.forEach { dao.forgetSource(it) }
-        // A file gone that never read as a source (one a sync tool had only partly written) recorded
-        // nothing, and its row goes with it.
         val gone = previous.filter { it.path !in files }
-        gone.filter { it.status != SourceStatus.APPLIED }.forEach { dao.deleteSource(it.path) }
-
-        // A source gone with its events still on disk elsewhere (the objects an earlier build's
-        // compaction deleted, which its snapshot carries) shrinks nothing: its rows and events stay,
-        // and a caller's in-memory state still is their fold. Any other loss, or a forgotten
-        // snapshot, may have.
-        val sourceRemoved =
-            carried.undone.isNotEmpty() ||
-                gone.any { it.status == SourceStatus.APPLIED && it.contentHash !in carried.hashes }
-        return ReconcilePass(projectionCleared, ingest, sourceRemoved)
+        if (gone.isNotEmpty()) {
+            val listed =
+                dao.allSources().filter { it.status == SourceStatus.APPLIED && it.path in files }.mapTo(HashSet()) {
+                    it.path
+                }
+            validator.unheldEvents(gone.filter { it.status == SourceStatus.APPLIED }, listed)?.let {
+                fail(WriteBlock.JOURNAL_DAMAGED, it)
+            }
+            // Every event of a gone source is held by a listed one now (the objects an earlier
+            // build's compaction deleted, which its snapshot holds; a snapshot whose objects a
+            // restore put back), and a gone file that never read as a source recorded none. The
+            // index forgets each, as a rebuild would; the event table, and so the fold, stays as it was.
+            gone.forEach { dao.forgetSource(it.path) }
+        }
+        return ReconcilePass(projectionCleared, ingest)
     }
 
     suspend fun reconcile(currentState: FoldedState? = null): MetadataReconciliation {
         val pass = runReconcilePass()
 
-        // A shrunken event graph, a wiped projection, a re-ingested (mutated) existing source, a
-        // richer copy of a stored event, or a first load with no prior state all force a full
-        // refold. Only when every read this pass purely ADDED events onto an intact prior state is
-        // incremental projection sound.
+        // A wiped projection, a re-ingested (mutated) existing source, a richer copy of a stored
+        // event, or a first load with no prior state all force a full refold. Only when every read
+        // this pass purely ADDED events onto an intact prior state is incremental projection sound.
+        // A gone source changes no event: the pass fails, or another source holds all of its.
         val incremental =
-            currentState != null && !pass.projectionCleared &&
-                !pass.ingest.refold && !pass.sourceRemoved
+            currentState != null && !pass.projectionCleared && !pass.ingest.refold
 
         val state =
             when {
