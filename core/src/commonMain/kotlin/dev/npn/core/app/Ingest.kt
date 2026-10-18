@@ -23,11 +23,6 @@ interface IngestFacade {
         suggestedName: String,
     ): ImportOutcome
 
-    suspend fun importPdfBytes(
-        bytes: ByteArray,
-        suggestedName: String,
-    ): ImportOutcome
-
     suspend fun importImagesAsPdf(
         images: List<ByteArray>,
         suggestedName: String,

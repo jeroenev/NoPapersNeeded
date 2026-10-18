@@ -92,7 +92,7 @@ class DocumentLifecycleSequenceTest {
 
     private suspend fun apply(
         operation: Operation,
-        session: LibrarySession,
+        session: LibrarySessionImpl,
         rig: AppSessionRig,
         doc: ExpectedDocument,
         step: Int,
@@ -165,10 +165,10 @@ class DocumentLifecycleSequenceTest {
     }
 
     private suspend fun import(
-        session: LibrarySession,
+        session: LibrarySessionImpl,
         doc: ExpectedDocument,
     ) {
-        val outcome = session.ingest.importPdfBytes(doc.bytes, "scan.pdf")
+        val outcome = session.importPdfBytes(doc.bytes, "scan.pdf")
         if (doc.state == State.LIVE) {
             (outcome as ImportOutcome.Duplicate).existingDocId shouldBe doc.id
         } else {

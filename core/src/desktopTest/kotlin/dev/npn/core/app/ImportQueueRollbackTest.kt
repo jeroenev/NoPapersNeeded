@@ -43,7 +43,7 @@ class ImportQueueRollbackTest {
                 publication.armed = true
                 pdf.armed = true
 
-                val importing = async { rig.session.ingest.importPdfBytes(bytes, "returned.pdf") }
+                val importing = async { rig.session.importPdfBytes(bytes, "returned.pdf") }
                 publication.reached.await()
                 // reOcr does not take the journal lock; it can act on the import's optimistic row.
                 rig.session.ocr.reOcr(id)

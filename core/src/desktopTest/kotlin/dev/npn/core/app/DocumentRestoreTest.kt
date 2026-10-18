@@ -52,7 +52,7 @@ class DocumentRestoreTest {
             val id = rig.docId("a.pdf")
             deleteForGood(id)
 
-            rig.session.ingest
+            rig.session
                 .importPdfBytes(bytes, "a.pdf")
                 .shouldBeInstanceOf<ImportOutcome.Imported>()
             rig.session.meta.setField(id, FieldKeys.TITLE, "Back again")
@@ -75,7 +75,7 @@ class DocumentRestoreTest {
             rig.session.rescan()
             val id = rig.docId("a.pdf")
             deleteForGood(id)
-            rig.session.ingest
+            rig.session
                 .importPdfBytes(bytes, "a.pdf")
                 .shouldBeInstanceOf<ImportOutcome.Imported>()
 
@@ -182,7 +182,7 @@ class DocumentRestoreTest {
             val objects = rig.journalObjectCount()
 
             val imported =
-                rig.session.ingest
+                rig.session
                     .importPdfBytes(bytes, "a.pdf")
                     .shouldBeInstanceOf<ImportOutcome.Imported>()
 
@@ -381,7 +381,7 @@ class DocumentRestoreTest {
     /** Import a scan of [text] as `scan.pdf`, the name every scan gets; returns its document id. */
     private suspend fun importScan(text: String): String {
         val bytes = PdfFixtures.embeddedTextPdf(text)
-        rig.session.ingest
+        rig.session
             .importPdfBytes(bytes, "scan.pdf")
             .shouldBeInstanceOf<ImportOutcome.Imported>()
         return sha256Bytes(bytes)

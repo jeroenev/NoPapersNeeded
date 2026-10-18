@@ -46,7 +46,7 @@ class OcrFacadeTest {
         bytes: ByteArray,
         name: String = "a.pdf",
     ): String =
-        session.ingest
+        session
             .importPdfBytes(bytes, name)
             .shouldBeInstanceOf<ImportOutcome.Imported>()
             .docId

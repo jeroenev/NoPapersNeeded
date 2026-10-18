@@ -149,7 +149,7 @@ class BakeInPlaceTest {
             val superseded = rig.db.documentDao().getByDocId(before)
             val objects = rig.journalObjectCount()
 
-            rig.session.ingest.importPdfBytes(original, "a.pdf") shouldBe ImportOutcome.Duplicate(after, "a.pdf")
+            rig.session.importPdfBytes(original, "a.pdf") shouldBe ImportOutcome.Duplicate(after, "a.pdf")
 
             rig.fs.libraryPdfs() shouldContainExactly listOf("a.pdf")
             rig.journalObjectCount() shouldBe objects
@@ -168,7 +168,7 @@ class BakeInPlaceTest {
             val superseded = rig.db.documentDao().getByDocId(before)
             val objects = rig.journalObjectCount()
 
-            rig.session.ingest.importPdfBytes(original, "a.pdf") shouldBe
+            rig.session.importPdfBytes(original, "a.pdf") shouldBe
                 ImportOutcome.Failed(ImportFailure.SUPERSEDED)
 
             rig.fs.libraryPdfs().shouldBeEmpty()

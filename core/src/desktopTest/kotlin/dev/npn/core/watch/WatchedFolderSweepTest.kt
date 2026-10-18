@@ -81,11 +81,6 @@ class WatchedFolderSweepTest {
             return import(suggestedName)
         }
 
-        override suspend fun importPdfBytes(
-            bytes: ByteArray,
-            suggestedName: String,
-        ): ImportOutcome = error("not used")
-
         override suspend fun importImagesAsPdf(
             images: List<ByteArray>,
             suggestedName: String,

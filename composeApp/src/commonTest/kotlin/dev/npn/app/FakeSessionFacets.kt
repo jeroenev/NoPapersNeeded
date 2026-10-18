@@ -65,11 +65,6 @@ class FakeIngestFacade : IngestFacade {
         suggestedName: String,
     ): ImportOutcome = nextOutcome()
 
-    override suspend fun importPdfBytes(
-        bytes: ByteArray,
-        suggestedName: String,
-    ): ImportOutcome = nextOutcome()
-
     override suspend fun importImagesAsPdf(
         images: List<ByteArray>,
         suggestedName: String,

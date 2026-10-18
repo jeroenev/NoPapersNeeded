@@ -56,7 +56,7 @@ class PermanentDeleteTest {
                 val id = trashedInPlace(rig, "a.pdf")
                 rig.session.work.drainOcr()
                 var imported: ImportOutcome? = null
-                importing.next = { imported = rig.session.ingest.importPdfBytes(bytes, "a.pdf") }
+                importing.next = { imported = rig.session.importPdfBytes(bytes, "a.pdf") }
 
                 rig.session.docLifecycle.deleteDocPermanently(id)
 

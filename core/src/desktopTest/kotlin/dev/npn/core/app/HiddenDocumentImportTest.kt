@@ -53,7 +53,7 @@ class HiddenDocumentImportTest {
     @Test
     fun importingTheBytesOfALiveDocumentIsADuplicate() =
         withDocument { id, bytes ->
-            rig.session.ingest.importPdfBytes(bytes, "copy.pdf") shouldBe ImportOutcome.Duplicate(id, "a.pdf")
+            rig.session.importPdfBytes(bytes, "copy.pdf") shouldBe ImportOutcome.Duplicate(id, "a.pdf")
 
             rig.fs.libraryPdfs() shouldBe listOf("a.pdf")
         }
@@ -83,7 +83,7 @@ class HiddenDocumentImportTest {
         withDocument { id, bytes ->
             rig.session.docLifecycle.trashDoc(id)
 
-            rig.session.ingest
+            rig.session
                 .importPdfBytes(bytes, "zulu.pdf")
                 .shouldBeInstanceOf<ImportOutcome.Imported>()
 
@@ -251,7 +251,7 @@ class HiddenDocumentImportTest {
         }
 
     /** Import [bytes] under the name the document had. */
-    private suspend fun importAgain(bytes: ByteArray) = rig.session.ingest.importPdfBytes(bytes, "a.pdf")
+    private suspend fun importAgain(bytes: ByteArray) = rig.session.importPdfBytes(bytes, "a.pdf")
 
     private suspend fun row(id: String) =
         rig.db

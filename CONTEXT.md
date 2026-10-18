@@ -132,8 +132,8 @@ exactly one public home:
   `storagePath`), the auto-match rules (`AutoMatchRuleRepository`, `rules`) and
   saved views (`SavedViewRepository`, `savedViews`).
 - **Ingest** (`IngestFacade`) — getting documents into the library: `importPdf`,
-  `importPdfBytes`, `importImagesAsPdf`, `rescan`, plus the `scanProgress` and
-  `lastScanReport` flows.
+  `importImagesAsPdf`, `rescan`, plus the `scanProgress` and `lastScanReport`
+  flows.
 - **OCR ops** (`OcrFacade`) — text-recognition management per document: `reOcr`,
   `ocrVersions`, `setOcrEngine` (the single public home for the engine pin),
   `aiOcrOffer` and `ocrWithAi` (a transcription by the vision model, asked for

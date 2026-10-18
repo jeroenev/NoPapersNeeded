@@ -157,7 +157,7 @@ class RestoreTargetTest {
             val trashed = rig.docId("inbox/x.pdf")
             rig.session.docLifecycle.trashDoc(trashed)
             val imported =
-                rig.session.ingest
+                rig.session
                     .importPdfBytes(PdfFixtures.embeddedTextPdf("imported since"), "x.pdf")
                     .shouldBeInstanceOf<ImportOutcome.Imported>()
             imported.relPath shouldBe "inbox/x.pdf"

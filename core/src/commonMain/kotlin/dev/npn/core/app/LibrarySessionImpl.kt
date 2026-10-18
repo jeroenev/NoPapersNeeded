@@ -138,7 +138,8 @@ class LibrarySessionImpl internal constructor(
         suggestedName: String,
     ): ImportOutcome = owned { importing(suggestedName) { importService.importPdf(source, suggestedName) } }
 
-    override suspend fun importPdfBytes(
+    /** Import a PDF held in memory: for tests, which have no [ExternalSource] to hand. */
+    internal suspend fun importPdfBytes(
         bytes: ByteArray,
         suggestedName: String,
     ): ImportOutcome = owned { importing(suggestedName) { importService.importBytes(bytes, suggestedName) } }
