@@ -144,7 +144,7 @@ class OcrPipeline(
      * engine only when it can improve on the existing versions, then indexes the selected
      * (best or overridden) version.
      */
-    suspend fun processDoc(docId: String) {
+    internal suspend fun processDoc(docId: String) {
         val doc = documentDao.getByDocId(docId)
         if (doc == null || docId == EMPTY_SHA256) {
             // Nothing to do; drop any stray queue entry.

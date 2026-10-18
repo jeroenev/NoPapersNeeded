@@ -100,7 +100,7 @@ class Indexer(
 
     suspend fun rescan(
         metadataState: FoldedState,
-        onExternalMoves: (suspend (List<PendingOp>) -> Unit)? = null,
+        onExternalMoves: suspend (List<PendingOp>) -> Unit = {},
         onResurrected: suspend (List<Resurrected>) -> Unit = {},
     ): ScanReport {
         check(!documentPaths.collecting) { "A rescan does filesystem work, so it cannot run inside a projection" }
@@ -149,10 +149,8 @@ class Indexer(
             val present = if (gone.isEmpty()) indexable else indexable.filterNot { it.relPath in gone }
 
             _scanState.value = IndexProgress(IndexProgress.Phase.RECONCILING)
-            if (onExternalMoves != null) {
-                val moves = externalMoves.detect(metadataState, dbProjection, present, hashes)
-                if (moves.isNotEmpty()) onExternalMoves(moves)
-            }
+            val moves = externalMoves.detect(metadataState, dbProjection, present, hashes)
+            if (moves.isNotEmpty()) onExternalMoves(moves)
             val diskPaths = present.map { it.relPath }.toHashSet()
             val contentAt = knownHashes(present, changed, byPath, hashes)
 
