@@ -11,8 +11,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.core.settings.SettingsRepository
 import no_papers_needed.composeapp.generated.resources.Res
@@ -30,7 +32,8 @@ fun AlreadyRunningNotice(
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    LocaleProvider(settings) {
+    val snapshot by settings.settings.collectAsStateWithLifecycle()
+    LocaleProvider(snapshot.appLanguage) {
         NpnTheme {
             Surface(modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                 Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {

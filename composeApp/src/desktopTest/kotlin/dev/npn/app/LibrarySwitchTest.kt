@@ -36,7 +36,7 @@ import kotlin.test.Test
  */
 class LibrarySwitchTest : EnglishLocaleTest() {
     private val scope = CoroutineScope(Job())
-    private val settings = FakeSettingsRepository()
+    private var language by mutableStateOf<String?>(null)
     private val first = FakeLibrarySession()
     private var session by mutableStateOf<LibrarySession?>(first)
 
@@ -84,7 +84,7 @@ class LibrarySwitchTest : EnglishLocaleTest() {
     fun aLanguageChangeKeepsTheLibrarysScreens() {
         val (before, after, probe) =
             afterVisitingADocument { window, _ ->
-                settings.updateSettings { it.copy(appLanguage = "nl") }
+                language = "nl"
                 window.settle()
             }
         probe.cleared shouldBe false
@@ -190,7 +190,7 @@ class LibrarySwitchTest : EnglishLocaleTest() {
 
         @Composable
         private fun LibraryScreens() {
-            LocalizedApp(settings, session, scope) { library ->
+            LocalizedApp(language, session, scope) { library ->
                 shown = library
                 if (library != null) {
                     LibraryViewModelHost(library) {

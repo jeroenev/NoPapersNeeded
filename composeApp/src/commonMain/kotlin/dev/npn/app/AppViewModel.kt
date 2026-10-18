@@ -120,6 +120,16 @@ class AppViewModel(
             .distinctUntilChanged()
             .stateIn(viewModelScope, WhileSubscribedTimeout, env.settings.settings.value.useSafStorage)
 
+    /**
+     * The app's language override (null follows the platform's), which the whole UI is composed in.
+     * Its current value from the start, so a recreated window's first frame is already in it.
+     */
+    val appLanguage: StateFlow<String?> =
+        env.settings.settings
+            .map { it.appLanguage }
+            .distinctUntilChanged()
+            .stateIn(viewModelScope, WhileSubscribedTimeout, env.settings.settings.value.appLanguage)
+
     /** Whether AI is configured, for the shell's AI entries. */
     val aiConfigured: StateFlow<Boolean> =
         env.settings

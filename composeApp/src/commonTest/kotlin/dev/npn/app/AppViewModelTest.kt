@@ -312,6 +312,20 @@ class AppViewModelTest : MainDispatcherTest() {
                 .useSafStorage shouldBe true
         }
 
+    /** A window recreated with a language override composes in it from its first frame. */
+    @Test
+    fun theAppLanguageIsTheSettingsFromTheStart() =
+        runTest(dispatcher) {
+            val env = env().apply { settings.updateSettings { it.copy(appLanguage = "nl") } }
+            val vm = model(env)
+            vm.appLanguage.value shouldBe "nl"
+
+            collecting(vm.appLanguage)
+            env.settings.edit { it.copy(appLanguage = null) }
+            runCurrent()
+            vm.appLanguage.value shouldBe null
+        }
+
     @Test
     fun aiConfiguredFollowsSettingsFromTheStart() =
         runTest(dispatcher) {

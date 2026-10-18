@@ -112,7 +112,7 @@ class LibraryLifecycleTestActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             val scope = rememberCoroutineScope()
-            LocalizedApp(LifecycleTestState.settings, LifecycleTestState.session, scope) { library ->
+            LocalizedApp(null, LifecycleTestState.session, scope) { library ->
                 if (library != null) {
                     SideEffect { LifecycleTestState.shown = library }
                     key(library) {
@@ -134,7 +134,6 @@ class LibraryLifecycleTestActivity : ComponentActivity() {
 }
 
 internal object LifecycleTestState {
-    val settings = FakeSettingsRepository()
     var session by mutableStateOf<LibrarySession?>(null)
 
     @Volatile var shown: LibraryUi? = null

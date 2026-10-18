@@ -52,7 +52,6 @@ import dev.npn.app.ui.onboarding.RestoreFailedScreen
 import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
-import dev.npn.core.settings.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.receiveAsFlow
 import no_papers_needed.composeapp.generated.resources.Res
@@ -126,14 +125,14 @@ internal class LibraryViewModelStores : ViewModel() {
 }
 
 /**
- * [content] in the app's language ([LocaleProvider]), handed the open library's [LibraryUi], or
+ * [content] in the app's [language] ([LocaleProvider]), handed the open library's [LibraryUi], or
  * null while no library is open. A change of language rebuilds everything below [LocaleProvider],
  * so what must outlive it is remembered here, above it, for as long as [session] is open. Once the
  * UI of a session that left is gone, its screens' viewmodels are cleared.
  */
 @Composable
 internal fun LocalizedApp(
-    settings: SettingsRepository,
+    language: String?,
     session: LibrarySession?,
     scope: CoroutineScope,
     stores: LibraryViewModelStores = viewModel { LibraryViewModelStores() },
@@ -142,7 +141,7 @@ internal fun LocalizedApp(
     val library = session?.let { rememberLibraryUi(it, scope, stores.of(it), stores.handoverOf(it)) }
     // Side effects run once the composition has let go of what it no longer shows.
     SideEffect { stores.keepOnly(session) }
-    LocaleProvider(settings) { content(library) }
+    LocaleProvider(language) { content(library) }
 }
 
 @Composable
@@ -178,7 +177,8 @@ private fun AppRoot(
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val useSaf by vm.useSafStorage.collectAsStateWithLifecycle()
-    LocalizedApp(env.settings, (state as? AppState.Open)?.session, env.appScope) { library ->
+    val language by vm.appLanguage.collectAsStateWithLifecycle()
+    LocalizedApp(language, (state as? AppState.Open)?.session, env.appScope) { library ->
         AppSurface {
             val snackbar = rememberSnackbarMessages(vm.messages)
             // Files dropped on the desktop window import into whichever library is open, from any screen.

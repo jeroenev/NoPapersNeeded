@@ -4,7 +4,10 @@ package dev.npn.app
 
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.ImageComposeScene
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -29,7 +32,7 @@ import kotlin.test.Test
 /** A change of the app's language re-renders the app in it, and loses nothing the user has not saved. */
 class LanguageChangeTest : EnglishLocaleTest() {
     private val scope = CoroutineScope(Job())
-    private val settings = FakeSettingsRepository()
+    private var language by mutableStateOf<String?>(null)
     private val session = FakeLibrarySession()
 
     @AfterTest
@@ -43,7 +46,7 @@ class LanguageChangeTest : EnglishLocaleTest() {
             var drafts: DocumentDrafts? = null
             val scene =
                 scene {
-                    LocalizedApp(settings, session, scope) { library ->
+                    LocalizedApp(language, session, scope) { library ->
                         if (library != null) {
                             DocumentDraftHost(library.drafts) { drafts = LocalDocumentDrafts.current }
                         }
@@ -54,7 +57,7 @@ class LanguageChangeTest : EnglishLocaleTest() {
                 val before = checkNotNull(drafts)
                 before.field("doc-1", FieldKeys.TITLE, "Unsaved title", persisted = null)
 
-                settings.updateSettings { it.copy(appLanguage = "nl") }
+                language = "nl"
                 settle()
 
                 drafts shouldBeSameInstanceAs before
@@ -70,7 +73,7 @@ class LanguageChangeTest : EnglishLocaleTest() {
             var subtree: Any? = null
             val scene =
                 scene {
-                    LocalizedApp(settings, session, scope) { library ->
+                    LocalizedApp(language, session, scope) { library ->
                         shown = library
                         subtree = remember { Any() }
                         if (library != null) {
@@ -92,7 +95,7 @@ class LanguageChangeTest : EnglishLocaleTest() {
                 before.nav.navigate(SETTINGS)
                 settle()
 
-                settings.updateSettings { it.copy(appLanguage = "nl") }
+                language = "nl"
                 settle()
 
                 // The language's key did rebuild what is under it.

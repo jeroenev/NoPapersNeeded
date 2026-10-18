@@ -3,11 +3,7 @@ package dev.npn.app.ui.common
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ProvidedValue
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dev.npn.core.settings.SettingsRepository
-import dev.npn.core.settings.SettingsSnapshot
 
 /**
  * CompositionLocal used to override the locale that Compose resource lookups
@@ -24,16 +20,16 @@ expect object LocalAppLocale {
 }
 
 /**
- * Applies the [SettingsRepository]'s app-language override to the whole subtree. Changing the
- * language rebuilds the subtree via [key], so resource lookups re-resolve against the new locale.
+ * Applies the app-language override [language] (null follows the platform's) to the whole subtree.
+ * Changing the language rebuilds the subtree via [key], so resource lookups re-resolve against the
+ * new locale. The caller passes the settings' current value from the first frame on, so a recreated
+ * window composes once, in its language, rather than once in the platform's and again in its own.
  */
 @Composable
 fun LocaleProvider(
-    settings: SettingsRepository,
+    language: String?,
     content: @Composable () -> Unit,
 ) {
-    val snapshot: SettingsSnapshot? by settings.settings.collectAsStateWithLifecycle(initialValue = null)
-    val language = snapshot?.appLanguage
     CompositionLocalProvider(LocalAppLocale provides language) {
         key(language) { content() }
     }
