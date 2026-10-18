@@ -10,6 +10,8 @@ import dev.npn.core.index.MetadataAccumulator
 import dev.npn.core.index.indexTest
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
+import dev.npn.core.journal.PendingOp
+import dev.npn.core.journal.journalObjects
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
@@ -20,7 +22,10 @@ import java.io.IOException
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 
-/** A trash, restore or delete whose journal commit fails leaves the file and the row as they were. */
+/**
+ * A trash, restore or delete whose journal commit fails leaves the file and the row as they were; a
+ * relink fails only while nothing is published.
+ */
 class LifecycleCommitFailureTest {
     /**
      * A trash whose commit fails leaves nothing behind: the PDF is back where it was and so is its
@@ -132,6 +137,45 @@ class LifecycleCommitFailureTest {
                 .trashed
                 .shouldBeTrue()
         }
+
+    /** A relink whose publish fails changed nothing, and says so: a bake then puts its original back. */
+    @Test
+    fun aRelinkWhosePublishFailsThrows() =
+        withLifecycle { lifecycle ->
+            val (original, replacement) = twoDocuments(lifecycle)
+
+            lifecycle.faults.publishFailures = 1
+            assertFailsWith<VerifiedPublicationFailedException> {
+                lifecycle.coordinator.commitAndRescan(listOf(PendingOp.relink(original, replacement)))
+            }
+
+            lifecycle.rig.fs
+                .journalObjects()
+                .shouldBeEmpty()
+        }
+
+    /**
+     * Once a relink is published it stands, so a failure to project it is no failure of the call: a
+     * bake must not put back an original the journal has already superseded.
+     */
+    @Test
+    fun aRelinkWhoseProjectionFailsAfterPublishingStands() =
+        withLifecycle(statFailuresOfObjects = 1) { lifecycle ->
+            val (original, replacement) = twoDocuments(lifecycle)
+
+            lifecycle.coordinator.commitAndRescan(listOf(PendingOp.relink(original, replacement))) shouldBe null
+
+            lifecycle.rig.fs.journalObjects() shouldHaveSize 1
+            lifecycle.coordinator.canWrite().shouldBeTrue()
+        }
+
+    private suspend fun twoDocuments(lifecycle: Lifecycle): Pair<String, String> {
+        val rig = lifecycle.rig
+        rig.writePdf("original.pdf", "original")
+        rig.writePdf("replacement.pdf", "replacement")
+        lifecycle.coordinator.rescan()
+        return rig.fs.sha256("original.pdf") to rig.fs.sha256("replacement.pdf")
+    }
 
     /**
      * A [DocLifecycleImpl] and its coordinator over an [IndexRig] whose journal publishes fail as

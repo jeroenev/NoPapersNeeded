@@ -570,27 +570,12 @@ class JournalCoordinator internal constructor(
      * this against every other write keeps the write, the fold it is built on and the rescan that
      * projects it in one order.
      *
-     * Returns the resulting [ScanReport]. Refreshes the folded state from the store after the
-     * rescan.
+     * Throws only before publication, when nothing changed (a bake then restores its original
+     * file). Once the transaction is published the change stands: a projection or rescan failure is
+     * dealt with as for any commit (writes latched, the projection rebuilt from the store) and
+     * logged, and the call returns null instead of the [ScanReport].
      */
-    suspend fun commitAndRescan(ops: List<PendingOp>): ScanReport =
-        locked {
-            ensureWritable()
-            val current = foldedState()
-            withContext(NonCancellable) {
-                // Fold the freshly-written events into the live state up front. reconcile()'s fast
-                // path returns the state unchanged when it read no new sources (the events were just
-                // recorded directly), so the projection rescan must see them here.
-                projectAndRescan(current, writeTransaction(ops))
-            }
-        }
-
-    /**
-     * Commit a filesystem change's relink. Once its transaction is durable, the change stands:
-     * projection or rescan failures are recovered and logged rather than inviting a byte rollback.
-     * Throws only before publication, when the caller must restore its original file.
-     */
-    internal suspend fun commitAndRescanStanding(ops: List<PendingOp>) {
+    suspend fun commitAndRescan(ops: List<PendingOp>): ScanReport? =
         locked {
             ensureWritable()
             val current = foldedState()
@@ -601,7 +586,6 @@ class JournalCoordinator internal constructor(
                 }
             }
         }
-    }
 
     private suspend fun projectAndRescan(
         current: FoldedState,

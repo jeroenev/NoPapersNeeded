@@ -33,7 +33,7 @@ internal class BakeRelink(
             enrichment.enrichedAt(original)?.let { enrichment.markEnriched(AiEnrichedEntity(baked, it)) }
         }
         // The baked bytes stand once the relink is published, even if the disposable index fails.
-        coordinator.commitAndRescanStanding(listOf(PendingOp.relink(original, baked)))
+        coordinator.commitAndRescan(listOf(PendingOp.relink(original, baked)))
         log.runLogged("Indexing the text of $baked") { ocr.reselect(baked) }
     }
 }

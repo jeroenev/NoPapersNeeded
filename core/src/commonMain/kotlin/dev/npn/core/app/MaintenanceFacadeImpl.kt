@@ -40,7 +40,9 @@ internal class MaintenanceFacadeImpl(
     ) = lifetime.owned {
         // The relink's fold carries the old document's metadata onto the new id and marks the old
         // one superseded, which only a rescan projects; commitAndRescan runs both under the lock.
-        scanReports.value = coordinator.commitAndRescan(listOf(PendingOp.relink(oldDocId, newDocId)))
+        // Its report is null when the relink stands but the rescan failed (logged); the last stays.
+        val report = coordinator.commitAndRescan(listOf(PendingOp.relink(oldDocId, newDocId)))
+        if (report != null) scanReports.value = report
     }
 
     override suspend fun splitPdf(
