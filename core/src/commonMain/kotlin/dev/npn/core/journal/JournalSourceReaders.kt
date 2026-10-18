@@ -43,13 +43,11 @@ object StorageV1Reader {
                 val event = EventDecoderRegistry.decode(line, allowMissingV1 = true)
                 if (event.event.op is JournalOp.Unknown) {
                     unsupported = "Legacy source contains unknown operation ${event.event.op.wire}"
-                    diagnostics += JournalDiagnostic(index + 1, "Unknown operation ${event.event.op.wire}")
                 } else {
                     events += event
                 }
             } catch (e: UnsupportedEventVersionException) {
                 unsupported = "Legacy source contains unsupported event version ${e.version}"
-                diagnostics += JournalDiagnostic(index + 1, e.message ?: "Unsupported event version")
             } catch (e: Exception) {
                 diagnostics += JournalDiagnostic(index + 1, e.message ?: "Malformed journal event")
             }
