@@ -217,14 +217,18 @@ class JournalCoordinator internal constructor(
      */
     suspend fun adoptSettings(groups: List<Map<String, String>>): Boolean {
         if (groups.all { group -> group.keys.any(syncedSettings::written) }) return true
-        if (writeBlockReason != null) return false
-        commitBuilt { state ->
-            val held = state.settings()
-            groups
-                .filter { group -> group.keys.none { it in held } }
-                .flatMap { group -> group.map { (key, value) -> PendingOp.settingSet(key, value) } }
+        return locked {
+            // Read under the lock: a pass failing meanwhile blocks writes, and that is a refusal.
+            if (writeBlockReason != null) return@locked false
+            val current = foldedState()
+            val held = current.settings()
+            val ops =
+                groups
+                    .filter { group -> group.keys.none { it in held } }
+                    .flatMap { group -> group.map { (key, value) -> PendingOp.settingSet(key, value) } }
+            if (ops.isNotEmpty()) commitOnto(current, ops)
+            true
         }
-        return true
     }
 
     /** The folded state, replaying it from the accumulator the first time it is actually needed. */
