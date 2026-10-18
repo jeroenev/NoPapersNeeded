@@ -62,14 +62,15 @@ pluginManager.withPlugin("org.jetbrains.kotlin.jvm") {
     }
 }
 
-// The app and the baseline-profile test app also get the catalog's SDK levels and the test runner
-// here; the multiplatform libraries get their SDK levels from npn.kmp-module.
+// The app and the baseline-profile test app also get the catalog's SDK levels, the test runner and
+// the one lint configuration here; the multiplatform libraries get theirs from npn.kmp-module.
 listOf("com.android.application", "com.android.test").forEach { android ->
     pluginManager.withPlugin(android) {
         val extension = extensions.getByType<CommonExtension>()
         extension.compileSdk = levels.compileSdk
         extension.defaultConfig.minSdk = levels.minSdk
         extension.defaultConfig.testInstrumentationRunner = testRunner
+        extension.lint.lintConfig = rootProject.file("config/lint/lint.xml")
         when (extension) {
             is ApplicationExtension -> extension.defaultConfig.targetSdk = levels.targetSdk
             is TestExtension -> extension.defaultConfig.targetSdk = levels.targetSdk

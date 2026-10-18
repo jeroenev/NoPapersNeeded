@@ -15,7 +15,8 @@ val catalog = extensions.getByType<VersionCatalogsExtension>().named("libs")
 
 // The one lint configuration, set on both lint extensions: the project's (the desktop lint `check`
 // runs here) and the Android target's (its lint, and androidApp's lintDebug through
-// checkDependencies). Neither reaches the other's lint model.
+// checkDependencies). Neither reaches the other's lint model. The app modules get the same file
+// from npn.toolchain.
 val lintXml = rootProject.file("config/lint/lint.xml")
 extensions.configure<com.android.build.api.dsl.Lint> {
     lintConfig = lintXml

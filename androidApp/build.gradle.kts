@@ -36,11 +36,10 @@ android {
         versionName = npnVersion.name
     }
     // `lintDebug` also lints core and composeApp (checkDependencies), so one report covers the
-    // Android code of the whole app. Errors fail the build.
+    // Android code of the whole app. Errors fail the build; the configuration is npn.toolchain's.
     lint {
         checkDependencies = true
         abortOnError = true
-        lintConfig = rootProject.file("config/lint/lint.xml")
     }
     // The app picks its language in its own settings, so an App Bundle install needs every
     // language's resources, not only the device's.
