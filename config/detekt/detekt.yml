@@ -59,6 +59,7 @@ style:
     max: 4
     excludeGuardClauses: true
   MaxLineLength:
+    # ktlint enforces the same limit (.editorconfig) on code, but not on comments; this covers both.
     maxLineLength: 120
   ForbiddenMethodCall:
     # Needs type resolution, so only the typed run checks it. Tests may block and print.
@@ -188,8 +189,6 @@ exceptions:
     excludes: *testSources
   TooGenericExceptionCaught:
     active: false
-  SwallowedException:
-    active: true
   ThrowingExceptionsWithoutMessageOrCause:
     active: false
   # An exception as an object shares one stack trace and one mutable cause between every throw;
@@ -198,6 +197,9 @@ exceptions:
   ObjectExtendsThrowable:
     active: true
   ErrorUsageWithThrowable:
+    active: true
+  # A TODO() call compiles and throws at runtime; ForbiddenComment only sees comments.
+  NotImplementedDeclaration:
     active: true
 
 config:

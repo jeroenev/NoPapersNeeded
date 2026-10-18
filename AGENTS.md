@@ -124,7 +124,8 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   PR. Prefer the real fix.
 - `LongMethod` ignores `@Composable` functions: their length measures UI-tree depth, not
   complexity.
-- `ForbiddenComment` rejects `TODO:`, `FIXME` and `STOPSHIP:`: track unfinished work as an issue.
+- `ForbiddenComment` rejects `TODO:`, `FIXME` and `STOPSHIP:`, and `NotImplementedDeclaration` a
+  `TODO()` call: track unfinished work as an issue.
 - Typed `SuspendFunInFinallySection` (main sources): a `finally` that suspends does its cleanup in
   `withContext(NonCancellable)`, or a cancelled coroutine skips it. Where the enclosing block or the
   callee already is NonCancellable, suppress the hit with that reason.

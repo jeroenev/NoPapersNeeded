@@ -57,9 +57,11 @@ if (typedCompilations.isNotEmpty()) {
 }
 
 tasks.withType<Detekt>().configureEach {
-    // Nothing reads an HTML or SARIF report; findings are read from the console.
+    // Nothing reads a report file; findings are read from the console.
     reports {
+        checkstyle.required.set(false)
         html.required.set(false)
+        markdown.required.set(false)
         sarif.required.set(false)
     }
     if (name in typedTasks) {
