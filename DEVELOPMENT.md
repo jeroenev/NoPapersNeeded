@@ -134,8 +134,7 @@ listed in `config/localization-hardcoded-allowlist.txt`.
 Android lint runs with `./gradlew :androidApp:lintDebug` (CI runs it too). It lints the app and,
 through `checkDependencies`, the Android code of `core` and `composeApp`; an error fails the build.
 `config/lint/lint.xml` configures it for every module (generated Room code and third-party jars
-are left out, and version-update checks are Dependabot's), and `androidApp/lint-baseline.xml`
-holds the findings that predate it; fix new ones rather than adding to it. The multiplatform
+are left out, and version-update checks are Dependabot's); there is no baseline. The multiplatform
 modules also lint their own Android and desktop code as part of `check`.
 `./gradlew checkFieldTypeBranches` (also part of `check`) keeps document fields registry data: it
 fails on code that branches on a `FieldType` constant outside the few files allowed to (canonical

@@ -70,8 +70,8 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
 - Formatting and lint: `./gradlew spotlessCheck detekt`, then `./gradlew detektTyped` (see
   Detekt below; it compiles first, so keep it a separate invocation from spotless).
 - Android lint: `./gradlew :androidApp:lintDebug` lints the app and, through `checkDependencies`,
-  core's and composeApp's Android code. Errors fail it; `androidApp/lint-baseline.xml`
-  grandfathers old findings (never add to it) and `config/lint/lint.xml` is the one configuration.
+  core's and composeApp's Android code. Errors fail it; there is no baseline, and
+  `config/lint/lint.xml` is the one configuration.
 - Fast UI iteration: `mise hot` (Compose Hot Reload on desktop). Android-only paths
   (scanner, share intents, WorkManager) need a device: `mise deploy`.
 - CI (`.github/workflows/ci.yml`) runs: shellcheck (hooks, mise tasks, `.github/scripts`) →

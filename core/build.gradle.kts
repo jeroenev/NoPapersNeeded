@@ -60,7 +60,7 @@ kotlin {
             implementation(libs.koog.http.client.ktor)
         }
         androidMain.dependencies {
-            implementation("net.java.dev.jna:jna:${libs.versions.jna.get()}@aar")
+            implementation(project.dependencies.variantOf(libs.jna) { artifactType("aar") })
             implementation(libs.androidx.core.ktx)
             implementation(libs.androidx.documentfile)
             implementation(libs.pdfbox.android)

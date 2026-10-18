@@ -36,13 +36,18 @@ android {
         versionName = npnVersion.name
     }
     // `lintDebug` also lints core and composeApp (checkDependencies), so one report covers the
-    // Android code of the whole app. Errors fail the build; lint-baseline.xml grandfathers the
-    // findings that were there when lint joined CI (do not add to it).
+    // Android code of the whole app. Errors fail the build.
     lint {
         checkDependencies = true
         abortOnError = true
         lintConfig = rootProject.file("config/lint/lint.xml")
-        baseline = file("lint-baseline.xml")
+    }
+    // The app picks its language in its own settings, so an App Bundle install needs every
+    // language's resources, not only the device's.
+    bundle {
+        language {
+            enableSplit = false
+        }
     }
     packaging {
         resources {
