@@ -1,5 +1,6 @@
 package dev.npn.core.ai
 
+import ai.koog.prompt.llm.LLMCapability
 import dev.npn.core.db.TempIndexDb
 import dev.npn.core.settings.SettingsRepositoryImpl
 import dev.npn.core.settings.toAiConfig
@@ -141,10 +142,8 @@ class LiveEndpointProbeTest {
             "No usable endpoint: configure Settings > AI assistant, or set ${ENABLE_VAR}_MODEL / " +
                 "${ENABLE_VAR}_KEY / ${ENABLE_VAR}_BASE_URL / ${ENABLE_VAR}_PROVIDER."
         }
-        println(
-            "PROBE endpoint provider=${config.provider} model=${config.model} " +
-                "responsesApi=${AiRuntime.usesResponsesApi(config.provider, config.model)}",
-        )
+        val responsesApi = AiRuntime.build(config).use { it.model.supports(LLMCapability.OpenAIEndpoint.Responses) }
+        println("PROBE endpoint provider=${config.provider} model=${config.model} responsesApi=$responsesApi")
         return config
     }
 

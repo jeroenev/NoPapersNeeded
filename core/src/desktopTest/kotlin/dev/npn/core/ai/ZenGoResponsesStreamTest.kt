@@ -3,6 +3,7 @@ package dev.npn.core.ai
 import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.executor.clients.openai.OpenAIResponsesParams
 import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
+import ai.koog.prompt.llm.LLMCapability
 import ai.koog.prompt.streaming.StreamFrame
 import dev.npn.core.util.runCatchingCancellable
 import io.kotest.matchers.collections.shouldContainExactly
@@ -33,7 +34,7 @@ class ZenGoResponsesStreamTest {
             "gpt-5.1-codex-max",
             "openai/gpt-5",
         ).forEach { model ->
-            AiRuntime.usesResponsesApi(AiProvider.OPENCODE_GO, model) shouldBe true
+            declaresResponsesApi(AiProvider.OPENCODE_GO, model) shouldBe true
         }
     }
 
@@ -49,7 +50,7 @@ class ZenGoResponsesStreamTest {
             "grok-4.5",
             "",
         ).forEach { model ->
-            AiRuntime.usesResponsesApi(AiProvider.OPENCODE_GO, model) shouldBe false
+            declaresResponsesApi(AiProvider.OPENCODE_GO, model) shouldBe false
         }
     }
 
@@ -58,7 +59,7 @@ class ZenGoResponsesStreamTest {
         // Only the OpenCode Go gateway splits its models across the two APIs. api.openai.com serves
         // both, and a self-hosted OpenAI-compatible server named "gpt-..." serves only completions.
         listOf(AiProvider.OPENAI, AiProvider.CUSTOM).forEach { provider ->
-            AiRuntime.usesResponsesApi(provider, "gpt-5.6-luna") shouldBe false
+            declaresResponsesApi(provider, "gpt-5.6-luna") shouldBe false
         }
     }
 
@@ -75,6 +76,18 @@ class ZenGoResponsesStreamTest {
             )
         params.shouldBeInstanceOf<OpenAIResponsesParams>().reasoning?.effort shouldBe ReasoningEffort.LOW
     }
+
+    /**
+     * Whether the runtime declares [model] on [provider] to Koog with the Responses API endpoint,
+     * which is what routes its calls there instead of to chat/completions.
+     */
+    private fun declaresResponsesApi(
+        provider: AiProvider,
+        model: String,
+    ): Boolean =
+        AiRuntime.build(AiConfig(enabled = true, provider = provider, apiKey = "unused", model = model)).use {
+            it.model.supports(LLMCapability.OpenAIEndpoint.Responses)
+        }
 
     private fun zenGoConfig(model: String) =
         AiConfig(enabled = true, provider = AiProvider.OPENCODE_GO, apiKey = "unused", model = model)

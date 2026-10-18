@@ -41,8 +41,6 @@ import io.ktor.client.HttpClient
  * @param reasoning the params for one [AiReasoningLevel] other than [AiReasoningLevel.DEFAULT] on a
  *  model, in a tool loop or not; null leaves the endpoint's default (see [AiRuntime.reasoningParams]).
  * @param ocrParams the params of one page transcription (see [AiRuntime.ocrParams]).
- * @param responsesApi whether a model is called through OpenAI's Responses API rather than
- *  chat/completions (see [AiRuntime.usesResponsesApi]).
  * @param transport derives the Ktor client the provider's requests go through from the runtime's
  *  base one, for a wire requirement of the provider's own; never in place of what the base has.
  */
@@ -51,7 +49,6 @@ internal class ProviderClientFactory(
     val capabilities: (AiConfig) -> List<LLMCapability>,
     val reasoning: (model: String, level: AiReasoningLevel, toolLoop: Boolean) -> LLMParams? = { _, _, _ -> null },
     val ocrParams: () -> LLMParams = { LLMParams() },
-    val responsesApi: (model: String) -> Boolean = { false },
     val transport: (HttpClient) -> HttpClient = { it },
     val client: (apiKey: String, baseUrl: String, model: LLModel, http: KoogHttpClient.Factory) -> LLMClient,
 )
@@ -118,7 +115,6 @@ internal object AiProviderClients {
                 OpenAIChatParams(reasoningEffort = level.toReasoningEffort())
             }
         },
-        responsesApi = responsesApi,
         transport = transport,
     ) { apiKey, baseUrl, _, http ->
         TolerantOpenAILLMClient(

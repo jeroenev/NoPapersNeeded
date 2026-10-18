@@ -119,16 +119,6 @@ internal class AiRuntime(
         }
 
         /**
-         * Whether this model must be called through OpenAI's Responses API rather than
-         * `chat/completions`: only an OpenAI-family model on [AiProvider.OPENCODE_GO]
-         * ([ProviderClientFactory.responsesApi]).
-         */
-        internal fun usesResponsesApi(
-            provider: AiProvider,
-            model: String,
-        ): Boolean = AiProviderClients.of(provider).responsesApi(model)
-
-        /**
          * Params for the one-shot AI-edit/suggestion prompts, from [AiConfig.reasoningEdit].
          * These run without tools, so every provider mapping is safe to apply.
          */
