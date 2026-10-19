@@ -6,6 +6,7 @@ import dev.npn.core.db.FtsDocumentEntity
 import dev.npn.core.db.FtsRows
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.TagEntity
+import dev.npn.core.db.missingSentinel
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.JournalEvent
@@ -147,6 +148,7 @@ internal class FoldProjection(
      *   or deleted but the document's own bytes are back at its current or original path, the file
      *   wins (flags and missing cleared) and the document is reported, so the caller can record a
      *   restore; until one is recorded, any other fold hides it again (see [FoldPass.lifecycle]).
+     *   A document in the trash that has no row gets one ([trashedRow]).
      * - Relinks: the OLD doc is marked deleted/superseded. The NEW doc shows its own metadata, which
      *   the relink's transaction copied onto it ([FoldedState.relinkOps]); no view reads a predecessor.
      * - FTS: after tags/props, each affected doc's metadata-derived fts columns (fileName, tags,
@@ -165,6 +167,8 @@ internal class FoldProjection(
             journalDocs.addAll(scope.docs)
         } else {
             journalDocs.addAll(state.docsWithMetadata())
+            // A document in the trash has a row whether or not a rescan ever listed its file.
+            journalDocs.addAll(state.trashedDocs())
             for (pm in documentDao.allPathsAndMeta()) journalDocs.add(pm.docId)
             // A deleted row is in neither list above, yet a rescan must project it too: when its
             // own bytes are back on disk (contentAt knows them), the fold resurrects the document,
@@ -184,7 +188,7 @@ internal class FoldProjection(
 
         val pass = FoldPass(state, scope, preloaded, changes, work)
         for (doc in journalDocs) {
-            val row = preloaded.rows[doc] ?: continue
+            val row = preloaded.rows[doc] ?: trashedRow(state, doc) ?: continue
             pass.project(doc, row)
         }
         flushChanges(changes)
@@ -192,6 +196,33 @@ internal class FoldProjection(
         // stale tags never linger in tag lists (see TagDao.pruneUnreferenced).
         tagDao.pruneUnreferenced()
         return pass.resurrected
+    }
+
+    /**
+     * The row a document in the trash ([FoldedState.trashedDocs]) gets when the index has none. Rows
+     * otherwise come only from the files a rescan lists, which never include the trash, so a rebuilt
+     * index, or a device that never saw the file before another one trashed it, would show an empty
+     * Trash for documents the journal and the trash folder hold. It waits at its sentinel, as a
+     * hidden row does, named after the path it was trashed from (or after its id, when that was no
+     * document path: a missing row's sentinel), with no stat: no file is known to hold its bytes
+     * until a restore moves the trash entry that does (and records that entry's stat).
+     */
+    private fun trashedRow(
+        state: FoldedState,
+        doc: String,
+    ): DocumentEntity? {
+        if (!state.isTrashed(doc) || state.resolveDocId(doc) != doc) return null
+        val origPath = state.trashOrigPath(doc) ?: return null
+        return DocumentEntity(
+            docId = doc,
+            relPath = missingSentinel(doc),
+            fileName =
+                NpnPaths.fileName(origPath).takeIf { NpnPaths.isDocumentPath(origPath) }
+                    ?: "${doc.take(TRASHED_NAME_ID_CHARS)}.pdf",
+            size = 0,
+            mtime = 0,
+            addedAt = state.trashedAtMillis(doc) ?: 0,
+        )
     }
 
     /**
@@ -327,7 +358,8 @@ internal class FoldProjection(
                     deleted = lifecycle.deleted,
                     missing = lifecycle.missing,
                 )
-            val rowChanged = projectedRow != row
+            // A row the pass made (trashedRow) is new however it compares.
+            val rowChanged = projectedRow != row || doc !in preloaded.rows
             if (rowChanged) changes.docRows.add(projectedRow)
             work.rows[doc] = projectedRow
 
@@ -431,3 +463,6 @@ internal class FoldProjection(
                 ?: origPath?.takeIf { contentAt[it] == doc && it !in holders }
     }
 }
+
+/** How much of its id names a trashed document whose trash recorded no document path. */
+private const val TRASHED_NAME_ID_CHARS = 12

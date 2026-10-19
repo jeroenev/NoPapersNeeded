@@ -1,5 +1,7 @@
 package dev.npn.core.index
 
+import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldNotContain
@@ -65,6 +67,46 @@ class ImportDuplicateTest {
             watched.calls("sha256") shouldNotContain "sha256 a.pdf"
             imported.docId shouldBe id
             rig.fs.sha256(imported.relPath) shouldBe id
+        }
+
+    /**
+     * Another process writes other bytes over the import's file after the import moved it into place
+     * and before it wrote the row. The row records the stat of the bytes the import placed, not the
+     * replacement's, so the next rescan hashes the file and indexes the replacement there, instead of
+     * taking it for the imported document for good.
+     */
+    @Test
+    fun aFileWrittenOverTheImportBeforeItsRowIsNotTakenForTheDocument() =
+        runTest {
+            val overwriting =
+                object : LibraryFileSystem by rig.fs {
+                    override suspend fun move(
+                        fromRelPath: String,
+                        toRelPath: String,
+                    ) {
+                        rig.fs.move(fromRelPath, toRelPath)
+                        if (fromRelPath.startsWith("${NpnPaths.TMP_DIR}/")) {
+                            rig.writePdf(toRelPath, "bravo")
+                            Files.setLastModifiedTime(rig.libRoot.resolve(toRelPath), FileTime.fromMillis(LATER))
+                        }
+                    }
+                }
+            val racing =
+                ImportService(overwriting, rig.db, rig.deviceDb.ocrQueueDao(), rig.clock, serialize = unserialized)
+
+            val imported =
+                racing.importBytes("alpha".encodeToByteArray(), "a.pdf").shouldBeInstanceOf<ImportResult.Imported>()
+            rig.rescan()
+
+            val replacement = sha256Bytes("bravo".encodeToByteArray())
+            rig.db
+                .documentDao()
+                .getByRelPath(imported.relPath)
+                ?.docId shouldBe replacement
+            rig.db
+                .documentDao()
+                .requireByDocId(imported.docId)
+                .missing shouldBe true
         }
 
     /** Index a PDF of [content] at [relPath] and forget the calls that took; returns its document id. */

@@ -1,6 +1,7 @@
 package dev.npn.core.app
 
 import dev.npn.core.db.isLive
+import dev.npn.core.db.missingSentinel
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.index.WatchedFileSystem
 import dev.npn.core.index.indexTest
@@ -236,6 +237,34 @@ class PermanentDeleteTest {
                     .shouldBeTrue()
             }
             rig.fs.listAllUnder(NpnPaths.TRASH_DIR).filter { !it.isDirectory } shouldHaveSize 3
+        }
+
+    /**
+     * Two documents deleted for good, and the second one's bytes come back under the first one's old
+     * name. The second one's row takes that path from the first one's, which waits at its sentinel,
+     * and the rescan, and every one after it, goes through.
+     */
+    @Test
+    fun aDeletedDocumentsBytesAtAnotherDeletedDocumentsPathAreRescanned() =
+        appSessionTest { rig ->
+            val second = PdfFixtures.embeddedTextPdf("deleted second")
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("deleted first"))
+            rig.writePdf("b.pdf", second)
+            rig.session.rescan()
+            val first = rig.docId("a.pdf")
+            val secondId = rig.docId("b.pdf")
+            for (id in listOf(first, secondId)) {
+                rig.session.docLifecycle.trashDoc(id)
+                rig.session.docLifecycle.deleteDocPermanently(id) shouldBe PermanentDeleteOutcome.DELETED
+            }
+            rig.writePdf("a.pdf", second)
+
+            rig.session.rescan()
+            rig.session.rescan()
+
+            val dao = rig.db.documentDao()
+            dao.getByRelPath("a.pdf")?.docId shouldBe secondId
+            dao.getByDocId(first).shouldNotBeNull().relPath shouldBe missingSentinel(first)
         }
 
     /** A provider that refuses to delete anything in the trash. */

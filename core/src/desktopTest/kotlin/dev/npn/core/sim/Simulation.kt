@@ -63,47 +63,12 @@ object KnownIssues {
     val disabledOps: Set<OpKind> = emptySet()
 
     /**
-     * Finding 1: a rebuilt index has no row for a document in the trash. Rows come only from files
-     * a rescan lists, and it never lists `.npn/trash`; the fold projects only documents that have a
-     * row (`FoldProjection.fold`). So after `index.db` is dropped (or on a new device) the Trash
-     * shows nothing, though the journal and the trash folder still hold the documents, and they can
-     * be neither restored nor deleted for good from there. While true, the oracle passes over a
-     * trashed row the rebuild lacks.
-     */
-    const val TRASH_IS_NOT_REBUILT = true
-
-    /**
-     * Finding 2: where storage reports no mtime (a SAF provider giving 0), a file replaced by other
-     * bytes of the same size keeps its old identity. The rescan, an import's duplicate check and the
-     * trash take an unchanged size and mtime as proof the bytes are the ones hashed before
-     * (`FileMeta.hasStoredStat`), and with every mtime 0 only the size is left; the watched folder
-     * alone hashes in that case (`WatchedFolder.kt`). While true, every PDF the simulation makes has
-     * a size no other one has, so a replacement always changes the size.
-     */
-    const val UNIQUE_PDF_SIZES = true
-
-    /**
      * Failures that are reported findings, by a phrase of their message. A seed that hits one stops
      * there (its library is broken from then on), and is counted instead of failing the test, so a
      * long run goes on to find what else there is. A new finding is never added here before it is
      * written up; a fixed one is removed.
-     *
-     * Finding 3: two documents deleted for good, and the bytes of the second come back under the
-     * first's old name. The rescan moves the second's (still deleted) row onto the path the first's
-     * deleted row holds; `DocumentDao.upsertAll` releases a path's hidden holders only for the live
-     * rows it writes, so the write fails on the unique `relPath`, the whole rescan with it, and
-     * every rescan after it, until the file goes away.
      */
-    val knownFailures: Map<String, String> =
-        mapOf(
-            "UNIQUE constraint failed: documents.relPath" to
-                "finding 3: a hidden row relocated onto another hidden row's path",
-        )
-
-    // Finding 4 has no switch: an import stats its target after moving its file there
-    // (`ImportService.record`), so a file another process put at that name in between is recorded
-    // with the document's id, and its stat then vouches for it at every rescan. Long runs hit it
-    // rarely, as "files do not hold their documents' bytes".
+    val knownFailures: Map<String, String> = emptyMap()
 }
 
 /** A broken invariant: the run stops at the first. */
@@ -484,7 +449,7 @@ internal class Simulation(
                 diff(
                     live,
                     rebuilt,
-                    hiddenOnlyLive = { _, hidden -> hidden != Hidden.TRASHED || KnownIssues.TRASH_IS_NOT_REBUILT },
+                    hiddenOnlyLive = { _, hidden -> hidden != Hidden.TRASHED },
                     bothHold = {
                         docId,
                         a,

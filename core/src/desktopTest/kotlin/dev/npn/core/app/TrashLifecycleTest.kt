@@ -11,10 +11,54 @@ import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.flow.first
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 
 class TrashLifecycleTest {
+    /**
+     * An index rebuilt from the folder (here, another device's, with an empty index) has the trash the
+     * journal and the trash folder hold, though no rescan lists the trash: the document is in its
+     * Trash with its tags, and a restore there brings its file back with the stat of the entry it
+     * moved, so the file vouches for it at the next rescan without a hash.
+     */
+    @Test
+    fun aRebuiltIndexHasTheTrashAndRestoresFromIt() =
+        appSessionTest { rig ->
+            rig.writePdf("inbox/a.pdf", PdfFixtures.embeddedTextPdf("trashed before the rebuild"))
+            rig.session.rescan()
+            val id = rig.docId("inbox/a.pdf")
+            rig.session.meta.addTag(listOf(id), "kept")
+            rig.session.docLifecycle.trashDoc(id)
+
+            val (rebuilt, db) = rig.secondSession(backgroundScope)
+            rebuilt.rescan()
+
+            val row = db.documentDao().requireByDocId(id)
+            row.trashed.shouldBeTrue()
+            row.trashedOrigPath shouldBe "inbox/a.pdf"
+            db
+                .documentDao()
+                .observeTrashed()
+                .first()
+                .map { it.docId } shouldBe listOf(id)
+            db.tagDao().tagsForDocument(id) shouldBe listOf("kept")
+            db.tagDao().all().map { it.name } shouldBe listOf("kept")
+
+            rebuilt.docLifecycle.restoreDoc(id)
+
+            rig.fs.sha256("inbox/a.pdf") shouldBe id
+            val restored = db.documentDao().requireByDocId(id)
+            restored.relPath shouldBe "inbox/a.pdf"
+            rig.fs
+                .stat("inbox/a.pdf")
+                .shouldNotBeNull()
+                .let { (it.size to it.mtimeMillis) } shouldBe
+                (restored.size to restored.mtime)
+            rebuilt.rescan().hashedCount shouldBe 0
+            rebuilt.close()
+        }
+
     @Test
     fun trashMovesFileAndSetsFlag() =
         appSessionTest { rig ->

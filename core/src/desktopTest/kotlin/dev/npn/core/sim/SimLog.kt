@@ -105,8 +105,8 @@ private val EXPECTED_MESSAGES =
         // A file another process put where the app expected a directory, or the other way round.
         "Is a directory",
         "Not a directory",
-        // An import whose file another process deleted the moment it was placed: the import fails
-        // and is taken back (the same window as finding 4, KnownIssues, where the file is replaced).
+        // An import that found its bytes back at the document's own path, which another process
+        // deleted before the import recorded them: the import fails and is taken back.
         "Imported file vanished",
     )
 

@@ -103,8 +103,9 @@ background operations end, 20 virtual minutes pass, then one more rescan runs. T
 - Every settled PDF in the folder is a live document or a known duplicate.
 - **Rebuild oracle**: a second replica opens over a copy of the files with empty databases,
   rescans to rest, and must show the same library (`LibraryView`, `diff`). That covers live
-  documents with their path, tags, field values and reviewed flag, the trashed/deleted state of
-  documents both indexes have, field definitions, the styles of tags in use, review mode, storage
+  documents with their path, tags, field values and reviewed flag, the documents in the trash with
+  the path each was trashed from and the same metadata, the deleted state of documents both indexes
+  have, field definitions, the styles of the tags live and trashed documents use, review mode, storage
   path rule, trash retention, saved views and auto-match rules. Device-local data is left out on
   purpose: device id, queues, enrichment marks, thumbnails, OCR state and page counts, `addedAt`, a
   row's stat, rows hidden as missing or deleted that only the live index remembers, and which of
@@ -114,18 +115,8 @@ background operations end, 20 virtual minutes pass, then one more rescan runs. T
 
 `KnownIssues` (in `Simulation.kt`) holds the switches that keep the suite green around findings
 that are not fixed yet. Each switch's comment names the finding. Fixing a finding means turning
-its switch off (or removing its `knownFailures` entry) and making a long run pass.
-
-- **Finding 1**, `TRASH_IS_NOT_REBUILT`: a rebuilt index has no rows for documents in the trash.
-  The oracle passes over trashed rows that only the live index has, and compares only the styles
-  of tags in use.
-- **Finding 2**, `UNIQUE_PDF_SIZES`: where storage reports no mtimes, a replacement of the same
-  size keeps the old identity. Every generated PDF has a size of its own.
-- **Finding 3**, `knownFailures`: a deleted document's row relocated onto the path of another
-  deleted row fails every rescan with a unique-constraint error on `documents.relPath`.
-- **Finding 4** (no switch): an import records the stat of whatever is at its target once it has
-  moved its file there. A file that replaced it in between is taken as the document's from then
-  on. Long runs hit this rarely; it fails as "files do not hold their documents' bytes".
+its switch off (or removing its `knownFailures` entry) and making a long run pass. None is set
+aside at the moment.
 
 ## Adding an operation
 
@@ -161,6 +152,7 @@ Fail through `fail(...)`, which attaches the seed and the trace.
 - **Compaction** runs only when the maintenance tick finds more than 64 objects older than a day,
   which a long run reaches only now and then. There is no direct compaction operation, because the
   coordinator is internal to the session.
-- **mtime-preserving overwrites** of the same size, and same-size replacements where storage reports
-  no mtimes (see `KnownIssues.UNIQUE_PDF_SIZES`).
+- **mtime-preserving overwrites** of the same size: with mtimes, every generated PDF has a size of
+  its own. Where storage reports no mtimes, same-size replacements are modelled: every generated PDF
+  has one of a few sizes, so only a hash tells a replacement apart.
 - **Deterministic names.** See the `Uuid.random()` note above.
