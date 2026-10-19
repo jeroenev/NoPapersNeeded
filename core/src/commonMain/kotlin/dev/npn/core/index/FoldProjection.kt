@@ -444,6 +444,9 @@ internal class FoldProjection(
                 val hiddenAt = state.hiddenBy(doc)?.physicalMillis ?: 0L
                 resurrected.add(Resurrected(doc, relPath, hiddenAtMillis = hiddenAt))
             }
+            // A row waiting at its sentinel has no file. Shown again (another device restored the
+            // document and its file has not arrived), it is missing until a rescan finds the file.
+            if (!trashed && !deleted && relPath == missingSentinel(doc)) missing = true
             return Lifecycle(trashed, deleted, missing, relPath, fileName, origPath)
         }
 
