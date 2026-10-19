@@ -101,7 +101,7 @@ abstract class MutationTestTask : JavaExec() {
                     minionJvmArgs.get() +
                         listOf(
                             "-XX:ErrorFile=${temporaryDir.absolutePath}/hs_err_pid%p.log",
-                            "-XX:-CreateCoredumpFile",
+                            "-XX:-CreateCoredumpOnCrash",
                         ),
             ).toCommandLine(
                 reportDir = report,
