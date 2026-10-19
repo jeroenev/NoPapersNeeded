@@ -34,23 +34,69 @@ interface DocumentDao {
 
     /**
      * Write [docs], in order, as whole rows. relPath is unique, and this is where a path's holder is
-     * decided: a hidden row (trashed, deleted or missing) gives its path up to a live one and waits
-     * at its [missingSentinel]; any other row landing on a held path fails the write. Room's
-     * `@Upsert` alone turns that conflict into an UPDATE that matches no row, so a new document
-     * would vanish while the write reports success.
+     * decided: a hidden row (trashed, deleted or missing) gives its path up to the row written there
+     * and waits at its [missingSentinel], and a hidden row written onto a path a live row holds (in
+     * the index, or as [docs] leave it) waits at its sentinel instead. Only a live row landing on
+     * another live row's path fails the write. Room's `@Upsert` alone turns that conflict into an
+     * UPDATE that matches no row, so a new document would vanish while the write reports success.
      */
     @Transaction
     suspend fun upsertAll(docs: List<DocumentEntity>) {
         if (docs.isEmpty()) return
-        for (paths in docs.filter { it.isLive }.map { it.relPath }.chunked(BIND_CHUNK)) {
+        val placed = hiddenOffLivePaths(docs)
+        for (paths in placed.map { it.relPath }.chunked(BIND_CHUNK)) {
             releaseHiddenHolders(paths, MISSING_SENTINEL_PREFIX)
         }
-        upsertUnchecked(docs)
-        val ids = docs.mapTo(LinkedHashSet()) { it.docId }.toList()
+        upsertUnchecked(placed)
+        val ids = placed.mapTo(LinkedHashSet()) { it.docId }.toList()
         val written = ids.chunkedBind { storedDocIdsChunk(it) }.toHashSet()
         val dropped = ids.filterNot(written::contains)
         check(dropped.isEmpty()) { "Another live document holds the path of ${dropped.joinToString()}" }
     }
+
+    /**
+     * [docs], with each hidden row that would land on a path a live row holds at that point of the
+     * write (the index's live holders, as the rows before it in [docs] change them) sent to its
+     * [missingSentinel] instead.
+     */
+    private suspend fun hiddenOffLivePaths(docs: List<DocumentEntity>): List<DocumentEntity> {
+        val contested = docs.filterNot { it.isLive }.mapTo(LinkedHashSet()) { it.relPath }
+        if (contested.isEmpty()) return docs
+        val holderAt = HashMap<String, String>()
+        val pathOf = HashMap<String, String>()
+        for (holder in contested.toList().chunkedBind { liveHoldersChunk(it) }) {
+            holderAt[holder.relPath] = holder.docId
+            pathOf[holder.docId] = holder.relPath
+        }
+        return docs.map { doc ->
+            // The row leaves the path it held, whichever it lands on.
+            pathOf.remove(doc.docId)?.let { if (holderAt[it] == doc.docId) holderAt.remove(it) }
+            when {
+                doc.isLive -> {
+                    if (doc.relPath in contested) {
+                        holderAt[doc.relPath] = doc.docId
+                        pathOf[doc.docId] = doc.relPath
+                    }
+                    doc
+                }
+
+                holderAt[doc.relPath].let { it != null && it != doc.docId } -> {
+                    doc.copy(relPath = missingSentinel(doc.docId))
+                }
+
+                else -> {
+                    doc
+                }
+            }
+        }
+    }
+
+    /** The live rows at [paths], each as its path and id. */
+    @Query(
+        "SELECT relPath, docId, size, mtime, 0 AS hidden FROM documents " +
+            "WHERE relPath IN (:paths) AND trashed = 0 AND deleted = 0 AND missing = 0",
+    )
+    suspend fun liveHoldersChunk(paths: List<String>): List<PathMeta>
 
     /** Room's upsert without [upsertAll]'s rule for who holds a path; write through that instead. */
     @Upsert

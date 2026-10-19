@@ -152,9 +152,12 @@ internal class ImportService(
         suggestedName: String,
         toDir: String,
     ): ImportResult {
-        val size = fs.stat(tmpPath)?.size ?: error("Staged import vanished: $tmpPath")
+        // The stat of the staged bytes, which only this import writes, and which the move into place
+        // keeps: the row records it, not a stat of the target once moved, which by then may be of a
+        // file another process put there.
+        val staged = fs.stat(tmpPath) ?: error("Staged import vanished: $tmpPath")
         // An empty file is never a document; its hash would claim the empty-content identity.
-        if (size == 0L) throw EmptyImportException()
+        if (staged.size == 0L) throw EmptyImportException()
         val hash = fs.sha256(tmpPath)
         // From the lock on, the import runs to its end even when its caller goes away: cut short
         // between placing a returning document and recording its return (or taking it back), the
@@ -163,7 +166,7 @@ internal class ImportService(
         return withContext(NonCancellable) {
             var outcome: ImportResult? = null
             serialize { journal ->
-                outcome = recordReturn(place(tmpPath, hash, size, suggestedName, toDir, journal), journal, tmpPath)
+                outcome = recordReturn(place(tmpPath, hash, staged, suggestedName, toDir, journal), journal, tmpPath)
             }
             val result = checkNotNull(outcome)
             if (result is ImportResult.Imported && result.broughtBack) discardTrashCopies(result.docId)
@@ -238,7 +241,7 @@ internal class ImportService(
     private suspend fun place(
         tmpPath: String,
         hash: String,
-        size: Long,
+        staged: FileMeta,
         suggestedName: String,
         toDir: String,
         journal: LockedJournal,
@@ -246,7 +249,7 @@ internal class ImportService(
         val existing = documentDao.getByDocId(hash)
         // The document's own path, when its bytes are there. This runs under the writer lock, so
         // re-importing a known, unchanged PDF must read no library file.
-        val inPlace = existing?.takeIf { fs.holdsDocument(it, size) }?.relPath
+        val inPlace = existing?.takeIf { fs.holdsDocument(it, staged.size) }?.relPath
         if (existing != null && existing.isLive && inPlace != null) {
             return Placement(ImportResult.Duplicate(existing.docId, existing.relPath))
         }
@@ -258,7 +261,7 @@ internal class ImportService(
         val target = inPlace ?: chooseImportTarget(ensurePdfName(suggestedName), toDir).also { fs.move(tmpPath, it) }
         var placement: Placement? = null
         try {
-            placement = record(hash, target, existing, moved = inPlace == null)
+            placement = record(hash, target, existing, placed = staged.takeIf { inPlace == null })
         } finally {
             // A cancelled import is taken back as a failed one is.
             if (placement == null) {
@@ -279,16 +282,17 @@ internal class ImportService(
     }
 
     /**
-     * Write the row of the document whose file [place] put at [target] (having [moved] it there),
-     * [existing] brought back or a new one, and queue it for OCR.
+     * Write the row of the document whose file [place] put at [target], [existing] brought back or a
+     * new one, and queue it for OCR. [placed] is the stat of the staged file [place] moved there, the
+     * row's from then on; null when the bytes were back at [target] already, whose stat is then read.
      */
     private suspend fun record(
         hash: String,
         target: String,
         existing: DocumentEntity?,
-        moved: Boolean,
+        placed: FileMeta?,
     ): Placement {
-        val meta = fs.stat(target) ?: error("Imported file vanished: $target")
+        val meta = placed ?: fs.stat(target) ?: error("Imported file vanished: $target")
         val now = clock.nowMillis()
         val row = existing?.backAt(target, meta) ?: newDocument(hash, target, meta, now)
         // A returning document whose text is indexed already has nothing for OCR to redo.
@@ -299,7 +303,7 @@ internal class ImportService(
         if (existing != null && existing.fileName != row.fileName) indexFileName(row)
         return Placement(
             ImportResult.Imported(hash, target, broughtBack = existing != null),
-            moved = moved,
+            moved = placed != null,
             previous = existing,
             previousQueue = enqueued?.first,
             queued = enqueued?.second,

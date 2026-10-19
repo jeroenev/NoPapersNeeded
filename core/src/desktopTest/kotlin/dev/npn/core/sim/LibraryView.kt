@@ -31,6 +31,8 @@ internal data class LibraryView(
     val live: Map<String, DocView>,
     /** Documents the index holds but does not show, by id. */
     val hidden: Map<String, Hidden>,
+    /** Documents in the trash by id, each with the path it was trashed from as its path. */
+    val trashed: Map<String, DocView>,
     /** Field definitions by key, as `label|type|showByDefault|aiEnabled|position|hint|perDocument`. */
     val fieldDefs: Map<String, String>,
     /** Tag styles: a tag's color and icon, for tags that have one. */
@@ -46,7 +48,8 @@ internal data class LibraryView(
             session: LibrarySessionImpl,
             db: NpnDatabase,
         ): LibraryView {
-            val docs = db.rows("SELECT docId, relPath, trashed, deleted, missing, reviewed FROM documents")
+            val docs =
+                db.rows("SELECT docId, relPath, trashed, deleted, missing, reviewed, trashedOrigPath FROM documents")
             val tags = db.rows("SELECT docId, tag FROM document_tags").groupBy({ it[0]!! }, { it[1]!! })
             val fields =
                 db.rows("SELECT docId, fieldKey, fieldValue FROM document_fields").groupBy({ it[0]!! }, {
@@ -55,8 +58,17 @@ internal data class LibraryView(
                 })
             val live = HashMap<String, DocView>()
             val hidden = HashMap<String, Hidden>()
+            val trashed = HashMap<String, DocView>()
             docs.forEach { row ->
                 val docId = row[0]!!
+
+                fun view(relPath: String) =
+                    DocView(
+                        relPath = relPath,
+                        tags = tags[docId].orEmpty().toSortedSet(),
+                        fields = fields[docId].orEmpty().toMap().toSortedMap(),
+                        reviewed = row[5] == "1",
+                    )
                 when {
                     row[3] == "1" -> {
                         hidden[docId] = Hidden.DELETED
@@ -64,6 +76,7 @@ internal data class LibraryView(
 
                     row[2] == "1" -> {
                         hidden[docId] = Hidden.TRASHED
+                        trashed[docId] = view(row[6].orEmpty())
                     }
 
                     row[4] == "1" -> {
@@ -71,13 +84,7 @@ internal data class LibraryView(
                     }
 
                     else -> {
-                        live[docId] =
-                            DocView(
-                                relPath = row[1]!!,
-                                tags = tags[docId].orEmpty().toSortedSet(),
-                                fields = fields[docId].orEmpty().toMap().toSortedMap(),
-                                reviewed = row[5] == "1",
-                            )
+                        live[docId] = view(row[1]!!)
                     }
                 }
             }
@@ -97,6 +104,7 @@ internal data class LibraryView(
             return LibraryView(
                 live = live.toSortedMap(),
                 hidden = hidden.toSortedMap(),
+                trashed = trashed.toSortedMap(),
                 fieldDefs = defs,
                 tagStyles = styles,
                 reviewMode = session.reviewConfig.reviewMode.first(),
@@ -184,6 +192,12 @@ internal fun diff(
             else -> out += "doc ${id.take(ID)} hidden state differs: live $a, rebuilt $b"
         }
     }
+    // A document in the trash carries its metadata and the path it was trashed from in both.
+    live.trashed.keys.intersect(rebuilt.trashed.keys).sorted().forEach { id ->
+        val a = live.trashed.getValue(id)
+        val b = rebuilt.trashed.getValue(id)
+        if (a != b) out += "trashed doc ${id.take(ID)} differs:\n    live:    $a\n    rebuilt: $b"
+    }
 
     fun <T> same(
         what: String,
@@ -193,13 +207,15 @@ internal fun diff(
         if (a != b) out += "$what differs:\n    live:    $a\n    rebuilt: $b"
     }
     same("field definitions", live.fieldDefs, rebuilt.fieldDefs)
-    // A trashed document keeps its tags' rows (TagDao.pruneUnreferenced), so while a rebuild has no
-    // trashed rows (KnownIssues.TRASH_IS_NOT_REBUILT) only the styles of tags in use compare.
-    val inUse = (live.live.values + rebuilt.live.values).flatMap { it.tags }.toSet()
-
-    fun styles(view: LibraryView) =
-        if (KnownIssues.TRASH_IS_NOT_REBUILT) view.tagStyles.filterKeys(inUse::contains) else view.tagStyles
-    same("tag styles", styles(live), styles(rebuilt))
+    // A live or trashed document keeps its tags' rows (TagDao.pruneUnreferenced), and so does a row
+    // hidden as missing that only the live index remembers: the styles of the tags the first two use
+    // compare.
+    val inUse =
+        listOf(live.live, live.trashed, rebuilt.live, rebuilt.trashed)
+            .flatMap { it.values }
+            .flatMap { it.tags }
+            .toSet()
+    same("tag styles", live.tagStyles.filterKeys(inUse::contains), rebuilt.tagStyles.filterKeys(inUse::contains))
     same("review mode", live.reviewMode, rebuilt.reviewMode)
     same("storage path", live.storagePath, rebuilt.storagePath)
     same("trash retention", live.trashRetentionDays, rebuilt.trashRetentionDays)

@@ -1,5 +1,6 @@
 package dev.npn.core.app
 
+import dev.npn.core.db.missingSentinel
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
@@ -130,12 +131,12 @@ class FieldRegistryTest {
         }
 
     /**
-     * A device with no row for a trashed document (it joined since, or rebuilt its index) removes a
-     * field with its values: the clear reaches that document from the journal, so its value does not
-     * come back as an orphan once the document is restored.
+     * A device that never saw the file of a trashed document (it joined since, or rebuilt its index),
+     * and knows it only by the row the journal's trash gives it, removes a field with its values: the
+     * clear reaches that document, so its value does not come back as an orphan once it is restored.
      */
     @Test
-    fun removeWithClearValuesClearsADocumentThisDeviceHasNoRowFor() =
+    fun removeWithClearValuesClearsADocumentThisDeviceNeverSawTheFileOf() =
         appSessionTest { rig ->
             rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
             rig.session.rescan()
@@ -149,7 +150,7 @@ class FieldRegistryTest {
                 .shouldNotBeNull()
 
             val (second, secondDb) = rig.secondSession(backgroundScope)
-            secondDb.documentDao().getByDocId(id) shouldBe null
+            secondDb.documentDao().getByDocId(id)?.relPath shouldBe missingSentinel(id)
             second.fieldRegistry.remove("amount", clearValues = true)
 
             rig.session.rescan()

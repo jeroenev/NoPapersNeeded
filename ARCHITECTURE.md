@@ -282,9 +282,11 @@ the short list of these that a change must never break; this section is the comp
   predicates use `isSafe` to ignore rather than throw. `NpnPaths.Temp` names every temporary file
   the app writes into the library.
 - A path holds one row (`DocumentDao.upsertAll`). A trashed, deleted or missing row gives its path
-  up to a live document and waits on a sentinel path, the `.npn/missing/` prefix plus its document
-  id (`DocumentDao`'s `missingSentinel`, a row path with no folder on disk), flags kept. `upsertAll`
-  fails the write rather than drop a row on a path another live row holds; before a rename or
+  up to any row written there, live or hidden, and waits on a sentinel path, the `.npn/missing/`
+  prefix plus its document id (`DocumentDao`'s `missingSentinel`, a row path with no folder on
+  disk), flags kept. A hidden row written onto a path a live row holds waits at its sentinel
+  instead, so no rescan fails on where a hidden document's bytes turned up. `upsertAll` fails the
+  write rather than drop a live row on a path another live row holds; before a rename or
   storage-path move onto such a path, `DocumentPathReconciler` does the same.
 - Explicit renames and moves, and storage-path rules, write the `storagePath` system property
   (keyed by hash) before moving bytes. HLC last-writer-wins chooses the intended location across
@@ -302,6 +304,9 @@ Kept by `ImportService`:
 - An import is a duplicate only of a **live** document whose file holds the bytes. The size and
   mtime its row stored prove that, as they do for a rescan; a drifted stat means hashing the file,
   under the writer lock the check runs in. A caller may delete a duplicate's source.
+- An import's row records the stat of the bytes it placed: the staged file's, which its move into
+  place keeps, never a stat of the target taken once moved, which by then may be another process's
+  file. A file written over the import in between has another stat, so the next rescan hashes it.
 - The bytes of a trashed, deleted or missing document bring that document back, metadata and all,
   and any copy of it left in the trash is deleted, under the writer lock and only while the
   document is still live. The return is recorded in the journal in the same locked step that makes
@@ -340,6 +345,11 @@ Kept by `DocLifecycleImpl`, `TrashOps`, `JournalCoordinator.changeLifecycle` and
   only while that trash still holds it: the receipt carries the trash time the row had once the
   trash stood, and a document trashed again since stays in the trash. The Trash screen's restore is
   unconditional.
+- A document the journal has in the trash has a row, whether or not a rescan ever listed its file:
+  rows otherwise come from the files a rescan lists, which never include the trash, so a rebuilt
+  index or another device would show an empty Trash. The fold gives such a document a row at its
+  sentinel, named after the path it was trashed from, with no stat (`FoldProjection.trashedRow`);
+  a restore records the stat of the trash entry it moves, so the restored file vouches for it.
 - Restore records its final destination: the path the document was trashed from (or the inbox under
   its file name when that is no document path), or a `(restored)` name beside it when a file is
   there now or another live row names it.
@@ -356,6 +366,11 @@ Kept by `Indexer`, `WriteSettle`, `JournalCoordinator.recordRestores` and `OcrPi
 - A rescan hashes a PDF only once its bytes have settled (`WriteSettle`). Files written in place
   are deferred and picked up by a follow-up rescan, whichever rescan deferred them; a relink or a
   bake hands the report of the rescan it ran to the session, which follows it up as its own.
+- A stat proves a file's bytes only with a real mtime (`FileMeta.hasStoredStat`, the one place every
+  proof by stat goes through: the rescan's fast path, an import's duplicate check, `holdsDocument`,
+  the trash and duplicate removal). Where storage reports no mtimes (a SAF provider giving 0), a file
+  of the same size may be other bytes, so it is hashed: such a library hashes every PDF at every
+  rescan.
 - `OcrPipeline` re-checks the hash of the bytes it read before publishing a sidecar, so a partial
   file never gets a document identity. A read that finds other bytes asks for a follow-up rescan
   and leaves its run queued, uncharged; a second one in a row counts as a failure.
