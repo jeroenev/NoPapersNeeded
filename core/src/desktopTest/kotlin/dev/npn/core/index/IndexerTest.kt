@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assume.assumeTrue
 import java.io.File
 import java.nio.file.Files
+import java.nio.file.attribute.FileTime
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertFails
@@ -473,6 +474,72 @@ class IndexerTest {
 
             rig.db.ftsDao().searchDocIds("pasta") shouldContainExactly listOf(docId)
             rig.db.ftsDao().searchDocIds("recipe") shouldContainExactly listOf(docId)
+        }
+
+    /**
+     * A file whose mtime moved with its bytes unchanged (a `touch`, a backup tool) is hashed once,
+     * found to be its document still, and its row takes the new stat: the next rescan proves it by
+     * that stat and reads nothing.
+     */
+    @Test
+    fun aTouchedFileIsHashedOnceAndItsRowTakesTheNewMtime() =
+        runTest {
+            rig.writePdf("a.pdf", "alpha")
+            rig.rescan()
+            val row = rig.db.documentDao().requireRowAtPath("a.pdf")
+            val touched = row.mtime + 10_000
+            Files.setLastModifiedTime(rig.libRoot.resolve("a.pdf"), FileTime.fromMillis(touched))
+
+            rig.rescan().hashedCount shouldBe 1
+
+            val refreshed = rig.db.documentDao().requireByDocId(row.docId)
+            refreshed.relPath shouldBe "a.pdf"
+            refreshed.mtime shouldBe touched
+            rig.rescan().hashedCount shouldBe 0
+        }
+
+    /**
+     * A row whose stored size is not its file's (a row written wrong) is no proof of the file: the
+     * rescan hashes it, finds the document's bytes, and stores the size it has.
+     */
+    @Test
+    fun aRowWhoseStoredSizeDriftedTakesTheFilesSize() =
+        runTest {
+            rig.writePdf("a.pdf", "alpha")
+            rig.rescan()
+            val dao = rig.db.documentDao()
+            val row = dao.requireRowAtPath("a.pdf")
+            dao.upsert(row.copy(size = row.size + 1))
+
+            rig.rescan().hashedCount shouldBe 1
+
+            dao.requireByDocId(row.docId).size shouldBe row.size
+            rig.rescan().hashedCount shouldBe 0
+        }
+
+    /**
+     * A file put back at its document's path with the stat it had (a backup restored), after a
+     * rescan found it missing, is the document's again: its row is no longer missing.
+     */
+    @Test
+    fun aMissingDocumentsFileBackWithItsOldStatIsLiveAgain() =
+        runTest {
+            rig.writePdf("a.pdf", "alpha")
+            rig.rescan()
+            val dao = rig.db.documentDao()
+            val row = dao.requireRowAtPath("a.pdf")
+            val aside = rig.scratchDir().resolve("a.pdf")
+            Files.move(rig.libRoot.resolve("a.pdf"), aside)
+            rig.rescan().missingCount shouldBe 1
+            dao.requireByDocId(row.docId).missing.shouldBeTrue()
+
+            Files.move(aside, rig.libRoot.resolve("a.pdf"))
+            Files.getLastModifiedTime(rig.libRoot.resolve("a.pdf")).toMillis() shouldBe row.mtime
+            rig.rescan()
+
+            val back = dao.requireByDocId(row.docId)
+            back.missing.shouldBeFalse()
+            back.relPath shouldBe "a.pdf"
         }
 }
 
