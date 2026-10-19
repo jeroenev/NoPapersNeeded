@@ -5,6 +5,7 @@ import dev.npn.core.db.missingSentinel
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.index.WatchedFileSystem
 import dev.npn.core.index.indexTest
+import dev.npn.core.journal.PendingOp
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -13,6 +14,8 @@ import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
+import java.nio.file.Files
+import java.nio.file.attribute.FileTime
 import kotlin.test.Test
 
 /** Deleting a document for good removes its own bytes and nothing else. */
@@ -104,7 +107,8 @@ class PermanentDeleteTest {
     /**
      * An import took the old path of a document being deleted for good, after the deletion and before
      * the deletion read the file there. That file is the import's, as its row says, and is not read
-     * for the deleted document's bytes.
+     * for the deleted document's bytes. The two files have the same size, so only the import's row,
+     * not a size that differs, spares the file a read.
      */
     @Test
     fun deletingForGoodReadsNoFileAnotherDocumentHoldsAtTheOldPath() =
@@ -120,7 +124,7 @@ class PermanentDeleteTest {
             val deleted = rig.fs.sha256("inbox/x.pdf")
             lifecycle.trashDoc(deleted)
             importing.next = {
-                rig.writePdf("inbox/x.pdf", "imported since")
+                rig.writePdf("inbox/x.pdf", "imported in time")
                 coordinator.rescan()
                 recorded.clear()
             }
@@ -128,11 +132,78 @@ class PermanentDeleteTest {
             lifecycle.deleteDocPermanently(deleted)
 
             recorded.calls("sha256").filterNot { it.contains(NpnPaths.TRASH_DIR) }.shouldBeEmpty()
-            rig.fs.readBytes("inbox/x.pdf").decodeToString() shouldBe "imported since"
+            rig.fs.readBytes("inbox/x.pdf").decodeToString() shouldBe "imported in time"
             rig.fs
                 .listAllUnder(NpnPaths.TRASH_DIR)
                 .filter { !it.isDirectory }
                 .shouldBeEmpty()
+        }
+
+    /**
+     * As above, but a sync tool has since put the deleted document's bytes back over the import's
+     * file. The import's row names the path with a stat the file no longer has, so it proves nothing:
+     * the file is read, holds the deleted document's bytes, and goes, so no rescan brings it back.
+     */
+    @Test
+    fun deletingForGoodRemovesItsBytesOverAnotherDocumentsFileAtTheOldPath() =
+        indexTest { rig ->
+            val importing = BeforeTrashListing()
+            val coordinator = rig.coordinator()
+            val lifecycle = rig.docLifecycle(coordinator, importing.over(rig.fs))
+            rig.writePdf("inbox/x.pdf", "deleted for good")
+            coordinator.rescan()
+            val deleted = rig.fs.sha256("inbox/x.pdf")
+            lifecycle.trashDoc(deleted)
+            importing.next = {
+                rig.writePdf("inbox/x.pdf", "imported in time")
+                coordinator.rescan()
+                val imported = rig.db.documentDao().getByRelPath("inbox/x.pdf").shouldNotBeNull()
+                rig.writePdf("inbox/x.pdf", "deleted for good")
+                Files.setLastModifiedTime(
+                    rig.libRoot.resolve("inbox/x.pdf"),
+                    FileTime.fromMillis(imported.mtime + 10_000),
+                )
+            }
+
+            lifecycle.deleteDocPermanently(deleted) shouldBe PermanentDeleteOutcome.DELETED
+
+            rig.exists("inbox/x.pdf").shouldBeFalse()
+        }
+
+    /**
+     * The document that took the old path is in the trash itself now, its file left in place (another
+     * device's trash, its file move not synced yet), and a tool that keeps mtimes has put the deleted
+     * document's bytes there with that file's size and mtime. A hidden row's stat proves nothing, so
+     * the file is read, holds the deleted document's bytes, and goes.
+     */
+    @Test
+    fun deletingForGoodTakesNoHiddenRowsStatAsProofOfTheFileAtTheOldPath() =
+        indexTest { rig ->
+            val importing = BeforeTrashListing()
+            val coordinator = rig.coordinator()
+            val lifecycle = rig.docLifecycle(coordinator, importing.over(rig.fs))
+            rig.writePdf("inbox/x.pdf", "deleted for good")
+            coordinator.rescan()
+            val deleted = rig.fs.sha256("inbox/x.pdf")
+            lifecycle.trashDoc(deleted)
+            importing.next = {
+                rig.writePdf("inbox/x.pdf", "imported in time")
+                coordinator.rescan()
+                val imported = rig.db.documentDao().getByRelPath("inbox/x.pdf").shouldNotBeNull()
+                coordinator.commitAndApply(listOf(PendingOp.docTrash(imported.docId, "inbox/x.pdf")))
+                rig.db
+                    .documentDao()
+                    .getByRelPath("inbox/x.pdf")
+                    .shouldNotBeNull()
+                    .trashed
+                    .shouldBeTrue()
+                rig.writePdf("inbox/x.pdf", "deleted for good")
+                Files.setLastModifiedTime(rig.libRoot.resolve("inbox/x.pdf"), FileTime.fromMillis(imported.mtime))
+            }
+
+            lifecycle.deleteDocPermanently(deleted) shouldBe PermanentDeleteOutcome.DELETED
+
+            rig.exists("inbox/x.pdf").shouldBeFalse()
         }
 
     /**

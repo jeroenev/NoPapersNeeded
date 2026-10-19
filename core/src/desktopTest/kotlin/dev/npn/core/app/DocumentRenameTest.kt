@@ -6,6 +6,7 @@ import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
+import java.nio.file.Files
 import kotlin.test.Test
 
 /** An explicit rename or move keeps the document's identity and refuses a name it cannot take. */
@@ -61,6 +62,29 @@ class DocumentRenameTest {
                 .documentDao()
                 .requireByDocId(id)
                 .relPath shouldBe "c.pdf"
+        }
+
+    /**
+     * A name that is the document's own file under another name (a hard link here; a case-only
+     * rename where the filesystem ignores case) is not taken: the rename leaves it alone and journals
+     * nothing, as the fold could not tell that move from one already made.
+     */
+    @Test
+    fun renameOntoTheDocumentsOwnFileUnderAnotherNameIsUnchanged() =
+        appSessionTest { rig ->
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val id = rig.fs.sha256("a.pdf")
+            Files.createLink(rig.libRoot.resolve("b.pdf"), rig.libRoot.resolve("a.pdf"))
+            val objects = rig.journalObjectCount()
+
+            rig.session.docLifecycle.renameFile(id, "b.pdf") shouldBe RelocationOutcome.UNCHANGED
+
+            rig.journalObjectCount() shouldBe objects
+            rig.db
+                .documentDao()
+                .requireByDocId(id)
+                .relPath shouldBe "a.pdf"
         }
 
     @Test
