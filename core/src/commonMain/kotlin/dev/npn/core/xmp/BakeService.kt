@@ -195,7 +195,12 @@ internal class BakeService(
                 fs.writeBytesOnce(norm, src)
                 check(fs.holds(norm, oldSha)) { "$norm does not read back as its original" }
             }
-            if (fs.exists(tmpPath)) fs.delete(tmpPath)
+        }.onSuccess {
+            // The original is back: the baked bytes are a leftover now, which the next bake of the
+            // document removes first if this cannot.
+            log.runLogged("Removing the baked bytes of $norm after its bake was undone") {
+                if (fs.exists(tmpPath)) fs.delete(tmpPath)
+            }
         }.onFailure { failure ->
             // Any failure here can leave the original nowhere but in memory: a later one saves it
             // under a recovery name too, before the log says where a reader would find it.
