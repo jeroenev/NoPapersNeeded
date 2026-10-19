@@ -86,6 +86,48 @@ class HlcTest {
         assertEquals(0, allocator.counter)
     }
 
+    /** A remote at the local physical time with a higher counter: the merge takes the higher counter. */
+    @Test
+    fun observeAtTheSamePhysicalTimeTakesTheHigherCounter() {
+        val allocator = HlcWatermarkAllocator({ 1000L })
+        allocator.next("local")
+        val remote = Hlc(1000, 5, "remote")
+        allocator.observe(remote)
+        assertEquals(1000L, allocator.physicalMillis)
+        assertEquals(6, allocator.counter)
+        assertTrue(allocator.next("local") > remote)
+    }
+
+    /** A remote at the local physical time with a lower counter: the local counter moves on by one. */
+    @Test
+    fun observeAtTheSamePhysicalTimeKeepsAHigherLocalCounter() {
+        val allocator = HlcWatermarkAllocator({ 1000L }, initialPhysicalMillis = 1000L, initialCounter = 9)
+        allocator.observe(Hlc(1000, 2, "remote"))
+        assertEquals(1000L, allocator.physicalMillis)
+        assertEquals(10, allocator.counter)
+    }
+
+    /**
+     * A local watermark ahead of both the wall clock and the remote: the remote's counter, from an
+     * earlier physical time, plays no part, and the local counter moves on by one.
+     */
+    @Test
+    fun observeOfARemoteBehindTheWatermarkIgnoresItsCounter() {
+        val allocator = HlcWatermarkAllocator({ 1000L }, initialPhysicalMillis = 5000L, initialCounter = 3)
+        allocator.observe(Hlc(4000, 10, "remote"))
+        assertEquals(5000L, allocator.physicalMillis)
+        assertEquals(4, allocator.counter)
+    }
+
+    /** A remote ahead of the watermark and the wall clock: its counter plus one, whatever the local one was. */
+    @Test
+    fun observeOfARemoteAheadTakesItsCounterPlusOne() {
+        val allocator = HlcWatermarkAllocator({ 1000L }, initialPhysicalMillis = 1000L, initialCounter = 9)
+        allocator.observe(Hlc(3000, 5, "remote"))
+        assertEquals(3000L, allocator.physicalMillis)
+        assertEquals(6, allocator.counter)
+    }
+
     @Test
     fun transactionActorAllocatorStaysMonotonicAcrossActorChanges() {
         val allocator = HlcWatermarkAllocator(clock = { 1000L })
