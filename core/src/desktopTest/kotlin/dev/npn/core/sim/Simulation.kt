@@ -526,18 +526,12 @@ internal class Simulation(
                     },
                 )
             // Each differing document with the journal events one index folded and the other did not.
-            val ids = live.live.keys + rebuilt.live.keys + live.hidden.keys
+            val ids = live.live.keys + rebuilt.live.keys + live.hidden.keys + live.trashed.keys + rebuilt.trashed.keys
             val explained =
                 differences.associateWith { line ->
-                    val prefix = Regex("^doc ([0-9a-f]+) ").find(line)?.groupValues?.get(1)
+                    val prefix = Regex("^(?:trashed )?doc ([0-9a-f]+) ").find(line)?.groupValues?.get(1)
                     val id = prefix?.let { ids.first { docId -> docId.startsWith(prefix) } }
-                    if (id ==
-                        null
-                    ) {
-                        ""
-                    } else {
-                        world.read("events of $id") { eventsDiffer(id, replica.indexDb, oracle.indexDb, fs, copy) }
-                    }
+                    id?.let { eventsOf(it, oracle, copy) }.orEmpty()
                 }
             // While SyncKnownIssues.REBUILD_RUNS_RULES holds, a document that differs only by what the
             // rebuild's own session wrote (its auto-match rules, finding 5) is passed over.
@@ -563,6 +557,13 @@ internal class Simulation(
             oracle.dispose()
         }
     }
+
+    /** [eventsDiffer] for [docId], between this replica's index and [oracle]'s over [copy]. */
+    private fun eventsOf(
+        docId: String,
+        oracle: SimReplica,
+        copy: InMemoryLibraryFileSystem,
+    ): String = world.read("events of $docId") { eventsDiffer(docId, replica.indexDb, oracle.indexDb, fs, copy) }
 
     // ---- failing --------------------------------------------------------------------------------
 

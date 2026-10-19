@@ -107,6 +107,15 @@ object SyncKnownIssues {
             listOf("do not converge", "\"key\":\"storagePath\"") to
                 "finding 6: devices keep moving a document between two paths, " +
                 "each taking the other's move for a user's",
+            // Finding 9: DocumentPathReconciler.project records the stat of the document's intended
+            // path after the move (or the check that its bytes are there already) has read them. A
+            // sync tool that puts another file there in between (a conflict another device's
+            // version won) has its stat recorded as the document's, which then vouches for it at
+            // every rescan: the row shows the document at a file that holds other bytes. The import
+            // had the same race (finding 4, fixed by keeping the staged file's stat).
+            listOf("files do not hold their documents' bytes", " external -> ") to
+                "finding 9: a document moved to its intended path takes the stat " +
+                "of a file a sync tool put there since",
         )
 
     /** [failure] as a known finding when it is one, else as it is. */
