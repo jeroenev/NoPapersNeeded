@@ -91,14 +91,18 @@ class ImportDuplicateTest {
                         }
                     }
                 }
-            val racing = ImportService(overwriting, rig.db, rig.deviceDb.ocrQueueDao(), rig.clock, serialize = unserialized)
+            val racing =
+                ImportService(overwriting, rig.db, rig.deviceDb.ocrQueueDao(), rig.clock, serialize = unserialized)
 
             val imported =
                 racing.importBytes("alpha".encodeToByteArray(), "a.pdf").shouldBeInstanceOf<ImportResult.Imported>()
             rig.rescan()
 
             val replacement = sha256Bytes("bravo".encodeToByteArray())
-            rig.db.documentDao().getByRelPath(imported.relPath)?.docId shouldBe replacement
+            rig.db
+                .documentDao()
+                .getByRelPath(imported.relPath)
+                ?.docId shouldBe replacement
             rig.db
                 .documentDao()
                 .requireByDocId(imported.docId)

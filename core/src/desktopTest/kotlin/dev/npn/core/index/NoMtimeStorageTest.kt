@@ -16,20 +16,22 @@ import kotlin.test.Test
  */
 class NoMtimeStorageTest {
     private val rig =
-        IndexRig.create(files = { raw ->
-            object : LibraryFileSystem by raw {
-                override suspend fun stat(relPath: String): FileMeta? = raw.stat(relPath)?.copy(mtimeMillis = 0)
+        IndexRig
+            .create(files = { raw ->
+                object : LibraryFileSystem by raw {
+                    override suspend fun stat(relPath: String): FileMeta? = raw.stat(relPath)?.copy(mtimeMillis = 0)
 
-                override suspend fun listAllIndexable(): List<FileMeta> =
-                    raw.listAllIndexable().map { it.copy(mtimeMillis = 0) }
+                    override suspend fun listAllIndexable(): List<FileMeta> =
+                        raw.listAllIndexable().map { it.copy(mtimeMillis = 0) }
 
-                override suspend fun listAllUnder(relPath: String): List<FileMeta> =
-                    raw.listAllUnder(relPath).map { it.copy(mtimeMillis = 0) }
+                    override suspend fun listAllUnder(relPath: String): List<FileMeta> =
+                        raw.listAllUnder(relPath).map { it.copy(mtimeMillis = 0) }
+                }
+            })
+            .also {
+                // A file's age is the clock's distance from its mtime, 0 here: the files have long settled.
+                it.clock.now = NOW
             }
-        }).also {
-            // A file's age is the clock's distance from its mtime, 0 here: the files have long settled.
-            it.clock.now = NOW
-        }
 
     @AfterTest
     fun teardown() = rig.close()

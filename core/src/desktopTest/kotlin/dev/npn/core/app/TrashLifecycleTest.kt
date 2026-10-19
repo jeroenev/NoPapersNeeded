@@ -37,7 +37,11 @@ class TrashLifecycleTest {
             val row = db.documentDao().requireByDocId(id)
             row.trashed.shouldBeTrue()
             row.trashedOrigPath shouldBe "inbox/a.pdf"
-            db.documentDao().observeTrashed().first().map { it.docId } shouldBe listOf(id)
+            db
+                .documentDao()
+                .observeTrashed()
+                .first()
+                .map { it.docId } shouldBe listOf(id)
             db.tagDao().tagsForDocument(id) shouldBe listOf("kept")
             db.tagDao().all().map { it.name } shouldBe listOf("kept")
 
@@ -46,7 +50,10 @@ class TrashLifecycleTest {
             rig.fs.sha256("inbox/a.pdf") shouldBe id
             val restored = db.documentDao().requireByDocId(id)
             restored.relPath shouldBe "inbox/a.pdf"
-            rig.fs.stat("inbox/a.pdf").shouldNotBeNull().let { (it.size to it.mtimeMillis) } shouldBe
+            rig.fs
+                .stat("inbox/a.pdf")
+                .shouldNotBeNull()
+                .let { (it.size to it.mtimeMillis) } shouldBe
                 (restored.size to restored.mtime)
             rebuilt.rescan().hashedCount shouldBe 0
             rebuilt.close()
