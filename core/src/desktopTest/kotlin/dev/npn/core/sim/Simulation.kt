@@ -87,18 +87,8 @@ object KnownIssues {
      * there (its library is broken from then on), and is counted instead of failing the test, so a
      * long run goes on to find what else there is. A new finding is never added here before it is
      * written up; a fixed one is removed.
-     *
-     * Finding 3: two documents deleted for good, and the bytes of the second come back under the
-     * first's old name. The rescan moves the second's (still deleted) row onto the path the first's
-     * deleted row holds; `DocumentDao.upsertAll` releases a path's hidden holders only for the live
-     * rows it writes, so the write fails on the unique `relPath`, the whole rescan with it, and
-     * every rescan after it, until the file goes away.
      */
-    val knownFailures: Map<String, String> =
-        mapOf(
-            "UNIQUE constraint failed: documents.relPath" to
-                "finding 3: a hidden row relocated onto another hidden row's path",
-        )
+    val knownFailures: Map<String, String> = emptyMap()
 
     // Finding 4 has no switch: an import stats its target after moving its file there
     // (`ImportService.record`), so a file another process put at that name in between is recorded

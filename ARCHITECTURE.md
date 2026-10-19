@@ -282,9 +282,11 @@ the short list of these that a change must never break; this section is the comp
   predicates use `isSafe` to ignore rather than throw. `NpnPaths.Temp` names every temporary file
   the app writes into the library.
 - A path holds one row (`DocumentDao.upsertAll`). A trashed, deleted or missing row gives its path
-  up to a live document and waits on a sentinel path, the `.npn/missing/` prefix plus its document
-  id (`DocumentDao`'s `missingSentinel`, a row path with no folder on disk), flags kept. `upsertAll`
-  fails the write rather than drop a row on a path another live row holds; before a rename or
+  up to any row written there, live or hidden, and waits on a sentinel path, the `.npn/missing/`
+  prefix plus its document id (`DocumentDao`'s `missingSentinel`, a row path with no folder on
+  disk), flags kept. A hidden row written onto a path a live row holds waits at its sentinel
+  instead, so no rescan fails on where a hidden document's bytes turned up. `upsertAll` fails the
+  write rather than drop a live row on a path another live row holds; before a rename or
   storage-path move onto such a path, `DocumentPathReconciler` does the same.
 - Explicit renames and moves, and storage-path rules, write the `storagePath` system property
   (keyed by hash) before moving bytes. HLC last-writer-wins chooses the intended location across

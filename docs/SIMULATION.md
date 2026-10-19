@@ -121,8 +121,6 @@ its switch off (or removing its `knownFailures` entry) and making a long run pas
   of tags in use.
 - **Finding 2**, `UNIQUE_PDF_SIZES`: where storage reports no mtimes, a replacement of the same
   size keeps the old identity. Every generated PDF has a size of its own.
-- **Finding 3**, `knownFailures`: a deleted document's row relocated onto the path of another
-  deleted row fails every rescan with a unique-constraint error on `documents.relPath`.
 - **Finding 4** (no switch): an import records the stat of whatever is at its target once it has
   moved its file there. A file that replaced it in between is taken as the document's from then
   on. Long runs hit this rarely; it fails as "files do not hold their documents' bytes".

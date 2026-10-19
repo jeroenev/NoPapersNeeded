@@ -90,6 +90,53 @@ class DocumentDaoTest {
             }
         }
 
+    /**
+     * A hidden row moved onto another hidden row's path takes it, as a live one would; one moved onto
+     * a live row's path waits at its own sentinel. Neither fails the write.
+     */
+    @Test
+    fun aHiddenRowTakesAHiddenRowsPathAndWaitsBesideALiveOne() =
+        runTest {
+            val dao = db.documentDao()
+            val first = documentEntity("a".repeat(64), relPath = "a.pdf", deleted = true)
+            val second = documentEntity("b".repeat(64), relPath = "b.pdf", deleted = true)
+            val live = documentEntity("c".repeat(64), relPath = "c.pdf")
+            dao.upsertAll(listOf(first, second, live))
+
+            dao.upsertAll(listOf(second.copy(relPath = "a.pdf"), first.copy(trashed = true, relPath = "c.pdf")))
+
+            dao.getByRelPath("a.pdf")?.docId shouldBe second.docId
+            dao.getByDocId(first.docId)?.relPath shouldBe missingSentinel(first.docId)
+            dao.getByRelPath("c.pdf")?.docId shouldBe live.docId
+        }
+
+    /**
+     * Within one write, a hidden row lands on a path a live row leaves earlier in it, and waits at its
+     * sentinel on a path a live row takes earlier in it.
+     */
+    @Test
+    fun aHiddenRowFollowsTheLiveRowsWrittenBeforeIt() =
+        runTest {
+            val dao = db.documentDao()
+            val moving = documentEntity("a".repeat(64), relPath = "a.pdf")
+            val hidden = documentEntity("b".repeat(64), relPath = "b.pdf", deleted = true)
+            val other = documentEntity("c".repeat(64), relPath = "c.pdf", missing = true)
+            dao.upsertAll(listOf(moving, hidden, other))
+
+            dao.upsertAll(
+                listOf(
+                    moving.copy(relPath = "elsewhere.pdf"),
+                    hidden.copy(relPath = "a.pdf"),
+                    documentEntity("d".repeat(64), relPath = "new.pdf"),
+                    other.copy(relPath = "new.pdf"),
+                ),
+            )
+
+            dao.getByRelPath("a.pdf")?.docId shouldBe hidden.docId
+            dao.getByRelPath("new.pdf")?.docId shouldBe "d".repeat(64)
+            dao.getByDocId(other.docId)?.relPath shouldBe missingSentinel(other.docId)
+        }
+
     /** Two live rows on one path is a bug, and the write says so instead of dropping one. */
     @Test
     fun aRowOnTheWayOfALiveOneFailsTheWrite() =
