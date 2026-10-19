@@ -325,7 +325,8 @@ internal class SimSync(
                 // What it recorded here is not on disk any more: the delivery puts the file there,
                 // and a device holding the recorded version meets this one as a conflict of its own.
                 put(fs, path, version, delivery, temp, to)
-                known[to][path] = SyncVersion(version.bytes.copyOf(), version.mtime, joined, version.origin)
+                // A version of its own, so no other content ever has its vector.
+                known[to][path] = SyncVersion(version.bytes.copyOf(), version.mtime, bump(joined, to), to)
             }
 
             else -> {
@@ -477,8 +478,15 @@ internal class SimSync(
         for (path in paths) {
             for (to in peers.indices) {
                 for (from in peers.indices.filter { it != to }) {
-                    val theirs = known[from][path]
-                    if (theirs != null && known[to][path]?.dominates(theirs.vector) != true) {
+                    val theirs = known[from][path] ?: continue
+                    val mine = known[to][path]
+                    if (mine != null && mine.vector == theirs.vector && !same(mine.bytes, theirs.bytes)) {
+                        // One vector for two contents (a model slip, never Syncthing's): theirs wins.
+                        val winner = SyncVersion(theirs.bytes, theirs.mtime, bump(theirs.vector, from), from)
+                        known[from][path] = winner
+                        apply(to, path, winner, Delivery.Atomic, immediate = true)
+                        pulled++
+                    } else if (mine?.dominates(theirs.vector) != true) {
                         apply(to, path, theirs, Delivery.Atomic, immediate = true)
                         pulled++
                     }
