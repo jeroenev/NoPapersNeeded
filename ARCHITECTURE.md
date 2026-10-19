@@ -342,6 +342,11 @@ Kept by `DocLifecycleImpl`, `TrashOps`, `JournalCoordinator.changeLifecycle` and
   only while that trash still holds it: the receipt carries the trash time the row had once the
   trash stood, and a document trashed again since stays in the trash. The Trash screen's restore is
   unconditional.
+- A document the journal has in the trash has a row, whether or not a rescan ever listed its file:
+  rows otherwise come from the files a rescan lists, which never include the trash, so a rebuilt
+  index or another device would show an empty Trash. The fold gives such a document a row at its
+  sentinel, named after the path it was trashed from, with no stat (`FoldProjection.trashedRow`);
+  a restore records the stat of the trash entry it moves, so the restored file vouches for it.
 - Restore records its final destination: the path the document was trashed from (or the inbox under
   its file name when that is no document path), or a `(restored)` name beside it when a file is
   there now or another live row names it.

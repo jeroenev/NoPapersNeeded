@@ -63,16 +63,6 @@ object KnownIssues {
     val disabledOps: Set<OpKind> = emptySet()
 
     /**
-     * Finding 1: a rebuilt index has no row for a document in the trash. Rows come only from files
-     * a rescan lists, and it never lists `.npn/trash`; the fold projects only documents that have a
-     * row (`FoldProjection.fold`). So after `index.db` is dropped (or on a new device) the Trash
-     * shows nothing, though the journal and the trash folder still hold the documents, and they can
-     * be neither restored nor deleted for good from there. While true, the oracle passes over a
-     * trashed row the rebuild lacks.
-     */
-    const val TRASH_IS_NOT_REBUILT = true
-
-    /**
      * Finding 2: where storage reports no mtime (a SAF provider giving 0), a file replaced by other
      * bytes of the same size keeps its old identity. The rescan, an import's duplicate check and the
      * trash take an unchanged size and mtime as proof the bytes are the ones hashed before
@@ -474,7 +464,7 @@ internal class Simulation(
                 diff(
                     live,
                     rebuilt,
-                    hiddenOnlyLive = { _, hidden -> hidden != Hidden.TRASHED || KnownIssues.TRASH_IS_NOT_REBUILT },
+                    hiddenOnlyLive = { _, hidden -> hidden != Hidden.TRASHED },
                     bothHold = {
                         docId,
                         a,

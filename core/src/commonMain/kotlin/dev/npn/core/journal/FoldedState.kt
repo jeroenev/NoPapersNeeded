@@ -349,6 +349,12 @@ internal class FoldedState {
     fun intendedPath(doc: String): String? =
         if (isCurrent(doc)) effectiveProp(doc, SystemProperty.STORAGE_PATH) else null
 
+    /**
+     * Every document in the trash now ([isTrashed]) and not superseded by a relink: the ones the
+     * Trash shows, which the projection gives a row whether or not this index ever saw their file.
+     */
+    fun trashedDocs(): Set<String> = trash.keys.filterTo(LinkedHashSet()) { isTrashed(it) && resolveDocId(it) == it }
+
     /** Original path recorded by the winning doc-trash, if currently trashed. */
     fun trashOrigPath(doc: String): String? {
         val t = trash[doc] ?: return null

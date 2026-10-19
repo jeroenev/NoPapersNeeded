@@ -103,8 +103,9 @@ background operations end, 20 virtual minutes pass, then one more rescan runs. T
 - Every settled PDF in the folder is a live document or a known duplicate.
 - **Rebuild oracle**: a second replica opens over a copy of the files with empty databases,
   rescans to rest, and must show the same library (`LibraryView`, `diff`). That covers live
-  documents with their path, tags, field values and reviewed flag, the trashed/deleted state of
-  documents both indexes have, field definitions, the styles of tags in use, review mode, storage
+  documents with their path, tags, field values and reviewed flag, the documents in the trash with
+  the path each was trashed from and the same metadata, the deleted state of documents both indexes
+  have, field definitions, the styles of the tags live and trashed documents use, review mode, storage
   path rule, trash retention, saved views and auto-match rules. Device-local data is left out on
   purpose: device id, queues, enrichment marks, thumbnails, OCR state and page counts, `addedAt`, a
   row's stat, rows hidden as missing or deleted that only the live index remembers, and which of
@@ -116,9 +117,6 @@ background operations end, 20 virtual minutes pass, then one more rescan runs. T
 that are not fixed yet. Each switch's comment names the finding. Fixing a finding means turning
 its switch off (or removing its `knownFailures` entry) and making a long run pass.
 
-- **Finding 1**, `TRASH_IS_NOT_REBUILT`: a rebuilt index has no rows for documents in the trash.
-  The oracle passes over trashed rows that only the live index has, and compares only the styles
-  of tags in use.
 - **Finding 2**, `UNIQUE_PDF_SIZES`: where storage reports no mtimes, a replacement of the same
   size keeps the old identity. Every generated PDF has a size of its own.
 - **Finding 4** (no switch): an import records the stat of whatever is at its target once it has

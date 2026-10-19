@@ -121,6 +121,9 @@ internal class DocLifecycleImpl(
             // target since the trash gave it up, so even with no copy left the row goes beside that
             // one's file, or beside its row while that names the path with the file gone.
             val entry = trashOps.confirmedCopiesOf(docId, hashed).firstOrNull()
+            // The stat of the entry just confirmed as the document's, which the move keeps: the row's
+            // proof from then on. A row the fold made for a trash it never saw the file of has none.
+            val entryStat = entry?.let { fs.stat(it) }
             val finalPath =
                 if (entry != null) {
                     trashOps.restoreTarget(target, ::takenForRestore)
@@ -134,7 +137,7 @@ internal class DocLifecycleImpl(
                         PendingOp.propSet(docId, SystemProperty.STORAGE_PATH, finalPath),
                     ),
                 move = { entry?.let { fs.move(it, finalPath) } },
-                optimisticWrite = { documentDao.upsert(doc.restoredAt(finalPath)) },
+                optimisticWrite = { documentDao.upsert(doc.restoredAt(finalPath, entryStat)) },
                 undoMove = { entry?.let { fs.move(finalPath, it) } },
             )
         }
@@ -169,16 +172,20 @@ internal class DocLifecycleImpl(
         return !meta.isDirectory && meta.size == doc.size && fs.holds(path, doc.docId)
     }
 
-    /** This trashed row, restored to [relPath]. */
-    private fun DocumentEntity.restoredAt(relPath: String) =
-        copy(
-            trashed = false,
-            trashedOrigPath = null,
-            trashedAt = null,
-            relPath = relPath,
-            fileName = NpnPaths.fileName(relPath),
-            missing = false,
-        )
+    /** This trashed row, restored to [relPath] from a trash entry of stat [moved] (null: none moved). */
+    private fun DocumentEntity.restoredAt(
+        relPath: String,
+        moved: FileMeta?,
+    ) = copy(
+        trashed = false,
+        trashedOrigPath = null,
+        trashedAt = null,
+        relPath = relPath,
+        fileName = NpnPaths.fileName(relPath),
+        size = moved?.size ?: size,
+        mtime = moved?.mtimeMillis ?: mtime,
+        missing = false,
+    )
 
     override suspend fun deleteDocPermanently(docId: String) =
         lifetime.owned { bakeLock.held { deleteForGood(docId, listing = null) } }
