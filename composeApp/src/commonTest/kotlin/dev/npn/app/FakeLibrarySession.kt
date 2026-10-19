@@ -36,7 +36,7 @@ class FakeLibrarySession : LibrarySession {
     override val maintenance = FakeMaintenanceFacade()
     override val work = FakeWorkFacade()
     override val aiEditQueue = FakeAiEditQueue()
-    override val log: NpnLog = NpnLog.None
+    override var log: NpnLog = NpnLog.None
 
     override fun start() = Unit
 

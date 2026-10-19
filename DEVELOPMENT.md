@@ -171,6 +171,12 @@ Regression coverage follows the failure modes from the code audit:
   seeded hints, scan phases and relink reasons, including text that the localization key guard
   cannot inspect.
 
+`LibrarySimulationTest` is a deterministic simulation of one replica. It runs the real session
+over an in-memory library folder, on virtual time, with seeded operations, external file changes,
+faults and crashes. It checks invariants after every step and compares the live index with a
+rebuilt one at rest. CI runs a few seeds. [docs/SIMULATION.md](docs/SIMULATION.md) covers long
+runs, replaying a seed, adding an operation or an invariant, and what it does not model yet.
+
 Android's host JVM has framework stubs. Its tests cannot verify a real document provider, an
 activity's retained state, URI grants, FileProvider routing or the installed app's network policy.
 Run the instrumentation suites on a connected Android device:

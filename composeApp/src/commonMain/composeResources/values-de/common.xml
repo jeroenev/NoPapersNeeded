@@ -24,6 +24,8 @@
     <string name="common_view_grid">Raster</string>
     <string name="common_unknown_error">unbekannter Fehler</string>
     <string name="common_writes_need_newer_app">die Bibliothek enthält Änderungen einer neueren Version der App; aktualisiere die App, um etwas zu ändern</string>
+    <string name="common_writes_journal_incomplete">dem Änderungsverlauf der Bibliothek fehlt eine Datei, die die Synchronisierung noch nicht geliefert hat oder die verloren gegangen ist; die Bibliothek ist schreibgeschützt, bis er vollständig ist</string>
+    <string name="common_writes_reconcile_failed">das Lesen des Änderungsverlaufs der Bibliothek ist fehlgeschlagen; die Bibliothek ist schreibgeschützt, bis die nächste Prüfung gelingt</string>
     <string name="common_could_not_open_library">Die Bibliothek konnte nicht geöffnet werden.</string>
 
     <string name="common_opening_library">Bibliothek wird geöffnet...</string>

@@ -20,7 +20,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -68,10 +67,10 @@ internal fun FieldsSection(
     refused: Set<String>,
     defs: List<FieldDef>,
     vocabulary: VocabularyState,
+    /** Keys the user picked from "Add field"; they render empty until a value lands. */
+    revealed: Set<String>,
     actions: MetadataActions,
 ) {
-    // Keys the user picked from "Add field" this session; they render empty until a value lands.
-    var revealed by remember(doc.docId) { mutableStateOf(emptySet<String>()) }
     var newField by rememberSaveable(
         stateSaver = jsonSaver(NewFieldSeed.serializer().nullable),
     ) { mutableStateOf(null) }
@@ -124,7 +123,7 @@ internal fun FieldsSection(
         AddFieldMenu(
             label = stringResource(Res.string.detail_add_field),
             fields = defs.filter { it !in shown },
-            onPick = { revealed = revealed + it.key },
+            onPick = { actions.revealField(it.key) },
             newLabel = stringResource(Res.string.detail_new_field_menu),
             onNew = { newField = NewFieldSeed() },
         )

@@ -5,7 +5,9 @@ import dev.npn.core.index.MetadataWriteBlocked
 import dev.npn.core.index.WriteBlock
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_unknown_error
+import no_papers_needed.composeapp.generated.resources.common_writes_journal_incomplete
 import no_papers_needed.composeapp.generated.resources.common_writes_need_newer_app
+import no_papers_needed.composeapp.generated.resources.common_writes_reconcile_failed
 import org.jetbrains.compose.resources.PluralStringResource
 import org.jetbrains.compose.resources.ResourceEnvironment
 import org.jetbrains.compose.resources.StringResource
@@ -76,13 +78,16 @@ fun Throwable.reasonText(): UiText =
         ?: uiText(Res.string.common_unknown_error)
 
 /**
- * Why writes are refused, in the user's terms, where they can act on it: only a newer app reads the
- * library. A damaged journal or a failed pass keeps its technical message, which is all there is.
+ * Why writes are refused, in the user's terms: only a newer app reads the library, the journal is
+ * missing an object (one sync has yet to deliver, or one that was lost), or reading it failed. The
+ * library stays readable meanwhile. The technical cause, which names journal objects, goes to the
+ * log where the refusal is reported ([MessageSink.reporting]), never into the sentence.
  */
-private fun MetadataWriteBlocked.blockText(): UiText? =
+private fun MetadataWriteBlocked.blockText(): UiText =
     when (block) {
         WriteBlock.NEWER_FORMAT -> uiText(Res.string.common_writes_need_newer_app)
-        WriteBlock.JOURNAL_DAMAGED, WriteBlock.RECONCILE_FAILED -> null
+        WriteBlock.JOURNAL_DAMAGED -> uiText(Res.string.common_writes_journal_incomplete)
+        WriteBlock.RECONCILE_FAILED -> uiText(Res.string.common_writes_reconcile_failed)
     }
 
 /** This text in [environment]'s language, outside a composition (see [SnackbarMessages]). */

@@ -92,6 +92,21 @@ tasks.matching { it.name.endsWith("LintModel") || it.name.startsWith("lintAnalyz
     mustRunAfter(tasks.matching { it.name.startsWith("ksp") })
 }
 
+// The library simulation (docs/SIMULATION.md) reads how many seeds and steps to run, or the one seed
+// to replay, from these: `./gradlew :core:desktopTest -Dnpn.sim.seed=1234` (or `-Pnpn.sim.seed=`)
+// hands them to the test JVM, and a changed value reruns the task rather than reusing its result.
+val simulationProperties =
+    listOf("npn.sim.seed", "npn.sim.seeds", "npn.sim.firstSeed", "npn.sim.steps", "npn.sim.traceDir")
+tasks.withType<Test>().configureEach {
+    simulationProperties.forEach { key ->
+        providers
+            .systemProperty(key)
+            .orElse(providers.gradleProperty(key))
+            .orNull
+            ?.let { systemProperty(key, it) }
+    }
+}
+
 // Mutation testing over the desktop target (docs/MUTATION_TESTING.md): on demand and in the weekly
 // mutation.yml, never in `check`. -Pnpn.mutation.packages=a.b,c.d picks other packages (each with
 // its subpackages), -Pnpn.mutation.threads the number of test processes.
@@ -124,6 +139,9 @@ tasks.register<MutationTestTask>("mutationTest") {
         listOf(
             // Calls a paid AI endpoint when NPN_LIVE_AI is set, and is skipped otherwise.
             "dev.npn.core.ai.LiveEndpointProbeTest",
+            // The library simulation runs its steps concurrently, so whether it kills a mutant can
+            // change from run to run, and each run takes seconds against every mutant it covers.
+            "dev.npn.core.sim.*",
         ),
     )
     threads.set(
