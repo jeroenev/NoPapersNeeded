@@ -165,7 +165,9 @@ internal class SyncSimulation(
     val world = SimWorld(scheduler)
     val sync = SyncConfig.forSeed(config)
     private val random = Random(config.seed xor ORCHESTRA_SALT)
-    private val trace = ArrayList<String>()
+
+    /** Every step and what it came to, as a trace file holds it. */
+    val trace = ArrayList<String>()
     private val known = HashMap<String, ByteArray>()
 
     inner class Member(
