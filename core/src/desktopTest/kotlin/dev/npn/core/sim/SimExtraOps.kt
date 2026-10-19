@@ -166,14 +166,18 @@ internal class ExtraPlanner(
     private val totalWeight = kinds.sumOf { it.weight }
     private var made = 0
 
-    /** Shared by every importer of this replica's folder, so two sweeps never overlap. */
-    val sweepLock = Mutex()
+    /**
+     * Shared by every importer of this replica's folder in one process, so two sweeps never
+     * overlap. A process's own: a killed one may die holding it.
+     */
+    private var sweepLock = Mutex()
 
     /** The continuous importer a host runs beside the session, started in its scope. */
     fun startImporter(
         session: LibrarySessionImpl,
         scope: CoroutineScope,
     ) {
+        sweepLock = Mutex()
         val folder = watched ?: return
         importer(session, folder).start(scope, POLL_MILLIS, sim.world.scheduler.timeSource)
     }

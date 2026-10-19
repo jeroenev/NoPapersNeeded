@@ -139,7 +139,13 @@ class InMemoryLibraryFileSystem(
         calls.merge(method, 1, Int::plus)
         latency.pause()
         faults.check(method, path, SimFaults.Point.BEFORE)
-        val result = effect()
+        actor = method
+        val result =
+            try {
+                effect()
+            } finally {
+                actor = null
+            }
         faults.check(method, path, SimFaults.Point.AFTER)
         latency.pause()
         return result
@@ -668,6 +674,11 @@ class InMemoryLibraryFileSystem(
 
     /** Report a change at [norm] to the watcher, as inotify would (possibly dropped or as an overflow). */
     private fun touch(norm: String) {
+        val entries = history.getOrPut(norm) { ArrayDeque() }
+        val content =
+            files[norm]?.let { sha256Bytes(it.bytes).take(HISTORY_ID) } ?: if (dirs.containsKey(norm)) "dir" else "gone"
+        entries.addLast("t=${now()} ${actor?.name?.lowercase() ?: "external"} -> $content")
+        if (entries.size > HISTORY_LENGTH) entries.removeFirst()
         if (!options.watch || options.profile.saf) return
         val roll = watchRandom.nextDouble()
         val event =
@@ -706,7 +717,17 @@ class InMemoryLibraryFileSystem(
             (norm.startsWith("${NpnPaths.OCR_DIR}/") || norm.startsWith("${NpnPaths.DEVICES_DIR}/"))
     }
 
+    /** The app's call taking effect right now, or null for the outside world. */
+    private var actor: FsMethod? = null
+
+    /** The last changes at each path, and who made them: what a failure at a path shows. */
+    private val history = HashMap<String, ArrayDeque<String>>()
+
+    fun historyOf(relPath: String): List<String> = history[relPath].orEmpty().toList()
+
     private companion object {
+        const val HISTORY_LENGTH = 12
+        const val HISTORY_ID = 8
         const val WATCH_BUFFER = 100_000
         const val NPN_PREFIX = "${NpnPaths.NPN_DIR}/"
     }

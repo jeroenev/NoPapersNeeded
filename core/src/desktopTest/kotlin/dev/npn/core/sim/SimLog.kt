@@ -75,6 +75,8 @@ private fun Throwable.isExpected(): Boolean =
     this is MetadataWriteBlocked ||
         // An import of bytes a relink superseded is refused (ImportFailure.SUPERSEDED), a split part's included.
         this is dev.npn.core.index.SupersededImportException ||
+        // A bake the PDF cannot carry, or whose rewrite did not verify: BakeFailure.UNSUPPORTED_PDF.
+        this is dev.npn.core.xmp.BakeRefusedException ||
         this is VerifiedPublicationUnavailableException ||
         this is VerifiedPublicationFailedException ||
         this is java.nio.file.NoSuchFileException ||

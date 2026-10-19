@@ -444,7 +444,14 @@ internal class Simulation(
                     else -> null
                 }
             }
-        if (wrong.isNotEmpty()) fail("files do not hold their documents' bytes:\n  " + wrong.joinToString("\n  "))
+        if (wrong.isNotEmpty()) {
+            val paths =
+                view.live.values
+                    .map { it.relPath }
+                    .filter { path -> wrong.any { "'$path'" in it } }
+            val history = paths.joinToString("") { path -> "\n  '$path': " + fs.historyOf(path).joinToString("; ") }
+            fail("files do not hold their documents' bytes:\n  " + wrong.joinToString("\n  ") + history)
+        }
         val livePaths =
             view.live.values
                 .map { it.relPath }
