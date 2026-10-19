@@ -371,6 +371,18 @@ class InMemoryLibraryFileSystem(
         touch(norm)
     }
 
+    /**
+     * Give the file at [relPath] a new mtime with its bytes unchanged, as `touch`, a backup tool
+     * that does not keep mtimes, or a sync tool rewriting a file it holds already does.
+     */
+    fun externalTouch(relPath: String) {
+        val norm = NpnPaths.normalize(relPath)
+        val node = files[norm] ?: return
+        external(norm)
+        node.mtime = now()
+        touch(norm)
+    }
+
     /** Delete [relPath], a file or a whole directory, as another process does. */
     fun externalDelete(relPath: String) {
         val norm = NpnPaths.normalize(relPath)
@@ -451,6 +463,9 @@ class InMemoryLibraryFileSystem(
     fun allFiles(): Map<String, ByteArray> = files.mapValues { it.value.bytes }
 
     fun bytesAt(relPath: String): ByteArray? = files[relPath]?.bytes
+
+    /** The stat of the file at [relPath] as a listing reports it now, with no latency or fault; null without one. */
+    fun statAt(relPath: String): FileMeta? = if (files.containsKey(relPath)) metaOf(relPath) else null
 
     fun isDirectory(relPath: String): Boolean = dirs.containsKey(relPath)
 

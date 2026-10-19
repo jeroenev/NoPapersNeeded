@@ -58,8 +58,8 @@ the run. It also checks that storage with no publication primitive refuses the l
   (`SimLatency`). It records every journal object, snapshot, OCR sidecar and device marker the app
   creates, and flags one that later holds other bytes or whose name is not its hash.
 - Its `external*` members are the outside world: an atomic write, a write in place in chunks over
-  virtual time (`cp`, a scanner app), an overwrite in place or by rename, a delete, a move, a
-  backup put back, sync-tool temporary files, and a Syncthing-style delivery (temporary name, then
+  virtual time (`cp`, a scanner app), an overwrite in place or by rename, a touch (a new mtime over
+  the same bytes), a delete, a move, a backup put back, sync-tool temporary files, and a Syncthing-style delivery (temporary name, then
   rename). The generator uses that delivery for another device's journal objects and OCR
   sidecars.
 - `SimFaults` fails any filesystem method once or N times, at any path or under a prefix, before
@@ -100,6 +100,8 @@ At rest (every `quiesceEvery` steps, and at the end): faults are cleared, OCR ru
 background operations end, 20 virtual minutes pass, then one more rescan runs. Then:
 
 - Every live document's file holds its hash.
+- Every live row stores its file's size and mtime, the proof by stat the rescan, trash and import
+  take from it: a file touched since was hashed and its row given the new stat.
 - Every settled PDF in the folder is a live document or a known duplicate.
 - **Rebuild oracle**: a second replica opens over a copy of the files with empty databases,
   rescans to rest, and must show the same library (`LibraryView`, `diff`). That covers live
