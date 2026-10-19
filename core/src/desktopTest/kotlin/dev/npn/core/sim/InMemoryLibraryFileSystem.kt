@@ -449,8 +449,10 @@ class InMemoryLibraryFileSystem(
     /** A copy of everything at or under [relPath], with mtimes, to [externalRestore] later. */
     fun externalBackup(relPath: String): Backup {
         val norm = NpnPaths.normalize(relPath)
+        // A file another process is still writing is skipped, as a backup tool skips a file in use:
+        // put back later, its partial bytes would be damage no library could tell from a lost file.
         val taken =
-            files.filterKeys { it == norm || it.startsWith("$norm/") }.mapValues { (_, node) ->
+            files.filterKeys { (it == norm || it.startsWith("$norm/")) && it !in writing }.mapValues { (_, node) ->
                 node.bytes.copyOf() to node.mtime
             }
         return Backup(norm, taken)

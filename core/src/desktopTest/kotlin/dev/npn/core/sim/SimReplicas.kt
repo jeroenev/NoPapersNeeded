@@ -6,6 +6,7 @@ import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.index.MetadataWriteBlocked
 import dev.npn.core.index.WriteBlock
+import dev.npn.core.journal.JournalOp
 import dev.npn.core.util.NpnLog
 import kotlinx.coroutines.test.TestCoroutineScheduler
 import java.io.File
@@ -85,6 +86,15 @@ object SyncKnownIssues {
      * differs only by what the rebuild's own session wrote.
      */
     const val REBUILD_RUNS_RULES = true
+
+    /**
+     * Finding 8, the documented cost of `doc-undelete` not being written yet (ARCHITECTURE.md 6.4):
+     * the bytes of a document deleted for good that come back (an import, or a file a sync tool
+     * delivers) bring it back on the device that imported them, for that session, and in the scan
+     * that finds the file, and nowhere else: devices disagree on whether the library shows it, and a
+     * device disagrees with a rebuild of its own index. Off once this build writes the op.
+     */
+    const val DELETED_RETURNS_UNRECORDED = !JournalOp.DocUndelete.WRITTEN
 
     /** Each finding by the phrases its failure message holds, all of them. */
     val knownFailures: Map<List<String>, String> =
@@ -271,8 +281,8 @@ internal class SyncSimulation(
                 checkAcross()
                 if (step % config.quiesceEvery == 0) quiesce(full = random.chance(FULL_SYNC_PERCENT))
                 val took = (System.nanoTime() - started) / NANOS_PER_MILLI
-                // Real time, not virtual: what a slow seed spends its time on, for whoever makes it faster.
-                if (took > SLOW_STEP_MILLIS) trace += "   (step $step took ${took}ms of real time)"
+                // Real time, so kept out of the trace a replay compares: where a slow seed spends its time.
+                if (took > SLOW_STEP_MILLIS) println("seed ${config.seed}: step $step took ${took}ms of real time")
             }
             quiesce(full = true)
         } finally {
@@ -469,9 +479,23 @@ internal class SyncSimulation(
             val b = views[member.index]
             // A row only one index holds for a document neither shows is what that replica alone saw
             // (a file gone missing, a deletion it watched): device-local, as for the rebuild oracle.
+            // While this build writes no doc-undelete, a document deleted for good that an import
+            // brought back shows on the importing device for that session only (ARCHITECTURE.md 6.4).
+            val returned =
+                if (!SyncKnownIssues.DELETED_RETURNS_UNRECORDED) {
+                    emptySet()
+                } else {
+                    world.read("deleted documents") {
+                        first.replica.indexDb
+                            .rows("SELECT DISTINCT documentId FROM metadata_events WHERE operation = 'doc-delete'")
+                            .mapNotNull { it[0]?.take(ID) }
+                            .toSet()
+                    }
+                }
             val differences =
-                diff(a, b, hiddenOnlyLive = { _, _ -> true }, bothHold = ::holds).filterNot {
-                    "hidden state differs: live null," in it
+                diff(a, b, hiddenOnlyLive = { _, _ -> true }, bothHold = ::holds).filterNot { line ->
+                    "hidden state differs: live null," in line ||
+                        ("is live only in" in line && line.removePrefix("doc ").take(ID) in returned)
                 }
             if (differences.isNotEmpty()) {
                 fail(
@@ -524,6 +548,7 @@ internal class SyncSimulation(
         const val SHORT_RADIX = 36
         const val DIFF_LINES = 30
         const val SUMMARY_LINES = 10
+        const val ID = 10
         const val ROUND_LINES = 6
         const val NANOS_PER_MILLI = 1_000_000L
         const val SLOW_STEP_MILLIS = 1_000L

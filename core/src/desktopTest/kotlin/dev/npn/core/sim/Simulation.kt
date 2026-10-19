@@ -457,10 +457,13 @@ internal class Simulation(
                     .toSet()
             }
         // Bytes a relink superseded (a bake's original) are no document: a rescan gives them no row.
+        // Nor, while this build writes no doc-undelete, are the bytes of a document deleted for good
+        // that came back: a rescan shows such a file for that scan only (ARCHITECTURE.md 6.4).
+        val operations = if (SyncKnownIssues.DELETED_RETURNS_UNRECORDED) "('relink', 'doc-delete')" else "('relink')"
         val superseded =
             world.read("superseded") {
                 replica.indexDb
-                    .rows("SELECT DISTINCT documentId FROM metadata_events WHERE operation = 'relink'")
+                    .rows("SELECT DISTINCT documentId FROM metadata_events WHERE operation IN $operations")
                     .mapNotNull { it[0] }
                     .toSet()
             }
@@ -532,9 +535,13 @@ internal class Simulation(
             // While SyncKnownIssues.REBUILD_RUNS_RULES holds, a document that differs only by what the
             // rebuild's own session wrote (its auto-match rules, finding 5) is passed over.
             val remaining =
-                explained.filterNot { (_, events) ->
-                    SyncKnownIssues.REBUILD_RUNS_RULES && events.isNotBlank() &&
-                        events.lines().filter { it.isNotBlank() }.all { REBUILD_WROTE in it }
+                explained.filterNot { (line, events) ->
+                    val ownRules =
+                        SyncKnownIssues.REBUILD_RUNS_RULES && events.isNotBlank() &&
+                            events.lines().filter { it.isNotBlank() }.all { REBUILD_WROTE in it }
+                    // A deleted document's file back in the folder: a rebuild's rescan shows it.
+                    val returned = SyncKnownIssues.DELETED_RETURNS_UNRECORDED && "(live index: DELETED)" in line
+                    ownRules || returned
                 }
             if (remaining.size < explained.size) {
                 trace += "   rebuild oracle: ${explained.size - remaining.size} document(s) differ by its own rules"
