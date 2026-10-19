@@ -79,11 +79,6 @@ object KnownIssues {
      * written up; a fixed one is removed.
      */
     val knownFailures: Map<String, String> = emptyMap()
-
-    // Finding 4 has no switch: an import stats its target after moving its file there
-    // (`ImportService.record`), so a file another process put at that name in between is recorded
-    // with the document's id, and its stat then vouches for it at every rescan. Long runs hit it
-    // rarely, as "files do not hold their documents' bytes".
 }
 
 /** A broken invariant: the run stops at the first. */

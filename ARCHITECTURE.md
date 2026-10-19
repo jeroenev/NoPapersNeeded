@@ -304,6 +304,9 @@ Kept by `ImportService`:
 - An import is a duplicate only of a **live** document whose file holds the bytes. The size and
   mtime its row stored prove that, as they do for a rescan; a drifted stat means hashing the file,
   under the writer lock the check runs in. A caller may delete a duplicate's source.
+- An import's row records the stat of the bytes it placed: the staged file's, which its move into
+  place keeps, never a stat of the target taken once moved, which by then may be another process's
+  file. A file written over the import in between has another stat, so the next rescan hashes it.
 - The bytes of a trashed, deleted or missing document bring that document back, metadata and all,
   and any copy of it left in the trash is deleted, under the writer lock and only while the
   document is still live. The return is recorded in the journal in the same locked step that makes

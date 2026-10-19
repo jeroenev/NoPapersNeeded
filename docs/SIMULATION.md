@@ -119,9 +119,6 @@ its switch off (or removing its `knownFailures` entry) and making a long run pas
 
 - **Finding 2**, `UNIQUE_PDF_SIZES`: where storage reports no mtimes, a replacement of the same
   size keeps the old identity. Every generated PDF has a size of its own.
-- **Finding 4** (no switch): an import records the stat of whatever is at its target once it has
-  moved its file there. A file that replaced it in between is taken as the document's from then
-  on. Long runs hit this rarely; it fails as "files do not hold their documents' bytes".
 
 ## Adding an operation
 
