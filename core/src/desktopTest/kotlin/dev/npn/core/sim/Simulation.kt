@@ -91,12 +91,14 @@ internal class Simulation(
     private val afterStep: Simulation.(step: Int) -> Unit = {},
     /** Changes the copy of the files the rebuild oracle opens: the harness's own tests plant a difference. */
     private val tamperWithRebuild: (InMemoryLibraryFileSystem) -> Unit = {},
+    /** Set when this is one replica of several ([SyncSimulation]): what it shares with them, and its own parts. */
+    private val setup: ReplicaSetup? = null,
 ) {
-    val world = SimWorld(scheduler)
-    private val random = Random(config.seed)
+    val world = setup?.world ?: SimWorld(scheduler)
+    private val random = setup?.random ?: Random(config.seed)
 
     val fs =
-        InMemoryLibraryFileSystem(
+        setup?.fs ?: InMemoryLibraryFileSystem(
             now = world.clock::nowMillis,
             options =
                 SimFsOptions(
@@ -109,13 +111,23 @@ internal class Simulation(
             watchRandom = Random(config.seed * LATENCY_SALT + 2),
         )
 
-    val replica = SimReplica(world, "sim-installation", fs)
+    val replica =
+        setup?.replica
+            ?: SimReplica(world, "sim-installation", fs, ids = SimIds(Random(config.seed * LATENCY_SALT + 3)))
 
     /** Every PDF the simulation made, by hash, so a later step can import its bytes again. */
-    val known = HashMap<String, ByteArray>()
+    val known = setup?.known ?: HashMap()
 
-    private val trace = ArrayList<String>()
-    private val generator = SimGenerator(random, this, OpKind.entries.filterNot { it in config.disabled })
+    private val trace = setup?.trace ?: ArrayList()
+    private val label = setup?.let { "[${it.name}] " }.orEmpty()
+    private val generator =
+        SimGenerator(
+            random,
+            this,
+            OpKind.entries.filterNot { it in config.disabled },
+            labelBase = setup?.labelBase ?: 0,
+            remoteDevice = setup?.let { "remote-device-${it.name}" } ?: "remote-device",
+        )
 
     /** How many times each outcome happened, for the summary. */
     val stats = HashMap<String, Int>()
@@ -124,15 +136,10 @@ internal class Simulation(
 
     fun run() {
         try {
-            openReplica()
+            open()
             for (step in 1..config.steps) {
                 world.step = step
-                val planned = generator.next(snapshot())
-                val outcome = execute(planned)
-                trace += "#$step t=${world.scheduler.currentTime} ${planned.text} -> $outcome"
-                harvest()
-                afterStep(step)
-                checkCheap()
+                step(step)
                 if (step % config.quiesceEvery == 0) quiesceAndCheck()
             }
             quiesceAndCheck()
@@ -144,6 +151,34 @@ internal class Simulation(
             replica.dispose()
             world.dispose()
         }
+    }
+
+    // ---- the phases of a run, for a SyncSimulation driving several replicas ---------------------
+
+    fun open() = openReplica()
+
+    /** One step: [planned] (by default the generator's next), its outcome traced, and the cheap invariants. */
+    fun step(
+        step: Int,
+        planned: Planned = generator.next(snapshot()),
+    ) {
+        val outcome = execute(planned)
+        trace += "#$step t=${world.scheduler.currentTime} $label${planned.text} -> $outcome"
+        harvest()
+        afterStep(step)
+        checkCheap()
+    }
+
+    /** The generator's next step for this replica, for a planner that runs it beside one of its own. */
+    fun nextPlanned(): Planned = generator.next(snapshot())
+
+    /** A hard crash: the killed process's background operations are dropped, never awaited; then reopen. */
+    fun hardCrashAndReopen(): String {
+        if (!replica.hardCrash()) return "no instant between transactions; not crashed"
+        inFlight.forEach { (text, _) -> trace += "   background '$text' -> killed with its process" }
+        inFlight.clear()
+        openReplica()
+        return "killed, reopened"
     }
 
     // ---- executing steps ------------------------------------------------------------------------
@@ -171,7 +206,7 @@ internal class Simulation(
 
             is Planned.Background -> {
                 val open = session
-                inFlight += planned.act.text to world.launch { planned.act.body(open) }
+                inFlight += planned.act.text to replica.launch { planned.act.body(open) }
                 "started"
             }
         }
@@ -201,7 +236,7 @@ internal class Simulation(
     /** Start [acts] together on the open session and drive them all to their end. */
     private fun runActs(acts: List<Planned.Act>): List<String> {
         val open = session
-        val running = acts.map { act -> act to world.launch { act.body(open) } }
+        val running = acts.map { act -> act to replica.launch { act.body(open) } }
         running.forEach { (act, deferred) ->
             try {
                 world.drive(deferred, act.text)
@@ -254,6 +289,7 @@ internal class Simulation(
             if (!failure.isInjected() && isBugFailure(failure)) fail("opening the library failed: ${failure.reason()}")
             trace += "   open failed (${failure.reason()}); faults cleared, opening again"
             fs.faults.disarmAll()
+            setup?.beforeReopen?.invoke(failure)
             runCatching { replica.open() }.exceptionOrNull()?.let {
                 fail(
                     "opening the library failed again: ${it.reason()}",
@@ -284,7 +320,7 @@ internal class Simulation(
 
     // ---- what the generator sees ----------------------------------------------------------------
 
-    private fun snapshot(): Snapshot {
+    fun snapshot(): Snapshot {
         val open = session
         return world.read("snapshot") {
             val rows =
@@ -306,7 +342,7 @@ internal class Simulation(
     // ---- invariants -----------------------------------------------------------------------------
 
     /** The invariants cheap enough for every step. */
-    private fun checkCheap() {
+    fun checkCheap() {
         fs.writeOnceViolations.firstOrNull()?.let { fail("write-once broken: $it") }
         fs.misnamedObjects().firstOrNull()?.let { fail("journal object not named by its hash: $it") }
         world.uncaught.firstOrNull()?.let { fail("an exception reached a scope's handler: $it") }
@@ -325,7 +361,8 @@ internal class Simulation(
                         !NpnPaths.isDocumentPath(relPath)
                     ) {
                         out +=
-                            "live row ${docId.take(ID)} at a path no document may have: '$relPath'"
+                            "live row ${docId.take(ID)} at a path no document may have: '$relPath'\n" +
+                            lifecycleEvents(docId, replica.indexDb)
                     }
                     if (sentinel &&
                         relPath != missingSentinel(docId)
@@ -360,7 +397,13 @@ internal class Simulation(
      * same files shows the same library ([rebuildOracle]).
      */
     private fun quiesceAndCheck() {
-        trace += "   -- quiescence at t=${world.scheduler.currentTime}"
+        settle()
+        checkAtRest()
+    }
+
+    /** The first half of [quiesceAndCheck]: everything let through and settled, and one more rescan. */
+    fun settle() {
+        trace += "   -- ${label}quiescence at t=${world.scheduler.currentTime}"
         fs.faults.disarmAll()
         replica.ocr.openGate()
         finishBackground()
@@ -374,12 +417,17 @@ internal class Simulation(
             )
         }
         world.advance(AFTER_RESCAN_MILLIS)
+    }
+
+    /** The second half of [quiesceAndCheck]: the invariants at rest; returns the library the replica shows. */
+    fun checkAtRest(): LibraryView {
         checkCheap()
         val live = world.read("live view") { LibraryView.read(session, replica.indexDb) }
         checkFilesHoldTheirHashes(live)
         rebuildOracle(live)
         replica.ocr.closeGate()
-        trace += "   -- quiescent: ${live.live.size} live, ${live.hidden.size} hidden"
+        trace += "   -- ${label}quiescent: ${live.live.size} live, ${live.hidden.size} hidden"
+        return live
     }
 
     private fun checkFilesHoldTheirHashes(view: LibraryView) {
@@ -408,12 +456,21 @@ internal class Simulation(
                     .map { it[0]!! }
                     .toSet()
             }
+        // Bytes a relink superseded (a bake's original) are no document: a rescan gives them no row.
+        val superseded =
+            world.read("superseded") {
+                replica.indexDb
+                    .rows("SELECT DISTINCT documentId FROM metadata_events WHERE operation = 'relink'")
+                    .mapNotNull { it[0] }
+                    .toSet()
+            }
         val unaccounted =
             fs.allFiles().filter { (path, bytes) ->
                 NpnPaths.indexable(FileMeta(path, NpnPaths.fileName(path), bytes.size.toLong(), 0, false)) &&
                     bytes.isNotEmpty() &&
                     path !in livePaths &&
-                    path !in duplicatePaths
+                    path !in duplicatePaths &&
+                    sha256Bytes(bytes) !in superseded
             }
         if (unaccounted.isNotEmpty()) {
             fail(
@@ -458,8 +515,35 @@ internal class Simulation(
                         listOf(a, b).all { path -> fs.bytesAt(path)?.let(::sha256Bytes) == docId }
                     },
                 )
-            if (differences.isNotEmpty()) {
-                fail("rebuild oracle: a fresh index shows another library:\n  " + differences.joinToString("\n  "))
+            // Each differing document with the journal events one index folded and the other did not.
+            val ids = live.live.keys + rebuilt.live.keys + live.hidden.keys
+            val explained =
+                differences.associateWith { line ->
+                    val prefix = Regex("^doc ([0-9a-f]+) ").find(line)?.groupValues?.get(1)
+                    val id = prefix?.let { ids.first { docId -> docId.startsWith(prefix) } }
+                    if (id ==
+                        null
+                    ) {
+                        ""
+                    } else {
+                        world.read("events of $id") { eventsDiffer(id, replica.indexDb, oracle.indexDb, fs, copy) }
+                    }
+                }
+            // While SyncKnownIssues.REBUILD_RUNS_RULES holds, a document that differs only by what the
+            // rebuild's own session wrote (its auto-match rules, finding 5) is passed over.
+            val remaining =
+                explained.filterNot { (_, events) ->
+                    SyncKnownIssues.REBUILD_RUNS_RULES && events.isNotBlank() &&
+                        events.lines().filter { it.isNotBlank() }.all { REBUILD_WROTE in it }
+                }
+            if (remaining.size < explained.size) {
+                trace += "   rebuild oracle: ${explained.size - remaining.size} document(s) differ by its own rules"
+            }
+            if (remaining.isNotEmpty()) {
+                fail(
+                    "rebuild oracle: a fresh index shows another library:\n  " +
+                        remaining.keys.joinToString("\n  ") + "\n" + remaining.values.joinToString(""),
+                )
             }
         } finally {
             oracle.dispose()
@@ -468,7 +552,7 @@ internal class Simulation(
 
     // ---- failing --------------------------------------------------------------------------------
 
-    private fun fail(message: String): Nothing =
+    fun fail(message: String): Nothing =
         throw SimFailure(
             report(message),
             KnownIssues.knownFailures.entries
@@ -478,7 +562,7 @@ internal class Simulation(
 
     private fun report(message: String): String =
         buildString {
-            appendLine("Simulation failed at step ${world.step} (t=${world.scheduler.currentTime}ms): $message")
+            appendLine("Simulation failed at step ${world.step} (t=${world.scheduler.currentTime}ms) $label: $message")
             appendLine()
             appendLine(
                 "Replay: ./gradlew :core:desktopTest --tests 'dev.npn.core.sim.LibrarySimulationTest' " +

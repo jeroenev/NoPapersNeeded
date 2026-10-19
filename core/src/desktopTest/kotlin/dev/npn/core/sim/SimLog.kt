@@ -73,6 +73,8 @@ fun isBugFailure(error: Throwable): Boolean {
 
 private fun Throwable.isExpected(): Boolean =
     this is MetadataWriteBlocked ||
+        // An import of bytes a relink superseded is refused (ImportFailure.SUPERSEDED), a split part's included.
+        this is dev.npn.core.index.SupersededImportException ||
         this is VerifiedPublicationUnavailableException ||
         this is VerifiedPublicationFailedException ||
         this is java.nio.file.NoSuchFileException ||

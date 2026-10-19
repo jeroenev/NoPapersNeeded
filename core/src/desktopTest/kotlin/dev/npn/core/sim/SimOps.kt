@@ -141,8 +141,12 @@ internal class SimGenerator(
     private val random: Random,
     private val sim: Simulation,
     private val enabled: List<OpKind>,
+    /** Where this generator numbers its PDFs from, so several generators never make the same one. */
+    labelBase: Int = 0,
+    /** The other device this generator delivers journal objects and OCR sidecars from. */
+    private val remoteDevice: String = "remote-device",
 ) {
-    private var nextLabel = 0
+    private var nextLabel = labelBase
     private val receipts = ArrayList<TrashReceipt>()
     private val backups = ArrayList<InMemoryLibraryFileSystem.Backup>()
     private val syncTemps = ArrayList<String>()
@@ -150,6 +154,9 @@ internal class SimGenerator(
     /** Another device's journal writer, its clock a little off ours, as a phone's may be. */
     private val remoteClock = EpochClock { sim.world.clock.nowMillis() - REMOTE_SKEW_MILLIS }
     private val remoteAllocator = HlcWatermarkAllocator(remoteClock)
+
+    /** The other device's actor ids, from the generator's own stream so a seed replays them. */
+    private val remoteIds = SimIds(random)
 
     private val totalWeight = enabled.sumOf { it.weight }
 
@@ -564,14 +571,14 @@ internal class SimGenerator(
     /** Another device's OCR sidecar for [doc], once per document and engine, as a sync tool delivers it. */
     private fun extRemoteSidecar(doc: SimDoc): Planned.Control? {
         val engine = random.pick(listOf(OcrEngineId.TESSERACT, OcrEngineId.MLKIT)).column
-        val name = OcrSidecarName(doc.docId, OcrSidecarName.writerKey(REMOTE_DEVICE, engine))
+        val name = OcrSidecarName(doc.docId, OcrSidecarName.writerKey(remoteDevice, engine))
         if (!remoteSidecars.add(name.path)) return null
         val transfer = random.nextLong(0, TRANSFER_MILLIS)
         return Planned.Control("external: another device's $engine OCR of ${doc.short()} arrives over ${transfer}ms") {
             val sidecar =
                 OcrSidecar(
                     doc = doc.docId,
-                    dev = REMOTE_DEVICE,
+                    dev = remoteDevice,
                     engine = engine,
                     lang = "eng",
                     createdAt = remoteClock.nowMillis(),
@@ -588,7 +595,7 @@ internal class SimGenerator(
     /** One object another device published, as its bytes and the path they belong at. */
     private fun remoteObject(ops: List<PendingOp>): Pair<String, ByteArray> {
         val scratch = InMemoryLibraryFileSystem(now = remoteClock::nowMillis)
-        val writer = ContentAddressedJournalWriter(scratch, "remote-installation", remoteAllocator)
+        val writer = ContentAddressedJournalWriter(scratch, "remote-installation", remoteAllocator, remoteIds)
         val published = sim.world.read("another device's commit") { writer.commit(ops) }
         return published.relPath to scratch.bytesAt(published.relPath)!!
     }
@@ -630,7 +637,6 @@ internal class SimGenerator(
 
     companion object {
         private const val ATTEMPTS = 20
-        private const val REMOTE_DEVICE = "remote-device"
         private const val SIZE_BASE = 400
         private const val SHARED_SIZES = 3
         private const val ID = 8

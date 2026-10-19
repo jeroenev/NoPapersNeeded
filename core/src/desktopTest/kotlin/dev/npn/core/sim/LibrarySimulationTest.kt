@@ -32,8 +32,14 @@ class LibrarySimulationTest {
                 }
         val failures = ArrayList<String>()
         val known = ArrayList<String>()
+        val timings = ArrayList<String>()
+        val maxReported = System.getProperty("npn.sim.maxReported")?.toInt() ?: MAX_REPORTED
         for (seed in seeds) {
+            val started = System.nanoTime()
             val failure = runCatching { runSeed(SimConfig.forSeed(seed, steps)) }.exceptionOrNull()
+            timings +=
+                "seed $seed: ${(System.nanoTime() - started) / NANOS_PER_MILLI} ms" +
+                if (failure != null) " (stopped)" else ""
             if (failure != null && failure !is SimFailure) throw failure
             val stopped: SimFailure? = failure
             // A replay of one seed shows its failure, known or not.
@@ -42,8 +48,9 @@ class LibrarySimulationTest {
                 knownFinding != null -> known += "seed $seed: $knownFinding"
                 stopped != null -> failures += stopped.message.orEmpty()
             }
-            if (failures.size >= MAX_REPORTED) break
+            if (failures.size >= maxReported) break
         }
+        println("Simulation time per seed:\n" + timings.joinToString("\n"))
         // Seeds that stopped at a reported finding (KnownIssues.knownFailures), so a long run shows how often.
         if (known.isNotEmpty()) {
             println("${known.size} of ${seeds.size} seed(s) stopped at a known finding:\n" + known.joinToString("\n"))
@@ -57,7 +64,7 @@ class LibrarySimulationTest {
 
     private fun runSeed(config: SimConfig) =
         runTest(timeout = (1 + config.steps / STEPS_PER_MINUTE).minutes) {
-            Simulation(testScheduler, config).run()
+            SyncSimulation(testScheduler, config).run()
         }
 
     private companion object {
@@ -66,5 +73,6 @@ class LibrarySimulationTest {
         const val STEPS_PER_MINUTE = 50
         const val MAX_REPORTED = 3
         const val RULE = 80
+        const val NANOS_PER_MILLI = 1_000_000L
     }
 }
