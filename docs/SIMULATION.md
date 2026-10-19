@@ -115,10 +115,8 @@ background operations end, 20 virtual minutes pass, then one more rescan runs. T
 
 `KnownIssues` (in `Simulation.kt`) holds the switches that keep the suite green around findings
 that are not fixed yet. Each switch's comment names the finding. Fixing a finding means turning
-its switch off (or removing its `knownFailures` entry) and making a long run pass.
-
-- **Finding 2**, `UNIQUE_PDF_SIZES`: where storage reports no mtimes, a replacement of the same
-  size keeps the old identity. Every generated PDF has a size of its own.
+its switch off (or removing its `knownFailures` entry) and making a long run pass. None is set
+aside at the moment.
 
 ## Adding an operation
 
@@ -154,6 +152,7 @@ Fail through `fail(...)`, which attaches the seed and the trace.
 - **Compaction** runs only when the maintenance tick finds more than 64 objects older than a day,
   which a long run reaches only now and then. There is no direct compaction operation, because the
   coordinator is internal to the session.
-- **mtime-preserving overwrites** of the same size, and same-size replacements where storage reports
-  no mtimes (see `KnownIssues.UNIQUE_PDF_SIZES`).
+- **mtime-preserving overwrites** of the same size: with mtimes, every generated PDF has a size of
+  its own. Where storage reports no mtimes, same-size replacements are modelled: every generated PDF
+  has one of a few sizes, so only a hash tells a replacement apart.
 - **Deterministic names.** See the `Uuid.random()` note above.

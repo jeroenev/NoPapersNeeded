@@ -366,6 +366,11 @@ Kept by `Indexer`, `WriteSettle`, `JournalCoordinator.recordRestores` and `OcrPi
 - A rescan hashes a PDF only once its bytes have settled (`WriteSettle`). Files written in place
   are deferred and picked up by a follow-up rescan, whichever rescan deferred them; a relink or a
   bake hands the report of the rescan it ran to the session, which follows it up as its own.
+- A stat proves a file's bytes only with a real mtime (`FileMeta.hasStoredStat`, the one place every
+  proof by stat goes through: the rescan's fast path, an import's duplicate check, `holdsDocument`,
+  the trash and duplicate removal). Where storage reports no mtimes (a SAF provider giving 0), a file
+  of the same size may be other bytes, so it is hashed: such a library hashes every PDF at every
+  rescan.
 - `OcrPipeline` re-checks the hash of the bytes it read before publishing a sidecar, so a partial
   file never gets a document identity. A read that finds other bytes asks for a follow-up rescan
   and leaves its run queued, uncharged; a second one in a row counts as a failure.

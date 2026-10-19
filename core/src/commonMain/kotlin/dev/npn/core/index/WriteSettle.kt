@@ -2,7 +2,6 @@ package dev.npn.core.index
 
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
-import dev.npn.core.fs.hasStoredStat
 import dev.npn.core.util.runCatchingCancellable
 
 /**
@@ -48,9 +47,13 @@ internal class WriteSettle(
         }
     }
 
-    /** True when the size and mtime the listing saw still hold after hashing. */
+    /**
+     * True when the size and mtime the listing saw still hold after hashing. Not [hasStoredStat]: this
+     * asks only whether a write visibly went on meanwhile, which storage without mtimes can show by
+     * the size alone, not whether a file is the one hashed earlier.
+     */
     suspend fun unchangedSince(meta: FileMeta): Boolean =
-        fs.stat(meta.relPath)?.hasStoredStat(meta.size, meta.mtimeMillis) == true
+        fs.stat(meta.relPath)?.let { it.size == meta.size && it.mtimeMillis == meta.mtimeMillis } == true
 
     private suspend fun hasEofMarker(relPath: String): Boolean {
         val tail = runCatchingCancellable { fs.readTail(relPath, TAIL_BYTES) }.getOrNull() ?: return false

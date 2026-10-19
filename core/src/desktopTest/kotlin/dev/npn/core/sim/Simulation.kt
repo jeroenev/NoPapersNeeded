@@ -63,16 +63,6 @@ object KnownIssues {
     val disabledOps: Set<OpKind> = emptySet()
 
     /**
-     * Finding 2: where storage reports no mtime (a SAF provider giving 0), a file replaced by other
-     * bytes of the same size keeps its old identity. The rescan, an import's duplicate check and the
-     * trash take an unchanged size and mtime as proof the bytes are the ones hashed before
-     * (`FileMeta.hasStoredStat`), and with every mtime 0 only the size is left; the watched folder
-     * alone hashes in that case (`WatchedFolder.kt`). While true, every PDF the simulation makes has
-     * a size no other one has, so a replacement always changes the size.
-     */
-    const val UNIQUE_PDF_SIZES = true
-
-    /**
      * Failures that are reported findings, by a phrase of their message. A seed that hits one stops
      * there (its library is broken from then on), and is counted instead of failing the test, so a
      * long run goes on to find what else there is. A new finding is never added here before it is

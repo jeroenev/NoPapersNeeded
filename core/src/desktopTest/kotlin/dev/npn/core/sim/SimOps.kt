@@ -228,9 +228,12 @@ internal class SimGenerator(
     private fun newPdf(): ByteArray {
         val n = nextLabel++
         val label = "doc-$n"
-        // Half carry a text layer; the rest are scans only OCR can read. Each has a size of its own
-        // while KnownIssues.UNIQUE_PDF_SIZES holds (see there).
-        val size = if (KnownIssues.UNIQUE_PDF_SIZES) UNIQUE_SIZE_BASE + n else null
+        // Half carry a text layer; the rest are scans only OCR can read. Where storage reports no
+        // mtimes, all share a few sizes, so a replacement often has the size of the file it replaces
+        // and only a hash tells it apart. Elsewhere each has a size of its own: two files written in
+        // the same virtual millisecond, one then renamed over the other, would have one stat, and an
+        // mtime-preserving overwrite of the same size is out of scope (docs/SIMULATION.md).
+        val size = if (sim.config.mtimes) SIZE_BASE + n else SIZE_BASE + random.nextInt(SHARED_SIZES)
         val bytes = SimPdf.bytes(label, if (random.chance(50)) "text of $label ${random.pick(WORDS)}" else null, size)
         sim.known[sha256Bytes(bytes)] = bytes
         return bytes
@@ -628,7 +631,8 @@ internal class SimGenerator(
     companion object {
         private const val ATTEMPTS = 20
         private const val REMOTE_DEVICE = "remote-device"
-        private const val UNIQUE_SIZE_BASE = 400
+        private const val SIZE_BASE = 400
+        private const val SHARED_SIZES = 3
         private const val ID = 8
         private const val CLEAR_PERCENT = 20
         private const val SHORT_MAX_MILLIS = 6_000L
