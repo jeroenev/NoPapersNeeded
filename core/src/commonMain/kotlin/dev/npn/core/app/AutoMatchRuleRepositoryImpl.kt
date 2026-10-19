@@ -7,10 +7,9 @@ import dev.npn.core.journal.PendingOp
 import dev.npn.core.rules.AutoMatchRule
 import dev.npn.core.rules.AutoMatchRuleJson
 import dev.npn.core.rules.RuleApplier
+import dev.npn.core.util.IdSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
 
 /**
  * The library's auto-match rules. The journal is the master copy: one synced setting holds the
@@ -33,15 +32,15 @@ internal class AutoMatchRuleRepositoryImpl(
     private val applier: RuleApplier,
     private val coordinator: JournalCoordinator,
     private val lifetime: SessionLifetime,
+    private val ids: IdSource = IdSource.Random,
 ) : AutoMatchRuleRepository {
     override fun observeRules(): Flow<List<AutoMatchRule>> =
         dao.observeAll().map { list ->
             list.map { it.toRule() }.sortedWith(AutoMatchRule.ORDER)
         }
 
-    @OptIn(ExperimentalUuidApi::class)
     override suspend fun save(rule: AutoMatchRule): String {
-        val saved = rule.copy(id = rule.id.ifBlank { Uuid.random().toString() }).normalized()
+        val saved = rule.copy(id = rule.id.ifBlank { ids.next() }).normalized()
         lifetime.owned {
             edit { rules -> rules.filterNot { it.id == saved.id } + saved }
             applier.applyToExistingDocs()

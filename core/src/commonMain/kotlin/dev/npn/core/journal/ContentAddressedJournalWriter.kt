@@ -3,7 +3,7 @@ package dev.npn.core.journal
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.publishStagedOnce
 import dev.npn.core.fs.sha256Bytes
-import kotlin.uuid.Uuid
+import dev.npn.core.util.IdSource
 
 internal data class PublishedTransaction(
     val relPath: String,
@@ -25,6 +25,7 @@ internal class ContentAddressedJournalWriter(
     private val fs: LibraryFileSystem,
     private val installationId: String,
     private val allocator: HlcWatermarkAllocator,
+    private val ids: IdSource = IdSource.Random,
 ) {
     fun observeHlc(remote: Hlc) = allocator.observe(remote)
 
@@ -34,7 +35,7 @@ internal class ContentAddressedJournalWriter(
     /** Publish [ops], at least one, as one transaction object. */
     suspend fun commit(ops: List<PendingOp>): PublishedTransaction {
         require(ops.isNotEmpty()) { "A transaction publishes at least one event" }
-        val actor = Uuid.random().toString()
+        val actor = ids.next()
         val events =
             ops.mapIndexed { index, pending ->
                 JournalEvent(
@@ -48,7 +49,7 @@ internal class ContentAddressedJournalWriter(
             }
         val bytes = JournalCodec.encodeLines(events).encodeToByteArray()
         val hash = sha256Bytes(bytes)
-        val canonicalPath = stageAndPublishVerifiedObject(fs, installationId, hash, bytes)
+        val canonicalPath = stageAndPublishVerifiedObject(fs, installationId, hash, bytes, ids)
         return PublishedTransaction(canonicalPath, hash, events)
     }
 }
@@ -65,9 +66,10 @@ internal suspend fun stageAndPublishVerifiedObject(
     installationId: String,
     hash: String,
     bytes: ByteArray,
+    ids: IdSource = IdSource.Random,
 ): String {
     val canonicalPath = JournalPaths.objectPath(hash)
-    val stagingPath = JournalPaths.stagingPath(hash, installationId, Uuid.random().toString())
+    val stagingPath = JournalPaths.stagingPath(hash, installationId, ids.next())
     fs.publishStagedOnce(stagingPath, canonicalPath, hash, targetHeldCounts = true) {
         fs.writeBytesOnce(stagingPath, bytes)
     }

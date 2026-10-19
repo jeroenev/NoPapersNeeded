@@ -5,6 +5,7 @@ import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.holds
 import dev.npn.core.fs.readDocument
 import dev.npn.core.fs.sha256Bytes
+import dev.npn.core.util.IdSource
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.error
 import dev.npn.core.util.runCatchingCancellable
@@ -35,6 +36,7 @@ internal class BakeService(
     private val fs: LibraryFileSystem,
     private val io: PdfXmpIO,
     private val log: NpnLog = NpnLog.None,
+    private val ids: IdSource = IdSource.Random,
 ) {
     /**
      * Bake [data] into a copy of the document [docId]'s file at [relPath] and return the new bytes,
@@ -209,7 +211,7 @@ internal class BakeService(
         norm: String,
         src: ByteArray,
     ): String {
-        val recovery = NpnPaths.Temp.recoveryPath(beside = norm)
+        val recovery = NpnPaths.Temp.recoveryPath(beside = norm, nonce = ids.next())
         fs.writeBytesOnce(recovery, src)
         return recovery
     }

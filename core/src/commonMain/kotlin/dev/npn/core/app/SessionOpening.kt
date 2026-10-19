@@ -47,7 +47,7 @@ internal suspend fun openSession(
     try {
         // Before anything reads the device id: an index from before device.db holds it.
         moveDeviceState(deps)
-        val indexer = Indexer(deps.fs, deps.db, deps.clock, deps.log, hashing = deps.computation)
+        val indexer = Indexer(deps.fs, deps.db, deps.clock, deps.log, hashing = deps.computation, ids = deps.ids)
         val coordinator = createCoordinator(deps, indexer, writeUndelete)
         // Waits out a write a caller started outside the lifetime, then refuses every later one.
         lifetime.releaseOnClose(coordinator::close)
@@ -67,7 +67,14 @@ private suspend fun wire(
     indexer: Indexer,
     coordinator: JournalCoordinator,
 ): LibrarySessionImpl {
-    val deviceId = DeviceIdentity(deps.deviceDb.keyValueDao(), deps.fs, deps.installationId, deps.log).resolve()
+    val deviceId =
+        DeviceIdentity(
+            deps.deviceDb.keyValueDao(),
+            deps.fs,
+            deps.installationId,
+            deps.log,
+            deps.ids,
+        ).resolve()
     foldJournal(deps, coordinator)
     val graph = SessionGraph(deps, lifetime, coordinator, indexer, deviceId)
     graph.prepare()
@@ -95,6 +102,7 @@ private suspend fun createObjectWriter(deps: SessionDeps): ContentAddressedJourn
     return ContentAddressedJournalWriter(
         fs = deps.fs,
         installationId = deps.installationId,
+        ids = deps.ids,
         allocator =
             HlcWatermarkAllocator(
                 clock = deps.clock,

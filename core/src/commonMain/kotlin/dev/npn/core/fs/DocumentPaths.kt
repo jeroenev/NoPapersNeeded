@@ -1,9 +1,9 @@
 package dev.npn.core.fs
 
+import dev.npn.core.util.IdSource
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
-import kotlin.uuid.Uuid
 
 /**
  * Applies journaled PDF locations. A document is moved, not copied: its file is claimed under a
@@ -13,6 +13,7 @@ import kotlin.uuid.Uuid
  */
 internal class DocumentPaths(
     private val fs: LibraryFileSystem,
+    private val ids: IdSource = IdSource.Random,
 ) {
     suspend fun reconcile(
         docId: String,
@@ -75,7 +76,7 @@ internal class DocumentPaths(
         runCatchingCancellable { fs.move(recovery, target) }.onFailure { failure ->
             // Taken meanwhile: leave it alone, and the caller puts the source back.
             if (fs.exists(target)) throw failure
-            val staging = NpnPaths.Temp.relocationPath(target, Uuid.random().toString())
+            val staging = NpnPaths.Temp.relocationPath(target, ids.next())
             fs.publishStagedOnce(staging, target, docId) { fs.copyOnce(recovery, staging) }
             fs.delete(recovery)
         }
@@ -104,5 +105,5 @@ internal class DocumentPaths(
 
     /** Atomically take [source]'s name away under a fresh recovery name in the same folder. */
     private suspend fun claim(source: String): String =
-        NpnPaths.Temp.recoveryPath(beside = source).also { fs.claimDocument(source, it) }
+        NpnPaths.Temp.recoveryPath(beside = source, nonce = ids.next()).also { fs.claimDocument(source, it) }
 }

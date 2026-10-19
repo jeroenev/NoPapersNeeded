@@ -24,14 +24,13 @@ import dev.npn.core.pathrules.pathOrNull
 import dev.npn.core.pathrules.pathTaken
 import dev.npn.core.pathrules.resolveUniqueTarget
 import dev.npn.core.util.EpochClock
+import dev.npn.core.util.IdSource
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.SystemEpochClock
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
-import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
 
 internal sealed interface ImportResult {
     /**
@@ -98,7 +97,6 @@ internal class SupersededImportException :
  * document is back, whatever the trash still holds of it is deleted: the trash keeps an entry for
  * as long as its document is live, so it would be a second copy for good.
  */
-@OptIn(ExperimentalUuidApi::class)
 internal class ImportService(
     private val fs: LibraryFileSystem,
     private val db: NpnDatabase,
@@ -108,6 +106,7 @@ internal class ImportService(
     private val serialize: suspend (suspend (LockedJournal) -> Unit) -> Unit,
     /** Where clearing a returned document's trashed copy, best effort, reports a failure. */
     private val log: NpnLog = NpnLog.None,
+    private val ids: IdSource = IdSource.Random,
 ) {
     private val documentDao get() = db.documentDao()
     private val trash = TrashOps(fs)
@@ -136,7 +135,7 @@ internal class ImportService(
         toDir: String,
         stage: (tmpPath: String) -> Unit,
     ): ImportResult {
-        val tmpPath = NpnPaths.Temp.importPath(Uuid.random().toString())
+        val tmpPath = NpnPaths.Temp.importPath(ids.next())
         try {
             stage(tmpPath)
             return finishImport(tmpPath, suggestedName, toDir)
