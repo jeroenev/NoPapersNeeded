@@ -171,7 +171,7 @@ private val BLOCK_FIELD = JournalCoordinator::class.java.getDeclaredField("write
  * Invariants beyond each replica's own: no sync conflict on a name written once, no replica
  * deleting a journal object or another device's sidecar or marker, device ids never shared, and a
  * replica blocking writes as `JOURNAL_DAMAGED` only after the tool damaged a journal object there
- * or the provider served it a partial listing. At rest every replica is checked against a rebuild of
+ * since it was last at rest. At rest every replica is checked against a rebuild of
  * its own folder, whatever it has not received yet; after a full sync (sometimes, and at the end)
  * the folders must be equal and every replica must show the same library.
  */
@@ -205,7 +205,7 @@ internal class SyncSimulation(
                     ),
                 latency = SimLatency(Random(salted(1))),
                 watchRandom = Random(salted(2)),
-            ).also { it.partialRandom = Random(salted(4)) }
+            )
         val log = ReplicaLog(name, world.log)
         val replica = SimReplica(world, "sim-$name", fs, ids = SimIds(Random(salted(3))), log = log)
         val sim =
@@ -238,7 +238,6 @@ internal class SyncSimulation(
 
         /** The step at which this replica was last seen at rest with writes allowed. */
         var cleanStep = 0
-        var cleanPartials = 0
         var removalsSeen = 0
 
         init {
@@ -357,7 +356,7 @@ internal class SyncSimulation(
                 fail(
                     member,
                     "${member.name} blocks writes as JOURNAL_DAMAGED, though the sync tool damaged no journal object " +
-                        "there and the provider listed nothing partially since step ${member.cleanStep}: " +
+                        "there since step ${member.cleanStep}: " +
                         block.message,
                 )
             }
@@ -381,8 +380,7 @@ internal class SyncSimulation(
     }
 
     /** Whether something the simulation did explains a damaged journal on [member] since it was last clean. */
-    private fun explained(member: Member): Boolean =
-        tool.damagedAt[member.index] > member.cleanStep || member.fs.partialListingsServed > member.cleanPartials
+    private fun explained(member: Member): Boolean = tool.damagedAt[member.index] > member.cleanStep
 
     /** A replica deletes no journal object, and no sidecar or device marker but its own. */
     private fun checkRemovals(member: Member) {
@@ -435,7 +433,6 @@ internal class SyncSimulation(
      */
     private fun quiesce(full: Boolean) {
         trace += "   == quiescence at t=${world.scheduler.currentTime}${if (full) ", full sync" else ""}"
-        members.forEach { it.fs.partialListings = 0 }
         tool.finishInFlight()
         if (full) {
             var rounds = 0
@@ -470,7 +467,6 @@ internal class SyncSimulation(
         if (full) checkConvergence(views)
         members.forEach { member ->
             member.cleanStep = world.step
-            member.cleanPartials = member.fs.partialListingsServed
         }
     }
 
@@ -531,7 +527,6 @@ internal class SyncSimulation(
                 appendLine(
                     "  ${member.name}: ${member.replica.installationId}, device ids ${member.replica.deviceIds}, " +
                         "${member.fs.allFiles().size} files, clean at step ${member.cleanStep}, " +
-                        "partial listings ${member.fs.partialListingsServed}, " +
                         "journal damaged at step ${tool.damagedAt[member.index]}",
                 )
             }

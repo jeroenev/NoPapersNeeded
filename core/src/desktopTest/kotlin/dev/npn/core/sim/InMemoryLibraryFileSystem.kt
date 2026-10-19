@@ -155,7 +155,7 @@ class InMemoryLibraryFileSystem(
         io(FsMethod.LIST_INDEXABLE, "") {
             entriesUnder(
                 "",
-            ).filterNot { it.relPath == NpnPaths.NPN_DIR || it.relPath.startsWith(NPN_PREFIX) }.partial("")
+            ).filterNot { it.relPath == NpnPaths.NPN_DIR || it.relPath.startsWith(NPN_PREFIX) }
         }
 
     override suspend fun listAllUnder(relPath: String): List<FileMeta> {
@@ -163,7 +163,7 @@ class InMemoryLibraryFileSystem(
         return io(FsMethod.LIST_UNDER, norm) {
             when {
                 files.containsKey(norm) -> listOf(metaOf(norm))
-                norm.isEmpty() || dirs.containsKey(norm) -> entriesUnder(norm).partial(norm)
+                norm.isEmpty() || dirs.containsKey(norm) -> entriesUnder(norm)
                 else -> emptyList()
             }
         }
@@ -324,31 +324,6 @@ class InMemoryLibraryFileSystem(
 
     /** Every file the app removed, by delete or by moving it away: the sync invariants check whose they were. */
     val appRemovals = ArrayList<String>()
-
-    /**
-     * How many of the next listings come back partial, as a document provider's cursor does while it
-     * is still loading (`DocumentsContract.EXTRA_LOADING`): one directory's later children, and
-     * everything under them, are left out. [partialListingsServed] counts the ones that were.
-     */
-    var partialListings = 0
-
-    var partialListingsServed = 0
-        private set
-
-    /** Decides which directory a partial listing cuts short, and where. */
-    var partialRandom: Random = Random(0)
-
-    private fun List<FileMeta>.partial(root: String): List<FileMeta> {
-        if (partialListings <= 0 || isEmpty()) return this
-        partialListings--
-        val parents = (map { NpnPaths.parentDir(it.relPath) }.toSortedSet() + root).toList()
-        val dir = parents[partialRandom.nextInt(parents.size)]
-        val children = filter { NpnPaths.parentDir(it.relPath) == dir }.map { it.relPath }.sorted()
-        if (children.isEmpty()) return this
-        val dropped = children.drop(partialRandom.nextInt(children.size)).toSet()
-        partialListingsServed++
-        return filterNot { meta -> dropped.any { meta.relPath == it || meta.relPath.startsWith("$it/") } }
-    }
 
     /** Put [bytes] at [relPath] in one step, replacing whatever is there: a rename into place. */
     fun externalWriteAtomic(

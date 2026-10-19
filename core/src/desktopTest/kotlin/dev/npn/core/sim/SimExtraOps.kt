@@ -42,7 +42,6 @@ enum class ExtraKind(
     WATCHED_REMOVE(1),
     WATCHED_SWEEP(2),
     HARD_CRASH(2),
-    PARTIAL_LISTING(2),
     WITH_ANOTHER(3),
 }
 
@@ -144,8 +143,8 @@ internal class SimWatchedFolder(
 
 /**
  * Plans the operations [SimGenerator] does not: bake in place, split, the relink of a missing
- * document to other bytes, edits of the auto-match rules, the watched inbox folder, a hard crash
- * and a partial directory listing. Like the first generator it draws every choice from its own
+ * document to other bytes, edits of the auto-match rules, the watched inbox folder and a hard
+ * crash. Like the first generator it draws every choice from its own
  * seeded [random] and describes each step fully in its text.
  */
 internal class ExtraPlanner(
@@ -160,8 +159,7 @@ internal class ExtraPlanner(
 ) {
     private val kinds =
         ExtraKind.entries.filter { kind ->
-            (kind !in WATCHED_KINDS || watched != null) &&
-                (kind != ExtraKind.PARTIAL_LISTING || sim.fs.options.profile.saf)
+            kind !in WATCHED_KINDS || watched != null
         }
     private val totalWeight = kinds.sumOf { it.weight }
     private var made = 0
@@ -239,7 +237,6 @@ internal class ExtraPlanner(
             ExtraKind.WATCHED_SWEEP to { _ -> watchedSweep() },
             ExtraKind.HARD_CRASH to
                 { _ -> Planned.Control("hard crash (killed) and reopen") { sim.hardCrashAndReopen() } },
-            ExtraKind.PARTIAL_LISTING to { _ -> partialListing() },
             ExtraKind.WITH_ANOTHER to ::withAnother,
         )
 
@@ -424,17 +421,6 @@ internal class ExtraPlanner(
 
     // ---- the process and the storage ------------------------------------------------------------
 
-    private fun partialListing(): Planned.Control {
-        val count = random.nextInt(1, PARTIAL_MAX)
-        return Planned.Control(
-            "the provider's next $count listing(s) come back partial (still loading)",
-            instant = true,
-        ) {
-            sim.fs.partialListings += count
-            "armed"
-        }
-    }
-
     private fun withAnother(s: Snapshot): Planned? {
         val own =
             listOf(
@@ -462,7 +448,6 @@ internal class ExtraPlanner(
         const val LABELS = 5
         const val CHUNKS = 6
         const val CHUNK_INTERVAL_MILLIS = 3_000L
-        const val PARTIAL_MAX = 4
         const val POLL_MILLIS = 60_000L
         val NAMES = listOf("scan.pdf", "invoice.pdf", "Letter.pdf", "scan (1).pdf")
         val WATCHED_KINDS =

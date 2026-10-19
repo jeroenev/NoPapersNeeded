@@ -99,8 +99,7 @@ kept 5 days. ci.yml keeps running only the CI-sized test above, as part of `:cor
   relocation and no watcher on SAF, and listings with no mtimes when `SimFsOptions.mtimes` is off.
   Each call suspends at least once and sometimes waits a seeded stretch of virtual time
   (`SimLatency`). It records every journal object, snapshot, OCR sidecar and device marker the app
-  creates, every file the app removes, and the last changes at each path and who made them. Under
-  SAF it can serve partial listings, as a provider's cursor does while it is still loading.
+  creates, every file the app removes, and the last changes at each path and who made them.
 - Its `external*` members are the outside world: an atomic write, a write in place in chunks over
   virtual time (`cp`, a scanner app), an overwrite in place or by rename, a delete, a move, a
   backup (which skips a file still being written) put back, and sync-tool temporary files.
@@ -130,8 +129,8 @@ kept 5 days. ci.yml keeps running only the CI-sized test above, as part of `:cor
   the relink of a missing document to other bytes, auto-match rule saves, deletes and toggles (whose
   field sets drive the storage-path rule, which moves documents on every replica), the watched folder
   (new, slowly written, known, overwritten and removed files, and sweeps, beside the importer each
-  session runs with delete-after-import on or off), a hard crash, a partial SAF listing, and its
-  operations run beside one of the first generator's.
+  session runs with delete-after-import on or off) and a hard crash, and its operations run beside
+  one of the first generator's.
 
 ## Invariants
 
@@ -156,7 +155,7 @@ Across replicas, after every step:
 - No replica deletes or moves away a journal object, nor another device's sidecar or marker.
 - No two replicas share a device id.
 - A replica blocks writes as `JOURNAL_DAMAGED` only after the sync tool wrote a journal object in
-  place there, or the provider served it a partial listing, since it was last at rest. Anything else
+  place there since it was last at rest. Anything else
   that blocks writes is a bug: objects are write-once and named by their hash, and a sync tool's
   file in transfer shows under its temporary name.
 - A watched folder's importer deletes only a file whose bytes the library has a document of.
@@ -244,6 +243,9 @@ why next to it. Fail through `fail(...)`, which attaches the seed and the trace.
   delivers everything eventually; it damages only by writing a journal object in place for a while.
 - **Directory renames and deletions** by the sync tool: it syncs files, and folders follow them.
 - **Devices that join late** with an empty folder, or leave: every replica opens at step 0.
+- **Partial listings** from a document provider still loading (`DocumentsContract.EXTRA_LOADING`):
+  SAF storage is on its way out, so the simulation spends nothing on what only it can do. The SAF
+  profile stays for its publication and relocation rules while the app supports it.
 - **AI** (enrichment, edit runs, chat, AI OCR): the AI endpoint is disabled.
 - **Compaction** runs only when the maintenance tick finds more than 64 objects older than a day,
   which a long run reaches only now and then. There is no direct compaction operation, because the
