@@ -157,7 +157,11 @@ class PermanentDeleteTest {
             importing.next = {
                 rig.writePdf("inbox/x.pdf", "imported in time")
                 coordinator.rescan()
-                val imported = rig.db.documentDao().getByRelPath("inbox/x.pdf").shouldNotBeNull()
+                val imported =
+                    rig.db
+                        .documentDao()
+                        .getByRelPath("inbox/x.pdf")
+                        .shouldNotBeNull()
                 rig.writePdf("inbox/x.pdf", "deleted for good")
                 Files.setLastModifiedTime(
                     rig.libRoot.resolve("inbox/x.pdf"),
@@ -189,7 +193,11 @@ class PermanentDeleteTest {
             importing.next = {
                 rig.writePdf("inbox/x.pdf", "imported in time")
                 coordinator.rescan()
-                val imported = rig.db.documentDao().getByRelPath("inbox/x.pdf").shouldNotBeNull()
+                val imported =
+                    rig.db
+                        .documentDao()
+                        .getByRelPath("inbox/x.pdf")
+                        .shouldNotBeNull()
                 coordinator.commitAndApply(listOf(PendingOp.docTrash(imported.docId, "inbox/x.pdf")))
                 rig.db
                     .documentDao()

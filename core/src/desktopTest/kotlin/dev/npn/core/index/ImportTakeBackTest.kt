@@ -1,9 +1,9 @@
 package dev.npn.core.index
 
+import dev.npn.core.db.isLive
 import dev.npn.core.fs.TrashOps
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.util.runCatchingCancellable
-import dev.npn.core.db.isLive
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldHaveSize
@@ -66,7 +66,7 @@ class ImportTakeBackTest {
             val id = trashed("a.pdf", "alpha")
             rig.writePdf("a.pdf", "alpha")
             val before = rig.db.documentDao().getByDocId(id)
-            val imports = importsOver { _, _ -> throw IllegalStateException("Metadata writes are disabled") }
+            val imports = importsOver { _, _ -> error("Metadata writes are disabled") }
 
             assertFailsWith<IllegalStateException> { imports.importBytes("alpha".encodeToByteArray(), "a.pdf") }
 
@@ -89,7 +89,7 @@ class ImportTakeBackTest {
             val imports =
                 importsOver { _, relPath ->
                     rig.writePdf(relPath, "written over")
-                    throw IllegalStateException("Metadata writes are disabled")
+                    error("Metadata writes are disabled")
                 }
 
             assertFailsWith<IllegalStateException> { imports.importBytes("alpha".encodeToByteArray(), "a.pdf") }
@@ -135,7 +135,10 @@ class ImportTakeBackTest {
             imports.undoImport(imported)
 
             rig.exists(imported.relPath).shouldBeFalse()
-            rig.db.documentDao().getByDocId(imported.docId).shouldBeNull()
+            rig.db
+                .documentDao()
+                .getByDocId(imported.docId)
+                .shouldBeNull()
         }
 
     /** An import service over this rig whose journal answers [restoreReturned] as given. */

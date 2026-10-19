@@ -325,8 +325,13 @@ class JournalCoordinatorWritesTest {
             coordinator.commitAndApply(listOf(PendingOp.tagAdd(DOC, "written")))
 
             val written = rig.accumulator.loadState().maxHlc
-            val stored = rig.db.metadataProjectionDao().state().shouldNotBeNull()
-            Hlc(stored.allocatorPhysical, stored.allocatorCounter, written.deviceId) shouldBeGreaterThanOrEqualTo written
+            val stored =
+                rig.db
+                    .metadataProjectionDao()
+                    .state()
+                    .shouldNotBeNull()
+            Hlc(stored.allocatorPhysical, stored.allocatorCounter, written.deviceId) shouldBeGreaterThanOrEqualTo
+                written
             val nextSession = HlcWatermarkAllocator({ 0L }, stored.allocatorPhysical, stored.allocatorCounter)
             nextSession.next(written.deviceId) shouldBeGreaterThan written
         }

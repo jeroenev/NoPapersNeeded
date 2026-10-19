@@ -436,17 +436,18 @@ internal class Simulation(
         val rows =
             world.read("row stats") {
                 replica.indexDb.rows(
-                    "SELECT docId, relPath, size, mtime FROM documents WHERE trashed = 0 AND deleted = 0 AND missing = 0",
+                    "SELECT docId, relPath, size || ',' || mtime FROM documents " +
+                        "WHERE trashed = 0 AND deleted = 0 AND missing = 0",
                 )
             }
         val stale =
-            rows.mapNotNull { (docId, relPath, size, mtime) ->
+            rows.mapNotNull { (docId, relPath, stored) ->
                 val stat = fs.statAt(relPath!!) ?: return@mapNotNull null
-                if (stat.size == size?.toLong() && stat.mtimeMillis == mtime?.toLong()) {
+                val actual = "${stat.size},${stat.mtimeMillis}"
+                if (stored == actual) {
                     null
                 } else {
-                    "live ${docId!!.take(ID)} at '$relPath' stores size $size, mtime $mtime; " +
-                        "its file has ${stat.size}, ${stat.mtimeMillis}"
+                    "live ${docId!!.take(ID)} at '$relPath' stores size,mtime $stored; its file has $actual"
                 }
             }
         if (stale.isNotEmpty()) fail("rows whose stored stat is not their file's:\n  " + stale.joinToString("\n  "))
