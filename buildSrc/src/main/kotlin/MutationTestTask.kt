@@ -99,7 +99,10 @@ abstract class MutationTestTask : JavaExec() {
                 // as a kill; its crash log belongs with the task's files, not in the module.
                 minionJvmArgs =
                     minionJvmArgs.get() +
-                        listOf("-XX:ErrorFile=${temporaryDir.absolutePath}/hs_err_pid%p.log", "-XX:-CreateCoredumpFile"),
+                        listOf(
+                            "-XX:ErrorFile=${temporaryDir.absolutePath}/hs_err_pid%p.log",
+                            "-XX:-CreateCoredumpFile",
+                        ),
             ).toCommandLine(
                 reportDir = report,
                 classPathFile = classPathFile,
