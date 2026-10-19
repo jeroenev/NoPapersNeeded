@@ -215,6 +215,14 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
 - A bug found in the session, index, journal or lifecycle code first becomes a generator operation,
   a fault or an invariant in the library simulation (docs/SIMULATION.md). Add an example test only
   when the simulation cannot express the bug.
+- Stability over churn in `core.app`, `core.index` and `core.journal`: a change there is a bug fix,
+  a new operation, or a refactor the simulation is already green on (the nightly run,
+  `simulation.yml`, over the long seed range). A rename or restructuring with no behaviour behind
+  it waits until then; a review round in those packages reports what the simulation or an
+  invariant would have caught, not style.
+- Done is measured, not reviewed: the long simulation run passes with `KnownIssues` empty, and the
+  mutation score of `core.index`/`core.app`/`core.journal` (docs/MUTATION_TESTING.md,
+  `./gradlew :core:mutationTest`) does not drop. Another review round is not a stopping criterion.
 - Shared Flow subscriptions use `WhileSubscribedTimeout` (`WhileSubscribed(5_000)`, in
   `composeApp`'s `ui/common/StateFlowConfig.kt`) instead of inline timeouts; typed detekt forbids
   `SharingStarted.WhileSubscribed` elsewhere.
