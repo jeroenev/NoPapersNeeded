@@ -92,6 +92,50 @@ tasks.matching { it.name.endsWith("LintModel") || it.name.startsWith("lintAnalyz
     mustRunAfter(tasks.matching { it.name.startsWith("ksp") })
 }
 
+// Mutation testing over the desktop target (docs/MUTATION_TESTING.md): on demand and in the weekly
+// mutation.yml, never in `check`. -Pnpn.mutation.packages=a.b,c.d picks other packages (each with
+// its subpackages), -Pnpn.mutation.threads the number of test processes.
+val pitest =
+    configurations.create("pitest") {
+        isCanBeConsumed = false
+    }
+dependencies {
+    pitest(libs.pitest.command.line)
+}
+tasks.register<MutationTestTask>("mutationTest") {
+    group = "verification"
+    description = "Mutation-tests core's index and app packages against the desktop tests (PIT)."
+    val desktopTest = tasks.named<Test>("desktopTest")
+    val desktopMain = kotlin.jvm("desktop").compilations.getByName("main")
+    classpath = pitest
+    javaLauncher.set(desktopTest.flatMap { it.javaLauncher })
+    workingDir = projectDir
+    testClasspath.from(desktopTest.map { it.classpath })
+    mutableCodePaths.from(desktopMain.output.classesDirs)
+    sourceDirectories.from(desktopMain.allKotlinSourceSets.map { it.kotlin.srcDirs })
+    targetPackages.set(
+        providers
+            .gradleProperty("npn.mutation.packages")
+            .map { list -> list.split(',').map { it.trim() }.filter { it.isNotEmpty() } }
+            .orElse(listOf("dev.npn.core.index", "dev.npn.core.app")),
+    )
+    targetTests.set(listOf("dev.npn.core.*"))
+    excludedTestClasses.set(
+        listOf(
+            // Calls a paid AI endpoint when NPN_LIVE_AI is set, and is skipped otherwise.
+            "dev.npn.core.ai.LiveEndpointProbeTest",
+        ),
+    )
+    threads.set(
+        providers
+            .gradleProperty("npn.mutation.threads")
+            .map { it.toInt() }
+            .orElse((Runtime.getRuntime().availableProcessors() / 2).coerceAtLeast(1)),
+    )
+    minionJvmArgs.set(listOf("-Xmx768m", "-Djava.awt.headless=true"))
+    reportDirectory.set(layout.buildDirectory.dir("reports/pitest"))
+}
+
 // On a fresh Windows machine PDFBox's first font lookup scans every system font to build its
 // cache, which can outlast runTest's one-minute default in whichever test gets there first.
 if (System.getProperty("os.name").startsWith("Windows")) {

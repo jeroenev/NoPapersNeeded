@@ -1,0 +1,56 @@
+name: Mutation testing
+
+# PIT over core's index and app packages (docs/MUTATION_TESTING.md). A run takes far
+# longer than the per-commit checks and Actions minutes are metered, so it runs weekly and on
+# demand, never from ci.yml. The HTML report is the result; it is kept for a week.
+on:
+  schedule:
+    - cron: "41 4 * * 0"
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: "Comma-separated packages to mutate instead of the default (e.g. dev.npn.core.index)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mutation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mutation:
+    name: Mutation testing (core)
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up JDK
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version-file: .java-version
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-provider: basic
+
+      # The runner has four cores; the task's default of half of them would leave two idle.
+      - name: Mutation tests
+        env:
+          PACKAGES: ${{ inputs.packages }}
+        run: ./gradlew :core:mutationTest -Pnpn.mutation.threads=4 ${PACKAGES:+"-Pnpn.mutation.packages=$PACKAGES"}
+
+      - name: Upload the mutation report
+        if: success() || failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mutation-report
+          path: core/build/reports/pitest
+          if-no-files-found: ignore
+          retention-days: 7
