@@ -152,15 +152,14 @@ class AutoMatchRuleApplicationTest {
             rig.session.meta.setField(id, FieldKeys.CORRESPONDENT, "Globex")
             engine.release.complete(Unit)
 
-            val item =
-                rig.session.documents
-                    .observeDoc(id)
-                    .first { it?.tags?.contains("invoice") == true }
-                    .shouldNotBeNull()
-            item.doc.correspondent shouldBe "Globex"
-            item.doc.docType shouldBe "Invoice"
+            rig.session.documents
+                .observeDoc(id)
+                .first { it?.tags?.contains("invoice") == true }
             rig.session.ocr.ocrStatus
                 .first { it.pending == 0 && !it.running }
+            val item = rig.session.documents.observeDoc(id).first().shouldNotBeNull()
+            item.doc.correspondent shouldBe "Globex"
+            item.doc.docType shouldBe "Invoice"
 
             val objects = rig.journalObjectCount()
             rig.session.rescan()
