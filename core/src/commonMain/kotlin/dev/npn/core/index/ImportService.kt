@@ -16,7 +16,6 @@ import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.TrashOps
 import dev.npn.core.fs.holds
 import dev.npn.core.fs.uniquifyPath
-import dev.npn.core.ocr.OcrState
 import dev.npn.core.pathrules.StoragePathContext
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pathrules.StoragePathTemplate
@@ -250,14 +249,24 @@ internal class ImportService(
         // The document's own path, when its bytes are there. This runs under the writer lock, so
         // re-importing a known, unchanged PDF must read no library file.
         val inPlace = existing?.takeIf { fs.holdsDocument(it, staged.size) }?.relPath
-        if (existing != null && existing.isLive && inPlace != null) {
-            return Placement(ImportResult.Duplicate(existing.docId, existing.relPath))
+        ImportDecision.duplicate(existing, inPlace)?.let { return Placement(it) }
+        return when (val plan = ImportDecision.place(hash, existing, inPlace, journal.successorOf(hash))) {
+            is ImportPlan.Superseded -> Placement(supersededBy(plan.successor))
+            is ImportPlan.Place -> placeAt(plan, tmpPath, hash, staged, suggestedName, toDir)
         }
-        // Asked of the journal, not the index: a superseded row is deleted like any other, and an
-        // index rebuilt since has none.
-        val successor = journal.successorOf(hash)
-        if (successor != hash) return Placement(supersededBy(successor))
+    }
 
+    /** Carry out [plan]: move the staged bytes into place (unless they are there), and [record] them. */
+    private suspend fun placeAt(
+        plan: ImportPlan.Place,
+        tmpPath: String,
+        hash: String,
+        staged: FileMeta,
+        suggestedName: String,
+        toDir: String,
+    ): Placement {
+        val existing = plan.existing
+        val inPlace = plan.inPlace
         val target = inPlace ?: chooseImportTarget(ensurePdfName(suggestedName), toDir).also { fs.move(tmpPath, it) }
         var placement: Placement? = null
         try {
@@ -277,8 +286,9 @@ internal class ImportService(
      * document back would last until the next fold, which hides it again whatever its events say.
      */
     private suspend fun supersededBy(successor: String): ImportResult {
-        val shown = documentDao.getByDocId(successor)?.takeIf { it.isLive && fs.holdsDocument(it) }
-        return shown?.let { ImportResult.Duplicate(it.docId, it.relPath) } ?: throw SupersededImportException()
+        val shown = documentDao.getByDocId(successor)
+        val holds = shown != null && shown.isLive && fs.holdsDocument(shown)
+        return ImportDecision.supersededDuplicate(shown, holds) ?: throw SupersededImportException()
     }
 
     /**
@@ -294,13 +304,11 @@ internal class ImportService(
     ): Placement {
         val meta = placed ?: fs.stat(target) ?: error("Imported file vanished: $target")
         val now = clock.nowMillis()
-        val row = existing?.backAt(target, meta) ?: newDocument(hash, target, meta, now)
-        // A returning document whose text is indexed already has nothing for OCR to redo.
-        val queueOcr = OcrState.fromColumn(row.ocrState) !in INDEXED
+        val imported = ImportDecision.row(hash, target, existing, meta, now)
         // No live row names the target ([uniqueTargetPath]); a hidden row naming it gives it up.
-        documentDao.upsert(if (queueOcr) row.copy(ocrState = OcrState.PENDING.column) else row)
-        val enqueued = if (queueOcr) ocrQueueDao.enqueueForImport(hash, now) else null
-        if (existing != null && existing.fileName != row.fileName) indexFileName(row)
+        documentDao.upsert(imported.row)
+        val enqueued = if (imported.queueOcr) ocrQueueDao.enqueueForImport(hash, now) else null
+        if (imported.reindexName) indexFileName(imported.row)
         return Placement(
             ImportResult.Imported(hash, target, broughtBack = existing != null),
             moved = placed != null,
@@ -331,37 +339,6 @@ internal class ImportService(
             log.runLogged("Taking the failed import back out of $movedTo") { fs.move(movedTo, tmpPath) }
         }
     }
-
-    private fun newDocument(
-        hash: String,
-        target: String,
-        meta: FileMeta,
-        now: Long,
-    ) = DocumentEntity(
-        docId = hash,
-        relPath = target,
-        fileName = NpnPaths.fileName(target),
-        size = meta.size,
-        mtime = meta.mtimeMillis,
-        addedAt = now,
-        ocrState = OcrState.PENDING.column,
-    )
-
-    /** This row, of a document the library did not show, as the live document whose file is [target]. */
-    private fun DocumentEntity.backAt(
-        target: String,
-        meta: FileMeta,
-    ) = copy(
-        relPath = target,
-        fileName = NpnPaths.fileName(target),
-        size = meta.size,
-        mtime = meta.mtimeMillis,
-        trashed = false,
-        trashedOrigPath = null,
-        trashedAt = null,
-        deleted = false,
-        missing = false,
-    )
 
     /**
      * Undo [placed] after recording its document's return failed, still in the step under the lock
@@ -478,11 +455,6 @@ internal class ImportService(
         return uniquifyPath(target, startIndex = 2, suffix = { " ($it)" }) { candidate ->
             pathTaken(fs, documentDao, currentDocId = null, candidate)
         }
-    }
-
-    private companion object {
-        /** The OCR states of a document whose text is indexed. */
-        val INDEXED = setOf(OcrState.DONE, OcrState.ADOPTED)
     }
 }
 
