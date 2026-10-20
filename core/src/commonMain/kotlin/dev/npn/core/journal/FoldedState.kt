@@ -53,6 +53,9 @@ internal class FoldedState {
     // --- raw prop data: doc -> key -> winning (value, hlc) ---
     private val props = HashMap<String, HashMap<SystemProperty, PropVal>>()
 
+    // --- every path a storagePath event named for a doc, winning or not (a grow-only set) ---
+    private val namedPaths = HashMap<String, HashSet<String>>()
+
     /** One last-writer-wins register: its winning value (null for a clear) and the HLC that won it. */
     internal data class PropVal(
         val value: String?,
@@ -168,6 +171,11 @@ internal class FoldedState {
 
             is JournalOp.PropSet -> {
                 props.getOrPut(doc) { HashMap() }.putIfNewerHlc(op.key, hlc) { PropVal(op.value, hlc) }
+                if (op.key ==
+                    SystemProperty.STORAGE_PATH
+                ) {
+                    op.value?.let { namedPaths.getOrPut(doc) { HashSet() }.add(it) }
+                }
             }
 
             is JournalOp.FieldSet -> {
@@ -257,6 +265,16 @@ internal class FoldedState {
         doc: String,
         key: SystemProperty,
     ): String? = props[doc]?.get(key)?.value
+
+    /**
+     * Whether any `storagePath` event, winning or not, named [path] for [doc]: a place some device
+     * was told to put the document, so a file found there may be the mirror of that device's move
+     * rather than a move of its own ([dev.npn.core.index.ExternalDocumentMoves]).
+     */
+    fun namedStoragePath(
+        doc: String,
+        path: String,
+    ): Boolean = namedPaths[doc]?.contains(path) == true
 
     /** Winning version of [doc]'s property [key], a clear included, for device-local observation baselines. */
     fun propVersion(

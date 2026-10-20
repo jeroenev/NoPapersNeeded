@@ -1,6 +1,5 @@
 package dev.npn.core.sim
 
-import dev.npn.core.app.LibrarySessionImpl
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.index.MetadataWriteBlocked
@@ -96,26 +95,7 @@ object SyncKnownIssues {
     const val DELETED_RETURNS_UNRECORDED = !JournalOp.DocUndelete.WRITTEN
 
     /** Each finding by the phrases its failure message holds, all of them. */
-    val knownFailures: Map<List<String>, String> =
-        mapOf(
-            // Finding 6: a device takes a move the sync tool mirrored from another device for a move
-            // its user made (ExternalDocumentMoves: the file left the path it was settled at, under
-            // the intent it still holds) and journals it as a new storage path, newer than the intent
-            // the other device was carrying out. Two devices that disagree on a document's place for
-            // a while then move it back and forth for good, a new storagePath each round.
-            listOf("do not converge", "\"key\":\"storagePath\"") to
-                "finding 6: devices keep moving a document between two paths, " +
-                "each taking the other's move for a user's",
-            // Finding 9: DocumentPathReconciler.project records the stat of the document's intended
-            // path after the move (or the check that its bytes are there already) has read them. A
-            // sync tool that puts another file there in between (a conflict another device's
-            // version won) has its stat recorded as the document's, which then vouches for it at
-            // every rescan: the row shows the document at a file that holds other bytes. The import
-            // had the same race (finding 4, fixed by keeping the staged file's stat).
-            listOf("files do not hold their documents' bytes", " external -> ") to
-                "finding 9: a document moved to its intended path takes the stat " +
-                "of a file a sync tool put there since",
-        )
+    val knownFailures: Map<List<String>, String> = emptyMap()
 
     /** [failure] as a known finding when it is one, else as it is. */
     internal fun classify(failure: SimFailure): SimFailure {
@@ -342,7 +322,10 @@ internal class SyncSimulation(
             }
         }
         members.forEach { member ->
-            val block = member.replica.session?.writeBlock?.value ?: return@forEach
+            val block =
+                member.replica.session
+                    ?.writeBlock
+                    ?.value ?: return@forEach
             if (block == WriteBlock.JOURNAL_DAMAGED && !explained(member)) {
                 fail(
                     member,

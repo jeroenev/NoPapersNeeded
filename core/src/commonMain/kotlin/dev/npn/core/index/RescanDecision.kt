@@ -19,6 +19,12 @@ internal interface RescanJournal {
 
     /** Whether the journal has [docId] out of the library: trashed or deleted by its latest such event. */
     fun hides(docId: String): Boolean
+
+    /** Whether any `storagePath` event, winning or not, named [path] for [docId]. */
+    fun named(
+        docId: String,
+        path: String,
+    ): Boolean
 }
 
 /** This fold as a rescan's reconcile reads it. */
@@ -27,6 +33,11 @@ internal fun FoldedState.rescanJournal(): RescanJournal =
         override fun successorOf(docId: String): String = resolveDocId(docId)
 
         override fun hides(docId: String): Boolean = hiddenBy(docId) != null
+
+        override fun named(
+            docId: String,
+            path: String,
+        ): Boolean = namedStoragePath(docId, path)
     }
 
 /**
@@ -142,16 +153,28 @@ internal object RescanDecision {
     }
 
     /**
-     * The moves an outside tool may have made, as the listing alone shows them: each row of
-     * [before] whose path is not listed and whose bytes are listed at exactly one other path (by
-     * [hashes], else by the row that path had), paired with that path. A file the app's own crash
-     * recovery named is no move. [ExternalDocumentMoves] confirms each against what it observed and
-     * the files as they are now.
+     * The moves a user may have made outside the app, as the listing and the [journal] show them:
+     * each row of [before] whose path is not listed and whose bytes are listed at exactly one other
+     * path (by [hashes], else by the row that path had), paired with that path.
+     *
+     * A file the app's own crash recovery named is no move. Nor is a file at a path a `storagePath`
+     * event already names for the document, current or overruled ([RescanJournal.named]): some
+     * device was told to put it there, and a sync tool mirrors that device's move, often before the
+     * event arrives or after a newer one overruled it. Taking such a mirror for a user's move would
+     * journal an older place as the newest intent, and two devices would move the document back and
+     * forth for good. The cost: a user who moves a file back to a place the journal named for it
+     * before sees the app move it to its intended path again. A file at a path no event names is
+     * taken for the user's move, whether or not the journal names any path for the document yet:
+     * nothing explains it otherwise, and a rename whose event is still on its way names the same
+     * path, so recording it again changes no device's place for the document.
+     * [ExternalDocumentMoves] confirms each candidate against what it observed and the files as they
+     * are now.
      */
     fun externalMoveCandidates(
         before: List<PathMeta>,
         files: List<FileMeta>,
         hashes: Map<String, String>,
+        journal: RescanJournal,
     ): List<Pair<PathMeta, String>> {
         val known = before.associateBy { it.relPath }
         val paths = files.mapTo(HashSet()) { it.relPath }
@@ -160,7 +183,8 @@ internal object RescanDecision {
             val target = byHash[old.docId]?.singleOrNull()?.relPath ?: return@mapNotNull null
             val moved =
                 old.relPath !in paths && old.relPath != target &&
-                    !NpnPaths.fileName(target).startsWith(NpnPaths.Temp.RECOVERY_PREFIX)
+                    !NpnPaths.fileName(target).startsWith(NpnPaths.Temp.RECOVERY_PREFIX) &&
+                    !journal.named(old.docId, target)
             if (moved) old to target else null
         }
     }

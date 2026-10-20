@@ -201,20 +201,11 @@ comment names the finding. Fixing a finding means turning its switch off (or rem
   document and publishes the result, where devices that indexed a document before the rule existed
   never applied it, and a value a user changed by hand is set back. The rebuild oracle passes over a
   document that differs only by what the rebuild's own session wrote.
-- **Finding 6**, `SyncKnownIssues.knownFailures`: a device takes a move the sync tool mirrored from
-  another device for one its user made (`ExternalDocumentMoves`) and journals it as a new storage
-  path, newer than the intent the other device was carrying out. Two devices that disagree on a
-  document's place for a while then move it back and forth for good, a new `storagePath` each round.
 - **Finding 8**, `SyncKnownIssues.DELETED_RETURNS_UNRECORDED`: the documented cost of `doc-undelete`
   not being written yet (ARCHITECTURE.md 6.4). A document deleted for good whose bytes come back is
   live on the device that imported them, for that session, and in the scan that finds the file, and
   nowhere else, so devices disagree, and a device disagrees with a rebuild of its own index. Off by
   itself once the op is written.
-- **Finding 9**, `SyncKnownIssues.knownFailures`: `DocumentPathReconciler.project` records the stat
-  of a document's intended path after the move (or the check that its bytes are there already). A
-  sync tool that puts another file there in between has that file's stat recorded as the document's,
-  and it vouches for it at every rescan. The import had the same race (fixed by keeping the staged
-  file's stat); the fix here is to record the stat of the bytes the move placed, or check them again.
 
 ## Adding an operation
 

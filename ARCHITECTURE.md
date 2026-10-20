@@ -326,7 +326,16 @@ the short list of these that a change must never break; this section is the comp
   (keyed by hash) before moving bytes. HLC last-writer-wins chooses the intended location across
   devices; `DocumentPathReconciler` materializes it on metadata refresh or rescan. The cached
   `relPath` is the actual location, never an unfulfilled intent. Trash and delete suspend path
-  reconciliation. A PDF with no path intent keeps its discovered location.
+  reconciliation. A PDF with no path intent keeps its discovered location. A moved row records the
+  stat of the bytes the move checked (`DocumentPaths.settle`), never one of the target taken after,
+  which by then may be a file a sync tool put there.
+- A file a user moved outside the app is journaled as the document's new `storagePath`
+  (`ExternalDocumentMoves`), once this device saw it settled at its old path under the intent it
+  still holds. A file at a path a `storagePath` event already named for the document, winning or
+  overruled (`RescanDecision.externalMoveCandidates`), is never such a move: it is a sync tool's
+  mirror of some device's move, and journaling it would set an older place against the newest
+  intent, so two devices would move the document back and forth for good. The cost: a file a user
+  moves back to a place the journal named before goes to its intended path again.
 - Storage that cannot move a document (SAF, `supportsDocumentRelocation` false) refuses a rename
   or move with `RelocationOutcome.UNSUPPORTED` and writes nothing; a rule's location is still
   journaled there, once, for a replica that can carry it out.

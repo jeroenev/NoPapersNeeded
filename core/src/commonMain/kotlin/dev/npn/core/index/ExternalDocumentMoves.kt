@@ -75,18 +75,10 @@ internal class ExternalDocumentMoves(
         files: List<FileMeta>,
         hashes: Map<String, String>,
     ): List<PendingOp> =
-        RescanDecision.externalMoveCandidates(before, files, hashes).mapNotNull { (old, target) ->
-            if (confirmed(
-                    state,
-                    old,
-                    target,
-                )
-            ) {
-                PendingOp.propSet(old.docId, SystemProperty.STORAGE_PATH, target)
-            } else {
-                null
-            }
-        }
+        RescanDecision
+            .externalMoveCandidates(before, files, hashes, state.rescanJournal())
+            .filter { (old, target) -> confirmed(state, old, target) }
+            .map { (old, target) -> PendingOp.propSet(old.docId, SystemProperty.STORAGE_PATH, target) }
 
     private suspend fun confirmed(
         state: FoldedState,

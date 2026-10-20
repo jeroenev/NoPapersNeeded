@@ -210,32 +210,80 @@ class RescanDecisionTest {
         RescanDecision.needsHash(noMtime, PathMeta(path, "d", 10, 0)) shouldBe true
     }
 
+    /** A journal that names [named] as storage paths of document `d`, and hides and supersedes nothing. */
+    private fun naming(vararg named: String) =
+        object : RescanJournal {
+            override fun successorOf(docId: String) = docId
+
+            override fun hides(docId: String) = false
+
+            override fun named(
+                docId: String,
+                path: String,
+            ) = docId == "d" && path in named
+        }
+
+    private fun file(relPath: String) = FileMeta(relPath, relPath.substringAfterLast('/'), 1, 1, false)
+
     /** A move is a candidate only when the old path is gone and the bytes are at exactly one other path. */
     @Test
     fun anExternalMoveIsACandidateOnlyForBytesGoneFromTheirPathAndListedOnceElsewhere() {
-        fun file(relPath: String) = FileMeta(relPath, relPath.substringAfterLast('/'), 1, 1, false)
         val row = PathMeta("a.pdf", "d", 1, 1)
-        RescanDecision.externalMoveCandidates(listOf(row), listOf(file("b.pdf")), mapOf("b.pdf" to "d")) shouldBe
+        val none = naming()
+        RescanDecision.externalMoveCandidates(listOf(row), listOf(file("b.pdf")), mapOf("b.pdf" to "d"), none) shouldBe
             listOf(row to "b.pdf")
         // Still listed at its own path: a copy, not a move.
         RescanDecision.externalMoveCandidates(
             listOf(row),
             listOf(file("a.pdf"), file("b.pdf")),
             mapOf("b.pdf" to "d"),
+            none,
         ) shouldBe emptyList()
         // Listed twice elsewhere: no telling which is the move.
         RescanDecision.externalMoveCandidates(
             listOf(row),
             listOf(file("b.pdf"), file("c.pdf")),
             mapOf("b.pdf" to "d", "c.pdf" to "d"),
+            none,
         ) shouldBe emptyList()
         // A file the app's own crash recovery named is no move.
         val recovered = "${NpnPaths.Temp.RECOVERY_PREFIX}a.pdf"
-        RescanDecision.externalMoveCandidates(listOf(row), listOf(file(recovered)), mapOf(recovered to "d")) shouldBe
+        RescanDecision.externalMoveCandidates(
+            listOf(row),
+            listOf(file(recovered)),
+            mapOf(recovered to "d"),
+            none,
+        ) shouldBe
             emptyList()
         // Other bytes elsewhere say nothing.
-        RescanDecision.externalMoveCandidates(listOf(row), listOf(file("b.pdf")), mapOf("b.pdf" to "e")) shouldBe
+        RescanDecision.externalMoveCandidates(listOf(row), listOf(file("b.pdf")), mapOf("b.pdf" to "e"), none) shouldBe
             emptyList()
+    }
+
+    /**
+     * A file at a path a storage-path event named for the document, the winning one or an overruled
+     * one, is the mirror of some device's move, never a user's: journaling it would set an older
+     * place against the newest intent, and devices would move the document back and forth for good.
+     */
+    @Test
+    fun aFileAtAPathTheJournalNamedForTheDocumentIsNoExternalMove() {
+        val row = PathMeta("a.pdf", "d", 1, 1)
+        for (journal in listOf(naming("b.pdf"), naming("a.pdf", "b.pdf", "c.pdf"))) {
+            RescanDecision.externalMoveCandidates(
+                listOf(row),
+                listOf(file("b.pdf")),
+                mapOf("b.pdf" to "d"),
+                journal,
+            ) shouldBe
+                emptyList()
+        }
+        // A path no event named is a user's move, whatever else the journal names.
+        RescanDecision.externalMoveCandidates(
+            listOf(row),
+            listOf(file("b.pdf")),
+            mapOf("b.pdf" to "d"),
+            naming("a.pdf", "c.pdf"),
+        ) shouldBe listOf(row to "b.pdf")
     }
 
     /** One random library, as a rescan finds it, and the plan it decides. */
@@ -308,6 +356,11 @@ class RescanDecisionTest {
                 override fun successorOf(docId: String) = successor[docId] ?: docId
 
                 override fun hides(docId: String) = docId in hiddenByJournal
+
+                override fun named(
+                    docId: String,
+                    path: String,
+                ) = false
             }
 
         fun plan(): RescanPlan {
