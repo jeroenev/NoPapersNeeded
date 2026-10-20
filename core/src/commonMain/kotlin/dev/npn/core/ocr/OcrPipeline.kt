@@ -38,15 +38,18 @@ import kotlinx.coroutines.flow.asStateFlow
  *
  * @param language the OCR languages a run asks its engine for (`nld+eng`), read once per document so a
  *  change in Settings applies to the next one.
- * @param onTextIndexed called whenever text is indexed for a document — including when an existing
- *  sidecar is merely adopted or re-selected, and so on every index rebuild. For work that is local,
- *  deterministic and free to repeat (the auto-match rules).
- * @param onOcrProduced called only when *this device produced* a new sidecar for the run it settles,
- *  i.e. the text is new here rather than re-indexed: by the pass that published it, or by the next
- *  pass of its run when that one was cut short first. Narrower than [onTextIndexed] on purpose:
- *  after a destructive index rebuild every document is re-queued and re-adopts its stored sidecar,
- *  which would otherwise look like a library's worth of new documents to work that costs a paid
- *  request each (automatic AI enrichment).
+ * New text and re-indexed text are told apart: text is new to the library only when *this device
+ * produced* a new sidecar for the run it settles, by the pass that published it, or by the next pass
+ * of its run when that one was cut short first. Text adopted or re-selected from a stored sidecar (a
+ * rescan, a sidecar another device published, a reopened session, a rebuilt index, whose rescan
+ * re-queues every document to re-adopt what is stored) is not new, and fires no hook: to work that
+ * writes into the journal or costs a request, a rebuild would otherwise look like a library's worth
+ * of new documents.
+ *
+ * @param onTextProduced called, with the text, for text new to the library: the auto-match rules,
+ *  which write what they set into the journal.
+ * @param onOcrProduced called, after [onTextProduced], for the same new text: work that costs a paid
+ *  request each (queueing automatic AI enrichment), so it sees what the rules set.
  * @param onStaleFile called when a document's file no longer hashes to its docId: it was replaced
  *  or is still being written. Nothing is published for it; a rescan sorts out what the file now is.
  */
@@ -59,7 +62,7 @@ internal class OcrPipeline(
     private val deviceId: String,
     private val language: suspend () -> String,
     private val clock: EpochClock = SystemEpochClock,
-    private val onTextIndexed: suspend (docId: String, text: String) -> Unit = { _, _ -> },
+    private val onTextProduced: suspend (docId: String, text: String) -> Unit = { _, _ -> },
     private val onOcrProduced: suspend (docId: String) -> Unit = {},
     private val onStaleFile: suspend (docId: String) -> Unit = {},
 ) {
@@ -197,7 +200,7 @@ internal class OcrPipeline(
         // pass of the run cut short before it got here. Being queued is not enough: a rebuilt index
         // re-queues documents, and those runs land here and adopt what is already stored.
         val produced = own == OwnOcr.Published || publishedFor(entry, stored)
-        val hookError = notifyTextIndexed(docId, sidecar, ocrProduced = produced)
+        val hookError = if (produced) notifyTextProduced(docId, sidecar) else null
         // The queue row is decided here, once, after the hooks, so an observer watching the queue
         // empty out (the Android maintenance job) cannot see this document finish before the
         // follow-up work they schedule has been recorded.
@@ -248,23 +251,22 @@ internal class OcrPipeline(
     }
 
     /**
-     * Run the post-index hooks, [onOcrProduced] only when [ocrProduced], and return the first
-     * failure for the caller to record if it has somewhere durable to put it.
+     * Run the hooks for text new to the library, and return the first failure for the caller to
+     * record on the queue row.
      *
      * Each is contained separately. They are follow-up work (auto-match rules, queueing AI
      * enrichment) on a result that is already indexed and searchable, so one throwing must neither
      * abort the queue drain, nor leave this document's entry unresolved, nor cost the document the
      * other hook — which nothing would retry.
      */
-    private suspend fun notifyTextIndexed(
+    private suspend fun notifyTextProduced(
         docId: String,
         sidecar: OcrSidecar,
-        ocrProduced: Boolean,
     ): String? {
         val hooks =
-            listOfNotNull(
-                "onTextIndexed" to suspend { onTextIndexed(docId, sidecar.fullText()) },
-                ("onOcrProduced" to suspend { onOcrProduced(docId) }).takeIf { ocrProduced },
+            listOf(
+                "onTextProduced" to suspend { onTextProduced(docId, sidecar.fullText()) },
+                "onOcrProduced" to suspend { onOcrProduced(docId) },
             )
         var firstError: String? = null
         for ((name, hook) in hooks) {
@@ -463,12 +465,8 @@ internal class OcrPipeline(
         val selected =
             versions.selectReadable(doc.docId, stored, doc.ocrEngineOverride) ?: return versions.forget(doc.docId)
         if (isIndexed(doc, selected.version)) return
+        // Adoption or re-selection of a stored sidecar: no new text, so no hook.
         indexAndMarkSelected(doc.docId, selected.version, selected.sidecar)
-        // Adoption or re-selection of a stored sidecar: no new text, so no enrichment. A hook
-        // failure is discarded rather than recorded, unlike in processDoc: the row is not marked
-        // done here, and the only hook that can run is onTextIndexed, which reconcile re-fires on
-        // every rescan. Nothing is permanently lost by dropping it.
-        notifyTextIndexed(doc.docId, selected.sidecar, ocrProduced = false)
         // Adopted text does not settle a run still owed here, nor one whose sidecar a pass cut short
         // already published; processDoc does, once it is due, and hands that text on as produced.
         val row = ocrQueueDao.getByDocId(doc.docId)
@@ -575,7 +573,7 @@ internal class OcrPipeline(
      * Index the selected [sidecar]'s text for [docId] and record the resulting OCR state on the
      * doc row: [OcrState.DONE] when this device produced [desired], else [OcrState.ADOPTED]. Shared by the
      * queue-drain path ([processDoc]) and the reconcile/re-select path ([applySelection]); each
-     * caller handles its own queue-entry bookkeeping and [onTextIndexed] notification afterwards.
+     * caller handles its own queue-entry bookkeeping, and [processDoc] the hooks, afterwards.
      */
     private suspend fun indexAndMarkSelected(
         docId: String,

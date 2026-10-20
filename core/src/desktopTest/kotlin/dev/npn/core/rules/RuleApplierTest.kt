@@ -3,6 +3,9 @@ package dev.npn.core.rules
 import dev.npn.core.db.FtsRows
 import dev.npn.core.index.IndexRig
 import dev.npn.core.index.rowAtPath
+import dev.npn.core.journal.PendingOp
+import dev.npn.core.journal.journalObjects
+import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
@@ -116,6 +119,64 @@ class RuleApplierTest {
             applier.applyToDoc(docId, organize = false)
 
             rig.db.documentFieldDao().valuesOf(docId)["correspondent"] shouldBe "Water Utility"
+        }
+
+    /**
+     * Rules only fill in. A value the journal holds, set by anyone (here a person's correspondent), a
+     * field someone cleared, and a tag someone removed stay as they are; only what the document never
+     * had is written. A second application finds nothing to fill and writes nothing.
+     */
+    @Test
+    fun rulesFillOnlyWhatTheDocumentNeverHad() =
+        runTest {
+            rig.writePdf("invoice.pdf", "the bill")
+            rig.rescan()
+            val docId = checkNotNull(rig.db.documentDao().rowAtPath("invoice.pdf")).docId
+            val coordinator = rig.coordinator(rig.writer("dev-main"))
+            coordinator.refreshState()
+            coordinator.commitAndApply(
+                listOf(
+                    PendingOp.fieldSet(docId, FieldKeys.CORRESPONDENT, "Globex"),
+                    PendingOp.fieldSet(docId, FieldKeys.DOC_TYPE, "Letter"),
+                    PendingOp.tagAdd(docId, "Paid"),
+                ),
+            )
+            coordinator.commitAndApply(listOf(PendingOp.fieldSet(docId, FieldKeys.DOC_TYPE, null)))
+            coordinator.commitBuilt { state -> state.tagRemovalOps(listOf(docId), "Paid") }
+            val applier =
+                RuleApplier(
+                    rules = {
+                        listOf(
+                            AutoMatchRule(
+                                id = "invoices",
+                                name = "Invoices",
+                                field = RuleField.Content,
+                                pattern = "invoice",
+                                tags = listOf("invoice", "paid"),
+                                sets =
+                                    mapOf(
+                                        FieldKeys.CORRESPONDENT to "ACME",
+                                        FieldKeys.DOC_TYPE to "Invoice",
+                                        "project" to "Billing",
+                                    ),
+                            ),
+                        )
+                    },
+                    ftsDao = rig.db.ftsDao(),
+                    documentDao = rig.db.documentDao(),
+                    coordinator = coordinator,
+                )
+
+            applier.applyToDoc(docId, content = "Invoice 42")
+
+            rig.db.documentFieldDao().valuesOf(docId) shouldBe
+                mapOf(FieldKeys.CORRESPONDENT to "Globex", "project" to "Billing")
+            rig.db.tagDao().tagsForDocument(docId) shouldContainExactly listOf("invoice")
+
+            val objects = rig.fs.journalObjects().size
+            applier.applyToDoc(docId, content = "Invoice 42")
+            applier.applyToExistingDocs()
+            rig.fs.journalObjects().size shouldBe objects
         }
 
     private companion object {

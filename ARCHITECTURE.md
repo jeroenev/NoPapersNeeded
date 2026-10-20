@@ -289,9 +289,10 @@ desktop nothing else rescans until the folder changes; Android rescans on every 
 The OCR queue in `device.db` records work owed per document. `OcrPipeline` drains it: picks the
 engine with `OcrEngineSelector`, reads the document's bytes through `readDocument` (which checks
 the hash), runs the engine, re-checks the hash before publishing a sidecar, indexes the text into
-FTS, and fires `onTextIndexed` (for every indexing, rebuilds included) and `onOcrProduced` (only
-for a sidecar this device wrote for the run it settles). The auto-match rules hang on the first;
-automatic AI enrichment on the second.
+FTS, and, only for a sidecar this device wrote for the run it settles, fires `onTextProduced` and
+then `onOcrProduced`. The auto-match rules hang on the first, automatic AI enrichment on the
+second. Text adopted from a stored sidecar (a rescan's reconcile, another device's sidecar, a
+rebuilt index re-queueing every document) is indexed and fires neither.
 
 ### 5.5 AI
 
@@ -591,6 +592,17 @@ Kept by `FoldedState`, `MetadataAccumulator`, `FoldProjection`, `Indexer`, `Pass
 - The rules table in the index only caches the journal's list (`AutoMatchRuleSource` mirrors it).
   A rule is normalized where it is saved or decoded (`AutoMatchRule.normalized`). Content rules
   match on the indexed text when a write re-runs them.
+- Auto-match rules only fill in what a document has never had, and run on text new to the library
+  or when a person acts, never when an index re-indexes text: a rule sets a field the journal holds
+  no value for on the document (a cleared one counts as held) and adds a tag it never carried (a
+  removed one counts), when this device's OCR reads the document's text, after an edit to its fields
+  or a rename or move, and over every live document when a rule is saved or enabled
+  (`RuleApplier`, deciding against the fold its commit lands on). So a rebuilt index, a device
+  that joins, or a sidecar another device wrote writes nothing, a person's value or removal is never
+  undone, and the rules need no op of their own: the device that read the text applies them once,
+  and the others get the result through the journal. A rule that arrives after a document's text was
+  read reaches it only when a rule is saved or enabled, and a rule edited later does not rewrite
+  what its earlier version filled in.
 - A storage-path template that cannot expand says why with a `StoragePathError`; its context always
   carries the registry's field types, which decide which fields take a date pattern.
 - A watched inbox folder at or inside the library (`liesInLibrary`) is never swept, and Settings
@@ -824,7 +836,7 @@ through the injected `EpochClock`; cancellation never swallowed.
 - **A new starting point for a bulk AI edit** → an `EditTask` constant plus its `preset` in
   `app/ui/ai/AiEditTask.kt`; nothing in `core` knows about tasks. Why the page refuses to start →
   `AiEditUiState.startBlocker`, rendered by `RunBar`.
-- **Follow-up work after OCR** → `OcrPipeline.onTextIndexed` for free, idempotent work;
-  `onOcrProduced` for anything that costs money or is externally visible (section 5.4).
+- **Follow-up work after OCR** → `OcrPipeline.onTextProduced` and `onOcrProduced`, which fire only
+  for text this device produced, never for a re-index (section 5.4).
 - **Who may spend on AI unattended** → `UnattendedAiPolicy`. When the paid OCR engine runs for a
   document → `OcrEngineSelector` (section 6.10).

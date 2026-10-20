@@ -42,7 +42,7 @@ class AutoMatchRuleIntegrationTest {
             rig.session.ocr.ocrStatus
                 .first { it.pending == 0 && !it.running }
 
-            // Rule application runs in the post-OCR onTextIndexed callback, which fires after the
+            // Rule application runs in the post-OCR onTextProduced callback, which fires after the
             // queue is marked done, so wait for the rule-produced metadata rather than mere
             // document existence.
             val item =

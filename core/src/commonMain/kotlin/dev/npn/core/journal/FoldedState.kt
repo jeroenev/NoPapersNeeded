@@ -291,11 +291,28 @@ internal class FoldedState {
     fun effectiveFields(doc: String): Map<String, String> = fields[doc]?.let(::nonNullFields).orEmpty()
 
     /**
-     * [doc]'s own field registers, clears included, as the fold holds them. Only the one-time
-     * upgrade of relinks written before relink copies reads them (`RelinkInheritanceUpgrade.kt`);
-     * every other reader goes through [effectiveFields].
+     * [doc]'s own field registers, clears included, as the fold holds them. Read by the one-time
+     * upgrade of relinks written before relink copies (`RelinkInheritanceUpgrade.kt`), and by the
+     * auto-match rules, which fill only a field whose register is empty (`RuleApplier`); every
+     * other reader goes through [effectiveFields].
      */
     internal fun fieldRegisters(doc: String): Map<String, PropVal> = fields[doc].orEmpty()
+
+    /**
+     * Every tag [doc] has ever been given, a removed one included, by the name it was added under
+     * and by the name a rename or merge gave it since. For the auto-match rules, which add only a
+     * tag a document never carried, so they do not undo a removal.
+     */
+    fun tagsEverAdded(doc: String): Set<String> {
+        val byTag = tagAdds[doc] ?: return emptySet()
+        val sortedRenames = sortedRenames
+        val out = LinkedHashSet<String>()
+        for ((literal, dots) in byTag) {
+            out += literal
+            for (addHlc in dots.values) out += applyRenames(literal, addHlc, sortedRenames)
+        }
+        return out
+    }
 
     /** [doc]'s own property registers, clears included: for the same upgrade only, as [fieldRegisters]. */
     internal fun propRegisters(doc: String): Map<SystemProperty, PropVal> = props[doc].orEmpty()

@@ -13,8 +13,16 @@ import kotlinx.coroutines.sync.withLock
 
 /**
  * Applies enabled auto-matching rules by turning matches into [PendingOp]s and committing them
- * through [JournalCoordinator]. Runs as a side effect when OCR text becomes available and when
- * a rule is saved/updated.
+ * through [JournalCoordinator]. Runs on text new to the library (this device's OCR produced it,
+ * `OcrPipeline`'s `onTextProduced`), after a write to a document's fields or file name, and over
+ * every document when a rule is saved or enabled. Never on text a rescan, a rebuilt index or a
+ * synced sidecar merely re-indexes: what the rules write is journal data, so it must not depend on
+ * when or where an index was built.
+ *
+ * Rules only fill in: a rule sets a field the document has never had a value for (a cleared one
+ * counts as had) and adds a tag it has never carried (a removed one counts as carried), by the fold
+ * the write lands on. What a person, another device's rules or AI set or took away stays, and
+ * applying the rules again changes nothing, wherever and however often it runs.
  *
  * [rules] reads the rule list wherever it is stored, each rule [AutoMatchRule.normalized]. Each call
  * here reads it once and compiles the enabled rules once, however many documents it then matches.
@@ -30,7 +38,7 @@ internal class RuleApplier(
 
     /**
      * Apply every rule to one document. [content] is its text when the caller has it at hand (OCR
-     * just indexed it); without it, a rule on the content reads the indexed text, so a write that
+     * just produced it); without it, a rule on the content reads the indexed text, so a write that
      * is no OCR (a field edit, a rename) matches the same rules a pass over the library does.
      */
     suspend fun applyToDoc(
@@ -45,8 +53,9 @@ internal class RuleApplier(
     }
 
     /**
-     * Apply the current rule set to every live document. This is awaited and serialized with OCR
-     * callbacks so saving/enabling several rules cannot race or duplicate writes.
+     * Apply the current rule set to every live document: what saving or enabling a rule does, and
+     * the only way a rule reaches a document whose text was there before it. This is awaited and
+     * serialized with OCR callbacks so saving/enabling several rules cannot race or duplicate writes.
      */
     suspend fun applyToExistingDocs() =
         mutex.withLock {
@@ -81,16 +90,16 @@ internal class RuleApplier(
                 // Matching reads the folded state, not the projection, so a rule on a field sees
                 // the value the journal holds even before the index has caught up.
                 val fields = state.effectiveFields(doc.docId)
-                val tags = state.effectiveTags(doc.docId)
                 val matched = matchRules(compiled, content, fields, doc.fileName)
+                // Fill in only: a register the journal holds, a clear included, is someone's value.
+                val held = state.fieldRegisters(doc.docId).keys
+                val carried = state.tagsEverAdded(doc.docId).mapTo(HashSet()) { it.lowercase() }
                 buildList {
-                    // Write when the effective value DIFFERS (not only when empty): idempotent, so a
-                    // rule fires once and then goes quiet, yet still corrects a non-matching value.
-                    for ((key, raw) in matched.sets) {
+                    for ((key, raw) in matched.sets - held) {
                         val value = canonicalOrNull(state, key, raw) ?: continue
-                        if (fields[key] != value) add(PendingOp.fieldSet(doc.docId, key, value))
+                        add(PendingOp.fieldSet(doc.docId, key, value))
                     }
-                    for (tag in matched.tags) if (tag !in tags) add(PendingOp.tagAdd(doc.docId, tag))
+                    for (tag in matched.tags) if (tag.lowercase() !in carried) add(PendingOp.tagAdd(doc.docId, tag))
                 }
             }
         if (changed && organize) onMetadataApplied(doc.docId)

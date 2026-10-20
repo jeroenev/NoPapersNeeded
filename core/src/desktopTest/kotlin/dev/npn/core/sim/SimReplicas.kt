@@ -75,17 +75,6 @@ data class SyncConfig(
  */
 object SyncKnownIssues {
     /**
-     * Finding 5: the auto-match rules run whenever text is indexed, a rebuild's indexing included
-     * (`OcrPipeline`'s `onTextIndexed`), and write what they set into the journal, correcting a
-     * value that differs. A rebuilt index, or a device that joins the library, applies today's rules
-     * to every document and publishes the result, where the devices that indexed a document before
-     * the rule existed never applied it, and a value a user changed by hand is set back: rebuilding
-     * the index changes the library. While true, the rebuild oracle passes over a document that
-     * differs only by what the rebuild's own session wrote.
-     */
-    const val REBUILD_RUNS_RULES = true
-
-    /**
      * Finding 8, the documented cost of `doc-undelete` not being written yet (ARCHITECTURE.md 6.4):
      * the bytes of a document deleted for good that come back (an import, or a file a sync tool
      * delivers) bring it back on the device that imported them, for that session, and in the scan
