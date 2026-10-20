@@ -43,7 +43,7 @@ class OcrPipelineStaleFileTest {
                 rig.pipeline(
                     "devA",
                     FakeOcrEngine(isAvailable = true, name = "mlkit"),
-                    onTextIndexed = { id, _ -> indexed += id },
+                    onTextProduced = { id, _ -> indexed += id },
                     onStaleFile = { stale += it },
                 )
 

@@ -24,7 +24,7 @@ internal suspend fun OcrSidecarFiles.writerKeysOf(hash: String): List<String> =
 
 /**
  * Temp library folder + index for [OcrPipeline] tests: builds pipelines over them and stages
- * documents the way the ingest path would. Shared by the pipeline tests and the `onTextIndexed`
+ * documents the way the ingest path would. Shared by the pipeline tests and the `onTextProduced`
  * hook tests so neither class carries the fixture itself.
  */
 internal class OcrPipelineRig {
@@ -45,7 +45,7 @@ internal class OcrPipelineRig {
         language: suspend () -> String = { "eng" },
         clock: EpochClock = SystemEpochClock,
         files: LibraryFileSystem = fs,
-        onTextIndexed: suspend (docId: String, text: String) -> Unit = { _, _ -> },
+        onTextProduced: suspend (docId: String, text: String) -> Unit = { _, _ -> },
         onOcrProduced: suspend (docId: String) -> Unit = {},
         onStaleFile: suspend (docId: String) -> Unit = {},
     ) = OcrPipeline(
@@ -57,7 +57,7 @@ internal class OcrPipelineRig {
         deviceId = deviceId,
         language = language,
         clock = clock,
-        onTextIndexed = onTextIndexed,
+        onTextProduced = onTextProduced,
         onOcrProduced = onOcrProduced,
         onStaleFile = onStaleFile,
     )

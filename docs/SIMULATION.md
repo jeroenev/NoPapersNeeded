@@ -195,12 +195,6 @@ do not converge, which fails the run. Then:
 comment names the finding. Fixing a finding means turning its switch off (or removing its
 `knownFailures` entry) and making a long run pass.
 
-- **Finding 5**, `SyncKnownIssues.REBUILD_RUNS_RULES`: the auto-match rules run whenever text is
-  indexed, a rebuild's indexing included, and write what they set into the journal, correcting a
-  value that differs. A rebuilt index, or a device that joins, applies today's rules to every
-  document and publishes the result, where devices that indexed a document before the rule existed
-  never applied it, and a value a user changed by hand is set back. The rebuild oracle passes over a
-  document that differs only by what the rebuild's own session wrote.
 - **Finding 6**, `SyncKnownIssues.knownFailures`: a device takes a move the sync tool mirrored from
   another device for one its user made (`ExternalDocumentMoves`) and journals it as a new storage
   path, newer than the intent the other device was carrying out. Two devices that disagree on a

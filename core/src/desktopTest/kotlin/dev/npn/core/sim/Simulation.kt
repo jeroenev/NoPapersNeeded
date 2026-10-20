@@ -561,20 +561,11 @@ internal class Simulation(
                     val id = prefix?.let { ids.first { docId -> docId.startsWith(prefix) } }
                     id?.let { eventsOf(it, oracle, copy) }.orEmpty()
                 }
-            // While SyncKnownIssues.REBUILD_RUNS_RULES holds, a document that differs only by what the
-            // rebuild's own session wrote (its auto-match rules, finding 5) is passed over.
+            // A deleted document's file back in the folder: a rebuild's rescan shows it.
             val remaining =
-                explained.filterNot { (line, events) ->
-                    val ownRules =
-                        SyncKnownIssues.REBUILD_RUNS_RULES && events.isNotBlank() &&
-                            events.lines().filter { it.isNotBlank() }.all { REBUILD_WROTE in it }
-                    // A deleted document's file back in the folder: a rebuild's rescan shows it.
-                    val returned = SyncKnownIssues.DELETED_RETURNS_UNRECORDED && "(live index: DELETED)" in line
-                    ownRules || returned
+                explained.filterNot { (line, _) ->
+                    SyncKnownIssues.DELETED_RETURNS_UNRECORDED && "(live index: DELETED)" in line
                 }
-            if (remaining.size < explained.size) {
-                trace += "   rebuild oracle: ${explained.size - remaining.size} document(s) differ by its own rules"
-            }
             if (remaining.isNotEmpty()) {
                 fail(
                     "rebuild oracle: a fresh index shows another library:\n  " +

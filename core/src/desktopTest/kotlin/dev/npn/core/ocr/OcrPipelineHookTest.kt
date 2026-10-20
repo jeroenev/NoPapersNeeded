@@ -16,8 +16,8 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 
 /**
- * The `onTextIndexed` hook, which is how OCR hands a freshly indexed document to its follow-up
- * work (auto-match rules, then queueing automatic AI enrichment).
+ * The `onTextProduced` and `onOcrProduced` hooks, which are how OCR hands text new to the library to
+ * its follow-up work (auto-match rules, then queueing automatic AI enrichment), and only such text.
  */
 class OcrPipelineHookTest {
     private val rig = OcrPipelineRig()
@@ -32,7 +32,7 @@ class OcrPipelineHookTest {
      * able to observe a document as done before the work its hook schedules has been recorded.
      */
     @Test
-    fun textIndexedHookRunsBeforeTheQueueEntryIsMarkedDone() =
+    fun textProducedHookRunsBeforeTheQueueEntryIsMarkedDone() =
         runTest {
             val docId = rig.stageDoc("a.pdf", PdfFixtures.embeddedTextPdf("invoice 42 acme corporation"))
             var stateDuringHook: String? = null
@@ -40,7 +40,7 @@ class OcrPipelineHookTest {
                 rig.pipeline(
                     "devA",
                     FakeOcrEngine(isAvailable = true, name = "mlkit"),
-                    onTextIndexed = { id, _ ->
+                    onTextProduced = { id, _ ->
                         stateDuringHook =
                             rig.deviceDb
                                 .ocrQueueDao()
@@ -60,9 +60,9 @@ class OcrPipelineHookTest {
                 ?.state shouldBe QueueState.DONE.column
         }
 
-    /** New text on this device is what the paid follow-up is for, so both hooks fire. */
+    /** New text on this device is what the follow-up work is for, so both hooks fire. */
     @Test
-    fun ownOcrFiresBothTheIndexedAndTheProducedHook() =
+    fun ownOcrFiresBothHooks() =
         runTest {
             val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
             val indexed = mutableListOf<String>()
@@ -71,7 +71,7 @@ class OcrPipelineHookTest {
                 rig.pipeline(
                     "devA",
                     FakeOcrEngine(isAvailable = true, name = "mlkit"),
-                    onTextIndexed = { id, _ -> indexed += id },
+                    onTextProduced = { id, _ -> indexed += id },
                     onOcrProduced = { id -> produced += id },
                 )
 
@@ -84,10 +84,11 @@ class OcrPipelineHookTest {
     /**
      * The index is a disposable cache, so this is what a rebuild looks like: a fresh index over a
      * library whose sidecars already exist, with every document re-queued for OCR. Those runs
-     * adopt stored text rather than producing any, and must not re-spend on the whole library.
+     * adopt stored text rather than producing any, and must neither re-spend on the whole library
+     * nor run the rules over it again.
      */
     @Test
-    fun adoptingAnExistingSidecarFiresOnlyTheIndexedHook() =
+    fun adoptingAnExistingSidecarFiresNoHook() =
         runTest {
             val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
             rig
@@ -112,14 +113,16 @@ class OcrPipelineHookTest {
                         "devA",
                         FakeOcrEngine(isAvailable = true, name = "mlkit"),
                         rebuilt,
-                        onTextIndexed = { id, _ -> indexed += id },
+                        onTextProduced = { id, _ -> indexed += id },
                         onOcrProduced = { id -> produced += id },
                     )
 
                 pipeline.processDoc(docId)
 
-                indexed shouldContainExactly listOf(docId)
+                indexed.shouldBeEmpty()
                 produced.shouldBeEmpty()
+                // Still searchable: the text is indexed, only not handed on.
+                rebuilt.documentDao().requireByDocId(docId).ocrState shouldBe OcrState.DONE.column
             } finally {
                 rebuilt.close()
             }
@@ -140,7 +143,7 @@ class OcrPipelineHookTest {
                 rig.pipeline(
                     "devA",
                     FakeOcrEngine(isAvailable = true, name = "mlkit"),
-                    onTextIndexed = { _, _ ->
+                    onTextProduced = { _, _ ->
                         if (closing) {
                             closing = false
                             throw CancellationException("session closed")
@@ -177,7 +180,7 @@ class OcrPipelineHookTest {
                 rig.pipeline(
                     "devA",
                     engine,
-                    onTextIndexed = { _, _ -> throw CancellationException("session closed") },
+                    onTextProduced = { _, _ -> throw CancellationException("session closed") },
                 )
             shouldThrow<CancellationException> { closing.processDoc(cutShort) }
 
@@ -208,9 +211,38 @@ class OcrPipelineHookTest {
             }
         }
 
+    /**
+     * A sidecar another device published, which the sync tool delivers, is text the library already
+     * had: that device handed it on. Adopting it here, by a reconcile or by a queued run that finds
+     * it outranks nothing, fires no hook, so this device runs no rules over it.
+     */
+    @Test
+    fun aSyncDeliveredSidecarFiresNoHook() =
+        runTest {
+            val reconciled = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
+            val drained = rig.stageDoc("other.pdf", PdfFixtures.imageOnlyPdf(pages = 2))
+            rig.writeForeignSidecar(reconciled, "devB", "mlkit", "invoice from devB")
+            rig.writeForeignSidecar(drained, "devB", "mlkit", "letter from devB")
+            val handedOn = mutableListOf<String>()
+            val pipeline =
+                rig.pipeline(
+                    "devA",
+                    FakeOcrEngine(isAvailable = true, name = "mlkit"),
+                    onTextProduced = { id, _ -> handedOn += id },
+                    onOcrProduced = { id -> handedOn += id },
+                )
+
+            pipeline.processDoc(drained)
+            pipeline.reconcileSidecars()
+
+            handedOn.shouldBeEmpty()
+            rig.db.documentDao().requireByDocId(reconciled).ocrState shouldBe OcrState.ADOPTED.column
+            rig.db.documentDao().requireByDocId(drained).ocrState shouldBe OcrState.ADOPTED.column
+        }
+
     /** A broken rule or a failing enrichment enqueue must not strand the entry or stop the drain. */
     @Test
-    fun aThrowingTextIndexedHookStillCompletesTheQueueEntry() =
+    fun aThrowingTextProducedHookStillCompletesTheQueueEntry() =
         runTest {
             rig.stageDoc("a.pdf", PdfFixtures.embeddedTextPdf("invoice 42 acme corporation"))
             rig.stageDoc("b.pdf", PdfFixtures.embeddedTextPdf("another invoice document here"))
@@ -219,7 +251,7 @@ class OcrPipelineHookTest {
                 rig.pipeline(
                     "devA",
                     FakeOcrEngine(isAvailable = true, name = "mlkit"),
-                    onTextIndexed = { _, _ -> error("hook blew up") },
+                    onTextProduced = { _, _ -> error("hook blew up") },
                     onOcrProduced = { id -> produced += id },
                 )
 
@@ -235,7 +267,7 @@ class OcrPipelineHookTest {
                 // The other hook still ran: containment is per hook, not per document.
                 produced.size shouldBe 2
                 // Nothing retries a hook, so the failure has to survive somewhere.
-                rows.forEach { it.lastError shouldBe "onTextIndexed: hook blew up" }
+                rows.forEach { it.lastError shouldBe "onTextProduced: hook blew up" }
             } finally {
                 worker.close()
             }

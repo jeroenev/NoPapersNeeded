@@ -97,7 +97,7 @@ internal class SessionGraph(
     /** The rules' cache in the index, mirrored from the journal when another device's list arrives. */
     val ruleSource = AutoMatchRuleSource(db.autoMatchRuleDao(), coordinator, log)
 
-    /** Runs the auto-match rules on a document: after a field write, and on newly indexed text. */
+    /** Runs the auto-match rules on a document: after a field write, and on text new to the library. */
     private val ruleApplier =
         RuleApplier(
             rules = ruleSource::current,
@@ -173,9 +173,9 @@ internal class SessionGraph(
     private val ocrEngines = OcrEngineSelector(local = deps.ocrEngine, ai = ai.ocrEngine, aiAuto = policy::autoOcr)
 
     /**
-     * This device's OCR pipeline. Indexed text runs the library's auto-match rules first; the
-     * enrichment is queued only for text this device just produced, so rule-applied tags and fields
-     * are part of what a paid follow-up sees.
+     * This device's OCR pipeline. Text this device just produced runs the library's auto-match rules,
+     * then queues the enrichment, so rule-applied tags and fields are part of what a paid follow-up
+     * sees. Text only re-indexed (a rebuild, a synced sidecar) runs neither.
      */
     val ocrPipeline =
         OcrPipeline(
@@ -187,8 +187,7 @@ internal class SessionGraph(
             deviceId = deviceId,
             language = deps.settings.ocrLanguage,
             clock = deps.clock,
-            // Deterministic local rules run on any newly indexed text, including a re-index.
-            onTextIndexed = { docId, text -> ruleApplier.applyToDoc(docId, text) },
+            onTextProduced = { docId, text -> ruleApplier.applyToDoc(docId, text) },
             // Only the *intent* is recorded here: this runs on the OCR queue-drain thread, where a
             // network call would stall OCR of every remaining document.
             onOcrProduced = { docId -> enrichment.queue.enqueue(docId) },
