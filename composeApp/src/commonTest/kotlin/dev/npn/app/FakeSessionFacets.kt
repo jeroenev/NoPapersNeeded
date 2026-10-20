@@ -44,12 +44,17 @@ class FakeIngestFacade : IngestFacade {
     var rescanReport: ScanReport = emptyScanReport()
     var failRescan: (() -> Nothing)? = null
 
+    /** How many rescans were asked for, failed ones included. */
+    var rescans = 0
+        private set
+
     /** Import outcomes, consumed in order per call; falls back to the last one when exhausted. */
     var importOutcomes: List<ImportOutcome> = listOf(ImportOutcome.Imported("x", "x.pdf"))
     private var importIdx = 0
     var failImport: (() -> Nothing)? = null
 
     override suspend fun rescan(): ScanReport {
+        rescans++
         failRescan?.invoke()
         return rescanReport
     }

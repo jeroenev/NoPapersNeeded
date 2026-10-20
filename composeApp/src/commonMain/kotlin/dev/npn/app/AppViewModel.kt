@@ -41,6 +41,7 @@ import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_save_setting_failed
 import no_papers_needed.composeapp.generated.resources.library_drop_needs_library
 import no_papers_needed.composeapp.generated.resources.library_import_failed
+import no_papers_needed.composeapp.generated.resources.library_refresh_failed
 
 /** A library that did not open, as the user is told: a localized [reason], with [details] for support. */
 data class OpenFailure(
@@ -146,11 +147,36 @@ class AppViewModel(
             .flatMapLatest { session -> session?.work?.queueStatus() ?: flowOf(QueueStatus.None) }
             .stateIn(viewModelScope, WhileSubscribedTimeout, QueueStatus.None)
 
+    /**
+     * Why the open library refuses writes now, for the shell's read-only banner: the session's
+     * [LibrarySession.writeBlock], null while writes are taken or no library is open. It clears by
+     * itself once a pass reads the journal whole.
+     */
+    val writeBlock: StateFlow<WriteBlock?> =
+        env.session
+            .flatMapLatest { session -> session?.writeBlock ?: flowOf(null) }
+            .stateIn(
+                viewModelScope,
+                WhileSubscribedTimeout,
+                env.session.value
+                    ?.writeBlock
+                    ?.value,
+            )
+
     init {
         restore()
         // Decoded thumbnails belong to the library they were drawn for: whenever it closes or
         // changes, the next one starts with an empty cache.
         viewModelScope.launch { env.session.collect { clearThumbCache() } }
+    }
+
+    /**
+     * Read the open library's journal again (a rescan), which lifts a block a journal still arriving
+     * through sync, or a pass that failed, left; a rescan that fails says so.
+     */
+    fun retryWrites() {
+        val session = env.session.value ?: return
+        launchReporting(Res.string.library_refresh_failed) { session.ingest.rescan() }
     }
 
     /** Try the saved library again. */

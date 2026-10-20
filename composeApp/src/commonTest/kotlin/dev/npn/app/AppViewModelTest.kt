@@ -2,6 +2,7 @@ package dev.npn.app
 
 import dev.npn.app.di.LibraryUnavailableException
 import dev.npn.app.di.OpenFailureReason
+import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.nav.QueueStatus
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.app.QueuedWork
@@ -14,10 +15,14 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_writes_journal_incomplete
+import no_papers_needed.composeapp.generated.resources.library_refresh_failed
 import kotlin.coroutines.ContinuationInterceptor
 import kotlin.test.Test
 
@@ -63,6 +68,102 @@ class AppViewModelTest : MainDispatcherTest() {
             env.closeLibrary()
             runCurrent()
             vm.queueStatus.value shouldBe QueueStatus.None
+        }
+
+    /**
+     * The read-only banner shows why the open library refuses writes for as long as its session
+     * says so, goes once a pass lifts the block, and goes with the library.
+     */
+    @Test
+    fun theReadOnlyBannerFollowsTheOpenLibrarysWriteBlock() =
+        runTest(dispatcher) {
+            val env = env(savedLocation = "/lib")
+            val vm = model(env)
+            collecting(vm.writeBlock)
+            runCurrent()
+            vm.writeBlock.value shouldBe null
+
+            val session = env.sessions.getValue("/lib")
+            session.writeBlock.value = WriteBlock.JOURNAL_DAMAGED
+            runCurrent()
+            vm.writeBlock.value shouldBe WriteBlock.JOURNAL_DAMAGED
+
+            session.writeBlock.value = null
+            runCurrent()
+            vm.writeBlock.value shouldBe null
+
+            session.writeBlock.value = WriteBlock.NEWER_FORMAT
+            runCurrent()
+            vm.writeBlock.value shouldBe WriteBlock.NEWER_FORMAT
+
+            env.closeLibrary()
+            runCurrent()
+            vm.writeBlock.value shouldBe null
+        }
+
+    /**
+     * The block is the session's, not the window's: a recreated shell shows it again from the
+     * session, with nothing of it in its saved state.
+     */
+    @Test
+    fun aRecreatedShellShowsTheBlockAgain() =
+        runTest(dispatcher) {
+            val env = env(savedLocation = "/lib")
+            val screen =
+                recreatable {
+                    AppViewModel(env, io) { parent, name -> createdLocation(parent, name) }
+                }
+            collecting(screen.vm.state)
+            runCurrent()
+            env.sessions
+                .getValue("/lib")
+                .writeBlock.value = WriteBlock.RECONCILE_FAILED
+
+            val restored = screen.recreate(this, { it.writeBlock })
+            restored.writeBlock.value shouldBe WriteBlock.RECONCILE_FAILED
+        }
+
+    /** Retry reads the open library's journal again, a rescan, and says nothing when it succeeds. */
+    @Test
+    fun retryRescansTheOpenLibrary() =
+        runTest(dispatcher) {
+            val env = env(savedLocation = "/lib")
+            val vm = model(env)
+            val messages = collecting(vm.messages.map { it.text })
+
+            vm.retryWrites()
+            runCurrent()
+
+            env.sessions
+                .getValue("/lib")
+                .ingest.rescans shouldBe 1
+            messages shouldBe emptyList()
+        }
+
+    /**
+     * A retry whose rescan still finds the journal incomplete says so in the user's terms, as a
+     * refused write does; any other failure gives its reason.
+     */
+    @Test
+    fun aRetryThatFailsSaysWhy() =
+        runTest(dispatcher) {
+            val env = env(savedLocation = "/lib")
+            val vm = model(env)
+            val messages = collecting(vm.messages.map { it.text })
+            val ingest = env.sessions.getValue("/lib").ingest
+
+            ingest.failRescan = { throw MetadataWriteBlocked(WriteBlock.JOURNAL_DAMAGED, "Object is not valid UTF-8") }
+            vm.retryWrites()
+            runCurrent()
+            ingest.failRescan = { error("folder unavailable") }
+            vm.retryWrites()
+            runCurrent()
+
+            messages shouldBe
+                listOf(
+                    uiText(Res.string.library_refresh_failed, uiText(Res.string.common_writes_journal_incomplete)),
+                    failure(Res.string.library_refresh_failed, "folder unavailable"),
+                )
         }
 
     /**

@@ -668,6 +668,12 @@ Kept by `FoldedState`, `MetadataAccumulator`, `FoldProjection`, `Indexer`, `Pass
 (`Restoring`, `Opening`, `NoLibrary`, `RestoreFailed`, `Open`), which also carries every failure to
 open as a localized `OpenFailureReason` with the technical cause as an optional detail.
 
+Above every screen, `MainNav` stacks the shell's `WithTopBanner` banners: the update notice, the
+read-only banner (`WithWriteBlockBanner`) and the unsaved-drafts one. The read-only banner shows
+`AppViewModel.writeBlock`, the open session's `LibrarySession.writeBlock`, in the same sentence a
+refused write gives as its reason (`WriteBlock.reasonText()`); it cannot be dismissed and goes once
+a pass reads the journal whole, and its Retry (not offered for `NEWER_FORMAT`) is a rescan.
+
 A change of the app's language rebuilds everything under `LocaleProvider`, so `LocalizedApp`
 remembers what the open library's UI must keep through one holder above it, `LibraryUi`: the
 navigation, and what the session keeps for its screens. All of it belongs to one session.

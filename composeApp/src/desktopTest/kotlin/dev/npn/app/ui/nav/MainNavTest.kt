@@ -97,8 +97,10 @@ class MainNavTest : EnglishLocaleTest() {
                                     library = library,
                                     aiConfigured = true,
                                     queue = QueueStatus.None,
+                                    writeBlock = null,
                                     snackbar = remember { SnackbarHostState() },
                                     onOpenLibrary = {},
+                                    onRetryWrites = {},
                                 )
                             }
                         }

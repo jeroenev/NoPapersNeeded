@@ -251,6 +251,7 @@ private fun AppRoot(
                     is AppState.Open -> {
                         val aiConfigured by vm.aiConfigured.collectAsStateWithLifecycle()
                         val queue by vm.queueStatus.collectAsStateWithLifecycle()
+                        val writeBlock by vm.writeBlock.collectAsStateWithLifecycle()
                         // Never null here: LocalizedApp remembers it for the session this state opened.
                         // Keyed, so nothing remembered for one library's screens carries over to
                         // another's when the session changes with no screen in between.
@@ -263,8 +264,10 @@ private fun AppRoot(
                                         library = library,
                                         aiConfigured = aiConfigured,
                                         queue = queue,
+                                        writeBlock = writeBlock,
                                         snackbar = snackbar,
                                         onOpenLibrary = vm::open,
+                                        onRetryWrites = vm::retryWrites,
                                     )
                                 }
                             }

@@ -72,7 +72,7 @@ fun uiText(
  * message, else its class name, else a localized "unknown error".
  */
 fun Throwable.reasonText(): UiText =
-    (this as? MetadataWriteBlocked)?.blockText()
+    (this as? MetadataWriteBlocked)?.block?.reasonText()
         ?: message?.takeIf { it.isNotBlank() }?.let(UiText::Raw)
         ?: this::class.simpleName?.let(UiText::Raw)
         ?: uiText(Res.string.common_unknown_error)
@@ -81,10 +81,11 @@ fun Throwable.reasonText(): UiText =
  * Why writes are refused, in the user's terms: only a newer app reads the library, the journal is
  * missing an object (one sync has yet to deliver, or one that was lost), or reading it failed. The
  * library stays readable meanwhile. The technical cause, which names journal objects, goes to the
- * log where the refusal is reported ([MessageSink.reporting]), never into the sentence.
+ * log where the refusal is reported ([MessageSink.reporting]), never into the sentence. Both the
+ * reason of a refused write and the read-only banner say it this way.
  */
-private fun MetadataWriteBlocked.blockText(): UiText =
-    when (block) {
+fun WriteBlock.reasonText(): UiText =
+    when (this) {
         WriteBlock.NEWER_FORMAT -> uiText(Res.string.common_writes_need_newer_app)
         WriteBlock.JOURNAL_DAMAGED -> uiText(Res.string.common_writes_journal_incomplete)
         WriteBlock.RECONCILE_FAILED -> uiText(Res.string.common_writes_reconcile_failed)
