@@ -99,6 +99,9 @@ After every step:
 At rest (every `quiesceEvery` steps, and at the end): faults are cleared, OCR runs through,
 background operations end, 20 virtual minutes pass, then one more rescan runs. Then:
 
+- The session's write block (`LibrarySession.writeBlock`) is lifted: the rescan read the journal
+  whole.
+
 - Every live document's file holds its hash.
 - Every live row stores its file's size and mtime, the proof by stat the rescan, trash and import
   take from it: a file touched since was hashed and its row given the new stat.

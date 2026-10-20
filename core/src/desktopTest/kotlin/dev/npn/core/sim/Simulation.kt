@@ -373,6 +373,8 @@ internal class Simulation(
                 "the quiescent rescan failed: ${it::class.simpleName}: ${it.reason()}",
             )
         }
+        // A rescan reads the journal whole, so once it succeeded nothing refuses writes.
+        session.writeBlock.value?.let { fail("writes stay blocked ($it) after a rescan that succeeded") }
         world.advance(AFTER_RESCAN_MILLIS)
         checkCheap()
         val live = world.read("live view") { LibraryView.read(session, replica.indexDb) }
