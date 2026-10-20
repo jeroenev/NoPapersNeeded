@@ -21,6 +21,7 @@ import java.nio.file.StandardCopyOption
 import java.nio.file.attribute.FileTime
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.test.assertFails
 import kotlin.test.assertFailsWith
 
 /**
@@ -246,6 +247,40 @@ class PathIdentityTest {
                 .documentDao()
                 .getByDocId(sha256Bytes("bravo".encodeToByteArray()))
                 .shouldBeNull()
+        }
+
+    /**
+     * As above, for bytes that bring a trashed document back: the file goes back out, and the
+     * document's row is put back as it was, still trashed, not dropped with the failed import.
+     */
+    @Test
+    fun aReturningImportWhoseRowCannotBeWrittenPutsTheHiddenRowBack() =
+        runTest {
+            rig.writePdf("a.pdf", "alpha")
+            rig.rescan()
+            val trashed = hide("a.pdf") { PendingOp.docTrash(it, "a.pdf") }
+            val racing =
+                object : LibraryFileSystem by rig.fs {
+                    override suspend fun move(
+                        fromRelPath: String,
+                        toRelPath: String,
+                    ) {
+                        rig.fs.move(fromRelPath, toRelPath)
+                        if (!NpnPaths.isInternal(toRelPath)) rig.db.documentDao().upsert(holderAt(toRelPath))
+                    }
+                }
+            val imports =
+                ImportService(racing, rig.db, rig.deviceDb.ocrQueueDao(), rig.clock, serialize = unserialized)
+
+            assertFails { imports.importBytes("alpha".encodeToByteArray(), "scan.pdf") }
+
+            rig.exists("inbox/scan.pdf").shouldBeFalse()
+            rig.db
+                .documentDao()
+                .getByDocId(trashed)
+                .shouldNotBeNull()
+                .trashed
+                .shouldBeTrue()
         }
 
     /** A live row at [relPath] whose file is not there. */

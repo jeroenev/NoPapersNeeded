@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+#MISE description="Mutation-test core's index and app packages with PIT (slow; never part of check)"
+#USAGE arg "[packages]" help="Comma-separated packages to mutate instead, each with its subpackages (e.g. dev.npn.core.index)"
+set -euo pipefail
+
+# Wraps :core:mutationTest (docs/MUTATION_TESTING.md); a full run takes a while. The number of
+# test processes defaults to half the cores: set npn.mutation.threads in
+# ~/.gradle/gradle.properties to change it.
+
+cd "$(git rev-parse --show-toplevel)"
+
+args=(:core:mutationTest)
+# mise exposes declared args as usage_<name>, not positional $1.
+if [ -n "${usage_packages:-}" ]; then
+    args+=("-Pnpn.mutation.packages=$usage_packages")
+fi
+
+./gradlew "${args[@]}"
+echo ">> Report: core/build/reports/pitest/index.html"

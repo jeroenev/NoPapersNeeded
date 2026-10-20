@@ -424,6 +424,7 @@ internal class Simulation(
         checkCheap()
         val live = world.read("live view") { LibraryView.read(session, replica.indexDb) }
         checkFilesHoldTheirHashes(live)
+        checkRowStats()
         rebuildOracle(live)
         replica.ocr.closeGate()
         trace += "   -- ${label}quiescent: ${live.live.size} live, ${live.hidden.size} hidden"
@@ -490,6 +491,33 @@ internal class Simulation(
                     ) { "'$it' (${sha256Bytes(unaccounted.getValue(it)).take(ID)})" },
             )
         }
+    }
+
+    /**
+     * Every live row stores its file's size and mtime, the proof by stat a rescan, a trash or an import
+     * takes from it. A file whose stat moved with its bytes unchanged (a touch) was hashed by the
+     * quiescent rescan, which stores the stat it found. A row without its file is
+     * [checkFilesHoldTheirHashes]'s to report.
+     */
+    private fun checkRowStats() {
+        val rows =
+            world.read("row stats") {
+                replica.indexDb.rows(
+                    "SELECT docId, relPath, size || ',' || mtime FROM documents " +
+                        "WHERE trashed = 0 AND deleted = 0 AND missing = 0",
+                )
+            }
+        val stale =
+            rows.mapNotNull { (docId, relPath, stored) ->
+                val stat = fs.statAt(relPath!!) ?: return@mapNotNull null
+                val actual = "${stat.size},${stat.mtimeMillis}"
+                if (stored == actual) {
+                    null
+                } else {
+                    "live ${docId!!.take(ID)} at '$relPath' stores size,mtime $stored; its file has $actual"
+                }
+            }
+        if (stale.isNotEmpty()) fail("rows whose stored stat is not their file's:\n  " + stale.joinToString("\n  "))
     }
 
     /**

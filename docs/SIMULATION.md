@@ -101,8 +101,9 @@ kept 5 days. ci.yml keeps running only the CI-sized test above, as part of `:cor
   (`SimLatency`). It records every journal object, snapshot, OCR sidecar and device marker the app
   creates, every file the app removes, and the last changes at each path and who made them.
 - Its `external*` members are the outside world: an atomic write, a write in place in chunks over
-  virtual time (`cp`, a scanner app), an overwrite in place or by rename, a delete, a move, a
-  backup (which skips a file still being written) put back, and sync-tool temporary files.
+  virtual time (`cp`, a scanner app), an overwrite in place or by rename, a touch (a new mtime over
+  the same bytes), a delete, a move, a backup (which skips a file still being written) put back,
+  and sync-tool temporary files.
 - `SimFaults` fails any filesystem method once or N times, at any path or under a prefix, before
   the call takes effect or after it landed.
 - `SimWorld` puts all time on one `TestCoroutineScheduler`. The sessions' scopes, their computation
@@ -167,7 +168,9 @@ until a round leaves every folder equal; replicas that keep changing their folde
 do not converge, which fails the run. Then:
 
 - No replica blocks writes.
-- On each replica: every live document's file holds its hash, and every settled PDF in its folder is
+- On each replica: every live document's file holds its hash; every live row stores its file's
+  size and mtime, the proof by stat the rescan, trash and import take from it (a file touched since
+  was hashed and its row given the new stat); and every settled PDF in its folder is
   a live document, a known duplicate, or bytes a relink superseded (or, while doc-undelete is not
   written, a document deleted for good).
 - **Rebuild oracle**, on each replica: a fresh replica opens over a copy of its files with empty

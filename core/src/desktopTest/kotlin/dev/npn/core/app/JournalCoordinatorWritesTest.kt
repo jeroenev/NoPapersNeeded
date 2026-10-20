@@ -5,17 +5,27 @@ import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.VerifiedPublicationFailedException
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
+import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.index.IndexRig
 import dev.npn.core.index.Indexer
 import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.index.LifecycleChange
+import dev.npn.core.index.MetadataAccumulator
+import dev.npn.core.index.MetadataWriteBlocked
+import dev.npn.core.index.WriteBlock
+import dev.npn.core.journal.Hlc
+import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.journalObjects
+import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.comparables.shouldBeGreaterThan
+import io.kotest.matchers.comparables.shouldBeGreaterThanOrEqualTo
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.types.shouldBeInstanceOf
@@ -224,6 +234,106 @@ class JournalCoordinatorWritesTest {
             } finally {
                 caller.close()
             }
+        }
+
+    /**
+     * A rescan records a file's return once its document has been hidden for
+     * [JournalCoordinator.RESTORE_SETTLE_MS], to the millisecond. One millisecond sooner the file
+     * may be one a sync tool has not taken away yet, and the rescan only shows it for that scan.
+     */
+    @Test
+    fun aReturnIsRecordedExactlyWhenTheSettleWindowHasPassed() =
+        runTest {
+            val coordinator = JournalCoordinator(rig.writer(), rig.indexer, rig.accumulator, clock = rig.clock)
+            rig.writePdf("a.pdf", "alpha")
+            coordinator.rescan()
+            val doc = rig.fs.sha256("a.pdf")
+            // Trashed on another device; the file is still in place here.
+            coordinator.commitAndApply(listOf(PendingOp.docTrash(doc, "a.pdf")))
+            val hiddenAt =
+                rig.accumulator
+                    .loadState()
+                    .hiddenBy(doc)
+                    .shouldNotBeNull()
+                    .physicalMillis
+            val objects = rig.fs.journalObjects().size
+
+            rig.clock.now = hiddenAt + JournalCoordinator.RESTORE_SETTLE_MS - 1
+            coordinator.rescan()
+            rig.fs.journalObjects() shouldHaveSize objects
+            rig.accumulator
+                .loadState()
+                .isTrashed(doc)
+                .shouldBeTrue()
+
+            rig.clock.advance()
+            coordinator.rescan()
+            rig.fs.journalObjects() shouldHaveSize objects + 1
+            rig.accumulator
+                .loadState()
+                .isTrashed(doc)
+                .shouldBeFalse()
+        }
+
+    /**
+     * An ingest that finds a damaged object blocks writes, and the rebuild that follows is cut short
+     * (its caller went away). Writes stay blocked, and a write is refused for the reason the ingest
+     * found, the journal's damage, not as a failed pass.
+     */
+    @Test
+    fun aWriteAfterAFailedIngestWhoseRebuildWasCutShortIsRefusedForTheIngestsReason() =
+        runTest {
+            var stall = false
+            val listing = CompletableDeferred<Unit>()
+            val stalling =
+                object : LibraryFileSystem by rig.fs {
+                    override suspend fun listAllUnder(relPath: String): List<FileMeta> {
+                        if (stall && relPath == NpnPaths.JOURNAL_DIR) {
+                            listing.complete(Unit)
+                            awaitCancellation()
+                        }
+                        return rig.fs.listAllUnder(relPath)
+                    }
+                }
+            val coordinator = JournalCoordinator(rig.writer(), rig.indexer, MetadataAccumulator(stalling, rig.db))
+            coordinator.refreshState()
+            val damaged = "{".encodeToByteArray()
+            val path = JournalPaths.objectPath(sha256Bytes(damaged))
+            rig.fs.writeBytesOnce(path, damaged)
+            stall = true
+
+            val ingest = launch { coordinator.ingestObject(path) }
+            listing.await()
+            ingest.cancelAndJoin()
+
+            coordinator.canWrite().shouldBeFalse()
+            assertFailsWith<MetadataWriteBlocked> {
+                coordinator.commitAndApply(listOf(PendingOp.tagAdd(DOC, "refused")))
+            }.block shouldBe WriteBlock.JOURNAL_DAMAGED
+        }
+
+    /**
+     * A local write moves the write clock's stored watermark, which the next session's clock starts
+     * from, up to the write itself: that session, its wall clock behind, still writes after it.
+     */
+    @Test
+    fun aLocalWriteMovesTheStoredWriteClockPastIt() =
+        runTest {
+            val coordinator = rig.coordinator()
+            coordinator.refreshState()
+
+            coordinator.commitAndApply(listOf(PendingOp.tagAdd(DOC, "written")))
+
+            val written = rig.accumulator.loadState().maxHlc
+            val stored =
+                rig.db
+                    .metadataProjectionDao()
+                    .state()
+                    .shouldNotBeNull()
+            Hlc(stored.allocatorPhysical, stored.allocatorCounter, written.deviceId) shouldBeGreaterThanOrEqualTo
+                written
+            val nextSession = HlcWatermarkAllocator({ 0L }, stored.allocatorPhysical, stored.allocatorCounter)
+            nextSession.next(written.deviceId) shouldBeGreaterThan written
         }
 
     private companion object {

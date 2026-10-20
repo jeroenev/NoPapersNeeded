@@ -64,6 +64,7 @@ enum class OpKind(
     EXT_DROP_PDF(3),
     EXT_CHUNKED_WRITE(3),
     EXT_OVERWRITE(2),
+    EXT_TOUCH(2),
     EXT_DELETE(2),
     EXT_MOVE(2),
     EXT_BACKUP(1),
@@ -208,6 +209,7 @@ internal class SimGenerator(
             OpKind.EXT_DROP_PDF -> extDrop()
             OpKind.EXT_CHUNKED_WRITE -> extChunked(s)
             OpKind.EXT_OVERWRITE -> s.live.pickOrNull()?.let(::extOverwrite)
+            OpKind.EXT_TOUCH -> s.live.pickOrNull()?.let(::extTouch)
             OpKind.EXT_DELETE -> extDelete(s)
             OpKind.EXT_MOVE -> s.live.pickOrNull()?.let(::extMove)
             OpKind.EXT_BACKUP -> extBackup()
@@ -486,6 +488,12 @@ internal class SimGenerator(
         }
     }
 
+    private fun extTouch(doc: SimDoc) =
+        Planned.Control("external: touch ${doc.short()}, its bytes unchanged", instant = true) {
+            sim.fs.externalTouch(doc.relPath)
+            "done"
+        }
+
     private fun extDelete(s: Snapshot): Planned.Control? {
         val path =
             if (random.chance(25)) {
@@ -699,6 +707,7 @@ internal class SimGenerator(
                 OpKind.EXT_DROP_PDF,
                 OpKind.EXT_CHUNKED_WRITE,
                 OpKind.EXT_OVERWRITE,
+                OpKind.EXT_TOUCH,
                 OpKind.EXT_DELETE,
                 OpKind.EXT_MOVE,
                 OpKind.EXT_RESTORE_BACKUP,

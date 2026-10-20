@@ -72,6 +72,11 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
 - Live AI endpoint checks are opt-in and skipped by default (they cost money):
   `NPN_LIVE_AI=1 ./gradlew :core:desktopTest --tests 'dev.npn.core.ai.LiveEndpointProbeTest'`.
   Never add a live-endpoint call to a normal test — CI has no credentials.
+- Mutation testing (PIT, slow): `./gradlew :core:mutationTest` (`mise mutation`) mutates
+  `dev.npn.core.index` and `dev.npn.core.app` against core's desktop tests;
+  `-Pnpn.mutation.packages=dev.npn.core.journal` picks others. Report in
+  `core/build/reports/pitest/`; baseline and how to read it in `docs/MUTATION_TESTING.md`. Never in
+  `check` or `ci.yml`: `mutation.yml` runs it weekly and on demand.
 - Formatting and lint: `./gradlew spotlessCheck detekt`, then `./gradlew detektTyped` (see
   Detekt below; it compiles first, so keep it a separate invocation from spotless).
 - Android lint: `./gradlew :androidApp:lintDebug` lints the app and, through `checkDependencies`,
@@ -88,9 +93,10 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   assembleDebug + packageAppImage. Match that order when verifying larger changes. Actions
   minutes and artifact storage are metered (private repo): PRs stop before the APK and packaging,
   which run on `main` only, the coverage report uploads only on `main` or after a failure, binaries
-  upload only on a manual run, and the Windows build (`windows.yml`) and CodeQL run weekly or on
-  demand. Keep it that way. `mise release` refuses unless CI passed on the `main` commit it bumps; the
-  tagged commit changes only `npn.version`, and `release.yml` builds it without waiting for CI.
+  upload only on a manual run, and the Windows build (`windows.yml`), mutation testing
+  (`mutation.yml`) and CodeQL run weekly or on demand. Keep it that way. `mise release` refuses
+  unless CI passed on the `main` commit it bumps; the tagged commit changes only `npn.version`,
+  and `release.yml` builds it without waiting for CI.
   Its draft job builds nothing unless CI passed on the tagged commit, or the tag only bumps
   `npn.version` on top of a `main` commit CI passed on (`.github/scripts/check-release-commit.sh`).
   Both count only a `push` or `workflow_dispatch` run as CI on a commit, through the one
@@ -215,6 +221,14 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
 - A bug found in the session, index, journal or lifecycle code first becomes a generator operation,
   a fault or an invariant in the library simulation (docs/SIMULATION.md). Add an example test only
   when the simulation cannot express the bug.
+- Stability over churn in `core.app`, `core.index` and `core.journal`: a change there is a bug fix,
+  a new operation, or a refactor the simulation is already green on (the nightly run,
+  `simulation.yml`, over the long seed range). A rename or restructuring with no behaviour behind
+  it waits until then; a review round in those packages reports what the simulation or an
+  invariant would have caught, not style.
+- Done is measured, not reviewed: the long simulation run passes with `KnownIssues` empty, and the
+  mutation score of `core.index`/`core.app`/`core.journal` (docs/MUTATION_TESTING.md,
+  `./gradlew :core:mutationTest`) does not drop. Another review round is not a stopping criterion.
 - Shared Flow subscriptions use `WhileSubscribedTimeout` (`WhileSubscribed(5_000)`, in
   `composeApp`'s `ui/common/StateFlowConfig.kt`) instead of inline timeouts; typed detekt forbids
   `SharingStarted.WhileSubscribed` elsewhere.
