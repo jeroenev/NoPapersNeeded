@@ -204,7 +204,7 @@ class JournalCoordinatorWritesTest {
             coordinator.commitBuilt { state -> state.tagRemovalOps(listOf(doc), "one") }
             coordinator.changeLifecycle(
                 doc,
-            ) { LifecycleChange(listOf(PendingOp.docTrash(doc, "a.pdf")), optimisticWrite = {}) }
+            ) { row -> LifecycleChange(listOf(PendingOp.docTrash(doc, "a.pdf")), checkNotNull(row)) }
             coordinator.commitAndRescan(listOf(PendingOp.docRestore(doc)))
 
             val journal = rig.fs.listAllUnder(NpnPaths.JOURNAL_DIR).filter { !it.isDirectory }

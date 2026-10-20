@@ -7,7 +7,6 @@ import dev.npn.core.db.PathMeta
 import dev.npn.core.db.isLive
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
-import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.holds
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.Hlc
@@ -64,36 +63,36 @@ internal class ExternalDocumentMoves(
         return fs.holds(row.relPath, row.docId)
     }
 
+    /**
+     * The `storagePath` ops that record the documents an outside tool moved: of the candidates
+     * [RescanDecision.externalMoveCandidates] finds in the listing, each whose document the library
+     * shows, whose stored baseline says it was seen at its old path under its current intent, and
+     * whose move both endpoints confirm now.
+     */
     suspend fun detect(
         state: FoldedState,
         before: List<PathMeta>,
         files: List<FileMeta>,
         hashes: Map<String, String>,
-    ): List<PendingOp> {
-        val known = before.associateBy { it.relPath }
-        val paths = files.map { it.relPath }.toSet()
-        val byHash = files.groupBy { hashes[it.relPath] ?: known[it.relPath]?.docId }
-        val moves = ArrayList<PendingOp>()
-        for (old in before) {
-            val target = byHash[old.docId]?.singleOrNull()?.relPath ?: continue
-            if (eligible(state, old, target, paths)) {
-                moves += PendingOp.propSet(old.docId, SystemProperty.STORAGE_PATH, target)
+    ): List<PendingOp> =
+        RescanDecision.externalMoveCandidates(before, files, hashes).mapNotNull { (old, target) ->
+            if (confirmed(
+                    state,
+                    old,
+                    target,
+                )
+            ) {
+                PendingOp.propSet(old.docId, SystemProperty.STORAGE_PATH, target)
+            } else {
+                null
             }
         }
-        return moves
-    }
 
-    private suspend fun eligible(
+    private suspend fun confirmed(
         state: FoldedState,
         old: PathMeta,
         target: String,
-        paths: Set<String>,
     ): Boolean {
-        if (old.relPath in paths || old.relPath == target ||
-            NpnPaths.fileName(target).startsWith(NpnPaths.Temp.RECOVERY_PREFIX)
-        ) {
-            return false
-        }
         if (!state.isCurrent(old.docId)) return false
         if (kv.get(key(old.docId)) != encode(old.docId, old.relPath, state)) return false
         // An omitted listing entry is not evidence of a move. Recheck both endpoints before writing;

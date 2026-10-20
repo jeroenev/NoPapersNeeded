@@ -4,6 +4,7 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.PathMeta
 import dev.npn.core.db.missingSentinel
 import dev.npn.core.fs.FileMeta
+import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.hasStoredStat
 import dev.npn.core.journal.FoldedState
 
@@ -138,6 +139,30 @@ internal object RescanDecision {
             byPath[meta.relPath]?.let { known[meta.relPath] = it.docId }
         }
         return known
+    }
+
+    /**
+     * The moves an outside tool may have made, as the listing alone shows them: each row of
+     * [before] whose path is not listed and whose bytes are listed at exactly one other path (by
+     * [hashes], else by the row that path had), paired with that path. A file the app's own crash
+     * recovery named is no move. [ExternalDocumentMoves] confirms each against what it observed and
+     * the files as they are now.
+     */
+    fun externalMoveCandidates(
+        before: List<PathMeta>,
+        files: List<FileMeta>,
+        hashes: Map<String, String>,
+    ): List<Pair<PathMeta, String>> {
+        val known = before.associateBy { it.relPath }
+        val paths = files.mapTo(HashSet()) { it.relPath }
+        val byHash = files.groupBy { hashes[it.relPath] ?: known[it.relPath]?.docId }
+        return before.mapNotNull { old ->
+            val target = byHash[old.docId]?.singleOrNull()?.relPath ?: return@mapNotNull null
+            val moved =
+                old.relPath !in paths && old.relPath != target &&
+                    !NpnPaths.fileName(target).startsWith(NpnPaths.Temp.RECOVERY_PREFIX)
+            if (moved) old to target else null
+        }
     }
 
     /**

@@ -152,9 +152,12 @@ internal class MetadataAccumulator(
 
     /**
      * Read the source [meta] describes, classified as [path], unless it was applied before and is
-     * unchanged since: null then. The cheap gate is the stat, an exact match on size and mtime
-     * (mtime granularity means an approximate one could hide a mutation); the bytes are read and
-     * hashed only past it, and a matching hash skips the source too. No DB writes.
+     * unchanged since: null then. Unchanged means the same stat, an exact match on size and mtime
+     * (mtime granularity means an approximate one could hide a mutation). Past that gate the bytes
+     * are read, hashed and staged whatever their hash: an applied source whose stat moved is recorded
+     * again with its new fingerprint, which leaves the next pass the new stat to match, and costs a
+     * reconcile pass a full refold even when only the mtime changed ([IngestBatch.refold]). No DB
+     * writes.
      */
     private suspend fun stage(
         meta: FileMeta,
@@ -174,7 +177,6 @@ internal class MetadataAccumulator(
         val bytes = fs.readBytes(meta.relPath)
         val contentHash = sha256Bytes(bytes)
         val fingerprint = SourceFingerprint(meta.size, meta.mtimeMillis, contentHash)
-        if (applied && existing.fingerprint == fingerprint) return null
         val (kind, read) = readSource(meta.relPath, path, bytes, contentHash)
         return StagedSource(
             relPath = meta.relPath,
@@ -278,43 +280,48 @@ internal class MetadataAccumulator(
 
     suspend fun reconcile(currentState: FoldedState? = null): MetadataReconciliation {
         val pass = runReconcilePass()
-
-        // A wiped projection, a re-ingested (mutated) existing source, a richer copy of a stored
-        // event, or a first load with no prior state all force a full refold. Only when every read
-        // this pass purely ADDED events onto an intact prior state is incremental projection sound.
-        // A gone source changes no event: the pass fails, or another source holds all of its.
-        val incremental =
-            currentState != null && !pass.projectionCleared && !pass.ingest.refold
-
+        val step =
+            PassDecision.foldStep(
+                hasFold = currentState != null,
+                projectionCleared = pass.projectionCleared,
+                sourcesRead = pass.ingest.read,
+                refold = pass.ingest.refold,
+            )
         val state =
-            when {
+            when (step) {
                 // Nothing read: hand back whatever the caller already had, INCLUDING null. A caller
                 // with no fold and nothing to fold in has nothing to project.
-                pass.ingest.read == 0 -> {
+                FoldStep.KEEP -> {
                     currentState
                 }
 
-                currentState != null && incremental -> {
-                    currentState.also { current -> pass.ingest.newEvents.forEach(current::apply) }
+                FoldStep.EXTEND -> {
+                    checkNotNull(
+                        currentState,
+                    ).also { current -> pass.ingest.newEvents.forEach(current::apply) }
                 }
 
-                else -> {
+                FoldStep.REFOLD -> {
                     loadState()
                 }
             }
         // Persist the projection version + observed maxHlc mid-pass so a crash before the
-        // coordinator's markReady() still records progress. Terminal states (ready/failed) are
-        // written by markReady()/fail(); this transient marker is not observed by any caller.
-        // Skipped entirely on a no-op pass: it would otherwise overwrite the ready marker (and the
-        // source-set fingerprint that lets the next open reuse the projection) for no change.
+        // coordinator's markReady() still records progress, and the next open refolds rather than
+        // reuse a projection this pass may have left half-written. Terminal states (ready/failed)
+        // are written by markReady()/fail(). Skipped only when there is no fold to hand back (no
+        // caller fold and nothing read), where the caller projects nothing and leaves the ready
+        // marker, with the source-set fingerprint that lets the next open reuse the projection, as
+        // it was. With a caller fold the marker goes to reconciling even when nothing was read, and
+        // the coordinator's markReady() puts it back once the pass has projected.
         if (state != null) {
             dao.upsertState(projectionState(ProjectionStatus.RECONCILING, state.maxHlc))
         }
+        val incremental = step == FoldStep.EXTEND
         return MetadataReconciliation(
             state = state,
             sourcesRead = pass.ingest.read,
             newEvents = if (incremental) pass.ingest.newEvents else emptyList(),
-            incremental = incremental && pass.ingest.read > 0,
+            incremental = incremental,
         )
     }
 

@@ -71,24 +71,39 @@ private class SyncedSettings {
     }
 }
 
+/** A document's file moving from [from] to [to], as a lifecycle change moves it. */
+internal data class FileMove(
+    val from: String,
+    val to: String,
+)
+
 /**
  * A change to one document's lifecycle as [JournalCoordinator.changeLifecycle] carries it out under
- * the writer lock: [move] its file (nothing, for a change that moves none), [optimisticWrite] its
- * row as the change leaves it, then publish [ops]. [undoMove] puts the file back when nothing was
- * published. [standing] runs once the change stands and is projected, still under the lock, for a
- * caller that reads what it left before anything else can change it.
+ * the writer lock: [move] its file (nothing, for a change that moves none), write [row], the
+ * document's row as the change leaves it, then publish [ops]. When nothing was published the row
+ * and the file go back as they were. With [readBack], the row is read again once the change stands
+ * and is projected, still under the lock, for a caller that needs what the fold made of it before
+ * anything else can change it.
  */
 internal class LifecycleChange(
     val ops: List<PendingOp>,
-    val optimisticWrite: suspend () -> Unit,
-    val move: suspend () -> Unit = {},
-    val undoMove: suspend () -> Unit = {},
-    val standing: suspend () -> Unit = {},
+    val row: DocumentEntity,
+    val move: FileMove? = null,
+    val readBack: Boolean = false,
 ) {
     init {
         require(ops.isNotEmpty()) { "A lifecycle change publishes at least one event" }
     }
 }
+
+/**
+ * A lifecycle change that stands: [before] is the document's row as the change found it, [after]
+ * the row as the fold left it, when the change asked to read it back and that read succeeded.
+ */
+internal class LifecycleDone(
+    val before: DocumentEntity,
+    val after: DocumentEntity?,
+)
 
 /**
  * Single point of serialization for all journal writes and the live [FoldedState] they depend on.
@@ -112,6 +127,12 @@ internal class LifecycleChange(
  * event the library has ever recorded, and only writers and rescans need it — readers go to the
  * Room projection, which [refreshState] can usually reuse wholesale. Anything here that needs the
  * state must therefore go through [foldedState] rather than assume it already exists.
+ *
+ * It is the session's one executor: the decisions are pure functions elsewhere ([RescanDecision],
+ * [FoldLifecycle], [ImportDecision], [PassDecision], the lifecycle plans of `core.app`), and this
+ * class alone holds the mutex, mutates the session's state (the live fold, the [WriterState], the
+ * synced settings) and runs their effects. Every entry point runs as a [pass] of the state machine
+ * [WriterState] documents; [writeBlock] shows where it stands.
  *
  * This is the ONLY sanctioned journal write path (see AGENTS.md). The invariant is enforced at
  * the type level rather than by convention: [ContentAddressedJournalWriter] and this class are
@@ -274,26 +295,26 @@ internal class JournalCoordinator(
                 // BEFORE this object is ingested, which is exactly the base its events apply onto.
                 val current = foldedState()
                 val staged = accumulator.readObject(relPath)
-                var events: List<JournalEvent> = emptyList()
-                var refold = false
-                if (staged != null) {
-                    indexer.projection {
-                        val recorded = accumulator.record(staged)
-                        events = recorded.events
-                        refold = recorded.refold
-                        if (refold || events.isEmpty()) return@projection
-                        events.forEach(current::apply)
-                        observeSourceHlc(current.maxHlc)
-                        indexer.refreshEvents(current, events)
+                val step =
+                    if (staged == null) {
+                        ProjectionStep.Unchanged
+                    } else {
+                        indexer.projection {
+                            PassDecision.afterIngest(accumulator.record(staged)).also { step ->
+                                if (step !is ProjectionStep.Events) return@also
+                                step.events.forEach(current::apply)
+                                observeSourceHlc(current.maxHlc)
+                                indexer.refreshEvents(current, step.events)
+                            }
+                        }
                     }
-                }
-                if (refold) {
+                if (step == ProjectionStep.Whole) {
                     // The object holds a richer copy of an event the live fold has: only a full
                     // refold takes it in, owed until it is done.
                     transition(PassOutcome.Unfinished)
                     recoverDurableProjection()
                 } else {
-                    syncedSettings.update(current, events)
+                    syncedSettings.update(current, (step as? ProjectionStep.Events)?.events.orEmpty())
                     // The projection now matches the enlarged source set; record that so the next
                     // open can reuse it instead of refolding.
                     accumulator.markReady(current.maxHlc)
@@ -312,11 +333,12 @@ internal class JournalCoordinator(
                     return@locked
                 }
                 val reconciliation = accumulator.reconcile(folded)
+                val step = PassDecision.afterReconcile(reconciliation)
                 val current = reconciliation.state
                 if (current == null) {
-                    // Nothing on disk changed and this session has never needed the fold. There is
-                    // nothing to project, and replaying the journal just to prove that is what made
-                    // the periodic tick as expensive as a boot.
+                    // ProjectionStep.Current: nothing on disk changed and this session has never
+                    // needed the fold. There is nothing to project, and replaying the journal just
+                    // to prove that is what made the periodic tick as expensive as a boot.
                     transition(PassOutcome.Projected)
                     return@locked
                 }
@@ -324,10 +346,16 @@ internal class JournalCoordinator(
                     // Bounded projection when reconcile only ADDED events onto the prior state;
                     // otherwise full reproject (source removed/invalidated, mutation, full refold,
                     // first load).
-                    if (reconciliation.incremental) {
-                        indexer.refreshEvents(current, reconciliation.newEvents)
-                    } else if (reconciliation.sourcesRead > 0) {
-                        indexer.refreshState(current)
+                    when (step) {
+                        is ProjectionStep.Events -> {
+                            indexer.refreshEvents(current, step.events)
+                        }
+
+                        ProjectionStep.Whole -> {
+                            indexer.refreshState(current)
+                        }
+
+                        ProjectionStep.Unchanged, ProjectionStep.Current -> {}
                     }
                 }
             }
@@ -478,57 +506,70 @@ internal class JournalCoordinator(
      *
      * [plan] runs once writes are known to be allowed, with the document's row as it stands under
      * the mutex (null without one), and returns the [LifecycleChange] to carry out, or null for
-     * nothing. From its [LifecycleChange.move] on, the change runs to its end even when the caller
-     * goes away: cut short, it could leave the file moved with no event, or the event published
-     * with the file moved back. With [followRelinks], [docId] stands for the document a relink made
-     * of it since ([FoldedState.resolveDocId]), whose row [plan] gets: a trash that waited for a
-     * bake acts on what the bake left.
+     * nothing; it decides, and this carries out. From the [LifecycleChange.move] on, the change runs
+     * to its end even when the caller goes away: cut short, it could leave the file moved with no
+     * event, or the event published with the file moved back. With [followRelinks], [docId] stands
+     * for the document a relink made of it since ([FoldedState.resolveDocId]), whose row [plan] gets:
+     * a trash that waited for a bake acts on what the bake left.
      *
-     * Ordering guarantee: [LifecycleChange.optimisticWrite] (a trashed/deleted flag or a restored
-     * path, so the UI reacts before the journal catches up) runs right before the publish. Every
-     * concurrent fold (periodic [reconcileMetadata], [rescan], [refreshState]) also holds this mutex,
-     * so none can clobber the row before its events are folded, and the committing fold keeps the
-     * row's lifecycle as written (preserveLifecycleDocs in [Indexer.refreshEvents]) rather than
+     * Ordering guarantee: the change's [LifecycleChange.row] (a trashed/deleted flag or a restored
+     * path, so the UI reacts before the journal catches up) is written right before the publish.
+     * Every concurrent fold (periodic [reconcileMetadata], [rescan], [refreshState]) also holds this
+     * mutex, so none can clobber the row before its events are folded, and the committing fold keeps
+     * the row's lifecycle as written (preserveLifecycleDocs in [Indexer.refreshEvents]) rather than
      * re-deriving it from a journal state that might not carry it yet.
      *
      * Throws only when nothing was published, and then, still under the mutex, puts the row back as
-     * it was and undoes the move ([LifecycleChange.undoMove]), so row and file agree; a failure of
-     * either is logged, as the commit's own failure is the one the caller needs. Once the transaction
-     * is published the change stands ([projectStanding]).
+     * it was and moves the file back, so row and file agree; a failure of either is logged, as the
+     * commit's own failure is the one the caller needs. Once the transaction is published the change
+     * stands ([projectStanding]), and this returns it as [LifecycleDone]; null when [plan] planned
+     * nothing.
      */
     suspend fun changeLifecycle(
         docId: String,
         followRelinks: Boolean = false,
         plan: suspend (DocumentEntity?) -> LifecycleChange?,
-    ): Boolean =
+    ): LifecycleDone? =
         locked {
             ensureWritable()
             val current = foldedState()
             val id = if (followRelinks) current.resolveDocId(docId) else docId
             val docs = setOf(id)
             val before = indexer.rowsOf(docs)
-            val change = plan(before.singleOrNull()) ?: return@locked false
+            val row = before.singleOrNull()
+            val change = plan(row) ?: return@locked null
+            requireNotNull(row) { "A lifecycle change of $id was planned without its row" }
+            require(change.row.docId == id) { "A lifecycle change of $id writes the row of ${change.row.docId}" }
             withContext(NonCancellable) {
                 var moved = false
                 var published: PublishedTransaction? = null
                 try {
-                    change.move()
+                    change.move?.let { indexer.moveFile(it.from, it.to) }
                     moved = true
-                    change.optimisticWrite()
+                    indexer.writeRow(change.row)
                     published = writeTransaction(change.ops)
                 } finally {
                     @Suppress("SuspendFunInFinallySection") // The whole block runs in NonCancellable.
                     if (published == null && moved) {
                         log.runLogged("Putting back the row of $id") { indexer.putBack(docs, before) }
-                        log.runLogged("Moving the file of $id back") { change.undoMove() }
+                        change.move?.let { move ->
+                            log.runLogged("Moving the file of $id back") { indexer.moveFile(move.to, move.from) }
+                        }
                     }
                 }
                 returnedUnrecorded -= id
                 projectStanding(current, published, preserveLifecycleDocs = docs)
                 // The change stands: a failure to read what it left is no failure of the change.
-                log.runLogged("Reading what the lifecycle change of $id left") { change.standing() }
+                val after =
+                    if (change.readBack) {
+                        log.runLogged("Reading what the lifecycle change of $id left") {
+                            indexer.rowsOf(docs).singleOrNull()
+                        }
+                    } else {
+                        null
+                    }
+                LifecycleDone(row, after)
             }
-            true
         }
 
     /**

@@ -83,6 +83,15 @@ internal class Indexer(
     /** The rows of [docIds] as they stand, for [putBack] to restore. */
     suspend fun rowsOf(docIds: Set<String>): List<DocumentEntity> = documentDao.getByDocIds(docIds.toList())
 
+    /** Write [row], a document's row as a lifecycle change leaves it ([JournalCoordinator.changeLifecycle]). */
+    suspend fun writeRow(row: DocumentEntity) = documentDao.upsert(row)
+
+    /** Move a document's file from [from] to [to], for a lifecycle change ([JournalCoordinator.changeLifecycle]). */
+    suspend fun moveFile(
+        from: String,
+        to: String,
+    ) = fs.move(from, to)
+
     /** Whether a rescan ever projected a document into the index. */
     suspend fun hasDocuments(): Boolean = documentDao.any()
 

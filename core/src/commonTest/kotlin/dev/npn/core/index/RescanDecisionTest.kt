@@ -7,6 +7,7 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.PathMeta
 import dev.npn.core.db.missingSentinel
 import dev.npn.core.fs.FileMeta
+import dev.npn.core.fs.NpnPaths
 import dev.npn.core.journal.propTest
 import io.kotest.common.ExperimentalKotest
 import io.kotest.matchers.shouldBe
@@ -204,6 +205,34 @@ class RescanDecisionTest {
         // Storage that reports no mtimes proves nothing by a stat.
         val noMtime = file.copy(mtimeMillis = 0)
         RescanDecision.needsHash(noMtime, PathMeta(path, "d", 10, 0)) shouldBe true
+    }
+
+    /** A move is a candidate only when the old path is gone and the bytes are at exactly one other path. */
+    @Test
+    fun anExternalMoveIsACandidateOnlyForBytesGoneFromTheirPathAndListedOnceElsewhere() {
+        fun file(relPath: String) = FileMeta(relPath, relPath.substringAfterLast('/'), 1, 1, false)
+        val row = PathMeta("a.pdf", "d", 1, 1)
+        RescanDecision.externalMoveCandidates(listOf(row), listOf(file("b.pdf")), mapOf("b.pdf" to "d")) shouldBe
+            listOf(row to "b.pdf")
+        // Still listed at its own path: a copy, not a move.
+        RescanDecision.externalMoveCandidates(
+            listOf(row),
+            listOf(file("a.pdf"), file("b.pdf")),
+            mapOf("b.pdf" to "d"),
+        ) shouldBe emptyList()
+        // Listed twice elsewhere: no telling which is the move.
+        RescanDecision.externalMoveCandidates(
+            listOf(row),
+            listOf(file("b.pdf"), file("c.pdf")),
+            mapOf("b.pdf" to "d", "c.pdf" to "d"),
+        ) shouldBe emptyList()
+        // A file the app's own crash recovery named is no move.
+        val recovered = "${NpnPaths.Temp.RECOVERY_PREFIX}a.pdf"
+        RescanDecision.externalMoveCandidates(listOf(row), listOf(file(recovered)), mapOf(recovered to "d")) shouldBe
+            emptyList()
+        // Other bytes elsewhere say nothing.
+        RescanDecision.externalMoveCandidates(listOf(row), listOf(file("b.pdf")), mapOf("b.pdf" to "e")) shouldBe
+            emptyList()
     }
 
     /** One random library, as a rescan finds it, and the plan it decides. */
