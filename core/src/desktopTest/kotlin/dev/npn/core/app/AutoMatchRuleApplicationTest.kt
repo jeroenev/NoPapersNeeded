@@ -68,7 +68,10 @@ class AutoMatchRuleApplicationTest {
                             ),
                         )
                     session.rescan()
-                    session.rules.observeRules().first().map { it.id } shouldBe listOf(INVOICES.id, PAID.id)
+                    session.rules
+                        .observeRules()
+                        .first()
+                        .map { it.id } shouldBe listOf(INVOICES.id, PAID.id)
                     objects = deps.fs.journalObjects().size
                 }
                 for (name in listOf("index.db", "index.db-wal", "index.db-shm")) File(data, name).delete()
@@ -82,7 +85,11 @@ class AutoMatchRuleApplicationTest {
                         .first { it?.ocrState == OcrState.DONE.column }
                     session.ocr.ocrStatus.first { it.pending == 0 && !it.running }
 
-                    val item = session.documents.observeDoc(id).first().shouldNotBeNull()
+                    val item =
+                        session.documents
+                            .observeDoc(id)
+                            .first()
+                            .shouldNotBeNull()
                     item.doc.correspondent shouldBe "Globex"
                     // As the first rule set it: the later one's "Receipt" never reached the document.
                     item.doc.docType shouldBe "Invoice"
@@ -124,12 +131,22 @@ class AutoMatchRuleApplicationTest {
             rig.session.ocr.ocrStatus
                 .first { it.pending == 0 && !it.running }
 
-            rig.db.documentDao().getByDocId(id)?.ocrState shouldBe OcrState.ADOPTED.column
-            rig.db.tagDao().tagsForDocument(id).shouldBeEmpty()
+            rig.db
+                .documentDao()
+                .getByDocId(id)
+                ?.ocrState shouldBe OcrState.ADOPTED.column
+            rig.db
+                .tagDao()
+                .tagsForDocument(id)
+                .shouldBeEmpty()
             rig.journalObjectCount() shouldBe objects
 
             rig.session.rules.setEnabled(INVOICES.id, true)
-            val item = rig.session.documents.observeDoc(id).first().shouldNotBeNull()
+            val item =
+                rig.session.documents
+                    .observeDoc(id)
+                    .first()
+                    .shouldNotBeNull()
             item.tags shouldContainExactly listOf("invoice")
             item.doc.correspondent shouldBe "ACME"
         }
@@ -157,7 +174,11 @@ class AutoMatchRuleApplicationTest {
                 .first { it?.tags?.contains("invoice") == true }
             rig.session.ocr.ocrStatus
                 .first { it.pending == 0 && !it.running }
-            val item = rig.session.documents.observeDoc(id).first().shouldNotBeNull()
+            val item =
+                rig.session.documents
+                    .observeDoc(id)
+                    .first()
+                    .shouldNotBeNull()
             item.doc.correspondent shouldBe "Globex"
             item.doc.docType shouldBe "Invoice"
 
@@ -193,11 +214,19 @@ class AutoMatchRuleApplicationTest {
 
             rig.session.rules.save(INVOICES)
 
-            val filled = rig.session.documents.observeDoc(untouched).first().shouldNotBeNull()
+            val filled =
+                rig.session.documents
+                    .observeDoc(untouched)
+                    .first()
+                    .shouldNotBeNull()
             filled.doc.correspondent shouldBe "ACME"
             filled.doc.docType shouldBe "Invoice"
             filled.tags shouldContainExactly listOf("invoice")
-            val kept = rig.session.documents.observeDoc(edited).first().shouldNotBeNull()
+            val kept =
+                rig.session.documents
+                    .observeDoc(edited)
+                    .first()
+                    .shouldNotBeNull()
             kept.doc.correspondent shouldBe "Globex"
             kept.doc.docType shouldBe null
             kept.tags.shouldBeEmpty()

@@ -236,8 +236,14 @@ class OcrPipelineHookTest {
             pipeline.reconcileSidecars()
 
             handedOn.shouldBeEmpty()
-            rig.db.documentDao().requireByDocId(reconciled).ocrState shouldBe OcrState.ADOPTED.column
-            rig.db.documentDao().requireByDocId(drained).ocrState shouldBe OcrState.ADOPTED.column
+            rig.db
+                .documentDao()
+                .requireByDocId(reconciled)
+                .ocrState shouldBe OcrState.ADOPTED.column
+            rig.db
+                .documentDao()
+                .requireByDocId(drained)
+                .ocrState shouldBe OcrState.ADOPTED.column
         }
 
     /** A broken rule or a failing enrichment enqueue must not strand the entry or stop the drain. */

@@ -95,8 +95,7 @@ internal class RuleApplier(
                 val held = state.fieldRegisters(doc.docId).keys
                 val carried = state.tagsEverAdded(doc.docId).mapTo(HashSet()) { it.lowercase() }
                 buildList {
-                    for ((key, raw) in matched.sets) {
-                        if (key in held) continue
+                    for ((key, raw) in matched.sets - held) {
                         val value = canonicalOrNull(state, key, raw) ?: continue
                         add(PendingOp.fieldSet(doc.docId, key, value))
                     }
