@@ -15,46 +15,78 @@ internal class DocumentPaths(
     private val fs: LibraryFileSystem,
     private val ids: IdSource = IdSource.Random,
 ) {
+    /**
+     * Where a document's file is once [settle] moved it toward its intended path: [path], and
+     * [stat], the stat of the bytes checked as the document's there, which a row records as its
+     * proof; null when the file stayed where it was.
+     */
+    class Settled(
+        val path: String,
+        val stat: FileMeta?,
+    )
+
+    /** Move [docId]'s file from [source] to [target] where it can; returns where it is now. */
     suspend fun reconcile(
         docId: String,
         source: String,
         target: String,
-    ): String {
-        if (source == target || !NpnPaths.isDocumentPath(target) || !fs.supportsDocumentRelocation) return source
+    ): String = settle(docId, source, target).path
+
+    /**
+     * Move [docId]'s file from [source] to [target] where it can, and say where it is now with the
+     * stat of the bytes the move checked: taken before the move, of the file it moved, never of the
+     * target afterwards, which by then may be another file a sync tool put there.
+     */
+    suspend fun settle(
+        docId: String,
+        source: String,
+        target: String,
+    ): Settled {
+        if (source == target || !NpnPaths.isDocumentPath(target) || !fs.supportsDocumentRelocation) {
+            return Settled(source, null)
+        }
         val placed = if (fs.exists(target)) alreadyPlaced(docId, source, target) else relocate(docId, source, target)
-        return if (placed) target else source
+        return if (placed != null) Settled(target, placed) else Settled(source, null)
     }
 
     /**
-     * Whether [target], which exists, already holds [docId]'s bytes, as a file other than [source].
-     * The copy at [source] is then retired.
+     * The stat of [target], which exists, when it already holds [docId]'s bytes, as a file other than
+     * [source], and kept that stat while it was hashed; null otherwise. The copy at [source] is then
+     * retired.
      */
     private suspend fun alreadyPlaced(
         docId: String,
         source: String,
         target: String,
-    ): Boolean {
-        if (fs.stat(target)?.isDirectory != false || fs.sha256(target) != docId) return false
-        if (!fs.exists(source)) return true
-        if (fs.sameFile(source, target)) return false
+    ): FileMeta? {
+        val checked = fs.stat(target)?.takeIf { !it.isDirectory } ?: return null
+        if (fs.sha256(target) != docId || fs.stat(target) != checked) return null
+        if (!fs.exists(source)) return checked
+        if (fs.sameFile(source, target)) return null
         retireSource(docId, source, target)
-        return true
+        return checked
     }
 
-    /** Move [source]'s bytes to [target]; false, with the file back at [source], when they are not [docId]'s. */
+    /**
+     * Move [source]'s bytes to [target], returning the stat they had under their recovery name, which
+     * a move within a volume keeps (a copy to another volume does not, and the next rescan hashes the
+     * file); null, with the file back at [source], when they are not [docId]'s.
+     */
     private suspend fun relocate(
         docId: String,
         source: String,
         target: String,
-    ): Boolean {
-        if (!fs.exists(source)) return false
+    ): FileMeta? {
+        if (!fs.exists(source)) return null
         // Claim the source name before checking identity: the bytes checked are then the bytes
         // moved, and an unrelated PDF an external writer installs at the old name is never touched.
         val recovery = claim(source)
         try {
-            if (fs.sha256(recovery) != docId) return false
+            if (fs.sha256(recovery) != docId) return null
+            // The recovery name is this device's alone: nothing else writes the file under it.
+            val checked = fs.stat(recovery) ?: return null
             place(docId, recovery, target)
-            return true
+            return checked.copy(relPath = target, name = NpnPaths.fileName(target))
         } finally {
             // Cancelled or not, the document's file goes back to its name.
             withContext(NonCancellable) {

@@ -120,20 +120,19 @@ internal class DocumentPathReconciler(
         // Metadata can arrive before a scan updates another document's old path in the cache.
         val owner = db.documentDao().getByRelPath(intended)
         if (owner != null && owner.docId != row.docId) return row
-        val actual = reconcileAvailable(row.docId, row.relPath, intended)
-        if (actual == row.relPath) return row
-        val meta = fs.stat(actual)
-        return if (meta == null) {
-            row
-        } else {
-            row.copy(
-                relPath = actual,
-                fileName = meta.name,
-                size = meta.size,
-                mtime = meta.mtimeMillis,
-                missing = false,
-            )
-        }
+        // Physical failures leave the journal intent pending, as for reconcileAvailable.
+        val settled = runCatchingCancellable { paths.settle(row.docId, row.relPath, intended) }.getOrNull()
+        // The stat of the bytes the move checked, never one of the path taken since: a sync tool
+        // may have put another file there in the meantime, whose stat would vouch for it as the
+        // document's at every rescan.
+        val placed = settled?.stat?.takeIf { settled.path != row.relPath } ?: return row
+        return row.copy(
+            relPath = settled.path,
+            fileName = NpnPaths.fileName(settled.path),
+            size = placed.size,
+            mtime = placed.mtimeMillis,
+            missing = false,
+        )
     }
 
     /**
