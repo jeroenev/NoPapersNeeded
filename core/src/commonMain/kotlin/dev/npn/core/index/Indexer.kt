@@ -5,12 +5,10 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.DuplicateEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.PathMeta
-import dev.npn.core.db.missingSentinel
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.TempFileSweep
-import dev.npn.core.fs.hasStoredStat
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.JournalEvent
 import dev.npn.core.journal.PendingOp
@@ -119,11 +117,7 @@ internal class Indexer(
             val dbProjection = documentDao.allPathsAndMeta()
             val byPath = dbProjection.associateBy { it.relPath }
             // A hidden row's stat is no evidence: a file at its old path is its own only if it hashes so.
-            val changed =
-                indexable.filter { meta ->
-                    val known = byPath[meta.relPath]
-                    known == null || known.hidden || !meta.hasStoredStat(known.size, known.mtime)
-                }
+            val changed = indexable.filter { meta -> RescanDecision.needsHash(meta, byPath[meta.relPath]) }
             // A file still being written is left for a later scan rather than given the
             // identity of a partial file. A known path keeps its old row meanwhile.
             val settle = WriteSettle(fs, started)
@@ -155,45 +149,42 @@ internal class Indexer(
             val moves = externalMoves.detect(metadataState, dbProjection, present, hashes)
             if (moves.isNotEmpty()) onExternalMoves(moves)
             val diskPaths = present.map { it.relPath }.toHashSet()
-            val contentAt = knownHashes(present, changed, byPath, hashes)
+            val contentAt = RescanDecision.knownHashes(present, changed, byPath, hashes)
 
             // The reconcile writes and the fold land in one transaction, so no reader sees a row
             // before its tags and fields; the files their intents move wait until it commits.
-            val recon =
+            var resurrected: List<Resurrected> = emptyList()
+            val plan =
                 documentPaths.deferring(known = contentAt) {
                     db.withWriteTransaction {
-                        reconcile(toHash, hashes, dbProjection, diskPaths, metadataState).also { recon ->
-                            val missing = detectMissing(dbProjection, diskPaths, recon.existingByDocId, metadataState)
-                            recon.missingCount = missing.size
-                            recon.relinkCandidates.addAll(
-                                RelinkPairing.pair(missing, recon.newDocs, recon.relinkCandidates),
-                            )
-
+                        reconcile(toHash, hashes, dbProjection, diskPaths, metadataState).also {
                             _scanState.value = IndexProgress(IndexProgress.Phase.FOLDING)
-                            recon.resurrected = folds.rescan(metadataState, FoldScope.FullRescan(contentAt))
+                            resurrected = folds.rescan(metadataState, FoldScope.FullRescan(contentAt))
                         }
                     }
                 }
-            if (recon.duplicates.isNotEmpty()) documentPaths.reconcileDuplicates(metadataState, recon.duplicates)
+            val duplicates =
+                plan.duplicates.takeIf { it.isEmpty() }
+                    ?: documentPaths.reconcileDuplicates(metadataState, plan.duplicates)
             // Every rescan lists the whole library, so its duplicates are all there are: a copy since
             // deleted, or overwritten with another document, loses its row.
-            duplicateDao.replaceAll(recon.duplicates.map { DuplicateEntity(it.docId, it.extraRelPath) })
+            duplicateDao.replaceAll(duplicates.map { DuplicateEntity(it.docId, it.extraRelPath) })
 
             // The listing is at hand: clear away what a crash left of the app's own temporary files.
             tempFiles.sweep(all, started)
 
             // Last: recording a return is a journal write, which must not cost the scan its
             // duplicates or its sweep if it fails.
-            if (recon.resurrected.isNotEmpty()) onResurrected(recon.resurrected)
+            if (resurrected.isNotEmpty()) onResurrected(resurrected)
 
             ScanReport(
-                added = recon.added,
-                moved = recon.moved,
-                changed = recon.changed,
-                missingCount = recon.missingCount,
-                duplicates = recon.duplicates,
+                added = plan.added,
+                moved = plan.moved,
+                changed = plan.changed,
+                missingCount = plan.missingCount,
+                duplicates = duplicates,
                 conflictFiles = conflictFiles,
-                relinkCandidates = recon.relinkCandidates,
+                relinkCandidates = plan.relinkCandidates,
                 // Every file handed to the pool counts, settled, unreadable or gone.
                 hashedCount = toHash.size,
                 durationMillis = clock.nowMillis() - started,
@@ -290,63 +281,12 @@ internal class Indexer(
         return indexable to conflictFiles
     }
 
-    /** Mutable accumulator for one rescan's reconcile and fold, plus the doc rows it touched. */
-    private class Reconciliation {
-        var added = 0
-        var moved = 0
-        var changed = 0
-        var missingCount = 0
-        var resurrected: List<Resurrected> = emptyList()
-        val duplicates = ArrayList<DuplicateReport>()
-        val relinkCandidates = ArrayList<RelinkCandidate>()
-
-        // New docs created this scan: docId -> meta, for relink pairing.
-        val newDocs = HashMap<String, FileMeta>()
-
-        // Canonical rows we loaded/updated, kept current so later steps re-read consistently.
-        val existingByDocId = HashMap<String, DocumentEntity>()
-
-        // The same rows by the path each holds now.
-        val existingByPath = HashMap<String, DocumentEntity>()
-
-        // Rows to write, in the order the pass decided them: relPath is unique, so a row that
-        // vacates a path must be written before the one that takes it.
-        val writes = ArrayList<DocumentEntity>()
-
-        /** Take [row] as the pass found it. */
-        fun load(row: DocumentEntity) {
-            existingByDocId[row.docId] = row
-            existingByPath[row.relPath] = row
-        }
-
-        /**
-         * Know [row] by id alone. A tombstone (`deleted`) row is read this way, for the document's
-         * own bytes coming back: they return the document, not start one, while its path stays out
-         * of [existingByPath] — another document landing on it still takes it (upsertAll moves the
-         * hidden holder aside).
-         */
-        fun loadById(row: DocumentEntity) {
-            existingByDocId[row.docId] = row
-        }
-
-        /** Queue [row] to be written, after every row queued so far, and keep both lookups current. */
-        fun write(row: DocumentEntity) {
-            val old = existingByDocId[row.docId]
-            if (old != null && existingByPath[old.relPath]?.docId == row.docId) existingByPath.remove(old.relPath)
-            load(row)
-            writes += row
-        }
-    }
-
     /**
-     * Reconcile hashed files against the DB. For each hashed file, one of: an unchanged/refreshed
-     * canonical, a move/rename, an external duplicate, an external edit (old -> missing sentinel +
-     * new doc + path-match relink candidate), a brand-new doc, or nothing for bytes a relink
-     * superseded, which get no row of their own. A row whose path now holds another
-     * document's bytes gives the path up: missing when its file was there, only trashed when it was
-     * in the trash ([hidden], judged with the journal [state] this pass folds). Writes the rows it
-     * changed in one batch and returns the counters + new docs + duplicates + relink candidates
-     * collected.
+     * Reconcile hashed files against the DB: read the rows the pass decides by, let
+     * [RescanDecision.plan] decide what each file is to them (an unchanged or refreshed canonical, a
+     * move or rename, an external duplicate, an external edit, a brand-new doc, or nothing for bytes
+     * a relink superseded) and which shown rows went missing, and write the rows it changed. Runs
+     * inside the rescan's transaction, before its fold.
      */
     private suspend fun reconcile(
         toHash: List<FileMeta>,
@@ -354,146 +294,26 @@ internal class Indexer(
         dbProjection: List<PathMeta>,
         diskPaths: Set<String>,
         state: FoldedState,
-    ): Reconciliation {
-        val recon = Reconciliation()
+    ): RescanPlan {
         // One bulk read (chunked under SQLite's bind limit), not a query per document: this runs
         // over the whole projection on every rescan.
-        for (row in documentDao.getByDocIds(dbProjection.map { it.docId })) recon.load(row)
-        // Rows the projection does not name are tombstones (`deleted` rows). The hashed bytes may
-        // be their document's own, back at its path: read them by id, so the return refreshes that
-        // row with its date added, page count and OCR bookkeeping instead of starting a new one.
-        val tombstoned = hashes.values.filterNot(recon.existingByDocId::containsKey).distinct()
-        for (row in documentDao.getByDocIds(tombstoned)) recon.loadById(row)
-        val now = clock.nowMillis()
-
-        for (meta in toHash) {
-            val hash = hashes[meta.relPath] ?: continue
-            reconcileFile(meta, hash, diskPaths, hashes, state, recon, now)
-        }
-        if (recon.writes.isNotEmpty()) documentDao.upsertAll(recon.writes)
-        return recon
-    }
-
-    /** Reconcile one hashed file, [meta] with content [hash], into [recon]; see [reconcile]. */
-    private fun reconcileFile(
-        meta: FileMeta,
-        hash: String,
-        diskPaths: Set<String>,
-        hashes: Map<String, String>,
-        state: FoldedState,
-        recon: Reconciliation,
-        now: Long,
-    ) {
-        // The row holding this path, when the bytes here are no longer its own. It must vacate
-        // the path (relPath is unique) for the document that is here now: it moves to a per-doc
-        // sentinel path under .npn (never indexed) that preserves its identity and metadata. A
-        // hidden row keeps its flags, as DocumentDao.upsertAll keeps them: a trashed document's
-        // file went to the trash, it was not replaced, so it is neither missing nor a relink
-        // candidate for the bytes here.
-        val replaced = recon.existingByPath[meta.relPath]?.takeIf { it.docId != hash }
-        val overwritten = replaced != null && !hidden(replaced, state)
-        replaced?.let {
-            recon.write(
-                it.copy(relPath = missingSentinel(it.docId), missing = it.missing || overwritten),
+        val rows = documentDao.getByDocIds(dbProjection.map { it.docId })
+        val tombstones = documentDao.getByDocIds(RescanDecision.tombstoneIds(hashes, rows))
+        val plan =
+            RescanDecision.plan(
+                hashed = toHash,
+                hashes = hashes,
+                projection = dbProjection,
+                rows = rows,
+                tombstones = tombstones,
+                diskPaths = diskPaths,
+                journal = state.rescanJournal(),
+                now = clock.nowMillis(),
             )
-        }
-
-        // Bytes a relink superseded (a bake's original) are an earlier version of another
-        // document, which no event makes live again: a row rewrite would give the superseded
-        // document the copy's path, and a new one would be counted and offered for a relink,
-        // then hidden by this very fold, on every rescan.
-        if (state.resolveDocId(hash) != hash) return
-
-        val existingDoc = recon.existingByDocId[hash]
-        if (existingDoc != null) {
-            reconcileKnownHash(existingDoc, meta, diskPaths, hashes, recon)
-            return
-        }
-
-        recon.write(newDocument(hash, meta, now))
-        recon.newDocs[hash] = meta
-        recon.added++
-        if (replaced != null && overwritten) {
-            // External edit: the new bytes may be an edit of the document that was here.
-            recon.changed++
-            recon.relinkCandidates.add(
-                RelinkCandidate(
-                    replaced.docId,
-                    hash,
-                    signals = setOf(RelinkSignal.REPLACED_IN_PLACE),
-                    score = RelinkPairing.SCORE_PATH_MATCH,
-                ),
-            )
-        }
+        if (plan.writes.isNotEmpty()) documentDao.upsertAll(plan.writes)
+        if (plan.nowMissing.isNotEmpty()) documentDao.upsertAll(plan.nowMissing)
+        return plan
     }
-
-    /**
-     * Handle a hashed file whose content hash already maps to a known canonical doc. Its old path
-     * still holds it unless the file there is gone or this pass hashed it to other bytes.
-     */
-    private fun reconcileKnownHash(
-        existingDoc: DocumentEntity,
-        meta: FileMeta,
-        diskPaths: Set<String>,
-        hashes: Map<String, String>,
-        recon: Reconciliation,
-    ) {
-        val hash = existingDoc.docId
-        val oldPath = existingDoc.relPath
-        val canonicalStillOnDisk =
-            oldPath in diskPaths && oldPath != meta.relPath && hashes[oldPath].let { it == null || it == hash }
-        if (canonicalStillOnDisk) {
-            // External duplicate: canonical untouched, record the extra path.
-            recon.duplicates.add(DuplicateReport(hash, meta.relPath))
-        } else if (oldPath != meta.relPath) {
-            // The file moved/renamed: canonical path no longer on disk (or is this path).
-            val movedDoc =
-                existingDoc.copy(
-                    relPath = meta.relPath,
-                    fileName = meta.name,
-                    size = meta.size,
-                    mtime = meta.mtimeMillis,
-                    missing = false,
-                )
-            recon.write(movedDoc)
-            recon.moved++
-        } else if (existingDoc.missing || existingDoc.size != meta.size || existingDoc.mtime != meta.mtimeMillis) {
-            // Same path, bytes unchanged but was flagged (e.g. mtime touched): refresh.
-            recon.write(existingDoc.copy(size = meta.size, mtime = meta.mtimeMillis, missing = false))
-        }
-    }
-
-    /**
-     * Mark docs whose canonical path is no longer on disk as missing (skipping [hidden] ones), and
-     * return every doc that is missing now.
-     */
-    private suspend fun detectMissing(
-        dbProjection: List<PathMeta>,
-        diskPaths: Set<String>,
-        existingByDocId: Map<String, DocumentEntity>,
-        state: FoldedState,
-    ): List<DocumentEntity> {
-        // [Reconciliation.existingByDocId] is kept current for every row the reconcile pass
-        // upserted, so it already holds the post-reconcile row; no need to re-read it.
-        val missingDocs =
-            dbProjection
-                .mapNotNull { existingByDocId[it.docId] }
-                .filter { !hidden(it, state) && it.relPath !in diskPaths }
-        val nowMissing = missingDocs.filterNot { it.missing }.map { it.copy(missing = true) }
-        if (nowMissing.isNotEmpty()) documentDao.upsertAll(nowMissing)
-        return missingDocs
-    }
-
-    /**
-     * Whether [row]'s document is out of the library: trashed or deleted by its row, or by the
-     * journal [state] a rescan folds after its reconcile, which another device's trash reaches
-     * before the row does. Its file is not expected at its path, so it never goes missing there and
-     * is never a relink candidate.
-     */
-    private fun hidden(
-        row: DocumentEntity,
-        state: FoldedState,
-    ): Boolean = row.trashed || row.deleted || state.hiddenBy(row.docId) != null
 
     /** Apply already-reduced events without reading journal files or walking the PDF library. */
     suspend fun refreshEvents(
@@ -522,42 +342,7 @@ internal class Indexer(
         }
     }
 
-    private fun newDocument(
-        hash: String,
-        meta: FileMeta,
-        now: Long,
-    ): DocumentEntity =
-        DocumentEntity(
-            docId = hash,
-            relPath = meta.relPath,
-            fileName = meta.name,
-            size = meta.size,
-            mtime = meta.mtimeMillis,
-            addedAt = now,
-            // reviewed defaults to false (new doc = needs review).
-        )
-
     private companion object {
         const val HASH_CONCURRENCY = 4
     }
-}
-
-/**
- * Every listed path whose content hash this pass knows without reading the file again: the ones
- * it just hashed, and the unchanged ones whose size and mtime matched their stored row, which is
- * the same evidence the pass itself trusts to skip hashing them.
- */
-private fun knownHashes(
-    indexable: List<FileMeta>,
-    changed: List<FileMeta>,
-    byPath: Map<String, PathMeta>,
-    hashes: Map<String, String>,
-): Map<String, String> {
-    val changedPaths = changed.mapTo(HashSet()) { it.relPath }
-    val known = HashMap(hashes)
-    for (meta in indexable) {
-        if (meta.relPath in changedPaths) continue
-        byPath[meta.relPath]?.let { known[meta.relPath] = it.docId }
-    }
-    return known
 }

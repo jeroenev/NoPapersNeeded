@@ -173,12 +173,12 @@ internal class DocumentPathReconciler(
 
     /**
      * Retire each extra copy in [duplicates] whose document already sits at its intended path, and
-     * keep in the list only the copies still on disk. The caller records what is left.
+     * return the copies still on disk, for the caller to record.
      */
     suspend fun reconcileDuplicates(
         state: FoldedState,
-        duplicates: MutableList<DuplicateReport>,
-    ) {
+        duplicates: List<DuplicateReport>,
+    ): List<DuplicateReport> {
         val rows = db.documentDao().getByDocIds(duplicates.map { it.docId }.distinct()).associateBy { it.docId }
         val retained = ArrayList<DuplicateReport>()
         for (duplicate in duplicates) {
@@ -189,8 +189,7 @@ internal class DocumentPathReconciler(
             }
             if (fs.exists(duplicate.extraRelPath) && duplicate.extraRelPath != row?.relPath) retained.add(duplicate)
         }
-        duplicates.clear()
-        duplicates.addAll(retained)
+        return retained
     }
 
     private suspend fun reconcileAvailable(

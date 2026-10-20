@@ -30,8 +30,10 @@ internal sealed interface WriterState {
     fun after(outcome: PassOutcome): WriterState =
         when (outcome) {
             PassOutcome.Projected -> Ready
+
             // Says nothing about the journal: a block stands, and nothing new blocks.
             PassOutcome.Unfinished -> if (this is Blocked) this else RefoldPending
+
             is PassOutcome.Failed -> Blocked(outcome.refusal)
         }
 
@@ -77,6 +79,8 @@ internal sealed interface PassOutcome {
     companion object {
         /** The outcome of a pass that threw [failure]: its own refusal keeps its reason, any other is the pass's. */
         fun failed(failure: Throwable): Failed =
-            Failed(failure as? MetadataWriteBlocked ?: MetadataWriteBlocked(WriteBlock.RECONCILE_FAILED, failure.reason()))
+            Failed(
+                failure as? MetadataWriteBlocked ?: MetadataWriteBlocked(WriteBlock.RECONCILE_FAILED, failure.reason()),
+            )
     }
 }

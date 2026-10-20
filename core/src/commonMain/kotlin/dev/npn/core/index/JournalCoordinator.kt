@@ -420,7 +420,8 @@ internal class JournalCoordinator(
      * Whether a commit would be taken now: false once [close] has run or while writes are blocked.
      * For a caller that only waits a refusal out, so a refusal is an answer rather than a failure.
      */
-    suspend fun canWrite(): Boolean = withContext(dispatcher) { mutex.withLock { !closed && writerState.refusal == null } }
+    suspend fun canWrite(): Boolean =
+        withContext(dispatcher) { mutex.withLock { !closed && writerState.refusal == null } }
 
     /**
      * Run [block] under the single-writer mutex: for a change to which file holds which hash that
