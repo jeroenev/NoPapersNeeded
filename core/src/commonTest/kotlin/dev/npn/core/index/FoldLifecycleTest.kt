@@ -128,7 +128,8 @@ class FoldLifecycleTest {
                 val journal = case.journal
                 projected.relPath shouldBe row.relPath
                 projected.fileName shouldBe row.fileName
-                projected.missing shouldBe row.missing
+                val shown = !projected.trashed && !projected.deleted
+                projected.missing shouldBe (row.missing || (shown && row.relPath == missingSentinel(doc)))
                 projected.origPath shouldBe journal.origPath
                 if (case.preserved) {
                     projected.trashed shouldBe row.trashed

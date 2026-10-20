@@ -107,7 +107,7 @@ internal class SessionGraph(
             onMetadataApplied = pathRules::applyFor,
         )
     val rules: AutoMatchRuleRepository =
-        AutoMatchRuleRepositoryImpl(db.autoMatchRuleDao(), ruleSource, ruleApplier, coordinator, lifetime)
+        AutoMatchRuleRepositoryImpl(db.autoMatchRuleDao(), ruleSource, ruleApplier, coordinator, lifetime, deps.ids)
 
     private val bakes = BakeLock()
     private val trash = TrashOps(deps.fs)
@@ -222,7 +222,7 @@ internal class SessionGraph(
                 documentDao = db.documentDao(),
                 renderGate = renderGate,
             ),
-            BakeService(deps.fs, deps.xmpIO, log),
+            BakeService(deps.fs, deps.xmpIO, log, deps.ids),
             coordinator,
             relinkBake = bakeRelink::relink,
             renderGate,
@@ -239,6 +239,7 @@ internal class SessionGraph(
             ruleProvider = storagePath::rule,
             serialize = { coordinator.serialized(it) },
             log = log,
+            ids = deps.ids,
         )
 
     /** Bulk AI edits handed to the background; their writes wait for a human review. */
@@ -257,6 +258,7 @@ internal class SessionGraph(
                 health = endpointHealth,
                 onEnqueued = onEnqueued,
                 ownWrite = { lifetime.owned(it) },
+                newJobId = deps.ids::next,
             )
         }, step = AiEditQueue::processNext)
 

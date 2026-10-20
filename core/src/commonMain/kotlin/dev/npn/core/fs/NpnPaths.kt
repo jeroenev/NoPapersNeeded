@@ -157,9 +157,12 @@ object NpnPaths {
         fun recoveryName(nonce: String): String = "$RECOVERY_PREFIX$nonce.pdf"
 
         /** A fresh [recoveryName] in the folder of [beside]. */
-        fun recoveryPath(beside: String): String {
+        fun recoveryPath(
+            beside: String,
+            nonce: String = Uuid.random().toString(),
+        ): String {
             val directory = parentDir(beside)
-            val name = recoveryName(Uuid.random().toString())
+            val name = recoveryName(nonce)
             return if (directory.isEmpty()) name else "$directory/$name"
         }
 

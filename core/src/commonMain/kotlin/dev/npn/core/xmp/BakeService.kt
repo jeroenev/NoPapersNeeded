@@ -5,6 +5,7 @@ import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.holds
 import dev.npn.core.fs.readDocument
 import dev.npn.core.fs.sha256Bytes
+import dev.npn.core.util.IdSource
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.error
 import dev.npn.core.util.runCatchingCancellable
@@ -35,6 +36,7 @@ internal class BakeService(
     private val fs: LibraryFileSystem,
     private val io: PdfXmpIO,
     private val log: NpnLog = NpnLog.None,
+    private val ids: IdSource = IdSource.Random,
 ) {
     /**
      * Bake [data] into a copy of the document [docId]'s file at [relPath] and return the new bytes,
@@ -193,7 +195,12 @@ internal class BakeService(
                 fs.writeBytesOnce(norm, src)
                 check(fs.holds(norm, oldSha)) { "$norm does not read back as its original" }
             }
-            if (fs.exists(tmpPath)) fs.delete(tmpPath)
+        }.onSuccess {
+            // The original is back: the baked bytes are a leftover now, which the next bake of the
+            // document removes first if this cannot.
+            log.runLogged("Removing the baked bytes of $norm after its bake was undone") {
+                if (fs.exists(tmpPath)) fs.delete(tmpPath)
+            }
         }.onFailure { failure ->
             // Any failure here can leave the original nowhere but in memory: a later one saves it
             // under a recovery name too, before the log says where a reader would find it.
@@ -209,7 +216,7 @@ internal class BakeService(
         norm: String,
         src: ByteArray,
     ): String {
-        val recovery = NpnPaths.Temp.recoveryPath(beside = norm)
+        val recovery = NpnPaths.Temp.recoveryPath(beside = norm, nonce = ids.next())
         fs.writeBytesOnce(recovery, src)
         return recovery
     }

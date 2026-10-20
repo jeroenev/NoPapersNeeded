@@ -13,6 +13,7 @@ import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.JournalEvent
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.util.EpochClock
+import dev.npn.core.util.IdSource
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.SystemEpochClock
 import dev.npn.core.util.runCatchingCancellable
@@ -57,9 +58,10 @@ internal class Indexer(
     private val log: NpnLog = NpnLog.None,
     /** Where files are hashed, [HASH_CONCURRENCY] at a time. */
     private val hashing: CoroutineDispatcher = Dispatchers.Default,
+    ids: IdSource = IdSource.Random,
 ) {
     private val externalMoves = ExternalDocumentMoves(fs, db.keyValueDao())
-    private val documentPaths = DocumentPathReconciler(fs, db, externalMoves)
+    private val documentPaths = DocumentPathReconciler(fs, db, externalMoves, ids)
     private val folds = FoldProjection(db, documentPaths)
     private val tempFiles = TempFileSweep(fs, log)
 

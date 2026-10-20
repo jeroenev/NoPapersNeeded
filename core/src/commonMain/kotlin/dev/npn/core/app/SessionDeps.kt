@@ -8,6 +8,7 @@ import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.ThumbnailStore
 import dev.npn.core.settings.SessionSettings
 import dev.npn.core.util.EpochClock
+import dev.npn.core.util.IdSource
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.SystemEpochClock
 import dev.npn.core.xmp.PdfXmpIO
@@ -45,6 +46,8 @@ class SessionDeps(
     val computation: CoroutineDispatcher = Dispatchers.Default,
     /** What measures the folder watch's settle windows; a test passes its scheduler's. */
     val timeSource: TimeSource = TimeSource.Monotonic,
+    /** Where fresh names (journal actors, staging files, device ids) come from; a test seeds it. */
+    val ids: IdSource = IdSource.Random,
 ) {
     /**
      * Close the index and device databases. Exposed here so the composeApp DI layer (which does not

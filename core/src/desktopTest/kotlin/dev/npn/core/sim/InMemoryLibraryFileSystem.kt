@@ -139,7 +139,13 @@ class InMemoryLibraryFileSystem(
         calls.merge(method, 1, Int::plus)
         latency.pause()
         faults.check(method, path, SimFaults.Point.BEFORE)
-        val result = effect()
+        actor = method
+        val result =
+            try {
+                effect()
+            } finally {
+                actor = null
+            }
         faults.check(method, path, SimFaults.Point.AFTER)
         latency.pause()
         return result
@@ -147,7 +153,9 @@ class InMemoryLibraryFileSystem(
 
     override suspend fun listAllIndexable(): List<FileMeta> =
         io(FsMethod.LIST_INDEXABLE, "") {
-            entriesUnder("").filterNot { it.relPath == NpnPaths.NPN_DIR || it.relPath.startsWith(NPN_PREFIX) }
+            entriesUnder(
+                "",
+            ).filterNot { it.relPath == NpnPaths.NPN_DIR || it.relPath.startsWith(NPN_PREFIX) }
         }
 
     override suspend fun listAllUnder(relPath: String): List<FileMeta> {
@@ -287,7 +295,7 @@ class InMemoryLibraryFileSystem(
 
     override suspend fun delete(relPath: String) {
         val norm = NpnPaths.normalize(relPath)
-        io(FsMethod.DELETE, norm) { remove(norm) }
+        io(FsMethod.DELETE, norm) { remove(norm, byApp = true) }
     }
 
     override suspend fun sha256(relPath: String): String {
@@ -300,13 +308,22 @@ class InMemoryLibraryFileSystem(
         toRelPath: String,
     ) {
         val norm = NpnPaths.normalize(toRelPath)
-        val bytes = Files.readAllBytes(source.path)
+        val bytes = externalSources?.invoke(source.path) ?: Files.readAllBytes(source.path)
         io(FsMethod.IMPORT_EXTERNAL, norm) { create(norm, bytes) }
     }
 
     override fun watch(): Flow<FsEvent> = if (options.profile.saf) emptyFlow() else events.asSharedFlow()
 
     // ---- the external world ---------------------------------------------------------------------
+
+    /**
+     * Where [importExternal] reads a source the simulation holds in memory (a watched folder's
+     * file); null for a real path.
+     */
+    var externalSources: ((java.nio.file.Path) -> ByteArray?)? = null
+
+    /** Every file the app removed, by delete or by moving it away: the sync invariants check whose they were. */
+    val appRemovals = ArrayList<String>()
 
     /** Put [bytes] at [relPath] in one step, replacing whatever is there: a rename into place. */
     fun externalWriteAtomic(
@@ -335,6 +352,23 @@ class InMemoryLibraryFileSystem(
     ) {
         val norm = NpnPaths.normalize(relPath)
         val step = (bytes.size + chunks - 1) / chunks
+        writing += norm
+        try {
+            writeChunks(norm, bytes, step, intervalMillis)
+        } finally {
+            writing -= norm
+        }
+    }
+
+    /** Paths another process is writing in place right now: partial, not damaged. */
+    private val writing = HashSet<String>()
+
+    private suspend fun writeChunks(
+        norm: String,
+        bytes: ByteArray,
+        step: Int,
+        intervalMillis: Long,
+    ) {
         var written = 0
         while (written < bytes.size) {
             written = minOf(bytes.size, written + step)
@@ -408,8 +442,10 @@ class InMemoryLibraryFileSystem(
     /** A copy of everything at or under [relPath], with mtimes, to [externalRestore] later. */
     fun externalBackup(relPath: String): Backup {
         val norm = NpnPaths.normalize(relPath)
+        // A file another process is still writing is skipped, as a backup tool skips a file in use:
+        // put back later, its partial bytes would be damage no library could tell from a lost file.
         val taken =
-            files.filterKeys { it == norm || it.startsWith("$norm/") }.mapValues { (_, node) ->
+            files.filterKeys { (it == norm || it.startsWith("$norm/")) && it !in writing }.mapValues { (_, node) ->
                 node.bytes.copyOf() to node.mtime
             }
         return Backup(norm, taken)
@@ -464,6 +500,11 @@ class InMemoryLibraryFileSystem(
 
     fun bytesAt(relPath: String): ByteArray? = files[relPath]?.bytes
 
+    fun mtimeAt(relPath: String): Long? = files[relPath]?.mtime
+
+    /** Every write-once file the app published here (not one that arrived from outside). */
+    val appPublished: Set<String> get() = writeOnce.keys
+
     /** The stat of the file at [relPath] as a listing reports it now, with no latency or fault; null without one. */
     fun statAt(relPath: String): FileMeta? = if (files.containsKey(relPath)) metaOf(relPath) else null
 
@@ -498,7 +539,8 @@ class InMemoryLibraryFileSystem(
                     else -> null
                 }
             path.takeIf {
-                expected != null && NpnPaths.fileName(path) == "$expected.jsonl" && sha256Bytes(node.bytes) != expected
+                expected != null && path !in writing && NpnPaths.fileName(path) == "$expected.jsonl" &&
+                    sha256Bytes(node.bytes) != expected
             }
         }
 
@@ -571,7 +613,10 @@ class InMemoryLibraryFileSystem(
                 files[to] = node
                 touch(from)
                 touch(to)
-                if (byApp) recordWrite(to, node.bytes)
+                if (byApp) {
+                    appRemovals += from
+                    recordWrite(to, node.bytes)
+                }
             }
 
             dirs.containsKey(from) -> {
@@ -593,14 +638,21 @@ class InMemoryLibraryFileSystem(
         }
     }
 
-    private fun remove(norm: String) {
+    private fun remove(
+        norm: String,
+        byApp: Boolean = false,
+    ) {
         if (files.remove(norm) != null) {
+            if (byApp) appRemovals += norm
             touch(norm)
             return
         }
         if (!dirs.containsKey(norm)) return
         val prefix = "$norm/"
-        files.keys.filter { it.startsWith(prefix) }.forEach { files.remove(it) }
+        files.keys.filter { it.startsWith(prefix) }.forEach {
+            files.remove(it)
+            if (byApp) appRemovals += it
+        }
         dirs.keys.filter { it == norm || it.startsWith(prefix) }.forEach { dirs.remove(it) }
         touch(norm)
     }
@@ -612,6 +664,11 @@ class InMemoryLibraryFileSystem(
 
     /** Report a change at [norm] to the watcher, as inotify would (possibly dropped or as an overflow). */
     private fun touch(norm: String) {
+        val entries = history.getOrPut(norm) { ArrayDeque() }
+        val content =
+            files[norm]?.let { sha256Bytes(it.bytes).take(HISTORY_ID) } ?: if (dirs.containsKey(norm)) "dir" else "gone"
+        entries.addLast("t=${now()} ${actor?.name?.lowercase() ?: "external"} -> $content")
+        if (entries.size > HISTORY_LENGTH) entries.removeFirst()
         if (!options.watch || options.profile.saf) return
         val roll = watchRandom.nextDouble()
         val event =
@@ -650,7 +707,17 @@ class InMemoryLibraryFileSystem(
             (norm.startsWith("${NpnPaths.OCR_DIR}/") || norm.startsWith("${NpnPaths.DEVICES_DIR}/"))
     }
 
+    /** The app's call taking effect right now, or null for the outside world. */
+    private var actor: FsMethod? = null
+
+    /** The last changes at each path, and who made them: what a failure at a path shows. */
+    private val history = HashMap<String, ArrayDeque<String>>()
+
+    fun historyOf(relPath: String): List<String> = history[relPath].orEmpty().toList()
+
     private companion object {
+        const val HISTORY_LENGTH = 12
+        const val HISTORY_ID = 8
         const val WATCH_BUFFER = 100_000
         const val NPN_PREFIX = "${NpnPaths.NPN_DIR}/"
     }

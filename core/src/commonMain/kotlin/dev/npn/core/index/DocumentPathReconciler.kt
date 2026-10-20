@@ -10,6 +10,7 @@ import dev.npn.core.fs.DocumentPaths
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.journal.FoldedState
+import dev.npn.core.util.IdSource
 import dev.npn.core.util.runCatchingCancellable
 
 /**
@@ -24,8 +25,9 @@ internal class DocumentPathReconciler(
     private val db: NpnDatabase,
     /** Where this device last saw each settled document; the rescan detects external moves from it. */
     private val externalMoves: ExternalDocumentMoves,
+    ids: IdSource = IdSource.Random,
 ) {
-    private val paths = DocumentPaths(fs)
+    private val paths = DocumentPaths(fs, ids)
 
     /** The work of the outermost [deferring] call in progress; null outside one. */
     private var open: PathWork? = null

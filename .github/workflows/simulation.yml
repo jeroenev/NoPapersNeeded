@@ -1,0 +1,86 @@
+name: Library simulation
+
+# The deterministic simulation of several replicas sharing a library through a sync tool
+# (docs/SIMULATION.md), run long. ci.yml runs its CI-sized seeds on every push; this runs about ten
+# minutes of fresh seeds a night, and any seeds on demand. Actions minutes and artifact storage are
+# metered on this private repo: the run is time-boxed, and the traces upload only when a seed fails.
+on:
+  schedule:
+    - cron: "23 2 * * *"
+  workflow_dispatch:
+    inputs:
+      seeds:
+        description: How many seeds to run
+        required: false
+        default: "60"
+      steps:
+        description: Steps per seed
+        required: false
+        default: "400"
+      first_seed:
+        description: The first seed (empty for the next seeds no nightly run took)
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: simulation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # About ten minutes on an ubuntu-latest runner at the cost measured in docs/SIMULATION.md.
+  NIGHTLY_SEEDS: "60"
+  NIGHTLY_STEPS: "400"
+
+jobs:
+  simulate:
+    name: Simulate seeds
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up JDK
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version-file: .java-version
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-provider: basic
+
+      - name: Choose the seeds
+        id: seeds
+        env:
+          SEEDS: ${{ inputs.seeds }}
+          STEPS: ${{ inputs.steps }}
+          FIRST_SEED: ${{ inputs.first_seed }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: bash .github/scripts/simulation-seeds.sh
+
+      # Every failing seed is reported (up to all of them), each with the line that replays it.
+      - name: Simulate
+        timeout-minutes: 30
+        run: >-
+          ./gradlew :core:desktopTest --tests 'dev.npn.core.sim.LibrarySimulationTest'
+          -Dnpn.sim.firstSeed=${{ steps.seeds.outputs.first }}
+          -Dnpn.sim.seeds=${{ steps.seeds.outputs.seeds }}
+          -Dnpn.sim.steps=${{ steps.seeds.outputs.steps }}
+          -Dnpn.sim.maxReported=${{ steps.seeds.outputs.seeds }}
+          -Dnpn.sim.traceDir=${{ runner.temp }}/simulation-traces
+
+      - name: Upload the traces and the report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: simulation-traces-${{ steps.seeds.outputs.first }}
+          path: |
+            ${{ runner.temp }}/simulation-traces
+            core/build/reports/tests/desktopTest
+            core/build/test-results/desktopTest
+          retention-days: 5

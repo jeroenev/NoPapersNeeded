@@ -6,13 +6,13 @@ import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
 import dev.npn.core.fs.publishStagedOnce
 import dev.npn.core.fs.sha256Bytes
+import dev.npn.core.util.IdSource
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.info
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.warn
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
-import kotlin.uuid.Uuid
 
 /**
  * This installation's `deviceId` for one library, and the check that no other installation uses it.
@@ -47,6 +47,7 @@ internal class DeviceIdentity(
     private val fs: LibraryFileSystem,
     private val installationId: String,
     private val log: NpnLog = NpnLog.None,
+    private val ids: IdSource = IdSource.Random,
 ) {
     init {
         require(installationPattern.matches(installationId)) { "Unusable installation id: $installationId" }
@@ -84,7 +85,7 @@ internal class DeviceIdentity(
     }
 
     private suspend fun mint(): String {
-        val fresh = Uuid.random().toString()
+        val fresh = ids.next()
         kv.put(KEY_DEVICE_ID, fresh)
         kv.put(KEY_INSTALLATION, installationId)
         return fresh
@@ -144,7 +145,7 @@ internal class DeviceIdentity(
         bytes: ByteArray,
     ) = fs.publishStagedOnce(staging, path, sha256Bytes(bytes)) { fs.writeBytesOnce(staging, bytes) }
 
-    private fun nonce(): String = Uuid.random().toString()
+    private fun nonce(): String = ids.next()
 
     /**
      * Drop the bookkeeping a build that still wrote v1 segments kept about them (the last sequence

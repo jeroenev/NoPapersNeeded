@@ -118,7 +118,9 @@ Why two things sit where they do:
 A library is opened with `openSession(SessionDeps)` followed by `start()`. `SessionDeps`
 (`core.app`) carries everything a library needs: the filesystem, the two databases, the PDF, OCR
 and XMP engines, the thumbnail store, a coroutine scope, the device settings as one
-`SessionSettings`, a log, a clock and the installation id. On a plain JVM they come from
+`SessionSettings`, a log, a clock, the installation id, and the source of every fresh name the
+session draws (`IdSource`: journal actors, staging files, device ids; random in production, seeded
+by the simulation so a seed replays). On a plain JVM they come from
 `jvmSessionDeps` (`desktopMain`), the one place that wires java.nio, PDFBox, Tesseract and the two
 Room databases under an `AppDirs`; Android's counterpart is `androidSessionDeps` (`androidMain`),
 which dispatches on the location string. The desktop app, the `AppSessionRig` test harness and any
@@ -760,6 +762,7 @@ DEVELOPMENT.md.
 |---|---|
 | `core/src/commonTest` | Tests of platform-agnostic core code, compiled for both targets. `FoldConvergencePropertyTest` lives here. |
 | `core/src/desktopTest` | The bulk of core's tests, on the desktop JVM, including every test over a real session. |
+| `core/src/desktopTest/.../sim` | The library simulation (docs/SIMULATION.md): two to four replicas of one library, real sessions over in-memory folders with a seeded sync tool between them, on virtual time, checked against invariants, a rebuild of each replica's index and each other. CI runs ten seeds in `:core:desktopTest`; `simulation.yml` runs fresh seeds nightly. |
 | `core/src/androidHostTest` | Tests of `androidMain`-only code that needs no framework implementation. |
 | `composeApp/src/commonTest` | Viewmodel tests over `core-testing`'s fakes, asserting on `UiText`. |
 | `desktopApp/src/test`, `buildSrc/src/test` | The single-instance lock; the build guards. |

@@ -9,11 +9,13 @@ import dev.npn.core.pdf.PdfOpenException
 import dev.npn.core.pdf.ThumbnailStore
 import dev.npn.core.xmp.PdfXmpIO
 import kotlinx.coroutines.CompletableDeferred
+import kotlin.io.encoding.Base64
 
 /**
  * The simulation's "PDFs": any bytes starting `%PDF-` open, so a document is just distinct bytes.
- * A file holding `text:<words>` has that embedded text on its one page; one without is a scan,
- * which only OCR reads. Every simulated PDF ends with `%%EOF`, so a partial one (still being
+ * A file holding `text:<words>` has that embedded text on its pages; one without is a scan, which
+ * only OCR reads. `pages:<n>` gives it more than one page, and `xmp:<base64>` is the metadata a
+ * bake wrote ([SimXmpIO]). Every simulated PDF ends with `%%EOF`, so a partial one (still being
  * written in chunks) lacks it, as a real partial file does.
  */
 object SimPdf {
@@ -28,8 +30,13 @@ object SimPdf {
         label: String,
         text: String? = null,
         size: Int? = null,
+        pages: Int = 1,
+        xmp: String? = null,
     ): ByteArray {
-        val body = HEADER + "%sim $label\n" + text?.let { "text:$it\n" }.orEmpty()
+        val body =
+            HEADER + "%sim $label\n" + text?.let { "text:$it\n" }.orEmpty() +
+                (if (pages > 1) "pages:$pages\n" else "") +
+                xmp?.let { "xmp:${Base64.encode(it.encodeToByteArray())}\n" }.orEmpty()
         val padding = size?.let { (it - body.length - TRAILER.length - 2).coerceAtLeast(0) } ?: 0
         val padded = if (padding > 0) body + "%" + " ".repeat(padding) + "\n" else body
         return (padded + TRAILER).encodeToByteArray()
@@ -37,17 +44,48 @@ object SimPdf {
 
     fun isPdf(bytes: ByteArray): Boolean = bytes.decodeToString().startsWith(HEADER.trim())
 
-    fun textOf(bytes: ByteArray): String =
+    private fun line(
+        bytes: ByteArray,
+        prefix: String,
+    ): String? =
         bytes
             .decodeToString()
             .lineSequence()
-            .firstOrNull { it.startsWith("text:") }
-            ?.removePrefix("text:")
-            .orEmpty()
+            .firstOrNull { it.startsWith(prefix) }
+            ?.removePrefix(prefix)
+
+    fun textOf(bytes: ByteArray): String = line(bytes, "text:").orEmpty()
+
+    fun labelOf(bytes: ByteArray): String = line(bytes, "%sim ").orEmpty()
+
+    fun pagesOf(bytes: ByteArray): Int = line(bytes, "pages:")?.toIntOrNull() ?: 1
+
+    fun xmpOf(bytes: ByteArray): String? = line(bytes, "xmp:")?.let { Base64.decode(it).decodeToString() }
 }
 
-/** A [PdfEngine] over [SimPdf] bytes: one page each, and its embedded text as [SimPdf.textOf] reads it. */
-class SimPdfEngine : PdfEngine {
+/**
+ * Sizes for the PDFs the engines make (split parts, baked copies), one per label, as the
+ * generators give theirs where storage reports mtimes: two files written in the same virtual
+ * millisecond, one renamed over the other, would otherwise share a stat. The same label (the same
+ * part of the same document, made on two replicas) gets the same size, so it makes the same bytes.
+ */
+class SimSizes(
+    private val base: Int = BASE,
+) {
+    private val byLabel = HashMap<String, Int>()
+
+    fun sizeOf(label: String): Int = byLabel.getOrPut(label) { base + byLabel.size }
+
+    private companion object {
+        /** Above every size the generators give the PDFs they make (see [SimGenerator]). */
+        const val BASE = 20_000
+    }
+}
+
+/** A [PdfEngine] over [SimPdf] bytes: [SimPdf.pagesOf] pages each, and the text [SimPdf.textOf] reads. */
+class SimPdfEngine(
+    private val sizes: SimSizes = SimSizes(),
+) : PdfEngine {
     var opened = 0
         private set
 
@@ -55,7 +93,7 @@ class SimPdfEngine : PdfEngine {
         if (!SimPdf.isPdf(bytes)) throw PdfOpenException("Not a simulated PDF")
         opened++
         return object : PdfDocumentHandle {
-            override val pageCount: Int = 1
+            override val pageCount: Int = SimPdf.pagesOf(bytes)
 
             override fun extractText(pageIndex: Int): String = SimPdf.textOf(bytes)
 
@@ -75,8 +113,12 @@ class SimPdfEngine : PdfEngine {
         bytes: ByteArray,
         pageIndices: List<Int>,
     ): ByteArray {
-        require(pageIndices.isNotEmpty() && pageIndices.all { it == 0 }) { "Pages out of range: $pageIndices" }
-        return SimPdf.bytes("pages-${sha256Bytes(bytes).take(HASH_LABEL)}-$pageIndices", SimPdf.textOf(bytes))
+        val pages = SimPdf.pagesOf(bytes)
+        require(
+            pageIndices.isNotEmpty() && pageIndices.all { it in 0 until pages },
+        ) { "Pages out of range: $pageIndices" }
+        val label = "pages-${sha256Bytes(bytes).take(HASH_LABEL)}-${pageIndices.joinToString("_")}"
+        return SimPdf.bytes(label, SimPdf.textOf(bytes), sizes.sizeOf(label), pages = pageIndices.size)
     }
 
     private companion object {
@@ -134,6 +176,9 @@ class GatedOcrEngine : OcrEngine {
         gateOpen = false
     }
 
+    /** Forget the pages a killed process was waiting on: they never finish, and never leave the queue. */
+    fun forgetWaiting() = waiting.clear()
+
     private companion object {
         const val OCR_LABEL = 16
     }
@@ -156,14 +201,37 @@ class MemoryThumbnailStore : ThumbnailStore {
     override suspend fun clear(): Int = pngs.size.also { pngs.clear() }
 }
 
-/** No XMP: the simulation does not bake (see docs/SIMULATION.md, what it does not model). */
-object NoXmpIO : PdfXmpIO {
-    override suspend fun readXmp(pdfBytes: ByteArray): String? = null
+/**
+ * XMP for [SimPdf] bytes: the packet travels as the PDF's `xmp:` line, so a bake writes new bytes
+ * (a new document identity) that read back as carrying the metadata, and bake-in-place relinks.
+ * The same packet on the same PDF makes the same bytes; anything not a simulated PDF is refused,
+ * as a PDF library refuses a file it cannot parse.
+ */
+class SimXmpIO(
+    private val sizes: SimSizes = SimSizes(),
+) : PdfXmpIO {
+    override suspend fun readXmp(pdfBytes: ByteArray): String? = SimPdf.xmpOf(pdfBytes)
 
     override suspend fun writeBaked(
         pdfBytes: ByteArray,
         xmp: String,
         keywords: List<String>,
         title: String?,
-    ): ByteArray = throw UnsupportedOperationException("The simulation does not bake")
+    ): ByteArray {
+        if (!SimPdf.isPdf(pdfBytes)) throw PdfOpenException("Not a simulated PDF")
+        val label = "${SimPdf.labelOf(
+            pdfBytes,
+        ).substringBefore('+')}+baked-${sha256Bytes(pdfBytes + xmp.encodeToByteArray()).take(LABEL)}"
+        return SimPdf.bytes(
+            label,
+            SimPdf.textOf(pdfBytes).ifEmpty { null },
+            sizes.sizeOf(label),
+            pages = SimPdf.pagesOf(pdfBytes),
+            xmp = xmp,
+        )
+    }
+
+    private companion object {
+        const val LABEL = 10
+    }
 }

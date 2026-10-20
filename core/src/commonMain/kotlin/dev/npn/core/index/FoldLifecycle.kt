@@ -1,6 +1,7 @@
 package dev.npn.core.index
 
 import dev.npn.core.db.DocumentEntity
+import dev.npn.core.db.missingSentinel
 import dev.npn.core.fs.NpnPaths
 
 /** What the journal says of one document's lifecycle, as a fold reads it ([FoldLifecycle.resolve]). */
@@ -66,10 +67,14 @@ internal object FoldLifecycle {
                 resurrected = Resurrected(doc, backAt, hiddenAtMillis = journal.hiddenAtMillis),
             )
         }
+        val trashed = if (preserved) row.trashed else journal.trashed
+        val deleted = if (preserved) row.deleted || journal.superseded else journalDeleted
         return ProjectedLifecycle(
-            trashed = if (preserved) row.trashed else journal.trashed,
-            deleted = if (preserved) row.deleted || journal.superseded else journalDeleted,
-            missing = row.missing,
+            trashed = trashed,
+            deleted = deleted,
+            // A row waiting at its sentinel has no file. Shown again (another device restored the
+            // document and its file has not arrived), it is missing until a rescan finds the file.
+            missing = row.missing || (!trashed && !deleted && row.relPath == missingSentinel(doc)),
             relPath = row.relPath,
             fileName = row.fileName,
             origPath = journal.origPath,
