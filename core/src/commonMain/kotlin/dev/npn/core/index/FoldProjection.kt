@@ -298,16 +298,6 @@ internal class FoldProjection(
         if (changed.isNotEmpty()) tagDao.upsertAll(changed)
     }
 
-    /** The trash/delete lifecycle for a doc, after applying the file-resurrection preference. */
-    private class Lifecycle(
-        val trashed: Boolean,
-        val deleted: Boolean,
-        val missing: Boolean,
-        val relPath: String,
-        val fileName: String,
-        val origPath: String?,
-    )
-
     /**
      * One [apply] pass over its documents: what it projects them from (the folded [state], the
      * [preloaded] rows) and where it leaves what it projected: [changes] for the database, [work] for
@@ -405,62 +395,29 @@ internal class FoldProjection(
         }
 
         /**
-         * Resolve the doc's trash/delete state. On a [FoldScope.FullRescan] the file is preferred:
-         * if the journal says trashed/deleted but the document's own bytes are back ([returnedPath]),
-         * the flags are cleared and a [Resurrected] recorded. Docs an [FoldScope.Events] fold
-         * preserves keep their stored lifecycle.
+         * Resolve the doc's trash/delete state ([FoldLifecycle.resolve]): on a [FoldScope.FullRescan]
+         * the file is preferred, and a document the journal hides whose own bytes are back is
+         * recorded as [Resurrected]. Docs an [FoldScope.Events] fold preserves keep their stored
+         * lifecycle.
          */
         private fun lifecycle(
             doc: String,
             row: DocumentEntity,
-        ): Lifecycle {
-            // Relinked onto another id: deleted for good, on every fold, whatever its own events say.
-            val superseded = state.resolveDocId(doc) != doc
-            val journalDeleted = state.isDeleted(doc) || superseded
-            val journalTrashed = state.isTrashed(doc)
-            val origPath = state.trashOrigPath(doc)
+        ): ProjectedLifecycle {
+            val journal =
+                JournalLifecycle(
+                    superseded = state.resolveDocId(doc) != doc,
+                    trashed = state.isTrashed(doc),
+                    deleted = state.isDeleted(doc),
+                    origPath = state.trashOrigPath(doc),
+                    hiddenAtMillis = state.hiddenBy(doc)?.physicalMillis ?: 0L,
+                )
             val preserved = scope is FoldScope.Events && doc in scope.preserveLifecycleDocs
-
-            var trashed = if (preserved) row.trashed else journalTrashed
-            var deleted = if (preserved) row.deleted || superseded else journalDeleted
-            var missing = row.missing
-            var relPath = row.relPath
-            var fileName = row.fileName
-
-            val hidden = journalTrashed || journalDeleted
-            val backAt =
-                (scope as? FoldScope.FullRescan)
-                    ?.takeIf { hidden && !superseded }
-                    ?.let { returnedPath(doc, row, origPath, it.contentAt) }
-            if (backAt != null) {
-                // Resurrection: prefer the file. Clear trashed/deleted for the working view.
-                trashed = false
-                deleted = false
-                missing = false
-                if (backAt != relPath) {
-                    relPath = backAt
-                    fileName = NpnPaths.fileName(backAt)
-                }
-                val hiddenAt = state.hiddenBy(doc)?.physicalMillis ?: 0L
-                resurrected.add(Resurrected(doc, relPath, hiddenAtMillis = hiddenAt))
+            val contentAt = (scope as? FoldScope.FullRescan)?.contentAt
+            return FoldLifecycle.resolve(doc, row, journal, preserved, contentAt) { it in holders }.also { lifecycle ->
+                lifecycle.resurrected?.let(resurrected::add)
             }
-            return Lifecycle(trashed, deleted, missing, relPath, fileName, origPath)
         }
-
-        /**
-         * Where a hidden [doc]'s own bytes are back in the library: at its row's path, else at
-         * [origPath], the path it was trashed from, when no other row holds that. Only a file whose
-         * hash the rescan knows ([contentAt]) is evidence: another document's file at the path, or
-         * one still being written, says nothing about this one.
-         */
-        private fun returnedPath(
-            doc: String,
-            row: DocumentEntity,
-            origPath: String?,
-            contentAt: Map<String, String>,
-        ): String? =
-            row.relPath.takeIf { contentAt[it] == doc }
-                ?: origPath?.takeIf { contentAt[it] == doc && it !in holders }
     }
 }
 

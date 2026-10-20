@@ -625,8 +625,7 @@ internal class JournalCoordinator(
         state: FoldedState,
         resurrected: List<Resurrected>,
     ) {
-        val settled = clock.nowMillis() - RESTORE_SETTLE_MS
-        val returned = resurrected.filter { it.hiddenAtMillis <= settled }
+        val returned = FoldLifecycle.settledReturns(resurrected, clock.nowMillis(), RESTORE_SETTLE_MS)
         val ops = returned.flatMap { state.restoreOps(it.docId, it.relPath, writeUndelete) }
         if (ops.isEmpty()) return
         log.runLogged("Recording the return of ${returned.joinToString { it.relPath }}") {

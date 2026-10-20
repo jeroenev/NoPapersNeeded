@@ -314,7 +314,13 @@ class RescanDecisionTest {
                     check(others.isEmpty()) { "seed $seed: $relPath holds $content, yet rows $others stay on it" }
                     if (library.journal.successorOf(content) != content) {
                         // Its row may only give a path up, never take one.
-                        val placed = plan.writes.filter { it.docId == content && it.relPath != missingSentinel(content) }
+                        val placed =
+                            plan.writes.filter {
+                                it.docId == content && it.relPath !=
+                                    missingSentinel(
+                                        content,
+                                    )
+                            }
                         check(placed.isEmpty()) { "seed $seed: superseded $content got a row at $placed" }
                         continue
                     }
@@ -351,7 +357,11 @@ class RescanDecisionTest {
                     }
                 }
                 val known = library.rows.mapTo(HashSet()) { it.docId }
-                plan.added shouldBe plan.writes.map { it.docId }.distinct().count { it !in known }
+                plan.added shouldBe
+                    plan.writes
+                        .map { it.docId }
+                        .distinct()
+                        .count { it !in known }
                 plan.duplicates.forEach { check(it.extraRelPath in library.hashes) { "seed $seed: unhashed copy $it" } }
             }
         }
