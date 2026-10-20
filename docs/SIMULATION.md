@@ -63,9 +63,10 @@ the library.
 `.github/workflows/simulation.yml` runs the simulation nightly on fresh seeds (each night the next
 `NIGHTLY_SEEDS` from 1000 on, by run number, so it never repeats CI's seeds 1..10), and on demand
 with `seeds`, `steps` and `first_seed` inputs. `.github/scripts/simulation-seeds.sh` picks the seeds.
-A seed of 400 steps costs about 6 s on a laptop and about 9 s on a hosted runner, so the nightly 65
-seeds of 400 steps take about ten minutes of simulation, under a 30-minute step timeout and a 40-minute
-job timeout. When a seed fails, the run uploads every seed's trace and the test report as an artifact
+A seed of 400 steps costs about 6.6 s on a laptop (300 seeds took 33 minutes) and, at an assumed
+1.5 times that on a two-core hosted runner, about 10 s there, so the nightly 60 seeds of 400 steps take
+about ten minutes of simulation, under a 30-minute step timeout and a 40-minute job timeout: some 15
+Actions minutes a night with checkout and the build, about 450 a month. When a seed fails, the run uploads every seed's trace and the test report as an artifact
 kept 5 days. ci.yml keeps running only the CI-sized test above, as part of `:core:desktopTest`.
 
 ## How it works

@@ -12,7 +12,7 @@ on:
       seeds:
         description: How many seeds to run
         required: false
-        default: "100"
+        default: "60"
       steps:
         description: Steps per seed
         required: false
@@ -31,7 +31,7 @@ concurrency:
 
 env:
   # About ten minutes on an ubuntu-latest runner at the cost measured in docs/SIMULATION.md.
-  NIGHTLY_SEEDS: "100"
+  NIGHTLY_SEEDS: "60"
   NIGHTLY_STEPS: "400"
 
 jobs:
