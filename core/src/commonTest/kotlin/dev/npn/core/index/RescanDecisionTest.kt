@@ -81,17 +81,20 @@ class RescanDecisionTest {
             }
         }
 
+    /** Whether the journal can say [holder] is hidden or not: a row's own flags hide it whatever it says. */
+    private fun hiddenStates(holder: DocumentEntity?): List<Boolean> =
+        when {
+            holder == null -> listOf(false)
+            holder.trashed || holder.deleted -> listOf(true)
+            else -> listOf(false, true)
+        }
+
     private val allFacts =
-        buildList {
-            for (holder in holders) {
-                for (holderHidden in listOf(false, true)) {
-                    // The row's own flags hide it whatever the journal says.
-                    if (holder == null && holderHidden) continue
-                    if (holder != null && (holder.trashed || holder.deleted) && !holderHidden) continue
-                    for (superseded in listOf(false, true)) {
-                        for ((known, stillOnDisk) in knowns) {
-                            add(FileFacts(meta, hash, holder, holderHidden, superseded, known, stillOnDisk))
-                        }
+        holders.flatMap { holder ->
+            hiddenStates(holder).flatMap { holderHidden ->
+                listOf(false, true).flatMap { superseded ->
+                    knowns.map { (known, stillOnDisk) ->
+                        FileFacts(meta, hash, holder, holderHidden, superseded, known, stillOnDisk)
                     }
                 }
             }
