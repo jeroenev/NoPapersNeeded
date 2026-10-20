@@ -10,6 +10,7 @@ import dev.npn.core.index.ImportResult
 import dev.npn.core.index.IndexProgress
 import dev.npn.core.index.ScanReport
 import dev.npn.core.index.SupersededImportException
+import dev.npn.core.index.WriteBlock
 import dev.npn.core.index.WriteSettle
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
@@ -21,6 +22,7 @@ import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.isActive
@@ -61,6 +63,7 @@ internal class LibrarySessionImpl(
     private val importService = graph.imports
     private val fs get() = deps.fs
     override val log: NpnLog get() = deps.log
+    override val writeBlock: StateFlow<WriteBlock?> get() = coordinator.writeBlock
 
     override val documents: DocumentRepository = graph.documents
     override val tags: TagRepository = graph.tags

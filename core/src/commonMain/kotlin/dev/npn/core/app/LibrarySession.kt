@@ -3,7 +3,9 @@ package dev.npn.core.app
 import dev.npn.core.ai.AiChat
 import dev.npn.core.ai.AiSuggest
 import dev.npn.core.app.aiedit.AiEditQueueFacade
+import dev.npn.core.index.WriteBlock
 import dev.npn.core.util.NpnLog
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Everything scoped to one opened library folder: a pure aggregate of narrow facets plus
@@ -33,6 +35,15 @@ interface LibrarySession {
 
     /** Where the session's failures go, for a caller reporting one of its own that nobody awaits. */
     val log: NpnLog
+
+    /**
+     * Why the library refuses writes now, null while it takes them. Library-wide, so it is the
+     * session's rather than any one facet's: every facet that writes is refused alike, with a
+     * [dev.npn.core.index.MetadataWriteBlocked] carrying this reason. Set from the open on when the
+     * journal does not fold whole (the library opens read-only) and after any pass that fails, and
+     * cleared by the next pass that reads the journal whole, such as a rescan.
+     */
+    val writeBlock: StateFlow<WriteBlock?>
 
     /**
      * Start folder watching, the queue drains and periodic reconciliation, all on the scope the

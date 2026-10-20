@@ -1,6 +1,7 @@
 package dev.npn.app
 
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.index.WriteBlock
 import dev.npn.core.testing.FakeAiSuggest
 import dev.npn.core.testing.FakeDocContentFacade
 import dev.npn.core.testing.FakeDocumentRepository
@@ -8,6 +9,7 @@ import dev.npn.core.testing.FakeFieldRegistry
 import dev.npn.core.testing.FakeMetadataWriter
 import dev.npn.core.testing.FakeTagRepository
 import dev.npn.core.util.NpnLog
+import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
  * The per-facet fakes composed into a session, mirroring how core's own session assembles the real
@@ -37,6 +39,9 @@ class FakeLibrarySession : LibrarySession {
     override val work = FakeWorkFacade()
     override val aiEditQueue = FakeAiEditQueue()
     override var log: NpnLog = NpnLog.None
+
+    /** Why writes are refused; a test sets it to show the library read-only. */
+    override val writeBlock = MutableStateFlow<WriteBlock?>(null)
 
     override fun start() = Unit
 
