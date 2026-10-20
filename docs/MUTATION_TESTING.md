@@ -111,13 +111,13 @@ test that fails with the mutant applied by hand (the numbers above predate them)
 
 | Guard | Test |
 |---|---|
-| `Indexer.reconcileKnownHash`: refresh a row whose missing flag, size or mtime drifted | `IndexerTest`: `aTouchedFileIsHashedOnceAndItsRowTakesTheNewMtime`, `aRowWhoseStoredSizeDriftedTakesTheFilesSize`, `aMissingDocumentsFileBackWithItsOldStatIsLiveAgain`; the simulation's touch operation and row-stat invariant |
+| `Indexer.reconcileKnownHash` (now `RescanDecision.file`): refresh a row whose missing flag, size or mtime drifted | `IndexerTest`: `aTouchedFileIsHashedOnceAndItsRowTakesTheNewMtime`, `aRowWhoseStoredSizeDriftedTakesTheFilesSize`, `aMissingDocumentsFileBackWithItsOldStatIsLiveAgain`; the simulation's touch operation and row-stat invariant |
 | `DocLifecycleImpl.fileAt`: a live holder's stored stat spares the file a read, a hidden one's does not | `PermanentDeleteTest`: `deletingForGoodReadsNoFileAnotherDocumentHoldsAtTheOldPath` (its files now the same size), `deletingForGoodRemovesItsBytesOverAnotherDocumentsFileAtTheOldPath`, `deletingForGoodTakesNoHiddenRowsStatAsProofOfTheFileAtTheOldPath` |
 | `ImportService.recordReturn`: a recorded return is `broughtBack`, a new document is not | `ImportTakeBackTest`: `anImportTheJournalRecordsAsAReturnIsNotUndone`, `anImportOfNewBytesIsNoReturnAndIsUndone` |
 | `ImportService.takeBack`: delete only the import's own moved copy | `ImportTakeBackTest`: `anImportThatFoundTheBytesInPlaceLeavesThatFileWhenItsReturnCannotBeRecorded`, `anImportsCopyWrittenOverBeforeItIsTakenBackStays` |
-| `JournalCoordinator.recordRestores`: the settle edge | `JournalCoordinatorWritesTest.aReturnIsRecordedExactlyWhenTheSettleWindowHasPassed` |
-| `MetadataAccumulator.stage`: skip an applied source whose fingerprint is unchanged | Equivalent: the stat gate before it already returns for every case it could match. `MetadataAccumulatorTest.aTouchedObjectLosesNothingAndIsNotReadAgain` pins what a touched object does |
-| `JournalCoordinator.withDurableProjectionRecovery` / `blockWrites`: the pass's own block, kept | `JournalCoordinatorWritesTest.aWriteAfterAFailedIngestWhoseRebuildWasCutShortIsRefusedForTheIngestsReason` |
+| `JournalCoordinator.recordRestores` (now `FoldLifecycle.settledReturns`): the settle edge | `JournalCoordinatorWritesTest.aReturnIsRecordedExactlyWhenTheSettleWindowHasPassed` |
+| `MetadataAccumulator.stage`: skip an applied source whose fingerprint is unchanged | Equivalent: the stat gate before it already returns for every case it could match, so the check is gone. `MetadataAccumulatorTest.aTouchedObjectLosesNothingAndIsNotReadAgain` pins what a touched object does |
+| `JournalCoordinator.withDurableProjectionRecovery` / `blockWrites` (now `JournalCoordinator.pass` / `PassOutcome.failed`): the pass's own block, kept | `JournalCoordinatorWritesTest.aWriteAfterAFailedIngestWhoseRebuildWasCutShortIsRefusedForTheIngestsReason` |
 | `JournalCoordinator.recordWritten`: the write clock moves past a local write | `JournalCoordinatorWritesTest.aLocalWriteMovesTheStoredWriteClockPastIt` |
 | `HlcWatermarkAllocator.observe`: the receive rule's counter | `HlcTest` (`observeAtTheSamePhysicalTime...`, `observeOfARemote...`), `HlcAllocatorPropertyTest` |
 | `MetadataAccumulator.runReconcilePass`: an older `PROJECTION_VERSION` is wiped and rebuilt | `MetadataAccumulatorTest.aStoredProjectionOfAnOlderVersionIsRebuiltAtTheNextPass` |

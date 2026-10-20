@@ -86,10 +86,10 @@ One line per package. The rules each package enforces are in section 6.
 
 | Package | Contents |
 |---|---|
-| `core.app` | The public session API and the orchestrators behind it. One contract file per concept: `LibrarySession.kt`, `Documents.kt`, `History.kt`, `Metadata.kt`, `FieldRegistry.kt`, `Ingest.kt`, `Ocr.kt`, `LibrarySettings.kt`, `Maintenance.kt`, `WorkFacade.kt`, `DocContentFacade.kt`, `Filters.kt`. Implementations: `LibrarySessionImpl`, `SessionGraph`, `SessionOpening.kt`, `MetadataWriterImpl`, `DocLifecycleImpl`, `OcrFacadeImpl`, `MaintenanceFacadeImpl`, `SessionWork`, `JournalReviewConfig`, `BakeRelink`. |
+| `core.app` | The public session API and the orchestrators behind it. One contract file per concept: `LibrarySession.kt`, `Documents.kt`, `History.kt`, `Metadata.kt`, `FieldRegistry.kt`, `Ingest.kt`, `Ocr.kt`, `LibrarySettings.kt`, `Maintenance.kt`, `WorkFacade.kt`, `DocContentFacade.kt`, `Filters.kt`. Implementations: `LibrarySessionImpl`, `SessionGraph`, `SessionOpening.kt`, `MetadataWriterImpl`, `DocLifecycleImpl` (with its pure `LifecyclePlan`), `OcrFacadeImpl`, `MaintenanceFacadeImpl`, `SessionWork`, `JournalReviewConfig`, `BakeRelink`. |
 | `core.app.aiedit` | The AI edit engine over the facets: `AiEditRun`, `AiEditQueue`, `AiAutoEnricher`, `AiEditReview.kt` (`ReviewProjector`, `ReviewApply`), `SuggestionRunner`. |
 | `core.journal` | The metadata journal: `JournalEvent`, `JournalOp`, `PendingOp`; `ContentAddressedJournalWriter`; `JournalPaths`; the readers for v2 objects, snapshots and legacy v1 segments (`JournalSourceReaders`); `JournalCodec`; `Hlc`, `HlcWatermarkAllocator`; `SnapshotFormat` (the compaction snapshots earlier builds wrote, read and never written); `EventCopies` (two copies of one event); the fold, `FoldedState`. |
-| `core.index` | The rebuildable index and its maintenance: `JournalCoordinator`, `Indexer`, `MetadataAccumulator`, `FoldProjection`, `SourceSetValidator`, `ImportService`, `DuplicateResolver`, `SplitService`, `ScanReport`, `DeviceIdentity`, `DocumentPathReconciler`, `ExternalDocumentMoves`. |
+| `core.index` | The rebuildable index and its maintenance. The executor: `JournalCoordinator` and its state machine `WriterState`. The pure decisions it and its helpers carry out: `RescanDecision`, `FoldLifecycle`, `ImportDecision`, `PassDecision`. The effects: `Indexer`, `MetadataAccumulator`, `FoldProjection`, `SourceSetValidator`, `ImportService`, `DuplicateResolver`, `SplitService`, `ScanReport`, `DeviceIdentity`, `DocumentPathReconciler`, `ExternalDocumentMoves`. |
 | `core.db` | Room entities and DAOs for the two databases: `NpnDatabase` (`index.db`) and `DeviceDatabase` (`device.db`). One file per DAO. `LegacyIndexTables` moves what older index schemas held into the journal or `device.db`. |
 | `core.fs` | `LibraryFileSystem` and its platform implementations; `NpnPaths` (the `.npn/` layout, path classification, the path-safety gate, every temporary file name); `TempFileSweep`; `ContentIdentity`, `HexEncoding`; `TrashOps`. |
 | `core.model` | `Document.kt` (`ReviewMode`, `SystemProperty`), `Field.kt` (`FieldType`, `FieldDef`, `FieldKeys` with the seeds and their versioned upgrade), `FieldValues.kt` (canonical forms), `AppLanguages`. |
@@ -180,9 +180,36 @@ coordinator's `writer` is private, so no caller outside `core` can reach a raw w
   bookkeeping joins, so no reader sees a row before its tags and fields. Moving a PDF to its
   intended path and recording where documents were seen are filesystem work, after the transaction.
 
+**Decisions and the executor.** What the coordinating code decides is a pure function of what a
+pass gathered, in plain files with no suspend, DAO, filesystem or mutex: `RescanDecision` (which
+files a rescan hashes, and what each hashed file is to the rows: unchanged, refreshed, moved, a
+duplicate, a new document, an edit in place, or superseded bytes that get no row; which shown rows
+went missing), `FoldLifecycle` (a document's trash and delete flags as a fold projects them, a
+rescan's resurrection of a document whose own bytes are back, and which returns are settled enough
+to record), `ImportDecision` (an import's duplicate, return of a hidden document, refusal of
+superseded bytes, and the row it writes), `LifecyclePlan` in `core.app` (the events, row and file
+move of a trash, restore or delete for good) and `PassDecision` (how a reconcile takes what it read
+into the fold, and what the projection then needs). The classes around them gather the facts (a
+listing, hashes, rows, the fold) and carry the plans out; the coordinator is the one executor that
+holds the mutex and mutates the session's state: the live fold, the synced settings and the
+writer's state.
+
+**The writer's state machine.** `WriterState` is `Ready` (the projection is the fold of the journal
+the last pass read; writes are taken), `RefoldPending` (a pass was cut short; writes are taken, and
+the next reconcile or ingest refolds and reprojects in full) or `Blocked(reason)` (a pass failed;
+writes are refused with that `MetadataWriteBlocked` until a pass reads the journal whole). Every
+entry point runs as one `pass`, which ends in a `PassOutcome`: `Projected` (it read the journal
+whole and projected it, `adopt`) leads to `Ready` from any state; `Failed` leads to `Blocked` with
+the pass's own refusal, or `RECONCILE_FAILED`; `Unfinished` (cancelled, or a richer copy of an event
+only a full refold takes in) leads to `RefoldPending` and leaves a block standing. Every outcome
+but `Projected` drops the live fold. A pass of a write that is durable already (the projection of a
+commit, an ingest) fails into `Blocked` and rebuilds the projection from the store at once, which
+lifts the block when it succeeds; its cancellation changes nothing.
+
 Lock order: `BakeLock` (in-place bakes, trash and delete for good), then the coordinator's mutex.
 Nothing that holds the coordinator's, the storage-path applicator's or the rule applier's lock takes
-`BakeLock`.
+`BakeLock`. A lifecycle change, an import's return and a commit's projection run in `NonCancellable`
+from the first effect that must not be left half done (a file moved, an object published).
 
 ### 4.4 The facet contract
 
@@ -200,6 +227,11 @@ Every `core.app` facet keeps one contract, so a caller needs no defensive wrappi
   and `AiModelCatalog.listModels` pass on what the server said, which no enum could list, and the
   UI shows it as the reason. Do not wrap it in an outcome, and do not copy it for any other facet.
 - **Cancellation is always rethrown** (`runCatchingCancellable`), never reported as a failure.
+- **What refuses writes is observable.** `LibrarySession.writeBlock` is a `StateFlow` of the
+  `WriteBlock` that refuses every write now, null while writes are taken: the writer's state
+  (section 4.3) as each pass leaves it, from a read-only open on. It is the session's rather than a
+  facet's because it is library-wide: every facet that writes is refused alike, each with a
+  `MetadataWriteBlocked` carrying the same reason.
 
 The facets stay narrow interfaces so each has a small fake. CONTEXT.md lists them.
 
@@ -299,7 +331,7 @@ the short list of these that a change must never break; this section is the comp
 
 ### 6.2 Import and duplicates
 
-Kept by `ImportService`:
+Kept by `ImportService`, which carries out what `ImportDecision` decides:
 
 - An import is a duplicate only of a **live** document whose file holds the bytes. The size and
   mtime its row stored prove that, as they do for a rescan; a drifted stat means hashing the file,
@@ -321,7 +353,8 @@ Kept by `ImportService`:
 
 ### 6.3 Trash, restore and delete for good
 
-Kept by `DocLifecycleImpl`, `TrashOps`, `JournalCoordinator.changeLifecycle` and `TrashPurge`:
+Kept by `DocLifecycleImpl` (its plans in `LifecyclePlan`), `TrashOps`, `JournalCoordinator.changeLifecycle` and
+`TrashPurge`:
 
 - `doc-trash`/`doc-restore` and `doc-delete`/`doc-undelete` are last-writer-wins pairs by HLC; an
   undelete also takes the document out of the trash.
@@ -361,7 +394,8 @@ Kept by `DocLifecycleImpl`, `TrashOps`, `JournalCoordinator.changeLifecycle` and
 
 ### 6.4 Rescan, settling and resurrection
 
-Kept by `Indexer`, `WriteSettle`, `JournalCoordinator.recordRestores` and `OcrPipeline`:
+Kept by `Indexer` (its decisions in `RescanDecision` and `FoldLifecycle`), `WriteSettle`,
+`JournalCoordinator.recordRestores` and `OcrPipeline`:
 
 - A rescan hashes a PDF only once its bytes have settled (`WriteSettle`). Files written in place
   are deferred and picked up by a follow-up rescan, whichever rescan deferred them; a relink or a
@@ -496,7 +530,7 @@ at every open (SAF skips the probe: `LibraryFileSystem.publicationMayBeLost`).
 
 ### 6.7 Fold and projection
 
-Kept by `FoldedState`, `MetadataAccumulator`, `FoldProjection`, `Indexer`:
+Kept by `FoldedState`, `MetadataAccumulator`, `FoldProjection`, `Indexer`, `PassDecision`:
 
 - The fold is OR-set tags and HLC last-writer-wins registers; `FoldConvergencePropertyTest`
   property-tests its convergence.
@@ -511,9 +545,15 @@ Kept by `FoldedState`, `MetadataAccumulator`, `FoldProjection`, `Indexer`:
   column indexes every value; a document's FTS row is reached through `fts_keys`; the fold writes
   its metadata columns and `OcrPipeline` its text, and neither rewrites the other's.
 - `LIVE_DOCUMENT` in `core.db` is the one SQL predicate for what the library shows.
-- A pass that failed or was cut short drops the fold and sets `refoldPending`, so the next reconcile
-  or ingest refolds and reprojects in full (`recoverDurableProjection`) rather than build on what it
-  had.
+- A pass that failed or was cut short drops the fold and leaves the writer `Blocked` or
+  `RefoldPending` (`WriterState`, section 4.3), so the next reconcile or ingest refolds and
+  reprojects in full (`recoverDurableProjection`) rather than build on what it had. A reconcile
+  extends the live fold only with events it purely added; a wiped projection, a mutated source or a
+  richer copy of a stored event folds again in full (`PassDecision.foldStep`).
+- A journal source is re-read only when its size or mtime moved; one applied before is then
+  recorded again with its new fingerprint, which a reconcile pays for with a full refold even when
+  only the mtime changed. A reconcile pass that holds a fold marks the projection reconciling until
+  the coordinator marks it ready again, so a pass cut short leaves the next open refolding.
 
 ### 6.8 Fields are data, not code
 
