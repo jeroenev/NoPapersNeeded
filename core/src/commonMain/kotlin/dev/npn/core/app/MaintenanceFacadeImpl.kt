@@ -41,7 +41,12 @@ internal class MaintenanceFacadeImpl(
         // does: the user says the file is that document, so its metadata follows it. The old one is
         // superseded, which only a rescan projects; relinkAndRescan runs both under the lock. Its
         // report is null when the relink stands but the rescan failed (logged); the last stays.
-        val report = coordinator.relinkAndRescan(oldDocId, newDocId, RelinkInheritanceUpgrade::pending)
+        val report =
+            coordinator.relinkAndRescan(
+                oldDocId,
+                newDocId,
+                RelinkInheritanceUpgrade.alongsideRelink(oldDocId, newDocId),
+            )
         if (report != null) rescanned(report)
     }
 

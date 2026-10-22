@@ -459,15 +459,15 @@ Kept by `BakeService`, `BakeRelink`, `DocContentFacadeImpl` and `FoldedState`:
   document's replacing the new one's and their tags joined. The relink op itself only supersedes:
   the old document is hidden (`resolveDocId`, `isCurrent`) and its bytes are a duplicate of the
   target while the library shows it (section 6.2).
-- So an edit of the old document made after the relink, by a device that had not seen it, no
-  longer reaches the target, nor does a tag removal from it; such an edit is one the device that
-  has the relink cannot see or make. A document's history is its own events, so a relink target's
-  shows the copies, not its predecessors' edits.
-- Libraries an earlier build relinked in, without copies, get them once at open
-  (`RelinkInheritanceUpgrade.kt`, the one place that still computes the inherited view, guarded by
-  the synced `relinkCopies` setting; a relink carries the upgrade too while it has not run). The
-  upgrade accepts one race: a device that upgrades before an edit to a predecessor reached it
-  copies the older value, which wins when its HLC is later.
+- So an edit of the old document made after the relink, by a device that had not seen it, does not
+  reach the target through the fold; the next open's copies bring it over when its HLC is the later
+  one. A document's history is its own events, so a relink target's shows the copies, not its
+  predecessors' edits.
+- Older builds still write relinks without copies and fold a target over its predecessors. At every
+  open, and in every relink, `RelinkInheritanceUpgrade.kt` copies onto each target whatever that
+  inherited view shows and its own does not, idempotently (nothing when they agree); a relink copies
+  the old document's inherited view, and a tag removal lists the predecessors' dots too. The copies
+  accept one race: one written before a concurrent edit reached its device wins when its HLC is later.
 - A bake changes no page, so its relink hands the original's text on: before it, the original's OCR
   versions are published again under the baked hash as this device's (`OcrPipeline.copyText`) and
   its enrichment mark is copied; after it, that text is indexed, so the baked document is

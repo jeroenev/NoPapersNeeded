@@ -69,11 +69,8 @@ internal object LibrarySettingKeys {
     /** Days the trash keeps a document, as a decimal number. */
     const val TRASH_RETENTION_DAYS = "trashRetentionDays"
 
-    /**
-     * Set once the library's relinks from before relink copies carry what their targets inherited as
-     * their own ([copyRelinkInheritanceIfNeeded]); absent until then.
-     */
-    const val RELINK_COPIES = "relinkCopies"
+    // "relinkCopies" latched a one-shot relink upgrade in builds before the upgrade ran at every
+    // open (copyRelinkInheritance); nothing reads it now, so a library holding it is unaffected.
 }
 
 /** Library-wide review workflow, synced via the journal. */

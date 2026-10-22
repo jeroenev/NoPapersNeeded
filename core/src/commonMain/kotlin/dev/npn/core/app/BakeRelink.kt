@@ -38,7 +38,12 @@ internal class BakeRelink(
             enrichment.enrichedAt(original)?.let { enrichment.markEnriched(AiEnrichedEntity(baked, it)) }
         }
         // The baked bytes stand once the relink is published, even if the disposable index fails.
-        val report = coordinator.relinkAndRescan(original, baked, RelinkInheritanceUpgrade::pending)
+        val report =
+            coordinator.relinkAndRescan(
+                original,
+                baked,
+                RelinkInheritanceUpgrade.alongsideRelink(original, baked),
+            )
         log.runLogged("Indexing the text of $baked") { ocr.reselect(baked) }
         report?.let(rescanned)
     }

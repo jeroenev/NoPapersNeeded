@@ -291,10 +291,9 @@ internal class FoldedState {
     fun effectiveFields(doc: String): Map<String, String> = fields[doc]?.let(::nonNullFields).orEmpty()
 
     /**
-     * [doc]'s own field registers, clears included, as the fold holds them. Read by the one-time
-     * upgrade of relinks written before relink copies (`RelinkInheritanceUpgrade.kt`), and by the
-     * auto-match rules, which fill only a field whose register is empty (`RuleApplier`); every
-     * other reader goes through [effectiveFields].
+     * [doc]'s own field registers, clears included, as the fold holds them. For the auto-match
+     * rules, which fill only a field whose register is empty (`RuleApplier`); every other reader
+     * goes through [effectiveFields].
      */
     internal fun fieldRegisters(doc: String): Map<String, PropVal> = fields[doc].orEmpty()
 
@@ -314,21 +313,52 @@ internal class FoldedState {
         return out
     }
 
-    /** [doc]'s own property registers, clears included: for the same upgrade only, as [fieldRegisters]. */
-    internal fun propRegisters(doc: String): Map<SystemProperty, PropVal> = props[doc].orEmpty()
+    // ---- the view older builds fold: a relink target with its predecessors' registers as one ----
+    // Never a view of this fold: only read to write copies that make it a target's own
+    // ([relinkOps], `RelinkInheritanceUpgrade.kt`), so both folds show the same.
+
+    /** [doc] and every [predecessorsOf] it: the documents older builds fold [doc]'s metadata over. */
+    internal fun chainOf(doc: String): List<String> = listOf(doc) + predecessorsOf(doc)
+
+    /** Per key, the latest field write across [chain]'s registers, a clear included; cleared keys left out. */
+    internal fun inheritedFields(chain: List<String>): Map<String, String> {
+        val winners = HashMap<String, PropVal>()
+        for (id in chain) {
+            fields[id]?.forEach { (key, register) ->
+                winners.putIfNewerHlc(key, register.hlc) { register }
+            }
+        }
+        return nonNullFields(winners)
+    }
+
+    /** The latest write of [key] across [chain]'s registers, null when that is a clear or there is none. */
+    internal fun inheritedProp(
+        chain: List<String>,
+        key: SystemProperty,
+    ): String? = chain.mapNotNull { props[it]?.get(key) }.maxByOrNull { it.hlc }?.value
+
+    /** Every live tag across [chain]: their adds are one OR-set ([tagRemovalOps] removes them as one). */
+    internal fun inheritedTags(chain: List<String>): Set<String> =
+        chain.flatMapTo(LinkedHashSet()) { effectiveTags(it) }
 
     /**
      * The ops that relink [oldDoc] onto [newDoc], for one transaction: the `relink`, and copies of
-     * [oldDoc]'s metadata onto [newDoc], which from then on are [newDoc]'s own. Every field value
-     * [oldDoc] shows ([effectiveFields]), every system property it has a value for (its storage
-     * path, review mark and OCR engine pin among them) and every live tag, each written only where
-     * [newDoc] does not hold it already. A value [oldDoc] has replaces [newDoc]'s own: the relink
-     * says [newDoc] is that document. What only [newDoc] has stays, and its tags join [oldDoc]'s.
+     * [oldDoc]'s metadata onto [newDoc], which from then on are [newDoc]'s own. Every field value,
+     * every system property with a value (its storage path, review mark and OCR engine pin among
+     * them) and every live tag [oldDoc] has, read over [oldDoc] and its predecessors as older builds
+     * fold it ([chainOf]), so a relink of a target whose own copies were never written still carries
+     * what it showed there. A value [oldDoc] has replaces [newDoc]'s own: the relink says [newDoc]
+     * is that document. What only [newDoc] has stays, and its tags join [oldDoc]'s.
+     *
+     * A copy is written where [newDoc]'s own value differs, and where the view older builds fold
+     * over the joined chain would; with the latest HLC, the copy makes both show the same.
      *
      * That holds for a relink to other bytes (a missing document relinked to the file that took
      * its place) as for a bake, whose result has no metadata of its own yet: either way the
      * document's metadata follows it onto its new bytes. A later edit of [oldDoc], which only a
-     * device that has not seen the relink can make, does not reach [newDoc].
+     * device that has not seen the relink can make, does not reach [newDoc] through this fold; the
+     * next open's `RelinkInheritanceUpgrade` copies it when its HLC is the later one, as older
+     * builds show it.
      */
     fun relinkOps(
         oldDoc: String,
@@ -336,16 +366,24 @@ internal class FoldedState {
     ): List<PendingOp> =
         buildList {
             add(PendingOp.relink(oldDoc, newDoc))
+            val oldChain = chainOf(oldDoc)
+            val newChain = chainOf(newDoc)
+            val joined = (newChain + oldChain).distinct()
             val ownFields = effectiveFields(newDoc)
-            for ((key, value) in effectiveFields(oldDoc)) {
-                if (ownFields[key] != value) add(PendingOp.fieldSet(newDoc, key, value))
+            val wanted = inheritedFields(newChain) + inheritedFields(oldChain)
+            val joinedFields = inheritedFields(joined)
+            for (key in (wanted.keys + ownFields.keys + joinedFields.keys).sorted()) {
+                val value = wanted[key]
+                if (ownFields[key] != value || joinedFields[key] != value) add(PendingOp.fieldSet(newDoc, key, value))
             }
             for (key in SystemProperty.entries) {
-                val value = effectiveProp(oldDoc, key) ?: continue
-                if (effectiveProp(newDoc, key) != value) add(PendingOp.propSet(newDoc, key, value))
+                val value = inheritedProp(oldChain, key) ?: inheritedProp(newChain, key)
+                if (effectiveProp(newDoc, key) != value || inheritedProp(joined, key) != value) {
+                    add(PendingOp.propSet(newDoc, key, value))
+                }
             }
             val ownTags = effectiveTags(newDoc)
-            for (tag in effectiveTags(oldDoc)) if (tag !in ownTags) add(PendingOp.tagAdd(newDoc, tag))
+            for (tag in inheritedTags(joined)) if (tag !in ownTags) add(PendingOp.tagAdd(newDoc, tag))
         }
 
     private fun nonNullFields(byKey: Map<String, PropVal>): Map<String, String> {
@@ -436,7 +474,8 @@ internal class FoldedState {
     /**
      * Every older id whose relink chain [resolveDocId]s onto [doc], in id order: a->b->c gives c
      * both a and b. Empty for a document nothing resolves onto, which includes every superseded one.
-     * No value of [doc]'s is read from them; the projection and the relink upgrade use the chain.
+     * No view of [doc]'s reads them; the projection, and the copies and tag removals that keep older
+     * builds' view of [doc] equal to its own ([chainOf]), use the chain.
      */
     fun predecessorsOf(doc: String): List<String> =
         (predecessorsCache ?: reversedRelinks().also { predecessorsCache = it })[doc].orEmpty()
@@ -497,8 +536,9 @@ internal class FoldedState {
 
     /**
      * Build the OR-set `tag-remove` [PendingOp]s for [tag] over [docIds] from THIS state's live
-     * dots: for each doc, list the dots currently observed for `(doc, tag)` and emit a remove
-     * carrying them, skipping docs that do not hold the tag (empty dots).
+     * dots: for each doc, list the dots currently observed for `(doc, tag)` and for its
+     * [predecessorsOf] (older builds show a relink target their adds too), each dot once, and emit a
+     * remove carrying them, skipping docs that do not hold the tag (empty dots).
      *
      * Outside `core` this is the ONLY way to construct a `tag-remove` op ([PendingOp.tagRemove], the
      * [PendingOp] constructor and [JournalOp.TagRemove]'s are `internal`), so a correct removal can
@@ -509,11 +549,13 @@ internal class FoldedState {
     fun tagRemovalOps(
         docIds: Collection<String>,
         tag: String,
-    ): List<PendingOp> =
-        docIds.distinct().mapNotNull { docId ->
-            val dots = liveTagDots(docId, tag)
+    ): List<PendingOp> {
+        val listed = HashSet<Dot>()
+        return docIds.distinct().mapNotNull { docId ->
+            val dots = chainOf(docId).flatMap { liveTagDots(it, tag) }.filter(listed::add)
             if (dots.isEmpty()) null else PendingOp.tagRemove(docId, tag, dots)
         }
+    }
 
     /**
      * The ops that bring [doc] back once its file is in the library again at [relPath]: a

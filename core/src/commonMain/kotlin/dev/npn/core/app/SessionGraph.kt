@@ -318,12 +318,12 @@ internal class SessionGraph(
 
     /**
      * What opening does to the library's data once everything is wired, before the session starts:
-     * saved views an older index kept move into the journal and relinks an earlier build wrote get
+     * saved views an older index kept move into the journal and relinks an older build wrote get
      * their copies (each best effort), and the rules' cache catches up with the journal's list.
      */
     suspend fun prepare() {
         deps.upgradeAtOpen("Moving saved views into the journal") { savedViews.adoptIndexViews(db) }
-        deps.upgradeAtOpen("Copying relinked documents' metadata") { coordinator.copyRelinkInheritanceIfNeeded() }
+        deps.upgradeAtOpen("Copying relinked documents' metadata") { coordinator.copyRelinkInheritance() }
         ruleSource.mirror()
     }
 }

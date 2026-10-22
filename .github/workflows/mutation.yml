@@ -40,11 +40,13 @@ jobs:
         with:
           cache-provider: basic
 
-      # The runner has four cores; the task's default of half of them would leave two idle.
+      # The hosted runner has two cores and about 7 GB: one test process per core, each with up to
+      # 768 MB of heap beside Gradle's. Cut off before the job's limit, so the report still uploads.
       - name: Mutation tests
+        timeout-minutes: 165
         env:
           PACKAGES: ${{ inputs.packages }}
-        run: ./gradlew :core:mutationTest -Pnpn.mutation.threads=4 ${PACKAGES:+"-Pnpn.mutation.packages=$PACKAGES"}
+        run: ./gradlew :core:mutationTest -Pnpn.mutation.threads=2 ${PACKAGES:+"-Pnpn.mutation.packages=$PACKAGES"}
 
       - name: Upload the mutation report
         if: success() || failure()

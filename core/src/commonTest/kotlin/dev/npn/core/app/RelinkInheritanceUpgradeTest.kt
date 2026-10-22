@@ -13,7 +13,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 /**
- * The one-time upgrade of relinks an earlier build wrote without copies: each target gets, as its
+ * The recurring upgrade of relinks an older build wrote without copies: each target gets, as its
  * own, what that build's fold showed it by inheritance. Per field or property the latest write
  * across the target and its predecessors wins, a clear included, and their tags are one OR-set.
  */

@@ -119,13 +119,78 @@ class RelinkCopiesTest {
         assertEquals(mapOf(FieldKeys.CORRESPONDENT to "Aquafin"), state.effectiveFields(b))
         assertNull(state.effectiveProp(b, SystemProperty.OCR_ENGINE))
         assertEquals(emptySet(), state.effectiveTags(b))
-        // The removal named b's own dots only: the superseded original keeps its own tag.
-        assertEquals(setOf("filed"), state.effectiveTags(a))
     }
 
     /**
-     * The accepted change: an edit of the original that a device makes before the relink reaches it,
-     * later than the relink, no longer reaches the target, nor does a tag removal from the original.
+     * Older builds show a relink target its predecessors' live tag adds too, so a removal from the
+     * target lists their dots with its own: no build shows the tag after it.
+     */
+    @Test
+    fun aTagRemovalFromTheTargetListsItsPredecessorsDots() {
+        val state = filed().apply { commit(20, relinkOps(a, b)) }
+
+        val removal = state.tagRemovalOps(listOf(b), "filed").single()
+
+        assertEquals(b, removal.doc)
+        val listed = (removal.op as JournalOp.TagRemove).dots
+        assertEquals(2, listed.size)
+        state.commit(50, listOf(removal))
+        assertEquals(emptySet(), state.effectiveTags(b))
+        assertEquals(emptySet(), state.effectiveTags(a))
+        assertEquals(emptySet(), state.inheritedTags(state.chainOf(b)))
+    }
+
+    /**
+     * A target an older build relinked without copies, relinked again here before any open copied
+     * its inherited metadata: the new relink carries what the older builds showed it.
+     */
+    @Test
+    fun aRelinkOfATargetWithoutCopiesCarriesWhatItInherited() {
+        val c = "c".repeat(64)
+        val state = filed().apply { commit(20, listOf(PendingOp.relink(a, b))) }
+        state.commit(21, listOf(PendingOp.fieldSet(b, FieldKeys.NOTES, "Baked")))
+
+        state.commit(30, state.relinkOps(b, c))
+
+        assertEquals(
+            mapOf(
+                FieldKeys.CORRESPONDENT to "Aquafin",
+                FieldKeys.NOTES to "Baked",
+                FieldKeys.TITLE to "Water bill",
+            ),
+            state.effectiveFields(c),
+        )
+        assertEquals("true", state.effectiveProp(c, SystemProperty.REVIEWED))
+        assertEquals("tesseract", state.effectiveProp(c, SystemProperty.OCR_ENGINE))
+        assertEquals("bills/water.pdf", state.intendedPath(c))
+        assertEquals(setOf("filed"), state.effectiveTags(c))
+        // Older builds fold c over a and b: they show it the same.
+        val chain = state.chainOf(c)
+        assertEquals(state.effectiveFields(c), state.inheritedFields(chain))
+        assertEquals(state.effectiveTags(c), state.inheritedTags(chain))
+        for (key in SystemProperty.entries) assertEquals(state.effectiveProp(c, key), state.inheritedProp(chain, key))
+    }
+
+    /**
+     * A value only the new document has stays, also where a clear on the old one is the later write,
+     * which older builds would fold over it: the copy restates it with the latest HLC.
+     */
+    @Test
+    fun theNewDocumentsOwnValueOutlastsAnOlderBuildsViewOfALaterClear() {
+        val state = JournalFolder.fold(listOf(at(10, b, JournalOp.FieldSet(FieldKeys.NOTES, "Mine"))))
+        state.commit(20, listOf(PendingOp.fieldSet(a, FieldKeys.NOTES, null)))
+
+        val ops = state.relinkOps(a, b)
+
+        assertEquals(listOf(PendingOp.relink(a, b), PendingOp.fieldSet(b, FieldKeys.NOTES, "Mine")), ops)
+        state.commit(30, ops)
+        assertEquals(mapOf(FieldKeys.NOTES to "Mine"), state.inheritedFields(state.chainOf(b)))
+    }
+
+    /**
+     * An edit of the original that a device makes before the relink reaches it, later than the
+     * relink, does not reach the target through the fold, nor does a tag removal from the original:
+     * only the next open's copies (`RelinkInheritanceUpgrade`) bring the later edit over.
      */
     @Test
     fun aLaterEditOfThePredecessorDoesNotReachTheTarget() {

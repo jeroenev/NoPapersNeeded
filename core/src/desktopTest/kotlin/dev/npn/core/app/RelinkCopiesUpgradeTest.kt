@@ -22,9 +22,9 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 
 /**
- * A library an earlier build relinked in, with no copies: its relink target showed its original's
- * metadata by inheritance. The first open with this build writes that metadata onto the target as
- * its own, once.
+ * A library an older build relinked in, with no copies: its relink target showed its original's
+ * metadata by inheritance. Every open with this build writes what the target lacks of that onto it
+ * as its own, and nothing once it has it all.
  */
 class RelinkCopiesUpgradeTest {
     private val dirs = LibraryDirs()
@@ -70,12 +70,9 @@ class RelinkCopiesUpgradeTest {
                 row.reviewed shouldBe true
                 row.relPath shouldBe "bill.pdf"
                 deps.db.tagDao().tagsForDocument(baked) shouldContainExactlyInAnyOrder listOf("filed")
-                val settings = fs.journalObjectEvents().mapNotNull { it.op as? JournalOp.SettingSet }
-                settings.filter { it.key == LibrarySettingKeys.RELINK_COPIES }.map { it.value } shouldBe
-                    listOf(RelinkInheritanceUpgrade.DONE)
             }
 
-            // Once: the next open, and another device's first, write nothing more.
+            // Idempotent: the next open, and another device's first, write nothing more.
             val objects = fs.journalObjects().size
             openSession(backgroundScope, library, data).use { session, _ -> session.rescan() }
             openSession(backgroundScope, library, File(data, "other-device")).use { session, deps ->
@@ -87,5 +84,45 @@ class RelinkCopiesUpgradeTest {
                     .title shouldBe "Water bill"
             }
             fs.journalObjects().size shouldBe objects
+        }
+
+    /**
+     * A device still on an older build relinks after this one already copied everything: the next
+     * open copies that relink too, since the upgrade recurs rather than latching once.
+     */
+    @Test
+    fun aRelinkWithoutCopiesAfterAnEarlierUpgradeIsCopiedAtTheNextOpen() =
+        runTest {
+            Files.write(library.resolve("bill.pdf"), PdfFixtures.embeddedTextPdf("baked"))
+            val fs = JvmLibraryFileSystem(library, PathExternalIo)
+            val baked = fs.sha256("bill.pdf")
+            val original = "a".repeat(64)
+            openSession(backgroundScope, library, data).use { session, _ -> session.rescan() }
+
+            val olderBuild =
+                ContentAddressedJournalWriter(fs, "older-build", HlcWatermarkAllocator(MutableClock(1_000L)))
+            olderBuild.commit(
+                listOf(
+                    PendingOp.fieldSet(original, FieldKeys.TITLE, "Water bill"),
+                    PendingOp.tagAdd(original, "filed"),
+                    PendingOp.propSet(original, SystemProperty.STORAGE_PATH, "bill.pdf"),
+                ),
+            )
+            olderBuild.commit(listOf(PendingOp.relink(original, baked)))
+
+            openSession(backgroundScope, library, data).use { session, deps ->
+                session.rescan()
+                val row =
+                    deps.db
+                        .documentDao()
+                        .getByDocId(baked)
+                        .shouldNotBeNull()
+                row.title shouldBe "Water bill"
+                row.relPath shouldBe "bill.pdf"
+                deps.db.tagDao().tagsForDocument(baked) shouldContainExactlyInAnyOrder listOf("filed")
+            }
+            val copied = fs.journalObjectEvents().filter { it.doc == baked }.map { it.op }
+            copied.filterIsInstance<JournalOp.FieldSet>().map { it.key to it.value } shouldBe
+                listOf(FieldKeys.TITLE to "Water bill")
         }
 }

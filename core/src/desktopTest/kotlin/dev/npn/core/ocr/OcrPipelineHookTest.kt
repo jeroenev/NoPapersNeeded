@@ -2,6 +2,8 @@ package dev.npn.core.ocr
 
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.QueueState
+import dev.npn.core.index.MetadataWriteBlocked
+import dev.npn.core.index.WriteBlock
 import dev.npn.core.index.requireByDocId
 import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.work.QueueDrainer
@@ -79,6 +81,35 @@ class OcrPipelineHookTest {
 
             indexed shouldContainExactly listOf(docId)
             produced shouldContainExactly listOf(docId)
+        }
+
+    /**
+     * Rules refused because journal writes were blocked are owed: the next text whose rules go
+     * through runs them again for the refused document, from its stored text, once.
+     */
+    @Test
+    fun rulesRefusedWhileWritesAreBlockedRunAgainOnceWritesGoThrough() =
+        runTest {
+            val refused = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
+            val next = rig.stageDoc("other.pdf", PdfFixtures.imageOnlyPdf(pages = 2))
+            var blocked = true
+            val ruled = mutableListOf<Pair<String, Boolean>>()
+            val pipeline =
+                rig.pipeline(
+                    "devA",
+                    FakeOcrEngine(isAvailable = true, name = "mlkit"),
+                    onTextProduced = { id, text ->
+                        if (blocked) throw MetadataWriteBlocked(WriteBlock.JOURNAL_DAMAGED, "blocked")
+                        ruled += id to text.isNotBlank()
+                    },
+                )
+
+            pipeline.processDoc(refused)
+            ruled.shouldBeEmpty()
+            blocked = false
+            pipeline.processDoc(next)
+
+            ruled shouldContainExactly listOf(next to true, refused to true)
         }
 
     /**
