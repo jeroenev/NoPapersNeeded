@@ -168,29 +168,7 @@ internal fun diff(
     /** Whether both paths hold the document's bytes: then either is a fair pick of its path. */
     bothHold: (docId: String, String, String) -> Boolean,
 ): List<String> {
-    val out = ArrayList<String>()
-    (live.live.keys + rebuilt.live.keys).toSortedSet().forEach { id ->
-        val a = live.live[id]
-        val b = rebuilt.live[id]
-        when {
-            // Its bytes back at its path within the restore settle window: the rebuild's rescan shows it.
-            a == null && live.hidden[id] == Hidden.TRASHED && trashedOnlyLive(id, b!!.relPath) -> {}
-
-            a == null -> {
-                out +=
-                    "doc ${id.take(ID)} is live only in the rebuild (live index: ${live.hidden[id] ?: "no row"}): $b"
-            }
-
-            b == null -> {
-                out +=
-                    "doc ${id.take(ID)} is live only in the live index (rebuild: ${rebuilt.hidden[id] ?: "no row"}): $a"
-            }
-
-            a.copy(relPath = b.relPath) != b || (a.relPath != b.relPath && !bothHold(id, a.relPath, b.relPath)) -> {
-                out += "doc ${id.take(ID)} differs:\n    live:    $a\n    rebuilt: $b"
-            }
-        }
-    }
+    val out = ArrayList(liveDifferences(live, rebuilt, trashedOnlyLive, bothHold))
     (live.hidden.keys + rebuilt.hidden.keys).toSortedSet().forEach { id ->
         val a = live.hidden[id]
         val b = rebuilt.hidden[id]
@@ -233,3 +211,36 @@ internal fun diff(
 }
 
 private const val ID = 10
+
+/** [diff] of the documents [live] or [rebuilt] shows. */
+private fun liveDifferences(
+    live: LibraryView,
+    rebuilt: LibraryView,
+    trashedOnlyLive: (docId: String, path: String) -> Boolean,
+    bothHold: (docId: String, String, String) -> Boolean,
+): List<String> {
+    val out = ArrayList<String>()
+    (live.live.keys + rebuilt.live.keys).toSortedSet().forEach { id ->
+        val a = live.live[id]
+        val b = rebuilt.live[id]
+        when {
+            // Its bytes back at its path within the restore settle window: the rebuild's rescan shows it.
+            a == null && live.hidden[id] == Hidden.TRASHED && trashedOnlyLive(id, b!!.relPath) -> {}
+
+            a == null -> {
+                out +=
+                    "doc ${id.take(ID)} is live only in the rebuild (live index: ${live.hidden[id] ?: "no row"}): $b"
+            }
+
+            b == null -> {
+                out +=
+                    "doc ${id.take(ID)} is live only in the live index (rebuild: ${rebuilt.hidden[id] ?: "no row"}): $a"
+            }
+
+            a.copy(relPath = b.relPath) != b || (a.relPath != b.relPath && !bothHold(id, a.relPath, b.relPath)) -> {
+                out += "doc ${id.take(ID)} differs:\n    live:    $a\n    rebuilt: $b"
+            }
+        }
+    }
+    return out
+}
