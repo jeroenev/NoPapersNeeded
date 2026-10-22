@@ -44,22 +44,12 @@ internal data class CanonicalJournalEvent(
 internal object EventDecoderRegistry {
     val supportedVersions: Set<Int> = setOf(JournalEventVersions.V1)
 
-    fun decode(
-        line: String,
-        allowMissingV1: Boolean,
-    ): CanonicalJournalEvent {
+    fun decode(line: String): CanonicalJournalEvent {
         rejectDuplicateObjectKeys(line)
         val raw = JournalCodec.json.parseToJsonElement(line).jsonObject
         validateEnvelopeTypes(raw)
-        val versionElement = raw["v"]
-        val version = eventVersion(versionElement, allowMissingV1)
-        val versioned =
-            if (versionElement == null) {
-                JsonObject(linkedMapOf<String, JsonElement>("v" to JsonPrimitive(version)).apply { putAll(raw) })
-            } else {
-                raw
-            }
-        val event = JournalCodec.json.decodeFromJsonElement(JournalEventSerializer, versioned)
+        requireEventVersion(raw["v"])
+        val event = JournalCodec.json.decodeFromJsonElement(JournalEventSerializer, raw)
         validateEvent(event)
         val normalized = JournalCodec.json.encodeToJsonElement(JournalEventSerializer, event)
         return CanonicalJournalEvent(event, canonicalJson(normalized))
@@ -142,26 +132,12 @@ internal object EventDecoderRegistry {
         (event.op as? JournalOp.TagRemove)?.dots?.forEach { require(it.seq > 0L) { "Invalid removed dot" } }
     }
 
-    private fun eventVersion(
-        versionElement: JsonElement?,
-        allowMissingV1: Boolean,
-    ): Int {
+    /** Every stored event names its version, and it must be one this build reads. */
+    private fun requireEventVersion(versionElement: JsonElement?) {
         val version =
-            when {
-                versionElement != null -> {
-                    versionElement.jsonPrimitive.content.toIntOrNull()
-                        ?: throw IllegalArgumentException("Event version must be an integer")
-                }
-
-                allowMissingV1 -> {
-                    JournalEventVersions.V1
-                }
-
-                else -> {
-                    throw IllegalArgumentException("Event version is required")
-                }
-            }
-        return requireSupportedVersion(version)
+            requireNotNull(versionElement) { "Event version is required" }.jsonPrimitive.content.toIntOrNull()
+                ?: throw IllegalArgumentException("Event version must be an integer")
+        requireSupportedVersion(version)
     }
 
     private fun requireSupportedVersion(version: Int): Int {

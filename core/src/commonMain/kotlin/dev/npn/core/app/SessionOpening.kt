@@ -81,11 +81,8 @@ private suspend fun wire(
     return LibrarySessionImpl(deps, graph)
 }
 
-/**
- * The `kv` keys an index from before [DeviceDatabase] kept for this device. The v1 writer's
- * bookkeeping moves too, so the index sheds it; [DeviceIdentity] then drops it.
- */
-private val DEVICE_KEYS = listOf(DeviceIdentity.KEY_DEVICE_ID) + DeviceIdentity.LEGACY_JOURNAL_KEYS
+/** The `kv` keys an index from before [DeviceDatabase] kept for this device. */
+private val DEVICE_KEYS = listOf(DeviceIdentity.KEY_DEVICE_ID)
 
 /** Move what an index from before [DeviceDatabase] kept for this device into the device database. */
 private suspend fun moveDeviceState(deps: SessionDeps) =
@@ -93,7 +90,7 @@ private suspend fun moveDeviceState(deps: SessionDeps) =
 
 /**
  * The journal writer: storage-v2 content-addressed objects are the only format this build writes
- * (v1 segments are still read). A filesystem that cannot publish without replacement throws
+ * or reads, beside the snapshots earlier builds wrote. A filesystem that cannot publish without replacement throws
  * [VerifiedPublicationUnavailableException] at its first publication, which [DeviceIdentity] makes
  * before anything else is written, rather than be written in a weaker format.
  */

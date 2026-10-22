@@ -1,5 +1,7 @@
 package dev.npn.core.index
 
+import androidx.room3.executeSQL
+import androidx.room3.useWriterConnection
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.journalObjects
@@ -52,6 +54,48 @@ class MetadataAccumulatorTest {
             rig.accumulator.markReady(state.maxHlc)
             olderProjectionVersion()
             rig.accumulator.reconcileOnOpen().shouldBeInstanceOf<OpenReconciliation.Refolded>()
+        }
+
+    /**
+     * An index from before this projection version can hold a source row of a kind this build no
+     * longer knows (a storage-v1 segment's, stored as 1). The version check clears the source rows
+     * before any is read, so the pass rebuilds from the journal rather than fail on that row.
+     */
+    @Test
+    fun aSourceRowOfAKindNoLongerKnownIsShedByTheRebuild() =
+        runTest {
+            val (doc, state) = oneTaggedDocument()
+            rig.accumulator.markReady(state.maxHlc)
+            olderProjectionVersion()
+            rig.db.useWriterConnection { connection ->
+                connection.executeSQL(
+                    "INSERT INTO metadata_sources (path, storageVersion, fingerprint, contentHash, status) " +
+                        "VALUES ('.npn/journal/old-device/0000000000000001.jsonl', 1, '1,1:x', NULL, 'applied')",
+                )
+            }
+
+            val rebuilt = rig.accumulator.reconcileOnOpen().shouldBeInstanceOf<OpenReconciliation.Refolded>()
+
+            rebuilt.state.effectiveTags(doc) shouldContainExactly setOf("kept")
+            dao.allSources().map { it.path } shouldContainExactly rig.fs.journalObjects().map { it.relPath }
+        }
+
+    /** A storage-v1 segment, compacted or not, is no source this build reads: it blocks writes, naming it. */
+    @Test
+    fun aStorageV1SegmentIsJournalDamage() =
+        runTest {
+            val (_, state) = oneTaggedDocument()
+            for (name in listOf("0000000000000001.jsonl", "0000000000000001-2.snap.jsonl")) {
+                val segment = ".npn/journal/old-device/$name"
+                rig.fs.writeBytesOnce(segment, "{}\n".encodeToByteArray())
+
+                val blocked = assertFailsWith<MetadataWriteBlocked> { rig.accumulator.reconcile(state) }
+
+                blocked.block shouldBe WriteBlock.JOURNAL_DAMAGED
+                blocked.message shouldBe "Storage-v1 journal segment is no longer read: $segment"
+                rig.fs.delete(segment)
+            }
+            rig.accumulator.reconcile(state).sourcesRead shouldBe 0
         }
 
     /**

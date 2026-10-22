@@ -55,7 +55,6 @@ internal class DeviceIdentity(
 
     /** The device id this installation uses for the library, minting a fresh one when it must. */
     suspend fun resolve(): String {
-        forgetLegacyJournalState()
         val stored = kv.get(KEY_DEVICE_ID)
         val owner = kv.get(KEY_INSTALLATION)
         val id =
@@ -147,14 +146,6 @@ internal class DeviceIdentity(
 
     private fun nonce(): String = ids.next()
 
-    /**
-     * Drop the bookkeeping a build that still wrote v1 segments kept about them (the last sequence
-     * number and the segment names it wrote). Nothing reads it any more; a no-op once it is gone.
-     */
-    private suspend fun forgetLegacyJournalState() {
-        LEGACY_JOURNAL_KEYS.forEach { kv.delete(it) }
-    }
-
     companion object {
         const val KEY_DEVICE_ID = "device.id"
 
@@ -165,9 +156,6 @@ internal class DeviceIdentity(
 
         /** What [probePublication] publishes; any bytes do. */
         private val PROBE_BYTES = "npn publication probe\n".encodeToByteArray()
-
-        /** What a build that still wrote v1 segments kept about them; [resolve] drops it. */
-        val LEGACY_JOURNAL_KEYS = listOf("journal.lastSeq", "journal.knownOwnSegments")
 
         private val installationPattern = Regex("^[A-Za-z0-9_-]+$")
 

@@ -7,9 +7,6 @@ import dev.npn.core.fs.SHA256_HEX
 
 /** What a file under [JOURNAL_DIR] is, as [JournalPaths.classify] tells it from its path alone. */
 internal sealed interface JournalPath {
-    /** A v1 segment, `.npn/journal/<deviceId>/<seq>.jsonl`: still read, never written. */
-    data object Legacy : JournalPath
-
     data class ObjectV2(
         val expectedHash: String,
     ) : JournalPath
@@ -55,7 +52,6 @@ internal object JournalPaths {
 
     private val objectNamePattern = Regex("^([0-9a-f]{64})\\.jsonl$")
     private val embeddedHashPattern = Regex("(?:^|[^0-9a-f])([0-9a-f]{64})(?=[^0-9a-f]|$)")
-    private val legacySegmentPattern = Regex("^[0-9]+(?:-[0-9]+\\.snap)?\\.jsonl$")
 
     /** `.npn/journal/objects-v2-<xx>/<hash>.jsonl`, or the snapshot bucket's when [snapshot]. */
     fun objectPath(
@@ -77,9 +73,9 @@ internal object JournalPaths {
         NpnPaths.parentDir(objectPath(hash, snapshot)) + "/" + Temp.journalStagingName(hash, installationId, nonce)
 
     /**
-     * Classify direct journal source files without letting object buckets masquerade as devices. A
-     * path the library cannot address ([NpnPaths.isSafe]), as a listing or the watcher may report
-     * one, is [JournalPath.Unknown] rather than a throw.
+     * Classify a direct journal source file by the bucket it is in and its name. A path the library
+     * cannot address ([NpnPaths.isSafe]), as a listing or the watcher may report one, is
+     * [JournalPath.Unknown] rather than a throw.
      */
     fun classify(relPath: String): JournalPath {
         if (!NpnPaths.isSafe(relPath)) return JournalPath.Unknown
@@ -99,7 +95,6 @@ internal object JournalPaths {
         return when {
             snapshotBucket != null -> classifyBucketFile(snapshotBucket, name, SNAPSHOT_V2, snapshot = true)
             bucket != null -> classifyBucketFile(bucket, name, STORAGE_V2, snapshot = false)
-            dir.isNotEmpty() && legacySegmentPattern.matches(name) -> JournalPath.Legacy
             else -> JournalPath.Unknown
         }
     }

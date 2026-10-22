@@ -9,7 +9,7 @@ internal fun JournalCodec.decodeLineOrNull(line: String): JournalEvent? {
     val trimmed = line.trim()
     if (trimmed.isEmpty()) return null
     return try {
-        EventDecoderRegistry.decode(trimmed, allowMissingV1 = true).event
+        EventDecoderRegistry.decode(trimmed).event
     } catch (_: Exception) {
         null
     }

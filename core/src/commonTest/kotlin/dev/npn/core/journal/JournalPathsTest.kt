@@ -5,14 +5,15 @@ import kotlin.test.Test
 
 class JournalPathsTest {
     @Test
-    fun classifiesVersionedJournalPathsWithoutTreatingObjectsAsLegacy() {
+    fun classifiesVersionedJournalPaths() {
         val hash = "ab" + "0".repeat(62)
         val canonical = JournalPaths.objectPath(hash)
         canonical shouldBe ".npn/journal/objects-v2-ab/$hash.jsonl"
         JournalPaths.classify(canonical) shouldBe JournalPath.ObjectV2(hash)
         JournalPaths.classify(".npn/journal/objects-v3-ab/$hash.jsonl") shouldBe
             JournalPath.UnsupportedObjectStore(3)
-        JournalPaths.classify(".npn/journal/dev1/0001.jsonl") shouldBe JournalPath.Legacy
+        // A storage-v1 segment is no source this build reads; the reconcile refuses the journal over it.
+        JournalPaths.classify(".npn/journal/dev1/0001.jsonl") shouldBe JournalPath.Unknown
     }
 
     @Test

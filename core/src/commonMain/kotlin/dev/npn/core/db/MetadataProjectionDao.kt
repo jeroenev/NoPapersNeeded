@@ -261,9 +261,9 @@ interface MetadataProjectionDao {
 
     /**
      * Point the source at [path] to [events], and drop the events it referenced before that no
-     * source references any more. Only a source read again with other contents (a grown legacy
-     * segment, a re-recorded snapshot) has such events, so the cleanup looks at those alone and a
-     * commit never walks the event table.
+     * source references any more. Only a source read again with other contents has such events, which
+     * content-addressed sources rule out, so the cleanup looks at those alone and a commit never walks
+     * the event table.
      */
     @Transaction
     suspend fun replaceSourceEvents(

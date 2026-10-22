@@ -6,11 +6,6 @@ import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.index.MetadataWriteBlocked
 import dev.npn.core.index.WriteBlock
 import dev.npn.core.index.requireByDocId
-import dev.npn.core.journal.Hlc
-import dev.npn.core.journal.JournalCodec
-import dev.npn.core.journal.JournalEvent
-import dev.npn.core.journal.JournalEventVersions
-import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.JournalSourceRead
 import dev.npn.core.journal.StorageV2Reader
@@ -19,18 +14,16 @@ import dev.npn.core.journal.journalObjects
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
-import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.first
-import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 
 /**
- * Metadata written on one device reaches another through the journal objects, snapshots and legacy
- * segments it reads, and a journal it cannot read blocks writes.
+ * Metadata written on one device reaches another through the journal objects and snapshots it reads,
+ * and a journal it cannot read blocks writes.
  */
 class MetadataReplicationTest {
     @Test
@@ -45,10 +38,10 @@ class MetadataReplicationTest {
 
             // Device 2 opens the SAME library (separate cache, distinct deviceId).
             val (session2, _) = rig.secondSession(backgroundScope)
-            session2.rescan() // folds device 1's segment
+            session2.rescan() // folds device 1's object
             session2.meta.addTag(listOf(id), "fromB")
 
-            // Device 1 rescans, picking up device 2's segment -> both tags present.
+            // Device 1 rescans, picking up device 2's object -> both tags present.
             rig.session.rescan()
             val docs =
                 rig.session.documents
@@ -221,60 +214,5 @@ class MetadataReplicationTest {
                     .observeDocuments(LibraryFilter(), LibrarySort())
                     .first()
             tagsOf(items, id) shouldContain "kept"
-        }
-
-    /**
-     * Legacy v1 segments remain readable: a REMOTE v1 device's segment is written directly (v1 is
-     * no longer produced locally), applied via rescan, then rewritten with fewer events. The
-     * tolerant v1 reader + shrink handling must drop events the rewritten source no longer contains.
-     */
-    @Test
-    fun rewrittenLegacySourceDropsEventsItNoLongerContains() =
-        appSessionTest { rig ->
-            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
-            rig.session.rescan()
-            val id = rig.docId("a.pdf")
-
-            // A remote v1 device drops a legacy segment containing a tag we will later rewrite away.
-            val remoteDevice = "remote-v1-device"
-            val legacyPath = "${NpnPaths.JOURNAL_DIR}/$remoteDevice/0001.jsonl"
-            val original =
-                JournalEvent(
-                    version = JournalEventVersions.V1,
-                    seq = 1,
-                    hlc = Hlc(90_000L, 0, remoteDevice),
-                    dev = remoteDevice,
-                    doc = id,
-                    op = JournalOp.TagAdd("removed-by-rewrite"),
-                )
-            rig.fs.writeBytesOnce(legacyPath, JournalCodec.encodeLines(listOf(original)).encodeToByteArray())
-            rig.session.rescan()
-            var items =
-                rig.session.documents
-                    .observeDocuments(LibraryFilter(), LibrarySort())
-                    .first()
-            tagsOf(items, id) shouldContain "removed-by-rewrite"
-
-            // The remote device rewrites the same segment file with a different (larger) content.
-            val replacement =
-                JournalEvent(
-                    version = JournalEventVersions.V1,
-                    seq = 1,
-                    hlc = Hlc(99_000L, 0, "replacement-device"),
-                    dev = "replacement-device",
-                    doc = id,
-                    op = JournalOp.TagAdd("replacement"),
-                )
-            val bytes = (JournalCodec.encodeLines(listOf(replacement)) + "\n".repeat(256)).encodeToByteArray()
-            Files.write(rig.libRoot.resolve(legacyPath), bytes)
-
-            rig.session.rescan()
-
-            items =
-                rig.session.documents
-                    .observeDocuments(LibraryFilter(), LibrarySort())
-                    .first()
-            tagsOf(items, id) shouldNotContain "removed-by-rewrite"
-            tagsOf(items, id) shouldContain "replacement"
         }
 }

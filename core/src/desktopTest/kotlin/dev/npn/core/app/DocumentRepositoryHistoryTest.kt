@@ -48,7 +48,7 @@ class DocumentRepositoryHistoryTest {
             val source =
                 MetadataSourceEntity(
                     "src",
-                    SourceKind.LEGACY_SEGMENT,
+                    SourceKind.SNAPSHOT,
                     SourceFingerprint("fp"),
                     null,
                     SourceStatus.APPLIED,
@@ -87,7 +87,7 @@ class DocumentRepositoryHistoryTest {
             dao.ingest(
                 MetadataSourceEntity(
                     "src",
-                    SourceKind.LEGACY_SEGMENT,
+                    SourceKind.SNAPSHOT,
                     SourceFingerprint("fp"),
                     null,
                     SourceStatus.APPLIED,

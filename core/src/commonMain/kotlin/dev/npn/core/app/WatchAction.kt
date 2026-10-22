@@ -49,7 +49,7 @@ internal sealed interface WatchAction {
 
     /**
      * A journal change the single-object path cannot take: a snapshot (it may supersede objects
-     * already applied, and carries many writers' events), a legacy segment, or an unknown file.
+     * already applied, and carries many writers' events), or an unknown file.
      * Refolds the journal, then re-selects OCR.
      */
     data object ReconcileJournal : Settled {
@@ -87,7 +87,6 @@ internal fun watchAction(
         }
 
         is JournalPath.SnapshotV2,
-        JournalPath.Legacy,
         is JournalPath.UnsupportedObjectStore,
         -> {
             WatchAction.ReconcileJournal

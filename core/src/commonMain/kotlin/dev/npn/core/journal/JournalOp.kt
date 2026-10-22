@@ -16,9 +16,9 @@ internal data class Dot(
  *
  * An op string this build does not know, or a known op whose payload it cannot read (a system
  * property or field type newer than it), decodes as [Unknown] rather than failing the line. No
- * reader skips one: an object, snapshot or legacy segment holding it is refused as unsupported, so
- * that build blocks writes and stops opening the library until it updates. A new op therefore ships
- * in a build that reads it before any build writes it.
+ * reader skips one: an object or snapshot holding it is refused as unsupported, so that build blocks
+ * writes and stops opening the library until it updates. A new op therefore ships in a build that
+ * reads it before any build writes it.
  */
 internal sealed interface JournalOp {
     /** The `op` wire string for this operation. */

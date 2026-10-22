@@ -87,7 +87,6 @@ class JournalCoordinatorWritesTest {
 
             val journal = rig.fs.listAllUnder(NpnPaths.JOURNAL_DIR).filter { !it.isDirectory }
             journal.filter { JournalPaths.classify(it.relPath) is JournalPath.ObjectV2 } shouldHaveSize 1
-            journal.filter { JournalPaths.classify(it.relPath) is JournalPath.Legacy }.shouldBeEmpty()
         }
 
     /**

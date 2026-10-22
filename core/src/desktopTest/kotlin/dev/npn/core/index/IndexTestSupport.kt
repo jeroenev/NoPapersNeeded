@@ -12,14 +12,9 @@ import dev.npn.core.db.npnDatabase
 import dev.npn.core.db.recordingDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.LibraryFileSystem
-import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.PathExternalIo
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.HlcWatermarkAllocator
-import dev.npn.core.journal.JournalCodec
-import dev.npn.core.journal.JournalEvent
-import dev.npn.core.journal.JournalEventVersions
-import dev.npn.core.journal.PendingOp
 import dev.npn.core.util.EpochClock
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -97,9 +92,6 @@ internal class IndexRig private constructor(
         accumulator: MetadataAccumulator = this.accumulator,
         dispatcher: CoroutineDispatcher = Dispatchers.Default,
     ): JournalCoordinator = JournalCoordinator(writer, indexer, accumulator, dispatcher = dispatcher)
-
-    /** v1 segments for [deviceId] in this library, as builds before storage-v2 wrote them. */
-    fun legacySegments(deviceId: String): LegacySegments = LegacySegments(fs, deviceId, clock)
 
     /** Write a fake PDF (bytes need not be valid; only the .pdf suffix matters to the indexer). */
     fun writePdf(
@@ -188,35 +180,6 @@ internal class IndexRig private constructor(
 /** A test over a fresh [IndexRig], closed once [block] is done. */
 internal fun indexTest(block: suspend TestScope.(IndexRig) -> Unit): TestResult =
     runTest { IndexRig.create().use { block(it) } }
-
-/**
- * Writes v1 segments, `.npn/journal/<deviceId>/<first seq>.jsonl`, the way builds before storage-v2
- * did. Nothing writes these any more, but libraries still hold them and the reader must fold them.
- */
-internal class LegacySegments(
-    private val fs: LibraryFileSystem,
-    private val deviceId: String,
-    clock: EpochClock,
-) {
-    private val hlc = HlcWatermarkAllocator(clock)
-    private var seq = 0L
-
-    /** Write [ops] as the next segment; returns its path. */
-    suspend fun write(ops: List<PendingOp>): String {
-        val first = seq + 1
-        val events =
-            ops.map {
-                JournalEvent(JournalEventVersions.CANONICAL, ++seq, hlc.next(deviceId), deviceId, it.doc, it.op)
-            }
-        val path = "${NpnPaths.JOURNAL_DIR}/$deviceId/${first.toString().padStart(SEQ_WIDTH, '0')}.jsonl"
-        fs.writeBytesOnce(path, JournalCodec.encodeLines(events).encodeToByteArray())
-        return path
-    }
-
-    private companion object {
-        const val SEQ_WIDTH = 16
-    }
-}
 
 /**
  * Test-only reverse path lookup. Production code addresses docs by content hash (docId); the

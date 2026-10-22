@@ -25,14 +25,11 @@ enum class SourceStatus(
 
 /**
  * What kind of journal file a source is. Stored as [stored], the values the column held when it
- * mixed the on-disk format version (1, 2) with the snapshot kind (3).
+ * mixed the on-disk format version (2) with the snapshot kind (3); 1 was the v1 segment, no longer read.
  */
 enum class SourceKind(
     val stored: Int,
 ) {
-    /** A per-device v1 segment, `.npn/journal/<deviceId>/<seq>.jsonl`: still read, never written. */
-    LEGACY_SEGMENT(1),
-
     /** A storage-v2 transaction object. */
     OBJECT(2),
 
@@ -41,6 +38,11 @@ enum class SourceKind(
     ;
 
     companion object {
+        /**
+         * The kind [stored] names. Any other value, such as a v1 segment's 1, is a bug: the
+         * accumulator clears every source row of an index whose projection version is not its own
+         * before it reads one, and the version moved on when the v1 kind went.
+         */
         fun fromStored(stored: Int): SourceKind =
             entries.firstOrNull { it.stored == stored } ?: error("Unknown metadata source kind: $stored")
     }
@@ -55,12 +57,6 @@ value class SourceFingerprint(
     val value: String,
 ) {
     constructor(size: Long, mtimeMillis: Long, contentHash: String) : this("$size,$mtimeMillis:$contentHash")
-
-    /** The size recorded, or null when this fingerprint has none. */
-    val size: Long? get() = stat.substringBefore(',').toLongOrNull()
-
-    /** The mtime recorded, or null when this fingerprint has none. */
-    val mtimeMillis: Long? get() = stat.substringAfter(',', missingDelimiterValue = "").toLongOrNull()
 
     /** Whether a file of [size] and [mtimeMillis] still has the stat recorded, so its bytes need no read. */
     fun sameStat(

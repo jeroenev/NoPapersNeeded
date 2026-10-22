@@ -3,15 +3,9 @@ package dev.npn.core.journal
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.util.reason
 
-internal data class JournalDiagnostic(
-    val line: Int?,
-    val message: String,
-)
-
 internal sealed interface JournalSourceRead {
     data class Accepted(
         val events: List<CanonicalJournalEvent>,
-        val diagnostics: List<JournalDiagnostic> = emptyList(),
     ) : JournalSourceRead
 
     data class Retryable(
@@ -21,37 +15,6 @@ internal sealed interface JournalSourceRead {
     data class Unsupported(
         val message: String,
     ) : JournalSourceRead
-}
-
-/** Tolerant storage-v1 reader: valid lines remain usable, but malformed lines are reported. */
-internal object StorageV1Reader {
-    fun read(bytes: ByteArray): JournalSourceRead {
-        val content =
-            try {
-                bytes.decodeToString(throwOnInvalidSequence = true)
-            } catch (_: CharacterCodingException) {
-                return JournalSourceRead.Retryable("Legacy source is not valid UTF-8")
-            }
-        val events = ArrayList<CanonicalJournalEvent>()
-        val diagnostics = ArrayList<JournalDiagnostic>()
-        var unsupported: String? = null
-        content.lineSequence().forEachIndexed { index, line ->
-            if (line.isBlank()) return@forEachIndexed
-            try {
-                val event = EventDecoderRegistry.decode(line, allowMissingV1 = true)
-                if (event.event.op is JournalOp.Unknown) {
-                    unsupported = "Legacy source contains unknown operation ${event.event.op.wire}"
-                } else {
-                    events += event
-                }
-            } catch (e: UnsupportedEventVersionException) {
-                unsupported = "Legacy source contains unsupported event version ${e.version}"
-            } catch (e: Exception) {
-                diagnostics += JournalDiagnostic(index + 1, e.message ?: "Malformed journal event")
-            }
-        }
-        return unsupported?.let(JournalSourceRead::Unsupported) ?: JournalSourceRead.Accepted(events, diagnostics)
-    }
 }
 
 /** Strict storage-v2 reader. Any integrity or structural failure applies zero events. */
@@ -148,7 +111,7 @@ internal object StrictLines {
             val number = firstLine + index
             val event =
                 try {
-                    EventDecoderRegistry.decode(line, allowMissingV1 = false)
+                    EventDecoderRegistry.decode(line)
                 } catch (e: UnsupportedEventVersionException) {
                     return JournalSourceRead.Unsupported(
                         "$noun line $number uses unsupported event version ${e.version}",

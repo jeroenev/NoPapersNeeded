@@ -76,7 +76,8 @@ class NpnPathsTest {
         // Another device's sidecar (arriving via sync) must keep triggering a refresh.
         OcrSidecarName.isOwnWrite(".npn/ocr/abc123.dev2.json", "dev1").shouldBeFalse()
         OcrSidecarName.isOwnWrite(".npn/ocr/abc123.dev2.tesseract.json", "dev1").shouldBeFalse()
-        // This build writes no v1 segments, so one under this device's id came from elsewhere.
+        // No build writes v1 segments now; one under this device's id is no own write, and its
+        // reconcile refuses the journal.
         OcrSidecarName.isOwnWrite(".npn/journal/dev1/0001.jsonl", "dev1").shouldBeFalse()
         // Document-area and trash paths are never self-writes.
         OcrSidecarName.isOwnWrite("inbox/x.pdf", "dev1").shouldBeFalse()

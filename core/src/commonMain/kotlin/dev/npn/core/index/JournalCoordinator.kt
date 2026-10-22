@@ -116,9 +116,9 @@ internal class LifecycleDone(
  *
  * Every transaction is published as one storage-v2 object. There is no other format to fall back
  * to: a filesystem that cannot publish without replacement fails the write, and the session refuses
- * to open such a library in the first place (see [dev.npn.core.app.openSession]). Legacy v1 segments
- * and the compaction snapshots earlier builds wrote are still read and folded; this build writes
- * neither, and never deletes a journal object.
+ * to open such a library in the first place (see [dev.npn.core.app.openSession]). The compaction
+ * snapshots earlier builds wrote are still read and folded; this build writes none, and never deletes
+ * a journal object.
  *
  * Normal commits apply their frozen events directly to the persisted accumulator and bounded DB
  * projection.

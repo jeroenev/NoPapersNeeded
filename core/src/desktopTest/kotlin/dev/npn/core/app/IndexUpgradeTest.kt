@@ -17,7 +17,6 @@ import dev.npn.core.db.exec
 import dev.npn.core.db.queueState
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
-import dev.npn.core.index.DeviceIdentity
 import dev.npn.core.index.requireDoc
 import dev.npn.core.ocr.OcrEngineId
 import dev.npn.core.pdf.PdfFixtures
@@ -120,7 +119,7 @@ class IndexUpgradeTest {
                 session.deviceId shouldBe "device-from-the-index"
                 val device = deps.deviceDb
                 device.keyValueDao().getAll(LEGACY_KV.keys.toList()) shouldBe
-                    LEGACY_KV - OBSERVATION_KEY - DeviceIdentity.LEGACY_JOURNAL_KEYS.toSet()
+                    LEGACY_KV - OBSERVATION_KEY
                 device
                     .aiEditJobDao()
                     .docsFor("job-1")
@@ -364,8 +363,6 @@ class IndexUpgradeTest {
         val LEGACY_KV =
             mapOf(
                 "device.id" to "device-from-the-index",
-                "journal.lastSeq" to "5",
-                "journal.knownOwnSegments" to "[]",
                 "ai-chat:session-metadata" to "[]",
                 "ai-chat:c1" to "[]",
                 OBSERVATION_KEY to "seen",

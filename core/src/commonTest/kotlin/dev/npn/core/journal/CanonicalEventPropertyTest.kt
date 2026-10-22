@@ -17,7 +17,7 @@ class CanonicalEventPropertyTest {
         propTest {
             checkAll(PropTestConfig(iterations = 50), Arb.long()) { seed ->
                 for (event in EventHistoryGen(seed, deviceCount = 3, eventCount = 60).generate()) {
-                    val decoded = EventDecoderRegistry.decode(JournalCodec.encode(event), allowMissingV1 = false)
+                    val decoded = EventDecoderRegistry.decode(JournalCodec.encode(event))
                     require(EventDecoderRegistry.canonical(event) == decoded) { "canonical differs for $event" }
                     require(EventDecoderRegistry.decodeStored(decoded.canonicalJson) == decoded.event) {
                         "stored decode differs for $event"

@@ -3,6 +3,7 @@ package dev.npn.core.index
 import dev.npn.core.db.MetadataProjectionDao
 import dev.npn.core.db.MetadataSourceEntity
 import dev.npn.core.fs.FileMeta
+import dev.npn.core.fs.NpnPaths
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
 
@@ -31,8 +32,8 @@ import dev.npn.core.journal.JournalPaths
  * (device and sequence); no snapshot manifest is taken at its word. That covers every way a source
  * can go without a loss alike: the objects an earlier build compacted, which its snapshot holds, or a
  * later snapshot that compacted that one in turn; a snapshot gone with the objects it replaced back
- * on disk (a folder put back from before a compaction); a v1 segment whose events another holds. A
- * snapshot that names an object without holding its events explains nothing.
+ * on disk (a folder put back from before a compaction). A snapshot that names an object without
+ * holding its events explains nothing.
  */
 internal class SourceSetValidator(
     private val dao: MetadataProjectionDao,
@@ -64,6 +65,22 @@ internal class SourceSetValidator(
     }
 
     /**
+     * A reason to reject the whole entry set because it holds a storage-v1 segment,
+     * `.npn/journal/<deviceId>/<seq>.jsonl` (or its `<seq>-<n>.snap.jsonl` compaction), or null when
+     * it holds none. No build reads that format any more; refusing writes over a journal that holds
+     * one keeps its events from being silently left out.
+     */
+    fun storageV1Segment(entries: List<FileMeta>): String? {
+        val segment =
+            entries.firstOrNull { entry ->
+                !entry.isDirectory && NpnPaths.isSafe(entry.relPath) &&
+                    JournalPaths.objectStoreVersion(entry.relPath) == null &&
+                    storageV1SegmentPath.matches(NpnPaths.normalize(entry.relPath))
+            }
+        return segment?.let { "Storage-v1 journal segment is no longer read: ${it.relPath}" }
+    }
+
+    /**
      * A reason to reject the set because a source applied before the pass is gone from the folder and
      * an event it held is held by no applied source the pass listed, or null when every event of each
      * of [gone] is. [gone] are the applied sources the pass did not list, and [listed] the paths of
@@ -85,5 +102,8 @@ internal class SourceSetValidator(
 
     private companion object {
         val SUPPORTED_STORE_VERSIONS = setOf(JournalPaths.STORAGE_V2, JournalPaths.SNAPSHOT_V2)
+
+        val storageV1SegmentPath =
+            Regex("^${Regex.escape(NpnPaths.JOURNAL_DIR)}/[^/]+/[0-9]+(?:-[0-9]+\\.snap)?\\.jsonl$")
     }
 }

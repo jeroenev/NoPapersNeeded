@@ -9,7 +9,6 @@ import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.model.SystemProperty
-import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -100,43 +99,6 @@ class ReconcilePerfTest {
 
             // Tag still projected (no regression from the skip).
             db.tagDao().tagsForDocument(docId) shouldContainExactly listOf("invoice")
-        }
-
-    @Test
-    fun mutatedV1SourceIsRereadAndShrinkStillFails() =
-        runTest {
-            rig.writePdf("a.pdf", "alpha")
-            rig.rescan()
-            val docId = db.documentDao().requireRowAtPath("a.pdf").docId
-
-            // An older build's v1 segment, as libraries still hold them.
-            clock.advance()
-            val segment = rig.legacySegments("dev-main").write(listOf(PendingOp.tagAdd(docId, "invoice")))
-            val coordinator = rig.coordinator(rig.writer("dev-main"))
-            coordinator.refreshState()
-            coordinator.reconcileMetadata()
-
-            val original = fs.readBytes(segment)
-            fs.reads.clear()
-
-            // Grow the file (append padding) so size+mtime change -> it must be re-read, and the
-            // padded content still folds to the same tag.
-            val grown = original + "\n".repeat(64).encodeToByteArray()
-            Files.write(libRoot.resolve(segment), grown)
-            clock.advance()
-            coordinator.reconcileMetadata()
-            fs.journalReads().contains(segment).shouldBeTrue()
-            db.tagDao().tagsForDocument(docId) shouldContainExactly listOf("invoice")
-
-            // Now shrink it below the recorded size -> the existing shrink guard must still latch.
-            Files.write(libRoot.resolve(segment), "x".encodeToByteArray())
-            clock.advance()
-            assertFailsWith<MetadataWriteBlocked> { coordinator.reconcileMetadata() }
-            db
-                .metadataProjectionDao()
-                .state()
-                .shouldNotBeNull()
-                .migrationState shouldBe ProjectionStatus.FAILED
         }
 
     @Test
@@ -328,14 +290,14 @@ class ReconcilePerfTest {
             val docId = db.documentDao().requireRowAtPath("a.pdf").docId
 
             clock.advance()
-            val segment = rig.legacySegments("dev-main").write(listOf(PendingOp.tagAdd(docId, "invoice")))
+            val published = rig.writer("other-device").commit(listOf(PendingOp.tagAdd(docId, "invoice")))
             val coordinator = rig.coordinator(rig.writer("dev-main"))
             coordinator.refreshState()
             coordinator.reconcileMetadata()
 
-            // Deleting a previously-applied v1 source with no validated replacement must latch the
+            // Deleting a previously-applied source with no validated replacement must latch the
             // write-block (SourceSetValidator.unheldEvents).
-            Files.delete(libRoot.resolve(segment))
+            Files.delete(libRoot.resolve(published.relPath))
             clock.advance()
             assertFailsWith<MetadataWriteBlocked> { coordinator.reconcileMetadata() }
             db

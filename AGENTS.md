@@ -168,9 +168,9 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   published object. New journal writes must go through `JournalCoordinator` (`core.index`) — this is enforced
   at the type level, not just by convention: `ContentAddressedJournalWriter` is `internal` to
   `core` and the coordinator's `writer` is private, so no outside caller can grab a raw writer.
-- The journal is written only as storage-v2 objects; legacy v1 segments and compaction snapshots
-  are read, never written; the app never deletes a journal object. A filesystem that cannot
-  publish without replacement (no hard link, no exclusive rename) refuses to open the library,
+- The journal is written only as storage-v2 objects; compaction snapshots are read, never written;
+  a storage-v1 segment is no longer read and blocks writes; the app never deletes a journal object.
+  A filesystem that cannot publish without replacement (no hard link, no exclusive rename) refuses to open the library,
   at every open (`DeviceIdentity` publishes before anything is written); never
   add a fallback format. `device.id` belongs to one installation:
   `DeviceIdentity` gives a restored or cloned installation a fresh one (ARCHITECTURE.md,

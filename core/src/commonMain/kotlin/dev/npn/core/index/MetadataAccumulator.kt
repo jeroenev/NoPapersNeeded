@@ -24,7 +24,6 @@ import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.JournalSourceRead
 import dev.npn.core.journal.PublishedTransaction
 import dev.npn.core.journal.SnapshotV2Reader
-import dev.npn.core.journal.StorageV1Reader
 import dev.npn.core.journal.StorageV2Reader
 
 /** Why a library refuses metadata writes, as a caller can act on it. */
@@ -165,14 +164,6 @@ internal class MetadataAccumulator(
     ): StagedSource? {
         val existing = dao.source(meta.relPath)
         val applied = existing?.status == SourceStatus.APPLIED
-        // v1-tolerant shrink guard: a legacy (mutable) source is allowed to grow but never shrink.
-        // When the stat gate below fires the size is unchanged, so this only fires on a real shrink.
-        if (applied && existing.kind == SourceKind.LEGACY_SEGMENT) {
-            val previousSize = existing.fingerprint.size
-            if (previousSize != null && meta.size < previousSize) {
-                fail(WriteBlock.JOURNAL_DAMAGED, "Legacy metadata source shrank: ${meta.relPath}")
-            }
-        }
         if (applied && existing.fingerprint.sameStat(meta.size, meta.mtimeMillis)) return null
         val bytes = fs.readBytes(meta.relPath)
         val contentHash = sha256Bytes(bytes)
@@ -200,9 +191,8 @@ internal class MetadataAccumulator(
                         path = staged.relPath,
                         kind = staged.kind,
                         fingerprint = staged.fingerprint,
-                        contentHash = staged.contentHash.takeIf { staged.kind != SourceKind.LEGACY_SEGMENT },
+                        contentHash = staged.contentHash,
                         status = SourceStatus.APPLIED,
-                        diagnostic = diagnosticOf(result),
                     )
                 // A v2 object is one transaction, whose actor no other object may claim.
                 val actor =
@@ -257,6 +247,7 @@ internal class MetadataAccumulator(
         val entries = fs.listAllUnder(NpnPaths.JOURNAL_DIR)
         validator.newerStore(entries)?.let { fail(WriteBlock.NEWER_FORMAT, it) }
         validator.invalidObjectPath(entries)?.let { fail(WriteBlock.JOURNAL_DAMAGED, it) }
+        validator.storageV1Segment(entries)?.let { fail(WriteBlock.JOURNAL_DAMAGED, it) }
         val previous = dao.allSources()
         val files = entries.filter { !it.isDirectory }.associateBy { it.relPath }
         val ingest = ingestFiles(files.values)
@@ -529,9 +520,10 @@ internal class MetadataAccumulator(
          * fold and never notices.
          *
          * Not needed for changes that only affect ingestion/validation, or for Room schema changes
-         * that already drop the affected tables.
+         * that already drop the affected tables. Bump it too when a [SourceKind]
+         * goes, so the source rows of that kind are cleared before any is read.
          */
-        const val PROJECTION_VERSION = 12
+        const val PROJECTION_VERSION = 13
     }
 }
 
@@ -544,12 +536,6 @@ private fun unseen(
     val keys = inserted.mapTo(HashSet()) { it.deviceId to it.sequence }
     return read.filter { (it.event.dev to it.event.seq) in keys }.map { it.event }
 }
-
-/** The lines a tolerant read skipped, one per line, or null when it skipped none. */
-private fun diagnosticOf(read: JournalSourceRead.Accepted): String? =
-    read.diagnostics
-        .joinToString("\n") { item -> item.line?.let { "line $it: ${item.message}" } ?: item.message }
-        .ifEmpty { null }
 
 /**
  * Read a source whose bytes the accumulator loaded and hashed, with the kind of source a journal
@@ -566,9 +552,7 @@ private fun readSource(
 
         is JournalPath.ObjectV2 -> SourceKind.OBJECT to StorageV2Reader.read(relPath, bytes, contentHash)
 
-        JournalPath.Legacy -> SourceKind.LEGACY_SEGMENT to StorageV1Reader.read(bytes)
-
-        // The caller stages only the three above.
+        // The caller stages only the two above.
         is JournalPath.UnsupportedObjectStore, JournalPath.Staging, JournalPath.SyncTemp, JournalPath.Unknown,
         -> error("Not a journal source: $relPath")
     }

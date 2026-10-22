@@ -23,17 +23,6 @@ class JournalSourceReadersTest {
     private fun objectPath(bytes: ByteArray): String = JournalPaths.objectPath(sha256Bytes(bytes))
 
     @Test
-    fun legacyAcceptsMissingVersionAndReportsMalformedLines() {
-        val missingVersion = JournalCodec.encode(event()).replaceFirst("\"v\":1,", "")
-        val result =
-            assertIs<JournalSourceRead.Accepted>(
-                StorageV1Reader.read("$missingVersion\nnot-json".encodeToByteArray()),
-            )
-        assertEquals(1, result.events.size)
-        assertEquals(1, result.diagnostics.size)
-    }
-
-    @Test
     fun v2RequiresExplicitVersionAndAppliesNoPrefix() {
         val first = JournalCodec.encode(event()).replaceFirst("\"v\":1,", "")
         val bytes = first.encodeToByteArray()
@@ -81,7 +70,7 @@ class JournalSourceReadersTest {
     fun unknownOperationPayloadIsPreserved() {
         val line =
             """{"v":1,"seq":1,"hlc":{"t":1,"c":0,"d":"$actor"},"dev":"$actor","doc":null,"op":"future","p":{"x":true}}"""
-        val decoded = EventDecoderRegistry.decode(line, allowMissingV1 = false).event.op
+        val decoded = EventDecoderRegistry.decode(line).event.op
         assertIs<JournalOp.Unknown>(decoded)
         assertTrue(decoded.payload.containsKey("x"))
         assertTrue(JournalCodec.encode(event().copy(op = decoded)).contains("\"x\":true"))
@@ -99,7 +88,8 @@ class JournalSourceReadersTest {
     fun unknownOperationsAndStringVersionsBlockSourceIngestion() {
         val unknown =
             """{"v":1,"seq":1,"hlc":{"t":1,"c":0,"d":"$actor"},"dev":"$actor","doc":null,"op":"future","p":{}}"""
-        assertIs<JournalSourceRead.Unsupported>(StorageV1Reader.read(unknown.encodeToByteArray()))
+        val unknownBytes = unknown.encodeToByteArray()
+        assertIs<JournalSourceRead.Unsupported>(StorageV2Reader.read(objectPath(unknownBytes), unknownBytes))
 
         val stringVersion = unknown.replace("\"v\":1", "\"v\":\"1\"")
         val bytes = stringVersion.encodeToByteArray()

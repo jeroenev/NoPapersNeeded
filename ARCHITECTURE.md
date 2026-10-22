@@ -88,7 +88,7 @@ One line per package. The rules each package enforces are in section 6.
 |---|---|
 | `core.app` | The public session API and the orchestrators behind it. One contract file per concept: `LibrarySession.kt`, `Documents.kt`, `History.kt`, `Metadata.kt`, `FieldRegistry.kt`, `Ingest.kt`, `Ocr.kt`, `LibrarySettings.kt`, `Maintenance.kt`, `WorkFacade.kt`, `DocContentFacade.kt`, `Filters.kt`. Implementations: `LibrarySessionImpl`, `SessionGraph`, `SessionOpening.kt`, `MetadataWriterImpl`, `DocLifecycleImpl` (with its pure `LifecyclePlan`), `OcrFacadeImpl`, `MaintenanceFacadeImpl`, `SessionWork`, `JournalReviewConfig`, `BakeRelink`. |
 | `core.app.aiedit` | The AI edit engine over the facets: `AiEditRun`, `AiEditQueue`, `AiAutoEnricher`, `AiEditReview.kt` (`ReviewProjector`, `ReviewApply`), `SuggestionRunner`. |
-| `core.journal` | The metadata journal: `JournalEvent`, `JournalOp`, `PendingOp`; `ContentAddressedJournalWriter`; `JournalPaths`; the readers for v2 objects, snapshots and legacy v1 segments (`JournalSourceReaders`); `JournalCodec`; `Hlc`, `HlcWatermarkAllocator`; `SnapshotFormat` (the compaction snapshots earlier builds wrote, read and never written); `EventCopies` (two copies of one event); the fold, `FoldedState`. |
+| `core.journal` | The metadata journal: `JournalEvent`, `JournalOp`, `PendingOp`; `ContentAddressedJournalWriter`; `JournalPaths`; the readers for v2 objects and snapshots (`JournalSourceReaders`); `JournalCodec`; `Hlc`, `HlcWatermarkAllocator`; `SnapshotFormat` (the compaction snapshots earlier builds wrote, read and never written); `EventCopies` (two copies of one event); the fold, `FoldedState`. |
 | `core.index` | The rebuildable index and its maintenance. The executor: `JournalCoordinator` and its state machine `WriterState`. The pure decisions it and its helpers carry out: `RescanDecision`, `FoldLifecycle`, `ImportDecision`, `PassDecision`. The effects: `Indexer`, `MetadataAccumulator`, `FoldProjection`, `SourceSetValidator`, `ImportService`, `DuplicateResolver`, `SplitService`, `ScanReport`, `DeviceIdentity`, `DocumentPathReconciler`, `ExternalDocumentMoves`. |
 | `core.db` | Room entities and DAOs for the two databases: `NpnDatabase` (`index.db`) and `DeviceDatabase` (`device.db`). One file per DAO. `LegacyIndexTables` moves what older index schemas held into the journal or `device.db`. |
 | `core.fs` | `LibraryFileSystem` and its platform implementations; `NpnPaths` (the `.npn/` layout, path classification, the path-safety gate, every temporary file name); `TempFileSweep`; `ContentIdentity`, `HexEncoding`; `TrashOps`. |
@@ -478,9 +478,9 @@ Kept by `BakeService`, `BakeRelink`, `DocContentFacadeImpl` and `FoldedState`:
 
 **Formats.** Every transaction is one storage-v2 object,
 `.npn/journal/objects-v2-<xx>/<sha256>.jsonl`, named by the SHA-256 of its bytes, with a fresh
-actor id per transaction. Builds before storage-v2 wrote per-device v1 segments,
-`.npn/journal/<deviceId>/<seq>.jsonl`; those are read and folded, never written. There is no
-fallback format. Beside its objects a bucket may hold their staging files and a sync tool's file for
+actor id per transaction. A per-device v1 segment, `.npn/journal/<deviceId>/<seq>.jsonl`, is no
+longer read: a reconcile that finds one blocks writes (`WriteBlock.JOURNAL_DAMAGED`) rather than
+fold the journal without it. There is no fallback format. Beside its objects a bucket may hold their staging files and a sync tool's file for
 one still in transfer (`NpnPaths.isSyncTemp`: Syncthing, Nextcloud and ownCloud, Resilio), which a
 reconcile passes over and never deletes; any other name there fails the pass. A staging file a
 crash left behind, on any installation, is the rescan's `TempFileSweep`'s to delete once a day old.

@@ -100,7 +100,7 @@ class NpnDatabaseTest {
             fun source(path: String) =
                 MetadataSourceEntity(
                     path,
-                    SourceKind.LEGACY_SEGMENT,
+                    SourceKind.SNAPSHOT,
                     SourceFingerprint(path),
                     null,
                     SourceStatus.APPLIED,

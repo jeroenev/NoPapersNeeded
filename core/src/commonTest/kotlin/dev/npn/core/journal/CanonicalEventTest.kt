@@ -57,7 +57,7 @@ class CanonicalEventTest {
     fun aLocalEventCanonicalizesExactlyAsItsDecodedLine() {
         for (event in events) {
             assertEquals(
-                EventDecoderRegistry.decode(JournalCodec.encode(event), allowMissingV1 = false),
+                EventDecoderRegistry.decode(JournalCodec.encode(event)),
                 EventDecoderRegistry.canonical(event),
             )
         }
@@ -66,7 +66,7 @@ class CanonicalEventTest {
     @Test
     fun aStoredEventDecodesToTheEventItWasStoredFrom() {
         for (event in events) {
-            val stored = EventDecoderRegistry.decode(JournalCodec.encode(event), allowMissingV1 = false)
+            val stored = EventDecoderRegistry.decode(JournalCodec.encode(event))
             assertEquals(stored.event, EventDecoderRegistry.decodeStored(stored.canonicalJson))
         }
     }
@@ -76,7 +76,7 @@ class CanonicalEventTest {
         val line =
             """{"v":1,"seq":1,"hlc":{"t":1,"c":0,"d":"$device"},"dev":"$device","doc":"$doc",""" +
                 """"op":"prop-set","p":{"key":"title","value":"Old"}}"""
-        val stored = EventDecoderRegistry.decode(line, allowMissingV1 = false)
+        val stored = EventDecoderRegistry.decode(line)
 
         assertEquals(
             JournalOp.FieldSet(FieldKeys.TITLE, "Old"),
