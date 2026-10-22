@@ -6,6 +6,7 @@ import dev.npn.core.db.missingSentinel
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
+import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.util.reason
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.delay
@@ -477,13 +478,15 @@ internal class Simulation(
                     .mapNotNull { it[0] }
                     .toSet()
             }
+        val settling = settlingReturns()
         val unaccounted =
             fs.allFiles().filter { (path, bytes) ->
                 NpnPaths.indexable(FileMeta(path, NpnPaths.fileName(path), bytes.size.toLong(), 0, false)) &&
                     bytes.isNotEmpty() &&
                     path !in livePaths &&
                     path !in duplicatePaths &&
-                    sha256Bytes(bytes) !in superseded
+                    sha256Bytes(bytes) !in superseded &&
+                    (path to sha256Bytes(bytes)) !in settling
             }
         if (unaccounted.isNotEmpty()) {
             fail(
@@ -494,6 +497,25 @@ internal class Simulation(
             )
         }
     }
+
+    /**
+     * Each (path, document) where a trashed document's own bytes may be back at its path (or the path
+     * it was trashed from) while it was trashed less than RESTORE_SETTLE_MS ago. A sync tool keeps a
+     * file it saw modified over another device's move of it to the trash, and the app records such a
+     * return only once the window has passed (FoldLifecycle.settledReturns): until then a rescan
+     * shows the document for that scan only, and the next fold hides it again.
+     */
+    private fun settlingReturns(): Set<Pair<String, String>> =
+        world.read("trashed returns within the settle window") {
+            val since = world.clock.nowMillis() - JournalCoordinator.RESTORE_SETTLE_MS
+            replica.indexDb
+                .rows(
+                    "SELECT docId, relPath, trashedOrigPath FROM documents " +
+                        "WHERE trashed = 1 AND deleted = 0 AND trashedAt > $since",
+                ).flatMapTo(HashSet()) { (docId, relPath, origPath) ->
+                    listOfNotNull(relPath, origPath).map { it to docId!! }
+                }
+        }
 
     /**
      * Every live row stores its file's size and mtime, the proof by stat a rescan, a trash or an import
@@ -528,6 +550,7 @@ internal class Simulation(
      * [live] shows ([diff], which says what is compared and what is device-local).
      */
     private fun rebuildOracle(live: LibraryView) {
+        val settling = settlingReturns()
         val copy = fs.snapshot().also(tamperWithRebuild)
         val oracle = SimReplica(world, "oracle-installation", copy, GatedOcrEngine().apply { openGate() })
         try {
@@ -547,6 +570,7 @@ internal class Simulation(
                     live,
                     rebuilt,
                     hiddenOnlyLive = { _, hidden -> hidden != Hidden.TRASHED },
+                    trashedOnlyLive = { docId, path -> (path to docId) in settling },
                     bothHold = {
                         docId,
                         a,

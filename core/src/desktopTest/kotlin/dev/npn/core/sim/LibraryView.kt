@@ -160,6 +160,11 @@ internal fun diff(
     live: LibraryView,
     rebuilt: LibraryView,
     hiddenOnlyLive: (String, Hidden) -> Boolean,
+    /**
+     * Whether a document the live index has trashed may show in the rebuild at this path: its bytes
+     * back there within the restore settle window, which a rescan shows for that scan only.
+     */
+    trashedOnlyLive: (docId: String, path: String) -> Boolean = { _, _ -> false },
     /** Whether both paths hold the document's bytes: then either is a fair pick of its path. */
     bothHold: (docId: String, String, String) -> Boolean,
 ): List<String> {
@@ -168,6 +173,9 @@ internal fun diff(
         val a = live.live[id]
         val b = rebuilt.live[id]
         when {
+            // Its bytes back at its path within the restore settle window: the rebuild's rescan shows it.
+            a == null && live.hidden[id] == Hidden.TRASHED && trashedOnlyLive(id, b!!.relPath) -> {}
+
             a == null -> {
                 out +=
                     "doc ${id.take(ID)} is live only in the rebuild (live index: ${live.hidden[id] ?: "no row"}): $b"
