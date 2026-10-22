@@ -306,11 +306,8 @@ internal class OcrPipeline(
      */
     private suspend fun retryOwedRules() {
         for (docId in rulesOwed.value) {
+            if (!retryRules(docId)) return
             rulesOwed.update { it - docId }
-            if (!retryRules(docId)) {
-                rulesOwed.update { it + docId }
-                return
-            }
         }
     }
 
