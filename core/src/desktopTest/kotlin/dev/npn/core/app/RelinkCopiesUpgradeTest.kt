@@ -87,30 +87,30 @@ class RelinkCopiesUpgradeTest {
         }
 
     /**
-     * A device still on an older build relinks after this one already copied everything: the next
-     * open copies that relink too, since the upgrade recurs rather than latching once.
+     * A device still on an older build relinks while this one is open, after it already copied
+     * everything: the next rescan copies that relink too, since the copying recurs rather than
+     * latching once.
      */
     @Test
-    fun aRelinkWithoutCopiesAfterAnEarlierUpgradeIsCopiedAtTheNextOpen() =
+    fun aRelinkWithoutCopiesAfterAnEarlierUpgradeIsCopiedByTheNextRescan() =
         runTest {
             Files.write(library.resolve("bill.pdf"), PdfFixtures.embeddedTextPdf("baked"))
             val fs = JvmLibraryFileSystem(library, PathExternalIo)
             val baked = fs.sha256("bill.pdf")
             val original = "a".repeat(64)
-            openSession(backgroundScope, library, data).use { session, _ -> session.rescan() }
-
-            val olderBuild =
-                ContentAddressedJournalWriter(fs, "older-build", HlcWatermarkAllocator(MutableClock(1_000L)))
-            olderBuild.commit(
-                listOf(
-                    PendingOp.fieldSet(original, FieldKeys.TITLE, "Water bill"),
-                    PendingOp.tagAdd(original, "filed"),
-                    PendingOp.propSet(original, SystemProperty.STORAGE_PATH, "bill.pdf"),
-                ),
-            )
-            olderBuild.commit(listOf(PendingOp.relink(original, baked)))
-
             openSession(backgroundScope, library, data).use { session, deps ->
+                session.rescan()
+                val olderBuild =
+                    ContentAddressedJournalWriter(fs, "older-build", HlcWatermarkAllocator(MutableClock(1_000L)))
+                olderBuild.commit(
+                    listOf(
+                        PendingOp.fieldSet(original, FieldKeys.TITLE, "Water bill"),
+                        PendingOp.tagAdd(original, "filed"),
+                        PendingOp.propSet(original, SystemProperty.STORAGE_PATH, "bill.pdf"),
+                    ),
+                )
+                olderBuild.commit(listOf(PendingOp.relink(original, baked)))
+
                 session.rescan()
                 val row =
                     deps.db

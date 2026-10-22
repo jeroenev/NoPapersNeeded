@@ -19,6 +19,7 @@ import dev.npn.core.xmp.BakeRefusedException
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import kotlinx.coroutines.CompletableDeferred
@@ -181,11 +182,12 @@ class BakeInPlaceTest {
         }
 
     /**
-     * The accepted change from inheritance: an edit of the original that a device which had not seen
-     * the bake makes after it no longer reaches the baked document.
+     * An edit of the original that a device which had not seen the bake makes after it, later than
+     * the bake's copies, reaches the baked document by the next rescan's copies, as older builds,
+     * which fold the baked document over the original, show it.
      */
     @Test
-    fun aLaterEditOfTheOriginalDoesNotReachTheBakedDocument() =
+    fun aLaterEditOfTheOriginalReachesTheBakedDocumentAtTheNextRescan() =
         appSessionTest { rig ->
             val (before, after) = bakeFiled(rig)
             rig.clock.advance(1_000)
@@ -198,10 +200,10 @@ class BakeInPlaceTest {
 
             rig.session.rescan()
 
-            fieldsOf(rig, after) shouldBe FILED
+            fieldsOf(rig, after) shouldBe FILED + (FieldKeys.TITLE to "Sewer bill")
             rig.db
                 .tagDao()
-                .tagsForDocument(after) shouldContainExactly listOf("filed")
+                .tagsForDocument(after) shouldContainExactlyInAnyOrder listOf("filed", "late")
         }
 
     /** A document baked twice shows the title it was given between the bakes, not the first one. */

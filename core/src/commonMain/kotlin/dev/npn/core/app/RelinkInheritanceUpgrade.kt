@@ -9,19 +9,20 @@ import dev.npn.core.model.SystemProperty
 // predecessors' registers (per field or property the latest write among them wins, a clear
 // included, and their tags are one OR-set). This build's fold reads a document's own events only; a
 // relink's transaction copies the metadata instead (FoldedState.relinkOps). As long as an older
-// build may relink in a library, this file writes what such a relink left out: at every open, and
-// in every relink this build writes, so both folds show the same.
+// build may relink in a library, this file writes what such a relink left out: at every open,
+// after every rescan, and in every relink this build writes, so both folds show the same.
 
 /**
  * Give every relink target whose inherited view differs from its own the copies that make them
  * equal, in one transaction, and nothing when none differs. Run at every open as an
- * [upgradeAtOpen], so it is best effort, and under the writer lock like any commit
- * ([JournalCoordinator.commitBuilt]). The fold it reads is the one the session's initial rescan
- * needs anyway.
+ * [upgradeAtOpen] and after every rescan, each best effort, under the writer lock like any commit
+ * ([JournalCoordinator.commitBuilt]); the fold it reads is the one a rescan needs anyway, and the
+ * cost is linear in relink targets. So a relink an older build wrote, or an edit of a predecessor
+ * by a device that had not seen the relink, is copied by the next rescan that folded it, as a fresh
+ * index's open would copy it.
  *
  * Devices converge through LWW: two that copy at once write the same values, and their tag copies
- * are one OR-set. A relink an older build writes after an open is copied at the next one, or by
- * this build's next relink.
+ * are one OR-set.
  *
  * The one race it accepts: a device that copies before an edit to a target or its predecessor
  * (made on a device that had not seen the copy's inputs) reached it writes the older value, and
@@ -46,13 +47,7 @@ internal object RelinkInheritanceUpgrade {
 
     /** The ops that give every relink target in [state] what it inherited as its own; empty once they have. */
     fun copies(state: FoldedState): List<PendingOp> =
-        state
-            .docsWithMetadata()
-            .map(state::resolveDocId)
-            .distinct()
-            .filter { state.predecessorsOf(it).isNotEmpty() }
-            .sorted()
-            .flatMap { target -> copiesFor(state, target) }
+        state.relinkTargets().sorted().flatMap { target -> copiesFor(state, target) }
 
     private fun copiesFor(
         state: FoldedState,

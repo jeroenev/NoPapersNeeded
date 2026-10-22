@@ -317,6 +317,10 @@ internal class FoldedState {
     // Never a view of this fold: only read to write copies that make it a target's own
     // ([relinkOps], `RelinkInheritanceUpgrade.kt`), so both folds show the same.
 
+    /** Every document a relink chain [resolveDocId]s onto, the ones with [predecessorsOf]. */
+    internal fun relinkTargets(): Set<String> =
+        (predecessorsCache ?: reversedRelinks().also { predecessorsCache = it }).keys
+
     /** [doc] and every [predecessorsOf] it: the documents older builds fold [doc]'s metadata over. */
     internal fun chainOf(doc: String): List<String> = listOf(doc) + predecessorsOf(doc)
 
@@ -357,7 +361,7 @@ internal class FoldedState {
      * its place) as for a bake, whose result has no metadata of its own yet: either way the
      * document's metadata follows it onto its new bytes. A later edit of [oldDoc], which only a
      * device that has not seen the relink can make, does not reach [newDoc] through this fold; the
-     * next open's `RelinkInheritanceUpgrade` copies it when its HLC is the later one, as older
+     * next rescan's `RelinkInheritanceUpgrade` copies it when its HLC is the later one, as older
      * builds show it.
      */
     fun relinkOps(

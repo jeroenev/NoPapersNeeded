@@ -460,11 +460,11 @@ Kept by `BakeService`, `BakeRelink`, `DocContentFacadeImpl` and `FoldedState`:
   the old document is hidden (`resolveDocId`, `isCurrent`) and its bytes are a duplicate of the
   target while the library shows it (section 6.2).
 - So an edit of the old document made after the relink, by a device that had not seen it, does not
-  reach the target through the fold; the next open's copies bring it over when its HLC is the later
-  one. A document's history is its own events, so a relink target's shows the copies, not its
+  reach the target through the fold; the next rescan's copies bring it over when its HLC is the
+  later one. A document's history is its own events, so a relink target's shows the copies, not its
   predecessors' edits.
 - Older builds still write relinks without copies and fold a target over its predecessors. At every
-  open, and in every relink, `RelinkInheritanceUpgrade.kt` copies onto each target whatever that
+  open, after every rescan and in every relink, `RelinkInheritanceUpgrade.kt` copies onto each target whatever that
   inherited view shows and its own does not, idempotently (nothing when they agree); a relink copies
   the old document's inherited view, and a tag removal lists the predecessors' dots too. The copies
   accept one race: one written before a concurrent edit reached its device wins when its HLC is later.

@@ -190,7 +190,7 @@ class RelinkCopiesTest {
     /**
      * An edit of the original that a device makes before the relink reaches it, later than the
      * relink, does not reach the target through the fold, nor does a tag removal from the original:
-     * only the next open's copies (`RelinkInheritanceUpgrade`) bring the later edit over.
+     * only the next rescan's copies (`RelinkInheritanceUpgrade`) bring the later edit over.
      */
     @Test
     fun aLaterEditOfThePredecessorDoesNotReachTheTarget() {

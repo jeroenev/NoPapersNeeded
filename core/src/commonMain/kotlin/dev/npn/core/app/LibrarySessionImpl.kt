@@ -109,12 +109,14 @@ internal class LibrarySessionImpl(
     /**
      * What follows every rescan that succeeded, this session's own and the one a relink or a bake
      * runs alike ([SessionGraph.rescans]): its report is the last, a file it deferred as still being
-     * written gets a follow-up rescan, the documents it found without OCR are queued for it, and
-     * the drains may start.
+     * written gets a follow-up rescan, the documents it found without OCR are queued for it, a
+     * relink an older build wrote since gets its copies, as a fresh index's open would write them,
+     * and the drains may start.
      */
     private suspend fun afterRescan(report: ScanReport) {
         scanReports.value = report
         report.retryAfterMillis?.let { scheduleSettleRescan(it) }
+        log.runLogged("Copying relinked documents' metadata") { coordinator.copyRelinkInheritance() }
         ocrFacade.reconcileAfterRescan()
         // The index knows the library's documents and has their stored text: from here on a drain
         // may take a document without a row for one that is gone, so the drains may start.
