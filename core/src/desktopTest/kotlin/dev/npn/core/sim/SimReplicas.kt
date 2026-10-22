@@ -188,11 +188,19 @@ internal class SyncSimulation(
             )
         val watched = if (sync.watched[index]) SimWatchedFolder(name, world.clock::nowMillis, ::accounted) else null
 
+        /**
+         * Whether the library holds [hash]: a file here has the bytes, or a relink superseded them. Any
+         * replica's relink counts, not just one this replica folded: the import may find the bytes in
+         * place, a duplicate, and the sync tool then deliver the bake that replaced them there before
+         * the bake's relink, so the original is gone here as on the baking device, which is a bake.
+         */
         private suspend fun accounted(hash: String): Boolean =
             fs.allFiles().values.any { sha256Bytes(it) == hash } ||
-                replica.indexDb
-                    .rows("SELECT 1 FROM metadata_events WHERE operation = 'relink' AND documentId = '$hash'")
-                    .isNotEmpty()
+                members.any { member ->
+                    member.replica.indexDb
+                        .rows("SELECT 1 FROM metadata_events WHERE operation = 'relink' AND documentId = '$hash'")
+                        .isNotEmpty()
+                }
 
         val extra = ExtraPlanner(Random(salted(6)), sim, name, watched, sync.deleteAfterImport[index], log)
 
