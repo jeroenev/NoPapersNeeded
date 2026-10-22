@@ -77,6 +77,8 @@ private fun Throwable.isExpected(): Boolean =
         this is dev.npn.core.index.SupersededImportException ||
         // A bake the PDF cannot carry, or whose rewrite did not verify: BakeFailure.UNSUPPORTED_PDF.
         this is dev.npn.core.xmp.BakeRefusedException ||
+        // Another process's file at a bake's path while the bake was undone; the original is kept.
+        this is dev.npn.core.xmp.BakeDisplacedException ||
         this is VerifiedPublicationUnavailableException ||
         this is VerifiedPublicationFailedException ||
         this is java.nio.file.NoSuchFileException ||

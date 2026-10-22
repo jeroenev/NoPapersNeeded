@@ -10,6 +10,7 @@ import dev.npn.core.util.NpnLog
 import dev.npn.core.util.error
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
+import dev.npn.core.util.warn
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 
@@ -18,6 +19,14 @@ internal class BakeRefusedException(
     message: String,
     cause: Throwable? = null,
 ) : IllegalStateException(message, cause)
+
+/**
+ * Another process put its own file at a bake's path while the bake was undone: that file stays, and
+ * the original is kept under a recovery name the next rescan indexes. A race, not a bug.
+ */
+internal class BakeDisplacedException(
+    message: String,
+) : IllegalStateException(message)
 
 /**
  * Orchestrates XMP baking on top of a [LibraryFileSystem] and a [PdfXmpIO].
@@ -179,7 +188,7 @@ internal class BakeService(
                     // Its file stays; save the original under an ordinary, indexable recovery name.
                     if (!fs.holds(norm, bakedSha)) {
                         recovery = keepOriginal(norm, src)
-                        error("$norm holds another file; the original is at $recovery")
+                        throw BakeDisplacedException("$norm holds another file; the original is at $recovery")
                     }
                     // A move that reports a failure may still have landed, so where the bytes are
                     // afterwards is what counts.
@@ -208,7 +217,15 @@ internal class BakeService(
                 recovery = runCatchingCancellable { keepOriginal(norm, src) }.getOrNull()
             }
             val where = onDisk(listOfNotNull(norm, tmpPath, recovery))
-            log.error("Restoring $norm after a failed bake failed; the document's bytes are at: $where", failure)
+            val message = "Restoring $norm after a failed bake failed; the document's bytes are at: $where"
+            // An original saved under its recovery name, an ordinary one, is indexed by the next
+            // rescan: put right, so a warning. Only an original on disk nowhere is an error.
+            val kept = recovery ?: norm.takeIf { runCatchingCancellable { fs.holds(norm, oldSha) }.getOrDefault(false) }
+            if (kept != null) {
+                log.warn("$message; the original is at $kept, where the next rescan finds it", failure)
+            } else {
+                log.error(message, failure)
+            }
         }
     }
 

@@ -258,9 +258,10 @@ class BakeServiceTest {
             val other = "a sync writer's unrelated replacement".encodeToByteArray()
             fs.writeBytesOnce("doc.pdf", original)
             val oldSha = fs.sha256("doc.pdf")
+            val log = RecordingLog()
 
             assertFailsWith<IOException> {
-                BakeService(fs, io).bakeInPlace("doc.pdf", oldSha, xmp(tags = listOf("t"))) { _, _ ->
+                BakeService(fs, io, log).bakeInPlace("doc.pdf", oldSha, xmp(tags = listOf("t"))) { _, _ ->
                     fs.delete("doc.pdf")
                     fs.writeBytesOnce("doc.pdf", other)
                     throw IOException("journal unavailable")
@@ -271,6 +272,13 @@ class BakeServiceTest {
             val recovery = fs.listAllUnder("").single { it.name.startsWith("npn-recovery-") }
             fs.readBytes(recovery.relPath) shouldBe original
             fs.sha256(recovery.relPath) shouldBe oldSha
+            // Saved under a name the next rescan indexes: put right, so a warning that says where.
+            log.entries.none { it.level == NpnLog.Level.ERROR }.shouldBeTrue()
+            log.entries
+                .any {
+                    it.level == NpnLog.Level.WARN && recovery.relPath in it.message &&
+                        it.error is BakeDisplacedException
+                }.shouldBeTrue()
         }
 
     /** The rename landed, but the provider reported a failure: undone, the document is back as it was. */
@@ -315,8 +323,10 @@ class BakeServiceTest {
             relinkCalled.shouldBeFalse()
             val kept = listOf("doc.pdf", NpnPaths.Temp.bakePath("doc.pdf")).filter { holdsAVersion(it, oldSha) }
             kept.shouldNotBeEmpty()
-            // The log says where to find it.
-            log.entries.any { it.level == NpnLog.Level.ERROR && kept.all(it.message::contains) }.shouldBeTrue()
+            // The log says where to find it; a warning, as the original is saved under a recovery
+            // name the next rescan indexes.
+            log.entries.any { it.level == NpnLog.Level.WARN && kept.all(it.message::contains) }.shouldBeTrue()
+            log.entries.none { it.level == NpnLog.Level.ERROR }.shouldBeTrue()
         }
 
     /**
