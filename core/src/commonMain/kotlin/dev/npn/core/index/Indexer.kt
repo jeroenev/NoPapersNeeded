@@ -247,8 +247,7 @@ internal class Indexer(
         if (originals.isEmpty()) return
         val successors = documentDao.getByDocIds(originals.map { it.third }.distinct()).associateBy { it.docId }
         for ((meta, hash, successor) in originals) {
-            val row = successors[successor]?.takeIf { it.isLive } ?: continue
-            if (contentAt[row.relPath] != successor) continue
+            successors[successor]?.takeIf { it.isLive && contentAt[it.relPath] == successor } ?: continue
             log.runLogged("Removing ${meta.relPath}, the original of a baked document") {
                 val now = fs.stat(meta.relPath)?.takeIf { !it.isDirectory }
                 if (now != null && (now.hasStoredStat(meta.size, meta.mtimeMillis) || fs.holds(meta.relPath, hash))) {

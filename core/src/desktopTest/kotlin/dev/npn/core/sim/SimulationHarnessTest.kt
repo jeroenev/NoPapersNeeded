@@ -224,7 +224,7 @@ class SimulationHarnessTest {
                                 .single()[0]!!
                                 .toLong()
                         }
-                    stampAhead = trashedAt > fs.lastWriteAt(from)!!.atMillis
+                    stampAhead = trashedAt > fs.writes.lastWriteAt(from)!!.atMillis
                     returned = settlingReturns()
                 }
             }).run()

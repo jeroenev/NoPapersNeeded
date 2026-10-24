@@ -6,7 +6,6 @@ import dev.npn.core.index.MetadataWriteBlocked
 import dev.npn.core.index.WriteBlock
 import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.JournalOp
-import dev.npn.core.sim.InMemoryLibraryFileSystem.Loss
 import dev.npn.core.util.NpnLog
 import kotlinx.coroutines.test.TestCoroutineScheduler
 import java.io.File
@@ -507,9 +506,9 @@ internal class SyncSimulation(
                     .rows(
                         "SELECT documentId, operation, hlcPhysical, hlcCounter, hlcDevice FROM metadata_events " +
                             "WHERE operation IN ('doc-trash', 'doc-restore')",
-                    ).forEach { (docId, operation, physical, counter, device) ->
-                        val hlc = Hlc(physical!!.toLong(), counter!!.toInt(), device!!)
-                        lifecycle.getOrPut(docId!!) { HashSet() } += hlc to operation!!
+                    ).forEach { row ->
+                        val hlc = Hlc(row[HLC_PHYSICAL]!!.toLong(), row[HLC_COUNTER]!!.toInt(), row[HLC_DEVICE]!!)
+                        lifecycle.getOrPut(row[0]!!) { HashSet() } += hlc to row[1]!!
                     }
             }
         }
@@ -545,7 +544,7 @@ internal class SyncSimulation(
                 members[0],
                 "the app removed the last copy of a document no journal deleted or relinked:\n  " +
                     lost.joinToString("\n  ") { hash ->
-                        "${hash.take(ID)}: " + members.joinToString { "${it.name} ${it.fs.lossesOf(hash)}" } +
+                        "${hash.take(ID)}: " + members.joinToString { "${it.name} ${it.fs.losses.of(hash)}" } +
                             ", latest ${latestLoss(hash)}" +
                             ", lifecycle " +
                             lifecycle[hash].orEmpty().sortedBy { it.first }.map { "${it.second}@${it.first}" } +
@@ -561,13 +560,13 @@ internal class SyncSimulation(
      * The latest time some replica lost the last of the bytes hashing to [hash] in its folder, the
      * sync tool's losses left out; at one instant the app's own loss counts as the latest. A copy the
      * app removed while another file there still held the bytes (a duplicate) took no document away;
-     * an import's staging file counts neither way ([InMemoryLibraryFileSystem.lossRecordsOf]).
+     * an import's staging file counts neither way ([InMemoryLibraryFileSystem.losses]).
      */
-    private fun latestLoss(hash: String): InMemoryLibraryFileSystem.LossAt? =
+    private fun latestLoss(hash: String): LossAt? =
         members
-            .flatMap { it.fs.lossRecordsOf(hash) }
+            .flatMap { it.fs.losses.recordsOf(hash) }
             .filter { it.loss != Loss.SYNC && it.lastHere }
-            .maxWithOrNull(compareBy<InMemoryLibraryFileSystem.LossAt> { it.atMillis }.thenBy { it.loss == Loss.APP })
+            .maxWithOrNull(compareBy<LossAt> { it.atMillis }.thenBy { it.loss == Loss.APP })
 
     /** After a full sync every replica shows the library the first one shows, but for what each alone remembers. */
     private fun checkConvergence(views: List<LibraryView>) {
@@ -655,6 +654,11 @@ internal class SyncSimulation(
         const val ROUND_LINES = 6
         const val NANOS_PER_MILLI = 1_000_000L
         const val SLOW_STEP_MILLIS = 1_000L
+
+        // The columns of an HLC in a metadata_events query of the last-copies check.
+        const val HLC_PHYSICAL = 2
+        const val HLC_COUNTER = 3
+        const val HLC_DEVICE = 4
         val RELINK_TARGET = Regex("\"newDoc\":\"([0-9a-f]{64})\"")
     }
 }

@@ -8,7 +8,6 @@ import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.index.JournalCoordinator
-import dev.npn.core.journal.EventDecoderRegistry
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.util.reason
 import kotlinx.coroutines.Deferred
@@ -127,7 +126,7 @@ internal class Simulation(
 
     init {
         // What may displace this replica's bakes: a file from outside the app at the bake's path.
-        world.log.outsideWrites[label] = fs::lastWrittenFromOutside
+        world.log.outsideWrites[label] = fs.writes::lastFromOutside
     }
 
     private val generator =
@@ -357,10 +356,12 @@ internal class Simulation(
         fs.misnamedObjects().firstOrNull()?.let { fail("journal object not named by its hash: $it") }
         world.uncaught.firstOrNull()?.let { fail("an exception reached a scope's handler: $it") }
         world.log.bugs.firstOrNull()?.let {
-            // A displaced bake is judged by who wrote at its path: show what happened there.
-            val displaced = it.error?.let(::displacedBake)?.path
-            val history = displaced?.let { path -> "\n'$path': " + fs.historyOf(path).joinToString("; ") }.orEmpty()
-            fail("a bug was logged: $it$history\n${it.error?.stackTraceToString()?.take(STACK_CHARS)}")
+            fail(
+                "a bug was logged: $it${displacedHistory(
+                    fs,
+                    it,
+                )}\n${it.error?.stackTraceToString()?.take(STACK_CHARS)}",
+            )
         }
         if (replica.session == null) return
         val problems =
@@ -443,7 +444,7 @@ internal class Simulation(
         checkRelinkCopies(beforeRescan = false)
         val live = world.read("live view") { LibraryView.read(session, replica.indexDb) }
         checkFilesHoldTheirHashes(live)
-        checkSupersededOriginals(live)
+        world.read("the fold") { lingeringOriginals(fs, replica.indexDb.fold(), live) }?.let { fail(it) }
         checkRowStats()
         rebuildOracle(live)
         replica.ocr.closeGate()
@@ -547,9 +548,13 @@ internal class Simulation(
                     .filter { path ->
                         // Since the app took the bytes from there: the trash moves the file before its
                         // commit stamps the trash, so a return may land before trashedAt.
-                        val since = fs.appTookAwayAt(path, docId) ?: at
+                        val since = fs.writes.appTookAwayAt(path, docId) ?: at
                         othersTrash ||
-                            fs.lastWriteAt(path)?.let { !it.byApp && it.hash == docId && it.atMillis >= since } == true
+                            fs.writes
+                                .lastWriteAt(
+                                    path,
+                                )?.let { !it.byApp && it.hash == docId && it.atMillis >= since } ==
+                            true
                     }.map { it to docId }
             }
         }
@@ -584,7 +589,7 @@ internal class Simulation(
     private fun checkRelinkCopies(beforeRescan: Boolean) {
         val owed =
             world.read("relink copies owed") {
-                val state = fold()
+                val state = replica.indexDb.fold()
                 val copies = RelinkInheritanceUpgrade.copies(state)
                 if (beforeRescan) {
                     val targets = copies.mapNotNullTo(HashSet()) { it.doc }
@@ -600,42 +605,6 @@ internal class Simulation(
             fail(
                 "relink targets lack what an older build shows them by inheritance ($moment):\n  " +
                     owed.joinToString("\n  ") { "${it.doc?.take(ID)} ${it.op}" },
-            )
-        }
-    }
-
-    /** This replica's fold, of the events its index holds. */
-    private suspend fun fold(): FoldedState =
-        FoldedState().also { state ->
-            replica.indexDb
-                .metadataProjectionDao()
-                .allEvents()
-                .forEach { state.apply(EventDecoderRegistry.decodeStored(it.canonicalJson)) }
-        }
-
-    /**
-     * No bake's original lingers once its relink stands: no file under a recovery name holds bytes a
-     * relink superseded while the live document they became, the relink chain followed, has its own
-     * bytes at its path. The bake deletes its original after the relink; one a crash or a failed
-     * delete left there, the rescan that just ran deletes.
-     */
-    private fun checkSupersededOriginals(view: LibraryView) {
-        val state = world.read("the fold") { fold() }
-        val lingering =
-            fs.allFiles().filter { (path, bytes) ->
-                if (!NpnPaths.Temp.isRecovery(path) || !NpnPaths.isDocumentPath(path)) return@filter false
-                val hash = sha256Bytes(bytes)
-                val successor = state.resolveDocId(hash)
-                val at = view.live[successor]?.relPath
-                successor != hash && at != null && fs.bytesAt(at)?.let(::sha256Bytes) == successor
-            }
-        if (lingering.isNotEmpty()) {
-            fail(
-                "a baked document's original lingers under a recovery name " +
-                    "while the document it became is at its path:" +
-                    lingering.entries.joinToString("") { (path, bytes) ->
-                        "\n  '$path' (${sha256Bytes(bytes).take(ID)}): " + fs.historyOf(path).joinToString("; ")
-                    },
             )
         }
     }

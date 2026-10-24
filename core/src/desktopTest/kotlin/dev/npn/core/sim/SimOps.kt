@@ -630,7 +630,7 @@ internal class SimGenerator(
         }
     }
 
-    /** What an older build's bake of [docId], whose file holds [bytes], writes: new bytes of the same pages and text. */
+    /** What an older build's bake of [docId], whose file holds [bytes], writes: new bytes, same pages and text. */
     private fun olderBuildBaked(
         docId: String,
         bytes: ByteArray,

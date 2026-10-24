@@ -18,7 +18,6 @@ import kotlinx.coroutines.yield
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
 import java.nio.file.NoSuchFileException
-import java.util.EnumSet
 import java.util.TreeMap
 import java.util.TreeSet
 import kotlin.random.Random
@@ -637,7 +636,7 @@ class InMemoryLibraryFileSystem(
                 touch(to)
                 if (byApp) {
                     appRemovals += from
-                    tookAway(from, node)
+                    writes.tookAway(from, sha256Bytes(node.bytes), now())
                     recordWrite(to, node.bytes)
                 }
             }
@@ -667,10 +666,7 @@ class InMemoryLibraryFileSystem(
         byApp: Boolean = false,
     ) {
         files.remove(norm)?.let { node ->
-            if (byApp) {
-                appRemovals += norm
-                tookAway(norm, node)
-            }
+            if (byApp) appRemovals += norm
             lost(norm, node, byApp)
             touch(norm)
             return
@@ -738,53 +734,14 @@ class InMemoryLibraryFileSystem(
     /** The app's call taking effect right now, or null for the outside world. */
     private var actor: FsMethod? = null
 
-    /**
-     * Who last put bytes at a path and when: the app through one of its calls, or the outside world
-     * (another process, a backup put back, the sync tool, which all go through the `external*`
-     * members). A touch puts no bytes anywhere, and a delete leaves the entry as it was.
-     */
-    data class LastWrite(
-        val atMillis: Long,
-        val byApp: Boolean,
-        /** The hash of the bytes that write left there. */
-        val hash: String,
-    )
-
-    private val lastWrites = HashMap<String, LastWrite>()
-
-    /** Who took bytes away from a path: deleted them, or wrote other bytes over them. */
-    enum class Loss {
-        /** The app deleted them outside the trash. */
-        APP,
-
-        /** The app deleted them in the trash: its trash purge or a delete for good. */
-        APP_TRASH,
-
-        /** The sync tool, carrying out what another device's folder did. */
-        SYNC,
-
-        /** Another process, a backup put back: the outside world itself. */
-        OUTSIDE,
-    }
-
-    /** One time bytes were taken from [path] here: when, by whom, and whether [lastHere], no other file here held them. */
-    data class LossAt(
-        val atMillis: Long,
-        val loss: Loss,
-        val path: String,
-        val lastHere: Boolean,
-    )
-
-    private val losses = HashMap<String, MutableList<LossAt>>()
-
-    /** How the bytes hashing to [hash] were ever taken from a path here, in [Loss] order; empty when they never were. */
-    fun lossesOf(hash: String): Set<Loss> = losses[hash].orEmpty().mapTo(EnumSet.noneOf(Loss::class.java)) { it.loss }
+    /** Who wrote at each path, and when the app last took bytes away from one. */
+    val writes = PathWrites()
 
     /**
-     * Each time the bytes hashing to [hash] were taken from a path here, oldest first; never from an
-     * import's staging file, which is the import's copy of its source, not one of the library's.
+     * Each time bytes were taken from a path here; never from an import's staging file, which is the
+     * import's copy of its source, not one of the library's.
      */
-    fun lossRecordsOf(hash: String): List<LossAt> = losses[hash].orEmpty().toList()
+    val losses = Losses()
 
     private var syncCalls = 0
 
@@ -815,58 +772,31 @@ class InMemoryLibraryFileSystem(
                 syncCalls > 0 -> Loss.SYNC
                 else -> Loss.OUTSIDE
             }
+        val hash = sha256Bytes(node.bytes)
+        if (byApp) writes.tookAway(norm, hash, now())
         // An import's staging file is the import's copy of its source, none of the library's: it
         // neither takes a document's bytes away when it goes nor keeps them while it is there.
-        if (isImportStaging(norm)) return
-        val hash = sha256Bytes(node.bytes)
+        if (Losses.isImportStaging(norm)) return
         val kept =
             files.any { (path, other) ->
-                path != norm && !(inPlace && other === node) && !isImportStaging(path) &&
+                path != norm && !(inPlace && other === node) && !Losses.isImportStaging(path) &&
                     sha256Bytes(other.bytes) == hash
             }
-        losses.getOrPut(hash) { ArrayList() } += LossAt(now(), cause, norm, lastHere = !kept)
+        losses.record(hash, LossAt(now(), cause, norm, lastHere = !kept))
     }
-
-    private fun isImportStaging(norm: String) = NpnPaths.Temp.kindOf(norm) == NpnPaths.Temp.Kind.IMPORT
 
     /** Each path the bytes hashing to [hash] were taken from, with that path's history: what a failure shows. */
     fun lossesAt(hash: String): List<String> =
-        losses[hash].orEmpty().map { it.path }.distinct().map { path ->
+        losses.pathsOf(hash).map { path ->
             "'$path': " + historyOf(path).joinToString("; ")
         }
-
-    /** The last write at [relPath], or null when nothing ever wrote there. */
-    fun lastWriteAt(relPath: String): LastWrite? = lastWrites[relPath]
-
-    /**
-     * Whether the outside world, not the app, made the last write at [relPath], whether or not its
-     * file is still there: what a bake displaced there by another file is judged by, which the log
-     * reports some suspension points after the fact.
-     */
-    fun lastWrittenFromOutside(relPath: String): Boolean = lastWrites[relPath]?.byApp == false
-
-    // When the app last moved or deleted the bytes of a hash away from a path, by path and hash.
-    private val appTookAway = HashMap<Pair<String, String>, Long>()
-
-    private fun tookAway(
-        norm: String,
-        node: Node,
-    ) {
-        appTookAway[norm to sha256Bytes(node.bytes)] = now()
-    }
-
-    /** When the app last moved or deleted the bytes hashing to [hash] away from [relPath]; null when it never did. */
-    fun appTookAwayAt(
-        relPath: String,
-        hash: String,
-    ): Long? = appTookAway[relPath to hash]
 
     private fun wrote(
         norm: String,
         byApp: Boolean,
     ) {
         val node = files[norm] ?: return
-        lastWrites[norm] = LastWrite(now(), byApp, sha256Bytes(node.bytes))
+        writes.wrote(norm, LastWrite(now(), byApp, sha256Bytes(node.bytes)))
     }
 
     /** The last changes at each path, and who made them: what a failure at a path shows. */

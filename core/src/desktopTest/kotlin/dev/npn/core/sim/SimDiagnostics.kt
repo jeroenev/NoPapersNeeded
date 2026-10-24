@@ -1,6 +1,10 @@
 package dev.npn.core.sim
 
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.sha256Bytes
+import dev.npn.core.journal.EventDecoderRegistry
+import dev.npn.core.journal.FoldedState
 
 /**
  * For a document two indexes show differently, which journal events one has folded and the other
@@ -79,3 +83,48 @@ internal suspend fun lifecycleEvents(
 }
 
 private const val EVENT_CHARS = 260
+
+/** The fold of the events this index holds. */
+internal suspend fun NpnDatabase.fold(): FoldedState =
+    FoldedState().also { state ->
+        metadataProjectionDao().allEvents().forEach { state.apply(EventDecoderRegistry.decodeStored(it.canonicalJson)) }
+    }
+
+/** For a logged displaced bake ([displacedBake]), what happened at its path, which decides whether it is a bug. */
+internal fun displacedHistory(
+    fs: InMemoryLibraryFileSystem,
+    entry: LogEntry,
+): String =
+    entry.error
+        ?.let(::displacedBake)
+        ?.path
+        ?.let { path -> "\n'$path': " + fs.historyOf(path).joinToString("; ") }
+        .orEmpty()
+
+/**
+ * The at-rest check that no bake's original lingers once its relink stands: a failure message for
+ * each file in [fs] under a recovery name whose bytes a relink in [state] superseded while the live
+ * document they became, in [view], has its own bytes at its path; null when there is none. The bake
+ * deletes its original after the relink, and the rescan one a crash or a failed delete left.
+ */
+internal fun lingeringOriginals(
+    fs: InMemoryLibraryFileSystem,
+    state: FoldedState,
+    view: LibraryView,
+): String? {
+    val lingering =
+        fs.allFiles().filter { (path, bytes) ->
+            if (!NpnPaths.Temp.isRecovery(path) || !NpnPaths.isDocumentPath(path)) return@filter false
+            val hash = sha256Bytes(bytes)
+            val successor = state.resolveDocId(hash)
+            val at = view.live[successor]?.relPath
+            successor != hash && at != null && fs.bytesAt(at)?.let(::sha256Bytes) == successor
+        }
+    if (lingering.isEmpty()) return null
+    return "a baked document's original lingers under a recovery name while the document it became is at its path:" +
+        lingering.entries.joinToString("") { (path, bytes) ->
+            "\n  '$path' (${sha256Bytes(bytes).take(HISTORY_ID)}): " + fs.historyOf(path).joinToString("; ")
+        }
+}
+
+private const val HISTORY_ID = 8
