@@ -476,8 +476,10 @@ Kept by `BakeService`, `BakeRelink`, `DocContentFacadeImpl` and `FoldedState`:
   predecessors' edits.
 - Older builds still write relinks without copies and fold a target over its predecessors. At every
   open, after every rescan, after every watch ingest or metadata reconcile that folded new events
-  or failed (a failed ingest's recovery refolds in full; a write refused or failed then is owed
-  until the next one), and in every relink,
+  or failed, at the next of those or the periodic reconcile after any failed pass whose recovery
+  refolded in full (a commit's projection, a relink's or a bake's rescan: the refold may take in
+  another device's objects unannounced), with a write refused or failed then owed until the next
+  one, and in every relink,
   `RelinkInheritanceUpgrade.kt` copies onto each target whatever that
   inherited view shows and its own does not, idempotently (nothing when they agree); a relink copies
   the old document's inherited view, and a tag removal lists the predecessors' dots too. The copies

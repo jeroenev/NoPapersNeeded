@@ -131,14 +131,18 @@ internal class LibrarySessionImpl(
 
     /**
      * Write what relink targets lack of their predecessors' metadata ([copyRelinkInheritance]) when
-     * the fold took in new events ([folded]: a rescan, or an ingest or reconcile that moved it), or
-     * while an earlier attempt is still owed. An older build's relink, or another device's edit of a
+     * the fold took in new events ([folded]: a rescan, or an ingest or reconcile that moved it), when
+     * a failed pass's recovery refolded since (`JournalCoordinator.takeRecoveredRefold`: a commit's,
+     * a relink's or a bake's), or while an earlier attempt is still owed. An older build's relink, or another device's edit of a
      * predecessor, then shows on its target as soon as it is folded, not at the next rescan, which on
      * desktop may be hours away. Called outside the coordinator's lock, as every commit is.
      */
     private suspend fun writeRelinkCopies(folded: Boolean) {
         relinkCopiesLock.withLock {
-            if (!folded && !relinkCopiesOwed) return
+            // A failed pass's recovery refolded in full, folding what it found unannounced: the
+            // periodic reconcile, which folds nothing new then, is what gets to its copies.
+            val refolded = coordinator.takeRecoveredRefold()
+            if (!folded && !refolded && !relinkCopiesOwed) return
             relinkCopiesOwed = true
             log.runLogged("Copying relinked documents' metadata") {
                 if (coordinator.copyRelinkInheritance()) relinkCopiesOwed = false

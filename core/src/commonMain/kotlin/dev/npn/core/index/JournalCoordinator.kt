@@ -755,7 +755,10 @@ internal class JournalCoordinator(
         } catch (failure: Throwable) {
             transition(PassOutcome.failed(failure))
             if (onFailure == OnFailure.RECOVER) {
-                runCatchingCancellable { recoverDurableProjection() }.onFailure { recoveryFailure ->
+                runCatchingCancellable {
+                    recoverDurableProjection()
+                    recoveredRefold.value = true
+                }.onFailure { recoveryFailure ->
                     transition(PassOutcome.failed(recoveryFailure))
                     failure.addSuppressed(recoveryFailure)
                 }
@@ -819,6 +822,18 @@ internal class JournalCoordinator(
         val current = accumulator.reconcile().state ?: accumulator.loadState()
         adopt(current) { indexer.refreshState(current) }
     }
+
+    // Set when a full refold recovered a failed pass: see takeRecoveredRefold.
+    private val recoveredRefold = MutableStateFlow(false)
+
+    /**
+     * Whether a full refold recovered a failed pass ([OnFailure.RECOVER]: an ingest, or the
+     * projection of a commit, a relink's or a bake's rescan included) since the last call. That
+     * refold read the whole journal, so it may have taken in events another device wrote that no
+     * ingest or reconcile reports as folded: what follows a fold that moved (a relink's copies,
+     * `LibrarySessionImpl.writeRelinkCopies`) is owed.
+     */
+    fun takeRecoveredRefold(): Boolean = recoveredRefold.compareAndSet(expect = true, update = false)
 
     /** Whether the live fold took in anything: new events, or a full refold. */
     private val ProjectionStep.moved: Boolean
