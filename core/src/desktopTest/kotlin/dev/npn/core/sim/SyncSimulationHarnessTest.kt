@@ -1,7 +1,11 @@
 package dev.npn.core.sim
 
+import dev.npn.core.fs.sha256Bytes
+import dev.npn.core.journal.ContentAddressedJournalWriter
+import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
+import dev.npn.core.journal.PendingOp
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -77,7 +81,40 @@ class SyncSimulationHarnessTest {
             failure.message shouldContain "blocks writes as JOURNAL_DAMAGED"
         }
 
+    /**
+     * Bytes another replica relinked are accounted for here (a watched folder's importer may delete
+     * their source) only once the bytes they became are in this folder too: until then this folder
+     * holds the document nowhere.
+     */
+    @Test
+    fun anotherReplicasRelinkAccountsForBytesOnlyWithItsTargetHere() =
+        runTest {
+            val original = "a".repeat(HASH)
+            val baked = SimPdf.bytes("baked elsewhere", "w", BAKED_SIZE)
+            val answers = ArrayList<Boolean>()
+            SyncSimulation(testScheduler, config(), afterStep = { step ->
+                if (step == 1) {
+                    val relinked = members[1]
+                    val elsewhere = InMemoryLibraryFileSystem(world.clock::nowMillis)
+                    val olderBuild =
+                        ContentAddressedJournalWriter(elsewhere, "harness", HlcWatermarkAllocator(world.clock))
+                    val published =
+                        world.read("a relink") {
+                            olderBuild.commit(listOf(PendingOp.relink(original, sha256Bytes(baked))))
+                        }
+                    relinked.fs.externalWriteAtomic(published.relPath, elsewhere.bytesAt(published.relPath)!!)
+                    world.read("the relink's ingest") { relinked.replica.session!!.rescan() }
+                    answers += world.read("accounted on the replica that folded it") { relinked.accounted(original) }
+                    answers += world.read("accounted without its target") { members[0].accounted(original) }
+                    members[0].fs.externalWriteAtomic("baked.pdf", baked)
+                    answers += world.read("accounted with its target") { members[0].accounted(original) }
+                }
+            }).run()
+            answers shouldBe listOf(true, false, true)
+        }
+
     private companion object {
+        const val BAKED_SIZE = 950
         const val HARNESS_SEED = 3L
         const val STEPS = 20
         const val REPLAY_STEPS = 120

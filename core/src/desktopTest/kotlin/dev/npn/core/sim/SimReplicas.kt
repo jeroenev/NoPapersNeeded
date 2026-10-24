@@ -189,18 +189,18 @@ internal class SyncSimulation(
         val watched = if (sync.watched[index]) SimWatchedFolder(name, world.clock::nowMillis, ::accounted) else null
 
         /**
-         * Whether the library holds [hash]: a file here has the bytes, or a relink superseded them. Any
-         * replica's relink counts, not just one this replica folded: the import may find the bytes in
-         * place, a duplicate, and the sync tool then deliver the bake that replaced them there before
-         * the bake's relink, so the original is gone here as on the baking device, which is a bake.
+         * Whether the library holds [hash]: a file here has the bytes, or a relink superseded them.
+         * This replica's own relink counts; another replica's only once the bytes it relinked them to
+         * are in this folder: the import may find the bytes in place, a duplicate, and the sync tool
+         * then deliver the bake that replaced them there before the bake's relink, so the original is
+         * gone here as on the baking device, and its baked bytes are here instead.
          */
-        private suspend fun accounted(hash: String): Boolean =
-            fs.allFiles().values.any { sha256Bytes(it) == hash } ||
-                members.any { member ->
-                    member.replica.indexDb
-                        .rows("SELECT 1 FROM metadata_events WHERE operation = 'relink' AND documentId = '$hash'")
-                        .isNotEmpty()
-                }
+        internal suspend fun accounted(hash: String): Boolean {
+            val held = fs.allFiles().values.mapTo(HashSet(), ::sha256Bytes)
+            return hash in held ||
+                relinkTargets(this, hash).isNotEmpty() ||
+                members.any { member -> member !== this && relinkTargets(member, hash).any { it in held } }
+        }
 
         val extra = ExtraPlanner(Random(salted(6)), sim, name, watched, sync.deleteAfterImport[index], log)
 
@@ -217,6 +217,15 @@ internal class SyncSimulation(
     }
 
     val members = List(sync.replicas) { Member(it) }
+
+    /** The documents [member]'s index has [hash] relinked to. */
+    private suspend fun relinkTargets(
+        member: Member,
+        hash: String,
+    ): List<String> =
+        member.replica.indexDb
+            .rows("SELECT canonicalJson FROM metadata_events WHERE operation = 'relink' AND documentId = '$hash'")
+            .mapNotNull { (json) -> json?.let { RELINK_TARGET.find(it)?.groupValues?.get(1) } }
 
     val tool =
         SimSync(
@@ -526,5 +535,6 @@ internal class SyncSimulation(
         const val ROUND_LINES = 6
         const val NANOS_PER_MILLI = 1_000_000L
         const val SLOW_STEP_MILLIS = 1_000L
+        val RELINK_TARGET = Regex("\"newDoc\":\"([0-9a-f]{64})\"")
     }
 }
