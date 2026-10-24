@@ -262,9 +262,15 @@ why next to it. Fail through `fail(...)`, which attaches the seed and the trace.
   SAF storage is on its way out, so the simulation spends nothing on what only it can do. The SAF
   profile stays for its publication and relocation rules while the app supports it.
 - **AI** (enrichment, edit runs, chat, AI OCR): the AI endpoint is disabled.
-- **Compaction** runs only when the maintenance tick finds more than 64 objects older than a day,
-  which a long run reaches only now and then. There is no direct compaction operation, because the
-  coordinator is internal to the session.
+- **Snapshots.** The app no longer compacts the journal: it writes no snapshot and deletes no
+  object, and reads the snapshots earlier builds wrote. The simulation makes none, so it does not
+  exercise folding a snapshot beside the objects it replaced; `CompactionReconcileTest`,
+  `OlderBuildSnapshotTest` and `UndoneCompactionTest` do.
+- **Mixed-build libraries**, beyond one thing an older build does: a device on `main` records a
+  relink with no copies and folds a target over its predecessors, and the generator delivers such a
+  bare relink (`EXT_OLDER_BUILD_RELINK`). That device's other writes, its fold, and a build newer
+  than this one (an op or a field type this build refuses) are not modelled: every replica runs
+  this build.
 - **mtime-preserving overwrites** of the same size: with mtimes, every generated PDF has a size of
   its own. Where storage reports no mtimes, same-size replacements are modelled: every generated PDF
   has one of a few sizes, so only a hash tells a replacement apart.

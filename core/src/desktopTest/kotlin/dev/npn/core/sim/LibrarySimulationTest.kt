@@ -5,9 +5,11 @@ import kotlin.test.Test
 import kotlin.time.Duration.Companion.minutes
 
 /**
- * The deterministic simulation of one replica (docs/SIMULATION.md): seeded runs of the session
- * against an in-memory library folder on virtual time, each step checked against the library's
- * invariants and, at rest, against an index rebuilt from the files alone.
+ * The deterministic simulation of a library shared by two to four replicas through a sync tool
+ * (docs/SIMULATION.md, [SyncSimulation]): seeded runs of each replica's session against its own
+ * in-memory library folder on one virtual clock, each step checked against the library's
+ * invariants and those across replicas, and, at rest, each replica against an index rebuilt from
+ * its files alone and, after a full sync, against the others.
  *
  * CI runs [CI_SEEDS] seeds of [CI_STEPS] steps. A longer run, or a replay of one seed:
  *
@@ -17,7 +19,9 @@ import kotlin.time.Duration.Companion.minutes
  * ```
  *
  * `npn.sim.seeds` runs seeds 1 to n (from `npn.sim.firstSeed` if set); `npn.sim.seed` runs just
- * that one. The build forwards all four properties to the test JVM.
+ * that one; `npn.sim.replicas` forces the number of replicas (1: one replica, no sync),
+ * `npn.sim.maxReported` how many failing seeds a long run reports, and `npn.sim.traceDir` where
+ * every seed's trace goes. The build forwards all of these and `npn.sim.steps` to the test JVM.
  */
 class LibrarySimulationTest {
     @Test
