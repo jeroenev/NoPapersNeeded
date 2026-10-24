@@ -33,7 +33,7 @@ Each test process takes up to 768 MB of heap on top of Gradle's, so on a machine
 memory, or one building something else at the same time, lower the thread count rather than raise it.
 
 The default scope leaves `dev.npn.core.journal` out because a run of all three packages takes well
-over an hour on a laptop; mutate it on its own when working on the journal (about 15 minutes).
+over an hour on a laptop; mutate it on its own when working on the journal (15 to 20 minutes).
 
 ## How it is set up
 
@@ -81,33 +81,37 @@ before a fix added six lines to `FoldedState`:
 |---|---|---|---|---|---|---|---|
 | `core.journal` | 639 | 456 | 142 (28) | 0 | 41 | 71.4% | 76.3% |
 
-`dev.npn.core.index` and `dev.npn.core.app`, a partial run: the machine's memory ran out after
-23 minutes, with other builds running beside it, and the run was killed. PIT writes
-`mutations.xml` as each class finishes, so these are the classes it finished: in `core.index`
-`ImportService`, `Indexer`, `JournalCoordinator` and `MetadataAccumulator`; in `core.app`
-`DocLifecycleImpl`, `MetadataWriterImpl`, `DocContentFacadeImpl` and `LibraryQuerySql`; in
-`core.app.aiedit` `AiEditQueue` and `AiAutoEnricher`. These are the hotspot classes the review
-rounds fixed most often; the rest of the two packages (about 330 smaller units) was not reached.
+A rerun of `dev.npn.core.journal` after that fix (19 min 7 s) matched it: 647 mutants, 463
+killed, 146 survived, 0 timed out, 38 without coverage, a score of 71.4% → 71.6% and a strength of
+76.3% → 76.0%.
 
-| Package (classes finished) | Mutants | Killed | Survived (inlined) | Timed out | No coverage | Score | Strength |
+`dev.npn.core.index` and `dev.npn.core.app` (with `core.app.aiedit`), a complete run of the default
+scope: 56 min 37 s, 54,762 test runs (16.3 per mutant).
+
+| Package | Mutants | Killed | Survived | Timed out | No coverage | Score | Strength |
 |---|---|---|---|---|---|---|---|
-| `core.index` (4) | 504 | 342 | 128 (27) | 2 | 32 | 68.3% | 72.9% |
-| `core.app` (4) | 298 | 181 | 56 (14) | 1 | 60 | 61.1% | 76.5% |
-| `core.app.aiedit` (2) | 161 | 118 | 32 (10) | 2 | 9 | 74.5% | 78.9% |
-| Total | 963 | 641 | 216 (51) | 5 | 101 | 67.1% | 74.9% |
+| `core.index` | 1493 | 994 | 274 | 112 | 113 | 74.1% | 80.1% |
+| `core.app` | 1487 | 802 | 279 | 106 | 299 | 61.1% | 76.4% |
+| `core.app.aiedit` | 374 | 275 | 70 | 4 | 24 | 74.6% | 79.7% |
+| Total | 3354 | 2071 | 623 | 222 | 436 | 68.4% | 78.6% |
 
-Per class, the survivors (and mutants without coverage) were: `JournalCoordinator` 35 (14),
-`ImportService` 34 (12), `MetadataAccumulator` 32 (4), `Indexer` 27 (2), `AiEditQueue` 21 (9),
-`DocLifecycleImpl` 18 (16), `MetadataWriterImpl` 15 (25), `DocContentFacadeImpl` 13 (17),
-`AiAutoEnricher` 11 (0), `LibraryQuerySql` 10 (2).
+Per class, most first, the survivors (and mutants without coverage) were: `JournalCoordinator` 80
+(68), `LibrarySessionImpl` 62 (26; a score of 42.9%), `ImportService` 43 (12), `Indexer` 35 (3),
+`MetadataWriterImpl` 32 (35), `FoldProjection` 25 (4), `MetadataAccumulator` 24 (4),
+`DocLifecycleImpl` 23 (17), `NameSimilarity` 23 (3), `AiEditQueue` 22 (9), `FieldRegistryImpl` 15
+(19), `DocContentFacadeImpl` 14 (27). In `core.journal`: `FoldedState` 39 (14),
+`EventDecoderRegistry` 38 (1), `JournalEventSerializer` 29 (1), `StorageV2Reader` 12 (3),
+`SnapshotCodec` 7 (0).
 
-A complete run of both default packages takes over an hour at four threads; run it alone, or on
-the weekly workflow, and replace these tables with its numbers.
+A complete run of both default packages takes 57 minutes at four threads on that laptop; run it
+alone, or on the weekly workflow. `mutation.yml` runs it at two threads in a 165-minute step, which
+is likely too short on a two-core hosted runner: half the threads alone make it about two hours
+there before any slowdown of the runner itself.
 
 ### Likely test gaps in the baseline, now covered
 
 The baseline's survivors in the hotspot classes held ten guards no test exercised. Each now has a
-test that fails with the mutant applied by hand (the numbers above predate them):
+test that fails with the mutant applied by hand, and the complete run above includes them:
 
 | Guard | Test |
 |---|---|
