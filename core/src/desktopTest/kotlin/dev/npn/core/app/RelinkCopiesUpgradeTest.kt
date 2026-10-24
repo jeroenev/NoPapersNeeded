@@ -163,7 +163,9 @@ class RelinkCopiesUpgradeTest {
     fun aRelinkWithoutCopiesWhoseIngestFailsAndRecoversIsCopiedWithoutARescan() =
         runTest {
             watchedRelink { relink ->
-                relink.fs.faults.arm(SimFaults.Rule(FsMethod.READ, relink.relinkPath, SimFaults.Point.BEFORE, times = 1))
+                relink.fs.faults.arm(
+                    SimFaults.Rule(FsMethod.READ, relink.relinkPath, SimFaults.Point.BEFORE, times = 1),
+                )
                 relink.arrive()
                 relink.world.advance(SETTLED_MILLIS)
 
@@ -183,7 +185,12 @@ class RelinkCopiesUpgradeTest {
         runTest {
             watchedRelink { relink ->
                 relink.fs.faults.arm(
-                    SimFaults.Rule(FsMethod.PUBLISH, NpnPaths.JOURNAL_DIR, SimFaults.Point.BEFORE, times = Int.MAX_VALUE),
+                    SimFaults.Rule(
+                        FsMethod.PUBLISH,
+                        NpnPaths.JOURNAL_DIR,
+                        SimFaults.Point.BEFORE,
+                        times = Int.MAX_VALUE,
+                    ),
                 )
                 relink.arrive()
                 relink.world.advance(SETTLED_MILLIS)
@@ -253,7 +260,10 @@ class RelinkCopiesUpgradeTest {
         val relinkPath: String = objects.last()
 
         /** The older build's objects land in the folder, as a sync tool delivers them. */
-        fun arrive() = objects.forEach { path -> fs.externalWriteAtomic(path, elsewhere.bytesAt(path).shouldNotBeNull()) }
+        fun arrive() =
+            objects.forEach { path ->
+                fs.externalWriteAtomic(path, elsewhere.bytesAt(path).shouldNotBeNull())
+            }
 
         /** The rescans run since [arrive]. */
         fun rescans(): Int = (fs.calls[FsMethod.LIST_INDEXABLE] ?: 0) - rescansBefore

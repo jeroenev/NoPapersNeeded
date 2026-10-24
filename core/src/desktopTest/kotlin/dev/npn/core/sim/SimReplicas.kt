@@ -535,7 +535,8 @@ internal class SyncSimulation(
                 "the app removed the last copy of a document no journal deleted or relinked:\n  " +
                     lost.joinToString("\n  ") { hash ->
                         "${hash.take(ID)}: " + members.joinToString { "${it.name} ${it.fs.lossesOf(hash)}" } +
-                            ", latest ${latestLoss(hash)}" + (if (hash in trashed) ", in the trash" else ", not in the trash") +
+                            ", latest ${latestLoss(hash)}" +
+                            (if (hash in trashed) ", in the trash" else ", not in the trash") +
                             members.joinToString("") { member ->
                                 member.fs.lossesAt(hash).joinToString("") { "\n    ${member.name} $it" }
                             }

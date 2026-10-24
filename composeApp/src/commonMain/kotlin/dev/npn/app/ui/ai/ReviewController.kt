@@ -246,7 +246,8 @@ internal object SavedTicks {
         val wanted =
             saved.drop(1).associate { entry ->
                 val parts = entry.split(SEPARATOR)
-                parts.first() to parts.drop(1).filter { it.length > 1 }.associate { it.substring(1) to (it[0] == TICKED) }
+                parts.first() to
+                    parts.drop(1).filter { it.length > 1 }.associate { it.substring(1) to (it[0] == TICKED) }
             }
         return reopened.map { doc ->
             val states = wanted[doc.docId].orEmpty()

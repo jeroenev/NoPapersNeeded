@@ -157,7 +157,15 @@ class ReviewControllerTest : MainDispatcherTest() {
     @Test
     fun deselectingEverySuggestionOfALargeRunSavesOnlyTheBase() =
         runTest(dispatcher) {
-            val opened = List(LARGE_RUN) { reviewDoc(largeRunId(it), tags = listOf("t1"), fields = mapOf(FieldKeys.TITLE to "Bill")) }
+            val opened =
+                List(LARGE_RUN) {
+                    reviewDoc(
+                        largeRunId(it),
+                        tags = listOf("t1"),
+                        fields =
+                            mapOf(FieldKeys.TITLE to "Bill"),
+                    )
+                }
             val none = opened.setAllSelected(false)
 
             SavedTicks.of(none, opened) shouldContainExactly listOf("none")
@@ -169,7 +177,15 @@ class ReviewControllerTest : MainDispatcherTest() {
     @Test
     fun aSelectionTooLargeToSaveIsRestoredWithNothingTicked() =
         runTest(dispatcher) {
-            val opened = List(LARGE_RUN) { reviewDoc(largeRunId(it), tags = listOf("t1"), fields = mapOf(FieldKeys.TITLE to "Bill")) }
+            val opened =
+                List(LARGE_RUN) {
+                    reviewDoc(
+                        largeRunId(it),
+                        tags = listOf("t1"),
+                        fields =
+                            mapOf(FieldKeys.TITLE to "Bill"),
+                    )
+                }
             // Half of every document ticked: as far from the run's own, from all and from none.
             val half = opened.fold(opened) { docs, doc -> docs.toggleChip(doc.docId, "t1") }
 

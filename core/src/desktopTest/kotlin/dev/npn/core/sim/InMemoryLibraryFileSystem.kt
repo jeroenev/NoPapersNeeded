@@ -383,7 +383,13 @@ class InMemoryLibraryFileSystem(
             external(norm)
             val node = files[norm]
             node?.let {
-                if (bySync) bySyncTool { lost(norm, it, byApp = false, inPlace = true) } else lost(norm, it, byApp = false, inPlace = true)
+                if (bySync) {
+                    bySyncTool {
+                        lost(norm, it, byApp = false, inPlace = true)
+                    }
+                } else {
+                    lost(norm, it, byApp = false, inPlace = true)
+                }
             }
             if (node == null) {
                 if (dirs.containsKey(norm)) remove(norm)
@@ -807,13 +813,19 @@ class InMemoryLibraryFileSystem(
                 else -> Loss.OUTSIDE
             }
         val hash = sha256Bytes(node.bytes)
-        val kept = files.any { (path, other) -> path != norm && !(inPlace && other === node) && sha256Bytes(other.bytes) == hash }
+        val kept =
+            files.any { (path, other) ->
+                path != norm && !(inPlace && other === node) &&
+                    sha256Bytes(other.bytes) == hash
+            }
         losses.getOrPut(hash) { ArrayList() } += LossAt(now(), cause, norm, lastHere = !kept)
     }
 
     /** Each path the bytes hashing to [hash] were taken from, with that path's history: what a failure shows. */
     fun lossesAt(hash: String): List<String> =
-        losses[hash].orEmpty().map { it.path }.distinct().map { path -> "'$path': " + historyOf(path).joinToString("; ") }
+        losses[hash].orEmpty().map { it.path }.distinct().map { path ->
+            "'$path': " + historyOf(path).joinToString("; ")
+        }
 
     /** The last write at [relPath], or null when nothing ever wrote there. */
     fun lastWriteAt(relPath: String): LastWrite? = lastWrites[relPath]

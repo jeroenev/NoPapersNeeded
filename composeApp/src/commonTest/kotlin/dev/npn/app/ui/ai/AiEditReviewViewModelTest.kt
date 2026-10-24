@@ -139,7 +139,8 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
     @Test
     fun aRestoredProcessKeepsWhatTheUserChoseWhenTheRunReopensWithOtherDefaults() =
         runTest(dispatcher) {
-            val review = ScriptedReview(docs = listOf(selectedReviewDoc("a"), selectedReviewDoc("b", fieldSelected = false)))
+            val review =
+                ScriptedReview(docs = listOf(selectedReviewDoc("a"), selectedReviewDoc("b", fieldSelected = false)))
             val session = sessionWith(review)
             val screen = recreatable { AiEditReviewViewModel(session, "job", it) }
             advanceUntilIdle()
@@ -182,7 +183,12 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
             val review =
                 ScriptedReview(
                     docs = ids.map { selectedReviewDoc(it) },
-                    outcome = ApplyOutcome.Retry(owed.map { selectedReviewDoc(it) }, failedDocs = RETRY_DOCS, total = ids.size),
+                    outcome =
+                        ApplyOutcome.Retry(
+                            owed.map { selectedReviewDoc(it) },
+                            failedDocs = RETRY_DOCS,
+                            total = ids.size,
+                        ),
                 )
             val session = sessionWith(review)
             val handle = SavedStateHandle()
@@ -221,7 +227,10 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
             val restored = AiEditReviewViewModel(session, "job", handle.afterProcessDeath())
             collecting(restored.phase)
             advanceUntilIdle()
-            val docs = restored.phase.value.shouldBeInstanceOf<QueuedReviewPhase.Review>().batch.docs
+            val docs =
+                restored.phase.value
+                    .shouldBeInstanceOf<QueuedReviewPhase.Review>()
+                    .batch.docs
             docs.size shouldBe UNSAVABLE_RUN_DOCS
             docs.count { doc -> doc.chips.single().selected || doc.fields.single().selected } shouldBe 0
         }

@@ -628,7 +628,8 @@ internal class Simulation(
             }
         if (lingering.isNotEmpty()) {
             fail(
-                "a baked document's original lingers under a recovery name while the document it became is at its path:" +
+                "a baked document's original lingers under a recovery name " +
+                    "while the document it became is at its path:" +
                     lingering.entries.joinToString("") { (path, bytes) ->
                         "\n  '$path' (${sha256Bytes(bytes).take(ID)}): " + fs.historyOf(path).joinToString("; ")
                     },

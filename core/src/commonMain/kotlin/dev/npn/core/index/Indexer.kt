@@ -235,7 +235,9 @@ internal class Indexer(
         val originals =
             present.mapNotNull { meta ->
                 val hash = hashes[meta.relPath]?.takeIf { NpnPaths.Temp.isRecovery(meta.relPath) }
-                hash?.let { state.resolveDocId(it) }?.takeIf { it != hash }?.let { successor -> Triple(meta, hash, successor) }
+                hash?.let { state.resolveDocId(it) }?.takeIf { it != hash }?.let { successor ->
+                    Triple(meta, hash, successor)
+                }
             }
         if (originals.isEmpty()) return
         val successors = documentDao.getByDocIds(originals.map { it.third }.distinct()).associateBy { it.docId }

@@ -192,14 +192,23 @@ class SimulationHarnessTest {
                             "clock ahead",
                             HlcWatermarkAllocator(EpochClock { world.clock.nowMillis() + HOUR_MILLIS }),
                         )
-                    val remote = world.read("a device whose clock runs ahead") { ahead.commit(listOf(PendingOp.tagStyle("ahead", "#00ff00", null))) }
+                    val remote =
+                        world.read("a device whose clock runs ahead") {
+                            ahead.commit(listOf(PendingOp.tagStyle("ahead", "#00ff00", null)))
+                        }
                     fs.externalWriteAtomic(remote.relPath, elsewhere.bytesAt(remote.relPath)!!)
                     val bytes = SimPdf.bytes("trashed ahead", "y", PLANTED_SIZE + 5)
                     val (docId, from) =
                         world.read("ingest, import and trash") {
                             val session = replica.session!!
                             session.rescan()
-                            val docId = session.importPdfBytes(bytes, "trashed.pdf").shouldBeInstanceOf<ImportOutcome.Imported>().docId
+                            val docId =
+                                session
+                                    .importPdfBytes(
+                                        bytes,
+                                        "trashed.pdf",
+                                    ).shouldBeInstanceOf<ImportOutcome.Imported>()
+                                    .docId
                             session.docLifecycle.trashDoc(docId)
                             docId to
                                 replica.indexDb

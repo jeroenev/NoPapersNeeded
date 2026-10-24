@@ -308,7 +308,9 @@ internal class LibrarySessionImpl(
             // Either may fold a relink an older build wrote without copies, or an edit of a relinked
             // document's predecessor: the copies follow at once, as after a rescan.
             is WatchAction.IngestObject -> {
-                writeRelinkCopiesAfter(log.runLogged("Journal object ingest") { coordinator.ingestObject(action.relPath) })
+                writeRelinkCopiesAfter(
+                    log.runLogged("Journal object ingest") { coordinator.ingestObject(action.relPath) },
+                )
             }
 
             WatchAction.ReconcileJournal -> {
