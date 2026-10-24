@@ -335,6 +335,7 @@ class InMemoryLibraryFileSystem(
         val norm = NpnPaths.normalize(relPath)
         external(norm)
         if (dirs.containsKey(norm)) remove(norm)
+        files[norm]?.let { lost(norm, it, byApp = false) }
         ensureParents(norm)
         files[norm] = Node(bytes.copyOf(), mtime)
         wrote(norm, byApp = false)
@@ -351,12 +352,14 @@ class InMemoryLibraryFileSystem(
         bytes: ByteArray,
         chunks: Int,
         intervalMillis: Long,
+        /** The sync tool writing a version in place, rather than another process. */
+        bySync: Boolean = false,
     ) {
         val norm = NpnPaths.normalize(relPath)
         val step = (bytes.size + chunks - 1) / chunks
         writing += norm
         try {
-            writeChunks(norm, bytes, step, intervalMillis)
+            writeChunks(norm, bytes, step, intervalMillis, bySync)
         } finally {
             writing -= norm
         }
@@ -370,12 +373,14 @@ class InMemoryLibraryFileSystem(
         bytes: ByteArray,
         step: Int,
         intervalMillis: Long,
+        bySync: Boolean,
     ) {
         var written = 0
         while (written < bytes.size) {
             written = minOf(bytes.size, written + step)
             external(norm)
             val node = files[norm]
+            node?.let { if (bySync) bySyncTool { lost(norm, it, byApp = false) } else lost(norm, it, byApp = false) }
             if (node == null) {
                 if (dirs.containsKey(norm)) remove(norm)
                 ensureParents(norm)
@@ -403,6 +408,7 @@ class InMemoryLibraryFileSystem(
         val norm = NpnPaths.normalize(relPath)
         val node = files[norm] ?: return externalWriteAtomic(norm, bytes)
         external(norm)
+        lost(norm, node, byApp = false)
         node.bytes = bytes.copyOf()
         if (!keepStat) node.mtime = now()
         wrote(norm, byApp = false)
@@ -649,15 +655,16 @@ class InMemoryLibraryFileSystem(
         norm: String,
         byApp: Boolean = false,
     ) {
-        if (files.remove(norm) != null) {
+        files.remove(norm)?.let { node ->
             if (byApp) appRemovals += norm
+            lost(norm, node, byApp)
             touch(norm)
             return
         }
         if (!dirs.containsKey(norm)) return
         val prefix = "$norm/"
         files.keys.filter { it.startsWith(prefix) }.forEach {
-            files.remove(it)
+            files.remove(it)?.let { node -> lost(it, node, byApp) }
             if (byApp) appRemovals += it
         }
         dirs.keys.filter { it == norm || it.startsWith(prefix) }.forEach { dirs.remove(it) }
@@ -730,6 +737,61 @@ class InMemoryLibraryFileSystem(
     )
 
     private val lastWrites = HashMap<String, LastWrite>()
+
+    /** Who took bytes away from a path: deleted them, or wrote other bytes over them. */
+    enum class Loss {
+        /** The app deleted them outside the trash. */
+        APP,
+
+        /** The app deleted them in the trash: its trash purge or a delete for good. */
+        APP_TRASH,
+
+        /** The sync tool, carrying out what another device's folder did. */
+        SYNC,
+
+        /** Another process, a backup put back: the outside world itself. */
+        OUTSIDE,
+    }
+
+    private val losses = HashMap<String, MutableSet<Loss>>()
+
+    /** How the bytes hashing to [hash] were ever taken from a path here; empty when they never were. */
+    fun lossesOf(hash: String): Set<Loss> = losses[hash].orEmpty()
+
+    private var syncCalls = 0
+
+    /** Run [block], the sync tool's change to this folder, so what it takes away counts as [Loss.SYNC]. */
+    fun <T> bySyncTool(block: () -> T): T {
+        syncCalls++
+        try {
+            return block()
+        } finally {
+            syncCalls--
+        }
+    }
+
+    private fun lost(
+        norm: String,
+        node: Node,
+        byApp: Boolean,
+    ) {
+        val cause =
+            when {
+                byApp && norm.startsWith("${NpnPaths.TRASH_DIR}/") -> Loss.APP_TRASH
+                byApp -> Loss.APP
+                syncCalls > 0 -> Loss.SYNC
+                else -> Loss.OUTSIDE
+            }
+        val hash = sha256Bytes(node.bytes)
+        losses.getOrPut(hash) { HashSet() } += cause
+        lossPaths.getOrPut(hash) { LinkedHashSet() } += norm
+    }
+
+    private val lossPaths = HashMap<String, MutableSet<String>>()
+
+    /** Each path the bytes hashing to [hash] were taken from, with that path's history: what a failure shows. */
+    fun lossesAt(hash: String): List<String> =
+        lossPaths[hash].orEmpty().map { path -> "'$path': " + historyOf(path).joinToString("; ") }
 
     /** The last write at [relPath], or null when nothing ever wrote there. */
     fun lastWriteAt(relPath: String): LastWrite? = lastWrites[relPath]

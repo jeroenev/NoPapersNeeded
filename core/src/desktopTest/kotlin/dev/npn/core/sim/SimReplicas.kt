@@ -5,6 +5,7 @@ import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.index.MetadataWriteBlocked
 import dev.npn.core.index.WriteBlock
 import dev.npn.core.journal.JournalOp
+import dev.npn.core.sim.InMemoryLibraryFileSystem.Loss
 import dev.npn.core.util.NpnLog
 import kotlinx.coroutines.test.TestCoroutineScheduler
 import java.io.File
@@ -443,9 +444,59 @@ internal class SyncSimulation(
         }
         val views = members.map { it.sim.checkAtRest() }
         members.forEach(::checkOwnNames)
+        checkLastCopies()
         if (full) checkConvergence(views)
         members.forEach { member ->
             member.cleanStep = world.step
+        }
+    }
+
+    /**
+     * At rest: the app never removes a document's last copy. Every document some replica's index has
+     * a row for, which no replica's journal deleted for good or relinked onto other bytes, is held by
+     * a file in some replica's folder (its path, a duplicate, the trash, a conflict copy), or what
+     * took its bytes away explains it: another process, or the app in its trash (the trash purge, a
+     * delete for good), on any replica. The sync tool only carries out another device's change, so a
+     * loss it made has its cause on that device; nor does a document nothing ever took bytes from
+     * count. What is left is the app deleting the last copy of a document it still shows, or would:
+     * the live index and a rebuild then both hide it as missing, which neither oracle sees.
+     */
+    private fun checkLastCopies() {
+        val known = HashSet<String>()
+        val gone = HashSet<String>()
+        members.forEach { member ->
+            world.read("the documents ${member.name} knows") {
+                val db = member.replica.indexDb
+                db.rows("SELECT docId FROM documents").mapNotNullTo(known) { it[0] }
+                db
+                    .rows(
+                        "SELECT DISTINCT documentId FROM metadata_events WHERE operation IN ('doc-delete', 'relink')",
+                    ).mapNotNullTo(gone) { it[0] }
+            }
+        }
+        val held =
+            members.flatMapTo(HashSet()) { member ->
+                member.fs
+                    .allFiles()
+                    .values
+                    .map(::sha256Bytes)
+            }
+        val lost =
+            (known - gone - held).sorted().filter { hash ->
+                val causes = members.flatMapTo(HashSet()) { it.fs.lossesOf(hash) }
+                Loss.APP in causes && Loss.OUTSIDE !in causes && Loss.APP_TRASH !in causes
+            }
+        if (lost.isNotEmpty()) {
+            fail(
+                members[0],
+                "the app removed the last copy of a document no journal deleted or relinked:\n  " +
+                    lost.joinToString("\n  ") { hash ->
+                        "${hash.take(ID)}: " + members.joinToString { "${it.name} ${it.fs.lossesOf(hash)}" } +
+                            members.joinToString("") { member ->
+                                member.fs.lossesAt(hash).joinToString("") { "\n    ${member.name} $it" }
+                            }
+                    },
+            )
         }
     }
 

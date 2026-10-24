@@ -254,12 +254,12 @@ internal class SimSync(
                     undeliverable += "${peers[to].name}: '$path'"
                     return
                 }
-                fs.externalWriteAtomic(temp, bytes, version.mtime)
+                fs.bySyncTool { fs.externalWriteAtomic(temp, bytes, version.mtime) }
                 if (delivery.transferMillis > 0) delay(delivery.transferMillis)
                 // The temporary file is the tool's; if it went meanwhile, the next pull starts over.
                 if (fs.bytesAt(temp) == null) return
                 apply(to, path, version, delivery, immediate = false, duplicate = duplicate, temp = temp)
-                fs.externalDelete(temp)
+                fs.bySyncTool { fs.externalDelete(temp) }
             }
 
             Delivery.Atomic, is Delivery.InPlace -> {
@@ -360,16 +360,16 @@ internal class SimSync(
                 "${sha256Bytes(version.bytes!!).take(ID)} from ${peers[remote].name})"
         }
         if (remoteWins) {
-            fs.externalMove(path, copy)
+            fs.bySyncTool { fs.externalMove(path, copy) }
             put(fs, path, version, delivery, temp, to)
             known[to][path] = SyncVersion(version.bytes!!.copyOf(), version.mtime, bump(joined, to), to)
         } else {
             if (temp !=
                 null
             ) {
-                fs.externalMove(temp, copy)
+                fs.bySyncTool { fs.externalMove(temp, copy) }
             } else {
-                fs.externalWriteAtomic(copy, version.bytes!!, version.mtime)
+                fs.bySyncTool { fs.externalWriteAtomic(copy, version.bytes!!, version.mtime) }
             }
             known[to][path] = SyncVersion(current.copyOf(), localMtime, bump(joined, to), to)
         }
@@ -390,7 +390,7 @@ internal class SimSync(
         val bytes = version.bytes
         when {
             bytes == null -> {
-                fs.externalDelete(path)
+                fs.bySyncTool { fs.externalDelete(path) }
             }
 
             delivery is Delivery.InPlace -> {
@@ -404,7 +404,13 @@ internal class SimSync(
                     "in place '$path' at ${peers[to].name}" to
                     world.launch {
                         try {
-                            fs.externalWriteInChunks(path, bytes, delivery.chunks, delivery.intervalMillis)
+                            fs.externalWriteInChunks(
+                                path,
+                                bytes,
+                                delivery.chunks,
+                                delivery.intervalMillis,
+                                bySync = true,
+                            )
                         } finally {
                             writing[to] -= path
                         }
@@ -412,11 +418,11 @@ internal class SimSync(
             }
 
             temp != null && fs.bytesAt(temp) != null -> {
-                fs.externalMove(temp, path)
+                fs.bySyncTool { fs.externalMove(temp, path) }
             }
 
             else -> {
-                fs.externalWriteAtomic(path, bytes, version.mtime)
+                fs.bySyncTool { fs.externalWriteAtomic(path, bytes, version.mtime) }
             }
         }
     }

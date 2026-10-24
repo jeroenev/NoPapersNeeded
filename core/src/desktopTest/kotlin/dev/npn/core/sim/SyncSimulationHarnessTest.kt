@@ -1,5 +1,6 @@
 package dev.npn.core.sim
 
+import dev.npn.core.app.ImportOutcome
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.HlcWatermarkAllocator
@@ -79,6 +80,28 @@ class SyncSimulationHarnessTest {
                     }).run()
                 }
             failure.message shouldContain "blocks writes as JOURNAL_DAMAGED"
+        }
+
+    /**
+     * A document whose only file the app deleted shows as missing in the live index and in a rebuild
+     * alike, so neither oracle sees it: the check of last copies across the replicas does.
+     */
+    @Test
+    fun theAppDeletingADocumentsLastCopyFailsTheRun() =
+        runTest {
+            val failure =
+                shouldThrow<SimFailure> {
+                    SyncSimulation(testScheduler, config(), afterStep = { step ->
+                        if (step == 2) {
+                            val bytes = SimPdf.bytes("only copy", "v", BAKED_SIZE + 1)
+                            world.read("import, then delete as the app") {
+                                val imported = members[0].replica.session!!.importPdfBytes(bytes, "only.pdf")
+                                members[0].fs.delete((imported as ImportOutcome.Imported).relPath)
+                            }
+                        }
+                    }).run()
+                }
+            failure.message shouldContain "the app removed the last copy"
         }
 
     /**
