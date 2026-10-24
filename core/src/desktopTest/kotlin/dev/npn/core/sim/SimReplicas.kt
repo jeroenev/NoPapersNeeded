@@ -4,6 +4,7 @@ import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.index.MetadataWriteBlocked
 import dev.npn.core.index.WriteBlock
+import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.JournalOp
 import dev.npn.core.sim.InMemoryLibraryFileSystem.Loss
 import dev.npn.core.util.NpnLog
@@ -455,15 +456,21 @@ internal class SyncSimulation(
      * At rest: the app never removes a document's last copy. Every document some replica's index has
      * a row for, which no replica's journal deleted for good or relinked onto other bytes, is held by
      * a file in some replica's folder (its path, a duplicate, the trash, a conflict copy), or what
-     * took its bytes away explains it: another process, or the app in its trash (the trash purge, a
-     * delete for good), on any replica. The sync tool only carries out another device's change, so a
-     * loss it made has its cause on that device; nor does a document nothing ever took bytes from
-     * count. What is left is the app deleting the last copy of a document it still shows, or would:
-     * the live index and a rebuild then both hide it as missing, which neither oracle sees.
+     * last took its bytes away explains it. Each folder records every time it lost bytes, when, by
+     * whom, and whether no other file there still held them; the latest loss of the last of them in
+     * a folder, on any replica, decides, the sync tool's left out, since it only
+     * carries out another device's change, whose cause is on that device. Another process explains
+     * the loss; the app in its trash (the trash purge, a delete for good) explains it only for a
+     * document the journals, all replicas' events together, have in the trash; nothing explains the
+     * app deleting it elsewhere. A document nothing ever took bytes from is not counted. What is
+     * left is the app deleting the last copy of a document it still shows, or would: the live index
+     * and a rebuild then both hide it as missing, which neither oracle sees.
      */
     private fun checkLastCopies() {
         val known = HashSet<String>()
         val gone = HashSet<String>()
+        // Per document, its latest doc-trash or doc-restore over every replica's events, by HLC.
+        val lifecycle = HashMap<String, Pair<Hlc, String>>()
         members.forEach { member ->
             world.read("the documents ${member.name} knows") {
                 val db = member.replica.indexDb
@@ -472,8 +479,18 @@ internal class SyncSimulation(
                     .rows(
                         "SELECT DISTINCT documentId FROM metadata_events WHERE operation IN ('doc-delete', 'relink')",
                     ).mapNotNullTo(gone) { it[0] }
+                db
+                    .rows(
+                        "SELECT documentId, operation, hlcPhysical, hlcCounter, hlcDevice FROM metadata_events " +
+                            "WHERE operation IN ('doc-trash', 'doc-restore')",
+                    ).forEach { (docId, operation, physical, counter, device) ->
+                        val hlc = Hlc(physical!!.toLong(), counter!!.toInt(), device!!)
+                        val latest = lifecycle[docId!!]
+                        if (latest == null || hlc > latest.first) lifecycle[docId] = hlc to operation!!
+                    }
             }
         }
+        val trashed = lifecycle.filterValues { it.second == "doc-trash" }.keys
         val held =
             members.flatMapTo(HashSet()) { member ->
                 member.fs
@@ -483,8 +500,11 @@ internal class SyncSimulation(
             }
         val lost =
             (known - gone - held).sorted().filter { hash ->
-                val causes = members.flatMapTo(HashSet()) { it.fs.lossesOf(hash) }
-                Loss.APP in causes && Loss.OUTSIDE !in causes && Loss.APP_TRASH !in causes
+                when (latestLoss(hash)?.loss) {
+                    Loss.APP -> true
+                    Loss.APP_TRASH -> hash !in trashed
+                    Loss.OUTSIDE, Loss.SYNC, null -> false
+                }
             }
         if (lost.isNotEmpty()) {
             fail(
@@ -492,6 +512,7 @@ internal class SyncSimulation(
                 "the app removed the last copy of a document no journal deleted or relinked:\n  " +
                     lost.joinToString("\n  ") { hash ->
                         "${hash.take(ID)}: " + members.joinToString { "${it.name} ${it.fs.lossesOf(hash)}" } +
+                            ", latest ${latestLoss(hash)}" + (if (hash in trashed) ", in the trash" else ", not in the trash") +
                             members.joinToString("") { member ->
                                 member.fs.lossesAt(hash).joinToString("") { "\n    ${member.name} $it" }
                             }
@@ -499,6 +520,18 @@ internal class SyncSimulation(
             )
         }
     }
+
+    /**
+     * The latest time some replica lost the last of the bytes hashing to [hash] in its folder, the
+     * sync tool's losses left out; at one instant the app's own loss counts as the latest. A copy the
+     * app removed while another file there still held the bytes (an import's staging file, a
+     * duplicate) took no document away.
+     */
+    private fun latestLoss(hash: String): InMemoryLibraryFileSystem.LossAt? =
+        members
+            .flatMap { it.fs.lossRecordsOf(hash) }
+            .filter { it.loss != Loss.SYNC && it.lastHere }
+            .maxWithOrNull(compareBy<InMemoryLibraryFileSystem.LossAt> { it.atMillis }.thenBy { it.loss == Loss.APP })
 
     /** After a full sync every replica shows the library the first one shows, but for what each alone remembers. */
     private fun checkConvergence(views: List<LibraryView>) {

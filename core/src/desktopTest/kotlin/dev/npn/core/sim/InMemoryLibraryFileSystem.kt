@@ -18,6 +18,7 @@ import kotlinx.coroutines.yield
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
 import java.nio.file.NoSuchFileException
+import java.util.EnumSet
 import java.util.TreeMap
 import java.util.TreeSet
 import kotlin.random.Random
@@ -335,7 +336,8 @@ class InMemoryLibraryFileSystem(
         val norm = NpnPaths.normalize(relPath)
         external(norm)
         if (dirs.containsKey(norm)) remove(norm)
-        files[norm]?.let { lost(norm, it, byApp = false) }
+        // The same bytes again (a backup put back over the file it copied) take nothing away.
+        files[norm]?.takeIf { sha256Bytes(it.bytes) != sha256Bytes(bytes) }?.let { lost(norm, it, byApp = false) }
         ensureParents(norm)
         files[norm] = Node(bytes.copyOf(), mtime)
         wrote(norm, byApp = false)
@@ -380,7 +382,9 @@ class InMemoryLibraryFileSystem(
             written = minOf(bytes.size, written + step)
             external(norm)
             val node = files[norm]
-            node?.let { if (bySync) bySyncTool { lost(norm, it, byApp = false) } else lost(norm, it, byApp = false) }
+            node?.let {
+                if (bySync) bySyncTool { lost(norm, it, byApp = false, inPlace = true) } else lost(norm, it, byApp = false, inPlace = true)
+            }
             if (node == null) {
                 if (dirs.containsKey(norm)) remove(norm)
                 ensureParents(norm)
@@ -408,7 +412,7 @@ class InMemoryLibraryFileSystem(
         val norm = NpnPaths.normalize(relPath)
         val node = files[norm] ?: return externalWriteAtomic(norm, bytes)
         external(norm)
-        lost(norm, node, byApp = false)
+        if (sha256Bytes(node.bytes) != sha256Bytes(bytes)) lost(norm, node, byApp = false, inPlace = true)
         node.bytes = bytes.copyOf()
         if (!keepStat) node.mtime = now()
         wrote(norm, byApp = false)
@@ -753,10 +757,21 @@ class InMemoryLibraryFileSystem(
         OUTSIDE,
     }
 
-    private val losses = HashMap<String, MutableSet<Loss>>()
+    /** One time bytes were taken from [path] here: when, by whom, and whether [lastHere], no other file here held them. */
+    data class LossAt(
+        val atMillis: Long,
+        val loss: Loss,
+        val path: String,
+        val lastHere: Boolean,
+    )
 
-    /** How the bytes hashing to [hash] were ever taken from a path here; empty when they never were. */
-    fun lossesOf(hash: String): Set<Loss> = losses[hash].orEmpty()
+    private val losses = HashMap<String, MutableList<LossAt>>()
+
+    /** How the bytes hashing to [hash] were ever taken from a path here, in [Loss] order; empty when they never were. */
+    fun lossesOf(hash: String): Set<Loss> = losses[hash].orEmpty().mapTo(EnumSet.noneOf(Loss::class.java)) { it.loss }
+
+    /** Each time the bytes hashing to [hash] were taken from a path here, oldest first. */
+    fun lossRecordsOf(hash: String): List<LossAt> = losses[hash].orEmpty().toList()
 
     private var syncCalls = 0
 
@@ -770,10 +785,15 @@ class InMemoryLibraryFileSystem(
         }
     }
 
+    /**
+     * Record that [node]'s bytes are leaving [norm]: removed, or replaced there ([inPlace]: the same
+     * file, every hard link to it, given other bytes).
+     */
     private fun lost(
         norm: String,
         node: Node,
         byApp: Boolean,
+        inPlace: Boolean = false,
     ) {
         val cause =
             when {
@@ -783,15 +803,13 @@ class InMemoryLibraryFileSystem(
                 else -> Loss.OUTSIDE
             }
         val hash = sha256Bytes(node.bytes)
-        losses.getOrPut(hash) { HashSet() } += cause
-        lossPaths.getOrPut(hash) { LinkedHashSet() } += norm
+        val kept = files.any { (path, other) -> path != norm && !(inPlace && other === node) && sha256Bytes(other.bytes) == hash }
+        losses.getOrPut(hash) { ArrayList() } += LossAt(now(), cause, norm, lastHere = !kept)
     }
-
-    private val lossPaths = HashMap<String, MutableSet<String>>()
 
     /** Each path the bytes hashing to [hash] were taken from, with that path's history: what a failure shows. */
     fun lossesAt(hash: String): List<String> =
-        lossPaths[hash].orEmpty().map { path -> "'$path': " + historyOf(path).joinToString("; ") }
+        losses[hash].orEmpty().map { it.path }.distinct().map { path -> "'$path': " + historyOf(path).joinToString("; ") }
 
     /** The last write at [relPath], or null when nothing ever wrote there. */
     fun lastWriteAt(relPath: String): LastWrite? = lastWrites[relPath]

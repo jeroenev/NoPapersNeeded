@@ -1,6 +1,7 @@
 package dev.npn.core.sim
 
 import dev.npn.core.app.ImportOutcome
+import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.HlcWatermarkAllocator
@@ -10,6 +11,7 @@ import dev.npn.core.journal.PendingOp
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 
@@ -89,19 +91,53 @@ class SyncSimulationHarnessTest {
     @Test
     fun theAppDeletingADocumentsLastCopyFailsTheRun() =
         runTest {
-            val failure =
-                shouldThrow<SimFailure> {
-                    SyncSimulation(testScheduler, config(), afterStep = { step ->
-                        if (step == 2) {
-                            val bytes = SimPdf.bytes("only copy", "v", BAKED_SIZE + 1)
-                            world.read("import, then delete as the app") {
-                                val imported = members[0].replica.session!!.importPdfBytes(bytes, "only.pdf")
-                                members[0].fs.delete((imported as ImportOutcome.Imported).relPath)
-                            }
-                        }
-                    }).run()
+            appDeletesTheLastCopy().message shouldContain "the app removed the last copy"
+        }
+
+    /**
+     * What the outside world took of the same bytes earlier excuses nothing: the latest loss decides,
+     * and here that is the app's.
+     */
+    @Test
+    fun theAppDeletingALastCopyAfterAnOutsideLossOfTheSameBytesFailsTheRun() =
+        runTest {
+            appDeletesTheLastCopy(outsideLossFirst = true).message shouldContain "the app removed the last copy"
+        }
+
+    /** The app deleting a copy in its trash excuses nothing for a document the journal does not have there. */
+    @Test
+    fun theAppDeletingALiveDocumentsLastCopyInItsTrashFailsTheRun() =
+        runTest {
+            appDeletesTheLastCopy(trashCopyLast = true).message shouldContain "the app removed the last copy"
+        }
+
+    /**
+     * At step 2, the app imports bytes and then deletes its file: with [outsideLossFirst], after
+     * another process wrote the same bytes elsewhere and deleted them; with [trashCopyLast], the
+     * last copy it deletes is one it put in its trash, of a document it never trashed.
+     */
+    private fun TestScope.appDeletesTheLastCopy(
+        outsideLossFirst: Boolean = false,
+        trashCopyLast: Boolean = false,
+    ): SimFailure =
+        shouldThrow<SimFailure> {
+            SyncSimulation(testScheduler, config(), afterStep = { step ->
+                if (step == 2) {
+                    val fs = members[0].fs
+                    val bytes = SimPdf.bytes("only copy", "v", BAKED_SIZE + 1)
+                    if (outsideLossFirst) {
+                        fs.externalWriteAtomic("elsewhere.pdf", bytes)
+                        fs.externalDelete("elsewhere.pdf")
+                    }
+                    world.read("import, then delete as the app") {
+                        val imported = members[0].replica.session!!.importPdfBytes(bytes, "only.pdf")
+                        val trashCopy = "${NpnPaths.TRASH_DIR}/only.pdf"
+                        if (trashCopyLast) fs.writeBytesOnce(trashCopy, bytes)
+                        fs.delete((imported as ImportOutcome.Imported).relPath)
+                        if (trashCopyLast) fs.delete(trashCopy)
+                    }
                 }
-            failure.message shouldContain "the app removed the last copy"
+            }).run()
         }
 
     /**

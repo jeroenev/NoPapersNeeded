@@ -213,11 +213,16 @@ do not converge, which fails the run. Then:
 - What each replica wrote under a device's name in the library (sidecars, markers) is under its own.
 - **The app never removes a document's last copy**: every document some replica's index has a row
   for, that no replica's journal deleted for good or relinked onto other bytes, is held by a file in
-  some replica's folder, unless another process took its bytes away, or the app did in its trash
-  (the purge, a delete for good). Each folder records who took which bytes from a path: the app,
-  the sync tool (carrying out another device's change, so never the cause itself), or the outside
-  world. A document whose only file the app deleted shows as missing in the live index and in a
-  rebuild alike, so the rebuild oracle cannot see it.
+  some replica's folder, unless what last took its bytes away explains it. Each folder records every
+  time bytes left a path (deleted, or replaced by other bytes; the same bytes written again take
+  nothing): when, by whom (the app, in its trash or elsewhere; the sync tool, carrying out another
+  device's change, so never the cause itself; or the outside world), and whether no other file
+  there still held them. Of the losses of a folder's last copy, the sync tool's left out, the
+  latest on any replica decides: another process explains it; the app in its trash (the purge, a
+  delete for good) explains it only for a document the replicas' journals, taken together, have in
+  the trash; the app anywhere else is a finding. A document whose only file the app deleted shows as
+  missing in the live index and in a rebuild alike, so the rebuild oracle cannot see it. The check
+  runs in every run, a single replica's included.
 - After a full sync, **convergence**: every replica shows the library the first one shows, by the
   same comparison, a row only one of them remembers for a document neither shows excepted.
 
