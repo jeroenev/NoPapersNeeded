@@ -1,5 +1,6 @@
 package dev.npn.core.sim
 
+import dev.npn.core.app.ImportOutcome
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
@@ -7,7 +8,11 @@ import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
 import dev.npn.core.util.NpnLog
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.collections.shouldNotContain
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 
@@ -73,6 +78,46 @@ class SimulationHarnessTest {
                     }).run()
                 }
             failure.message shouldContain "a bug was logged"
+        }
+
+    /**
+     * The at-rest checks pass over a trashed document's bytes back at its path within the restore
+     * settle window only when another replica trashed it or something outside the app put them back
+     * since. This replica's own trash whose file the app itself put back (a move undone after a
+     * publication that failed but landed) is a finding: the next rescan past the window would
+     * un-trash it. A single replica's rescan shows such a file for that scan in the live index and
+     * in a rebuild alike, so the exemption is checked here directly.
+     */
+    @Test
+    fun aTrashTheAppItselfUndidIsNoSettlingReturn() =
+        runTest {
+            var appPutBack: Set<Pair<String, String>>? = null
+            var outsidePutBack: Set<Pair<String, String>>? = null
+            var trashed: Pair<String, String>? = null
+            Simulation(testScheduler, config(), afterStep = { step ->
+                if (step == STEPS) {
+                    fs.faults.disarmAll()
+                    val bytes = SimPdf.bytes("trashed", "y", PLANTED_SIZE + 1)
+                    val (docId, from) =
+                        world.read("import and trash") {
+                            val session = replica.session!!
+                            val imported = session.importPdfBytes(bytes, "trashed.pdf")
+                            val docId = imported.shouldBeInstanceOf<ImportOutcome.Imported>().docId
+                            session.docLifecycle.trashDoc(docId)
+                            docId to
+                                replica.indexDb
+                                    .rows("SELECT trashedOrigPath FROM documents WHERE docId = '$docId'")
+                                    .single()[0]!!
+                        }
+                    trashed = from to docId
+                    world.read("the app puts the file back") { fs.writeBytesOnce(from, bytes) }
+                    appPutBack = settlingReturns()
+                    fs.externalWriteAtomic(from, bytes)
+                    outsidePutBack = settlingReturns()
+                }
+            }).run()
+            appPutBack.shouldNotBeNull() shouldNotContain trashed
+            outsidePutBack.shouldNotBeNull() shouldContain trashed
         }
 
     @Test

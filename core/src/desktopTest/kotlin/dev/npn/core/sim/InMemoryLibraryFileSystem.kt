@@ -228,6 +228,7 @@ class InMemoryLibraryFileSystem(
                 }
             } else {
                 files[canonical] = node
+                wrote(canonical, byApp = true)
                 touch(canonical)
                 recordWrite(canonical, node.bytes)
             }
@@ -336,6 +337,7 @@ class InMemoryLibraryFileSystem(
         if (dirs.containsKey(norm)) remove(norm)
         ensureParents(norm)
         files[norm] = Node(bytes.copyOf(), mtime)
+        wrote(norm, byApp = false)
         touch(norm)
     }
 
@@ -382,6 +384,7 @@ class InMemoryLibraryFileSystem(
                 node.bytes = bytes.copyOf(written)
                 node.mtime = now()
             }
+            wrote(norm, byApp = false)
             touch(norm)
             if (written < bytes.size) delay(intervalMillis)
         }
@@ -402,6 +405,7 @@ class InMemoryLibraryFileSystem(
         external(norm)
         node.bytes = bytes.copyOf()
         if (!keepStat) node.mtime = now()
+        wrote(norm, byApp = false)
         touch(norm)
     }
 
@@ -596,6 +600,7 @@ class InMemoryLibraryFileSystem(
         check(!existsNow(norm)) { "Target already exists: $norm" }
         ensureParents(norm)
         files[norm] = Node(bytes, now())
+        wrote(norm, byApp = true)
         touch(norm)
         recordWrite(norm, bytes)
     }
@@ -611,6 +616,7 @@ class InMemoryLibraryFileSystem(
                 ensureParents(to)
                 files.remove(from)
                 files[to] = node
+                wrote(to, byApp)
                 touch(from)
                 touch(to)
                 if (byApp) {
@@ -627,6 +633,7 @@ class InMemoryLibraryFileSystem(
                 }
                 files.keys.filter { it.startsWith(prefix) }.forEach { file ->
                     files[to + file.removePrefix(from)] = files.remove(file) ?: return@forEach
+                    wrote(to + file.removePrefix(from), byApp)
                 }
                 touch(from)
                 touch(to)
@@ -709,6 +716,31 @@ class InMemoryLibraryFileSystem(
 
     /** The app's call taking effect right now, or null for the outside world. */
     private var actor: FsMethod? = null
+
+    /**
+     * Who last put bytes at a path and when: the app through one of its calls, or the outside world
+     * (another process, a backup put back, the sync tool, which all go through the `external*`
+     * members). A touch puts no bytes anywhere, and a delete leaves the entry as it was.
+     */
+    data class LastWrite(
+        val atMillis: Long,
+        val byApp: Boolean,
+        /** The hash of the bytes that write left there. */
+        val hash: String,
+    )
+
+    private val lastWrites = HashMap<String, LastWrite>()
+
+    /** The last write at [relPath], or null when nothing ever wrote there. */
+    fun lastWriteAt(relPath: String): LastWrite? = lastWrites[relPath]
+
+    private fun wrote(
+        norm: String,
+        byApp: Boolean,
+    ) {
+        val node = files[norm] ?: return
+        lastWrites[norm] = LastWrite(now(), byApp, sha256Bytes(node.bytes))
+    }
 
     /** The last changes at each path, and who made them: what a failure at a path shows. */
     private val history = HashMap<String, ArrayDeque<String>>()

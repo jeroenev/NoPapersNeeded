@@ -100,7 +100,8 @@ kept 5 days. ci.yml keeps running only the CI-sized test above, as part of `:cor
   relocation and no watcher on SAF, and listings with no mtimes when `SimFsOptions.mtimes` is off.
   Each call suspends at least once and sometimes waits a seeded stretch of virtual time
   (`SimLatency`). It records every journal object, snapshot, OCR sidecar and device marker the app
-  creates, every file the app removes, and the last changes at each path and who made them.
+  creates, every file the app removes, the last changes at each path and who made them, and the
+  last write at each path: when, the app's or the outside world's, and the bytes it left.
 - Its `external*` members are the outside world: an atomic write, a write in place in chunks over
   virtual time (`cp`, a scanner app), an overwrite in place or by rename, a touch (a new mtime over
   the same bytes), a delete, a move, a backup (which skips a file still being written) put back,
@@ -173,7 +174,12 @@ do not converge, which fails the run. Then:
   size and mtime, the proof by stat the rescan, trash and import take from it (a file touched since
   was hashed and its row given the new stat); and every settled PDF in its folder is
   a live document, a known duplicate, or bytes a relink superseded (or, while doc-undelete is not
-  written, a document deleted for good).
+  written, a document deleted for good). A trashed document's own bytes back at its path, or the
+  path it was trashed from, within `RESTORE_SETTLE_MS` of the trash pass too, but only when another
+  replica trashed it (the sync tool has not delivered that device's move of the file yet) or the
+  last write at that path since the trash came from outside the app (another process, a backup put
+  back, the sync tool): the app records such a return only once the window has passed. The app's
+  own trash whose file the app itself put back is a finding.
 - **Rebuild oracle**, on each replica: a fresh replica opens over a copy of its files with empty
   databases, rescans to rest, and must show the same library (`LibraryView`, `diff`). That covers
   live documents with their path, tags, field values and reviewed flag, the documents in the trash
@@ -183,7 +189,9 @@ do not converge, which fails the run. Then:
   device id, queues, enrichment marks, thumbnails, OCR state and page counts, `addedAt`, a row's
   stat, rows hidden as missing or deleted that only the live index remembers, and which of several
   identical files is a document's path. A replica that is behind (the sync tool has not brought it
-  everything yet) is judged on what it has: its index must show what its own folder holds.
+  everything yet) is judged on what it has: its index must show what its own folder holds. A
+  document the live index has in the trash may show in the rebuild only where the check above lets
+  its bytes be back.
 - What each replica wrote under a device's name in the library (sidecars, markers) is under its own.
 - After a full sync, **convergence**: every replica shows the library the first one shows, by the
   same comparison, a row only one of them remembers for a document neither shows excepted.

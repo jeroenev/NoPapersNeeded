@@ -500,22 +500,54 @@ internal class Simulation(
 
     /**
      * Each (path, document) where a trashed document's own bytes may be back at its path (or the path
-     * it was trashed from) while it was trashed less than RESTORE_SETTLE_MS ago. A sync tool keeps a
-     * file it saw modified over another device's move of it to the trash, and the app records such a
-     * return only once the window has passed (FoldLifecycle.settledReturns): until then a rescan
-     * shows the document for that scan only, and the next fold hides it again.
+     * it was trashed from) while it was trashed less than RESTORE_SETTLE_MS ago, and something other
+     * than this app put them there: the app records such a return only once the window has passed
+     * (FoldLifecycle.settledReturns), and until then a rescan shows the document for that scan only
+     * and the next fold hides it again. That is legitimate in two cases:
+     *
+     * - another replica trashed it, and the sync tool has not delivered that device's move of the
+     *   file yet, or kept a version it saw modified over it;
+     * - the last write at the path came from outside (a backup put back, another process, the sync
+     *   tool) since the trash.
+     *
+     * The app's own trash whose file is back by the app's own hand (a move undone after a publish
+     * that failed but landed) is neither, and stays a finding.
      */
-    private fun settlingReturns(): Set<Pair<String, String>> =
+    internal fun settlingReturns(): Set<Pair<String, String>> =
         world.read("trashed returns within the settle window") {
             val since = world.clock.nowMillis() - JournalCoordinator.RESTORE_SETTLE_MS
-            replica.indexDb
-                .rows(
-                    "SELECT docId, relPath, trashedOrigPath FROM documents " +
+            val rows =
+                replica.indexDb.rows(
+                    "SELECT docId, relPath, trashedOrigPath, trashedAt FROM documents " +
                         "WHERE trashed = 1 AND deleted = 0 AND trashedAt > $since",
-                ).flatMapTo(HashSet()) { (docId, relPath, origPath) ->
-                    listOfNotNull(relPath, origPath).map { it to docId!! }
-                }
+                )
+            rows.flatMapTo(HashSet()) { row ->
+                val docId = row[0]!!
+                val at = row[3]!!.toLong()
+                val othersTrash = !trashedHere(docId)
+                listOfNotNull(row[1], row[2])
+                    .filter { path ->
+                        othersTrash ||
+                            fs.lastWriteAt(path)?.let { !it.byApp && it.hash == docId && it.atMillis >= at } == true
+                    }.map { it to docId }
+            }
         }
+
+    /**
+     * Whether the trash that hides [docId] now (its latest `doc-trash`) is one this replica wrote:
+     * an object it published holds it.
+     */
+    private suspend fun trashedHere(docId: String): Boolean {
+        val sources =
+            replica.indexDb.rows(
+                "SELECT s.sourcePath FROM metadata_events e JOIN metadata_source_events s " +
+                    "ON s.eventDeviceId = e.deviceId AND s.eventSequence = e.sequence " +
+                    "WHERE e.operation = 'doc-trash' AND e.documentId = '$docId' AND e.hlcPhysical = (" +
+                    "SELECT MAX(hlcPhysical) FROM metadata_events " +
+                    "WHERE operation = 'doc-trash' AND documentId = '$docId')",
+            )
+        return sources.any { (path) -> path in fs.appPublished }
+    }
 
     /**
      * Every live row stores its file's size and mtime, the proof by stat a rescan, a trash or an import
