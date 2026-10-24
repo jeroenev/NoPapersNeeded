@@ -25,7 +25,7 @@ import dev.npn.core.sim.StorageProfile
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.test.runTest
 import java.io.File
 import java.nio.file.Files
@@ -146,7 +146,7 @@ class RelinkCopiesUpgradeTest {
     @Test
     fun aRelinkWithoutCopiesTheWatchIngestsIsCopiedWithoutARescan() =
         runTest {
-            watchedRelink { relink ->
+            watchedRelink(testScheduler) { relink ->
                 relink.arrive()
                 relink.world.advance(SETTLED_MILLIS)
 
@@ -164,7 +164,7 @@ class RelinkCopiesUpgradeTest {
     @Test
     fun aRelinkWithoutCopiesWhoseIngestFailsAndRecoversIsCopiedWithoutARescan() =
         runTest {
-            watchedRelink { relink ->
+            watchedRelink(testScheduler) { relink ->
                 relink.fs.faults.arm(
                     SimFaults.Rule(FsMethod.READ, relink.relinkPath, SimFaults.Point.BEFORE, times = 1),
                 )
@@ -185,7 +185,7 @@ class RelinkCopiesUpgradeTest {
     @Test
     fun relinkCopiesAWriteRefusedAreWrittenByTheNextPeriodicReconcile() =
         runTest {
-            watchedRelink { relink ->
+            watchedRelink(testScheduler) { relink ->
                 relink.fs.faults.arm(
                     SimFaults.Rule(
                         FsMethod.PUBLISH,
@@ -266,8 +266,11 @@ class RelinkCopiesUpgradeTest {
      * (the sync tool brought the PDF first, and a rescan found it), and a device on an older build
      * whose bare relink onto it, with its original's title and tag, [WatchedRelink.arrive]s.
      */
-    private suspend fun TestScope.watchedRelink(block: suspend (WatchedRelink) -> Unit) {
-        val world = SimWorld(testScheduler)
+    private suspend fun watchedRelink(
+        scheduler: TestCoroutineScheduler,
+        block: suspend (WatchedRelink) -> Unit,
+    ) {
+        val world = SimWorld(scheduler)
         val fs = InMemoryLibraryFileSystem(world.clock::nowMillis)
         val replica = SimReplica(world, "watching", fs)
         try {
