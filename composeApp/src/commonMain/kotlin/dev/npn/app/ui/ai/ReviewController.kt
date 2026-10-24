@@ -196,33 +196,53 @@ private fun List<ReviewDoc>.mapDoc(
 ): List<ReviewDoc> = map { if (it.docId == docId) transform(it) else it }
 
 /**
- * Every ticked suggestion of these documents, one entry each: what a restored process needs to tick
- * them again ([withTicked]) over the same suggestions, which it reads back from where they are kept.
+ * How the selection of these documents differs from [defaults] (the same run as it opened, before
+ * anyone ticked anything): one entry per document with a difference, naming each suggestion whose
+ * tick differs. What a restored process needs to tick them again ([withToggled]) over the defaults
+ * it opens with. Only what the user changed is saved, so a run of hundreds of suggestions with a
+ * few unticked stays far under what a saved state may hold. A document of [defaults] no longer
+ * here (applied already) differs in every tick it had, so it comes back with none.
  */
-internal fun List<ReviewDoc>.ticked(): List<String> =
-    flatMap { doc ->
-        doc.chips.filter { it.selected }.map { tick(doc.docId, ADDED, it.tag) } +
-            doc.removals.filter { it.selected }.map { tick(doc.docId, REMOVED, it.tag) } +
-            doc.fields.filter { it.selected }.map { tick(doc.docId, FIELD, it.key) }
+internal fun List<ReviewDoc>.toggledFrom(defaults: List<ReviewDoc>): List<String> {
+    val opened = defaults.associateBy { it.docId }
+    val current = associateBy { it.docId }
+    return (opened.keys + current.keys).mapNotNull { docId ->
+        val was = opened[docId]?.ticks().orEmpty()
+        val now = current[docId]?.ticks().orEmpty()
+        val toggled = (was - now) + (now - was)
+        if (toggled.isEmpty()) null else (listOf(docId) + toggled.sorted()).joinToString(TICK_SEPARATOR.toString())
     }
+}
 
-/** These documents with exactly the suggestions [ticked] names ticked; see [ticked]. */
-internal fun List<ReviewDoc>.withTicked(ticked: Set<String>): List<ReviewDoc> =
-    map { doc ->
+/** These documents with every suggestion [toggled] names ticked the other way; see [toggledFrom]. */
+internal fun List<ReviewDoc>.withToggled(toggled: List<String>): List<ReviewDoc> {
+    val byDoc =
+        toggled.associate { entry ->
+            val parts = entry.split(TICK_SEPARATOR)
+            parts.first() to parts.drop(1).toSet()
+        }
+    return map { doc ->
+        val flip = byDoc[doc.docId] ?: return@map doc
         doc.copy(
-            chips = doc.chips.map { it.copy(selected = tick(doc.docId, ADDED, it.tag) in ticked) },
-            removals = doc.removals.map { it.copy(selected = tick(doc.docId, REMOVED, it.tag) in ticked) },
-            fields = doc.fields.map { it.copy(selected = tick(doc.docId, FIELD, it.key) in ticked) },
+            chips = doc.chips.map { it.copy(selected = it.selected != (tick(ADDED, it.tag) in flip)) },
+            removals = doc.removals.map { it.copy(selected = it.selected != (tick(REMOVED, it.tag) in flip)) },
+            fields = doc.fields.map { it.copy(selected = it.selected != (tick(FIELD, it.key) in flip)) },
         )
     }
+}
+
+/** Every ticked suggestion of this document, each as its kind and what it names. */
+private fun ReviewDoc.ticks(): Set<String> =
+    chips.filter { it.selected }.map { tick(ADDED, it.tag) }.toSet() +
+        removals.filter { it.selected }.map { tick(REMOVED, it.tag) } +
+        fields.filter { it.selected }.map { tick(FIELD, it.key) }
 
 private fun tick(
-    docId: String,
     kind: Char,
     what: String,
-): String = "$docId$TICK_SEPARATOR$kind$TICK_SEPARATOR$what"
+): String = "$kind$what"
 
-/** Between a tick's parts: a control character, which neither ids nor tags nor keys hold. */
+/** Between a saved entry's parts: a control character, which neither ids nor tags nor keys hold. */
 private const val TICK_SEPARATOR = '\u001F'
 private const val ADDED = '+'
 private const val REMOVED = '-'

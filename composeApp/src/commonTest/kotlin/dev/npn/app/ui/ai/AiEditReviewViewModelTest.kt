@@ -100,6 +100,34 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
                 listOf(false to true, true to false)
         }
 
+    /**
+     * A run over hundreds of documents saves only what the user changed: a handful of unticks over
+     * 400 suggestions survives process death, where a list of every tick no longer fit the saved
+     * state and restored the run's own selection, so Apply would have written what was unticked.
+     */
+    @Test
+    fun aRestoredProcessKeepsTheUnticksOfALargeReview() =
+        runTest(dispatcher) {
+            val ids = List(LARGE_RUN_DOCS) { i -> i.toString().padStart(DOC_ID_LENGTH, '0') }
+            val review = ScriptedReview(docs = ids.map { selectedReviewDoc(it) })
+            val session = sessionWith(review)
+            val screen = recreatable { AiEditReviewViewModel(session, "job", it) }
+            advanceUntilIdle()
+            val unticked = ids.filterIndexed { i, _ -> i % UNTICK_EVERY == 0 }
+            unticked.forEach { screen.vm.toggleChip(it, "invoice") }
+            screen.vm.toggleField(ids.last(), FieldKeys.TITLE)
+
+            val restored = screen.recreate(this, { it.phase })
+            val phase = restored.phase.value.shouldBeInstanceOf<QueuedReviewPhase.Review>()
+            phase.batch.docs
+                .filterNot { it.chips.single().selected }
+                .map { it.docId } shouldContainExactly unticked
+            phase.batch.docs
+                .filterNot { it.fields.single().selected }
+                .map { it.docId } shouldContainExactly
+                listOf(ids.last())
+        }
+
     @Test
     fun theStoredSuggestionsAreLoadedIntoAReviewPhase() =
         runTest(dispatcher) {
@@ -278,4 +306,11 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
                 .shouldBeInstanceOf<QueuedReviewPhase.Done>()
                 .result.applied shouldBe 0
         }
+
+    private companion object {
+        /** Two suggestions each, 400 in all. */
+        const val LARGE_RUN_DOCS = 200
+        const val DOC_ID_LENGTH = 64
+        const val UNTICK_EVERY = 40
+    }
 }

@@ -81,26 +81,30 @@ class AiEditReviewViewModel(
 
     private var run: Job? = null
 
+    /** The run's documents as it opened, ticked as stored: what the saved state is the difference from. */
+    private var defaults: List<ReviewDoc> = emptyList()
+
     init {
         viewModelScope.launch {
             val opened =
                 runCatchingCancellable { queue.openEditRun(jobId) }
                     .onFailure { message(uiText(Res.string.ai_edit_review_open_failed, it.reasonText())) }
                     .getOrNull()
-            // A restored process gets back what the user had ticked, over the run as it is now.
-            val ticked = saved.restored<List<String>?>(TICKED_KEY, TickedSerializer, null)?.toSet()
+            // A restored process gets back what the user had ticked and unticked, over the run as it is now.
+            val toggled = saved.restored<List<String>?>(TOGGLED_KEY, ToggledSerializer, null)
             _phase.value =
                 opened?.let {
-                    val docs = ticked?.let(it.docs::withTicked) ?: it.docs
+                    defaults = it.docs
+                    val docs = toggled?.let(it.docs::withToggled) ?: it.docs
                     QueuedReviewPhase.Review(ReviewBatchState(docs, it.emptyDocs), it)
                 } ?: QueuedReviewPhase.Unavailable
         }
     }
 
-    /** Show [review], saving what is ticked in it for a restored process. */
+    /** Show [review], saving how its ticks differ from the run's own for a restored process. */
     private fun show(review: QueuedReviewPhase.Review) {
         _phase.value = review
-        saved.saveUiState(TICKED_KEY, TickedSerializer, review.batch.docs.ticked())
+        saved.saveUiState(TOGGLED_KEY, ToggledSerializer, review.batch.docs.toggledFrom(defaults))
     }
 
     /** Leaving destroys the only copy of an answer already paid for, so it is a discard. */
@@ -153,7 +157,7 @@ class AiEditReviewViewModel(
     }
 
     private companion object {
-        const val TICKED_KEY = "review.ticked"
-        val TickedSerializer = ListSerializer(String.serializer()).nullable
+        const val TOGGLED_KEY = "review.toggled"
+        val ToggledSerializer = ListSerializer(String.serializer()).nullable
     }
 }

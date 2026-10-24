@@ -46,18 +46,19 @@ private sealed interface Shown {
  */
 private class BatchUnderReview(
     vararg docs: ReviewDoc,
-    /** Where it keeps what is ticked, as a viewmodel reviewing a stored run does ([ticked]). */
+    /** Where it keeps what is ticked, as a viewmodel reviewing a stored run does ([toggledFrom]). */
     private val saved: SavedStateHandle = SavedStateHandle(),
     private val write: suspend (List<ReviewDoc>) -> ApplyOutcome,
 ) : ReviewViewModel() {
+    private val defaults = docs.toList()
+
     var shown: Shown =
         Shown.Review(
             ReviewBatchState(
                 saved
-                    .get<String>(TICKED)
+                    .get<String>(TOGGLED)
                     ?.split('\n')
-                    ?.toSet()
-                    ?.let(docs.toList()::withTicked) ?: docs.toList(),
+                    ?.let(defaults::withToggled) ?: defaults,
                 emptyDocs = emptyList(),
             ),
         )
@@ -67,15 +68,15 @@ private class BatchUnderReview(
     override fun updateReview(transform: (List<ReviewDoc>) -> List<ReviewDoc>) {
         val review = shown as? Shown.Review ?: return
         shown = Shown.Review(review.batch.copy(docs = transform(review.batch.docs)))
-        saved[TICKED] =
+        saved[TOGGLED] =
             (shown as Shown.Review)
                 .batch.docs
-                .ticked()
+                .toggledFrom(defaults)
                 .joinToString("\n")
     }
 
     private companion object {
-        const val TICKED = "ticked"
+        const val TOGGLED = "toggled"
     }
 
     override fun apply() {
@@ -97,8 +98,9 @@ private class BatchUnderReview(
 /** Review → Apply as both AI-edit viewmodels share it ([ReviewViewModel.applyReview]). */
 class ReviewControllerTest : MainDispatcherTest() {
     /**
-     * What is ticked in a batch comes back from its saved form ([ticked], [withTicked]) over the same
-     * suggestions, as a restored process ticks a stored run again: additions, removals and fields.
+     * What is ticked in a batch comes back from its saved form ([toggledFrom], [withToggled]) over the
+     * same suggestions, as a restored process ticks a stored run again: additions, removals and fields,
+     * ticked or unticked against the pre-select policy.
      */
     @Test
     fun aRestoredReviewIsTickedAsTheUserLeftIt() =
@@ -117,8 +119,11 @@ class ReviewControllerTest : MainDispatcherTest() {
             restored.shown
                 .shouldBeInstanceOf<Shown.Review>()
                 .batch.docs
-                .ticked() shouldContainExactly
-                listOf("a\u001F-\u001Fold")
+                .flatMap { doc ->
+                    doc.chips.filter { it.selected }.map { "${doc.docId} +${it.tag}" } +
+                        doc.removals.filter { it.selected }.map { "${doc.docId} -${it.tag}" } +
+                        doc.fields.filter { it.selected }.map { "${doc.docId} =${it.key}" }
+                } shouldContainExactly listOf("a -old")
         }
 
     @Test
