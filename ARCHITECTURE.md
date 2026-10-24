@@ -445,10 +445,13 @@ Kept by `Indexer` (its decisions in `RescanDecision` and `FoldLifecycle`), `Writ
 Kept by `BakeService`, `BakeRelink`, `DocContentFacadeImpl` and `FoldedState`:
 
 - Bake-in-place replaces only the bytes it read and hashed as the document's, while the file keeps
-  the size and mtime it had then, and records a `relink` journal event for the new hash. Bakes run
-  one at a time, each whole, under the session's `BakeLock`; every bake of a path writes the same
-  temporary file, and its relink must name the bytes it installed. A trash or delete for good holds
-  that lock too, so it waits for a bake and then acts on the document the bake made
+  the size and mtime it had then, and records a `relink` journal event for the new hash. It moves
+  the original aside under a recovery name rather than deleting it, and puts back a file that turns
+  out not to be the document's (another process or a sync tool replaced it after the bake's last
+  look), so it never deletes bytes it did not prove; the original goes once the relink stands.
+  Bakes run one at a time, each whole, under the session's `BakeLock`; every bake of a path writes
+  the same temporary file, and its relink must name the bytes it installed. A trash or delete for
+  good holds that lock too, so it waits for a bake and then acts on the document the bake made
   (`changeLifecycle` follows the relink).
 - **A document's metadata is its own.** Every view the fold projects reads the document's own
   events, a relink target's included. A relink (a bake, or a missing document relinked to the file

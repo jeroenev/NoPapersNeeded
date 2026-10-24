@@ -1,7 +1,9 @@
 package dev.npn.core.xmp
 
+import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.hasStoredStat
 import dev.npn.core.fs.holds
 import dev.npn.core.fs.readDocument
 import dev.npn.core.fs.sha256Bytes
@@ -77,21 +79,24 @@ internal class BakeService(
      *
      * Sequence: read the file once and check its hash -> produce baked bytes -> write them to a
      * sibling temp file -> re-read the temp and verify it is what was written and carries our
-     * metadata -> re-stat the original -> delete it -> move the temp into its path -> [emitRelink]
-     * (skipped when the bytes came out identical). The new sha256 is that of the verified bytes.
+     * metadata -> re-stat the original -> move it aside, under a recovery name -> check it hashes to
+     * [docId] -> move the temp into its path -> [emitRelink] (skipped when the bytes came out
+     * identical) -> delete the original aside. The new sha256 is that of the verified bytes.
      *
      * The bake only replaces the bytes it read and proved to be the document's: another app or a
      * sync tool may write over the file at any point, so the file goes only while it still has the
-     * size and mtime it had when it was read; otherwise the temp is removed and nothing is swapped.
+     * size and mtime it had when it was read, and only once what was moved aside hashes to the
+     * document, since the file can be replaced between that stat and the move. Otherwise the file
+     * moved aside goes back, the temp is removed and nothing is swapped.
      *
      * Atomicity compromise: [LibraryFileSystem.move] refuses to overwrite an existing target
      * (fail-if-exists, required for the write-once invariant elsewhere), and SAF offers no atomic
-     * replace. So the swap is delete-then-move, leaving a small window where the original path does
-     * not exist; the baked bytes are in the temp file (`*.npnbake.tmp`) throughout, and a crash
-     * there leaves them as recovery material next to the missing original. The swap and the relink
-     * run to their end even when the bake is cancelled: cut short, the baked bytes could be left in
-     * place without their relink. A failed swap is undone ([restoreOriginal]) and rethrown: the
-     * document keeps its hash, so no relink is owed.
+     * replace. So the swap is move-aside-then-move, leaving a small window where the original path
+     * does not exist; the original is under its recovery name (an ordinary, indexable PDF) and the
+     * baked bytes in the temp file (`*.npnbake.tmp`) throughout, and a crash there leaves both. The
+     * swap and the relink run to their end even when the bake is cancelled: cut short, the baked
+     * bytes could be left in place without their relink. A failed swap is undone ([restoreOriginal])
+     * and rethrown: the document keeps its hash, so no relink is owed.
      *
      * [emitRelink] must throw only when no relink was published: failures after publication are
      * recovered or logged by the caller, since the baked bytes then belong to their new identity.
@@ -144,19 +149,58 @@ internal class BakeService(
                 log.runLogged("Removing the bake of $norm, written over since it was read") { fs.delete(tmpPath) }
                 return@withContext null
             }
-            // Non-atomic replace: delete original, then move temp into place.
+            // Non-atomic replace: move the original aside, then the temp into place. Aside, not
+            // deleted: another process or a sync tool may have put its own file at the path since the
+            // stat above, and only the document's own bytes may go. Kept under an ordinary recovery
+            // name until the relink stands, so a crash in between loses nothing.
+            val aside = NpnPaths.Temp.recoveryPath(beside = norm, nonce = ids.next())
             var standing = false
             try {
-                fs.delete(norm)
+                fs.move(norm, aside)
+                if (!holdsWhatWasRead(aside, read, docId)) {
+                    standing = true
+                    putBack(norm, aside, tmpPath)
+                    return@withContext null
+                }
                 fs.move(tmpPath, norm)
                 if (newSha != docId) emitRelink(docId, newSha)
                 standing = true
             } finally {
                 @Suppress("SuspendFunInFinallySection") // The whole block runs in NonCancellable.
-                if (!standing) restoreOriginal(norm, src, docId, newSha, tmpPath)
+                if (!standing) restoreOriginal(norm, src, docId, newSha, tmpPath, aside)
+            }
+            log.runLogged("Removing the original of $norm after its bake") {
+                if (holdsWhatWasRead(aside, read, docId)) fs.delete(aside)
             }
             newSha
         }
+    }
+
+    /**
+     * Whether [path] holds the document [docId]'s bytes, as [read] (its file's stat when the bake
+     * read it) still proves for a file a rename moved here ([hasStoredStat]); else by its hash.
+     */
+    private suspend fun holdsWhatWasRead(
+        path: String,
+        read: FileMeta,
+        docId: String,
+    ): Boolean {
+        val now = fs.stat(path)?.takeIf { !it.isDirectory } ?: return false
+        return now.hasStoredStat(read.size, read.mtimeMillis) || fs.holds(path, docId)
+    }
+
+    /**
+     * The file moved aside from [norm] for a bake is not the document's: another process or a sync
+     * tool wrote it there after the bake's last look. It goes back, and the bake's temp goes; where
+     * the path was taken again meanwhile it stays under its recovery name, an ordinary indexable one.
+     */
+    private suspend fun putBack(
+        norm: String,
+        aside: String,
+        tmpPath: String,
+    ) {
+        log.runLogged("Putting back the file at $norm, written over before its bake") { fs.move(aside, norm) }
+        log.runLogged("Removing the bake of $norm, written over since it was read") { fs.delete(tmpPath) }
     }
 
     /** Whether [pdfBytes] carry recognizable npn metadata: a `npn:documentId` or at least one `dc:subject` tag. */
@@ -171,9 +215,11 @@ internal class BakeService(
      * move still landed at [norm] go back to [tmpPath] before the original is written, and [tmpPath]
      * goes only once [norm] holds the original again (until then [dev.npn.core.fs.TempFileSweep]
      * keeps it, as it keeps any bake's temporary file whose bytes are not at its document's path).
-     * The caller still sees the swap's failure; a restore that fails too is logged with where the
-     * document's bytes are, and saves the original under a recovery name first ([keepOriginal])
-     * whenever [norm] no longer holds them, so no run of failures loses them.
+     * The original the swap moved [aside], when it got that far, is what goes back, and what is
+     * kept: it already has an ordinary recovery name. The caller still sees the swap's failure; a
+     * restore that fails too is logged with where the document's bytes are, and saves the original
+     * under a recovery name first ([keepOriginal]) whenever [norm] no longer holds them, so no run of
+     * failures loses them.
      */
     private suspend fun restoreOriginal(
         norm: String,
@@ -181,44 +227,53 @@ internal class BakeService(
         oldSha: String,
         bakedSha: String,
         tmpPath: String,
+        aside: String,
     ) {
         var recovery: String? = null
+
+        suspend fun asideHolds() = runCatchingCancellable { fs.holds(aside, oldSha) }.getOrDefault(false)
+
+        suspend fun original(): String = if (asideHolds()) aside else keepOriginal(norm, src)
         runCatchingCancellable {
             if (!fs.holds(norm, oldSha)) {
                 if (fs.exists(norm)) {
                     // A sync writer may have replaced the baked bytes while publication failed.
-                    // Its file stays; save the original under an ordinary, indexable recovery name.
+                    // Its file stays; the original stays under an ordinary, indexable recovery name.
                     if (!fs.holds(norm, bakedSha)) {
-                        recovery = keepOriginal(norm, src)
+                        recovery = original()
                         throw BakeDisplacedException(norm, "$norm holds another file; the original is at $recovery")
                     }
                     // A move that reports a failure may still have landed, so where the bytes are
                     // afterwards is what counts.
                     val parked = runCatchingCancellable { fs.move(norm, tmpPath) }
                     if (fs.exists(norm)) {
-                        // [norm] keeps the baked bytes and [writeBytesOnce] below cannot land: the
-                        // original is saved before the failure is raised, as in the branch above.
-                        recovery = runCatchingCancellable { keepOriginal(norm, src) }.getOrNull()
+                        // [norm] keeps the baked bytes and the original cannot go back: it is kept
+                        // under a recovery name before the failure is raised, as in the branch above.
+                        recovery = runCatchingCancellable { original() }.getOrNull()
                         val saved = recovery?.let { "; the original is at $it" }.orEmpty()
                         throw IllegalStateException("$norm still holds the baked bytes$saved", parked.exceptionOrNull())
                     }
                 }
-                fs.writeBytesOnce(norm, src)
+                // A rename keeps the original's size and mtime, which its row still stores. One that
+                // reports a failure may still have landed: where the bytes are afterwards is what counts.
+                if (asideHolds()) runCatchingCancellable { fs.move(aside, norm) }
+                if (!fs.exists(norm)) fs.writeBytesOnce(norm, src)
                 check(fs.holds(norm, oldSha)) { "$norm does not read back as its original" }
             }
         }.onSuccess {
             // The original is back: the baked bytes are a leftover now, which the next bake of the
-            // document removes first if this cannot.
+            // document removes first if this cannot, and so is a copy of the original left aside.
             log.runLogged("Removing the baked bytes of $norm after its bake was undone") {
                 if (fs.exists(tmpPath)) fs.delete(tmpPath)
+                if (asideHolds()) fs.delete(aside)
             }
         }.onFailure { failure ->
             // Any failure here can leave the original nowhere but in memory: a later one saves it
             // under a recovery name too, before the log says where a reader would find it.
             if (recovery == null && runCatchingCancellable { !fs.holds(norm, oldSha) }.getOrDefault(true)) {
-                recovery = runCatchingCancellable { keepOriginal(norm, src) }.getOrNull()
+                recovery = runCatchingCancellable { original() }.getOrNull()
             }
-            val where = onDisk(listOfNotNull(norm, tmpPath, recovery))
+            val where = onDisk(listOf(norm, tmpPath, recovery ?: aside))
             val message = "Restoring $norm after a failed bake failed; the document's bytes are at: $where"
             // An original saved under its recovery name, an ordinary one, is indexed by the next
             // rescan: put right, so a warning. Only an original on disk nowhere is an error.

@@ -172,6 +172,54 @@ class BakeServiceTest {
             noTempLitter().shouldBeTrue()
         }
 
+    /**
+     * Another process or a sync tool replaces the document's file between the bake's last look at it
+     * and its swap: the file it moved aside is not the document's, so it goes back where it was and
+     * nothing is baked. Deleted instead, it could be the only copy of another device's version.
+     */
+    @Test
+    fun aFileReplacedRightBeforeTheSwapIsPutBack() =
+        runTest {
+            fs.writeBytesOnce("doc.pdf", fixturePdf())
+            val oldSha = fs.sha256("doc.pdf")
+            val other = "a sync tool's newer version, delivered just now".encodeToByteArray()
+            val racing =
+                object : LibraryFileSystem by fs {
+                    var raced = false
+
+                    /** The other version lands at the document's path right before the bake's first change there. */
+                    suspend fun race(relPath: String) {
+                        if (relPath != "doc.pdf" || raced) return
+                        raced = true
+                        fs.delete("doc.pdf")
+                        fs.writeBytesOnce("doc.pdf", other)
+                    }
+
+                    override suspend fun move(
+                        fromRelPath: String,
+                        toRelPath: String,
+                    ) {
+                        race(fromRelPath)
+                        fs.move(fromRelPath, toRelPath)
+                    }
+
+                    override suspend fun delete(relPath: String) {
+                        race(relPath)
+                        fs.delete(relPath)
+                    }
+                }
+            var relinkCalled = false
+
+            BakeService(racing, io).bakeInPlace("doc.pdf", oldSha, xmp(tags = listOf("t"))) { _, _ ->
+                relinkCalled = true
+            } shouldBe null
+
+            relinkCalled.shouldBeFalse()
+            fs.readBytes("doc.pdf") shouldBe other
+            fs.listAllUnder("").none { it.name.startsWith(NpnPaths.Temp.RECOVERY_PREFIX) }.shouldBeTrue()
+            noTempLitter().shouldBeTrue()
+        }
+
     @Test
     fun bakeInPlaceVerifyFailureLeavesOriginalUntouched() =
         runTest {
@@ -303,7 +351,7 @@ class BakeServiceTest {
     /**
      * Two faults: the move reports failure after landing, and putting the original back fails too.
      * The undo never deletes the only copy: the document path or the bake's temporary file still
-     * holds the original or the baked bytes.
+     * holds the original or the baked bytes, and the original is under a recovery name.
      */
     @Test
     fun aFailedUndoOfAFailedMoveLeavesAVersionOfTheDocumentOnDisk() =
@@ -327,6 +375,8 @@ class BakeServiceTest {
             // name the next rescan indexes.
             log.entries.any { it.level == NpnLog.Level.WARN && kept.all(it.message::contains) }.shouldBeTrue()
             log.entries.none { it.level == NpnLog.Level.ERROR }.shouldBeTrue()
+            val recovery = fs.listAllUnder("").single { it.name.startsWith(NpnPaths.Temp.RECOVERY_PREFIX) }
+            fs.sha256(recovery.relPath) shouldBe oldSha
         }
 
     /**
@@ -340,7 +390,7 @@ class BakeServiceTest {
             val original = fixturePdf()
             fs.writeBytesOnce("doc.pdf", original)
             val oldSha = fs.sha256("doc.pdf")
-            val failing = MoveRefusedFrom(fs, refuseFrom = "doc.pdf")
+            val failing = MoveRefused(fs, from = "doc.pdf", to = NpnPaths.Temp.bakePath("doc.pdf"))
 
             assertFailsWith<IOException> {
                 BakeService(failing, io).bakeInPlace("doc.pdf", oldSha, xmp(tags = listOf("t"))) { _, _ ->
@@ -358,7 +408,7 @@ class BakeServiceTest {
         }
 
     /**
-     * A bake cancelled while it swaps the files (right after the original went, or during the move)
+     * A bake cancelled while it swaps the files (right after the original went aside, or during the move)
      * ends consistent either way: baked and relinked, or the original with no relink. Never the
      * baked bytes without their relink, nor the document path empty.
      */
@@ -445,25 +495,27 @@ class BakeServiceTest {
     }
 
     /**
-     * [fs] whose move away from [refuseFrom] reports failure without landing, as a provider that
-     * never started it.
+     * [fs] whose move from [from] to [to] reports failure without landing, as a provider that never
+     * started it.
      */
-    private class MoveRefusedFrom(
+    private class MoveRefused(
         private val fs: LibraryFileSystem,
-        private val refuseFrom: String,
+        private val from: String,
+        private val to: String,
     ) : LibraryFileSystem by fs {
         override suspend fun move(
             fromRelPath: String,
             toRelPath: String,
         ) {
-            if (fromRelPath == refuseFrom) throw IOException("move refused")
+            if (fromRelPath == from && toRelPath == to) throw IOException("move refused")
             fs.move(fromRelPath, toRelPath)
         }
     }
 
     /**
      * [fs] whose every move lands and then reports failure, as a provider that renamed the file and
-     * then threw; a write to [failWriteTo] fails, as on a full disk.
+     * then threw; a write to [failWriteTo] fails, as on a full disk, and so does a move to it,
+     * without landing.
      */
     private class LandingMoveFails(
         private val fs: LibraryFileSystem,
@@ -473,6 +525,7 @@ class BakeServiceTest {
             fromRelPath: String,
             toRelPath: String,
         ) {
+            if (toRelPath == failWriteTo) throw IOException("disk full")
             fs.move(fromRelPath, toRelPath)
             throw IOException("moved, then reported a failure")
         }
@@ -497,20 +550,16 @@ class BakeServiceTest {
         private val step: Step,
         private val suspendAfterCancel: Boolean,
     ) : LibraryFileSystem by fs {
-        enum class Step { DELETE, MOVE }
+        enum class Step { ASIDE, MOVE }
 
         lateinit var job: Job
-
-        override suspend fun delete(relPath: String) {
-            fs.delete(relPath)
-            if (step == Step.DELETE && relPath == doc) cancel()
-        }
 
         override suspend fun move(
             fromRelPath: String,
             toRelPath: String,
         ) {
             fs.move(fromRelPath, toRelPath)
+            if (step == Step.ASIDE && fromRelPath == doc) cancel()
             if (step == Step.MOVE && toRelPath == doc) cancel()
         }
 

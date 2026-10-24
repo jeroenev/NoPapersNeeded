@@ -26,9 +26,9 @@ class TrashDuringABakeTest {
     @Test
     fun aTrashDuringABakeTrashesTheBakedDocument() = trashedDuringABake(PausedBake.Moment.AFTER_SWAP)
 
-    /** The same for a trash that lands after the bake checked its file is unchanged and before it deletes it. */
+    /** The same for a trash that lands after the bake checked its file is unchanged and before it moves it aside. */
     @Test
-    fun aTrashBeforeABakeSwapsTrashesTheBakedDocument() = trashedDuringABake(PausedBake.Moment.BEFORE_DELETE)
+    fun aTrashBeforeABakeSwapsTrashesTheBakedDocument() = trashedDuringABake(PausedBake.Moment.BEFORE_ASIDE)
 
     private fun trashedDuringABake(moment: PausedBake.Moment) =
         runTest {
@@ -90,8 +90,8 @@ private class PausedBake(
     private val moment: Moment,
 ) : FsGate() {
     enum class Moment {
-        /** Once the bake checked the file is the one it read, right before it deletes it. */
-        BEFORE_DELETE,
+        /** Once the bake checked the file is the one it read, right before it moves it aside. */
+        BEFORE_ASIDE,
 
         /** Right after the bake moved its rewrite into place, before its relink. */
         AFTER_SWAP,
@@ -101,15 +101,11 @@ private class PausedBake(
 
     fun over(fs: LibraryFileSystem): LibraryFileSystem =
         object : LibraryFileSystem by fs {
-            override suspend fun delete(relPath: String) {
-                if (moment == Moment.BEFORE_DELETE && relPath == path) pauseIfArmed()
-                fs.delete(relPath)
-            }
-
             override suspend fun move(
                 fromRelPath: String,
                 toRelPath: String,
             ) {
+                if (moment == Moment.BEFORE_ASIDE && fromRelPath == path) pauseIfArmed()
                 fs.move(fromRelPath, toRelPath)
                 val swap = fromRelPath == NpnPaths.Temp.bakePath(path) && toRelPath == path
                 if (moment == Moment.AFTER_SWAP && swap) pauseIfArmed()
