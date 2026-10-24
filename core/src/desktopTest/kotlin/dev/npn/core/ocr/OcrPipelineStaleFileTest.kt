@@ -62,6 +62,33 @@ class OcrPipelineStaleFileTest {
         }
 
     /**
+     * A file moved away since the index last looked (by a user outside the app, or a sync tool,
+     * where no watch event said so) is no failure of the document's: the run asks for the rescan that
+     * finds where it went and waits for it, uncharged. Charged, three such reads gave up on the
+     * document for good, and only a rebuilt index would ever read it.
+     */
+    @Test
+    fun aFileMovedAwaySinceIndexingIsNotChargedAndAsksForARescan() =
+        runTest {
+            val docId = rig.stageDoc("a.pdf", PdfFixtures.embeddedTextPdf("moved away"))
+            Files.move(rig.libRoot.resolve("a.pdf"), rig.libRoot.resolve("b.pdf"))
+            val stale = mutableListOf<String>()
+            val pipeline =
+                rig.pipeline("devA", FakeOcrEngine(isAvailable = true, name = "mlkit"), onStaleFile = { stale += it })
+
+            pipeline.processNext()
+
+            stale shouldContainExactly listOf(docId)
+            val row =
+                rig.deviceDb
+                    .ocrQueueDao()
+                    .getByDocId(docId)
+                    .shouldNotBeNull()
+            row.attempts shouldBe 0
+            row.queueState shouldBe QueueState.PENDING
+        }
+
+    /**
      * A re-run asked for while a pass found the file changing is a request that pass never saw: it
      * stays on the row, owed, rather than going with the pass's wait for the rescan.
      */

@@ -92,8 +92,10 @@ internal class OcrPipeline(
          */
         private const val EMPTY_SHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
-        /** A queue row's error after a read found other bytes than the document's. */
+        /** A queue row's error after a read found other bytes than the document's, or no file. */
         private const val STALE_FILE = "the file did not hold the document's bytes when read"
+
+        private const val READ_FAILED = "read failed"
     }
 
     private val retry = QueueRetryPolicy(MAX_ATTEMPTS)
@@ -342,7 +344,7 @@ internal class OcrPipeline(
         stored: List<OcrVersions.Version>,
         aiRequested: Boolean,
     ): OwnOcr {
-        var step = "read failed"
+        var step = READ_FAILED
         val result =
             runCatchingCancellable {
                 // The sidecar is keyed by docId and is write-once and synced, so text from any other
@@ -350,7 +352,13 @@ internal class OcrPipeline(
                 val bytes = fs.readDocument(doc.relPath, doc.docId) ?: return OwnOcr.Stale
                 step = "ocr failed"
                 extractOrOcr(bytes, doc, aiRequested)
-            }.getOrElse { return OwnOcr.Failed(describe(step, it)) }
+            }.getOrElse { failure ->
+                // A file moved or deleted since the index last looked is no failure of the document's
+                // either: the rescan asked for then finds where it went, or that it is gone. Charged,
+                // three moves between rescans would give up on the document for good.
+                val gone = step == READ_FAILED && runCatchingCancellable { !fs.exists(doc.relPath) }.getOrDefault(false)
+                return if (gone) OwnOcr.Stale else OwnOcr.Failed(describe(step, failure))
+            }
         val sameEngine = stored.filter { it.engine == result.engine }
         // A re-run that read the same text again adds nothing; keep the library free of copies.
         if (sameEngine.any { versions.read(doc.docId, it.writerKey)?.pages == result.pages }) return OwnOcr.Adopted
