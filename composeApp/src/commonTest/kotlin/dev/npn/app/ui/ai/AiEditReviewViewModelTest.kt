@@ -1,7 +1,9 @@
 package dev.npn.app.ui.ai
 
+import androidx.lifecycle.SavedStateHandle
 import dev.npn.app.FakeLibrarySession
 import dev.npn.app.MainDispatcherTest
+import dev.npn.app.afterProcessDeath
 import dev.npn.app.collecting
 import dev.npn.app.failure
 import dev.npn.app.recreatable
@@ -55,7 +57,8 @@ private fun selectedReviewDoc(
 /** Serves a scripted review and records what the viewmodel asked it to do. */
 private class ScriptedReview(
     override val jobId: String = "job",
-    override val docs: List<ReviewDoc> = listOf(selectedReviewDoc("a")),
+    /** What the run opens with; a test changes it to reopen the run with other defaults. */
+    override var docs: List<ReviewDoc> = listOf(selectedReviewDoc("a")),
     override val emptyDocs: List<ReviewDoc> = emptyList(),
     override val failures: Int = 0,
     private val outcome: ApplyOutcome = ApplyOutcome.Done(ApplyResult(2, 1, moreRemain = false)),
@@ -126,6 +129,101 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
                 .filterNot { it.fields.single().selected }
                 .map { it.docId } shouldContainExactly
                 listOf(ids.last())
+        }
+
+    /**
+     * The run reopens with other defaults (another device filled the field the user ticked, or
+     * removed the tag the user unticked): what the user chose still stands, rather than being
+     * flipped against the new defaults into what they refused.
+     */
+    @Test
+    fun aRestoredProcessKeepsWhatTheUserChoseWhenTheRunReopensWithOtherDefaults() =
+        runTest(dispatcher) {
+            val review = ScriptedReview(docs = listOf(selectedReviewDoc("a"), selectedReviewDoc("b", fieldSelected = false)))
+            val session = sessionWith(review)
+            val screen = recreatable { AiEditReviewViewModel(session, "job", it) }
+            advanceUntilIdle()
+            screen.vm.toggleChip("a", "invoice")
+            screen.vm.toggleField("b", FieldKeys.TITLE)
+            review.docs = listOf(selectedReviewDoc("a", tagSelected = false), selectedReviewDoc("b"))
+
+            val restored = screen.recreate(this, { it.phase })
+            val phase = restored.phase.value.shouldBeInstanceOf<QueuedReviewPhase.Review>()
+            phase.batch.docs.map { doc -> doc.chips.single().selected to doc.fields.single().selected } shouldBe
+                listOf(false to true, true to true)
+        }
+
+    /** Deselecting every suggestion of a large run survives a restored process. */
+    @Test
+    fun aRestoredProcessKeepsALargeReviewDeselected() =
+        runTest(dispatcher) {
+            val ids = List(LARGER_RUN_DOCS) { i -> i.toString().padStart(DOC_ID_LENGTH, '0') }
+            val session = sessionWith(ScriptedReview(docs = ids.map { selectedReviewDoc(it) }))
+            val screen = recreatable { AiEditReviewViewModel(session, "job", it) }
+            advanceUntilIdle()
+            screen.vm.setAllSelection(false)
+
+            val restored = screen.recreate(this, { it.phase })
+            restored.phase.value
+                .shouldBeInstanceOf<QueuedReviewPhase.Review>()
+                .batch.docs
+                .count { doc -> doc.chips.single().selected || doc.fields.single().selected } shouldBe 0
+        }
+
+    /**
+     * After an Apply that landed most of a large run, a restored process reopens the whole run with
+     * only the Retry's rows ticked: the documents already applied are not ticked again.
+     */
+    @Test
+    fun aRestoredProcessAfterALargePartialApplyTicksOnlyWhatTheRetryOwes() =
+        runTest(dispatcher) {
+            val ids = List(LARGER_RUN_DOCS) { i -> i.toString().padStart(DOC_ID_LENGTH, '0') }
+            val owed = ids.take(RETRY_DOCS)
+            val review =
+                ScriptedReview(
+                    docs = ids.map { selectedReviewDoc(it) },
+                    outcome = ApplyOutcome.Retry(owed.map { selectedReviewDoc(it) }, failedDocs = RETRY_DOCS, total = ids.size),
+                )
+            val session = sessionWith(review)
+            val handle = SavedStateHandle()
+            val model = AiEditReviewViewModel(session, "job", handle)
+            collecting(model.phase)
+            advanceUntilIdle()
+            model.apply()
+            advanceUntilIdle()
+
+            val restored = AiEditReviewViewModel(session, "job", handle.afterProcessDeath())
+            collecting(restored.phase)
+            advanceUntilIdle()
+            restored.phase.value
+                .shouldBeInstanceOf<QueuedReviewPhase.Review>()
+                .batch.docs
+                .filter { doc -> doc.chips.single().selected || doc.fields.single().selected }
+                .map { it.docId } shouldContainExactly owed
+        }
+
+    /**
+     * A selection too large to save in any form comes back with nothing ticked, never with the run's
+     * own ticks, which would write what the user had unticked.
+     */
+    @Test
+    fun aRestoredProcessShowsNothingTickedWhenTheSelectionWasTooLargeToSave() =
+        runTest(dispatcher) {
+            val ids = List(UNSAVABLE_RUN_DOCS) { i -> i.toString().padStart(DOC_ID_LENGTH, '0') }
+            val session = sessionWith(ScriptedReview(docs = ids.map { selectedReviewDoc(it) }))
+            val handle = SavedStateHandle()
+            val model = AiEditReviewViewModel(session, "job", handle)
+            collecting(model.phase)
+            advanceUntilIdle()
+            // Half of every document's suggestions: as far from the run's own, from all and from none.
+            ids.forEach { model.toggleChip(it, "invoice") }
+
+            val restored = AiEditReviewViewModel(session, "job", handle.afterProcessDeath())
+            collecting(restored.phase)
+            advanceUntilIdle()
+            val docs = restored.phase.value.shouldBeInstanceOf<QueuedReviewPhase.Review>().batch.docs
+            docs.size shouldBe UNSAVABLE_RUN_DOCS
+            docs.count { doc -> doc.chips.single().selected || doc.fields.single().selected } shouldBe 0
         }
 
     @Test
@@ -312,5 +410,12 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
         const val LARGE_RUN_DOCS = 200
         const val DOC_ID_LENGTH = 64
         const val UNTICK_EVERY = 40
+
+        /** A run whose every suggestion, listed, no longer fits the saved state. */
+        const val LARGER_RUN_DOCS = 400
+        const val RETRY_DOCS = 10
+
+        /** A run whose selection fits the saved state in no form. */
+        const val UNSAVABLE_RUN_DOCS = 600
     }
 }

@@ -16,9 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.nullable
-import kotlinx.serialization.builtins.serializer
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_review_discard_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_review_open_failed
@@ -81,7 +79,7 @@ class AiEditReviewViewModel(
 
     private var run: Job? = null
 
-    /** The run's documents as it opened, ticked as stored: what the saved state is the difference from. */
+    /** The run's documents as it opened, ticked as stored: what the saved ticks' `opened` base is ([SavedTicks]). */
     private var defaults: List<ReviewDoc> = emptyList()
 
     init {
@@ -91,20 +89,20 @@ class AiEditReviewViewModel(
                     .onFailure { message(uiText(Res.string.ai_edit_review_open_failed, it.reasonText())) }
                     .getOrNull()
             // A restored process gets back what the user had ticked and unticked, over the run as it is now.
-            val toggled = saved.restored<List<String>?>(TOGGLED_KEY, ToggledSerializer, null)
+            val ticks = saved.restored<List<String>?>(TICKS_KEY, TicksSerializer, null)
             _phase.value =
                 opened?.let {
                     defaults = it.docs
-                    val docs = toggled?.let(it.docs::withToggled) ?: it.docs
+                    val docs = ticks?.let { saved -> SavedTicks.restore(it.docs, saved) } ?: it.docs
                     QueuedReviewPhase.Review(ReviewBatchState(docs, it.emptyDocs), it)
                 } ?: QueuedReviewPhase.Unavailable
         }
     }
 
-    /** Show [review], saving how its ticks differ from the run's own for a restored process. */
+    /** Show [review], saving its ticks for a restored process. */
     private fun show(review: QueuedReviewPhase.Review) {
         _phase.value = review
-        saved.saveUiState(TOGGLED_KEY, ToggledSerializer, review.batch.docs.toggledFrom(defaults))
+        saved.saveUiState(TICKS_KEY, TicksSerializer, SavedTicks.of(review.batch.docs, defaults))
     }
 
     /** Leaving destroys the only copy of an answer already paid for, so it is a discard. */
@@ -157,7 +155,11 @@ class AiEditReviewViewModel(
     }
 
     private companion object {
-        const val TOGGLED_KEY = "review.toggled"
-        val ToggledSerializer = ListSerializer(String.serializer()).nullable
+        /**
+         * Not the earlier `review.toggled`, whose entries were flips of the run's own ticks: read as
+         * states, those would tick what the user had unticked.
+         */
+        const val TICKS_KEY = "review.ticks"
+        val TicksSerializer = SavedTicks.serializer.nullable
     }
 }
