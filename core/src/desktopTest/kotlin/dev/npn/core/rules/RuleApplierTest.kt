@@ -179,6 +179,57 @@ class RuleApplierTest {
             rig.fs.journalObjects().size shouldBe objects
         }
 
+    /**
+     * A relink copies the old document's values and live tags onto the new one, but no clear and no
+     * removal. What someone cleared or removed on the old document stays taken away on the document it
+     * became: a rule on it reads the whole relink chain for what was ever set or carried.
+     */
+    @Test
+    fun rulesDoNotRefillWhatWasTakenAwayBeforeARelink() =
+        runTest {
+            rig.writePdf("original.pdf", "the bill")
+            rig.writePdf("baked.pdf", "the bill, baked")
+            rig.rescan()
+            val original = checkNotNull(rig.db.documentDao().rowAtPath("original.pdf")).docId
+            val baked = checkNotNull(rig.db.documentDao().rowAtPath("baked.pdf")).docId
+            val coordinator = rig.coordinator(rig.writer("dev-main"))
+            coordinator.refreshState()
+            coordinator.commitAndApply(
+                listOf(
+                    PendingOp.fieldSet(original, FieldKeys.CORRESPONDENT, "Globex"),
+                    PendingOp.fieldSet(original, FieldKeys.DOC_TYPE, "Letter"),
+                    PendingOp.tagAdd(original, "Paid"),
+                ),
+            )
+            coordinator.commitAndApply(listOf(PendingOp.fieldSet(original, FieldKeys.DOC_TYPE, null)))
+            coordinator.commitBuilt { state -> state.tagRemovalOps(listOf(original), "Paid") }
+            coordinator.relinkAndRescan(original, baked)
+            val applier =
+                RuleApplier(
+                    rules = {
+                        listOf(
+                            AutoMatchRule(
+                                id = "invoices",
+                                name = "Invoices",
+                                field = RuleField.Content,
+                                pattern = "invoice",
+                                tags = listOf("paid", "invoice"),
+                                sets = mapOf(FieldKeys.DOC_TYPE to "Invoice", "project" to "Billing"),
+                            ),
+                        )
+                    },
+                    ftsDao = rig.db.ftsDao(),
+                    documentDao = rig.db.documentDao(),
+                    coordinator = coordinator,
+                )
+
+            applier.applyToDoc(baked, content = "Invoice 42")
+
+            rig.db.documentFieldDao().valuesOf(baked) shouldBe
+                mapOf(FieldKeys.CORRESPONDENT to "Globex", "project" to "Billing")
+            rig.db.tagDao().tagsForDocument(baked) shouldContainExactly listOf("invoice")
+        }
+
     private companion object {
         const val DOCS = 25
     }

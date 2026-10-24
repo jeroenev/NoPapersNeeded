@@ -21,8 +21,9 @@ import kotlinx.coroutines.sync.withLock
  *
  * Rules only fill in: a rule sets a field the document has never had a value for (a cleared one
  * counts as had) and adds a tag it has never carried (a removed one counts as carried), by the fold
- * the write lands on. What a person, another device's rules or AI set or took away stays, and
- * applying the rules again changes nothing, wherever and however often it runs.
+ * the write lands on, read over the document and every document a relink made it of. What a person,
+ * another device's rules or AI set or took away stays, and applying the rules again changes nothing,
+ * wherever and however often it runs.
  *
  * [rules] reads the rule list wherever it is stored, each rule [AutoMatchRule.normalized]. Each call
  * here reads it once and compiles the enabled rules once, however many documents it then matches.
@@ -92,8 +93,11 @@ internal class RuleApplier(
                 val fields = state.effectiveFields(doc.docId)
                 val matched = matchRules(compiled, content, fields, doc.fileName)
                 // Fill in only: a register the journal holds, a clear included, is someone's value.
-                val held = state.fieldRegisters(doc.docId).keys
-                val carried = state.tagsEverAdded(doc.docId).mapTo(HashSet()) { it.lowercase() }
+                // Over the whole relink chain: a relink copies values and live tags, never a clear
+                // or a removal, so what was taken away before it is read on its predecessors.
+                val chain = state.chainOf(doc.docId)
+                val held = chain.flatMapTo(HashSet()) { state.fieldRegisters(it).keys }
+                val carried = chain.flatMapTo(HashSet()) { id -> state.tagsEverAdded(id).map { it.lowercase() } }
                 buildList {
                     for ((key, raw) in matched.sets - held) {
                         val value = canonicalOrNull(state, key, raw) ?: continue
