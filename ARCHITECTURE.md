@@ -329,7 +329,10 @@ the short list of these that a change must never break; this section is the comp
   `relPath` is the actual location, never an unfulfilled intent. Trash and delete suspend path
   reconciliation. A PDF with no path intent keeps its discovered location. A moved row records the
   stat of the bytes the move checked (`DocumentPaths.settle`), never one of the target taken after,
-  which by then may be a file a sync tool put there.
+  which by then may be a file a sync tool put there. A document whose intended path already holds
+  its bytes takes that file and leaves the one it was at: the sync tool is usually still bringing
+  that copy's deletion from the device that moved it, and a device whose intent is still the other
+  path could delete the intended copy at the same time for the same reason, losing both.
 - A file a user moved outside the app is journaled as the document's new `storagePath`
   (`ExternalDocumentMoves`), once this device saw it settled at its old path under the intent it
   still holds. A file at a path a `storagePath` event already named for the document, winning or

@@ -96,7 +96,9 @@ class DocumentPathReplicationTest {
                     .requireByDocId(hash)
                     .relPath shouldBe "b.pdf"
                 rebuilt.fs.sha256("b.pdf") shouldBe hash
-                rebuilt.exists("old.pdf") shouldBe false
+                // The copy at old.pdf stays, a duplicate: a device still intending old.pdf could be
+                // deleting b.pdf for the same reason right now, and the sync tool would lose both.
+                rebuilt.exists("old.pdf") shouldBe true
             } finally {
                 a.close()
                 b.close()
@@ -270,8 +272,14 @@ class DocumentPathReplicationTest {
             rig.exists("old.pdf") shouldBe false
         }
 
+    /**
+     * A claim that fails moves nothing, and the next path work moves the document. An old copy that
+     * turns up at its former path afterwards (a sync tool's or a backup's) stays, as a duplicate the
+     * rescan reports: a document's copy is never deleted for another at its intended path, which a
+     * device with an older intent may be deleting at the same time.
+     */
     @Test
-    fun anInterruptedClaimRetriesAndALateOldCopyIsRemoved() =
+    fun anInterruptedClaimRetriesAndALateOldCopyStaysADuplicate() =
         indexTest { rig ->
             rig.writePdf("old.pdf", "document")
             rig.rescan()
@@ -295,8 +303,9 @@ class DocumentPathReplicationTest {
             )
             rig.exists("old.pdf") shouldBe false
             rig.copyFile("new.pdf", "old.pdf")
-            rig.rescan().duplicates shouldBe emptyList()
-            rig.exists("old.pdf") shouldBe false
+            rig.rescan().duplicates shouldBe listOf(DuplicateReport(hash, "old.pdf"))
+            rig.exists("old.pdf") shouldBe true
+            rig.fs.sha256("new.pdf") shouldBe hash
         }
 
     @Test

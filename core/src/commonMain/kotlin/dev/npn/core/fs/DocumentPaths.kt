@@ -51,8 +51,13 @@ internal class DocumentPaths(
 
     /**
      * The stat of [target], which exists, when it already holds [docId]'s bytes, as a file other than
-     * [source], and kept that stat while it was hashed; null otherwise. The copy at [source] is then
-     * retired.
+     * [source], and kept that stat while it was hashed; null otherwise.
+     *
+     * The copy at [source] stays, a duplicate the next rescan lists. Most often it is a move another
+     * device made, whose deletion of [source] the sync tool is still bringing. Deleted here, it could
+     * be the last copy: a device whose intent for the document is still another path deletes
+     * [target] for the same reason at the same time, and the sync tool carries each deletion to the
+     * other.
      */
     private suspend fun alreadyPlaced(
         docId: String,
@@ -61,9 +66,7 @@ internal class DocumentPaths(
     ): FileMeta? {
         val checked = fs.stat(target)?.takeIf { !it.isDirectory } ?: return null
         if (fs.sha256(target) != docId || fs.stat(target) != checked) return null
-        if (!fs.exists(source)) return checked
-        if (fs.sameFile(source, target)) return null
-        retireSource(docId, source, target)
+        if (fs.exists(source) && fs.sameFile(source, target)) return null
         return checked
     }
 
@@ -111,27 +114,6 @@ internal class DocumentPaths(
             val staging = NpnPaths.Temp.relocationPath(target, ids.next())
             fs.publishStagedOnce(staging, target, docId) { fs.copyOnce(recovery, staging) }
             fs.delete(recovery)
-        }
-    }
-
-    /** Delete the extra copy at [source] of bytes that already sit at [target]. */
-    private suspend fun retireSource(
-        docId: String,
-        source: String,
-        target: String,
-    ) {
-        // Claim before checking, as in relocate: hash-then-delete at the old pathname could unlink
-        // an unrelated PDF installed by an external writer between those operations.
-        val recovery = claim(source)
-        try {
-            if (fs.sha256(recovery) == docId && fs.exists(target) && fs.sha256(target) == docId) {
-                fs.delete(recovery)
-            }
-        } finally {
-            // Cancelled or not, the document's file goes back to its name.
-            withContext(NonCancellable) {
-                if (fs.exists(recovery) && !fs.exists(source)) fs.claimDocument(recovery, source)
-            }
         }
     }
 
