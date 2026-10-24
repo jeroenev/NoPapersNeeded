@@ -143,7 +143,10 @@ After every step, on every replica:
 - Nothing logged is a bug (`SimLog.isBug`): anything at `ERROR`, or a failure whose cause is a
   programming error (a failed `check` or `require`, null, bounds, casts, SQLite constraints).
   Expected failures pass: injected faults, a closed session, blocked writes, a refused publication,
-  a file another process moved or replaced, a refused bake or a superseded import.
+  a file another process moved or replaced, a refused bake or a superseded import. A bake displaced
+  by a third file at its path while it was undone (`BakeDisplacedException`, logged as a warning, the
+  original kept under a recovery name) passes only when the file history shows that file came from
+  outside the app (another process, the sync tool); the app's own file there is a bug.
 - No operation throws such a bug either.
 - Write-once: no object the app published changes bytes, and every journal object the app wrote is
   named by its hash.

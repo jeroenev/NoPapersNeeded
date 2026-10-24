@@ -121,6 +121,12 @@ internal class Simulation(
 
     private val trace = setup?.trace ?: ArrayList()
     private val label = setup?.let { "[${it.name}] " }.orEmpty()
+
+    init {
+        // What may displace this replica's bakes: a file from outside the app at the bake's path.
+        world.log.outsideWrites[label] = fs::writtenFromOutside
+    }
+
     private val generator =
         SimGenerator(
             random,

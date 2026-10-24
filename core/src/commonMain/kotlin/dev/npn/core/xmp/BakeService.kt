@@ -25,6 +25,8 @@ internal class BakeRefusedException(
  * the original is kept under a recovery name the next rescan indexes. A race, not a bug.
  */
 internal class BakeDisplacedException(
+    /** The bake's path, which holds the other file. */
+    val path: String,
     message: String,
 ) : IllegalStateException(message)
 
@@ -188,7 +190,7 @@ internal class BakeService(
                     // Its file stays; save the original under an ordinary, indexable recovery name.
                     if (!fs.holds(norm, bakedSha)) {
                         recovery = keepOriginal(norm, src)
-                        throw BakeDisplacedException("$norm holds another file; the original is at $recovery")
+                        throw BakeDisplacedException(norm, "$norm holds another file; the original is at $recovery")
                     }
                     // A move that reports a failure may still have landed, so where the bytes are
                     // afterwards is what counts.

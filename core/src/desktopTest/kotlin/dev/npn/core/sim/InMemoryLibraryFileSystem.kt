@@ -734,6 +734,13 @@ class InMemoryLibraryFileSystem(
     /** The last write at [relPath], or null when nothing ever wrote there. */
     fun lastWriteAt(relPath: String): LastWrite? = lastWrites[relPath]
 
+    /** Whether the file at [relPath] holds what the outside world last wrote there, not the app. */
+    fun writtenFromOutside(relPath: String): Boolean {
+        val bytes = files[relPath]?.bytes ?: return false
+        val last = lastWrites[relPath] ?: return false
+        return !last.byApp && last.hash == sha256Bytes(bytes)
+    }
+
     private fun wrote(
         norm: String,
         byApp: Boolean,

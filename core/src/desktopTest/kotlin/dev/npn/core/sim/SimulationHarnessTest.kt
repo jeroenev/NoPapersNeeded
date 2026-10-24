@@ -7,6 +7,7 @@ import dev.npn.core.fs.VerifiedPublicationUnavailableException
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
 import dev.npn.core.util.NpnLog
+import dev.npn.core.xmp.BakeDisplacedException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldNotContain
@@ -120,6 +121,49 @@ class SimulationHarnessTest {
             outsidePutBack.shouldNotBeNull() shouldContain trashed
         }
 
+    /**
+     * A bake undone while a third file sits at its path is a race with whoever wrote that file: the
+     * outside world (another process, the sync tool) may, the app may not, since its own import,
+     * rename, restore or storage-path move taking the freed name is one the bake lock should have
+     * kept out.
+     */
+    @Test
+    fun aBakeDisplacedByAFileTheAppWroteFailsTheRun() =
+        runTest {
+            fun Simulation.displaceABake(byApp: Boolean) {
+                val bytes = SimPdf.bytes("displacing", "z", PLANTED_SIZE + 2)
+                if (byApp) {
+                    world.read("the app writes at the bake's path") { fs.writeBytesOnce(DISPLACED, bytes) }
+                } else {
+                    fs.externalWriteAtomic(DISPLACED, bytes)
+                }
+                world.log.log(
+                    NpnLog.Level.WARN,
+                    "Restoring $DISPLACED after a failed bake failed; the original is kept",
+                    BakeDisplacedException(DISPLACED, "$DISPLACED holds another file"),
+                )
+            }
+            Simulation(testScheduler, config(), afterStep = { step ->
+                if (step ==
+                    1
+                ) {
+                    displaceABake(byApp = false)
+                }
+            }).run()
+            val failure =
+                shouldThrow<SimFailure> {
+                    Simulation(testScheduler, config(), afterStep = { step ->
+                        if (step ==
+                            1
+                        ) {
+                            displaceABake(byApp = true)
+                        }
+                    })
+                        .run()
+                }
+            failure.message shouldContain "a bug was logged"
+        }
+
     @Test
     fun storageWithoutAPublicationPrimitiveRefusesTheLibrary() =
         runTest {
@@ -135,6 +179,7 @@ class SimulationHarnessTest {
         }
 
     private companion object {
+        const val DISPLACED = "baked.pdf"
         const val HARNESS_SEED = 7L
         const val STEPS = 30
         const val PLANTED_SIZE = 900
