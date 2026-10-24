@@ -132,7 +132,8 @@ kept 5 days. ci.yml keeps running only the CI-sized test above, as part of `:cor
   operation left running in the background, time steps, every external event, faults, crashes, close
   and reopen, and dropping the index. Among the external events is a device on an older build
   (`main`), which records a relink with no copies and folds a target over its predecessors: its bare
-  `relink` of one live document onto another arrives like any other device's journal object. `ExtraPlanner` adds bake in place, multi-page imports and split,
+  `relink` of one live document onto another arrives like any other device's journal object,
+  sometimes with its first read failing, so the ingest that folds it fails and recovers. `ExtraPlanner` adds bake in place, multi-page imports and split,
   the relink of a missing document to other bytes, auto-match rule saves, deletes and toggles (whose
   field sets drive the storage-path rule, which moves documents on every replica), the watched folder
   (new, slowly written, known, overwritten and removed files, and sweeps, beside the importer each

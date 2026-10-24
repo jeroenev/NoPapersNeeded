@@ -1,6 +1,7 @@
 package dev.npn.core.app
 
 import dev.npn.core.fs.JvmLibraryFileSystem
+import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.PathExternalIo
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.index.MutableClock
@@ -15,12 +16,14 @@ import dev.npn.core.model.SystemProperty
 import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.sim.FsMethod
 import dev.npn.core.sim.InMemoryLibraryFileSystem
+import dev.npn.core.sim.SimFaults
 import dev.npn.core.sim.SimPdf
 import dev.npn.core.sim.SimReplica
 import dev.npn.core.sim.SimWorld
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import java.io.File
 import java.nio.file.Files
@@ -141,51 +144,132 @@ class RelinkCopiesUpgradeTest {
     @Test
     fun aRelinkWithoutCopiesTheWatchIngestsIsCopiedWithoutARescan() =
         runTest {
-            val world = SimWorld(testScheduler)
-            val fs = InMemoryLibraryFileSystem(world.clock::nowMillis)
-            val replica = SimReplica(world, "watching", fs)
-            try {
-                replica.open()
-                val session = replica.session.shouldNotBeNull()
-                val bytes = SimPdf.bytes("baked", "text of the bill", BAKED_SIZE)
-                val baked = sha256Bytes(bytes)
-                world.read("the baked bytes arrive") { session.importPdfBytes(bytes, "bill.pdf") }
-                world.advance(SETTLED_MILLIS)
+            watchedRelink { relink ->
+                relink.arrive()
+                relink.world.advance(SETTLED_MILLIS)
 
-                val original = "a".repeat(64)
-                val elsewhere = InMemoryLibraryFileSystem(world.clock::nowMillis)
-                val olderBuild =
-                    ContentAddressedJournalWriter(elsewhere, "older-build", HlcWatermarkAllocator(world.clock))
-                val objects =
-                    world.read("the older build's commits") {
-                        listOf(
-                            olderBuild.commit(
-                                listOf(
-                                    PendingOp.fieldSet(original, FieldKeys.TITLE, "Water bill"),
-                                    PendingOp.tagAdd(original, "filed"),
-                                ),
-                            ),
-                            olderBuild.commit(listOf(PendingOp.relink(original, baked))),
-                        ).map { it.relPath }
-                    }
-                val rescans = fs.calls[FsMethod.LIST_INDEXABLE]
-                objects.forEach { path -> fs.externalWriteAtomic(path, elsewhere.bytesAt(path).shouldNotBeNull()) }
-                world.advance(SETTLED_MILLIS)
-
-                fs.calls[FsMethod.LIST_INDEXABLE] shouldBe rescans
-                val row = world.read("the target's row") { replica.indexDb.documentDao().getByDocId(baked) }
-                row.shouldNotBeNull().title shouldBe "Water bill"
-                world.read("its tags") { replica.indexDb.tagDao().tagsForDocument(baked) } shouldBe listOf("filed")
-            } finally {
-                replica.dispose()
-                world.dispose()
+                relink.rescans() shouldBe 0
+                relink.title() shouldBe "Water bill"
+                relink.tags() shouldBe listOf("filed")
             }
         }
+
+    /**
+     * The ingest of the bare relink fails on its read, and the full refold that recovers it takes
+     * the relink in before the failure is rethrown: the copies are owed all the same, and written at
+     * once, not at the next rescan.
+     */
+    @Test
+    fun aRelinkWithoutCopiesWhoseIngestFailsAndRecoversIsCopiedWithoutARescan() =
+        runTest {
+            watchedRelink { relink ->
+                relink.fs.faults.arm(SimFaults.Rule(FsMethod.READ, relink.relinkPath, SimFaults.Point.BEFORE, times = 1))
+                relink.arrive()
+                relink.world.advance(SETTLED_MILLIS)
+
+                relink.fs.faults.fired shouldBe 1
+                relink.rescans() shouldBe 0
+                relink.title() shouldBe "Water bill"
+                relink.tags() shouldBe listOf("filed")
+            }
+        }
+
+    /**
+     * Copies the journal refused to publish are owed: once the storage takes writes again, the
+     * periodic reconcile writes them, though it folds nothing new.
+     */
+    @Test
+    fun relinkCopiesAWriteRefusedAreWrittenByTheNextPeriodicReconcile() =
+        runTest {
+            watchedRelink { relink ->
+                relink.fs.faults.arm(
+                    SimFaults.Rule(FsMethod.PUBLISH, NpnPaths.JOURNAL_DIR, SimFaults.Point.BEFORE, times = Int.MAX_VALUE),
+                )
+                relink.arrive()
+                relink.world.advance(SETTLED_MILLIS)
+
+                (relink.fs.faults.fired > 0) shouldBe true
+                relink.title() shouldBe null
+                relink.fs.faults.disarmAll()
+                relink.world.advance(RECONCILE_INTERVAL_MILLIS)
+
+                relink.rescans() shouldBe 0
+                relink.title() shouldBe "Water bill"
+                relink.tags() shouldBe listOf("filed")
+            }
+        }
+
+    /**
+     * A replica over an in-memory folder with the watch on, which shows a document's baked bytes
+     * (the sync tool brought the PDF first, and a rescan found it), and a device on an older build
+     * whose bare relink onto it, with its original's title and tag, [WatchedRelink.arrive]s.
+     */
+    private suspend fun TestScope.watchedRelink(block: suspend (WatchedRelink) -> Unit) {
+        val world = SimWorld(testScheduler)
+        val fs = InMemoryLibraryFileSystem(world.clock::nowMillis)
+        val replica = SimReplica(world, "watching", fs)
+        try {
+            replica.open()
+            val session = replica.session.shouldNotBeNull()
+            val bytes = SimPdf.bytes("baked", "text of the bill", BAKED_SIZE)
+            val baked = sha256Bytes(bytes)
+            world.read("the baked bytes arrive") { session.importPdfBytes(bytes, "bill.pdf") }
+            world.advance(SETTLED_MILLIS)
+
+            val original = "a".repeat(64)
+            val elsewhere = InMemoryLibraryFileSystem(world.clock::nowMillis)
+            val olderBuild = ContentAddressedJournalWriter(elsewhere, "older-build", HlcWatermarkAllocator(world.clock))
+            val objects =
+                world.read("the older build's commits") {
+                    listOf(
+                        olderBuild.commit(
+                            listOf(
+                                PendingOp.fieldSet(original, FieldKeys.TITLE, "Water bill"),
+                                PendingOp.tagAdd(original, "filed"),
+                            ),
+                        ),
+                        olderBuild.commit(listOf(PendingOp.relink(original, baked))),
+                    ).map { it.relPath }
+                }
+            val relink = WatchedRelink(world, fs, replica, baked, objects, elsewhere)
+            block(relink)
+        } finally {
+            replica.dispose()
+            world.dispose()
+        }
+    }
+
+    private class WatchedRelink(
+        val world: SimWorld,
+        val fs: InMemoryLibraryFileSystem,
+        private val replica: SimReplica,
+        private val baked: String,
+        private val objects: List<String>,
+        private val elsewhere: InMemoryLibraryFileSystem,
+    ) {
+        private val rescansBefore = fs.calls[FsMethod.LIST_INDEXABLE] ?: 0
+
+        /** The bare relink's object, the last to arrive. */
+        val relinkPath: String = objects.last()
+
+        /** The older build's objects land in the folder, as a sync tool delivers them. */
+        fun arrive() = objects.forEach { path -> fs.externalWriteAtomic(path, elsewhere.bytesAt(path).shouldNotBeNull()) }
+
+        /** The rescans run since [arrive]. */
+        fun rescans(): Int = (fs.calls[FsMethod.LIST_INDEXABLE] ?: 0) - rescansBefore
+
+        fun title(): String? = world.read("the target's row") { replica.indexDb.documentDao().getByDocId(baked) }?.title
+
+        fun tags(): List<String> = world.read("its tags") { replica.indexDb.tagDao().tagsForDocument(baked) }
+    }
 
     private companion object {
         const val BAKED_SIZE = 900
 
         /** Past the watch's settling and every write's follow-up, well short of the 15-minute reconcile. */
         const val SETTLED_MILLIS = 30_000L
+
+        /** The session's periodic metadata reconcile, once. */
+        const val RECONCILE_INTERVAL_MILLIS = 15L * 60L * 1000L
     }
 }

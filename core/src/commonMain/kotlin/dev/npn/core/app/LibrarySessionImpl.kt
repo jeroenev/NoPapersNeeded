@@ -146,6 +146,15 @@ internal class LibrarySessionImpl(
         }
     }
 
+    /**
+     * [writeRelinkCopies] after an ingest or reconcile that returned [folded], null when it failed. A
+     * failed pass may have folded new events all the same: an ingest that fails is recovered by a
+     * full refold, which takes in the object before the failure is rethrown. So only a pass that
+     * said it folded nothing new leaves the copies to an earlier attempt still owed; a failed one
+     * counts as folded, which costs at most a copy pass that finds nothing to write.
+     */
+    private suspend fun writeRelinkCopiesAfter(folded: Boolean?) = writeRelinkCopies(folded = folded != false)
+
     // The one pending follow-up rescan for files a scan deferred as still being written. A file
     // can finish without another watch event, and SAF libraries have no watcher at all.
     private val settleRescanLock = Mutex()
@@ -275,8 +284,7 @@ internal class LibrarySessionImpl(
         scope.launch {
             while (isActive) {
                 delay(METADATA_RECONCILIATION_INTERVAL_MS)
-                val folded = log.runLogged("Periodic metadata reconcile") { coordinator.reconcileMetadata() }
-                writeRelinkCopies(folded == true)
+                writeRelinkCopiesAfter(log.runLogged("Periodic metadata reconcile") { coordinator.reconcileMetadata() })
                 // An initial rescan that failed keeps every drain at the gate, and on desktop nothing
                 // else rescans until the library folder changes (Android rescans on every resume).
                 if (!drainsReady.isCompleted) {
@@ -300,13 +308,11 @@ internal class LibrarySessionImpl(
             // Either may fold a relink an older build wrote without copies, or an edit of a relinked
             // document's predecessor: the copies follow at once, as after a rescan.
             is WatchAction.IngestObject -> {
-                val folded = log.runLogged("Journal object ingest") { coordinator.ingestObject(action.relPath) }
-                writeRelinkCopies(folded == true)
+                writeRelinkCopiesAfter(log.runLogged("Journal object ingest") { coordinator.ingestObject(action.relPath) })
             }
 
             WatchAction.ReconcileJournal -> {
-                val folded = log.runLogged("Metadata reconcile") { coordinator.reconcileMetadata() }
-                writeRelinkCopies(folded == true)
+                writeRelinkCopiesAfter(log.runLogged("Metadata reconcile") { coordinator.reconcileMetadata() })
                 log.runLogged("OCR sidecar reconcile") { ocrPipeline.reconcileSidecars() }
             }
 

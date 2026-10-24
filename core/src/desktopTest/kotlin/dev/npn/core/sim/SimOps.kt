@@ -586,6 +586,10 @@ internal class SimGenerator(
      * `relink`, none of the old document's metadata copied onto the new one, since that build folds a
      * target over its predecessors. Each document takes part in one such relink at most, so two of
      * them still under way never relink a pair both ways.
+     *
+     * Sometimes the first read of the object fails: the ingest the watch starts for it fails, and the
+     * full refold that recovers it takes the relink in before the failure is rethrown, so the copies
+     * are owed all the same.
      */
     private fun extOlderBuildRelink(s: Snapshot): Planned.Control? {
         val candidates = s.live.filterNot { it.docId in olderBuildRelinked }
@@ -595,10 +599,13 @@ internal class SimGenerator(
         olderBuildRelinked += old.docId
         olderBuildRelinked += new.docId
         val transfer = random.nextLong(0, TRANSFER_MILLIS)
+        val failRead = random.chance(FAILED_INGEST_PERCENT)
+        val failing = if (failRead) ", its first read failing" else ""
         return Planned.Control(
-            "external: an older build's bare relink of ${old.short()} onto ${new.short()} arrives over ${transfer}ms",
+            "external: an older build's bare relink of ${old.short()} onto ${new.short()} arrives over ${transfer}ms$failing",
         ) {
             val (path, bytes) = remoteObject(listOf(PendingOp.relink(old.docId, new.docId)))
+            if (failRead) sim.fs.faults.arm(SimFaults.Rule(FsMethod.READ, path, SimFaults.Point.BEFORE, times = 1))
             sim.world.launch { sim.fs.externalSyncDelivery(path, bytes, transfer) }
             path.substringAfterLast('/').take(ID)
         }
@@ -688,6 +695,7 @@ internal class SimGenerator(
         private const val TRANSFER_MILLIS = 3_000L
         private const val REMOTE_SKEW_MILLIS = 90_000L
         private const val FAULT_TIMES = 4
+        private const val FAILED_INGEST_PERCENT = 40
         private const val OCR_BURST = 4
         private const val CONCURRENCY = 3
         private const val DURING = 2
