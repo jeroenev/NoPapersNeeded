@@ -2,6 +2,7 @@ package dev.npn.core.app
 
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.PathExternalIo
+import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.index.MutableClock
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.HlcWatermarkAllocator
@@ -12,6 +13,11 @@ import dev.npn.core.journal.journalObjects
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.SystemProperty
 import dev.npn.core.pdf.PdfFixtures
+import dev.npn.core.sim.FsMethod
+import dev.npn.core.sim.InMemoryLibraryFileSystem
+import dev.npn.core.sim.SimPdf
+import dev.npn.core.sim.SimReplica
+import dev.npn.core.sim.SimWorld
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -125,4 +131,61 @@ class RelinkCopiesUpgradeTest {
             copied.filterIsInstance<JournalOp.FieldSet>().map { it.key to it.value } shouldBe
                 listOf(FieldKeys.TITLE to "Water bill")
         }
+
+    /**
+     * A device on an older build bakes a document this one already shows the baked bytes of (the
+     * sync tool brought the PDF first, and a rescan found it), and its bare relink then arrives
+     * through the folder watch: the ingest copies it at once. Before, only the next rescan did, and
+     * on desktop nothing rescans until a PDF changes.
+     */
+    @Test
+    fun aRelinkWithoutCopiesTheWatchIngestsIsCopiedWithoutARescan() =
+        runTest {
+            val world = SimWorld(testScheduler)
+            val fs = InMemoryLibraryFileSystem(world.clock::nowMillis)
+            val replica = SimReplica(world, "watching", fs)
+            try {
+                replica.open()
+                val session = replica.session.shouldNotBeNull()
+                val bytes = SimPdf.bytes("baked", "text of the bill", BAKED_SIZE)
+                val baked = sha256Bytes(bytes)
+                world.read("the baked bytes arrive") { session.importPdfBytes(bytes, "bill.pdf") }
+                world.advance(SETTLED_MILLIS)
+
+                val original = "a".repeat(64)
+                val elsewhere = InMemoryLibraryFileSystem(world.clock::nowMillis)
+                val olderBuild =
+                    ContentAddressedJournalWriter(elsewhere, "older-build", HlcWatermarkAllocator(world.clock))
+                val objects =
+                    world.read("the older build's commits") {
+                        listOf(
+                            olderBuild.commit(
+                                listOf(
+                                    PendingOp.fieldSet(original, FieldKeys.TITLE, "Water bill"),
+                                    PendingOp.tagAdd(original, "filed"),
+                                ),
+                            ),
+                            olderBuild.commit(listOf(PendingOp.relink(original, baked))),
+                        ).map { it.relPath }
+                    }
+                val rescans = fs.calls[FsMethod.LIST_INDEXABLE]
+                objects.forEach { path -> fs.externalWriteAtomic(path, elsewhere.bytesAt(path).shouldNotBeNull()) }
+                world.advance(SETTLED_MILLIS)
+
+                fs.calls[FsMethod.LIST_INDEXABLE] shouldBe rescans
+                val row = world.read("the target's row") { replica.indexDb.documentDao().getByDocId(baked) }
+                row.shouldNotBeNull().title shouldBe "Water bill"
+                world.read("its tags") { replica.indexDb.tagDao().tagsForDocument(baked) } shouldBe listOf("filed")
+            } finally {
+                replica.dispose()
+                world.dispose()
+            }
+        }
+
+    private companion object {
+        const val BAKED_SIZE = 900
+
+        /** Past the watch's settling and every write's follow-up, well short of the 15-minute reconcile. */
+        const val SETTLED_MILLIS = 30_000L
+    }
 }

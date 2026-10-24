@@ -286,10 +286,18 @@ internal class JournalCoordinator(
             }
         }
 
-    suspend fun ingestObject(relPath: String) =
+    /**
+     * Fold the journal object at [relPath] in, as a watch event brings it. Returns whether the fold
+     * moved: the object held events new to it, or the pass refolded in full. Only then may a relink
+     * target's inherited view have changed (`RelinkInheritanceUpgrade`).
+     */
+    suspend fun ingestObject(relPath: String): Boolean =
         locked {
             // The full path reads this object too.
-            if (writerState.refoldOwed) return@locked pass(OnFailure.BLOCK) { recoverDurableProjection() }
+            if (writerState.refoldOwed) {
+                pass(OnFailure.BLOCK) { recoverDurableProjection() }
+                return@locked true
+            }
             pass(OnFailure.RECOVER) {
                 // Fold before opening the transaction: loadState reads the events as they stand
                 // BEFORE this object is ingested, which is exactly the base its events apply onto.
@@ -319,18 +327,23 @@ internal class JournalCoordinator(
                     // open can reuse it instead of refolding.
                     accumulator.markReady(current.maxHlc)
                 }
+                step.moved
             }
         }
 
     /** Strictly reconcile metadata before touching the document projection. */
     suspend fun rescan(): ScanReport = locked { pass(OnFailure.BLOCK) { rescanFrom(foldedState()) } }
 
-    suspend fun reconcileMetadata() =
+    /**
+     * Read the journal folder again and fold what changed in it. Returns whether the fold moved, as
+     * [ingestObject] does: events new to it, or a full refold.
+     */
+    suspend fun reconcileMetadata(): Boolean =
         locked {
             pass(OnFailure.BLOCK) {
                 if (writerState.refoldOwed) {
                     recoverDurableProjection()
-                    return@locked
+                    return@locked true
                 }
                 val reconciliation = accumulator.reconcile(folded)
                 val step = PassDecision.afterReconcile(reconciliation)
@@ -340,7 +353,7 @@ internal class JournalCoordinator(
                     // needed the fold. There is nothing to project, and replaying the journal just
                     // to prove that is what made the periodic tick as expensive as a boot.
                     transition(PassOutcome.Projected)
-                    return@locked
+                    return@locked false
                 }
                 adopt(current) {
                     // Bounded projection when reconcile only ADDED events onto the prior state;
@@ -358,6 +371,7 @@ internal class JournalCoordinator(
                         ProjectionStep.Unchanged, ProjectionStep.Current -> {}
                     }
                 }
+                step.moved
             }
         }
 
@@ -805,6 +819,10 @@ internal class JournalCoordinator(
         val current = accumulator.reconcile().state ?: accumulator.loadState()
         adopt(current) { indexer.refreshState(current) }
     }
+
+    /** Whether the live fold took in anything: new events, or a full refold. */
+    private val ProjectionStep.moved: Boolean
+        get() = this == ProjectionStep.Whole || (this is ProjectionStep.Events && events.isNotEmpty())
 
     companion object {
         /** How long a document must have been hidden before a rescan records its file's return. */
