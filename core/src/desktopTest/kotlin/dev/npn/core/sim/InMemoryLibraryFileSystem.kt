@@ -631,6 +631,7 @@ class InMemoryLibraryFileSystem(
                 touch(to)
                 if (byApp) {
                     appRemovals += from
+                    tookAway(from, node)
                     recordWrite(to, node.bytes)
                 }
             }
@@ -660,7 +661,10 @@ class InMemoryLibraryFileSystem(
         byApp: Boolean = false,
     ) {
         files.remove(norm)?.let { node ->
-            if (byApp) appRemovals += norm
+            if (byApp) {
+                appRemovals += norm
+                tookAway(norm, node)
+            }
             lost(norm, node, byApp)
             touch(norm)
             return
@@ -814,12 +818,28 @@ class InMemoryLibraryFileSystem(
     /** The last write at [relPath], or null when nothing ever wrote there. */
     fun lastWriteAt(relPath: String): LastWrite? = lastWrites[relPath]
 
-    /** Whether the file at [relPath] holds what the outside world last wrote there, not the app. */
-    fun writtenFromOutside(relPath: String): Boolean {
-        val bytes = files[relPath]?.bytes ?: return false
-        val last = lastWrites[relPath] ?: return false
-        return !last.byApp && last.hash == sha256Bytes(bytes)
+    /**
+     * Whether the outside world, not the app, made the last write at [relPath], whether or not its
+     * file is still there: what a bake displaced there by another file is judged by, which the log
+     * reports some suspension points after the fact.
+     */
+    fun lastWrittenFromOutside(relPath: String): Boolean = lastWrites[relPath]?.byApp == false
+
+    // When the app last moved or deleted the bytes of a hash away from a path, by path and hash.
+    private val appTookAway = HashMap<Pair<String, String>, Long>()
+
+    private fun tookAway(
+        norm: String,
+        node: Node,
+    ) {
+        appTookAway[norm to sha256Bytes(node.bytes)] = now()
     }
+
+    /** When the app last moved or deleted the bytes hashing to [hash] away from [relPath]; null when it never did. */
+    fun appTookAwayAt(
+        relPath: String,
+        hash: String,
+    ): Long? = appTookAway[relPath to hash]
 
     private fun wrote(
         norm: String,

@@ -152,8 +152,9 @@ After every step, on every replica:
   Expected failures pass: injected faults, a closed session, blocked writes, a refused publication,
   a file another process moved or replaced, a refused bake or a superseded import. A bake displaced
   by a third file at its path while it was undone (`BakeDisplacedException`, logged as a warning, the
-  original kept under a recovery name) passes only when the file history shows that file came from
-  outside the app (another process, the sync tool); the app's own file there is a bug.
+  original kept under a recovery name) passes only when the file history shows the last write at
+  that path came from outside the app (another process, the sync tool), whether or not that file is
+  still there when the failure is logged; the app's own file there is a bug.
 - No operation throws such a bug either.
 - Write-once: no object the app published changes bytes, and every journal object the app wrote is
   named by its hash.
@@ -171,7 +172,9 @@ Across replicas, after every step:
   place there since it was last at rest. Anything else
   that blocks writes is a bug: objects are write-once and named by their hash, and a sync tool's
   file in transfer shows under its temporary name.
-- A watched folder's importer deletes only a file whose bytes the library has a document of.
+- A watched folder's importer deletes only a file whose bytes the library has a document of: bytes
+  a file in the replica's folder holds, or bytes a relink superseded whose final target, the relink
+  chain followed to its end, a file in that folder holds.
 
 At rest (every `quiesceEvery` steps, and at the end), deliveries under way land, faults are
 cleared, OCR runs through, background operations end, 20 virtual minutes pass, and every replica
@@ -187,8 +190,9 @@ do not converge, which fails the run. Then:
   written, a document deleted for good). A trashed document's own bytes back at its path, or the
   path it was trashed from, within `RESTORE_SETTLE_MS` of the trash pass too, but only when another
   replica trashed it (the sync tool has not delivered that device's move of the file yet) or the
-  last write at that path since the trash came from outside the app (another process, a backup put
-  back, the sync tool): the app records such a return only once the window has passed. The app's
+  last write at that path since the app took the document's bytes from there (the trash moves the
+  file before its commit stamps it) came from outside the app (another process, a backup put back,
+  the sync tool): the app records such a return only once the window has passed. The app's
   own trash whose file the app itself put back is a finding.
 - No bake's original lingers: no file under a recovery name holds bytes a relink superseded while
   the live document they became has its own bytes at its path. The bake deletes its original once

@@ -191,17 +191,16 @@ internal class SyncSimulation(
         val watched = if (sync.watched[index]) SimWatchedFolder(name, world.clock::nowMillis, ::accounted) else null
 
         /**
-         * Whether the library holds [hash]: a file here has the bytes, or a relink superseded them.
-         * This replica's own relink counts; another replica's only once the bytes it relinked them to
-         * are in this folder: the import may find the bytes in place, a duplicate, and the sync tool
-         * then deliver the bake that replaced them there before the bake's relink, so the original is
-         * gone here as on the baking device, and its baked bytes are here instead.
+         * Whether the library holds [hash]: a file here has the bytes, or a relink superseded them and
+         * the bytes they finally became, the relink chain followed to its end, are in this folder. A
+         * relink this replica or another folded counts alike: the import may find the bytes in place,
+         * a duplicate, and the sync tool then deliver the bake that replaced them there before the
+         * bake's relink, so the original is gone here as on the baking device, and its baked bytes
+         * are here instead. Without those bytes here this folder holds the document nowhere.
          */
         internal suspend fun accounted(hash: String): Boolean {
             val held = fs.allFiles().values.mapTo(HashSet(), ::sha256Bytes)
-            return hash in held ||
-                relinkTargets(this, hash).isNotEmpty() ||
-                members.any { member -> member !== this && relinkTargets(member, hash).any { it in held } }
+            return hash in held || members.any { member -> finalTargets(member, hash).any { it in held } }
         }
 
         val extra = ExtraPlanner(Random(salted(6)), sim, name, watched, sync.deleteAfterImport[index], log)
@@ -219,6 +218,30 @@ internal class SyncSimulation(
     }
 
     val members = List(sync.replicas) { Member(it) }
+
+    /**
+     * The documents [hash]'s relink chains in [member]'s index end at: followed from [hash] through
+     * every relink to the documents no relink superseded. Empty when [hash] was never relinked, or
+     * every chain loops.
+     */
+    private suspend fun finalTargets(
+        member: Member,
+        hash: String,
+    ): Set<String> {
+        val seen = hashSetOf(hash)
+        val finals = HashSet<String>()
+        var frontier = relinkTargets(member, hash)
+        while (frontier.isNotEmpty()) {
+            val next = ArrayList<String>()
+            for (target in frontier) {
+                if (!seen.add(target)) continue
+                val onward = relinkTargets(member, target)
+                if (onward.isEmpty()) finals += target else next += onward
+            }
+            frontier = next
+        }
+        return finals
+    }
 
     /** The documents [member]'s index has [hash] relinked to. */
     private suspend fun relinkTargets(

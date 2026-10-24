@@ -35,8 +35,9 @@ class SimLog(
     val bugs = ArrayList<LogEntry>()
 
     /**
-     * Per replica, by the prefix its entries carry (empty for a lone replica): whether the file at a
-     * path came from outside the app, the one thing that may displace a bake ([displacedBake]).
+     * Per replica, by the prefix its entries carry (empty for a lone replica): whether the last write
+     * at a path came from outside the app, the one thing that may displace a bake ([displacedBake]),
+     * whether or not that file is still there when the bake's failure is logged.
      */
     val outsideWrites = LinkedHashMap<String, (path: String) -> Boolean>()
 

@@ -141,15 +141,17 @@ class SyncSimulationHarnessTest {
         }
 
     /**
-     * Bytes another replica relinked are accounted for here (a watched folder's importer may delete
-     * their source) only once the bytes they became are in this folder too: until then this folder
-     * holds the document nowhere.
+     * Relinked bytes are accounted for in a folder (a watched folder's importer may delete their
+     * source) only once the bytes they finally became, the relink chain followed to its end, are in
+     * that folder too, whichever replica folded the relinks: until then that folder holds the
+     * document nowhere.
      */
     @Test
-    fun anotherReplicasRelinkAccountsForBytesOnlyWithItsTargetHere() =
+    fun aRelinkAccountsForBytesOnlyWithItsFinalTargetHere() =
         runTest {
             val original = "a".repeat(HASH)
             val baked = SimPdf.bytes("baked elsewhere", "w", BAKED_SIZE)
+            val rebaked = SimPdf.bytes("baked again elsewhere", "w", BAKED_SIZE + 2)
             val answers = ArrayList<Boolean>()
             SyncSimulation(testScheduler, config(), afterStep = { step ->
                 if (step == 1) {
@@ -158,18 +160,23 @@ class SyncSimulationHarnessTest {
                     val olderBuild =
                         ContentAddressedJournalWriter(elsewhere, "harness", HlcWatermarkAllocator(world.clock))
                     val published =
-                        world.read("a relink") {
-                            olderBuild.commit(listOf(PendingOp.relink(original, sha256Bytes(baked))))
+                        world.read("two relinks") {
+                            listOf(
+                                olderBuild.commit(listOf(PendingOp.relink(original, sha256Bytes(baked)))),
+                                olderBuild.commit(listOf(PendingOp.relink(sha256Bytes(baked), sha256Bytes(rebaked)))),
+                            )
                         }
-                    relinked.fs.externalWriteAtomic(published.relPath, elsewhere.bytesAt(published.relPath)!!)
-                    world.read("the relink's ingest") { relinked.replica.session!!.rescan() }
-                    answers += world.read("accounted on the replica that folded it") { relinked.accounted(original) }
-                    answers += world.read("accounted without its target") { members[0].accounted(original) }
+                    published.forEach { relinked.fs.externalWriteAtomic(it.relPath, elsewhere.bytesAt(it.relPath)!!) }
+                    world.read("the relinks' ingest") { relinked.replica.session!!.rescan() }
+                    answers += world.read("accounted on the replica that folded them") { relinked.accounted(original) }
+                    answers += world.read("accounted without a target") { members[0].accounted(original) }
                     members[0].fs.externalWriteAtomic("baked.pdf", baked)
-                    answers += world.read("accounted with its target") { members[0].accounted(original) }
+                    answers += world.read("accounted with the first target only") { members[0].accounted(original) }
+                    members[0].fs.externalWriteAtomic("rebaked.pdf", rebaked)
+                    answers += world.read("accounted with the final target") { members[0].accounted(original) }
                 }
             }).run()
-            answers shouldBe listOf(true, false, true)
+            answers shouldBe listOf(false, false, false, true)
         }
 
     private companion object {

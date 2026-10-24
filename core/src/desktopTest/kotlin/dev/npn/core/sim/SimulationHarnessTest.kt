@@ -12,12 +12,14 @@ import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.JournalSourceRead
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.StorageV2Reader
+import dev.npn.core.util.EpochClock
 import dev.npn.core.util.NpnLog
 import dev.npn.core.xmp.BakeDisplacedException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.nulls.shouldNotBeNull
+import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.test.runTest
@@ -131,43 +133,94 @@ class SimulationHarnessTest {
      * A bake undone while a third file sits at its path is a race with whoever wrote that file: the
      * outside world (another process, the sync tool) may, the app may not, since its own import,
      * rename, restore or storage-path move taking the freed name is one the bake lock should have
-     * kept out.
+     * kept out. Whoever made the last write there decides, even when that file is gone by the time
+     * the failure is logged (the bake looks at the path again before it logs).
      */
     @Test
     fun aBakeDisplacedByAFileTheAppWroteFailsTheRun() =
         runTest {
-            fun Simulation.displaceABake(byApp: Boolean) {
+            fun Simulation.displaceABake(
+                byApp: Boolean,
+                goneByTheLog: Boolean = false,
+            ) {
                 val bytes = SimPdf.bytes("displacing", "z", PLANTED_SIZE + 2)
                 if (byApp) {
                     world.read("the app writes at the bake's path") { fs.writeBytesOnce(DISPLACED, bytes) }
                 } else {
                     fs.externalWriteAtomic(DISPLACED, bytes)
                 }
+                if (goneByTheLog) fs.externalMove(DISPLACED, "moved away.pdf")
                 world.log.log(
                     NpnLog.Level.WARN,
                     "Restoring $DISPLACED after a failed bake failed; the original is kept",
                     BakeDisplacedException(DISPLACED, "$DISPLACED holds another file"),
                 )
             }
+            for (goneByTheLog in listOf(false, true)) {
+                Simulation(testScheduler, config(), afterStep = { step ->
+                    if (step == 1) displaceABake(byApp = false, goneByTheLog = goneByTheLog)
+                }).run()
+                val failure =
+                    shouldThrow<SimFailure> {
+                        Simulation(testScheduler, config(), afterStep = { step ->
+                            if (step == 1) displaceABake(byApp = true, goneByTheLog = goneByTheLog)
+                        }).run()
+                    }
+                failure.message shouldContain "a bug was logged"
+            }
+        }
+
+    /**
+     * A trash moves the document's file before its commit stamps the trash, and the stamp is an HLC,
+     * which a device whose clock runs ahead pushes past this one's clock: the outside world putting
+     * the bytes back after the move counts as their return from outside, though it is earlier than
+     * the trash's stamp.
+     */
+    @Test
+    fun aReturnAfterTheTrashsMoveButBeforeItsStampIsASettlingReturn() =
+        runTest {
+            var returned: Set<Pair<String, String>>? = null
+            var trashed: Pair<String, String>? = null
+            var stampAhead = false
             Simulation(testScheduler, config(), afterStep = { step ->
-                if (step ==
-                    1
-                ) {
-                    displaceABake(byApp = false)
+                if (step == STEPS) {
+                    fs.faults.disarmAll()
+                    val elsewhere = InMemoryLibraryFileSystem(world.clock::nowMillis)
+                    val ahead =
+                        ContentAddressedJournalWriter(
+                            elsewhere,
+                            "clock ahead",
+                            HlcWatermarkAllocator(EpochClock { world.clock.nowMillis() + HOUR_MILLIS }),
+                        )
+                    val remote = world.read("a device whose clock runs ahead") { ahead.commit(listOf(PendingOp.tagStyle("ahead", "#00ff00", null))) }
+                    fs.externalWriteAtomic(remote.relPath, elsewhere.bytesAt(remote.relPath)!!)
+                    val bytes = SimPdf.bytes("trashed ahead", "y", PLANTED_SIZE + 5)
+                    val (docId, from) =
+                        world.read("ingest, import and trash") {
+                            val session = replica.session!!
+                            session.rescan()
+                            val docId = session.importPdfBytes(bytes, "trashed.pdf").shouldBeInstanceOf<ImportOutcome.Imported>().docId
+                            session.docLifecycle.trashDoc(docId)
+                            docId to
+                                replica.indexDb
+                                    .rows("SELECT trashedOrigPath FROM documents WHERE docId = '$docId'")
+                                    .single()[0]!!
+                        }
+                    trashed = from to docId
+                    fs.externalWriteAtomic(from, bytes)
+                    val trashedAt =
+                        world.read("the trash's stamp") {
+                            replica.indexDb
+                                .rows("SELECT trashedAt FROM documents WHERE docId = '$docId'")
+                                .single()[0]!!
+                                .toLong()
+                        }
+                    stampAhead = trashedAt > fs.lastWriteAt(from)!!.atMillis
+                    returned = settlingReturns()
                 }
             }).run()
-            val failure =
-                shouldThrow<SimFailure> {
-                    Simulation(testScheduler, config(), afterStep = { step ->
-                        if (step ==
-                            1
-                        ) {
-                            displaceABake(byApp = true)
-                        }
-                    })
-                        .run()
-                }
-            failure.message shouldContain "a bug was logged"
+            stampAhead shouldBe true
+            returned.shouldNotBeNull() shouldContain trashed
         }
 
     /**
@@ -234,5 +287,6 @@ class SimulationHarnessTest {
         const val HARNESS_SEED = 7L
         const val STEPS = 30
         const val PLANTED_SIZE = 900
+        const val HOUR_MILLIS = 60L * 60L * 1000L
     }
 }

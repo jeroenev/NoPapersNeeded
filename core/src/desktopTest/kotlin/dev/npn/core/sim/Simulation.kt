@@ -127,7 +127,7 @@ internal class Simulation(
 
     init {
         // What may displace this replica's bakes: a file from outside the app at the bake's path.
-        world.log.outsideWrites[label] = fs::writtenFromOutside
+        world.log.outsideWrites[label] = fs::lastWrittenFromOutside
     }
 
     private val generator =
@@ -522,7 +522,8 @@ internal class Simulation(
      * - another replica trashed it, and the sync tool has not delivered that device's move of the
      *   file yet, or kept a version it saw modified over it;
      * - the last write at the path came from outside (a backup put back, another process, the sync
-     *   tool) since the trash.
+     *   tool) since the app took the document's bytes from there (or, where it never did, since the
+     *   trash).
      *
      * The app's own trash whose file is back by the app's own hand (a move undone after a publish
      * that failed but landed) is neither, and stays a finding.
@@ -541,8 +542,11 @@ internal class Simulation(
                 val othersTrash = !trashedHere(docId)
                 listOfNotNull(row[1], row[2])
                     .filter { path ->
+                        // Since the app took the bytes from there: the trash moves the file before its
+                        // commit stamps the trash, so a return may land before trashedAt.
+                        val since = fs.appTookAwayAt(path, docId) ?: at
                         othersTrash ||
-                            fs.lastWriteAt(path)?.let { !it.byApp && it.hash == docId && it.atMillis >= at } == true
+                            fs.lastWriteAt(path)?.let { !it.byApp && it.hash == docId && it.atMillis >= since } == true
                     }.map { it to docId }
             }
         }
