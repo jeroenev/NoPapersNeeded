@@ -4,8 +4,14 @@ import dev.npn.core.app.ImportOutcome
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
+import dev.npn.core.index.toEventEntity
+import dev.npn.core.journal.ContentAddressedJournalWriter
+import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
+import dev.npn.core.journal.JournalSourceRead
+import dev.npn.core.journal.PendingOp
+import dev.npn.core.journal.StorageV2Reader
 import dev.npn.core.util.NpnLog
 import dev.npn.core.xmp.BakeDisplacedException
 import io.kotest.assertions.throwables.shouldThrow
@@ -162,6 +168,51 @@ class SimulationHarnessTest {
                         .run()
                 }
             failure.message shouldContain "a bug was logged"
+        }
+
+    /**
+     * A relink an older build wrote, with no copies, that the index folded and nothing copied after
+     * (what a watch ingest left before the session copied there too) fails the check of relink
+     * copies, before the quiescent rescan would write them.
+     */
+    @Test
+    fun aBareRelinkNothingCopiedFailsTheRun() =
+        runTest {
+            val failure =
+                shouldThrow<SimFailure> {
+                    Simulation(testScheduler, config(), afterStep = { step ->
+                        if (step == STEPS) {
+                            fs.faults.disarmAll()
+                            world.read("a bare relink, folded without its copies") {
+                                val session = replica.session!!
+                                val old =
+                                    session
+                                        .importPdfBytes(SimPdf.bytes("old", "u", PLANTED_SIZE + 3), "old.pdf")
+                                        .shouldBeInstanceOf<ImportOutcome.Imported>()
+                                        .docId
+                                val new =
+                                    session
+                                        .importPdfBytes(SimPdf.bytes("new", "u", PLANTED_SIZE + 4), "new.pdf")
+                                        .shouldBeInstanceOf<ImportOutcome.Imported>()
+                                        .docId
+                                session.meta.addTag(listOf(old), "kept")
+                                val elsewhere = InMemoryLibraryFileSystem(world.clock::nowMillis)
+                                val olderBuild =
+                                    ContentAddressedJournalWriter(
+                                        elsewhere,
+                                        "older",
+                                        HlcWatermarkAllocator(world.clock),
+                                    )
+                                val relink = olderBuild.commit(listOf(PendingOp.relink(old, new))).relPath
+                                val read = StorageV2Reader.read(relink, elsewhere.bytesAt(relink)!!)
+                                read.shouldBeInstanceOf<JournalSourceRead.Accepted>().events.forEach {
+                                    replica.indexDb.metadataProjectionDao().insertEvent(it.toEventEntity())
+                                }
+                            }
+                        }
+                    }).run()
+                }
+            failure.message shouldContain "relink targets lack what an older build shows them"
         }
 
     @Test

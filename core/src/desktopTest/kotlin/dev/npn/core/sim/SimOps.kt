@@ -73,6 +73,10 @@ enum class OpKind(
     EXT_REMOTE_OBJECT(3),
     EXT_REMOTE_SIDECAR(2),
 
+    // A device on an older build, which relinks with no copies and folds a target over its
+    // predecessors: this build writes the copies once it folds the relink.
+    EXT_OLDER_BUILD_RELINK(2),
+
     // Storage failures, and the process's own end.
     FAULT(3),
     CRASH(1),
@@ -217,6 +221,7 @@ internal class SimGenerator(
             OpKind.EXT_SYNC_TEMP -> extSyncTemp(s)
             OpKind.EXT_REMOTE_OBJECT -> s.live.pickOrNull()?.let { extRemoteObject(it, s.fields) }
             OpKind.EXT_REMOTE_SIDECAR -> s.live.pickOrNull()?.let(::extRemoteSidecar)
+            OpKind.EXT_OLDER_BUILD_RELINK -> extOlderBuildRelink(s)
             OpKind.FAULT -> fault()
             OpKind.CRASH -> Planned.Control("crash and reopen") { sim.crashAndReopen() }
             OpKind.CLOSE_REOPEN -> Planned.Control("close and reopen") { sim.closeAndReopen() }
@@ -575,6 +580,31 @@ internal class SimGenerator(
             path.substringAfterLast('/').take(ID)
         }
     }
+
+    /**
+     * A device on an older build relinks one live document onto another as it records a bake: a bare
+     * `relink`, none of the old document's metadata copied onto the new one, since that build folds a
+     * target over its predecessors. Each document takes part in one such relink at most, so two of
+     * them still under way never relink a pair both ways.
+     */
+    private fun extOlderBuildRelink(s: Snapshot): Planned.Control? {
+        val candidates = s.live.filterNot { it.docId in olderBuildRelinked }
+        if (candidates.size < 2) return null
+        val old = candidates.pickOrNull() ?: return null
+        val new = (candidates - old).pickOrNull() ?: return null
+        olderBuildRelinked += old.docId
+        olderBuildRelinked += new.docId
+        val transfer = random.nextLong(0, TRANSFER_MILLIS)
+        return Planned.Control(
+            "external: an older build's bare relink of ${old.short()} onto ${new.short()} arrives over ${transfer}ms",
+        ) {
+            val (path, bytes) = remoteObject(listOf(PendingOp.relink(old.docId, new.docId)))
+            sim.world.launch { sim.fs.externalSyncDelivery(path, bytes, transfer) }
+            path.substringAfterLast('/').take(ID)
+        }
+    }
+
+    private val olderBuildRelinked = HashSet<String>()
 
     /** Another device's OCR sidecar for [doc], once per document and engine, as a sync tool delivers it. */
     private fun extRemoteSidecar(doc: SimDoc): Planned.Control? {

@@ -128,7 +128,9 @@ kept 5 days. ci.yml keeps running only the CI-sized test above, as part of `:cor
 - `SimGenerator` picks an `OpKind` by weight: the app's writes through the facets, rescans, OCR
   completions, several operations at once (with external events landing while they run), an
   operation left running in the background, time steps, every external event, faults, crashes, close
-  and reopen, and dropping the index. `ExtraPlanner` adds bake in place, multi-page imports and split,
+  and reopen, and dropping the index. Among the external events is a device on an older build
+  (`main`), which records a relink with no copies and folds a target over its predecessors: its bare
+  `relink` of one live document onto another arrives like any other device's journal object. `ExtraPlanner` adds bake in place, multi-page imports and split,
   the relink of a missing document to other bytes, auto-match rule saves, deletes and toggles (whose
   field sets drive the storage-path rule, which moves documents on every replica), the watched folder
   (new, slowly written, known, overwritten and removed files, and sweeps, beside the importer each
@@ -195,6 +197,12 @@ do not converge, which fails the run. Then:
   everything yet) is judged on what it has: its index must show what its own folder holds. A
   document the live index has in the trash may show in the rebuild only where the check above lets
   its bytes be back.
+- **Relink copies**: every relink target shows on its own what an older build shows it by
+  inheritance over its relink chain (`RelinkInheritanceUpgrade.copies` of the replica's fold is
+  empty), at rest and already before the quiescent rescan, once the watch and the periodic
+  reconcile have folded everything delivered: the session copies after a watch ingest or reconcile
+  as after a rescan. Before the rescan a target is passed over whose predecessor the replica itself
+  edited after the relink, which this build copies only at the next rescan.
 - What each replica wrote under a device's name in the library (sidecars, markers) is under its own.
 - **The app never removes a document's last copy**: every document some replica's index has a row
   for, that no replica's journal deleted for good or relinked onto other bytes, is held by a file in

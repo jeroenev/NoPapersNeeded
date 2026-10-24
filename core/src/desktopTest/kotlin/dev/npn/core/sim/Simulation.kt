@@ -1,12 +1,15 @@
 package dev.npn.core.sim
 
 import dev.npn.core.app.LibrarySessionImpl
+import dev.npn.core.app.RelinkInheritanceUpgrade
 import dev.npn.core.db.QueueState
 import dev.npn.core.db.missingSentinel
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.index.JournalCoordinator
+import dev.npn.core.journal.EventDecoderRegistry
+import dev.npn.core.journal.FoldedState
 import dev.npn.core.util.reason
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.delay
@@ -417,6 +420,9 @@ internal class Simulation(
         world.advance(SETTLE_MILLIS)
         // A fault a concurrent step armed while it ran (Planned.Group.during) may have landed since.
         fs.faults.disarmAll()
+        // Everything delivered has been folded by the watch or the periodic reconcile, and nothing
+        // rescanned yet, whose own copies would hide a fold that wrote none.
+        if (session.writeBlock.value == null) checkRelinkCopies(beforeRescan = true)
         val rescanned = world.run("quiescent rescan") { session.rescan() }
         rescanned.exceptionOrNull()?.let {
             fail(
@@ -431,6 +437,7 @@ internal class Simulation(
     /** The second half of [quiesceAndCheck]: the invariants at rest; returns the library the replica shows. */
     fun checkAtRest(): LibraryView {
         checkCheap()
+        checkRelinkCopies(beforeRescan = false)
         val live = world.read("live view") { LibraryView.read(session, replica.indexDb) }
         checkFilesHoldTheirHashes(live)
         checkRowStats()
@@ -553,6 +560,69 @@ internal class Simulation(
                     "WHERE operation = 'doc-trash' AND documentId = '$docId')",
             )
         return sources.any { (path) -> path in fs.appPublished }
+    }
+
+    /**
+     * Every relink target shows on its own what an older build shows it by inheritance over its relink
+     * chain: [RelinkInheritanceUpgrade.copies] of this replica's fold is empty. The session writes those
+     * copies after every rescan and after every watch ingest or reconcile that folded new events (one
+     * refused or failed is owed until the next), so an older build's bare relink, or another device's
+     * edit of a predecessor, is copied as soon as it is folded. [beforeRescan], the check runs once
+     * the watch and the periodic reconcile took everything in and before the quiescent rescan, which
+     * would write the copies itself: there a target is passed over whose predecessor this replica
+     * itself edited after the relink (a write planned before the relink landed), which this build
+     * copies only at the next rescan (ARCHITECTURE.md 6.5).
+     */
+    private fun checkRelinkCopies(beforeRescan: Boolean) {
+        val owed =
+            world.read("relink copies owed") {
+                val state = FoldedState()
+                replica.indexDb
+                    .metadataProjectionDao()
+                    .allEvents()
+                    .forEach { state.apply(EventDecoderRegistry.decodeStored(it.canonicalJson)) }
+                val copies = RelinkInheritanceUpgrade.copies(state)
+                if (beforeRescan) {
+                    val targets = copies.mapNotNullTo(HashSet()) { it.doc }
+                    val editedHere = predecessorsEditedHereAfterTheirRelink(state, targets)
+                    copies.filterNot { it.doc in editedHere }
+                } else {
+                    copies
+                }
+            }
+        if (owed.isNotEmpty()) {
+            val moment =
+                if (beforeRescan) "after the watch folded everything, before the quiescent rescan" else "at rest"
+            fail(
+                "relink targets lack what an older build shows them by inheritance ($moment):\n  " +
+                    owed.joinToString("\n  ") { "${it.doc?.take(ID)} ${it.op}" },
+            )
+        }
+    }
+
+    /**
+     * Those of [targets] one of whose predecessors has an event this replica published at a later HLC
+     * than the latest relink of the chain.
+     */
+    private suspend fun predecessorsEditedHereAfterTheirRelink(
+        state: FoldedState,
+        targets: Set<String>,
+    ): Set<String> {
+        if (targets.isEmpty()) return emptySet()
+        val events =
+            replica.indexDb.rows(
+                "SELECT e.documentId, e.operation, e.hlcPhysical, e.hlcCounter, s.sourcePath FROM metadata_events e " +
+                    "JOIN metadata_source_events s ON s.eventDeviceId = e.deviceId AND s.eventSequence = e.sequence",
+            )
+
+        fun hlc(row: List<String?>) = row[2]!!.toLong() to row[3]!!.toLong()
+        val order = compareBy<Pair<Long, Long>>({ it.first }, { it.second })
+        return targets.filterTo(HashSet()) { target ->
+            val predecessors = state.chainOf(target).toSet() - target
+            val chain = events.filter { it[0] in predecessors }
+            val relinked = chain.filter { it[1] == "relink" }.map(::hlc).maxWithOrNull(order) ?: return@filterTo false
+            chain.any { it[1] != "relink" && it[4] in fs.appPublished && order.compare(hlc(it), relinked) > 0 }
+        }
     }
 
     /**
