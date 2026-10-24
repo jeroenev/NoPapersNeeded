@@ -94,7 +94,8 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   minutes and artifact storage are metered (private repo): PRs stop before the APK and packaging,
   which run on `main` only, the coverage report uploads only on `main` or after a failure, binaries
   upload only on a manual run, and the Windows build (`windows.yml`), mutation testing
-  (`mutation.yml`) and CodeQL run weekly or on demand. Keep it that way. `mise release` refuses
+  (`mutation.yml`) and CodeQL run weekly or on demand, and the long library simulation
+  (`simulation.yml`) nightly. Keep it that way. `mise release` refuses
   unless CI passed on the `main` commit it bumps; the tagged commit changes only `npn.version`,
   and `release.yml` builds it without waiting for CI.
   Its draft job builds nothing unless CI passed on the tagged commit, or the tag only bumps
