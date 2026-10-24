@@ -67,7 +67,8 @@ object SimPdf {
  * Sizes for the PDFs the engines make (split parts, baked copies), one per label, as the
  * generators give theirs where storage reports mtimes: two files written in the same virtual
  * millisecond, one renamed over the other, would otherwise share a stat. The same label (the same
- * part of the same document, made on two replicas) gets the same size, so it makes the same bytes.
+ * baked copy of the same document, made on two replicas) gets the same size, so it makes the same
+ * bytes.
  */
 class SimSizes(
     private val base: Int = BASE,
@@ -82,10 +83,18 @@ class SimSizes(
     }
 }
 
-/** A [PdfEngine] over [SimPdf] bytes: [SimPdf.pagesOf] pages each, and the text [SimPdf.textOf] reads. */
+/**
+ * A [PdfEngine] over [SimPdf] bytes: [SimPdf.pagesOf] pages each, and the text [SimPdf.textOf] reads.
+ * Pages it extracts make a new file each time, named by [maker] and a count, as PDFBox seeds a new
+ * document's `/ID` from the clock: two replicas splitting one document, or a split retried, make
+ * other bytes, never the same parts.
+ */
 class SimPdfEngine(
     private val sizes: SimSizes = SimSizes(),
+    private val maker: String = "sim",
 ) : PdfEngine {
+    private var made = 0
+
     var opened = 0
         private set
 
@@ -117,7 +126,7 @@ class SimPdfEngine(
         require(
             pageIndices.isNotEmpty() && pageIndices.all { it in 0 until pages },
         ) { "Pages out of range: $pageIndices" }
-        val label = "pages-${sha256Bytes(bytes).take(HASH_LABEL)}-${pageIndices.joinToString("_")}"
+        val label = "pages-${sha256Bytes(bytes).take(HASH_LABEL)}-${pageIndices.joinToString("_")}-$maker-${made++}"
         return SimPdf.bytes(label, SimPdf.textOf(bytes), sizes.sizeOf(label), pages = pageIndices.size)
     }
 

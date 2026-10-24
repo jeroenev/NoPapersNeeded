@@ -121,7 +121,9 @@ kept 5 days. ci.yml keeps running only the CI-sized test above, as part of `:cor
   it runs again, not even a `finally`. The next open runs over the images. A soft crash cancels the
   scope, so `finally` blocks still run.
 - The fakes are `SimPdfEngine` (any bytes starting `%PDF-` open; `text:` lines are the text layer,
-  `pages:` the page count, so documents split), `SimXmpIO` (a bake writes the XMP packet as an `xmp:`
+  `pages:` the page count, so documents split; every split part is a new file, as PDFBox stamps a
+  new document's `/ID` from the clock, so two replicas splitting one document make other parts),
+  `SimXmpIO` (a bake writes the XMP packet as an `xmp:`
   line, so bake-in-place relinks), `GatedOcrEngine` (each page waits until the simulation lets it
   finish), `SimWatchedFolder` (a watched inbox folder in memory, swept by the real
   `WatchedFolderImporter`) and in-memory thumbnails.

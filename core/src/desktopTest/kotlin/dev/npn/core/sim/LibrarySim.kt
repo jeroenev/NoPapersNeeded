@@ -49,7 +49,7 @@ internal class SimReplica(
     /** Where its sessions log: the world's log, the entries naming the replica when several run. */
     val log: NpnLog = world.log,
 ) {
-    val pdf = SimPdfEngine(world.sizes)
+    val pdf = SimPdfEngine(world.sizes, maker = installationId)
     val xmp = SimXmpIO(world.sizes)
     var indexDb: NpnDatabase = world.newIndexDb()
         private set
