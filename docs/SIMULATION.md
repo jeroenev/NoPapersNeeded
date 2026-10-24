@@ -131,9 +131,11 @@ kept 5 days. ci.yml keeps running only the CI-sized test above, as part of `:cor
   completions, several operations at once (with external events landing while they run), an
   operation left running in the background, time steps, every external event, faults, crashes, close
   and reopen, and dropping the index. Among the external events is a device on an older build
-  (`main`), which records a relink with no copies and folds a target over its predecessors: its bare
-  `relink` of one live document onto another arrives like any other device's journal object,
-  sometimes with its first read failing, so the ingest that folds it fails and recovers. `ExtraPlanner` adds bake in place, multi-page imports and split,
+  (`main`), which records a relink with no copies and folds a target over its predecessors: it
+  bakes a live document in place, and its baked bytes (written over the document's file, as the
+  sync tool delivers them) and its bare `relink` onto them arrive in either order, minutes apart at
+  most, the relink sometimes with its first read failing, so the ingest that folds it fails and
+  recovers. Each document is baked so once at most, across every replica. `ExtraPlanner` adds bake in place, multi-page imports and split,
   the relink of a missing document to other bytes, auto-match rule saves, deletes and toggles (whose
   field sets drive the storage-path rule, which moves documents on every replica), the watched folder
   (new, slowly written, known, overwritten and removed files, and sweeps, beside the importer each
@@ -280,7 +282,7 @@ why next to it. Fail through `fail(...)`, which attaches the seed and the trace.
   `OlderBuildSnapshotTest` and `UndoneCompactionTest` do.
 - **Mixed-build libraries**, beyond one thing an older build does: a device on `main` records a
   relink with no copies and folds a target over its predecessors, and the generator delivers such a
-  bare relink (`EXT_OLDER_BUILD_RELINK`). That device's other writes, its fold, and a build newer
+  device's bake in place, its baked bytes and its bare relink (`EXT_OLDER_BUILD_BAKE`). That device's other writes, its fold, and a build newer
   than this one (an op or a field type this build refuses) are not modelled: every replica runs
   this build.
 - **mtime-preserving overwrites** of the same size: with mtimes, every generated PDF has a size of

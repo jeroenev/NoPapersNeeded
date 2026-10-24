@@ -19,6 +19,7 @@ import dev.npn.core.ocr.OcrSidecar
 import dev.npn.core.ocr.OcrSidecarCodec
 import dev.npn.core.ocr.OcrSidecarName
 import dev.npn.core.util.EpochClock
+import kotlinx.coroutines.delay
 import kotlin.random.Random
 
 /**
@@ -75,7 +76,7 @@ enum class OpKind(
 
     // A device on an older build, which relinks with no copies and folds a target over its
     // predecessors: this build writes the copies once it folds the relink.
-    EXT_OLDER_BUILD_RELINK(2),
+    EXT_OLDER_BUILD_BAKE(2),
 
     // Storage failures, and the process's own end.
     FAULT(3),
@@ -221,7 +222,7 @@ internal class SimGenerator(
             OpKind.EXT_SYNC_TEMP -> extSyncTemp(s)
             OpKind.EXT_REMOTE_OBJECT -> s.live.pickOrNull()?.let { extRemoteObject(it, s.fields) }
             OpKind.EXT_REMOTE_SIDECAR -> s.live.pickOrNull()?.let(::extRemoteSidecar)
-            OpKind.EXT_OLDER_BUILD_RELINK -> extOlderBuildRelink(s)
+            OpKind.EXT_OLDER_BUILD_BAKE -> extOlderBuildBake(s)
             OpKind.FAULT -> fault()
             OpKind.CRASH -> Planned.Control("crash and reopen") { sim.crashAndReopen() }
             OpKind.CLOSE_REOPEN -> Planned.Control("close and reopen") { sim.closeAndReopen() }
@@ -582,36 +583,67 @@ internal class SimGenerator(
     }
 
     /**
-     * A device on an older build relinks one live document onto another as it records a bake: a bare
-     * `relink`, none of the old document's metadata copied onto the new one, since that build folds a
-     * target over its predecessors. Each document takes part in one such relink at most, so two of
-     * them still under way never relink a pair both ways.
+     * A device on an older build bakes a live document in place: its baked bytes replace the file at
+     * the document's path, as the sync tool delivers them, and its bare `relink` onto them arrives, none
+     * of the old document's metadata copied onto the new one, since that build folds a target over its
+     * predecessors. The two arrive in either order, each over its own transfer, so the relink may land
+     * while the baked bytes are not here yet. Each document is baked so at most once across every
+     * replica ([SimWorld.olderBuildBaked]): two replicas that both still show it never fork it.
      *
-     * Sometimes the first read of the object fails: the ingest the watch starts for it fails, and the
-     * full refold that recovers it takes the relink in before the failure is rethrown, so the copies
-     * are owed all the same.
+     * Sometimes the first read of the relink object fails: the ingest the watch starts for it fails,
+     * and the full refold that recovers it takes the relink in before the failure is rethrown, so the
+     * copies are owed all the same.
      */
-    private fun extOlderBuildRelink(s: Snapshot): Planned.Control? {
-        val candidates = s.live.filterNot { it.docId in olderBuildRelinked }
-        if (candidates.size < 2) return null
-        val old = candidates.pickOrNull() ?: return null
-        val new = (candidates - old).pickOrNull() ?: return null
-        olderBuildRelinked += old.docId
-        olderBuildRelinked += new.docId
-        val transfer = random.nextLong(0, TRANSFER_MILLIS)
+    private fun extOlderBuildBake(s: Snapshot): Planned.Control? {
+        val old = s.live.filterNot { it.docId in sim.world.olderBuildBaked }.pickOrNull() ?: return null
+        sim.world.olderBuildBaked += old.docId
+        val fileTransfer = random.nextLong(0, TRANSFER_MILLIS)
+        val relinkTransfer = random.nextLong(0, TRANSFER_MILLIS)
+        val relinkFirst = random.nextBoolean()
+        val gap = random.nextLong(0, OLDER_BUILD_GAP_MILLIS)
         val failRead = random.chance(FAILED_INGEST_PERCENT)
-        val failing = if (failRead) ", its first read failing" else ""
+        val order = if (relinkFirst) "the relink first" else "the baked bytes first"
+        val failing = if (failRead) ", the relink's first read failing" else ""
         return Planned.Control(
-            "external: an older build's bare relink of ${old.short()} onto ${new.short()} arrives over ${transfer}ms$failing",
+            "external: an older build bakes ${old.short()} in place; $order, ${gap}ms apart, " +
+                "over ${fileTransfer}ms and ${relinkTransfer}ms$failing",
         ) {
-            val (path, bytes) = remoteObject(listOf(PendingOp.relink(old.docId, new.docId)))
-            if (failRead) sim.fs.faults.arm(SimFaults.Rule(FsMethod.READ, path, SimFaults.Point.BEFORE, times = 1))
-            sim.world.launch { sim.fs.externalSyncDelivery(path, bytes, transfer) }
-            path.substringAfterLast('/').take(ID)
+            val bytes = sim.fs.bytesAt(old.relPath)?.takeIf { sha256Bytes(it) == old.docId }
+            if (bytes == null) {
+                "the file there is no longer the document's: nothing"
+            } else {
+                val baked = olderBuildBaked(old.docId, bytes)
+                val (path, objectBytes) = remoteObject(listOf(PendingOp.relink(old.docId, sha256Bytes(baked))))
+                if (failRead) sim.fs.faults.arm(SimFaults.Rule(FsMethod.READ, path, SimFaults.Point.BEFORE, times = 1))
+                val deliveries =
+                    listOf(
+                        suspend { sim.fs.externalSyncDelivery(old.relPath, baked, fileTransfer) },
+                        suspend { sim.fs.externalSyncDelivery(path, objectBytes, relinkTransfer) },
+                    ).let { if (relinkFirst) it.reversed() else it }
+                sim.world.launch {
+                    deliveries[0]()
+                    delay(gap)
+                    deliveries[1]()
+                }
+                "${hash(baked)}, relink ${path.substringAfterLast('/').take(ID)}"
+            }
         }
     }
 
-    private val olderBuildRelinked = HashSet<String>()
+    /** What an older build's bake of [docId], whose file holds [bytes], writes: new bytes of the same pages and text. */
+    private fun olderBuildBaked(
+        docId: String,
+        bytes: ByteArray,
+    ): ByteArray {
+        val label = "${SimPdf.labelOf(bytes).substringBefore('+')}+older-baked-${docId.take(ID)}"
+        return SimPdf.bytes(
+            label,
+            SimPdf.textOf(bytes).ifEmpty { null },
+            sim.world.sizes.sizeOf(label),
+            pages = SimPdf.pagesOf(bytes),
+            xmp = "older build's metadata of $docId",
+        )
+    }
 
     /** Another device's OCR sidecar for [doc], once per document and engine, as a sync tool delivers it. */
     private fun extRemoteSidecar(doc: SimDoc): Planned.Control? {
@@ -696,6 +728,7 @@ internal class SimGenerator(
         private const val REMOTE_SKEW_MILLIS = 90_000L
         private const val FAULT_TIMES = 4
         private const val FAILED_INGEST_PERCENT = 40
+        private const val OLDER_BUILD_GAP_MILLIS = 120_000L
         private const val OCR_BURST = 4
         private const val CONCURRENCY = 3
         private const val DURING = 2
