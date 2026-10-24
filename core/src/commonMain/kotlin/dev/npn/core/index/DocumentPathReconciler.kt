@@ -173,8 +173,9 @@ internal class DocumentPathReconciler(
         }
 
     /**
-     * Retire each extra copy in [duplicates] whose document already sits at its intended path, and
-     * return the copies still on disk, for the caller to record.
+     * Return the extra copies in [duplicates] still on disk, for the caller to record. An extra copy
+     * of a document whose row sits at its intended path stays where it is (`DocumentPaths.settle`
+     * explains why), unless that intended file is gone: then the copy moves there.
      */
     suspend fun reconcileDuplicates(
         state: FoldedState,
@@ -185,7 +186,7 @@ internal class DocumentPathReconciler(
         for (duplicate in duplicates) {
             val intended = state.intendedPath(duplicate.docId)
             val row = rows[duplicate.docId]
-            if (intended != null && row?.relPath == intended) {
+            if (intended != null && row?.relPath == intended && !fs.exists(intended)) {
                 reconcileAvailable(duplicate.docId, duplicate.extraRelPath, intended)
             }
             if (fs.exists(duplicate.extraRelPath) && duplicate.extraRelPath != row?.relPath) retained.add(duplicate)

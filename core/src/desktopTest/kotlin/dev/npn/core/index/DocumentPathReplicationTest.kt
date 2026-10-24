@@ -308,6 +308,32 @@ class DocumentPathReplicationTest {
             rig.fs.sha256("new.pdf") shouldBe hash
         }
 
+    /**
+     * A duplicate beside a document already at its intended path stays, so a rescan has nothing to
+     * check at that path: it reads only the copy it does not know, not the document's own file.
+     */
+    @Test
+    fun aRescanReadsNoFileOfADocumentAtItsIntendedPathForItsDuplicate() =
+        runTest {
+            var watched: WatchedFileSystem? = null
+            IndexRig.create(files = { raw -> WatchedFileSystem(raw).also { watched = it } }).use { rig ->
+                val files = checkNotNull(watched).also { it.db = rig.db }
+                rig.writePdf("old.pdf", "document")
+                rig.rescan()
+                val hash = rig.fs.sha256("old.pdf")
+                rig.coordinator(rig.writer("remote")).commitAndApply(
+                    listOf(PendingOp.propSet(hash, SystemProperty.STORAGE_PATH, "new.pdf")),
+                )
+                rig.copyFile("new.pdf", "old.pdf")
+                files.clear()
+
+                rig.rescan().duplicates shouldBe listOf(DuplicateReport(hash, "old.pdf"))
+
+                files.calls("sha256") shouldBe listOf("sha256 old.pdf")
+                rig.fs.sha256("new.pdf") shouldBe hash
+            }
+        }
+
     @Test
     fun unsafeAndInternalJournalPathsNeverMovePdf() =
         indexTest { rig ->
