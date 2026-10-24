@@ -210,6 +210,38 @@ class IndexerTest {
             }
         }
 
+    /**
+     * A bake that crashed once its relink stood leaves its original under a recovery name. The next
+     * rescan deletes it while the baked document's bytes are at its path, and keeps it otherwise; a
+     * file of the same bytes under any other name stays, as any file of the user's does.
+     */
+    @Test
+    fun aRescanDeletesABakesOriginalLeftUnderARecoveryNameOnlyWhileItsSuccessorIsOnDisk() =
+        runTest {
+            rig.writePdf("bill.pdf", "baked")
+            rig.writePdf("npn-recovery-left.pdf", "original")
+            rig.writePdf("copies/kept.pdf", "original")
+            rig.writePdf("other.pdf", "other baked")
+            rig.writePdf("archive/npn-recovery-waiting.pdf", "other original")
+            rig.rescan()
+            val baked = rig.fs.sha256("bill.pdf")
+            val original = rig.fs.sha256("npn-recovery-left.pdf")
+            val otherBaked = rig.fs.sha256("other.pdf")
+            val otherOriginal = rig.fs.sha256("archive/npn-recovery-waiting.pdf")
+            // The second baked document's file is gone before its relink arrives.
+            rig.deleteFile("other.pdf")
+            rig.coordinator(rig.writer("remote")).commitAndApply(
+                listOf(PendingOp.relink(original, baked), PendingOp.relink(otherOriginal, otherBaked)),
+            )
+
+            rig.rescan()
+
+            rig.exists("npn-recovery-left.pdf").shouldBeFalse()
+            rig.exists("copies/kept.pdf").shouldBeTrue()
+            rig.exists("archive/npn-recovery-waiting.pdf").shouldBeTrue()
+            rig.exists("bill.pdf").shouldBeTrue()
+        }
+
     @Test
     fun disappearAndReappear() =
         runTest {

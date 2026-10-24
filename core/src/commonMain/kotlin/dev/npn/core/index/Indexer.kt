@@ -5,10 +5,13 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.DuplicateEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.PathMeta
+import dev.npn.core.db.isLive
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.TempFileSweep
+import dev.npn.core.fs.hasStoredStat
+import dev.npn.core.fs.holds
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.JournalEvent
 import dev.npn.core.journal.PendingOp
@@ -17,6 +20,7 @@ import dev.npn.core.util.IdSource
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.SystemEpochClock
 import dev.npn.core.util.runCatchingCancellable
+import dev.npn.core.util.runLogged
 import dev.npn.core.util.warn
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -42,7 +46,8 @@ import kotlinx.coroutines.sync.withLock
  *  6. folds the journals and applies effective views (tags, props, trash, deletes, relinks) into the
  *     DB, then updates FTS,
  *  7. moves documents to the paths their intents name, and records where each was seen,
- *  8. deletes the app's own temporary files a crash left behind ([TempFileSweep]),
+ *  8. deletes the app's own temporary files a crash left behind ([TempFileSweep]), and a bake's
+ *     original its relink superseded ([removeSupersededOriginals]),
  *  9. returns a [ScanReport].
  *
  * Steps 3 to 6 write in one database transaction, as every fold does; step 7 is filesystem work
@@ -181,8 +186,10 @@ internal class Indexer(
             // deleted, or overwritten with another document, loses its row.
             duplicateDao.replaceAll(duplicates.map { DuplicateEntity(it.docId, it.extraRelPath) })
 
-            // The listing is at hand: clear away what a crash left of the app's own temporary files.
+            // The listing is at hand: clear away what a crash left of the app's own temporary files,
+            // and of a bake's original once its relink stands.
             tempFiles.sweep(all, started)
+            removeSupersededOriginals(present, hashes, contentAt, metadataState)
 
             // Last: recording a return is a journal write, which must not cost the scan its
             // duplicates or its sweep if it fails.
@@ -205,6 +212,42 @@ internal class Indexer(
             )
         } finally {
             _scanState.value = null
+        }
+    }
+
+    /**
+     * Delete each file in [present] under a recovery name ([NpnPaths.Temp.isRecovery]) whose bytes
+     * ([hashes]) a relink in [state] superseded, while the document they became, its relink chain
+     * followed, is in the library with its own bytes at its row's path ([contentAt]). Such a file is
+     * a bake's original, which the bake deletes itself once its relink stands, left behind by a crash
+     * or a delete that failed in between. It is no document of its own (no row; an import of it is a
+     * duplicate of the document it became), and kept, it would be hashed at every rescan and carried
+     * to every device by a sync tool. It goes only while it still holds those bytes, by its stat as
+     * listed, else its hash; the file of the document it became is never touched, so this never
+     * deletes the last copy of a document.
+     */
+    private suspend fun removeSupersededOriginals(
+        present: List<FileMeta>,
+        hashes: Map<String, String>,
+        contentAt: Map<String, String>,
+        state: FoldedState,
+    ) {
+        val originals =
+            present.mapNotNull { meta ->
+                val hash = hashes[meta.relPath]?.takeIf { NpnPaths.Temp.isRecovery(meta.relPath) }
+                hash?.let { state.resolveDocId(it) }?.takeIf { it != hash }?.let { successor -> Triple(meta, hash, successor) }
+            }
+        if (originals.isEmpty()) return
+        val successors = documentDao.getByDocIds(originals.map { it.third }.distinct()).associateBy { it.docId }
+        for ((meta, hash, successor) in originals) {
+            val row = successors[successor]?.takeIf { it.isLive } ?: continue
+            if (contentAt[row.relPath] != successor) continue
+            log.runLogged("Removing ${meta.relPath}, the original of a baked document") {
+                val now = fs.stat(meta.relPath)?.takeIf { !it.isDirectory }
+                if (now != null && (now.hasStoredStat(meta.size, meta.mtimeMillis) || fs.holds(meta.relPath, hash))) {
+                    fs.delete(meta.relPath)
+                }
+            }
         }
     }
 

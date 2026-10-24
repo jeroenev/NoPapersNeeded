@@ -188,6 +188,10 @@ do not converge, which fails the run. Then:
   last write at that path since the trash came from outside the app (another process, a backup put
   back, the sync tool): the app records such a return only once the window has passed. The app's
   own trash whose file the app itself put back is a finding.
+- No bake's original lingers: no file under a recovery name holds bytes a relink superseded while
+  the live document they became has its own bytes at its path. The bake deletes its original once
+  its relink stands, and the rescan one a crash (the simulation's hard crash stops a bake at any
+  suspension point) or a failed delete left behind.
 - **Rebuild oracle**, on each replica: a fresh replica opens over a copy of its files with empty
   databases, rescans to rest, and must show the same library (`LibraryView`, `diff`). That covers
   live documents with their path, tags, field values and reviewed flag, the documents in the trash

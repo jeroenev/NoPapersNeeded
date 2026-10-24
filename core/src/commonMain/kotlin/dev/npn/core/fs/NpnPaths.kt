@@ -156,6 +156,9 @@ object NpnPaths {
          */
         fun recoveryName(nonce: String): String = "$RECOVERY_PREFIX$nonce.pdf"
 
+        /** Whether [relPath] is named as a [recoveryName] is. */
+        fun isRecovery(relPath: String): Boolean = fileName(relPath).startsWith(RECOVERY_PREFIX)
+
         /** A fresh [recoveryName] in the folder of [beside]. */
         fun recoveryPath(
             beside: String,

@@ -8,11 +8,12 @@ import dev.npn.core.util.runLogged
  * library, once they are [STALE_AFTER_MS] old: no write in progress keeps one that long. Most of
  * them sit in the user's folders, where a sync tool would carry them to every device.
  *
- * Never a file that may hold the only copy of a document: a recovery file (a move interrupted
- * mid-way leaves the document under that name, and a rescan indexes it like any PDF), or a bake's
- * temporary file unless the file at its document's path holds the same bytes (a bake interrupted
- * between deleting the original and moving the baked bytes into its place leaves the only copy
- * there, and another file can take the path since).
+ * Never a file that may hold the only copy of a document: a recovery file (a move or a bake
+ * interrupted mid-way leaves the document under that name, and a rescan indexes it like any PDF;
+ * once a relink superseded its bytes, the rescan deletes it, `Indexer.removeSupersededOriginals`),
+ * or a bake's temporary file unless the file at its document's path holds the same bytes (a bake
+ * whose swap is undone parks the baked bytes there until the original is back, and another file
+ * can take the path since).
  */
 internal class TempFileSweep(
     private val fs: LibraryFileSystem,

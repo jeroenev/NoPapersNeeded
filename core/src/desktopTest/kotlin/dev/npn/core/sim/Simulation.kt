@@ -440,6 +440,7 @@ internal class Simulation(
         checkRelinkCopies(beforeRescan = false)
         val live = world.read("live view") { LibraryView.read(session, replica.indexDb) }
         checkFilesHoldTheirHashes(live)
+        checkSupersededOriginals(live)
         checkRowStats()
         rebuildOracle(live)
         replica.ocr.closeGate()
@@ -576,11 +577,7 @@ internal class Simulation(
     private fun checkRelinkCopies(beforeRescan: Boolean) {
         val owed =
             world.read("relink copies owed") {
-                val state = FoldedState()
-                replica.indexDb
-                    .metadataProjectionDao()
-                    .allEvents()
-                    .forEach { state.apply(EventDecoderRegistry.decodeStored(it.canonicalJson)) }
+                val state = fold()
                 val copies = RelinkInheritanceUpgrade.copies(state)
                 if (beforeRescan) {
                     val targets = copies.mapNotNullTo(HashSet()) { it.doc }
@@ -596,6 +593,41 @@ internal class Simulation(
             fail(
                 "relink targets lack what an older build shows them by inheritance ($moment):\n  " +
                     owed.joinToString("\n  ") { "${it.doc?.take(ID)} ${it.op}" },
+            )
+        }
+    }
+
+    /** This replica's fold, of the events its index holds. */
+    private suspend fun fold(): FoldedState =
+        FoldedState().also { state ->
+            replica.indexDb
+                .metadataProjectionDao()
+                .allEvents()
+                .forEach { state.apply(EventDecoderRegistry.decodeStored(it.canonicalJson)) }
+        }
+
+    /**
+     * No bake's original lingers once its relink stands: no file under a recovery name holds bytes a
+     * relink superseded while the live document they became, the relink chain followed, has its own
+     * bytes at its path. The bake deletes its original after the relink; one a crash or a failed
+     * delete left there, the rescan that just ran deletes.
+     */
+    private fun checkSupersededOriginals(view: LibraryView) {
+        val state = world.read("the fold") { fold() }
+        val lingering =
+            fs.allFiles().filter { (path, bytes) ->
+                if (!NpnPaths.Temp.isRecovery(path) || !NpnPaths.isDocumentPath(path)) return@filter false
+                val hash = sha256Bytes(bytes)
+                val successor = state.resolveDocId(hash)
+                val at = view.live[successor]?.relPath
+                successor != hash && at != null && fs.bytesAt(at)?.let(::sha256Bytes) == successor
+            }
+        if (lingering.isNotEmpty()) {
+            fail(
+                "a baked document's original lingers under a recovery name while the document it became is at its path:" +
+                    lingering.entries.joinToString("") { (path, bytes) ->
+                        "\n  '$path' (${sha256Bytes(bytes).take(ID)}): " + fs.historyOf(path).joinToString("; ")
+                    },
             )
         }
     }

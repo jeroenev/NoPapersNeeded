@@ -102,8 +102,9 @@ class BakeServiceTest {
             fs.sha256("doc.pdf") shouldBe newSha
             io.readXmp(fs.readBytes("doc.pdf")) shouldBe XmpSerializer.serialize(data.copy(documentId = oldSha))
 
-            // No temp litter.
+            // No temp litter, and the original moved aside is gone once the relink stands.
             noTempLitter().shouldBeTrue()
+            noRecoveryLitter().shouldBeTrue()
         }
 
     /** The bake reads the document's file once and hashes what it read, and the rewrite in memory. */
@@ -437,6 +438,7 @@ class BakeServiceTest {
                         val now = fs.sha256(doc)
                         if (relink == null) now shouldBe oldSha else relink shouldBe (oldSha to now)
                         noTempLitter().shouldBeTrue()
+                        noRecoveryLitter().shouldBeTrue()
                     }
                 }
             }
@@ -454,6 +456,12 @@ class BakeServiceTest {
             }
             fs.readBytes("doc.pdf") shouldBe before
             noTempLitter().shouldBeTrue()
+        }
+
+    /** Whether no file under a recovery name is left: the original a bake moved aside went back, or went. */
+    private fun noRecoveryLitter(): Boolean =
+        Files.walk(root).use { stream ->
+            stream.noneMatch { p -> p.fileName?.toString()?.startsWith(NpnPaths.Temp.RECOVERY_PREFIX) == true }
         }
 
     private fun noTempLitter(): Boolean {

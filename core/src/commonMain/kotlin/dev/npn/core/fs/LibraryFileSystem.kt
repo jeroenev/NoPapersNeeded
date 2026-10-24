@@ -83,7 +83,8 @@ expect class ExternalSource
  * - The library is a plain folder of immutable PDFs plus a `.npn/` metadata directory.
  * - The app only ever creates new, write-once files (journal objects, OCR sidecars) and
  *   moves/renames PDFs. It never appends to or rewrites an existing file through this API; the
- *   explicit bake-in-place (`BakeService`) replaces a PDF by a delete and a move.
+ *   explicit bake-in-place (`BakeService`) replaces a PDF by moving it aside under a recovery name,
+ *   moving the baked bytes into its place, and deleting the original once their relink stands.
  * - All paths are library-relative, '/'-separated, no leading slash.
  */
 interface LibraryFileSystem {
