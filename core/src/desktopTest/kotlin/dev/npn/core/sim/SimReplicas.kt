@@ -484,16 +484,17 @@ internal class SyncSimulation(
      * a folder, on any replica, decides, the sync tool's left out, since it only
      * carries out another device's change, whose cause is on that device. Another process explains
      * the loss; the app in its trash (the trash purge, a delete for good) explains it only for a
-     * document the journals, all replicas' events together, have in the trash; nothing explains the
-     * app deleting it elsewhere. A document nothing ever took bytes from is not counted. What is
+     * document the journals, all replicas' events together, had in the trash when the loss happened
+     * (a restore since, of bytes the purge took, is not the purge's doing); nothing explains the app
+     * deleting it elsewhere. A document nothing ever took bytes from is not counted. What is
      * left is the app deleting the last copy of a document it still shows, or would: the live index
      * and a rebuild then both hide it as missing, which neither oracle sees.
      */
     private fun checkLastCopies() {
         val known = HashSet<String>()
         val gone = HashSet<String>()
-        // Per document, its latest doc-trash or doc-restore over every replica's events, by HLC.
-        val lifecycle = HashMap<String, Pair<Hlc, String>>()
+        // Per document, its doc-trash and doc-restore events over every replica's, by HLC.
+        val lifecycle = HashMap<String, MutableSet<Pair<Hlc, String>>>()
         members.forEach { member ->
             world.read("the documents ${member.name} knows") {
                 val db = member.replica.indexDb
@@ -508,12 +509,21 @@ internal class SyncSimulation(
                             "WHERE operation IN ('doc-trash', 'doc-restore')",
                     ).forEach { (docId, operation, physical, counter, device) ->
                         val hlc = Hlc(physical!!.toLong(), counter!!.toInt(), device!!)
-                        val latest = lifecycle[docId!!]
-                        if (latest == null || hlc > latest.first) lifecycle[docId] = hlc to operation!!
+                        lifecycle.getOrPut(docId!!) { HashSet() } += hlc to operation!!
                     }
             }
         }
-        val trashed = lifecycle.filterValues { it.second == "doc-trash" }.keys
+
+        // Whether the latest of [hash]'s lifecycle events stamped no later than [atMillis] is a trash.
+        fun trashedAt(
+            hash: String,
+            atMillis: Long,
+        ) = lifecycle[hash]
+            .orEmpty()
+            .filter { it.first.physicalMillis <= atMillis }
+            .maxByOrNull { it.first }
+            ?.second ==
+            "doc-trash"
         val held =
             members.flatMapTo(HashSet()) { member ->
                 member.fs
@@ -523,9 +533,10 @@ internal class SyncSimulation(
             }
         val lost =
             (known - gone - held).sorted().filter { hash ->
-                when (latestLoss(hash)?.loss) {
+                val latest = latestLoss(hash)
+                when (latest?.loss) {
                     Loss.APP -> true
-                    Loss.APP_TRASH -> hash !in trashed
+                    Loss.APP_TRASH -> !trashedAt(hash, latest.atMillis)
                     Loss.OUTSIDE, Loss.SYNC, null -> false
                 }
             }
@@ -536,7 +547,8 @@ internal class SyncSimulation(
                     lost.joinToString("\n  ") { hash ->
                         "${hash.take(ID)}: " + members.joinToString { "${it.name} ${it.fs.lossesOf(hash)}" } +
                             ", latest ${latestLoss(hash)}" +
-                            (if (hash in trashed) ", in the trash" else ", not in the trash") +
+                            ", lifecycle " +
+                            lifecycle[hash].orEmpty().sortedBy { it.first }.map { "${it.second}@${it.first}" } +
                             members.joinToString("") { member ->
                                 member.fs.lossesAt(hash).joinToString("") { "\n    ${member.name} $it" }
                             }
@@ -548,8 +560,8 @@ internal class SyncSimulation(
     /**
      * The latest time some replica lost the last of the bytes hashing to [hash] in its folder, the
      * sync tool's losses left out; at one instant the app's own loss counts as the latest. A copy the
-     * app removed while another file there still held the bytes (an import's staging file, a
-     * duplicate) took no document away.
+     * app removed while another file there still held the bytes (a duplicate) took no document away;
+     * an import's staging file counts neither way ([InMemoryLibraryFileSystem.lossRecordsOf]).
      */
     private fun latestLoss(hash: String): InMemoryLibraryFileSystem.LossAt? =
         members

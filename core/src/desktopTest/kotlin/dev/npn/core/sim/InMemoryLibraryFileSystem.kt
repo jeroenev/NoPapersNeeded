@@ -780,7 +780,10 @@ class InMemoryLibraryFileSystem(
     /** How the bytes hashing to [hash] were ever taken from a path here, in [Loss] order; empty when they never were. */
     fun lossesOf(hash: String): Set<Loss> = losses[hash].orEmpty().mapTo(EnumSet.noneOf(Loss::class.java)) { it.loss }
 
-    /** Each time the bytes hashing to [hash] were taken from a path here, oldest first. */
+    /**
+     * Each time the bytes hashing to [hash] were taken from a path here, oldest first; never from an
+     * import's staging file, which is the import's copy of its source, not one of the library's.
+     */
     fun lossRecordsOf(hash: String): List<LossAt> = losses[hash].orEmpty().toList()
 
     private var syncCalls = 0
@@ -812,14 +815,19 @@ class InMemoryLibraryFileSystem(
                 syncCalls > 0 -> Loss.SYNC
                 else -> Loss.OUTSIDE
             }
+        // An import's staging file is the import's copy of its source, none of the library's: it
+        // neither takes a document's bytes away when it goes nor keeps them while it is there.
+        if (isImportStaging(norm)) return
         val hash = sha256Bytes(node.bytes)
         val kept =
             files.any { (path, other) ->
-                path != norm && !(inPlace && other === node) &&
+                path != norm && !(inPlace && other === node) && !isImportStaging(path) &&
                     sha256Bytes(other.bytes) == hash
             }
         losses.getOrPut(hash) { ArrayList() } += LossAt(now(), cause, norm, lastHere = !kept)
     }
+
+    private fun isImportStaging(norm: String) = NpnPaths.Temp.kindOf(norm) == NpnPaths.Temp.Kind.IMPORT
 
     /** Each path the bytes hashing to [hash] were taken from, with that path's history: what a failure shows. */
     fun lossesAt(hash: String): List<String> =

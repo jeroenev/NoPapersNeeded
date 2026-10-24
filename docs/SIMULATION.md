@@ -223,10 +223,11 @@ do not converge, which fails the run. Then:
   time bytes left a path (deleted, or replaced by other bytes; the same bytes written again take
   nothing): when, by whom (the app, in its trash or elsewhere; the sync tool, carrying out another
   device's change, so never the cause itself; or the outside world), and whether no other file
-  there still held them. Of the losses of a folder's last copy, the sync tool's left out, the
-  latest on any replica decides: another process explains it; the app in its trash (the purge, a
-  delete for good) explains it only for a document the replicas' journals, taken together, have in
-  the trash; the app anywhere else is a finding. A document whose only file the app deleted shows as
+  there still held them (an import's staging file, a copy of the import's source, counts neither
+  way). Of the losses of a folder's last copy, the sync tool's left out, the latest on any replica
+  decides: another process explains it; the app in its trash (the purge, a delete for good)
+  explains it only for a document the replicas' journals, taken together, had in the trash at that
+  time; the app anywhere else is a finding. A document whose only file the app deleted shows as
   missing in the live index and in a rebuild alike, so the rebuild oracle cannot see it. The check
   runs in every run, a single replica's included.
 - After a full sync, **convergence**: every replica shows the library the first one shows, by the
