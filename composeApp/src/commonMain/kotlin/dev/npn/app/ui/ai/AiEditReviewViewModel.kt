@@ -93,7 +93,7 @@ class AiEditReviewViewModel(
             _phase.value =
                 opened?.let {
                     defaults = it.docs
-                    val docs = ticks?.let { saved -> SavedTicks.restore(it.docs, saved) } ?: it.docs
+                    val docs = ticks?.let { stored -> SavedTicks.restore(it.docs, stored) } ?: it.docs
                     QueuedReviewPhase.Review(ReviewBatchState(docs, it.emptyDocs), it)
                 } ?: QueuedReviewPhase.Unavailable
         }
