@@ -229,6 +229,9 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
 - Done is measured, not reviewed: the long simulation run passes with `KnownIssues` empty, and the
   mutation score of `core.index`/`core.app`/`core.journal` (docs/MUTATION_TESTING.md,
   `./gradlew :core:mutationTest`) does not drop. Another review round is not a stopping criterion.
+- Before adding complexity for a speculative or vanishingly unlikely race or security edge case,
+  explain the concrete failure mode, likelihood, and complexity cost to the user and get their
+  buy-in. Do not silently expand scope for theoretical robustness.
 - Shared Flow subscriptions use `WhileSubscribedTimeout` (`WhileSubscribed(5_000)`, in
   `composeApp`'s `ui/common/StateFlowConfig.kt`) instead of inline timeouts; typed detekt forbids
   `SharingStarted.WhileSubscribed` elsewhere.
