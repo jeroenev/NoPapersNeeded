@@ -221,7 +221,7 @@ internal class SessionGraph(
                 documentDao = db.documentDao(),
                 renderGate = renderGate,
             ),
-            BakeService(deps.fs, deps.xmpIO, log, deps.ids),
+            BakeService(deps.fs, deps.xmpIO, log, deps.ids, indexer.bakingPaths),
             coordinator,
             relinkBake = bakeRelink::relink,
             renderGate,

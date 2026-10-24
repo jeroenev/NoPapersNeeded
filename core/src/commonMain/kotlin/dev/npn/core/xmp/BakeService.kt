@@ -1,5 +1,6 @@
 package dev.npn.core.xmp
 
+import dev.npn.core.fs.BakingPaths
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
@@ -50,6 +51,8 @@ internal class BakeService(
     private val io: PdfXmpIO,
     private val log: NpnLog = NpnLog.None,
     private val ids: IdSource = IdSource.Random,
+    /** Where the swap holds the path it frees for a moment, so no path move of the app takes it. */
+    private val baking: BakingPaths = BakingPaths(),
 ) {
     /**
      * Bake [data] into a copy of the document [docId]'s file at [relPath] and return the new bytes,
@@ -143,36 +146,40 @@ internal class BakeService(
         }
         val newSha = sha256Bytes(bakedBytes)
 
+        // The path is held from the original's move aside to the relink: no path move of the app may
+        // take it meanwhile ([BakingPaths]).
         return withContext(NonCancellable) {
-            // Only the file that was read goes: same size and mtime as then.
-            if (fs.stat(norm) != read) {
-                log.runLogged("Removing the bake of $norm, written over since it was read") { fs.delete(tmpPath) }
-                return@withContext null
-            }
-            // Non-atomic replace: move the original aside, then the temp into place. Aside, not
-            // deleted: another process or a sync tool may have put its own file at the path since the
-            // stat above, and only the document's own bytes may go. Kept under an ordinary recovery
-            // name until the relink stands, so a crash in between loses nothing.
-            val aside = NpnPaths.Temp.recoveryPath(beside = norm, nonce = ids.next())
-            var standing = false
-            try {
-                fs.move(norm, aside)
-                if (!holdsWhatWasRead(aside, read, docId)) {
-                    standing = true
-                    putBack(norm, aside, tmpPath)
-                    return@withContext null
+            baking.holding(norm) {
+                // Only the file that was read goes: same size and mtime as then.
+                if (fs.stat(norm) != read) {
+                    log.runLogged("Removing the bake of $norm, written over since it was read") { fs.delete(tmpPath) }
+                    return@holding null
                 }
-                fs.move(tmpPath, norm)
-                if (newSha != docId) emitRelink(docId, newSha)
-                standing = true
-            } finally {
-                @Suppress("SuspendFunInFinallySection") // The whole block runs in NonCancellable.
-                if (!standing) restoreOriginal(norm, src, docId, newSha, tmpPath, aside)
+                // Non-atomic replace: move the original aside, then the temp into place. Aside, not
+                // deleted: another process or a sync tool may have put its own file at the path since the
+                // stat above, and only the document's own bytes may go. Kept under an ordinary recovery
+                // name until the relink stands, so a crash in between loses nothing.
+                val aside = NpnPaths.Temp.recoveryPath(beside = norm, nonce = ids.next())
+                var standing = false
+                try {
+                    fs.move(norm, aside)
+                    if (!holdsWhatWasRead(aside, read, docId)) {
+                        standing = true
+                        putBack(norm, aside, tmpPath)
+                        return@holding null
+                    }
+                    fs.move(tmpPath, norm)
+                    if (newSha != docId) emitRelink(docId, newSha)
+                    standing = true
+                } finally {
+                    @Suppress("SuspendFunInFinallySection") // The whole block runs in NonCancellable.
+                    if (!standing) restoreOriginal(norm, src, docId, newSha, tmpPath, aside)
+                }
+                log.runLogged("Removing the original of $norm after its bake") {
+                    if (holdsWhatWasRead(aside, read, docId)) fs.delete(aside)
+                }
+                newSha
             }
-            log.runLogged("Removing the original of $norm after its bake") {
-                if (holdsWhatWasRead(aside, read, docId)) fs.delete(aside)
-            }
-            newSha
         }
     }
 

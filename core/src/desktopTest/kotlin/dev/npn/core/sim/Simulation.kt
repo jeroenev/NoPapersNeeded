@@ -357,7 +357,10 @@ internal class Simulation(
         fs.misnamedObjects().firstOrNull()?.let { fail("journal object not named by its hash: $it") }
         world.uncaught.firstOrNull()?.let { fail("an exception reached a scope's handler: $it") }
         world.log.bugs.firstOrNull()?.let {
-            fail("a bug was logged: $it\n${it.error?.stackTraceToString()?.take(STACK_CHARS)}")
+            // A displaced bake is judged by who wrote at its path: show what happened there.
+            val displaced = it.error?.let(::displacedBake)?.path
+            val history = displaced?.let { path -> "\n'$path': " + fs.historyOf(path).joinToString("; ") }.orEmpty()
+            fail("a bug was logged: $it$history\n${it.error?.stackTraceToString()?.take(STACK_CHARS)}")
         }
         if (replica.session == null) return
         val problems =

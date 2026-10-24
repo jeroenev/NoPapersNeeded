@@ -14,6 +14,8 @@ import kotlinx.coroutines.withContext
 internal class DocumentPaths(
     private val fs: LibraryFileSystem,
     private val ids: IdSource = IdSource.Random,
+    /** Paths a bake has freed for a moment, which no move may take ([BakingPaths]). */
+    private val baking: BakingPaths = BakingPaths(),
 ) {
     /**
      * Where a document's file is once [settle] moved it toward its intended path: [path], and
@@ -42,7 +44,9 @@ internal class DocumentPaths(
         source: String,
         target: String,
     ): Settled {
-        if (source == target || !NpnPaths.isDocumentPath(target) || !fs.supportsDocumentRelocation) {
+        if (source == target || !NpnPaths.isDocumentPath(target) || !fs.supportsDocumentRelocation ||
+            target in baking
+        ) {
             return Settled(source, null)
         }
         val placed = if (fs.exists(target)) alreadyPlaced(docId, source, target) else relocate(docId, source, target)

@@ -457,7 +457,10 @@ Kept by `BakeService`, `BakeRelink`, `DocContentFacadeImpl` and `FoldedState`:
   superseded, while the document they became is in the library with its bytes at its path, and
   only while the file still holds those bytes. Never another file of them, and never the
   successor's, so no last copy of a document goes.
-  Bakes run one at a time, each whole, under the session's `BakeLock`; every bake of a path writes
+  From the original's move aside to the relink, the bake holds its path (`BakingPaths`): a rescan
+  then may take the original under its recovery name for the document's move and let the path go,
+  and no path move of the app (`DocumentPaths`) takes it meanwhile, as a document whose intent
+  names it would. Bakes run one at a time, each whole, under the session's `BakeLock`; every bake of a path writes
   the same temporary file, and its relink must name the bytes it installed. A trash or delete for
   good holds that lock too, so it waits for a bake and then acts on the document the bake made
   (`changeLifecycle` follows the relink).

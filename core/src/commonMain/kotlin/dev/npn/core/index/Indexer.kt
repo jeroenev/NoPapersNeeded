@@ -6,6 +6,7 @@ import dev.npn.core.db.DuplicateEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.PathMeta
 import dev.npn.core.db.isLive
+import dev.npn.core.fs.BakingPaths
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
@@ -66,7 +67,11 @@ internal class Indexer(
     ids: IdSource = IdSource.Random,
 ) {
     private val externalMoves = ExternalDocumentMoves(fs, db.keyValueDao())
-    private val documentPaths = DocumentPathReconciler(fs, db, externalMoves, ids)
+
+    /** The paths this session's bakes have freed for a moment, which no path move may take. */
+    val bakingPaths = BakingPaths()
+
+    private val documentPaths = DocumentPathReconciler(fs, db, externalMoves, ids, bakingPaths)
     private val folds = FoldProjection(db, documentPaths)
     private val tempFiles = TempFileSweep(fs, log)
 

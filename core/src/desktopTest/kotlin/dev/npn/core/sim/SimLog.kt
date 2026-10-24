@@ -66,7 +66,7 @@ class SimLog(
 }
 
 /** The [BakeDisplacedException] in [error]'s causes, if any. */
-private fun displacedBake(error: Throwable): BakeDisplacedException? =
+internal fun displacedBake(error: Throwable): BakeDisplacedException? =
     generateSequence(error) { it.cause }.take(CHAIN_DEPTH).filterIsInstance<BakeDisplacedException>().firstOrNull()
 
 /**
