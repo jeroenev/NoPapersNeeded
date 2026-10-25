@@ -11,6 +11,7 @@ import dev.npn.core.app.OcrStatus
 import dev.npn.core.app.OcrVersion
 import dev.npn.core.app.QueuedEditRun
 import dev.npn.core.app.QueuedWork
+import dev.npn.core.app.RebuildOutcome
 import dev.npn.core.app.ReviewConfigFacade
 import dev.npn.core.app.SplitOutcome
 import dev.npn.core.app.StoragePathFacade
@@ -200,6 +201,13 @@ class FakeMaintenanceFacade : MaintenanceFacade {
     val relinks = mutableListOf<Pair<String, String>>()
     val splits = mutableListOf<Pair<String, List<IntRange>>>()
     var splitOutcome: SplitOutcome = SplitOutcome.Done(emptyList())
+    var rebuilds = 0
+    var rebuildOutcome: RebuildOutcome = RebuildOutcome.Rebuilt
+
+    override suspend fun rebuildIndex(): RebuildOutcome {
+        rebuilds++
+        return rebuildOutcome
+    }
 
     override suspend fun resolveDuplicate(
         docId: String,

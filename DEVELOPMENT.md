@@ -455,7 +455,10 @@ Metadata uses content-addressed storage-v2 objects. Metadata writes require veri
 publication with atomic create-without-replacement semantics, supported by all current
 desktop and Android libraries. A library on storage that cannot guarantee this refuses
 to open, at every open and with its own message, rather than falling back to another storage
-format.
+format. The app never compacts the journal: every transaction stays as its own small object
+under `journal/objects-v2-*/`, so that folder grows by one file per metadata change for the
+life of the library. Thousands of small files there are the expected shape, not damage; a sync
+tool handles them like any other files.
 A storage-v1 segment (`journal/<deviceId>/<seq>.jsonl`), a format no released build ever wrote, is
 no longer read. The `devices/` markers tie each device id to the one installation that uses it, so a
 restored or cloned installation takes a fresh id rather than writing under another's name.

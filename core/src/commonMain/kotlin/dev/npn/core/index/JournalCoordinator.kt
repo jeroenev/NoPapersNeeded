@@ -787,6 +787,23 @@ internal class JournalCoordinator(
     }
 
     /**
+     * Rebuild the index's metadata from the folder alone: forget every source and event the
+     * accumulator recorded ([MetadataAccumulator.forgetSources]), read the journal objects the
+     * folder holds, and fold and reproject them whole, as a fresh index's open does. What this
+     * device knew from an object nobody holds any more is forgotten with it, as a fresh device never
+     * knew it: the way out of a library blocked on a journal object that is lost for good
+     * (`WriteBlock.JOURNAL_DAMAGED`, ARCHITECTURE.md 6.6). A pass like any other: it lifts the block
+     * when it reads the journal whole, and a failure blocks writes with its own reason.
+     */
+    suspend fun rebuildIndex() =
+        locked {
+            pass(OnFailure.BLOCK) {
+                accumulator.forgetSources()
+                recoverDurableProjection()
+            }
+        }
+
+    /**
      * Rebuild the live fold and the whole projection from the durable store, which leaves the writer
      * [WriterState.Ready]: lifts a block and settles an owed refold.
      */

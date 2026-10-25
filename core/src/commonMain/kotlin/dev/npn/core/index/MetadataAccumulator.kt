@@ -236,6 +236,14 @@ internal class MetadataAccumulator(
     )
 
     /**
+     * Forget every source and event recorded, so the next [reconcile] reads the folder's journal as
+     * a fresh index's open does, as a [PROJECTION_VERSION] move makes it. The way out of a block on
+     * an object nobody holds any more (`JournalCoordinator.rebuildIndex`): what only it held is
+     * forgotten, as a device that never saw it never knew it.
+     */
+    suspend fun forgetSources() = dao.clearAccumulator()
+
+    /**
      * Read the metadata directory and bring the persisted source/event tables up to date with it.
      * Shared by [reconcile] and [reconcileOnOpen]; decides nothing about the fold itself.
      */

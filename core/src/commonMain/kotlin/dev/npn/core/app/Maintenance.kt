@@ -1,9 +1,20 @@
 package dev.npn.core.app
 
 import dev.npn.core.index.SplitFailure
+import dev.npn.core.index.WriteBlock
 
-/** Repair and surgery on existing documents: duplicates, relinks, and splitting. */
+/** Repair and surgery on existing documents: duplicates, relinks, and splitting; and on the index. */
 interface MaintenanceFacade {
+    /**
+     * Rebuild the index's metadata from the library folder alone, as a fresh index's open does:
+     * forget every journal object this device applied and read the folder's again. The way out of a
+     * library whose writes stay refused ([LibrarySession.writeBlock], `JOURNAL_DAMAGED`) because a
+     * journal object this device applied is gone for good from the folder: what only that object
+     * held is forgotten, as a device that never saw it shows the library. Nothing of the folder is
+     * touched. Throws only when the session is closed.
+     */
+    suspend fun rebuildIndex(): RebuildOutcome
+
     /**
      * Forget the extra copy of [docId] recorded at [extraRelPath], deleting the file only while it
      * is still a copy of the document's bytes beside the document's own file.
@@ -32,6 +43,16 @@ interface MaintenanceFacade {
         docId: String,
         segments: List<IntRange>,
     ): SplitOutcome
+}
+
+sealed interface RebuildOutcome {
+    /** The index is the fold of the folder's journal again, and writes are taken. */
+    data object Rebuilt : RebuildOutcome
+
+    /** The rebuild failed (logged): writes stay refused with [block], and the index shows what it showed. */
+    data class Failed(
+        val block: WriteBlock,
+    ) : RebuildOutcome
 }
 
 sealed interface SplitOutcome {

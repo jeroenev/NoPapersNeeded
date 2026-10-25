@@ -515,7 +515,11 @@ it into, directly or through a later one, or, for a gone snapshot, the objects i
 disk (a folder put back from before a compaction). Such a source is forgotten, as a rebuild would;
 the events, and the fold, stay as they were. A manifest vouches for nothing it does not hold. A loss
 blocks writes (`WriteBlock.JOURNAL_DAMAGED`) at the first pass that sees it, and a pass that reads
-a journal holding those events again lifts the block; there is no grace window, since objects are
+a journal holding those events again lifts the block. An object lost for good, which no device
+holds any more, would block this device forever while a device that never saw it writes on: the
+user's exit is `MaintenanceFacade.rebuildIndex` (`JournalCoordinator.rebuildIndex`), which forgets
+every applied source and event and refolds the folder's journal as a fresh index's open does, so
+what only the lost object held is forgotten and writes are taken again. There is no grace window, since objects are
 write-once and named by their hash, a sync tool never swaps one in place, and a file still in
 transfer shows under its temp name rather than as a gap (`SourceSetValidator`'s KDoc has the
 reasoning). An open that finds the journal not folding whole opens the library read-only rather than
