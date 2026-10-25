@@ -90,17 +90,6 @@ internal suspend fun NpnDatabase.fold(): FoldedState =
         metadataProjectionDao().allEvents().forEach { state.apply(EventDecoderRegistry.decodeStored(it.canonicalJson)) }
     }
 
-/** For a logged displaced bake ([displacedBake]), what happened at its path, which decides whether it is a bug. */
-internal fun displacedHistory(
-    fs: InMemoryLibraryFileSystem,
-    entry: LogEntry,
-): String =
-    entry.error
-        ?.let(::displacedBake)
-        ?.path
-        ?.let { path -> "\n'$path': " + fs.historyOf(path).joinToString("; ") }
-        .orEmpty()
-
 /**
  * The at-rest check that no bake's original lingers once its relink stands: a failure message for
  * each file in [fs] under a recovery name whose bytes a relink in [state] superseded while the live

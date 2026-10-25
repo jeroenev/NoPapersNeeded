@@ -80,21 +80,15 @@ class MetadataAccumulatorTest {
             dao.allSources().map { it.path } shouldContainExactly rig.fs.journalObjects().map { it.relPath }
         }
 
-    /** A storage-v1 segment, compacted or not, is no source this build reads: it blocks writes, naming it. */
+    /** A storage-v1 segment, compacted or not, is no source this build reads: passed over, as any unknown file. */
     @Test
-    fun aStorageV1SegmentIsJournalDamage() =
+    fun aStorageV1SegmentIsPassedOver() =
         runTest {
             val (_, state) = oneTaggedDocument()
             for (name in listOf("0000000000000001.jsonl", "0000000000000001-2.snap.jsonl")) {
-                val segment = ".npn/journal/old-device/$name"
-                rig.fs.writeBytesOnce(segment, "{}\n".encodeToByteArray())
-
-                val blocked = assertFailsWith<MetadataWriteBlocked> { rig.accumulator.reconcile(state) }
-
-                blocked.block shouldBe WriteBlock.JOURNAL_DAMAGED
-                blocked.message shouldBe "Storage-v1 journal segment is no longer read: $segment"
-                rig.fs.delete(segment)
+                rig.fs.writeBytesOnce(".npn/journal/old-device/$name", "{}\n".encodeToByteArray())
             }
+
             rig.accumulator.reconcile(state).sourcesRead shouldBe 0
         }
 

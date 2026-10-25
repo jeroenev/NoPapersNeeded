@@ -89,12 +89,12 @@ internal class RuleApplier(
         val changed =
             coordinator.commitBuilt { state ->
                 // Matching reads the folded state, not the projection, so a rule on a field sees
-                // the value the journal holds even before the index has caught up.
-                val fields = state.effectiveFields(doc.docId)
+                // the value the journal holds even before the index has caught up, inherited
+                // through a relink or not.
+                val fields = state.inheritedFields(doc.docId)
                 val matched = matchRules(compiled, content, fields, doc.fileName)
-                // Fill in only: a register the journal holds, a clear included, is someone's value.
-                // Over the whole relink chain: a relink copies values and live tags, never a clear
-                // or a removal, so what was taken away before it is read on its predecessors.
+                // Fill in only: a register the journal holds, a clear included, is someone's value,
+                // and the document shows its relink predecessors' registers as its own.
                 val chain = state.chainOf(doc.docId)
                 val held = chain.flatMapTo(HashSet()) { state.fieldRegisters(it).keys }
                 val carried = chain.flatMapTo(HashSet()) { id -> state.tagsEverAdded(id).map { it.lowercase() } }

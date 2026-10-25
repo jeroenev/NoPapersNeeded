@@ -4,17 +4,13 @@ import dev.npn.core.app.ImportOutcome
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
-import dev.npn.core.index.toEventEntity
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
-import dev.npn.core.journal.JournalSourceRead
 import dev.npn.core.journal.PendingOp
-import dev.npn.core.journal.StorageV2Reader
 import dev.npn.core.util.EpochClock
 import dev.npn.core.util.NpnLog
-import dev.npn.core.xmp.BakeDisplacedException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldNotContain
@@ -130,47 +126,6 @@ class SimulationHarnessTest {
         }
 
     /**
-     * A bake undone while a third file sits at its path is a race with whoever wrote that file: the
-     * outside world (another process, the sync tool) may, the app may not, since its own import,
-     * rename, restore or storage-path move taking the freed name is one the bake lock should have
-     * kept out. Whoever made the last write there decides, even when that file is gone by the time
-     * the failure is logged (the bake looks at the path again before it logs).
-     */
-    @Test
-    fun aBakeDisplacedByAFileTheAppWroteFailsTheRun() =
-        runTest {
-            fun Simulation.displaceABake(
-                byApp: Boolean,
-                goneByTheLog: Boolean = false,
-            ) {
-                val bytes = SimPdf.bytes("displacing", "z", PLANTED_SIZE + 2)
-                if (byApp) {
-                    world.read("the app writes at the bake's path") { fs.writeBytesOnce(DISPLACED, bytes) }
-                } else {
-                    fs.externalWriteAtomic(DISPLACED, bytes)
-                }
-                if (goneByTheLog) fs.externalMove(DISPLACED, "moved away.pdf")
-                world.log.log(
-                    NpnLog.Level.WARN,
-                    "Restoring $DISPLACED after a failed bake failed; the original is kept",
-                    BakeDisplacedException(DISPLACED, "$DISPLACED holds another file"),
-                )
-            }
-            for (goneByTheLog in listOf(false, true)) {
-                Simulation(testScheduler, config(), afterStep = { step ->
-                    if (step == 1) displaceABake(byApp = false, goneByTheLog = goneByTheLog)
-                }).run()
-                val failure =
-                    shouldThrow<SimFailure> {
-                        Simulation(testScheduler, config(), afterStep = { step ->
-                            if (step == 1) displaceABake(byApp = true, goneByTheLog = goneByTheLog)
-                        }).run()
-                    }
-                failure.message shouldContain "a bug was logged"
-            }
-        }
-
-    /**
      * A trash moves the document's file before its commit stamps the trash, and the stamp is an HLC,
      * which a device whose clock runs ahead pushes past this one's clock: the outside world putting
      * the bytes back after the move counts as their return from outside, though it is earlier than
@@ -232,51 +187,6 @@ class SimulationHarnessTest {
             returned.shouldNotBeNull() shouldContain trashed
         }
 
-    /**
-     * A relink an older build wrote, with no copies, that the index folded and nothing copied after
-     * (what a watch ingest left before the session copied there too) fails the check of relink
-     * copies, before the quiescent rescan would write them.
-     */
-    @Test
-    fun aBareRelinkNothingCopiedFailsTheRun() =
-        runTest {
-            val failure =
-                shouldThrow<SimFailure> {
-                    Simulation(testScheduler, config(), afterStep = { step ->
-                        if (step == STEPS) {
-                            fs.faults.disarmAll()
-                            world.read("a bare relink, folded without its copies") {
-                                val session = replica.session!!
-                                val old =
-                                    session
-                                        .importPdfBytes(SimPdf.bytes("old", "u", PLANTED_SIZE + 3), "old.pdf")
-                                        .shouldBeInstanceOf<ImportOutcome.Imported>()
-                                        .docId
-                                val new =
-                                    session
-                                        .importPdfBytes(SimPdf.bytes("new", "u", PLANTED_SIZE + 4), "new.pdf")
-                                        .shouldBeInstanceOf<ImportOutcome.Imported>()
-                                        .docId
-                                session.meta.addTag(listOf(old), "kept")
-                                val elsewhere = InMemoryLibraryFileSystem(world.clock::nowMillis)
-                                val olderBuild =
-                                    ContentAddressedJournalWriter(
-                                        elsewhere,
-                                        "older",
-                                        HlcWatermarkAllocator(world.clock),
-                                    )
-                                val relink = olderBuild.commit(listOf(PendingOp.relink(old, new))).relPath
-                                val read = StorageV2Reader.read(relink, elsewhere.bytesAt(relink)!!)
-                                read.shouldBeInstanceOf<JournalSourceRead.Accepted>().events.forEach {
-                                    replica.indexDb.metadataProjectionDao().insertEvent(it.toEventEntity())
-                                }
-                            }
-                        }
-                    }).run()
-                }
-            failure.message shouldContain "relink targets lack what an older build shows them"
-        }
-
     @Test
     fun storageWithoutAPublicationPrimitiveRefusesTheLibrary() =
         runTest {
@@ -292,7 +202,6 @@ class SimulationHarnessTest {
         }
 
     private companion object {
-        const val DISPLACED = "baked.pdf"
         const val HARNESS_SEED = 7L
         const val STEPS = 30
         const val PLANTED_SIZE = 900

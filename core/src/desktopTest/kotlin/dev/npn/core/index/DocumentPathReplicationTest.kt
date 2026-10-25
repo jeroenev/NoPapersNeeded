@@ -1,6 +1,5 @@
 package dev.npn.core.index
 
-import dev.npn.core.fs.BakingPaths
 import dev.npn.core.fs.DocumentPaths
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
@@ -35,24 +34,6 @@ class DocumentPathReplicationTest {
             DocumentPaths(racing).reconcile(hash, "old.pdf", "new.pdf") shouldBe "new.pdf"
             rig.fs.sha256("new.pdf") shouldBe hash
             rig.fs.readBytes("old.pdf").decodeToString() shouldBe "replacement"
-        }
-
-    /**
-     * A path a bake of this session has freed for a moment (its original aside, the baked bytes not
-     * in yet) is taken by no move: once the bake lets it go, the move goes ahead.
-     */
-    @Test
-    fun noMoveTakesAPathABakeHolds() =
-        indexTest { rig ->
-            rig.writePdf("old.pdf", "document")
-            val hash = rig.fs.sha256("old.pdf")
-            val baking = BakingPaths()
-            val paths = DocumentPaths(rig.fs, baking = baking)
-
-            baking.holding("new.pdf") { paths.reconcile(hash, "old.pdf", "new.pdf") } shouldBe "old.pdf"
-            rig.exists("new.pdf") shouldBe false
-
-            paths.reconcile(hash, "old.pdf", "new.pdf") shouldBe "new.pdf"
         }
 
     @Test

@@ -93,13 +93,6 @@ class PathWrites {
     /** The last write at [path], or null when nothing ever wrote there. */
     fun lastWriteAt(path: String): LastWrite? = lastWrites[path]
 
-    /**
-     * Whether the outside world, not the app, made the last write at [path], whether or not its file
-     * is still there: what a bake displaced there by another file is judged by, which the log reports
-     * some suspension points after the fact.
-     */
-    fun lastFromOutside(path: String): Boolean = lastWrites[path]?.byApp == false
-
     /** When the app last moved or deleted the bytes hashing to [hash] away from [path]; null when it never did. */
     fun appTookAwayAt(
         path: String,

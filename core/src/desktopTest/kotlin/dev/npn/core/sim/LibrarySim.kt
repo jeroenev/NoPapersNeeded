@@ -243,12 +243,6 @@ internal class SimWorld(
     /** The sizes of the PDFs the engines make, one per content, across every replica. */
     val sizes = SimSizes()
 
-    /**
-     * The documents a device on an older build baked in place (`EXT_OLDER_BUILD_BAKE`), across every
-     * replica's generator: each is baked so at most once, so no two replicas still showing it fork it.
-     */
-    val olderBuildBaked = HashSet<String>()
-
     /** Failures that reached a scope's handler: nothing a session runs may end that way. */
     val uncaught = ArrayList<String>()
 

@@ -98,7 +98,8 @@ internal class MetadataWriterImpl(
         val changed =
             coordinator.commitBuilt { state ->
                 val v = canonical(state, k, value)
-                ids.filter { state.effectiveFields(it)[k] != v }.map { PendingOp.fieldSet(it, k, v) }
+                // Against what the document shows, inherited values included: clearing one is a write.
+                ids.filter { state.inheritedFields(it)[k] != v }.map { PendingOp.fieldSet(it, k, v) }
             }
         if (changed) followUp(ids, autoMatch = true)
     }
@@ -165,16 +166,16 @@ internal class MetadataWriterImpl(
     }
 
     /**
-     * The part of [tags] and [values] that [docId] lacks in this state, as it shows them: tags it
-     * does not carry in any case, and values for fields it has none for.
+     * The part of [tags] and [values] that [docId] lacks in this state, as it shows them (inherited
+     * ones included): tags it does not carry in any case, and values for fields it has none for.
      */
     private fun FoldedState.lackedBy(
         docId: String,
         tags: List<String>,
         values: List<Pair<String, String?>>,
     ): DocEdit {
-        val carried = effectiveTags(docId).mapTo(HashSet()) { it.lowercase() }
-        val filled = effectiveFields(docId).keys
+        val carried = inheritedTags(docId).mapTo(HashSet()) { it.lowercase() }
+        val filled = inheritedFields(docId).keys
         return DocEdit(
             docId,
             tags.filterNot { it.lowercase() in carried },

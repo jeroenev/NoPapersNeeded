@@ -236,6 +236,14 @@ internal class MetadataAccumulator(
     )
 
     /**
+     * Forget every source and event recorded, so the next [reconcile] reads the folder's journal as
+     * a fresh index's open does, as a [PROJECTION_VERSION] move makes it. The way out of a block on
+     * an object nobody holds any more (`JournalCoordinator.rebuildIndex`): what only it held is
+     * forgotten, as a device that never saw it never knew it.
+     */
+    suspend fun forgetSources() = dao.clearAccumulator()
+
+    /**
      * Read the metadata directory and bring the persisted source/event tables up to date with it.
      * Shared by [reconcile] and [reconcileOnOpen]; decides nothing about the fold itself.
      */
@@ -247,7 +255,6 @@ internal class MetadataAccumulator(
         val entries = fs.listAllUnder(NpnPaths.JOURNAL_DIR)
         validator.newerStore(entries)?.let { fail(WriteBlock.NEWER_FORMAT, it) }
         validator.invalidObjectPath(entries)?.let { fail(WriteBlock.JOURNAL_DAMAGED, it) }
-        validator.storageV1Segment(entries)?.let { fail(WriteBlock.JOURNAL_DAMAGED, it) }
         val previous = dao.allSources()
         val files = entries.filter { !it.isDirectory }.associateBy { it.relPath }
         val ingest = ingestFiles(files.values)
@@ -523,7 +530,7 @@ internal class MetadataAccumulator(
          * that already drop the affected tables. Bump it too when a [SourceKind]
          * goes, so the source rows of that kind are cleared before any is read.
          */
-        const val PROJECTION_VERSION = 13
+        const val PROJECTION_VERSION = 14
     }
 }
 

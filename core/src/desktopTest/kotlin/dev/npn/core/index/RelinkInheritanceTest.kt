@@ -10,10 +10,11 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 
 /**
- * A relink writes copies of the old document's metadata onto the new one in its own transaction
- * ([JournalCoordinator.relinkAndRescan]): the new document's metadata is its own from then on.
+ * A relinked document's metadata and its predecessors' are one set of registers: the latest write
+ * wins across all of them, a clear included, whichever way their ids sort. The relink writes nothing
+ * but the `relink` event.
  */
-class RelinkCopiesIndexTest {
+class RelinkInheritanceTest {
     /** After older->newer->current, the current document shows the title newer was given after its relink. */
     @Test
     fun aChainCarriesTheLatestValueToItsEnd() =
@@ -22,9 +23,9 @@ class RelinkCopiesIndexTest {
                 val older = "a".repeat(64)
                 val newer = "b".repeat(64)
                 coordinator.commitAndApply(listOf(PendingOp.fieldSet(older, FieldKeys.TITLE, "Old")))
-                coordinator.relinkAndRescan(older, newer)
+                coordinator.commitAndRescan(listOf(PendingOp.relink(older, newer)))
                 coordinator.commitAndApply(listOf(PendingOp.fieldSet(newer, FieldKeys.TITLE, "New")))
-                coordinator.relinkAndRescan(newer, current)
+                coordinator.commitAndRescan(listOf(PendingOp.relink(newer, current)))
 
                 rig.rescan()
 
@@ -35,14 +36,14 @@ class RelinkCopiesIndexTest {
             }
         }
 
-    /** Unpinning the OCR engine of a relinked document unpins the pin it was given, for good. */
+    /** Unpinning the OCR engine of a relinked document unpins the one it inherited, for good. */
     @Test
-    fun aClearOnTheTargetStands() =
+    fun aClearOnTheTargetMasksAnInheritedProperty() =
         runTest {
             withCurrent { rig, coordinator, current ->
                 val older = "a".repeat(64)
                 coordinator.commitAndApply(listOf(PendingOp.propSet(older, SystemProperty.OCR_ENGINE, "tesseract")))
-                coordinator.relinkAndRescan(older, current)
+                coordinator.commitAndRescan(listOf(PendingOp.relink(older, current)))
                 rig.db
                     .documentDao()
                     .getByDocId(current)
@@ -59,12 +60,11 @@ class RelinkCopiesIndexTest {
         }
 
     /**
-     * An older build relinked z onto b1 without copies, and no open has copied them yet (it was
-     * read-only, say). Relinking b1 here carries what older builds showed b1, z's metadata, onto
-     * the current document: nothing of z's is lost in the superseded b1.
+     * A document relinked twice, z onto b1 and b1 onto the current one, shows z's title, tag and
+     * storage path: the whole chain is its own.
      */
     @Test
-    fun aRelinkOfATargetAnOlderBuildRelinkedCarriesItsPredecessorsMetadata() =
+    fun aRelinkOfARelinkTargetShowsTheWholeChain() =
         runTest {
             withCurrent { rig, coordinator, current ->
                 val z = "a".repeat(64)
@@ -78,7 +78,7 @@ class RelinkCopiesIndexTest {
                 )
                 coordinator.commitAndRescan(listOf(PendingOp.relink(z, b1)))
 
-                coordinator.relinkAndRescan(b1, current)
+                coordinator.commitAndRescan(listOf(PendingOp.relink(b1, current)))
 
                 val row =
                     rig.db
@@ -89,7 +89,8 @@ class RelinkCopiesIndexTest {
                 row.relPath shouldBe "c.pdf"
                 rig.db.tagDao().tagsForDocument(current) shouldContainExactly listOf("filed")
                 coordinator.commitBuilt { state ->
-                    state.effectiveProp(current, SystemProperty.STORAGE_PATH) shouldBe "c.pdf"
+                    state.inheritedProp(current, SystemProperty.STORAGE_PATH) shouldBe "c.pdf"
+                    state.effectiveProp(current, SystemProperty.STORAGE_PATH) shouldBe null
                     emptyList()
                 }
             }

@@ -201,6 +201,13 @@ class FakeMaintenanceFacade : MaintenanceFacade {
     val relinks = mutableListOf<Pair<String, String>>()
     val splits = mutableListOf<Pair<String, List<IntRange>>>()
     var splitOutcome: SplitOutcome = SplitOutcome.Done(emptyList())
+    var rebuilds = 0
+    var rebuildOutcome: RebuildOutcome = RebuildOutcome.Rebuilt
+
+    override suspend fun rebuildIndex(): RebuildOutcome {
+        rebuilds++
+        return rebuildOutcome
+    }
 
     override suspend fun resolveDuplicate(
         docId: String,

@@ -11,7 +11,6 @@ import dev.npn.core.db.isLive
 import dev.npn.core.db.queueState
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.readDocument
-import dev.npn.core.index.MetadataWriteBlocked
 import dev.npn.core.index.WriteSettle
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.util.EpochClock
@@ -23,7 +22,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 
 /**
  * Hybrid OCR pipeline with co-existing OCR versions. Every device+engine pair may publish its
@@ -117,14 +115,6 @@ internal class OcrPipeline(
      * is doing the running, and so cannot be wrong after a restart.
      */
     val inFlight: StateFlow<String?> = _inFlight.asStateFlow()
-
-    /**
-     * Documents whose [onTextProduced] was refused because journal writes were blocked
-     * ([MetadataWriteBlocked]): nothing else runs the rules for their new text, so the next call
-     * that goes through runs them again ([retryOwedRules]). In memory only: a restart forgets them,
-     * and then a later edit or rule save applies the rules.
-     */
-    private val rulesOwed = MutableStateFlow<Set<String>>(emptySet())
 
     /**
      * Pop the next queue entry owed a pass and due now, process it, and return whether something
@@ -277,7 +267,7 @@ internal class OcrPipeline(
     ): String? {
         val hooks =
             listOf(
-                "onTextProduced" to suspend { runRules(docId, sidecar.fullText()) },
+                "onTextProduced" to suspend { onTextProduced(docId, sidecar.fullText()) },
                 "onOcrProduced" to suspend { onOcrProduced(docId) },
             )
         var firstError: String? = null
@@ -285,44 +275,6 @@ internal class OcrPipeline(
             runCatchingCancellable { hook() }.onFailure { if (firstError == null) firstError = "$name: ${it.reason()}" }
         }
         return firstError
-    }
-
-    /** [onTextProduced] for [docId], owed again while writes are blocked, then for what was owed before. */
-    private suspend fun runRules(
-        docId: String,
-        text: String,
-    ) {
-        try {
-            onTextProduced(docId, text)
-        } catch (blocked: MetadataWriteBlocked) {
-            rulesOwed.update { it + docId }
-            throw blocked
-        }
-        rulesOwed.update { it - docId }
-        retryOwedRules()
-    }
-
-    /**
-     * Run [onTextProduced] again for every document [rulesOwed] it, from its selected text, until
-     * writes are refused again. Any other failure goes on the document's queue row, as its pass's would.
-     */
-    private suspend fun retryOwedRules() {
-        for (docId in rulesOwed.value) {
-            if (!retryRules(docId)) return
-            rulesOwed.update { it - docId }
-        }
-    }
-
-    /** [retryOwedRules] for one document; false when writes were refused again. */
-    private suspend fun retryRules(docId: String): Boolean {
-        val doc = documentDao.getByDocId(docId)
-        val sidecar = doc?.let { versions.selectReadable(docId, versions.of(docId), it.ocrEngineOverride)?.sidecar }
-        val failure = sidecar?.let { runCatchingCancellable { onTextProduced(docId, it.fullText()) }.exceptionOrNull() }
-        if (failure == null || failure is MetadataWriteBlocked) return failure == null
-        ocrQueueDao.getByDocId(docId)?.let { row ->
-            ocrQueueDao.upsert(row.copy(lastError = "onTextProduced: ${failure.reason()}"))
-        }
-        return true
     }
 
     /**

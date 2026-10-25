@@ -34,13 +34,6 @@ class SimLog(
     /** Entries [isBug] judged bugs, not yet reported. */
     val bugs = ArrayList<LogEntry>()
 
-    /**
-     * Per replica, by the prefix its entries carry (empty for a lone replica): whether the last write
-     * at a path came from outside the app, the one thing that may displace a bake ([displacedBake]),
-     * whether or not that file is still there when the bake's failure is logged.
-     */
-    val outsideWrites = LinkedHashMap<String, (path: String) -> Boolean>()
-
     override fun log(
         level: NpnLog.Level,
         message: String,
@@ -48,35 +41,17 @@ class SimLog(
     ) {
         val entry = LogEntry(step(), now(), level, message, error)
         entries += entry
-        val displaced = error?.let(::displacedBake)
-        val bug =
-            if (displaced == null || level == NpnLog.Level.ERROR) {
-                isBug(entry)
-            } else {
-                // A bake's path held a third file while the bake was undone, and the original was kept
-                // under a recovery name: a race with another process or the sync tool, which wrote that
-                // file. The app's own import, rename, restore or storage-path move taking the freed name
-                // is one BakeLock does not serialise: a bug.
-                outsideWrites.entries.none { (prefix, outside) ->
-                    message.startsWith(prefix) && outside(displaced.path)
-                }
-            }
-        if (bug) bugs += entry
+        if (isBug(entry)) bugs += entry
     }
 }
-
-/** The [BakeDisplacedException] in [error]'s causes, if any. */
-internal fun displacedBake(error: Throwable): BakeDisplacedException? =
-    generateSequence(error) { it.cause }.take(CHAIN_DEPTH).filterIsInstance<BakeDisplacedException>().firstOrNull()
 
 /**
  * Whether a failure is a bug rather than one normal use can run into. Expected: anything an
  * injected fault caused (the storage failed), a session closed under the work (a crash or a close),
  * blocked journal writes (they are reported to the user), a publication the storage refused, a
  * file another process moved, replaced or deleted under the app (`NoSuchFileException`, a
- * "Target already exists" race the caller handles), a refused or superseded bake or import, and a
- * non-PDF. A bake displaced by another file ([BakeDisplacedException]) is judged by the log
- * ([SimLog.outsideWrites]): expected only when that file came from outside the app. A bug: every other
+ * "Target already exists" race the caller handles), a refused, displaced or superseded bake or
+ * import, and a non-PDF. A bug: every other
  * [IllegalStateException] (a failed `check`), an [IllegalArgumentException] (a failed `require`),
  * the JVM's programming errors (null, bounds, casts, concurrent modification), and SQLite's
  * constraint failures.
@@ -104,6 +79,9 @@ private fun Throwable.isExpected(): Boolean =
         this is dev.npn.core.index.SupersededImportException ||
         // A bake the PDF cannot carry, or whose rewrite did not verify: BakeFailure.UNSUPPORTED_PDF.
         this is dev.npn.core.xmp.BakeRefusedException ||
+        // A third file at a bake's path while the bake was undone, whoever wrote it: the original
+        // is kept under a recovery name, which the next rescan indexes.
+        this is BakeDisplacedException ||
         this is VerifiedPublicationUnavailableException ||
         this is VerifiedPublicationFailedException ||
         this is java.nio.file.NoSuchFileException ||

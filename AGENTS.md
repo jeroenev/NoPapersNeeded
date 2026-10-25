@@ -161,9 +161,9 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   rules) belongs in the journal, not in either database.
 - PDFs are immutable after import (rename/move only). Sole exception: explicit
   bake-in-place, which replaces only the bytes it read and hashed as the document's (while the
-  file keeps the size and mtime it had then) and records a `relink` journal event for the new hash,
-  with copies of the document's metadata onto it in the same transaction: the fold never shows a
-  relink target its predecessors' metadata.
+  file keeps the size and mtime it had then) and records a `relink` journal event for the new hash
+  and nothing else: the fold shows a relink target its predecessors' metadata as its own
+  (`FoldedState.inheritedFields`), so nothing is copied.
 - All app-written files in `.npn/` are write-once. Journal transactions are content-addressed
   by their complete-file SHA-256 and require verified create-without-replacement publication;
   OCR sidecars are keyed by hash and writer (device id + engine). Never append to or rewrite a
@@ -171,7 +171,7 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   at the type level, not just by convention: `ContentAddressedJournalWriter` is `internal` to
   `core` and the coordinator's `writer` is private, so no outside caller can grab a raw writer.
 - The journal is written only as storage-v2 objects; compaction snapshots are read, never written;
-  a storage-v1 segment is no longer read and blocks writes; the app never deletes a journal object.
+  a storage-v1 segment is no longer read; the app never deletes a journal object.
   A filesystem that cannot publish without replacement (no hard link, no exclusive rename) refuses to open the library,
   at every open (`DeviceIdentity` publishes before anything is written); never
   add a fallback format. `device.id` belongs to one installation:

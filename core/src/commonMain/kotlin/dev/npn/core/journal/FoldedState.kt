@@ -18,9 +18,9 @@ import dev.npn.core.model.SystemProperty
  * - Props are last-writer-wins by HLC. Trash/restore is LWW, and so is delete/undelete; an
  *   undelete also takes the document out of the trash, and a delete that wins hides the document
  *   whatever its trash state. Relinks resolve to the highest-HLC winner per old doc.
- * - Every view of a document reads its own events only. A relink target's metadata is its own
- *   too: the relink's transaction copies its predecessor's onto it ([relinkOps]), and the fold
- *   never reads a predecessor for a value. The relink itself only supersedes ([resolveDocId]).
+ * - The effective views read one id's own events. The inherited ones read a relink target's
+ *   together with its predecessors': one register per field or property, LWW across all of them
+ *   (a clear included), and one OR-set of tags.
  *
  * Instances are mutable accumulators; [copy]-style snapshotting is not needed because folding
  * is deterministic regardless of the order events were applied.
@@ -260,24 +260,31 @@ internal class FoldedState {
         return name
     }
 
-    /** Effective value of [doc]'s single-value property [key], or null if unset or cleared. */
-    fun effectiveProp(
+    /**
+     * Effective value of [doc]'s own register for a single-value property, or null if unset/cleared.
+     * A test seam: main code reads [inheritedProp].
+     */
+    internal fun effectiveProp(
         doc: String,
         key: SystemProperty,
     ): String? = props[doc]?.get(key)?.value
 
     /**
-     * Whether any `storagePath` event, winning or not, named [path] for [doc]: a place some device
-     * was told to put the document, so a file found there may be the mirror of that device's move
-     * rather than a move of its own ([dev.npn.core.index.ExternalDocumentMoves]).
+     * Whether any `storagePath` event, winning or not, named [path] for [doc] or a document it
+     * [predecessorsOf]: a place some device was told to put the document, so a file found there may
+     * be the mirror of that device's move rather than a move of its own
+     * ([dev.npn.core.index.ExternalDocumentMoves]).
      */
     fun namedStoragePath(
         doc: String,
         path: String,
-    ): Boolean = namedPaths[doc]?.contains(path) == true
+    ): Boolean = chainOf(doc).any { namedPaths[it]?.contains(path) == true }
 
-    /** Winning version of [doc]'s property [key], a clear included, for device-local observation baselines. */
-    fun propVersion(
+    /**
+     * Winning version, including explicit clears, of [doc]'s own register for [key]. A test seam:
+     * main code reads [inheritedPropVersion].
+     */
+    internal fun propVersion(
         doc: String,
         key: SystemProperty,
     ): Hlc? = props[doc]?.get(key)?.hlc
@@ -286,14 +293,14 @@ internal class FoldedState {
      * Effective custom fields for a document: only keys whose winning value is non-null (a null
      * value means the field was cleared). Ordered by key for deterministic projection. Values are
      * read in the registry type's canonical form ([FieldValues.normalized]), so a number an older
-     * build stored as `007` folds to `7`.
+     * build stored as `007` folds to `7`. A test seam: main code reads [inheritedFields].
      */
-    fun effectiveFields(doc: String): Map<String, String> = fields[doc]?.let(::nonNullFields).orEmpty()
+    internal fun effectiveFields(doc: String): Map<String, String> = fields[doc]?.let(::nonNullFields).orEmpty()
 
     /**
      * [doc]'s own field registers, clears included, as the fold holds them. For the auto-match
-     * rules, which fill only a field whose register is empty (`RuleApplier`); every other reader
-     * goes through [effectiveFields].
+     * rules, which fill only a field no register of the chain holds (`RuleApplier`); every other
+     * reader goes through [inheritedFields].
      */
     internal fun fieldRegisters(doc: String): Map<String, PropVal> = fields[doc].orEmpty()
 
@@ -313,82 +320,45 @@ internal class FoldedState {
         return out
     }
 
-    // ---- the view older builds fold: a relink target with its predecessors' registers as one ----
-    // Never a view of this fold: only read to write copies that make it a target's own
-    // ([relinkOps], `RelinkInheritanceUpgrade.kt`), so both folds show the same.
+    // ---- a document with what it inherited: its own registers and its predecessors' as one ----
 
-    /** Every document a relink chain [resolveDocId]s onto, the ones with [predecessorsOf]. */
-    internal fun relinkTargets(): Set<String> =
-        (predecessorsCache ?: reversedRelinks().also { predecessorsCache = it }).keys
-
-    /** [doc] and every [predecessorsOf] it: the documents older builds fold [doc]'s metadata over. */
+    /** [doc] and every [predecessorsOf] it: the documents whose registers [doc]'s views read as one. */
     internal fun chainOf(doc: String): List<String> = listOf(doc) + predecessorsOf(doc)
 
-    /** Per key, the latest field write across [chain]'s registers, a clear included; cleared keys left out. */
-    internal fun inheritedFields(chain: List<String>): Map<String, String> {
+    /**
+     * [doc]'s fields as [effectiveFields] reads them, over its own registers and its
+     * [predecessorsOf]'s as one set: per key, the latest write among them wins, a clear included.
+     * A value cleared on [doc] stays cleared, and a chain shows its newest value however its ids sort.
+     */
+    fun inheritedFields(doc: String): Map<String, String> {
+        val predecessors = predecessorsOf(doc)
+        if (predecessors.isEmpty()) return effectiveFields(doc)
         val winners = HashMap<String, PropVal>()
-        for (id in chain) {
-            fields[id]?.forEach { (key, register) ->
-                winners.putIfNewerHlc(key, register.hlc) { register }
-            }
+        for (id in listOf(doc) + predecessors) {
+            fields[id]?.forEach { (key, register) -> winners.putIfNewerHlc(key, register.hlc) { register } }
         }
         return nonNullFields(winners)
     }
 
-    /** The latest write of [key] across [chain]'s registers, null when that is a clear or there is none. */
-    internal fun inheritedProp(
-        chain: List<String>,
+    /** [doc]'s value of [key] over its own register and its [predecessorsOf]'s, as [inheritedFields]. */
+    fun inheritedProp(
+        doc: String,
         key: SystemProperty,
-    ): String? = chain.mapNotNull { props[it]?.get(key) }.maxByOrNull { it.hlc }?.value
+    ): String? = inheritedRegister(doc, key)?.value
 
-    /** Every live tag across [chain]: their adds are one OR-set ([tagRemovalOps] removes them as one). */
-    internal fun inheritedTags(chain: List<String>): Set<String> =
-        chain.flatMapTo(LinkedHashSet()) { effectiveTags(it) }
+    /** Winning inherited version, explicit clears included, for device-local observation baselines. */
+    fun inheritedPropVersion(
+        doc: String,
+        key: SystemProperty,
+    ): Hlc? = inheritedRegister(doc, key)?.hlc
 
-    /**
-     * The ops that relink [oldDoc] onto [newDoc], for one transaction: the `relink`, and copies of
-     * [oldDoc]'s metadata onto [newDoc], which from then on are [newDoc]'s own. Every field value,
-     * every system property with a value (its storage path, review mark and OCR engine pin among
-     * them) and every live tag [oldDoc] has, read over [oldDoc] and its predecessors as older builds
-     * fold it ([chainOf]), so a relink of a target whose own copies were never written still carries
-     * what it showed there. A value [oldDoc] has replaces [newDoc]'s own: the relink says [newDoc]
-     * is that document. What only [newDoc] has stays, and its tags join [oldDoc]'s.
-     *
-     * A copy is written where [newDoc]'s own value differs, and where the view older builds fold
-     * over the joined chain would; with the latest HLC, the copy makes both show the same.
-     *
-     * That holds for a relink to other bytes (a missing document relinked to the file that took
-     * its place) as for a bake, whose result has no metadata of its own yet: either way the
-     * document's metadata follows it onto its new bytes. A later edit of [oldDoc], which only a
-     * device that has not seen the relink can make, does not reach [newDoc] through this fold; the
-     * next rescan's `RelinkInheritanceUpgrade` copies it when its HLC is the later one, as older
-     * builds show it.
-     */
-    fun relinkOps(
-        oldDoc: String,
-        newDoc: String,
-    ): List<PendingOp> =
-        buildList {
-            add(PendingOp.relink(oldDoc, newDoc))
-            val oldChain = chainOf(oldDoc)
-            val newChain = chainOf(newDoc)
-            val joined = (newChain + oldChain).distinct()
-            val ownFields = effectiveFields(newDoc)
-            val wanted = inheritedFields(newChain) + inheritedFields(oldChain)
-            val joinedFields = inheritedFields(joined)
-            for (key in (wanted.keys + ownFields.keys + joinedFields.keys).sorted()) {
-                val value = wanted[key]
-                if (ownFields[key] != value || joinedFields[key] != value) add(PendingOp.fieldSet(newDoc, key, value))
-            }
-            for (key in SystemProperty.entries) {
-                val value = inheritedProp(oldChain, key) ?: inheritedProp(newChain, key)
-                if (effectiveProp(newDoc, key) != value || inheritedProp(joined, key) != value) {
-                    add(PendingOp.propSet(newDoc, key, value))
-                }
-            }
-            val ownTags = effectiveTags(newDoc)
-            for (tag in inheritedTags(joined)) if (tag !in ownTags) add(PendingOp.tagAdd(newDoc, tag))
-        }
+    private fun inheritedRegister(
+        doc: String,
+        key: SystemProperty,
+    ): PropVal? = chainOf(doc).mapNotNull { props[it]?.get(key) }.maxByOrNull { it.hlc }
+
+    /** [doc]'s tags with its [predecessorsOf]'s: their live adds are one OR-set ([tagRemovalOps]). */
+    fun inheritedTags(doc: String): Set<String> = chainOf(doc).flatMapTo(LinkedHashSet()) { effectiveTags(it) }
 
     private fun nonNullFields(byKey: Map<String, PropVal>): Map<String, String> {
         val out = LinkedHashMap<String, String>()
@@ -420,11 +390,12 @@ internal class FoldedState {
     fun isCurrent(doc: String): Boolean = hiddenBy(doc) == null && resolveDocId(doc) == doc
 
     /**
-     * Where [doc]'s file is meant to be: its storage path, or null when no path is intended or [doc]
-     * is not [isCurrent], as a hidden document's file goes nowhere.
+     * Where [doc]'s file is meant to be: its storage path with what it inherited ([inheritedProp]),
+     * or null when no path is intended or [doc] is not [isCurrent], as a hidden document's file goes
+     * nowhere.
      */
     fun intendedPath(doc: String): String? =
-        if (isCurrent(doc)) effectiveProp(doc, SystemProperty.STORAGE_PATH) else null
+        if (isCurrent(doc)) inheritedProp(doc, SystemProperty.STORAGE_PATH) else null
 
     /**
      * Every document in the trash now ([isTrashed]) and not superseded by a relink: the ones the
@@ -478,8 +449,7 @@ internal class FoldedState {
     /**
      * Every older id whose relink chain [resolveDocId]s onto [doc], in id order: a->b->c gives c
      * both a and b. Empty for a document nothing resolves onto, which includes every superseded one.
-     * No view of [doc]'s reads them; the projection, and the copies and tag removals that keep older
-     * builds' view of [doc] equal to its own ([chainOf]), use the chain.
+     * The inherited views read [doc]'s registers and theirs as one ([chainOf]).
      */
     fun predecessorsOf(doc: String): List<String> =
         (predecessorsCache ?: reversedRelinks().also { predecessorsCache = it })[doc].orEmpty()
@@ -541,8 +511,9 @@ internal class FoldedState {
     /**
      * Build the OR-set `tag-remove` [PendingOp]s for [tag] over [docIds] from THIS state's live
      * dots: for each doc, list the dots currently observed for `(doc, tag)` and for its
-     * [predecessorsOf] (older builds show a relink target their adds too), each dot once, and emit a
-     * remove carrying them, skipping docs that do not hold the tag (empty dots).
+     * [predecessorsOf], as [inheritedTags] reads them (a tombstone names dots, whichever document it
+     * is addressed to), each dot once, and emit a remove carrying them, skipping docs that do not
+     * hold the tag (empty dots).
      *
      * Outside `core` this is the ONLY way to construct a `tag-remove` op ([PendingOp.tagRemove], the
      * [PendingOp] constructor and [JournalOp.TagRemove]'s are `internal`), so a correct removal can

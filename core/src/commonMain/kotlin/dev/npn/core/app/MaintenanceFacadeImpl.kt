@@ -7,6 +7,8 @@ import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.index.ScanReport
 import dev.npn.core.index.SplitFailure
 import dev.npn.core.index.SplitService
+import dev.npn.core.index.WriteBlock
+import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
@@ -28,6 +30,17 @@ internal class MaintenanceFacadeImpl(
     private val rescanned: (ScanReport) -> Unit,
     private val log: NpnLog,
 ) : MaintenanceFacade {
+    override suspend fun rebuildIndex(): RebuildOutcome =
+        lifetime.owned {
+            runCatchingCancellable { coordinator.rebuildIndex() }.fold(
+                onSuccess = { RebuildOutcome.Rebuilt },
+                onFailure = { failure ->
+                    log.warn("Rebuilding the index from the library folder failed", failure)
+                    RebuildOutcome.Failed(coordinator.writeBlock.value ?: WriteBlock.RECONCILE_FAILED)
+                },
+            )
+        }
+
     override suspend fun resolveDuplicate(
         docId: String,
         extraRelPath: String,
@@ -37,16 +50,10 @@ internal class MaintenanceFacadeImpl(
         oldDocId: String,
         newDocId: String,
     ) = lifetime.owned {
-        // The relink's transaction copies the old document's metadata onto the new id, as a bake's
-        // does: the user says the file is that document, so its metadata follows it. The old one is
-        // superseded, which only a rescan projects; relinkAndRescan runs both under the lock. Its
-        // report is null when the relink stands but the rescan failed (logged); the last stays.
-        val report =
-            coordinator.relinkAndRescan(
-                oldDocId,
-                newDocId,
-                RelinkInheritanceUpgrade.alongsideRelink(oldDocId, newDocId),
-            )
+        // The relink's fold carries the old document's metadata onto the new id and marks the old
+        // one superseded, which only a rescan projects; commitAndRescan runs both under the lock.
+        // Its report is null when the relink stands but the rescan failed (logged); the last stays.
+        val report = coordinator.commitAndRescan(listOf(PendingOp.relink(oldDocId, newDocId)))
         if (report != null) rescanned(report)
     }
 
