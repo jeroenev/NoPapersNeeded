@@ -126,7 +126,8 @@ internal class Simulation(
         SimGenerator(
             random,
             this,
-            OpKind.entries.filterNot { it in config.disabled },
+            // With other replicas, the sync tool delivers what another device wrote; alone, the generator does.
+            OpKind.entries.filterNot { it in config.disabled || (it.fromAnotherDevice && (setup?.peers ?: 1) > 1) },
             labelBase = setup?.labelBase ?: 0,
             remoteDevice = setup?.let { "remote-device-${it.name}" } ?: "remote-device",
         )

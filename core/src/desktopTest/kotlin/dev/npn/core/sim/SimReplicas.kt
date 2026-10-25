@@ -103,6 +103,8 @@ internal class ReplicaSetup(
     val known: HashMap<String, ByteArray>,
     val trace: MutableList<String>,
     val labelBase: Int,
+    /** How many replicas the run has: with more than one, the sync tool is the other devices. */
+    val peers: Int,
 )
 
 /** The world's log, each entry naming the replica it came from. */
@@ -178,6 +180,7 @@ internal class SyncSimulation(
                         known,
                         trace,
                         LABEL_STRIDE * index,
+                        sync.replicas,
                     ),
             )
         val watched = if (sync.watched[index]) SimWatchedFolder(name, world.clock::nowMillis, ::accounted) else null

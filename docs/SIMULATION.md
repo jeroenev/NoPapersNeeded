@@ -145,8 +145,9 @@ kept 5 days. ci.yml keeps running only the CI-sized test above, as part of `:cor
   `WatchedFolderImporter`) and in-memory thumbnails.
 - `SimGenerator` picks an `OpKind` by weight: the app's writes through the facets, rescans, OCR
   completions, several operations at once (with external events landing while they run), an
-  operation left running in the background, time steps, every external event, faults, crashes, close
-  and reopen, and dropping the index. `ExtraPlanner` adds bake in place, multi-page imports and split,
+  operation left running in the background, time steps, every external event (another device's
+  journal object or OCR sidecar only when the replica runs alone: with others, the sync tool
+  delivers theirs), faults, crashes, close and reopen, and dropping the index. `ExtraPlanner` adds bake in place, multi-page imports and split,
   the relink of a missing document to other bytes, auto-match rule saves, deletes and toggles (whose
   field sets drive the storage-path rule, which moves documents on every replica), the watched folder
   (new, slowly written, known, overwritten and removed files, and sweeps, beside the importer each

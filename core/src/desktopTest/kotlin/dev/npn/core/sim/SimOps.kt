@@ -70,6 +70,8 @@ enum class OpKind(
     EXT_BACKUP(1),
     EXT_RESTORE_BACKUP(1),
     EXT_SYNC_TEMP(2),
+
+    // Another device's writes, as a sync tool delivers them: only when this replica runs alone.
     EXT_REMOTE_OBJECT(3),
     EXT_REMOTE_SIDECAR(2),
 
@@ -79,6 +81,9 @@ enum class OpKind(
     CLOSE_REOPEN(1),
     DROP_INDEX(1),
 }
+
+/** Whether this is another device's write stood in for: the sync tool's job when there are other replicas. */
+val OpKind.fromAnotherDevice: Boolean get() = this == OpKind.EXT_REMOTE_OBJECT || this == OpKind.EXT_REMOTE_SIDECAR
 
 /** A step the generator planned: what the trace says it is, and what it does. */
 internal sealed interface Planned {
