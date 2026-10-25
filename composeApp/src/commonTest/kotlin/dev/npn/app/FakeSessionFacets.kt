@@ -203,8 +203,10 @@ class FakeMaintenanceFacade : MaintenanceFacade {
     var splitOutcome: SplitOutcome = SplitOutcome.Done(emptyList())
     var rebuilds = 0
     var rebuildOutcome: RebuildOutcome = RebuildOutcome.Rebuilt
+    var failRebuild: (() -> Nothing)? = null
 
     override suspend fun rebuildIndex(): RebuildOutcome {
+        failRebuild?.invoke()
         rebuilds++
         return rebuildOutcome
     }
@@ -229,16 +231,6 @@ class FakeMaintenanceFacade : MaintenanceFacade {
     ): SplitOutcome {
         splits += docId to segments
         return splitOutcome
-    }
-
-    var rebuilds = 0
-    var rebuildOutcome: RebuildOutcome = RebuildOutcome.Done
-    var failRebuild: (() -> Nothing)? = null
-
-    override suspend fun rebuildIndex(): RebuildOutcome {
-        failRebuild?.invoke()
-        rebuilds++
-        return rebuildOutcome
     }
 }
 

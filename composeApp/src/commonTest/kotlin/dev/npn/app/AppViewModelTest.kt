@@ -6,7 +6,6 @@ import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.nav.QueueStatus
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.app.QueuedWork
-import dev.npn.core.app.RebuildFailure
 import dev.npn.core.app.RebuildOutcome
 import dev.npn.core.app.WorkStage
 import dev.npn.core.app.WorkState
@@ -158,7 +157,7 @@ class AppViewModelTest : MainDispatcherTest() {
 
             vm.rebuildIndex()
             runCurrent()
-            maintenance.rebuildOutcome = RebuildOutcome.Failed(RebuildFailure.NOT_COMPLETED)
+            maintenance.rebuildOutcome = RebuildOutcome.Failed(WriteBlock.JOURNAL_DAMAGED)
             vm.rebuildIndex()
             runCurrent()
             maintenance.failRebuild = { error("disk full") }

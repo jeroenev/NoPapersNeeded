@@ -6,7 +6,6 @@ import dev.npn.app.di.LibraryUnavailableException
 import dev.npn.app.di.OpenFailureReason
 import dev.npn.app.platform.createLibraryFolder
 import dev.npn.app.ui.common.MessagesViewModel
-import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.asUiText
 import dev.npn.app.ui.common.clearThumbCache
@@ -14,7 +13,6 @@ import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.nav.QueueStatus
 import dev.npn.app.ui.nav.queueStatus
 import dev.npn.core.app.LibrarySession
-import dev.npn.core.app.RebuildFailure
 import dev.npn.core.app.RebuildOutcome
 import dev.npn.core.app.importAll
 import dev.npn.core.fs.ExternalSource
@@ -192,9 +190,10 @@ class AppViewModel(
     fun rebuildIndex() {
         val session = env.session.value ?: return
         launchReporting(Res.string.library_rebuild_failed) {
-            when (val outcome = session.maintenance.rebuildIndex()) {
-                RebuildOutcome.Done -> Unit
-                is RebuildOutcome.Failed -> message(outcome.reason.text())
+            // The banner keeps showing the block a failed rebuild leaves; the message says it did not finish.
+            when (session.maintenance.rebuildIndex()) {
+                RebuildOutcome.Rebuilt -> Unit
+                is RebuildOutcome.Failed -> message(uiText(Res.string.library_rebuild_not_completed))
             }
         }
     }
@@ -289,8 +288,3 @@ private fun Throwable.toOpenFailure(): OpenFailure =
             },
         details = reason(),
     )
-
-private fun RebuildFailure.text(): UiText =
-    when (this) {
-        RebuildFailure.NOT_COMPLETED -> uiText(Res.string.library_rebuild_not_completed)
-    }
