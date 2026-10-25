@@ -60,9 +60,10 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   `mise check` cover them; `mise test-fast` deliberately does not.
 - Single test class: `./gradlew :core:desktopTest --tests 'dev.npn.core.journal.OrSetTest'`.
 - Library simulation (docs/SIMULATION.md): CI runs a few seeds as part of `:core:desktopTest`.
-  Run a long one with `./gradlew :core:desktopTest --tests 'dev.npn.core.sim.LibrarySimulationTest'
-  -Dnpn.sim.seeds=500 -Dnpn.sim.steps=400`. Replay a failure with `-Dnpn.sim.seed=<seed>
-  -Dnpn.sim.steps=<steps>`, as its message prints.
+  Run a long one with `./gradlew --max-workers=8 :core:desktopTest --tests
+  'dev.npn.core.sim.LibrarySimulationTest*' -Dnpn.sim.seeds=500 -Dnpn.sim.steps=400` (the seeds are
+  dealt over eight test classes, which run in up to that many test JVMs at once). Replay a failure
+  with `-Dnpn.sim.seed=<seed> -Dnpn.sim.steps=<steps>`, as its message prints.
 - Build logic tests (`buildSrc`, e.g. the `checkLocalization` and `checkFieldTypeBranches`
   guards): `./gradlew :buildSrc:test`, and its source-only detekt run, `./gradlew :buildSrc:detekt`
   (the root `detekt` does not reach the included build). Neither is part of `check`; CI runs both

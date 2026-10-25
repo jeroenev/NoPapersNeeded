@@ -1,6 +1,7 @@
 # Library simulation
 
-`LibrarySimulationTest` (`core/src/desktopTest/kotlin/dev/npn/core/sim/`) runs two to four replicas
+The library simulation (`LibrarySimulationTest1` to `LibrarySimulationTest8` in
+`core/src/desktopTest/kotlin/dev/npn/core/sim/`, one test class per shard of the seeds) runs two to four replicas
 of one library, each a real session (the same `openSession` and `start()` the apps use) over its own
 in-memory folder and databases, with a file sync tool between the folders, all on one virtual clock,
 driven by seeded generators of operations. After each step it checks the library's invariants. At
@@ -17,21 +18,30 @@ simulation explores those schedules on purpose instead of pinning one per exampl
 
 ```
 # What CI runs (in :core:desktopTest): seeds 1..10, 250 steps each, about 35 s on a laptop.
-./gradlew :core:desktopTest --tests 'dev.npn.core.sim.LibrarySimulationTest'
+./gradlew :core:desktopTest --tests 'dev.npn.core.sim.LibrarySimulationTest*'
 
 # A long run: seeds 1..300, 400 steps each (or start elsewhere with -Dnpn.sim.firstSeed=), every
-# failing seed reported rather than the first three.
-./gradlew :core:desktopTest --tests 'dev.npn.core.sim.LibrarySimulationTest' -Dnpn.sim.seeds=300 -Dnpn.sim.steps=400 -Dnpn.sim.maxReported=300
+# failing seed reported rather than the first three of each shard.
+./gradlew --max-workers=8 :core:desktopTest --tests 'dev.npn.core.sim.LibrarySimulationTest*' -Dnpn.sim.seeds=300 -Dnpn.sim.steps=400 -Dnpn.sim.maxReported=300
 
 # Replay one seed (a failure prints this line with its seed and step count).
-./gradlew :core:desktopTest --tests 'dev.npn.core.sim.LibrarySimulationTest' -Dnpn.sim.seed=1234 -Dnpn.sim.steps=400
+./gradlew :core:desktopTest --tests 'dev.npn.core.sim.LibrarySimulationTest*' -Dnpn.sim.seed=1234 -Dnpn.sim.steps=400
 ```
+
+The seeds are dealt round-robin over eight test classes, `LibrarySimulationTest1` to
+`LibrarySimulationTest8`, and `core/build.gradle.kts` lets `:core:desktopTest` run up to eight test
+JVMs at once (half the processors, within `--max-workers`), so a long run takes about an eighth of
+the time on a machine with the cores. Within a JVM the seeds run one after the other: a seed is one
+single-threaded run, and seeds sharing a JVM slow each other down far more than they share the
+machine (the JVM's own shared structures, from the coroutine library's debug ids to the stack walks
+Room does on every connection it hands out). A replay of one seed runs in the shard it falls to;
+the other classes report that no seed fell to them and pass.
 
 `core/build.gradle.kts` forwards `npn.sim.seed`, `npn.sim.seeds`, `npn.sim.firstSeed`,
 `npn.sim.steps`, `npn.sim.traceDir`, `npn.sim.replicas` (force the number of replicas; 1 runs one
-replica with every operation and no sync) and `npn.sim.maxReported` to the test JVM, given as `-D` or `-P`. A changed value reruns the test task
+replica with every operation and no sync) and `npn.sim.maxReported` (per shard) to the test JVMs, given as `-D` or `-P`. A changed value reruns the test task
 instead of reusing its cached result. With `-Dnpn.sim.traceDir=<dir>`, every seed writes its whole
-trace to `<dir>/seed-<n>.txt`, whether it fails or not. The test prints each seed's real time, and
+trace to `<dir>/seed-<n>.txt`, whether it fails or not. Each shard prints its seeds' real time, and
 any step that took over a second.
 
 A seed decides everything the simulation chooses: the replicas and their storage, the sync tool's
@@ -63,10 +73,14 @@ the library.
 `.github/workflows/simulation.yml` runs the simulation nightly on fresh seeds (each night the next
 `NIGHTLY_SEEDS` from 1000 on, by run number, so it never repeats CI's seeds 1..10), and on demand
 with `seeds`, `steps` and `first_seed` inputs. `.github/scripts/simulation-seeds.sh` picks the seeds.
-A seed of 400 steps costs about 6.6 s on a laptop (300 seeds took 33 minutes) and, at an assumed
-1.5 times that on a two-core hosted runner, about 10 s there, so the nightly 60 seeds of 400 steps take
-about ten minutes of simulation, under a 30-minute step timeout and a 40-minute job timeout: some 15
-Actions minutes a night with checkout and the build, about 450 a month. When a seed fails, the run uploads every seed's trace and the test report as an artifact
+A seed of 400 steps costs about 9.6 s on a laptop core, and the eight shards run on eight cores at
+that speed each (400 seeds took 9 minutes). A two-core hosted runner gets one test JVM, so at an
+assumed 1.5 times the laptop's cost per seed, about 15 s, the nightly 60 seeds of 400 steps take about
+fifteen minutes of simulation, under a 30-minute step timeout and a 40-minute job timeout: some 20
+Actions minutes a night with checkout and the build, about 600 a month. The workflow's `--tests`
+filter must name the shards, `dev.npn.core.sim.LibrarySimulationTest*`: the exact class name
+matches nothing since the seeds were dealt over eight classes, and Gradle fails a filter that
+matches no test. When a seed fails, the run uploads every seed's trace and the test report as an artifact
 kept 5 days. ci.yml keeps running only the CI-sized test above, as part of `:core:desktopTest`.
 
 ## How it works

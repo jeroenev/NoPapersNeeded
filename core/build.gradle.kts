@@ -115,6 +115,14 @@ tasks.withType<Test>().configureEach {
     }
 }
 
+// The simulation's seeds are dealt over eight test classes (LibrarySimulationTest1..8) so a long
+// run spreads over this many test JVMs, each running its seeds one after the other: seeds sharing
+// a JVM slow each other down far more than they share the machine (docs/SIMULATION.md). Gradle
+// also caps the forks at --max-workers.
+tasks.withType<Test>().matching { it.name == "desktopTest" }.configureEach {
+    maxParallelForks = (Runtime.getRuntime().availableProcessors() / 2).coerceIn(1, 8)
+}
+
 // Mutation testing over the desktop target (docs/MUTATION_TESTING.md): on demand and in the weekly
 // mutation.yml, never in `check`. -Pnpn.mutation.packages=a.b,c.d picks other packages (each with
 // its subpackages), -Pnpn.mutation.threads the number of test processes.

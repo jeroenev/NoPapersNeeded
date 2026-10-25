@@ -742,7 +742,7 @@ internal class Simulation(
             appendLine("Simulation failed at step ${world.step} (t=${world.scheduler.currentTime}ms) $label: $message")
             appendLine()
             appendLine(
-                "Replay: ./gradlew :core:desktopTest --tests 'dev.npn.core.sim.LibrarySimulationTest' " +
+                "Replay: ./gradlew :core:desktopTest --tests 'dev.npn.core.sim.LibrarySimulationTest*' " +
                     "-Dnpn.sim.seed=${config.seed} -Dnpn.sim.steps=${config.steps}",
             )
             appendLine("Config: $config")

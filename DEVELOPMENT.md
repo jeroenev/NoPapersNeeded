@@ -172,7 +172,8 @@ Regression coverage follows the failure modes from the code audit:
   seeded hints, scan phases and relink reasons, including text that the localization key guard
   cannot inspect.
 
-`LibrarySimulationTest` is a deterministic simulation of two to four replicas of one library. It
+The library simulation (`LibrarySimulationTest1` to `LibrarySimulationTest8`, one class per shard
+of the seeds) is a deterministic simulation of two to four replicas of one library. It
 runs real sessions over in-memory library folders, with a seeded file sync tool between them, on
 virtual time, with seeded operations, external file changes, faults and crashes. It checks
 invariants after every step, compares each replica's index with a rebuilt one at rest, and after a
