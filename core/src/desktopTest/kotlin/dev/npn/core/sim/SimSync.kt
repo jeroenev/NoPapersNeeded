@@ -3,8 +3,6 @@ package dev.npn.core.sim
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
-import dev.npn.core.journal.JournalPath
-import dev.npn.core.journal.JournalPaths
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.delay
 import java.time.Instant
@@ -352,7 +350,7 @@ internal class SimSync(
                 (version.mtime == localMtime && peers[remote].deviceShort > peers[to].deviceShort)
         val loser = if (remoteWins) peers[to] else peers[remote]
         val copy = conflictName(path, loser.deviceShort)
-        if (writeOnceName(path)) {
+        if (SimNames.isWriteOnce(path)) {
             violations += "step ${world.step}: conflicting versions of the write-once '$path' " +
                 "(${sha256Bytes(current).take(ID)} on ${peers[to].name}, " +
                 "${sha256Bytes(version.bytes!!).take(ID)} from ${peers[remote].name})"
@@ -545,7 +543,7 @@ internal class SimSync(
                         "${peers[i].name}=${hashes[slot]} (tool has $held ${recorded?.vector}$busy)"
                     } +
                     // A journal object some device keeps writing says what it keeps deciding.
-                    if (isJournalObject(it)) {
+                    if (SimNames.isJournalObject(it)) {
                         "\n    holding: " +
                             maps.firstNotNullOf { files -> files[it] }.decodeToString().trim()
                     } else {
@@ -560,15 +558,8 @@ internal class SimSync(
     private fun synced(path: String): Boolean = !NpnPaths.isSyncTemp(NpnPaths.fileName(path))
 
     private fun tempName(path: String): String {
-        val name = NpnPaths.fileName(path)
-        val temp =
-            when (options.tool) {
-                SyncTool.SYNCTHING -> ".syncthing.$name.tmp"
-                SyncTool.NEXTCLOUD -> ".$name.~${random.nextInt(0x10000, 0xfffff).toString(16)}"
-                SyncTool.RESILIO -> "$name.!sync"
-            }
-        val dir = NpnPaths.parentDir(path)
-        return if (dir.isEmpty()) temp else "$dir/$temp"
+        val nonce = if (options.tool == SyncTool.NEXTCLOUD) random.nextInt(NONCE_FROM, NONCE_UNTIL) else 0
+        return SimNames.syncTemp(path, options.tool, nonce)
     }
 
     private fun conflictName(
@@ -613,24 +604,12 @@ internal class SimSync(
         private const val FLUSH_ROUNDS = 12
         private const val BUSY_POLL_MILLIS = 500L
         private const val LONG_WAIT_MILLIS = 15L * 60_000
+        private const val NONCE_FROM = 0x10000
+        private const val NONCE_UNTIL = 0xfffff
         private val SYNCTHING_TIME = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC)
         private val NEXTCLOUD_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HHmmss").withZone(ZoneOffset.UTC)
 
         fun isPdf(path: String): Boolean = NpnPaths.indexable(FileMeta(path, NpnPaths.fileName(path), 1, 0, false))
-
-        fun isJournalObject(path: String): Boolean =
-            JournalPaths.classify(path).let {
-                it is JournalPath.ObjectV2 ||
-                    it is JournalPath.SnapshotV2
-            }
-
-        /** Names the library writes once and never again: two different versions of one is a broken invariant. */
-        fun writeOnceName(path: String): Boolean =
-            isJournalObject(path) ||
-                (
-                    path.endsWith(".json") &&
-                        (path.startsWith("${NpnPaths.OCR_DIR}/") || path.startsWith("${NpnPaths.DEVICES_DIR}/"))
-                )
 
         /** Whether every folder above [path] is a folder (or not there yet) on [fs], so a file can be put there. */
         fun placeable(

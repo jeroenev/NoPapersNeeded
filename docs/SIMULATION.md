@@ -127,6 +127,11 @@ kept 5 days. ci.yml keeps running only the CI-sized test above, as part of `:cor
   and sync-tool temporary files.
 - `SimFaults` fails any filesystem method once or N times, at any path or under a prefix, before
   the call takes effect or after it landed.
+- `SimNames` is the one place the outside world's names come from, derived from `NpnPaths` and
+  `JournalPaths`: a sync tool's temporary name (checked against `NpnPaths.isSyncTemp`), what is a
+  journal object, and what the library writes once. `LibraryFileSystemContractTest` runs one
+  contract over `JvmLibraryFileSystem` and `InMemoryLibraryFileSystem`, so the fake cannot drift
+  from the real filesystem silently.
 - `SimWorld` puts all time on one `TestCoroutineScheduler`. The sessions' scopes, their computation
   dispatcher (`SessionDeps.computation`), the watch's time source, Room's query dispatcher, the sync
   tool and every operation run on one `SimDispatcher` over a `StandardTestDispatcher`. `EpochClock`

@@ -545,15 +545,28 @@ internal class SimGenerator(
         val beside = s.live.pickOrNull()?.relPath ?: pathIn(random.pick(DIRS), pickName())
         val bucket = "${NpnPaths.JOURNAL_DIR}/objects-v2-${random.pick(BUCKETS)}"
         val dir = if (random.chance(30)) bucket else NpnPaths.parentDir(beside)
-        val name = NpnPaths.fileName(beside)
-        val temp =
+        val path =
             when (random.nextInt(4)) {
-                0 -> ".syncthing.$name.tmp"
-                1 -> "~syncthing~$name.tmp"
-                2 -> ".$name.~${random.nextInt(0x10000, 0xfffff).toString(16)}"
-                else -> "$name.!sync"
+                0 -> {
+                    SimNames.syncTemp(pathIn(dir, NpnPaths.fileName(beside)), SyncTool.SYNCTHING)
+                }
+
+                1 -> {
+                    SimNames.syncTemp(pathIn(dir, NpnPaths.fileName(beside)), SyncTool.SYNCTHING, older = true)
+                }
+
+                2 -> {
+                    SimNames.syncTemp(
+                        pathIn(dir, NpnPaths.fileName(beside)),
+                        SyncTool.NEXTCLOUD,
+                        random.nextInt(0x10000, 0xfffff),
+                    )
+                }
+
+                else -> {
+                    SimNames.syncTemp(pathIn(dir, NpnPaths.fileName(beside)), SyncTool.RESILIO)
+                }
             }
-        val path = pathIn(dir, temp)
         syncTemps += path
         return Planned.Control("external: sync tool writes '$path'", instant = true) {
             sim.fs.externalWriteAtomic(path, SimPdf.bytes("partial").copyOf(PARTIAL))

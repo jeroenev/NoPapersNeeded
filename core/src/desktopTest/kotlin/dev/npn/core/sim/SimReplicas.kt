@@ -3,7 +3,9 @@ package dev.npn.core.sim
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.index.WriteBlock
+import dev.npn.core.journal.EventDecoderRegistry
 import dev.npn.core.journal.Hlc
+import dev.npn.core.journal.JournalOp
 import dev.npn.core.util.NpnLog
 import kotlinx.coroutines.test.TestCoroutineScheduler
 import java.io.File
@@ -242,7 +244,9 @@ internal class SyncSimulation(
     ): List<String> =
         member.replica.indexDb
             .rows("SELECT canonicalJson FROM metadata_events WHERE operation = 'relink' AND documentId = '$hash'")
-            .mapNotNull { (json) -> json?.let { RELINK_TARGET.find(it)?.groupValues?.get(1) } }
+            .mapNotNull { (json) ->
+                json?.let { (EventDecoderRegistry.decodeStored(it).op as? JournalOp.Relink)?.newDoc }
+            }
 
     val tool =
         SimSync(
@@ -377,8 +381,8 @@ internal class SyncSimulation(
             val own = path in member.fs.appPublished
             val problem =
                 when {
-                    SimSync.isJournalObject(path) -> "deleted the journal object '$path'"
-                    SimSync.writeOnceName(path) && !own -> "deleted '$path', which another device wrote"
+                    SimNames.isJournalObject(path) -> "deleted the journal object '$path'"
+                    SimNames.isWriteOnce(path) && !own -> "deleted '$path', which another device wrote"
                     else -> null
                 }
             problem?.let { fail(member, "${member.name} $it") }
@@ -640,6 +644,5 @@ internal class SyncSimulation(
         const val HLC_PHYSICAL = 2
         const val HLC_COUNTER = 3
         const val HLC_DEVICE = 4
-        val RELINK_TARGET = Regex("\"newDoc\":\"([0-9a-f]{64})\"")
     }
 }
