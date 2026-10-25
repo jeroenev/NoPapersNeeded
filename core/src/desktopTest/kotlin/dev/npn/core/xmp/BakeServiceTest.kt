@@ -300,6 +300,51 @@ class BakeServiceTest {
             noTempLitter().shouldBeTrue()
         }
 
+    /**
+     * The document's file moved elsewhere between the bake's last look and its move aside (the app's
+     * own path move, a sync tool, the user): the bake touched nothing, so it is refused with a
+     * warning, not an error, and the file is where the other hand put it.
+     */
+    @Test
+    fun aFileMovedAwayRightBeforeTheSwapIsARefusedBakeNotAnError() =
+        runTest {
+            val original = fixturePdf()
+            fs.writeBytesOnce("doc.pdf", original)
+            val oldSha = fs.sha256("doc.pdf")
+            val log = RecordingLog()
+            val racing =
+                object : LibraryFileSystem by fs {
+                    override suspend fun move(
+                        fromRelPath: String,
+                        toRelPath: String,
+                    ) {
+                        if (fromRelPath == "doc.pdf" &&
+                            !fs.exists("elsewhere/doc.pdf")
+                        ) {
+                            fs.move("doc.pdf", "elsewhere/doc.pdf")
+                        }
+                        fs.move(fromRelPath, toRelPath)
+                    }
+                }
+            var relinkCalled = false
+
+            assertFailsWith<Exception> {
+                BakeService(racing, io, log).bakeInPlace("doc.pdf", oldSha, xmp(tags = listOf("t"))) { _, _ ->
+                    relinkCalled = true
+                }
+            }
+
+            relinkCalled.shouldBeFalse()
+            fs.readBytes("elsewhere/doc.pdf") shouldBe original
+            fs.exists("doc.pdf").shouldBeFalse()
+            noRecoveryLitter().shouldBeTrue()
+            log.entries.none { it.level == NpnLog.Level.ERROR }.shouldBeTrue()
+            log.entries
+                .any { it.level == NpnLog.Level.WARN && "moved away before its bake" in it.message }
+                .shouldBeTrue()
+            log.entries.none { it.error is IllegalStateException }.shouldBeTrue()
+        }
+
     @Test
     fun aFailedRelinkLeavesAnExternalReplacementAloneAndKeepsTheOriginalForRecovery() =
         runTest {
