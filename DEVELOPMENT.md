@@ -164,8 +164,7 @@ Regression coverage follows the failure modes from the code audit:
 - `OlderJournalFixtureTest` reads frozen object and older snapshot bytes from
   `core/src/desktopTest/resources/journal-compatibility/`, tests both arrival orders, and rebuilds
   the index after reconciliation. Do not regenerate these fixtures with the current encoders.
-  `LibraryOpenTest` also checks that a storage-v1 segment blocks writes; database migration tests
-  use exported schemas.
+  Database migration tests use exported schemas.
 - `WatchedFolderImporterTest`, `StoragePathRuleIntegrationTest` and `OcrPipelineNoEngineTest`
   cover a watched folder inside the library, storage without relocation, and installing an OCR
   engine after an earlier run had none. The UI wording tests cover every translated locale for
@@ -457,8 +456,8 @@ publication with atomic create-without-replacement semantics, supported by all c
 desktop and Android libraries. A library on storage that cannot guarantee this refuses
 to open, at every open and with its own message, rather than falling back to another storage
 format.
-A storage-v1 segment (`journal/<deviceId>/<seq>.jsonl`) is no longer read, and blocks writes
-until it is gone. The `devices/` markers tie each device id to the one installation that uses it, so a
+A storage-v1 segment (`journal/<deviceId>/<seq>.jsonl`), a format no released build ever wrote, is
+no longer read. The `devices/` markers tie each device id to the one installation that uses it, so a
 restored or cloned installation takes a fresh id rather than writing under another's name.
 
 ### Android storage

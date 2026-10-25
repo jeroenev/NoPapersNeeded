@@ -247,7 +247,6 @@ internal class MetadataAccumulator(
         val entries = fs.listAllUnder(NpnPaths.JOURNAL_DIR)
         validator.newerStore(entries)?.let { fail(WriteBlock.NEWER_FORMAT, it) }
         validator.invalidObjectPath(entries)?.let { fail(WriteBlock.JOURNAL_DAMAGED, it) }
-        validator.storageV1Segment(entries)?.let { fail(WriteBlock.JOURNAL_DAMAGED, it) }
         val previous = dao.allSources()
         val files = entries.filter { !it.isDirectory }.associateBy { it.relPath }
         val ingest = ingestFiles(files.values)

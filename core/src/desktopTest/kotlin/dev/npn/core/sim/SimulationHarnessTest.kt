@@ -11,7 +11,6 @@ import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.util.EpochClock
 import dev.npn.core.util.NpnLog
-import dev.npn.core.xmp.BakeDisplacedException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldNotContain
@@ -127,47 +126,6 @@ class SimulationHarnessTest {
         }
 
     /**
-     * A bake undone while a third file sits at its path is a race with whoever wrote that file: the
-     * outside world (another process, the sync tool) may, the app may not, since its own import,
-     * rename, restore or storage-path move taking the freed name is one the bake lock should have
-     * kept out. Whoever made the last write there decides, even when that file is gone by the time
-     * the failure is logged (the bake looks at the path again before it logs).
-     */
-    @Test
-    fun aBakeDisplacedByAFileTheAppWroteFailsTheRun() =
-        runTest {
-            fun Simulation.displaceABake(
-                byApp: Boolean,
-                goneByTheLog: Boolean = false,
-            ) {
-                val bytes = SimPdf.bytes("displacing", "z", PLANTED_SIZE + 2)
-                if (byApp) {
-                    world.read("the app writes at the bake's path") { fs.writeBytesOnce(DISPLACED, bytes) }
-                } else {
-                    fs.externalWriteAtomic(DISPLACED, bytes)
-                }
-                if (goneByTheLog) fs.externalMove(DISPLACED, "moved away.pdf")
-                world.log.log(
-                    NpnLog.Level.WARN,
-                    "Restoring $DISPLACED after a failed bake failed; the original is kept",
-                    BakeDisplacedException(DISPLACED, "$DISPLACED holds another file"),
-                )
-            }
-            for (goneByTheLog in listOf(false, true)) {
-                Simulation(testScheduler, config(), afterStep = { step ->
-                    if (step == 1) displaceABake(byApp = false, goneByTheLog = goneByTheLog)
-                }).run()
-                val failure =
-                    shouldThrow<SimFailure> {
-                        Simulation(testScheduler, config(), afterStep = { step ->
-                            if (step == 1) displaceABake(byApp = true, goneByTheLog = goneByTheLog)
-                        }).run()
-                    }
-                failure.message shouldContain "a bug was logged"
-            }
-        }
-
-    /**
      * A trash moves the document's file before its commit stamps the trash, and the stamp is an HLC,
      * which a device whose clock runs ahead pushes past this one's clock: the outside world putting
      * the bytes back after the move counts as their return from outside, though it is earlier than
@@ -244,7 +202,6 @@ class SimulationHarnessTest {
         }
 
     private companion object {
-        const val DISPLACED = "baked.pdf"
         const val HARNESS_SEED = 7L
         const val STEPS = 30
         const val PLANTED_SIZE = 900

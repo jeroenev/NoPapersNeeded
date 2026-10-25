@@ -456,12 +456,11 @@ Kept by `BakeService`, `BakeRelink`, `DocContentFacadeImpl` and `FoldedState`:
   (`Indexer.removeSupersededOriginals`): a file under a recovery name whose bytes a relink
   superseded, while the document they became is in the library with its bytes at its path, and
   only while the file still holds those bytes. Never another file of them, and never the
-  successor's, so no last copy of a document goes.
-  From the original's move aside to the relink, the bake holds its path (`BakingPaths`): a rescan
-  then may take the original under its recovery name for the document's move and let the path go,
-  and no path move of the app (`DocumentPaths`) takes it meanwhile, as a document whose intent
-  names it would. Bakes run one at a time, each whole, under the session's `BakeLock`; every bake of a path writes
-  the same temporary file, and its relink must name the bytes it installed. A trash or delete for
+  successor's, so no last copy of a document goes. Between the original's move aside and the
+  baked bytes' move in, the path is free for a moment; whoever takes it then, the bake's undo
+  leaves that file alone and the original under its recovery name (an accepted race, logged as a
+  warning). Bakes run one at a time, each whole, under the session's `BakeLock`; every bake of a
+  path writes the same temporary file, and its relink must name the bytes it installed. A trash or delete for
   good holds that lock too, so it waits for a bake and then acts on the document the bake made
   (`changeLifecycle` follows the relink).
 - **A relink target inherits its chain.** A relink (a bake, or a missing document relinked to the
@@ -487,9 +486,9 @@ Kept by `BakeService`, `BakeRelink`, `DocContentFacadeImpl` and `FoldedState`:
 
 **Formats.** Every transaction is one storage-v2 object,
 `.npn/journal/objects-v2-<xx>/<sha256>.jsonl`, named by the SHA-256 of its bytes, with a fresh
-actor id per transaction. A per-device v1 segment, `.npn/journal/<deviceId>/<seq>.jsonl`, is no
-longer read: a reconcile that finds one blocks writes (`WriteBlock.JOURNAL_DAMAGED`) rather than
-fold the journal without it. There is no fallback format. Beside its objects a bucket may hold their staging files and a sync tool's file for
+actor id per transaction. A per-device v1 segment, `.npn/journal/<deviceId>/<seq>.jsonl`, a format
+no released build ever wrote, is no longer read and is passed over like any unknown file. There is
+no fallback format. Beside its objects a bucket may hold their staging files and a sync tool's file for
 one still in transfer (`NpnPaths.isSyncTemp`: Syncthing, Nextcloud and ownCloud, Resilio), which a
 reconcile passes over and never deletes; any other name there fails the pass. A staging file a
 crash left behind, on any installation, is the rescan's `TempFileSweep`'s to delete once a day old.
