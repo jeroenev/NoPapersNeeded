@@ -99,7 +99,7 @@ internal class Simulation(
     /** Changes the copy of the files the rebuild oracle opens: the harness's own tests plant a difference. */
     private val tamperWithRebuild: (InMemoryLibraryFileSystem) -> Unit = {},
     /** Set when this is one replica of several ([SyncSimulation]): what it shares with them, and its own parts. */
-    private val setup: ReplicaSetup? = null,
+    setup: ReplicaSetup? = null,
 ) {
     val world = setup?.world ?: SimWorld(scheduler)
     private val random = setup?.random ?: Random(config.seed)
