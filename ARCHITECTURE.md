@@ -89,7 +89,7 @@ One line per package. The rules each package enforces are in section 6.
 | `core.app` | The public session API and the orchestrators behind it. One contract file per concept: `LibrarySession.kt`, `Documents.kt`, `History.kt`, `Metadata.kt`, `FieldRegistry.kt`, `Ingest.kt`, `Ocr.kt`, `LibrarySettings.kt`, `Maintenance.kt`, `WorkFacade.kt`, `DocContentFacade.kt`, `Filters.kt`. Implementations: `LibrarySessionImpl`, `SessionGraph`, `SessionOpening.kt`, `MetadataWriterImpl`, `DocLifecycleImpl` (with its pure `LifecyclePlan`), `OcrFacadeImpl`, `MaintenanceFacadeImpl`, `SessionWork`, `JournalReviewConfig`, `BakeRelink`. |
 | `core.app.aiedit` | The AI edit engine over the facets: `AiEditRun`, `AiEditQueue`, `AiAutoEnricher`, `AiEditReview.kt` (`ReviewProjector`, `ReviewApply`), `SuggestionRunner`. |
 | `core.journal` | The metadata journal: `JournalEvent`, `JournalOp`, `PendingOp`; `ContentAddressedJournalWriter`; `JournalPaths`; the readers for v2 objects and snapshots (`JournalSourceReaders`); `JournalCodec`; `Hlc`, `HlcWatermarkAllocator`; `SnapshotFormat` (the compaction snapshots earlier builds wrote, read and never written); `EventCopies` (two copies of one event); the fold, `FoldedState`. |
-| `core.index` | The rebuildable index and its maintenance. The executor: `JournalCoordinator` and its state machine `WriterState`. The pure decisions it and its helpers carry out: `RescanDecision`, `FoldLifecycle`, `ImportDecision`, `PassDecision`. The effects: `Indexer`, `MetadataAccumulator`, `FoldProjection`, `SourceSetValidator`, `ImportService`, `DuplicateResolver`, `SplitService`, `ScanReport`, `DeviceIdentity`, `DocumentPathReconciler`, `ExternalDocumentMoves`. |
+| `core.index` | The rebuildable index and its maintenance. The executor: `JournalCoordinator`. The pure decisions it and its helpers carry out: `RescanDecision`, `FoldLifecycle`, `ImportDecision` (the row an import writes). The effects: `Indexer`, `MetadataAccumulator`, `FoldProjection`, `SourceSetValidator`, `ImportService`, `DuplicateResolver`, `SplitService`, `ScanReport`, `DeviceIdentity`, `DocumentPathReconciler`, `ExternalDocumentMoves`. |
 | `core.db` | Room entities and DAOs for the two databases: `NpnDatabase` (`index.db`) and `DeviceDatabase` (`device.db`). One file per DAO. `LegacyIndexTables` moves what older index schemas held into the journal or `device.db`. |
 | `core.fs` | `LibraryFileSystem` and its platform implementations; `NpnPaths` (the `.npn/` layout, path classification, the path-safety gate, every temporary file name); `TempFileSweep`; `ContentIdentity`, `HexEncoding`; `TrashOps`. |
 | `core.model` | `Document.kt` (`ReviewMode`, `SystemProperty`), `Field.kt` (`FieldType`, `FieldDef`, `FieldKeys` with the seeds and their versioned upgrade), `FieldValues.kt` (canonical forms), `AppLanguages`. |
@@ -187,26 +187,25 @@ pass gathered, in plain files with no suspend, DAO, filesystem or mutex: `Rescan
 files a rescan hashes, and what each hashed file is to the rows: unchanged, refreshed, moved, a
 duplicate, a new document, an edit in place, or superseded bytes that get no row; which shown rows
 went missing), `FoldLifecycle` (a document's trash and delete flags as a fold projects them, a
-rescan's resurrection of a document whose own bytes are back, and which returns are settled enough
-to record), `ImportDecision` (an import's duplicate, return of a hidden document, refusal of
-superseded bytes, and the row it writes), `LifecyclePlan` in `core.app` (the events, row and file
-move of a trash, restore or delete for good) and `PassDecision` (how a reconcile takes what it read
-into the fold, and what the projection then needs). The classes around them gather the facts (a
-listing, hashes, rows, the fold) and carry the plans out; the coordinator is the one executor that
-holds the mutex and mutates the session's state: the live fold, the synced settings and the
-writer's state.
+rescan's resurrection of a document whose own bytes are back), `ImportDecision.row` (the row an
+import writes) and `LifecyclePlan` in `core.app` (the events, row and file move of a trash, restore
+or delete for good). The classes around them gather the facts (a listing, hashes, rows, the fold)
+and carry the plans out, deciding the few-line cases inline (an import's duplicate or refusal, how
+a reconcile extends or refolds the fold, which returns have settled); the coordinator is the one
+executor that holds the mutex and mutates the session's state: the live fold, the synced settings
+and the writer's state.
 
-**The writer's state machine.** `WriterState` is `Ready` (the projection is the fold of the journal
-the last pass read; writes are taken), `RefoldPending` (a pass was cut short; writes are taken, and
-the next reconcile or ingest refolds and reprojects in full) or `Blocked(reason)` (a pass failed;
-writes are refused with that `MetadataWriteBlocked` until a pass reads the journal whole). Every
-entry point runs as one `pass`, which ends in a `PassOutcome`: `Projected` (it read the journal
-whole and projected it, `adopt`) leads to `Ready` from any state; `Failed` leads to `Blocked` with
-the pass's own refusal, or `RECONCILE_FAILED`; `Unfinished` (cancelled, or a richer copy of an event
-only a full refold takes in) leads to `RefoldPending` and leaves a block standing. Every outcome
-but `Projected` drops the live fold. A pass of a write that is durable already (the projection of a
-commit, an ingest) fails into `Blocked` and rebuilds the projection from the store at once, which
-lifts the block when it succeeds; its cancellation changes nothing.
+**The writer's state.** Two flags beside the live fold, written only under the mutex: what blocks
+writes (a `MetadataWriteBlocked`, null while they are taken; `LibrarySession.writeBlock` mirrors
+it) and whether a full refold is owed. A fold, reconcile or rescan pass runs in `latching`: when it
+fails, writes are refused with the pass's own refusal, or `RECONCILE_FAILED`, and the live fold is
+dropped with a refold owed, so the next reconcile or ingest refolds and reprojects in full; a
+cancelled pass, or one that found a richer copy of an event only a full refold takes in, drops the
+fold and owes the refold without blocking. Any pass that reads the journal whole and projects it
+(`adopt`) lifts the block and settles the owed refold. The projection of a write that is durable
+already (a commit's, an ingest's) runs in `withDurableProjectionRecovery`: a failure blocks writes
+and rebuilds the projection from the store at once, which lifts the block when it succeeds; its
+cancellation changes nothing.
 
 Lock order: `BakeLock` (in-place bakes, trash and delete for good), then the coordinator's mutex.
 Nothing that holds the coordinator's, the storage-path applicator's or the rule applier's lock takes
@@ -346,7 +345,7 @@ the short list of these that a change must never break; this section is the comp
 
 ### 6.2 Import and duplicates
 
-Kept by `ImportService`, which carries out what `ImportDecision` decides:
+Kept by `ImportService`:
 
 - An import is a duplicate only of a **live** document whose file holds the bytes. The size and
   mtime its row stored prove that, as they do for a rescan; a drifted stat means hashing the file,
@@ -554,7 +553,7 @@ at every open (SAF skips the probe: `LibraryFileSystem.publicationMayBeLost`).
 
 ### 6.7 Fold and projection
 
-Kept by `FoldedState`, `MetadataAccumulator`, `FoldProjection`, `Indexer`, `PassDecision`:
+Kept by `FoldedState`, `MetadataAccumulator`, `FoldProjection`, `Indexer`:
 
 - The fold is OR-set tags and HLC last-writer-wins registers; `FoldConvergencePropertyTest`
   property-tests its convergence.
@@ -569,11 +568,11 @@ Kept by `FoldedState`, `MetadataAccumulator`, `FoldProjection`, `Indexer`, `Pass
   column indexes every value; a document's FTS row is reached through `fts_keys`; the fold writes
   its metadata columns and `OcrPipeline` its text, and neither rewrites the other's.
 - `LIVE_DOCUMENT` in `core.db` is the one SQL predicate for what the library shows.
-- A pass that failed or was cut short drops the fold and leaves the writer `Blocked` or
-  `RefoldPending` (`WriterState`, section 4.3), so the next reconcile or ingest refolds and
+- A pass that failed or was cut short drops the fold and leaves the writer blocked or owing a
+  refold (`JournalCoordinator`, section 4.3), so the next reconcile or ingest refolds and
   reprojects in full (`recoverDurableProjection`) rather than build on what it had. A reconcile
   extends the live fold only with events it purely added; a wiped projection, a mutated source or a
-  richer copy of a stored event folds again in full (`PassDecision.foldStep`).
+  richer copy of a stored event folds again in full (`MetadataAccumulator.reconcile`).
 - A journal source is re-read only when its size or mtime moved; one applied before is then
   recorded again with its new fingerprint, which a reconcile pays for with a full refold even when
   only the mtime changed. A reconcile pass that holds a fold marks the projection reconciling until

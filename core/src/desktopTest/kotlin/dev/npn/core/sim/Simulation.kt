@@ -504,7 +504,7 @@ internal class Simulation(
      * Each (path, document) where a trashed document's own bytes may be back at its path (or the path
      * it was trashed from) while it was trashed less than RESTORE_SETTLE_MS ago, and something other
      * than this app put them there: the app records such a return only once the window has passed
-     * (FoldLifecycle.settledReturns), and until then a rescan shows the document for that scan only
+     * (JournalCoordinator.recordRestores), and until then a rescan shows the document for that scan only
      * and the next fold hides it again. That is legitimate in two cases:
      *
      * - another replica trashed it, and the sync tool has not delivered that device's move of the

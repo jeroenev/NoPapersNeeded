@@ -11,6 +11,7 @@ import dev.npn.core.journal.PublishedTransaction
 import dev.npn.core.util.EpochClock
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.SystemEpochClock
+import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
 import kotlinx.coroutines.CancellationException
@@ -129,10 +130,10 @@ internal class LifecycleDone(
  * state must therefore go through [foldedState] rather than assume it already exists.
  *
  * It is the session's one executor: the decisions are pure functions elsewhere ([RescanDecision],
- * [FoldLifecycle], [ImportDecision], [PassDecision], the lifecycle plans of `core.app`), and this
- * class alone holds the mutex, mutates the session's state (the live fold, the [WriterState], the
- * synced settings) and runs their effects. Every entry point runs as a [pass] of the state machine
- * [WriterState] documents; [writeBlock] shows where it stands.
+ * [FoldLifecycle], the lifecycle plans of `core.app`), and this class alone holds the mutex,
+ * mutates the session's state (the live fold, the write block and the refold it owes, the synced
+ * settings) and runs their effects. Every entry point is a pass that blocks writes when it fails
+ * ([latching], [withDurableProjectionRecovery]); [writeBlock] shows where it stands.
  *
  * This is the ONLY sanctioned journal write path (see AGENTS.md). The invariant is enforced at
  * the type level rather than by convention: [ContentAddressedJournalWriter] and this class are
@@ -159,18 +160,21 @@ internal class JournalCoordinator(
 ) {
     private val mutex = Mutex()
 
-    /** Where this writer stands between passes; only [transition] changes it, under [mutex]. */
-    private var writerState: WriterState = WriterState.Ready
-
     private val blockFlow = MutableStateFlow<WriteBlock?>(null)
 
     /**
-     * Why writes are refused now, null while they are taken: [WriterState.refusal] as every
-     * [transition] leaves it. Blocked from an open that found the journal not folding whole (the
-     * library opens read-only), or after any pass that failed; lifted by a pass that reads the
-     * journal whole.
+     * Why writes are refused now, null while they are taken: [blocked] as the last pass left it.
+     * Blocked from an open that found the journal not folding whole (the library opens read-only),
+     * or after any pass that failed; lifted by a pass that reads the journal whole.
      */
     val writeBlock: StateFlow<WriteBlock?> = blockFlow.asStateFlow()
+
+    /** What blocks writes, as [blockWrites] recorded it; null while they are taken. Set under [mutex]. */
+    private var blocked: MetadataWriteBlocked? = null
+        set(value) {
+            field = value
+            blockFlow.value = value?.block
+        }
 
     private var closed = false
 
@@ -207,6 +211,15 @@ internal class JournalCoordinator(
      */
     private var folded: FoldedState? = null
 
+    /**
+     * Set, with [folded] dropped, when a pass failed or was cut short, or when rebuilding the
+     * projection after a failure failed: that pass may have recorded sources it never folded or
+     * projected. A fold built while it is set is the store's whole, but the projection may lack them,
+     * so the next reconcile or ingest refolds and reprojects in full ([recoverDurableProjection])
+     * rather than build on what it had. Any pass that reads the journal whole ([adopt]) settles it.
+     */
+    private var refoldPending = false
+
     private val syncedSettings = SyncedSettings()
 
     fun settingFlow(key: String): Flow<String?> = syncedSettings.flow(key)
@@ -231,7 +244,7 @@ internal class JournalCoordinator(
         if (groups.all { group -> group.keys.any(syncedSettings::written) }) return true
         return locked {
             // Read under the lock: a pass failing meanwhile blocks writes, and that is a refusal.
-            if (writerState.refusal != null) return@locked false
+            if (blocked != null) return@locked false
             val current = foldedState()
             val held = current.settings()
             val ops =
@@ -264,13 +277,13 @@ internal class JournalCoordinator(
     suspend fun refreshState() =
         locked {
             runCatchingCancellable {
-                pass(OnFailure.BLOCK) {
+                latching {
                     when (val outcome = accumulator.reconcileOnOpen()) {
                         is OpenReconciliation.ProjectionCurrent -> {
                             folded = null
                             observeSourceHlc(outcome.maxHlc)
                             syncedSettings.seed(accumulator.loadStateOf(JournalOp.SettingSet.WIRE))
-                            transition(PassOutcome.Projected)
+                            blocked = null
                         }
 
                         is OpenReconciliation.Refolded -> {
@@ -280,7 +293,7 @@ internal class JournalCoordinator(
                 }
             }.getOrElse { failure ->
                 // The failed pass blocked writes, dropped the live fold and owes a full refold.
-                val block = writerState.refusal?.block
+                val block = blocked?.block
                 if (block == null || block == WriteBlock.NEWER_FORMAT || !indexer.hasDocuments()) throw failure
                 syncedSettings.seed(accumulator.loadStateOf(JournalOp.SettingSet.WIRE))
             }
@@ -290,35 +303,32 @@ internal class JournalCoordinator(
     suspend fun ingestObject(relPath: String) =
         locked {
             // The full path reads this object too.
-            if (writerState.refoldOwed) {
-                pass(OnFailure.BLOCK) { recoverDurableProjection() }
-                return@locked
-            }
-            pass(OnFailure.RECOVER) {
+            if (refoldPending) return@locked latching { recoverDurableProjection() }
+            withDurableProjectionRecovery {
                 // Fold before opening the transaction: loadState reads the events as they stand
                 // BEFORE this object is ingested, which is exactly the base its events apply onto.
                 val current = foldedState()
                 val staged = accumulator.readObject(relPath)
-                val step =
-                    if (staged == null) {
-                        ProjectionStep.Unchanged
-                    } else {
-                        indexer.projection {
-                            PassDecision.afterIngest(accumulator.record(staged)).also { step ->
-                                if (step !is ProjectionStep.Events) return@also
-                                step.events.forEach(current::apply)
-                                observeSourceHlc(current.maxHlc)
-                                indexer.refreshEvents(current, step.events)
-                            }
-                        }
+                var events: List<JournalEvent> = emptyList()
+                var refold = false
+                if (staged != null) {
+                    indexer.projection {
+                        val recorded = accumulator.record(staged)
+                        events = recorded.events
+                        refold = recorded.refold
+                        if (refold || events.isEmpty()) return@projection
+                        events.forEach(current::apply)
+                        observeSourceHlc(current.maxHlc)
+                        indexer.refreshEvents(current, events)
                     }
-                if (step == ProjectionStep.Whole) {
+                }
+                if (refold) {
                     // The object holds a richer copy of an event the live fold has: only a full
                     // refold takes it in, owed until it is done.
-                    transition(PassOutcome.Unfinished)
+                    dropFold()
                     recoverDurableProjection()
                 } else {
-                    syncedSettings.update(current, (step as? ProjectionStep.Events)?.events.orEmpty())
+                    syncedSettings.update(current, events)
                     // The projection now matches the enlarged source set; record that so the next
                     // open can reuse it instead of refolding.
                     accumulator.markReady(current.maxHlc)
@@ -327,40 +337,33 @@ internal class JournalCoordinator(
         }
 
     /** Strictly reconcile metadata before touching the document projection. */
-    suspend fun rescan(): ScanReport = locked { pass(OnFailure.BLOCK) { rescanFrom(foldedState()) } }
+    suspend fun rescan(): ScanReport = locked { latching { rescanFrom(foldedState()) } }
 
     /** Read the journal folder again and fold what changed in it. */
     suspend fun reconcileMetadata() =
         locked {
-            pass(OnFailure.BLOCK) {
-                if (writerState.refoldOwed) {
+            latching {
+                if (refoldPending) {
                     recoverDurableProjection()
                     return@locked
                 }
                 val reconciliation = accumulator.reconcile(folded)
-                val step = PassDecision.afterReconcile(reconciliation)
                 val current = reconciliation.state
                 if (current == null) {
-                    // ProjectionStep.Current: nothing on disk changed and this session has never
-                    // needed the fold. There is nothing to project, and replaying the journal just
-                    // to prove that is what made the periodic tick as expensive as a boot.
-                    transition(PassOutcome.Projected)
+                    // Nothing on disk changed and this session has never needed the fold. There is
+                    // nothing to project, and replaying the journal just to prove that is what made
+                    // the periodic tick as expensive as a boot.
+                    blocked = null
                     return@locked
                 }
                 adopt(current) {
                     // Bounded projection when reconcile only ADDED events onto the prior state;
                     // otherwise full reproject (source removed/invalidated, mutation, full refold,
-                    // first load).
-                    when (step) {
-                        is ProjectionStep.Events -> {
-                            indexer.refreshEvents(current, step.events)
-                        }
-
-                        ProjectionStep.Whole -> {
-                            indexer.refreshState(current)
-                        }
-
-                        ProjectionStep.Unchanged, ProjectionStep.Current -> {}
+                    // first load). Nothing read: nothing to project.
+                    if (reconciliation.incremental) {
+                        indexer.refreshEvents(current, reconciliation.newEvents)
+                    } else if (reconciliation.sourcesRead > 0) {
+                        indexer.refreshState(current)
                     }
                 }
             }
@@ -398,7 +401,7 @@ internal class JournalCoordinator(
         current: FoldedState,
         published: PublishedTransaction,
         preserveLifecycleDocs: Set<String> = emptySet(),
-    ) = pass(OnFailure.RECOVER) {
+    ) = withDurableProjectionRecovery {
         val local = accumulator.localSource(published)
         indexer.projection {
             recordWritten(current, local)
@@ -453,8 +456,7 @@ internal class JournalCoordinator(
      * Whether a commit would be taken now: false once [close] has run or while writes are blocked.
      * For a caller that only waits a refusal out, so a refusal is an answer rather than a failure.
      */
-    suspend fun canWrite(): Boolean =
-        withContext(dispatcher) { mutex.withLock { !closed && writerState.refusal == null } }
+    suspend fun canWrite(): Boolean = withContext(dispatcher) { mutex.withLock { !closed && blocked == null } }
 
     /**
      * Run [block] under the single-writer mutex: for a change to which file holds which hash that
@@ -607,7 +609,7 @@ internal class JournalCoordinator(
         current: FoldedState,
         published: PublishedTransaction,
     ): ScanReport =
-        pass(OnFailure.RECOVER) {
+        withDurableProjectionRecovery {
             recordWritten(current, accumulator.localSource(published))
             rescanFrom(current)
         }
@@ -627,7 +629,7 @@ internal class JournalCoordinator(
                 )
             }
         // Every document projected, from a fold built since any failed pass dropped the last one:
-        // [adopt] has left the writer ready.
+        // [adopt] has lifted any block and settled any owed refold.
         return report
     }
 
@@ -657,7 +659,8 @@ internal class JournalCoordinator(
         state: FoldedState,
         resurrected: List<Resurrected>,
     ) {
-        val returned = FoldLifecycle.settledReturns(resurrected, clock.nowMillis(), RESTORE_SETTLE_MS)
+        val settled = clock.nowMillis() - RESTORE_SETTLE_MS
+        val returned = resurrected.filter { it.hiddenAtMillis <= settled }
         val ops = returned.flatMap { state.restoreOps(it.docId, it.relPath, writeUndelete) }
         if (ops.isEmpty()) return
         log.runLogged("Recording the return of ${returned.joinToString { it.relPath }}") {
@@ -675,67 +678,65 @@ internal class JournalCoordinator(
 
     /** Refuse a write, with why ([MetadataWriteBlocked.block]), while a failed pass blocks them. */
     private fun ensureWritable() {
-        val blocked = writerState.refusal ?: return
-        throw MetadataWriteBlocked(blocked.block, "Metadata writes are disabled: ${blocked.message}")
+        val refusal = blocked ?: return
+        throw MetadataWriteBlocked(refusal.block, "Metadata writes are disabled: ${refusal.message}")
+    }
+
+    /** Block writes for [failure]: a pass's own refusal keeps its reason, any other failure is the pass's. */
+    private fun blockWrites(failure: Throwable) {
+        blocked = failure as? MetadataWriteBlocked
+            ?: MetadataWriteBlocked(WriteBlock.RECONCILE_FAILED, failure.reason())
     }
 
     /**
-     * Move the writer on by [outcome] ([WriterState.after]), the one place its state, the live fold's
-     * validity and [writeBlock] change. Every outcome but [PassOutcome.Projected] drops the live fold:
-     * the pass may have stopped between recording a source and folding or projecting it.
-     */
-    private fun transition(outcome: PassOutcome) {
-        writerState = writerState.after(outcome)
-        if (outcome != PassOutcome.Projected) folded = null
-        blockFlow.value = writerState.refusal?.block
-    }
-
-    /** What a pass that fails does beyond blocking writes; see [pass]. */
-    private enum class OnFailure {
-        /**
-         * A fold, reconcile or rescan pass: it fails into [WriterState.Blocked], owing a full
-         * refold, and a cancelled one owes that refold too ([PassOutcome.Unfinished]).
-         */
-        BLOCK,
-
-        /**
-         * The projection of a write that is durable already: it fails into [WriterState.Blocked] and
-         * rebuilds the projection from the store at once ([recoverDurableProjection]), which lifts
-         * the block when it succeeds. Cancellation changes nothing: a rolled-back ingest can leave
-         * its events in the live fold, which is harmless, as the object is ingested again and folding
-         * is idempotent.
-         */
-        RECOVER,
-    }
-
-    /**
-     * Run one pass of the single writer, every entry point's way into the state machine
-     * ([WriterState]): [body] reaches [PassOutcome.Projected] itself where it reads the journal whole
-     * ([adopt]), and a failure or cancellation of it moves the writer as [onFailure] says, then is
-     * rethrown. A failed pass can leave the live fold out of step with the journal, and building
-     * OR-set ops on it would be wrong; cancellation is no such failure (a rescan whose caller left the
-     * screen says nothing about the journal), so it blocks nothing.
+     * Run a fold, reconcile or rescan pass, refusing later writes if it fails: a failed pass can
+     * leave the live fold out of step with the journal, and building OR-set ops on it would be wrong.
      *
-     * With [OnFailure.RECOVER] the original failure is rethrown whether or not the recovery lifted
-     * the block, so the caller learns that the projection failed; a recovery that fails too blocks
-     * with its own reason and is attached to it as suppressed.
+     * Cancellation is not such a failure. A rescan whose caller left the screen says nothing about
+     * the journal, so it blocks nothing.
+     *
+     * Either way the pass may have stopped between recording a source and folding or projecting it,
+     * so the live fold is dropped, and the projection rebuilt in full when next reconciled
+     * ([refoldPending]).
      */
-    private suspend inline fun <T> pass(
-        onFailure: OnFailure,
-        body: () -> T,
-    ): T =
+    private inline fun <T> latching(pass: () -> T): T =
         try {
-            body()
+            pass()
         } catch (cancelled: CancellationException) {
-            if (onFailure == OnFailure.BLOCK) transition(PassOutcome.Unfinished)
+            dropFold()
             throw cancelled
         } catch (failure: Throwable) {
-            transition(PassOutcome.failed(failure))
-            if (onFailure == OnFailure.RECOVER) {
-                runCatchingCancellable { recoverDurableProjection() }.onFailure { recoveryFailure ->
-                    transition(PassOutcome.failed(recoveryFailure))
-                    failure.addSuppressed(recoveryFailure)
-                }
+            blockWrites(failure)
+            dropFold()
+            throw failure
+        }
+
+    /** Drop the live fold and owe a full refold and reprojection ([refoldPending]). */
+    private fun dropFold() {
+        folded = null
+        refoldPending = true
+    }
+
+    /**
+     * Run [attempt], a bounded projection of a write that is durable already (a commit's, an
+     * ingest's), and on any failure keep the live fold and the projection from diverging from the
+     * journal: the failure blocks writes ([blockWrites]), and the projection is rebuilt from the
+     * store at once ([recoverDurableProjection]), which lifts the block when it succeeds. The
+     * original failure is rethrown either way, so the caller learns that the projection failed; a
+     * recovery that fails too blocks with its own reason, drops the fold for the next reconcile or
+     * ingest to rebuild in full, and is attached to the original as suppressed.
+     *
+     * Cancellation is not a failure, so nothing is blocked for it: a rolled-back ingest can leave
+     * its events in the live fold, which is harmless, as the object is ingested again and folding is
+     * idempotent.
+     */
+    private suspend fun <T> withDurableProjectionRecovery(attempt: suspend () -> T): T =
+        runCatchingCancellable { attempt() }.getOrElse { failure ->
+            blockWrites(failure)
+            runCatchingCancellable { recoverDurableProjection() }.onFailure { recoveryFailure ->
+                blockWrites(recoveryFailure)
+                dropFold()
+                failure.addSuppressed(recoveryFailure)
             }
             throw failure
         }
@@ -743,9 +744,9 @@ internal class JournalCoordinator(
     /**
      * Make [fold], freshly reconciled from the store, this session's live fold: seed the write
      * clock and the synced settings from it, let [project] bring the index in step with it, then
-     * record the projection as ready for the next open and move the writer to
-     * [WriterState.Ready]. A new entry point that adopts a fold goes through here, so none of these
-     * steps can be forgotten.
+     * record the projection as ready for the next open, lift any block and settle any owed refold:
+     * the pass read the journal whole. A new entry point that adopts a fold goes through here, so
+     * none of these steps can be forgotten.
      */
     private suspend inline fun <T> adopt(
         fold: FoldedState,
@@ -757,7 +758,8 @@ internal class JournalCoordinator(
         val result = project()
         // Read after projecting: a rescan's own writes (external moves, restores) raise it.
         accumulator.markReady(fold.maxHlc)
-        transition(PassOutcome.Projected)
+        blocked = null
+        refoldPending = false
         return result
     }
 
@@ -797,15 +799,15 @@ internal class JournalCoordinator(
      */
     suspend fun rebuildIndex() =
         locked {
-            pass(OnFailure.BLOCK) {
+            latching {
                 accumulator.forgetSources()
                 recoverDurableProjection()
             }
         }
 
     /**
-     * Rebuild the live fold and the whole projection from the durable store, which leaves the writer
-     * [WriterState.Ready]: lifts a block and settles an owed refold.
+     * Rebuild the live fold and the whole projection from the durable store, which lifts a block
+     * and settles an owed refold ([adopt]).
      */
     private suspend fun recoverDurableProjection() {
         // Recovery must reproject unconditionally, so it always needs a materialized fold even

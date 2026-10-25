@@ -140,15 +140,4 @@ class FoldLifecycleTest {
                 }
             }
         }
-
-    @Test
-    fun aReturnIsRecordedOnlyOnceItsHidingEventIsOldEnough() {
-        val returns =
-            listOf(Resurrected("a", "a.pdf", hiddenAtMillis = 100), Resurrected("b", "b.pdf", hiddenAtMillis = 101))
-        FoldLifecycle.settledReturns(returns, nowMillis = 1_100, settleMillis = 1_000).map { it.docId } shouldBe
-            listOf("a")
-        FoldLifecycle.settledReturns(returns, nowMillis = 1_101, settleMillis = 1_000).map { it.docId } shouldBe
-            listOf("a", "b")
-        FoldLifecycle.settledReturns(returns, nowMillis = 1_099, settleMillis = 1_000) shouldBe emptyList()
-    }
 }

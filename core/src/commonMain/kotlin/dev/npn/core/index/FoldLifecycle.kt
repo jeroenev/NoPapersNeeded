@@ -97,19 +97,4 @@ internal object FoldLifecycle {
     ): String? =
         row.relPath.takeIf { contentAt[it] == doc }
             ?: origPath?.takeIf { contentAt[it] == doc && !held(it) }
-
-    /**
-     * The returns a rescan found ([resurrected]) that it records in the journal [nowMillis]: those
-     * of documents hidden at least [settleMillis] ago. Sooner, a file still in place may be one a
-     * sync tool has not taken away yet, as it delivers another device's trash or delete event before
-     * the file move that went with it.
-     */
-    fun settledReturns(
-        resurrected: List<Resurrected>,
-        nowMillis: Long,
-        settleMillis: Long,
-    ): List<Resurrected> {
-        val settled = nowMillis - settleMillis
-        return resurrected.filter { it.hiddenAtMillis <= settled }
-    }
 }
