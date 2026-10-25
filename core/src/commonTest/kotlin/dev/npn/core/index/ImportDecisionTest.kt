@@ -13,9 +13,8 @@ import io.kotest.property.exhaustive.collection
 import kotlin.test.Test
 
 /**
- * What an import decides about its bytes ([ImportDecision]), over every row their hash can have
- * (none, shown, trashed, deleted, missing; at a path or a sentinel; any OCR state), whether that
- * row's file holds them, and whether a relink superseded them.
+ * The row an import writes ([ImportDecision.row]), over every row its bytes' hash can have (none,
+ * shown, trashed, deleted, missing; at a path or a sentinel; any OCR state).
  */
 class ImportDecisionTest {
     private val hash = "h"
@@ -46,50 +45,6 @@ class ImportDecisionTest {
                 }
             }
 
-    private class Case(
-        val existing: DocumentEntity?,
-        val inPlace: String?,
-        val successor: String,
-    ) {
-        override fun toString() = "existing=$existing inPlace=$inPlace successor=$successor"
-    }
-
-    private val cases =
-        existings.flatMap { existing ->
-            // Only a row's own path can hold its bytes in place.
-            listOfNotNull(null, existing?.relPath).flatMap { inPlace ->
-                listOf(hash, "successor").map { successor -> Case(existing, inPlace, successor) }
-            }
-        }
-
-    @Test
-    fun anImportIsADuplicateOnlyOfAShownDocumentWhoseFileHoldsItsBytes() =
-        propTest {
-            checkAll(Exhaustive.collection(cases)) { case ->
-                val existing = case.existing
-                val duplicate = ImportDecision.duplicate(existing, case.inPlace)
-                if (existing != null && existing.isLive && case.inPlace != null) {
-                    duplicate shouldBe ImportResult.Duplicate(hash, existing.relPath)
-                } else {
-                    duplicate shouldBe null
-                }
-            }
-        }
-
-    /** Bytes a relink superseded bring nothing back; any others are placed, as a return when a row knows them. */
-    @Test
-    fun bytesThatAreNoDuplicateArePlacedUnlessARelinkSupersededThem() =
-        propTest {
-            checkAll(Exhaustive.collection(cases)) { case ->
-                val plan = ImportDecision.place(hash, case.existing, case.inPlace, case.successor)
-                if (case.successor != hash) {
-                    plan shouldBe ImportPlan.Superseded(case.successor)
-                } else {
-                    plan shouldBe ImportPlan.Place(case.existing, case.inPlace)
-                }
-            }
-        }
-
     /**
      * The row an import writes is live at its target with the stat of the bytes it placed, keeps a
      * returning document's metadata and date added, and queues for OCR only text not indexed yet.
@@ -117,13 +72,4 @@ class ImportDecisionTest {
                 imported.reindexName shouldBe (existing != null)
             }
         }
-
-    @Test
-    fun supersededBytesAreADuplicateOnlyOfAShownSuccessorThatHoldsItsBytes() {
-        val successor = DocumentEntity("s", "s.pdf", "s.pdf", size = 1, mtime = 1, addedAt = 1)
-        ImportDecision.supersededDuplicate(successor, holds = true) shouldBe ImportResult.Duplicate("s", "s.pdf")
-        ImportDecision.supersededDuplicate(successor, holds = false) shouldBe null
-        ImportDecision.supersededDuplicate(successor.copy(trashed = true), holds = true) shouldBe null
-        ImportDecision.supersededDuplicate(null, holds = false) shouldBe null
-    }
 }

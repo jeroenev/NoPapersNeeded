@@ -248,24 +248,18 @@ internal class ImportService(
         // The document's own path, when its bytes are there. This runs under the writer lock, so
         // re-importing a known, unchanged PDF must read no library file.
         val inPlace = existing?.takeIf { fs.holdsDocument(it, staged.size) }?.relPath
-        ImportDecision.duplicate(existing, inPlace)?.let { return Placement(it) }
-        return when (val plan = ImportDecision.place(hash, existing, inPlace, journal.successorOf(hash))) {
-            is ImportPlan.Superseded -> Placement(supersededBy(plan.successor))
-            is ImportPlan.Place -> placeAt(plan, tmpPath, hash, staged, suggestedName, toDir)
+        // A duplicate only of a document the library shows whose file holds the bytes: nothing is added.
+        if (existing != null && existing.isLive && inPlace != null) {
+            return Placement(ImportResult.Duplicate(existing.docId, existing.relPath))
         }
-    }
-
-    /** Carry out [plan]: move the staged bytes into place (unless they are there), and [record] them. */
-    private suspend fun placeAt(
-        plan: ImportPlan.Place,
-        tmpPath: String,
-        hash: String,
-        staged: FileMeta,
-        suggestedName: String,
-        toDir: String,
-    ): Placement {
-        val existing = plan.existing
-        val inPlace = plan.inPlace
+        // Bytes a relink superseded go nowhere. Their successor is asked of the journal, not the
+        // index: a superseded row is deleted like any other, and an index rebuilt since has none.
+        val successor = journal.successorOf(hash)
+        if (successor != hash) return Placement(supersededBy(successor))
+        // Else into [existing]'s return (a document the library has but does not show: trashed,
+        // deleted, missing, or live with its file gone), or a new document. The bytes stay where
+        // the document's row says when they are back there already, else move to a target of
+        // the import's own.
         val target = inPlace ?: chooseImportTarget(ensurePdfName(suggestedName), toDir).also { fs.move(tmpPath, it) }
         var placement: Placement? = null
         try {
@@ -286,8 +280,8 @@ internal class ImportService(
      */
     private suspend fun supersededBy(successor: String): ImportResult {
         val shown = documentDao.getByDocId(successor)
-        val holds = shown != null && shown.isLive && fs.holdsDocument(shown)
-        return ImportDecision.supersededDuplicate(shown, holds) ?: throw SupersededImportException()
+        if (shown == null || !shown.isLive || !fs.holdsDocument(shown)) throw SupersededImportException()
+        return ImportResult.Duplicate(shown.docId, shown.relPath)
     }
 
     /**

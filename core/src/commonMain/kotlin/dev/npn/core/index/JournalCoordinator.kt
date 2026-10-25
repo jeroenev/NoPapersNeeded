@@ -129,9 +129,9 @@ internal class LifecycleDone(
  * state must therefore go through [foldedState] rather than assume it already exists.
  *
  * It is the session's one executor: the decisions are pure functions elsewhere ([RescanDecision],
- * [FoldLifecycle], [ImportDecision], [PassDecision], the lifecycle plans of `core.app`), and this
- * class alone holds the mutex, mutates the session's state (the live fold, the [WriterState], the
- * synced settings) and runs their effects. Every entry point runs as a [pass] of the state machine
+ * [FoldLifecycle], the lifecycle plans of `core.app`), and this class alone holds the mutex,
+ * mutates the session's state (the live fold, the [WriterState], the synced settings) and runs
+ * their effects. Every entry point runs as a [pass] of the state machine
  * [WriterState] documents; [writeBlock] shows where it stands.
  *
  * This is the ONLY sanctioned journal write path (see AGENTS.md). The invariant is enforced at
@@ -299,26 +299,26 @@ internal class JournalCoordinator(
                 // BEFORE this object is ingested, which is exactly the base its events apply onto.
                 val current = foldedState()
                 val staged = accumulator.readObject(relPath)
-                val step =
-                    if (staged == null) {
-                        ProjectionStep.Unchanged
-                    } else {
-                        indexer.projection {
-                            PassDecision.afterIngest(accumulator.record(staged)).also { step ->
-                                if (step !is ProjectionStep.Events) return@also
-                                step.events.forEach(current::apply)
-                                observeSourceHlc(current.maxHlc)
-                                indexer.refreshEvents(current, step.events)
-                            }
-                        }
+                var events: List<JournalEvent> = emptyList()
+                var refold = false
+                if (staged != null) {
+                    indexer.projection {
+                        val recorded = accumulator.record(staged)
+                        events = recorded.events
+                        refold = recorded.refold
+                        if (refold || events.isEmpty()) return@projection
+                        events.forEach(current::apply)
+                        observeSourceHlc(current.maxHlc)
+                        indexer.refreshEvents(current, events)
                     }
-                if (step == ProjectionStep.Whole) {
+                }
+                if (refold) {
                     // The object holds a richer copy of an event the live fold has: only a full
                     // refold takes it in, owed until it is done.
                     transition(PassOutcome.Unfinished)
                     recoverDurableProjection()
                 } else {
-                    syncedSettings.update(current, (step as? ProjectionStep.Events)?.events.orEmpty())
+                    syncedSettings.update(current, events)
                     // The projection now matches the enlarged source set; record that so the next
                     // open can reuse it instead of refolding.
                     accumulator.markReady(current.maxHlc)
@@ -338,29 +338,22 @@ internal class JournalCoordinator(
                     return@locked
                 }
                 val reconciliation = accumulator.reconcile(folded)
-                val step = PassDecision.afterReconcile(reconciliation)
                 val current = reconciliation.state
                 if (current == null) {
-                    // ProjectionStep.Current: nothing on disk changed and this session has never
-                    // needed the fold. There is nothing to project, and replaying the journal just
-                    // to prove that is what made the periodic tick as expensive as a boot.
+                    // Nothing on disk changed and this session has never needed the fold. There is
+                    // nothing to project, and replaying the journal just to prove that is what made
+                    // the periodic tick as expensive as a boot.
                     transition(PassOutcome.Projected)
                     return@locked
                 }
                 adopt(current) {
                     // Bounded projection when reconcile only ADDED events onto the prior state;
                     // otherwise full reproject (source removed/invalidated, mutation, full refold,
-                    // first load).
-                    when (step) {
-                        is ProjectionStep.Events -> {
-                            indexer.refreshEvents(current, step.events)
-                        }
-
-                        ProjectionStep.Whole -> {
-                            indexer.refreshState(current)
-                        }
-
-                        ProjectionStep.Unchanged, ProjectionStep.Current -> {}
+                    // first load). Nothing read: nothing to project.
+                    if (reconciliation.incremental) {
+                        indexer.refreshEvents(current, reconciliation.newEvents)
+                    } else if (reconciliation.sourcesRead > 0) {
+                        indexer.refreshState(current)
                     }
                 }
             }
@@ -657,7 +650,8 @@ internal class JournalCoordinator(
         state: FoldedState,
         resurrected: List<Resurrected>,
     ) {
-        val returned = FoldLifecycle.settledReturns(resurrected, clock.nowMillis(), RESTORE_SETTLE_MS)
+        val settled = clock.nowMillis() - RESTORE_SETTLE_MS
+        val returned = resurrected.filter { it.hiddenAtMillis <= settled }
         val ops = returned.flatMap { state.restoreOps(it.docId, it.relPath, writeUndelete) }
         if (ops.isEmpty()) return
         log.runLogged("Recording the return of ${returned.joinToString { it.relPath }}") {

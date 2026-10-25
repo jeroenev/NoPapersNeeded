@@ -278,30 +278,21 @@ internal class MetadataAccumulator(
 
     suspend fun reconcile(currentState: FoldedState? = null): MetadataReconciliation {
         val pass = runReconcilePass()
-        val step =
-            PassDecision.foldStep(
-                hasFold = currentState != null,
-                projectionCleared = pass.projectionCleared,
-                sourcesRead = pass.ingest.read,
-                refold = pass.ingest.refold,
-            )
+        // Only a pass that purely ADDED events onto an intact live fold extends it: a wiped
+        // projection (whose tables went with it), a re-ingested (mutated) source or a richer copy of
+        // a stored event, or no fold to extend all fold again in full. A gone source changes no
+        // event: the pass fails, or another source holds all of its.
+        val incremental =
+            pass.ingest.read > 0 && currentState != null && !pass.projectionCleared && !pass.ingest.refold
         val state =
-            when (step) {
+            when {
                 // Nothing read: hand back whatever the caller already had, INCLUDING null. A caller
                 // with no fold and nothing to fold in has nothing to project.
-                FoldStep.KEEP -> {
-                    currentState
-                }
+                pass.ingest.read == 0 -> currentState
 
-                FoldStep.EXTEND -> {
-                    checkNotNull(
-                        currentState,
-                    ).also { current -> pass.ingest.newEvents.forEach(current::apply) }
-                }
+                incremental -> currentState.also { pass.ingest.newEvents.forEach(it::apply) }
 
-                FoldStep.REFOLD -> {
-                    loadState()
-                }
+                else -> loadState()
             }
         // Persist the projection version + observed maxHlc mid-pass so a crash before the
         // coordinator's markReady() still records progress, and the next open refolds rather than
@@ -314,7 +305,6 @@ internal class MetadataAccumulator(
         if (state != null) {
             dao.upsertState(projectionState(ProjectionStatus.RECONCILING, state.maxHlc))
         }
-        val incremental = step == FoldStep.EXTEND
         return MetadataReconciliation(
             state = state,
             sourcesRead = pass.ingest.read,
