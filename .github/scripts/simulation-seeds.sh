@@ -2,16 +2,18 @@
 # Decide which seeds a run of the library simulation (docs/SIMULATION.md) covers, and write them as
 # step outputs for simulation.yml: `first`, `seeds` and `steps`.
 #
-# A manual run takes its inputs (FIRST_SEED empty: start where the run number says). A nightly run
-# moves on to seeds no run took before, NIGHTLY_SEEDS of them from (run number - 1) * NIGHTLY_SEEDS
-# + 1000, so the seeds CI runs on every push (1..10) are left to it.
+# A manual run takes its inputs (FIRST_SEED empty: start where the date says). A nightly run takes
+# the day's block: NIGHTLY_SEEDS seeds from 1000 + (days since the epoch) * NIGHTLY_SEEDS, so one
+# night's seeds follow the previous night's, a manual run does not shift them, and the seeds CI runs
+# on every push (1..10) are left to it. Two runs on one day repeat the block.
 set -euo pipefail
 
 seeds="${SEEDS:-${NIGHTLY_SEEDS:?}}"
 steps="${STEPS:-${NIGHTLY_STEPS:?}}"
 first="${FIRST_SEED:-}"
 if [[ -z "$first" ]]; then
-  first=$(( (${RUN_NUMBER:?} - 1) * seeds + 1000 ))
+  day=$(( $(date -u +%s) / 86400 ))
+  first=$(( 1000 + day * seeds ))
 fi
 
 for value in "$first" "$seeds" "$steps"; do

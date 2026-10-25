@@ -18,7 +18,7 @@ on:
         required: false
         default: "400"
       first_seed:
-        description: The first seed (empty for the next seeds no nightly run took)
+        description: The first seed (empty for the block of seeds tonight's nightly run takes)
         required: false
         default: ""
 
@@ -60,7 +60,6 @@ jobs:
           SEEDS: ${{ inputs.seeds }}
           STEPS: ${{ inputs.steps }}
           FIRST_SEED: ${{ inputs.first_seed }}
-          RUN_NUMBER: ${{ github.run_number }}
         run: bash .github/scripts/simulation-seeds.sh
 
       # Every failing seed is reported (up to all of them), each with the line that replays it.

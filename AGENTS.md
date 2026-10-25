@@ -77,7 +77,7 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   `dev.npn.core.index` and `dev.npn.core.app` against core's desktop tests;
   `-Pnpn.mutation.packages=dev.npn.core.journal` picks others. Report in
   `core/build/reports/pitest/`; baseline and how to read it in `docs/MUTATION_TESTING.md`. Never in
-  `check` or `ci.yml`: `mutation.yml` runs it weekly and on demand.
+  `check` or `ci.yml`: `mutation.yml` runs it on demand.
 - Formatting and lint: `./gradlew spotlessCheck detekt`, then `./gradlew detektTyped` (see
   Detekt below; it compiles first, so keep it a separate invocation from spotless).
 - Android lint: `./gradlew :androidApp:lintDebug` lints the app and, through `checkDependencies`,
@@ -94,8 +94,8 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   assembleDebug + packageAppImage. Match that order when verifying larger changes. Actions
   minutes and artifact storage are metered (private repo): PRs stop before the APK and packaging,
   which run on `main` only, the coverage report uploads only on `main` or after a failure, binaries
-  upload only on a manual run, and the Windows build (`windows.yml`), mutation testing
-  (`mutation.yml`) and CodeQL run weekly or on demand, and the long library simulation
+  upload only on a manual run, and the Windows build (`windows.yml`) and CodeQL run weekly or on
+  demand, mutation testing (`mutation.yml`) on demand only, and the long library simulation
   (`simulation.yml`) nightly. Keep it that way. `mise release` refuses
   unless CI passed on the `main` commit it bumps; the tagged commit changes only `npn.version`,
   and `release.yml` builds it without waiting for CI.

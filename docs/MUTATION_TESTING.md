@@ -9,8 +9,8 @@ would still pass.
 
 It runs over `core`'s `desktop` target, where the session, coordinator, indexer, import and
 lifecycle code lives and where most of the review rounds' bug fixes landed. It is slow, so it never
-runs in `check`, `allTests` or `ci.yml`: run it on demand, and `.github/workflows/mutation.yml`
-runs it weekly (Sunday) and on `workflow_dispatch`, uploading the HTML report as the
+runs in `check`, `allTests` or `ci.yml`: run it on demand, locally or through
+`.github/workflows/mutation.yml` (`workflow_dispatch` only), which uploads the HTML report as the
 `mutation-report` artifact for a week.
 
 ## Running it
@@ -104,9 +104,11 @@ Per class, most first, the survivors (and mutants without coverage) were: `Journ
 `SnapshotCodec` 7 (0).
 
 A complete run of both default packages takes 57 minutes at four threads on that laptop; run it
-alone, or on the weekly workflow. `mutation.yml` runs it at two threads in a 165-minute step, which
-is likely too short on a two-core hosted runner: half the threads alone make it about two hours
-there before any slowdown of the runner itself.
+alone. `mutation.yml` runs it at two threads in a 165-minute step, which may be too short on a
+two-core hosted runner: half the threads alone make it about two hours there before any slowdown
+of the runner itself, and PIT writes its report only at the end, so a run cut short shows nothing.
+That is why the workflow has no schedule: dispatch it, preferably over one package
+(`dev.npn.core.index`) at a time.
 
 ### Likely test gaps in the baseline, now covered
 

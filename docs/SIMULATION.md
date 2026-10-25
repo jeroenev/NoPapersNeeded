@@ -70,8 +70,9 @@ the library.
 
 ## Scheduled runs
 
-`.github/workflows/simulation.yml` runs the simulation nightly on fresh seeds (each night the next
-`NIGHTLY_SEEDS` from 1000 on, by run number, so it never repeats CI's seeds 1..10), and on demand
+`.github/workflows/simulation.yml` runs the simulation nightly on fresh seeds (each night the day's
+block of `NIGHTLY_SEEDS` from 1000 on, keyed on the date, so it never repeats CI's seeds 1..10 and a
+manual run does not shift it), and on demand
 with `seeds`, `steps` and `first_seed` inputs. `.github/scripts/simulation-seeds.sh` picks the seeds.
 A seed of 400 steps costs about 9.6 s on a laptop core, and the eight shards run on eight cores at
 that speed each (400 seeds took 9 minutes). A two-core hosted runner gets one test JVM, so at an

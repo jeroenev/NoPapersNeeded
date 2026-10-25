@@ -137,7 +137,7 @@ prefixed with the current branch name when needed.
 `mise test-fast` also runs the shared UI tests; `mise test-all` and `mise check` add the
 Android-target host tests. See [AGENTS.md](AGENTS.md) for the full list.
 `mise mutation` measures how much of `core`'s index and app code the tests would notice going wrong
-(PIT, on demand and weekly; see [docs/MUTATION_TESTING.md](docs/MUTATION_TESTING.md)).
+(PIT, on demand; see [docs/MUTATION_TESTING.md](docs/MUTATION_TESTING.md)).
 
 Regression coverage follows the failure modes from the code audit:
 

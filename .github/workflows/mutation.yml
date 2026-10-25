@@ -1,11 +1,11 @@
 name: Mutation testing
 
 # PIT over core's index and app packages (docs/MUTATION_TESTING.md). A run takes far
-# longer than the per-commit checks and Actions minutes are metered, so it runs weekly and on
-# demand, never from ci.yml. The HTML report is the result; it is kept for a week.
+# longer than the per-commit checks and Actions minutes are metered, so it runs on demand only,
+# never from ci.yml or a schedule: PIT writes its report only at the end, so a run the step's
+# time-box cuts short costs its full minutes and shows nothing. The HTML report is the result; it
+# is kept for a week.
 on:
-  schedule:
-    - cron: "41 4 * * 0"
   workflow_dispatch:
     inputs:
       packages:
