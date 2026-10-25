@@ -108,7 +108,8 @@ kept 5 days. ci.yml keeps running only the CI-sized test above, as part of `:cor
   a rename, as every tool of this kind does it.
 - A full sync (`SimSync.flush`) lets every delivery under way land, scans every device and delivers at
   once, and brings each device every version another holds that its own does not descend from, until
-  a round changes nothing.
+  a round changes nothing. Two devices recording different bytes under one version vector would be
+  a slip of the model, never the tool's, and fail the run rather than being settled quietly.
 - `InMemoryLibraryFileSystem` implements `LibraryFileSystem` with the semantics of
   `JvmLibraryFileSystem`, or of `SafLibraryFileSystem` under `StorageProfile.SAF`: publication
   without replacement by hard link or exclusive rename, `sameFile` through hard links, no document

@@ -459,6 +459,10 @@ internal class SimSync(
      * Bring every device every version another holds that its own does not descend from, as the
      * tool does when it compares a device's index with the others': what a lost or overtaken
      * delivery left out comes now. Returns how many it brought.
+     *
+     * Two devices recording different bytes under one version vector would be a slip of this model
+     * (every version a device makes bumps its own counter, so no two contents share a vector), never
+     * the tool's: it fails the run, rather than being quietly settled and hiding the next slip.
      */
     private fun pullAll(): Int {
         var pulled = 0
@@ -468,13 +472,12 @@ internal class SimSync(
                 for (from in peers.indices.filter { it != to }) {
                     val theirs = known[from][path] ?: continue
                     val mine = known[to][path]
-                    if (mine != null && mine.vector == theirs.vector && !same(mine.bytes, theirs.bytes)) {
-                        // One vector for two contents (a model slip, never Syncthing's): theirs wins.
-                        val winner = SyncVersion(theirs.bytes, theirs.mtime, bump(theirs.vector, from), from)
-                        known[from][path] = winner
-                        apply(to, path, winner, Delivery.Atomic, immediate = true)
-                        pulled++
-                    } else if (mine?.dominates(theirs.vector) != true) {
+                    check(mine == null || mine.vector != theirs.vector || same(mine.bytes, theirs.bytes)) {
+                        "sync model: ${peers[to].name} and ${peers[from].name} record different contents of " +
+                            "'$path' under one version vector ${theirs.vector} " +
+                            "(${mine?.describe()} and ${theirs.describe()})"
+                    }
+                    if (mine?.dominates(theirs.vector) != true) {
                         apply(to, path, theirs, Delivery.Atomic, immediate = true)
                         pulled++
                     }
