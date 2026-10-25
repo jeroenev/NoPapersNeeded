@@ -28,6 +28,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -38,7 +41,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.EmptyState
@@ -101,11 +103,10 @@ fun QueueScreen(
     onOpenDoc: (String) -> Unit,
     onOpenEditRun: (String) -> Unit,
     modifier: Modifier = Modifier,
-    vm: QueueViewModel = viewModel { QueueViewModel(session, createSavedStateHandle()) },
+    vm: QueueViewModel = viewModel { QueueViewModel(session) },
 ) {
     val items by vm.items.collectAsStateWithLifecycle()
     val editRuns by vm.editRuns.collectAsStateWithLifecycle()
-    val confirmingDiscard by vm.confirmingDiscard.collectAsStateWithLifecycle()
     val snackbar = rememberSnackbarMessages(vm.messages)
 
     Scaffold(
@@ -127,8 +128,6 @@ fun QueueScreen(
                 editRuns = loadedRuns,
                 onOpenDoc = onOpenDoc,
                 onOpenEditRun = onOpenEditRun,
-                confirmingDiscard = confirmingDiscard,
-                onConfirmDiscard = vm::confirmDiscard,
                 onDiscardEditRun = vm::discardEditRun,
                 onRetry = vm::retry,
                 modifier = Modifier.fillMaxSize().padding(padding),
@@ -143,9 +142,6 @@ private fun QueueList(
     editRuns: List<QueuedEditRun>,
     onOpenDoc: (String) -> Unit,
     onOpenEditRun: (String) -> Unit,
-    /** The run whose discard is being confirmed, if any. */
-    confirmingDiscard: String?,
-    onConfirmDiscard: (jobId: String?) -> Unit,
     onDiscardEditRun: (String) -> Unit,
     onRetry: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -169,13 +165,7 @@ private fun QueueList(
                 )
             }
             items(editRuns, key = { "run:${it.jobId}" }) { run ->
-                EditRunRow(
-                    run = run,
-                    confirmingDiscard = confirmingDiscard == run.jobId,
-                    onOpen = onOpenEditRun,
-                    onConfirmDiscard = onConfirmDiscard,
-                    onDiscard = onDiscardEditRun,
-                )
+                EditRunRow(run, onOpenEditRun, onDiscardEditRun)
                 HorizontalDivider()
             }
         }
@@ -202,13 +192,11 @@ private fun QueueList(
 @Composable
 private fun EditRunRow(
     run: QueuedEditRun,
-    /** Whether its discard is being confirmed. */
-    confirmingDiscard: Boolean,
     onOpen: (String) -> Unit,
-    onConfirmDiscard: (jobId: String?) -> Unit,
     onDiscard: (String) -> Unit,
 ) {
     val ready = run.state == WorkState.READY
+    var confirmingDiscard by rememberSaveable(run.jobId) { mutableStateOf(false) }
     Row(
         Modifier
             .fillMaxWidth()
@@ -249,7 +237,7 @@ private fun EditRunRow(
                 Text(stringResource(Res.string.queue_edit_run_review))
             }
         } else {
-            TextButton(onClick = { if (run.done > 0) onConfirmDiscard(run.jobId) else onDiscard(run.jobId) }) {
+            TextButton(onClick = { if (run.done > 0) confirmingDiscard = true else onDiscard(run.jobId) }) {
                 Text(stringResource(Res.string.queue_edit_run_discard))
             }
         }
@@ -263,10 +251,10 @@ private fun EditRunRow(
             dismissLabel = stringResource(Res.string.ai_edit_cancel_keep),
             destructive = true,
             onConfirm = {
-                onConfirmDiscard(null)
+                confirmingDiscard = false
                 onDiscard(run.jobId)
             },
-            onDismiss = { onConfirmDiscard(null) },
+            onDismiss = { confirmingDiscard = false },
         )
     }
 }

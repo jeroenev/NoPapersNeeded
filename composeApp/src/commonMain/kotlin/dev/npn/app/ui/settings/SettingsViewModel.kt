@@ -163,13 +163,7 @@ class SettingsViewModel(
 
     fun searchCategories(query: String) = categoryQueryState.set(query)
 
-    /** The document whose unsaved changes are offered back before the library changes, if any. */
-    private val draftToResumeState = saved.uiState<String?>(DRAFT_TO_RESUME_KEY, null)
-    val draftToResume: StateFlow<String?> = draftToResumeState.flow
-
-    fun offerDraft(docId: String?) = draftToResumeState.set(docId)
-
-    /** The field manager's open dialog, with what is typed or ticked in it; see [FieldDialog]. */
+    /** The field manager's open dialog; see [FieldDialog]. */
     private val fieldDialog = saved.uiState<FieldDialog?>(FIELD_DIALOG_KEY, null)
 
     internal fun openFieldDialog(dialog: FieldDialog?) = fieldDialog.set(dialog)
@@ -178,13 +172,8 @@ class SettingsViewModel(
 
     internal fun typeOcrLanguage(text: String) = ocrLanguageTyped.set(text)
 
-    private val confirmingInboxMigration = saved.uiState(INBOX_MIGRATION_KEY, false)
-
-    internal fun confirmInboxMigration(open: Boolean) = confirmingInboxMigration.set(open)
-
     /** What the panes have open or typed, which the viewmodel keeps for them. */
-    private val paneUi: Flow<PaneUi> =
-        combine(fieldDialog.flow, ocrLanguageTyped.flow, confirmingInboxMigration.flow, ::PaneUi)
+    private val paneUi: Flow<PaneUi> = combine(fieldDialog.flow, ocrLanguageTyped.flow, ::PaneUi)
 
     /** Everything a settings pane shows, as one value. */
     internal val paneState: StateFlow<SettingsPaneState> =
@@ -204,7 +193,6 @@ class SettingsViewModel(
                 usage,
                 paneUi.fieldDialog,
                 paneUi.ocrLanguageTyped,
-                paneUi.confirmingInboxMigration,
             )
         }.stateIn(
             viewModelScope,
@@ -218,7 +206,6 @@ class SettingsViewModel(
                 fieldUsage.value,
                 fieldDialog.value,
                 ocrLanguageTyped.value,
-                confirmingInboxMigration.value,
             ),
         )
 
@@ -395,10 +382,8 @@ class SettingsViewModel(
     private companion object {
         const val PICKED_KEY = "settings.picked"
         const val CATEGORY_QUERY_KEY = "settings.categoryQuery"
-        const val DRAFT_TO_RESUME_KEY = "settings.draftToResume"
         const val FIELD_DIALOG_KEY = "settings.fieldDialog"
         const val OCR_LANGUAGE_KEY = "settings.ocrLanguageTyped"
-        const val INBOX_MIGRATION_KEY = "settings.confirmingInboxMigration"
     }
 }
 
@@ -410,5 +395,4 @@ private fun SettingsSnapshot.withTyped(drafts: List<Pair<TextSetting, String?>>)
 private data class PaneUi(
     val fieldDialog: FieldDialog?,
     val ocrLanguageTyped: String,
-    val confirmingInboxMigration: Boolean,
 )
