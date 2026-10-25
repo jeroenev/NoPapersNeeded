@@ -4,7 +4,6 @@ import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.index.WriteBlock
 import dev.npn.core.journal.Hlc
-import dev.npn.core.journal.JournalOp
 import dev.npn.core.util.NpnLog
 import kotlinx.coroutines.test.TestCoroutineScheduler
 import java.io.File
@@ -63,33 +62,6 @@ data class SyncConfig(
         private const val MAX_REPLICAS = 4
         private const val IN_PLACE_PERCENT = 15
         private const val DUPLICATE_PERCENT = 10
-    }
-}
-
-/**
- * The findings of the multi-replica simulation that are written up and not fixed yet, as
- * [KnownIssues] holds the single replica's: a seed that hits one stops there and is counted, so a
- * long run goes on to find what else there is. A fixed one is removed.
- */
-object SyncKnownIssues {
-    /**
-     * Finding 8, the documented cost of `doc-undelete` not being written yet (ARCHITECTURE.md 6.4):
-     * the bytes of a document deleted for good that come back (an import, or a file a sync tool
-     * delivers) bring it back on the device that imported them, for that session, and in the scan
-     * that finds the file, and nowhere else: devices disagree on whether the library shows it, and a
-     * device disagrees with a rebuild of its own index. Off once this build writes the op.
-     */
-    const val DELETED_RETURNS_UNRECORDED = !JournalOp.DocUndelete.WRITTEN
-
-    /** Each finding by the phrases its failure message holds, all of them. */
-    val knownFailures: Map<List<String>, String> = emptyMap()
-
-    /** [failure] as a known finding when it is one, else as it is. */
-    internal fun classify(failure: SimFailure): SimFailure {
-        if (failure.known != null) return failure
-        val message = failure.message.orEmpty()
-        val known = knownFailures.entries.firstOrNull { it.key.all(message::contains) }?.value ?: return failure
-        return SimFailure(message, known)
     }
 }
 
@@ -257,13 +229,7 @@ internal class SyncSimulation(
             trace,
         )
 
-    fun run() {
-        try {
-            runSteps()
-        } catch (failure: SimFailure) {
-            throw SyncKnownIssues.classify(failure)
-        }
-    }
+    fun run() = runSteps()
 
     private fun runSteps() {
         try {
@@ -555,7 +521,7 @@ internal class SyncSimulation(
             // While this build writes no doc-undelete, a document deleted for good that an import
             // brought back shows on the importing device for that session only (ARCHITECTURE.md 6.4).
             val returned =
-                if (!SyncKnownIssues.DELETED_RETURNS_UNRECORDED) {
+                if (!KnownIssues.DELETED_RETURNS_UNRECORDED) {
                     emptySet()
                 } else {
                     world.read("deleted documents") {

@@ -58,7 +58,7 @@ the last steps of the trace, the end of the session log (each entry names its re
 replica's files with their hashes and its index's document rows, the history of a path whose file is
 not its document's, the journal events behind a document the rebuild shows otherwise, and the sync
 tool's state (conflict copies, deliveries under way). A seed that hits a failure listed
-in `KnownIssues.knownFailures` or `SyncKnownIssues.knownFailures` (a finding already written up) stops
+in `KnownIssues.knownFailures` (a finding already written up) stops
 there. Such a seed is counted and printed instead of failing the test, so a long run goes on to find
 new bugs. A replay of that one seed still fails.
 
@@ -238,12 +238,11 @@ do not converge, which fails the run. Then:
 
 ## Known issues
 
-`KnownIssues` (in `Simulation.kt`) holds the single replica's switches and known failures;
-`SyncKnownIssues` (in `SimReplicas.kt`) holds the ones only several replicas find. Each entry's
-comment names the finding. Fixing a finding means turning its switch off (or removing its
-`knownFailures` entry) and making a long run pass.
+`KnownIssues` (in `Simulation.kt`) holds the switches and the known failures, each with a comment
+that names the finding; a known failure is listed by the phrases its message holds. Fixing a finding
+means turning its switch off (or removing its `knownFailures` entry) and making a long run pass.
 
-- **Finding 8**, `SyncKnownIssues.DELETED_RETURNS_UNRECORDED`: the documented cost of `doc-undelete`
+- **Finding 8**, `KnownIssues.DELETED_RETURNS_UNRECORDED`: the documented cost of `doc-undelete`
   not being written yet (ARCHITECTURE.md 6.4). A document deleted for good whose bytes come back is
   live on the device that imported them, for that session, and in the scan that finds the file, and
   nowhere else, so devices disagree, and a device disagrees with a rebuild of its own index. Off by

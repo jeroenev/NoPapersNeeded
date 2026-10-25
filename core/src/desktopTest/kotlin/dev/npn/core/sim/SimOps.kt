@@ -23,8 +23,7 @@ import kotlin.random.Random
 
 /**
  * Every kind of step the generator can take, with its weight: how often it is picked relative to
- * the others. An operation the simulation must not run for now (a known issue it would keep
- * finding) is left out through [SimConfig.disabled], never by deleting it here.
+ * the others.
  */
 enum class OpKind(
     val weight: Int,
