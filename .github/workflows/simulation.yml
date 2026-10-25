@@ -30,7 +30,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # About ten minutes on an ubuntu-latest runner at the cost measured in docs/SIMULATION.md.
+  # About fifteen minutes on an ubuntu-latest runner at the cost measured in docs/SIMULATION.md.
   NIGHTLY_SEEDS: "60"
   NIGHTLY_STEPS: "400"
 
@@ -67,7 +67,7 @@ jobs:
       - name: Simulate
         timeout-minutes: 30
         run: >-
-          ./gradlew :core:desktopTest --tests 'dev.npn.core.sim.LibrarySimulationTest'
+          ./gradlew :core:desktopTest --tests 'dev.npn.core.sim.LibrarySimulationTest*'
           -Dnpn.sim.firstSeed=${{ steps.seeds.outputs.first }}
           -Dnpn.sim.seeds=${{ steps.seeds.outputs.seeds }}
           -Dnpn.sim.steps=${{ steps.seeds.outputs.steps }}
