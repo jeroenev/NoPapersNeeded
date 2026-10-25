@@ -21,6 +21,12 @@ data class SyncConfig(
     val watched: List<Boolean>,
     val deleteAfterImport: List<Boolean>,
     val options: SyncOptions,
+    /**
+     * The step at which each replica joins, 0 for one there from the start: a late one starts with
+     * an empty folder the sync tool fills, as a second device set up later does, and opens the
+     * library on it at once.
+     */
+    val joinsAt: List<Int> = List(replicas) { 0 },
 ) {
     companion object {
         fun forSeed(config: SimConfig): SyncConfig {
@@ -39,6 +45,12 @@ data class SyncConfig(
                         }
                     }
                 }
+            val options =
+                SyncOptions(
+                    tool = random.pick(SyncTool.entries),
+                    inPlacePdfPercent = if (random.nextBoolean()) IN_PLACE_PERCENT else 0,
+                    duplicatePercent = DUPLICATE_PERCENT,
+                )
             return SyncConfig(
                 replicas = count,
                 profiles = profiles,
@@ -48,12 +60,17 @@ data class SyncConfig(
                     },
                 watched = List(count) { random.chance(50) },
                 deleteAfterImport = List(count) { random.nextBoolean() },
-                options =
-                    SyncOptions(
-                        tool = random.pick(SyncTool.entries),
-                        inPlacePdfPercent = if (random.nextBoolean()) IN_PLACE_PERCENT else 0,
-                        duplicatePercent = DUPLICATE_PERCENT,
-                    ),
+                options = options,
+                joinsAt =
+                    List(count) { i ->
+                        if (i > 0 &&
+                            random.chance(LATE_JOIN_PERCENT)
+                        ) {
+                            1 + random.nextInt(maxOf(1, config.steps / 2))
+                        } else {
+                            0
+                        }
+                    },
             )
         }
 
@@ -62,6 +79,7 @@ data class SyncConfig(
         private const val MAX_REPLICAS = 4
         private const val IN_PLACE_PERCENT = 15
         private const val DUPLICATE_PERCENT = 10
+        private const val LATE_JOIN_PERCENT = 25
     }
 }
 
@@ -103,16 +121,19 @@ internal class ReplicaLog(
  * replica blocking writes as `JOURNAL_DAMAGED`, since the tool delivers every journal object whole
  * and nothing deletes one. At rest every replica is checked against a rebuild of
  * its own folder, whatever it has not received yet; after a full sync (sometimes, and at the end)
- * the folders must be equal and every replica must show the same library.
+ * the folders must be equal and every replica must show the same library. A replica that joins
+ * late ([SyncConfig.joinsAt]) takes part from the step it joins, its folder empty until the tool
+ * fills it.
  */
 internal class SyncSimulation(
     scheduler: TestCoroutineScheduler,
     val config: SimConfig,
     /** Runs after each step, before the invariants across replicas: the harness's own tests break things here. */
     private val afterStep: SyncSimulation.(step: Int) -> Unit = {},
+    /** The replicas and the tool, as the seed draws them unless a harness test says otherwise. */
+    val sync: SyncConfig = SyncConfig.forSeed(config),
 ) {
     val world = SimWorld(scheduler)
-    val sync = SyncConfig.forSeed(config)
     private val random = Random(config.seed xor ORCHESTRA_SALT)
 
     /** Every step and what it came to, as a trace file holds it. */
@@ -172,6 +193,9 @@ internal class SyncSimulation(
 
         val extra = ExtraPlanner(Random(salted(6)), sim, name, watched, sync.deleteAfterImport[index], log)
 
+        /** The step this replica joins at (0: from the start), and whether it has. */
+        val joinsAt = sync.joinsAt[index]
+        var joined = false
         var removalsSeen = 0
 
         init {
@@ -183,6 +207,9 @@ internal class SyncSimulation(
     }
 
     val members = List(sync.replicas) { Member(it) }
+
+    /** The replicas that have joined: the ones that take steps and are checked. */
+    private val present: List<Member> get() = members.filter { it.joined }
 
     /**
      * The documents [hash]'s relink chains in [member]'s index end at: followed from [hash] through
@@ -227,6 +254,7 @@ internal class SyncSimulation(
             Random(config.seed xor TOOL_SALT),
             sync.options,
             trace,
+            present = members.map { it.joinsAt == 0 },
         )
 
     fun run() = runSteps()
@@ -235,14 +263,15 @@ internal class SyncSimulation(
         try {
             trace += "config: $config"
             trace += "replicas: $sync"
-            members.forEach { it.sim.open() }
+            members.filter { it.joinsAt == 0 }.forEach { open(it) }
             for (step in 1..config.steps) {
                 world.step = step
                 val started = System.nanoTime()
+                members.filter { !it.joined && it.joinsAt == step }.forEach { join(it, step) }
                 if (random.chance(SYNC_PERCENT)) {
                     syncStep(step)
                 } else {
-                    val member = random.pick(members)
+                    val member = random.pick(present)
                     val extra = if (random.chance(EXTRA_PERCENT)) member.extra.next(member.sim.snapshot()) else null
                     member.sim.step(step, extra ?: member.sim.nextPlanned())
                 }
@@ -263,6 +292,22 @@ internal class SyncSimulation(
         }
     }
 
+    private fun open(member: Member) {
+        member.sim.open()
+        member.joined = true
+    }
+
+    /** [member] is given the folder, empty, at [step], and opens the library on it while the tool fills it. */
+    private fun join(
+        member: Member,
+        step: Int,
+    ) {
+        tool.join(member.index)
+        trace += "#$step t=${world.scheduler.currentTime} ${member.name} joins with an empty folder " +
+            "(${tool.pendingDeliveries} delivering)"
+        open(member)
+    }
+
     // ---- the sync tool's steps ------------------------------------------------------------------
 
     private fun syncStep(step: Int) {
@@ -270,7 +315,7 @@ internal class SyncSimulation(
         val text =
             when {
                 roll < 65 -> {
-                    val member = random.pick(members)
+                    val member = random.pick(present)
                     val changed = tool.scan(member.index)
                     "sync: scan ${member.name}, $changed path(s) changed"
                 }
@@ -287,7 +332,7 @@ internal class SyncSimulation(
                 }
             }
         trace += "#$step t=${world.scheduler.currentTime} $text (${tool.pendingDeliveries} delivering)"
-        members.forEach { it.sim.checkCheap() }
+        present.forEach { it.sim.checkCheap() }
     }
 
     // ---- invariants across replicas -------------------------------------------------------------
@@ -380,7 +425,7 @@ internal class SyncSimulation(
             var rounds = 0
             while (true) {
                 val moved = tool.flush()
-                members.forEach { it.sim.settle() }
+                present.forEach { it.sim.settle() }
                 tool.finishInFlight()
                 val differences = tool.differences()
                 trace += "   == sync round ${rounds + 1}: $moved path(s) moved, " +
@@ -397,15 +442,15 @@ internal class SyncSimulation(
                 }
             }
         } else {
-            members.forEach { it.sim.settle() }
+            present.forEach { it.sim.settle() }
         }
-        members.forEach { member ->
+        present.forEach { member ->
             member.replica.session?.writeBlock?.value?.let {
                 fail(member, "${member.name} still blocks writes at rest ($it; the log says why)")
             }
         }
-        val views = members.map { it.sim.checkAtRest() }
-        members.forEach(::checkOwnNames)
+        val views = present.associateWith { it.sim.checkAtRest() }
+        present.forEach(::checkOwnNames)
         checkLastCopies()
         if (full) checkConvergence(views)
     }
@@ -505,7 +550,7 @@ internal class SyncSimulation(
             .maxWithOrNull(compareBy<LossAt> { it.atMillis }.thenBy { it.loss == Loss.APP })
 
     /** After a full sync every replica shows the library the first one shows, but for what each alone remembers. */
-    private fun checkConvergence(views: List<LibraryView>) {
+    private fun checkConvergence(views: Map<Member, LibraryView>) {
         val first = members[0]
 
         fun holds(
@@ -513,9 +558,9 @@ internal class SyncSimulation(
             a: String,
             b: String,
         ) = listOf(a, b).all { path -> first.fs.bytesAt(path)?.let(::sha256Bytes) == docId }
-        members.drop(1).forEach { member ->
-            val a = views[0]
-            val b = views[member.index]
+        views.keys.filter { it != first }.forEach { member ->
+            val a = views.getValue(first)
+            val b = views.getValue(member)
             // A row only one index holds for a document neither shows is what that replica alone saw
             // (a file gone missing, a deletion it watched): device-local, as for the rebuild oracle.
             // While this build writes no doc-undelete, a document deleted for good that an import
@@ -560,7 +605,8 @@ internal class SyncSimulation(
             members.forEach { member ->
                 appendLine(
                     "  ${member.name}: ${member.replica.installationId}, device ids ${member.replica.deviceIds}, " +
-                        "${member.fs.allFiles().size} files",
+                        "${member.fs.allFiles().size} files" +
+                        if (member.joinsAt > 0) ", joined at step ${member.joinsAt}" else "",
                 )
             }
             appendLine("Sync: ${tool.pendingDeliveries} deliveries under way, ${tool.conflicts.size} conflict copies")

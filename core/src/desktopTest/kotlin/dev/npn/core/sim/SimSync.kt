@@ -65,7 +65,9 @@ internal class SyncPeer(
  * a version it has that does not descend from it, contends with is a conflict: identical bytes
  * merge, a modification beats a deletion, and otherwise the newer mtime (then the higher device id)
  * keeps the name while the other is kept as a conflict copy, which then syncs like any new file.
- * Modification times travel with the bytes.
+ * Modification times travel with the bytes. A device the folder is shared with later ([join]) is
+ * sent what the others hold, over the same seeded delays, as the tool fills a folder it was just
+ * given; until then it is scanned by nothing and sent nothing.
  *
  * A conflict on a write-once name under `.npn/` is a violation of the library's naming
  * ([violations]): two writers published different bytes under one name.
@@ -76,9 +78,17 @@ internal class SimSync(
     private val random: Random,
     val options: SyncOptions,
     private val trace: MutableList<String>,
+    /** Which devices share the folder from the start; the others [join] later. */
+    present: List<Boolean> = peers.map { true },
 ) {
     /** What the tool last recorded at each path of each device: its local index. */
     private val known = peers.map { HashMap<String, SyncVersion>() }
+
+    /** Which devices share the folder now. */
+    private val present = present.toBooleanArray()
+
+    /** The indices of the devices that share the folder now. */
+    private val sharing: List<Int> get() = peers.indices.filter { present[it] }
 
     /** Version counters, one per device. */
     private val counters = LongArray(peers.size)
@@ -113,6 +123,7 @@ internal class SimSync(
         peer: Int,
         immediate: Boolean = false,
     ): Int {
+        if (!present[peer]) return 0
         val fs = peers[peer].fs
         val index = known[peer]
         val files = fs.allFiles().filterKeys { synced(it) && it !in writing[peer] }
@@ -150,7 +161,7 @@ internal class SimSync(
         version: SyncVersion,
         immediate: Boolean,
     ) {
-        peers.indices.filter { it != from }.forEach { to ->
+        sharing.filter { it != from }.forEach { to ->
             if (immediate) {
                 apply(to, path, version, Delivery.Atomic, immediate = true)
             } else {
@@ -409,6 +420,32 @@ internal class SimSync(
         }
     }
 
+    // ---- joining --------------------------------------------------------------------------------
+
+    /**
+     * Share the folder with [peer] from now on, its folder empty: the tool sends it the latest
+     * version every other device holds of each path (the one that descends from all the others',
+     * or the newest where none does, as a conflict would resolve), each over a seeded delay, so the
+     * folder fills over virtual time while the app may already be open on it.
+     */
+    fun join(peer: Int) {
+        check(!present[peer]) { "${peers[peer].name} shares the folder already" }
+        val others = sharing
+        present[peer] = true
+        val paths = others.flatMap { known[it].keys }.toSortedSet()
+        for (path in paths) {
+            val held = others.mapNotNull { from -> known[from][path]?.let { from to it } }
+            val (from, version) =
+                held.firstOrNull { (_, candidate) -> held.all { (_, other) -> candidate.dominates(other.vector) } }
+                    ?: held.maxWith(
+                        compareBy<Pair<Int, SyncVersion>> { it.second.mtime }.thenBy { peers[it.first].deviceShort },
+                    )
+            if (version.bytes == null) continue
+            trace += "   sync: sending ${version.describe()} '$path' to ${peers[peer].name}, which joined"
+            schedule(peer, path, SyncVersion(version.bytes, version.mtime, version.vector, from), duplicate = false)
+        }
+    }
+
     // ---- quiescence -----------------------------------------------------------------------------
 
     /** Let every delivery under way land, however long it waits. */
@@ -448,7 +485,7 @@ internal class SimSync(
         var total = 0
         repeat(FLUSH_ROUNDS) {
             finishInFlight()
-            val changed = peers.indices.sumOf { peer -> scan(peer, immediate = true) } + pullAll()
+            val changed = sharing.sumOf { peer -> scan(peer, immediate = true) } + pullAll()
             total += changed
             if (changed == 0) return total
         }
@@ -466,10 +503,10 @@ internal class SimSync(
      */
     private fun pullAll(): Int {
         var pulled = 0
-        val paths = known.flatMap { it.keys }.toSortedSet()
+        val paths = sharing.flatMap { known[it].keys }.toSortedSet()
         for (path in paths) {
-            for (to in peers.indices) {
-                for (from in peers.indices.filter { it != to }) {
+            for (to in sharing) {
+                for (from in sharing.filter { it != to }) {
                     val theirs = known[from][path] ?: continue
                     val mine = known[to][path]
                     check(mine == null || mine.vector != theirs.vector || same(mine.bytes, theirs.bytes)) {
@@ -487,21 +524,25 @@ internal class SimSync(
         return pulled
     }
 
-    /** The paths whose files differ between the devices (missing on some, or other bytes); empty when all agree. */
+    /**
+     * The paths whose files differ between the devices sharing the folder (missing on some, or other
+     * bytes); empty when all agree.
+     */
     fun differences(): List<String> {
-        val maps = peers.map { peer -> peer.fs.allFiles().filterKeys(::synced) }
+        val devices = sharing
+        val maps = devices.map { peers[it].fs.allFiles().filterKeys(::synced) }
         val paths = maps.flatMap { it.keys }.toSortedSet()
         return paths.mapNotNull { path ->
             val hashes = maps.map { files -> files[path]?.let { sha256Bytes(it).take(ID) } ?: "-" }
             path.takeIf { hashes.distinct().size > 1 }?.let {
                 "'$it': " +
-                    peers.indices.joinToString { i ->
+                    devices.withIndex().joinToString { (slot, i) ->
                         val recorded = known[i][it]
                         val held =
                             recorded?.bytes?.let { bytes -> sha256Bytes(bytes).take(ID) } ?: recorded?.let { "deleted" }
                                 ?: "none"
                         val busy = if (it in writing[i]) ", writing" else ""
-                        "${peers[i].name}=${hashes[i]} (tool has $held ${recorded?.vector}$busy)"
+                        "${peers[i].name}=${hashes[slot]} (tool has $held ${recorded?.vector}$busy)"
                     } +
                     // A journal object some device keeps writing says what it keeps deciding.
                     if (isJournalObject(it)) {

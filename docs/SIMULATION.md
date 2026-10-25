@@ -105,7 +105,10 @@ kept 5 days. ci.yml keeps running only the CI-sized test above, as part of `:cor
   the higher device id) keeps the name and the other is kept as a conflict copy (Syncthing's
   `.sync-conflict-<date>-<time>-<device>` or Nextcloud's `(conflicted copy <date> <time>)`), which
   then syncs like any new file. What is not a PDF, a journal object above all, always lands whole by
-  a rename, as every tool of this kind does it.
+  a rename, as every tool of this kind does it. A device given the folder later (`SyncConfig.joinsAt`:
+  a quarter of the replicas after the first, at a step in the first half of the run) starts with an
+  empty folder, which the tool fills with the latest version of every path over the same delays,
+  while the app opens on it at once, as a second device set up later is.
 - A full sync (`SimSync.flush`) lets every delivery under way land, scans every device and delivers at
   once, and brings each device every version another holds that its own does not descend from, until
   a round changes nothing. Two devices recording different bytes under one version vector would be
@@ -278,7 +281,8 @@ why next to it. Fail through `fail(...)`, which attaches the seed and the trace.
 - **The sync tool losing a file it delivered**, or a device that never syncs again. The tool here
   delivers everything eventually, and never damages a file: it writes only PDFs in place.
 - **Directory renames and deletions** by the sync tool: it syncs files, and folders follow them.
-- **Devices that join late** with an empty folder, or leave: every replica opens at step 0.
+- **Devices that leave**, or come back after a long time away: a replica that has joined takes part
+  to the end.
 - **Partial listings** from a document provider still loading (`DocumentsContract.EXTRA_LOADING`):
   SAF storage is on its way out, so the simulation spends nothing on what only it can do. The SAF
   profile stays for its publication and relocation rules while the app supports it.
