@@ -2,7 +2,6 @@ package dev.npn.core.sim
 
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
-import dev.npn.core.index.MetadataWriteBlocked
 import dev.npn.core.index.WriteBlock
 import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.JournalOp
@@ -55,7 +54,6 @@ data class SyncConfig(
                         tool = random.pick(SyncTool.entries),
                         inPlacePdfPercent = if (random.nextBoolean()) IN_PLACE_PERCENT else 0,
                         duplicatePercent = DUPLICATE_PERCENT,
-                        journalInPlace = random.chance(JOURNAL_IN_PLACE_SEEDS),
                     ),
             )
         }
@@ -65,7 +63,6 @@ data class SyncConfig(
         private const val MAX_REPLICAS = 4
         private const val IN_PLACE_PERCENT = 15
         private const val DUPLICATE_PERCENT = 10
-        private const val JOURNAL_IN_PLACE_SEEDS = 15
     }
 }
 
@@ -106,8 +103,6 @@ internal class ReplicaSetup(
     val known: HashMap<String, ByteArray>,
     val trace: MutableList<String>,
     val labelBase: Int,
-    /** Runs before an open that failed is tried again: what lets the world mend what made it fail. */
-    val beforeReopen: (Throwable) -> Unit = {},
 )
 
 /** The world's log, each entry naming the replica it came from. */
@@ -130,9 +125,9 @@ internal class ReplicaLog(
  * [ExtraPlanner]'s), or one of the tool's.
  *
  * Invariants beyond each replica's own: no sync conflict on a name written once, no replica
- * deleting a journal object or another device's sidecar or marker, device ids never shared, and a
- * replica blocking writes as `JOURNAL_DAMAGED` only after the tool damaged a journal object there
- * since it was last at rest. At rest every replica is checked against a rebuild of
+ * deleting a journal object or another device's sidecar or marker, device ids never shared, and no
+ * replica blocking writes as `JOURNAL_DAMAGED`, since the tool delivers every journal object whole
+ * and nothing deletes one. At rest every replica is checked against a rebuild of
  * its own folder, whatever it has not received yet; after a full sync (sometimes, and at the end)
  * the folders must be equal and every replica must show the same library.
  */
@@ -183,9 +178,7 @@ internal class SyncSimulation(
                         known,
                         trace,
                         LABEL_STRIDE * index,
-                    ) { failure ->
-                        reopenAfter(this, failure)
-                    },
+                    ),
             )
         val watched = if (sync.watched[index]) SimWatchedFolder(name, world.clock::nowMillis, ::accounted) else null
 
@@ -204,8 +197,6 @@ internal class SyncSimulation(
 
         val extra = ExtraPlanner(Random(salted(6)), sim, name, watched, sync.deleteAfterImport[index], log)
 
-        /** The step at which this replica was last seen at rest with writes allowed. */
-        var cleanStep = 0
         var removalsSeen = 0
 
         init {
@@ -351,39 +342,18 @@ internal class SyncSimulation(
                 }
             }
         }
+        // The tool delivers every journal object whole, by a rename, and nothing deletes one: a
+        // library that finds its journal damaged found a bug.
         members.forEach { member ->
             val block =
                 member.replica.session
                     ?.writeBlock
-                    ?.value ?: return@forEach
-            if (block == WriteBlock.JOURNAL_DAMAGED && !explained(member)) {
-                fail(
-                    member,
-                    "${member.name} blocks writes as JOURNAL_DAMAGED, though the sync tool damaged no journal object " +
-                        "there since step ${member.cleanStep} (the log says why)",
-                )
+                    ?.value
+            if (block == WriteBlock.JOURNAL_DAMAGED) {
+                fail(member, "${member.name} blocks writes as JOURNAL_DAMAGED (the log says why)")
             }
         }
     }
-
-    /**
-     * An open refused (a damaged journal over an index with nothing to show refuses the library):
-     * when the tool damaged a journal object there, let its deliveries land, which mends it, before
-     * the open is tried again. An open the simulation does not explain is tried again as it is.
-     */
-    private fun reopenAfter(
-        member: Member,
-        failure: Throwable,
-    ) {
-        if (failure is MetadataWriteBlocked && explained(member)) {
-            trace += "   ${member.name}'s open was refused while the sync tool had a journal object half written; " +
-                "letting deliveries land"
-            tool.finishInFlight()
-        }
-    }
-
-    /** Whether something the simulation did explains a damaged journal on [member] since it was last clean. */
-    private fun explained(member: Member): Boolean = tool.damagedAt[member.index] > member.cleanStep
 
     /** A replica deletes no journal object, and no sidecar or device marker but its own. */
     private fun checkRemovals(member: Member) {
@@ -469,9 +439,6 @@ internal class SyncSimulation(
         members.forEach(::checkOwnNames)
         checkLastCopies()
         if (full) checkConvergence(views)
-        members.forEach { member ->
-            member.cleanStep = world.step
-        }
     }
 
     /**
@@ -624,8 +591,7 @@ internal class SyncSimulation(
             members.forEach { member ->
                 appendLine(
                     "  ${member.name}: ${member.replica.installationId}, device ids ${member.replica.deviceIds}, " +
-                        "${member.fs.allFiles().size} files, clean at step ${member.cleanStep}, " +
-                        "journal damaged at step ${tool.damagedAt[member.index]}",
+                        "${member.fs.allFiles().size} files",
                 )
             }
             appendLine("Sync: ${tool.pendingDeliveries} deliveries under way, ${tool.conflicts.size} conflict copies")

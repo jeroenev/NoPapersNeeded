@@ -69,8 +69,9 @@ class SyncSimulationHarnessTest {
             failure.message shouldContain "deleted the journal object"
         }
 
+    /** The tool delivers every journal object whole, so a journal a library finds damaged is a bug. */
     @Test
-    fun aDamagedJournalNoSyncExplainsFailsTheRun() =
+    fun aDamagedJournalObjectFailsTheRun() =
         runTest {
             val failure =
                 shouldThrow<SimFailure> {

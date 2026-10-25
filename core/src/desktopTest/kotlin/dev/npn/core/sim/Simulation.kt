@@ -291,7 +291,6 @@ internal class Simulation(
             if (!failure.isInjected() && isBugFailure(failure)) fail("opening the library failed: ${failure.reason()}")
             trace += "   open failed (${failure.reason()}); faults cleared, opening again"
             fs.faults.disarmAll()
-            setup?.beforeReopen?.invoke(failure)
             runCatching { replica.open() }.exceptionOrNull()?.let {
                 fail(
                     "opening the library failed again: ${it.reason()}",

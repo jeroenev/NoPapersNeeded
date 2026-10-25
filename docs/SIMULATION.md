@@ -57,7 +57,7 @@ replica's storage profile and mtimes, the watcher's losses, the sync tool), the 
 the last steps of the trace, the end of the session log (each entry names its replica), the failing
 replica's files with their hashes and its index's document rows, the history of a path whose file is
 not its document's, the journal events behind a document the rebuild shows otherwise, and the sync
-tool's state (conflict copies, deliveries under way, damage it did). A seed that hits a failure listed
+tool's state (conflict copies, deliveries under way). A seed that hits a failure listed
 in `KnownIssues.knownFailures` or `SyncKnownIssues.knownFailures` (a finding already written up) stops
 there. Such a seed is counted and printed instead of failing the test, so a long run goes on to find
 new bugs. A replay of that one seed still fails.
@@ -65,7 +65,7 @@ new bugs. A replay of that one seed still fails.
 `SimulationHarnessTest` and `SyncSimulationHarnessTest` check that the harness itself can fail: the
 rebuild opening other files, a rewritten journal object, a logged programming error, two versions of
 a write-once name meeting in the sync tool, a replica deleting a journal object, and a damaged journal
-nothing in the simulation explains each fail the run. Storage with no publication primitive refuses
+object each fail the run. Storage with no publication primitive refuses
 the library.
 
 ## Scheduled runs
@@ -104,8 +104,8 @@ kept 5 days. ci.yml keeps running only the CI-sized test above, as part of `:cor
   a conflict: identical bytes merge, a modification beats a deletion, otherwise the newer mtime (then
   the higher device id) keeps the name and the other is kept as a conflict copy (Syncthing's
   `.sync-conflict-<date>-<time>-<device>` or Nextcloud's `(conflicted copy <date> <time>)`), which
-  then syncs like any new file. On some seeds the tool also writes journal objects in place, which
-  a library cannot tell from damage; the tool records each such delivery (`damagedAt`).
+  then syncs like any new file. What is not a PDF, a journal object above all, always lands whole by
+  a rename, as every tool of this kind does it.
 - A full sync (`SimSync.flush`) lets every delivery under way land, scans every device and delivers at
   once, and brings each device every version another holds that its own does not descend from, until
   a round changes nothing.
@@ -176,10 +176,9 @@ Across replicas, after every step:
   snapshot, an OCR sidecar, a device marker): two writers published different bytes under one name.
 - No replica deletes or moves away a journal object, nor another device's sidecar or marker.
 - No two replicas share a device id.
-- A replica blocks writes as `JOURNAL_DAMAGED` only after the sync tool wrote a journal object in
-  place there since it was last at rest. Anything else
-  that blocks writes is a bug: objects are write-once and named by their hash, and a sync tool's
-  file in transfer shows under its temporary name.
+- No replica blocks writes as `JOURNAL_DAMAGED`: objects are write-once and named by their hash, the
+  tool delivers each whole by a rename and shows a file in transfer under its temporary name, and
+  nothing deletes one, so a journal a library finds damaged is a bug.
 - A watched folder's importer deletes only a file whose bytes the library has a document of: bytes
   a file in the replica's folder holds, or bytes a relink superseded whose final target, the relink
   chain followed to its end, a file in that folder holds.
@@ -276,7 +275,7 @@ why next to it. Fail through `fail(...)`, which attaches the seed and the trace.
   moment before, but what the process did to files during the transaction would stay. Modelling
   that needs file-backed databases copied at the crash point.
 - **The sync tool losing a file it delivered**, or a device that never syncs again. The tool here
-  delivers everything eventually; it damages only by writing a journal object in place for a while.
+  delivers everything eventually, and never damages a file: it writes only PDFs in place.
 - **Directory renames and deletions** by the sync tool: it syncs files, and folders follow them.
 - **Devices that join late** with an empty folder, or leave: every replica opens at step 0.
 - **Partial listings** from a document provider still loading (`DocumentsContract.EXTRA_LOADING`):

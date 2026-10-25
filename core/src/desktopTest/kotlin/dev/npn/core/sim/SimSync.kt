@@ -31,11 +31,6 @@ data class SyncOptions(
     val inPlacePdfPercent: Int,
     /** The share of deliveries made a second time, as a tool that re-pulls a file it already has does. */
     val duplicatePercent: Int,
-    /**
-     * Whether the tool sometimes writes a journal object in place, partial at its final name for a
-     * while: damage the library cannot tell from a lost object, and so a reason it may block writes.
-     */
-    val journalInPlace: Boolean,
 )
 
 /** One version of one path, as the tool's index holds it: its bytes (null for a deletion), mtime and version vector. */
@@ -63,17 +58,17 @@ internal class SyncPeer(
  * device records what changed there since its last scan as new versions (a version vector per path)
  * and sends each to every other device, where it lands after a seeded delay, so deliveries arrive out
  * of order, now and then twice, under the tool's temporary name first and then renamed into place,
- * or (for a PDF, sometimes) written in place over a while. Journal objects, OCR sidecars, device
- * markers, staging files and PDFs travel alike; a deletion travels as a version too. A delivery a
- * device's own unscanned change, or a version it has that does not descend from it, contends with is
- * a conflict: identical bytes merge, a modification beats a deletion, and otherwise the newer mtime
- * (then the higher device id) keeps the name while the other is kept as a conflict copy, which then
- * syncs like any new file. Modification times travel with the bytes.
+ * or (for a PDF, sometimes) written in place over a while, as `cp`, a scanner app or `adb push`
+ * write one; what is not a PDF, a journal object above all, always lands whole by a rename, as every
+ * tool of this kind does it. Journal objects, OCR sidecars, device markers, staging files and PDFs
+ * travel alike; a deletion travels as a version too. A delivery a device's own unscanned change, or
+ * a version it has that does not descend from it, contends with is a conflict: identical bytes
+ * merge, a modification beats a deletion, and otherwise the newer mtime (then the higher device id)
+ * keeps the name while the other is kept as a conflict copy, which then syncs like any new file.
+ * Modification times travel with the bytes.
  *
- * What it did that a library could not tell from damage (a journal object partial at its final
- * name) is recorded per device ([damagedAt]), so the simulation can tell a block it explains from
- * one it does not. A conflict on a write-once name under `.npn/` is a violation of the library's
- * naming ([violations]): two writers published different bytes under one name.
+ * A conflict on a write-once name under `.npn/` is a violation of the library's naming
+ * ([violations]): two writers published different bytes under one name.
  */
 internal class SimSync(
     private val world: SimWorld,
@@ -95,9 +90,6 @@ internal class SimSync(
     private val transferring = peers.map { HashSet<String>() }
 
     private val inFlight = ArrayList<Pair<String, Deferred<Unit>>>()
-
-    /** The step at which each device last got a journal object partial at its final name, or -1. */
-    val damagedAt = IntArray(peers.size) { -1 }
 
     /** Conflict copies made, for the trace and the summary. */
     val conflicts = ArrayList<String>()
@@ -181,12 +173,7 @@ internal class SimSync(
                 roll < 95 -> random.nextLong(3_000, 60_000)
                 else -> random.nextLong(60_000, 10L * 60_000)
             }
-        val inPlace =
-            version.bytes != null &&
-                (
-                    (isPdf(path) && random.chance(options.inPlacePdfPercent)) ||
-                        (options.journalInPlace && isJournalObject(path) && random.chance(JOURNAL_IN_PLACE_PERCENT))
-                )
+        val inPlace = version.bytes != null && isPdf(path) && random.chance(options.inPlacePdfPercent)
         val delivery =
             when {
                 inPlace -> Delivery.InPlace(random.nextInt(2, CHUNKS), random.nextLong(200, CHUNK_INTERVAL_MILLIS))
@@ -395,11 +382,6 @@ internal class SimSync(
 
             delivery is Delivery.InPlace -> {
                 writing[to] += path
-                if (isJournalObject(path)) {
-                    damagedAt[to] = world.step
-                    trace +=
-                        "   sync: writing journal object '$path' in place at ${peers[to].name}, partial for a while"
-                }
                 inFlight +=
                     "in place '$path' at ${peers[to].name}" to
                     world.launch {
@@ -584,7 +566,6 @@ internal class SimSync(
         private const val CHUNKS = 5
         private const val CHUNK_INTERVAL_MILLIS = 3_000L
         private const val TRANSFER_MILLIS = 2_500L
-        private const val JOURNAL_IN_PLACE_PERCENT = 10
         private const val FLUSH_ROUNDS = 12
         private const val BUSY_POLL_MILLIS = 500L
         private const val LONG_WAIT_MILLIS = 15L * 60_000
