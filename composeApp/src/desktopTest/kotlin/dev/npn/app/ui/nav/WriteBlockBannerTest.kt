@@ -18,30 +18,48 @@ import dev.npn.core.index.WriteBlock
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 
-/** The read-only banner above every screen: the block's reason as a sentence, and Retry where it helps. */
+/**
+ * The read-only banner above every screen: the block's reason as a sentence, and Retry and Rebuild
+ * index where they help.
+ */
 class WriteBlockBannerTest : EnglishLocaleTest() {
     /**
-     * A journal still arriving reads as its reason, capitalized to start the banner, with a Retry;
-     * a library a newer app changed offers none; and the banner goes once the block lifts.
+     * A journal still arriving reads as its reason, capitalized to start the banner, with a Retry
+     * and a Rebuild index; a library a newer app changed offers neither; and the banner goes once
+     * the block lifts.
      */
     @Test
     fun theBannerSaysWhyAndGoesOnceWritesAreTaken() =
         onUiThread {
             var block by mutableStateOf<WriteBlock?>(WriteBlock.JOURNAL_DAMAGED)
             var retries = 0
+            var rebuilds = 0
+            val actions =
+                object : WriteBlockActions {
+                    override fun retry() {
+                        retries++
+                    }
+
+                    override fun rebuildIndex() {
+                        rebuilds++
+                    }
+                }
             themedScene(WIDTH, HEIGHT) {
-                WithWriteBlockBanner(block, onRetry = { retries++ }) { Text("Library") }
+                WithWriteBlockBanner(block, actions) { Text("Library") }
             }.closing {
                 render()
                 has { it.text()?.startsWith("The library's change history is missing a file") == true } shouldBe true
                 click { it.text() == "Retry" }
                 retries shouldBe 1
+                click { it.text() == "Rebuild index" }
+                rebuilds shouldBe 1
 
                 block = WriteBlock.NEWER_FORMAT
                 Snapshot.sendApplyNotifications()
                 render()
                 has { it.text()?.startsWith("The library has changes from a newer version") == true } shouldBe true
                 has { it.text() == "Retry" } shouldBe false
+                has { it.text() == "Rebuild index" } shouldBe false
 
                 block = null
                 Snapshot.sendApplyNotifications()

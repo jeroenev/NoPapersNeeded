@@ -100,7 +100,7 @@ class MainNavTest : EnglishLocaleTest() {
                                     writeBlock = null,
                                     snackbar = remember { SnackbarHostState() },
                                     onOpenLibrary = {},
-                                    onRetryWrites = {},
+                                    writeBlockActions = NoWriteBlockActions,
                                 )
                             }
                         }
@@ -133,4 +133,10 @@ class MainNavTest : EnglishLocaleTest() {
         const val FRAME_NANOS = 100_000_000L
         val ROUTES = listOf(Route.Library::class, Route.Settings::class, Route.AiChat::class)
     }
+}
+
+private object NoWriteBlockActions : WriteBlockActions {
+    override fun retry() = Unit
+
+    override fun rebuildIndex() = Unit
 }

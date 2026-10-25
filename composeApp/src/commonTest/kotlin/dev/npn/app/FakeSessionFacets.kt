@@ -11,6 +11,7 @@ import dev.npn.core.app.OcrStatus
 import dev.npn.core.app.OcrVersion
 import dev.npn.core.app.QueuedEditRun
 import dev.npn.core.app.QueuedWork
+import dev.npn.core.app.RebuildOutcome
 import dev.npn.core.app.ReviewConfigFacade
 import dev.npn.core.app.SplitOutcome
 import dev.npn.core.app.StoragePathFacade
@@ -221,6 +222,16 @@ class FakeMaintenanceFacade : MaintenanceFacade {
     ): SplitOutcome {
         splits += docId to segments
         return splitOutcome
+    }
+
+    var rebuilds = 0
+    var rebuildOutcome: RebuildOutcome = RebuildOutcome.Done
+    var failRebuild: (() -> Nothing)? = null
+
+    override suspend fun rebuildIndex(): RebuildOutcome {
+        failRebuild?.invoke()
+        rebuilds++
+        return rebuildOutcome
     }
 }
 

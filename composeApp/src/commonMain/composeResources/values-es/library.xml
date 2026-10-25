@@ -4,6 +4,8 @@
     <string name="library_documents">Documentos</string>
     <string name="library_refresh">Actualizar</string>
     <string name="library_refresh_failed">No se pudo actualizar la biblioteca: %1$s</string>
+    <string name="library_rebuild_failed">No se pudo reconstruir el índice: %1$s</string>
+    <string name="library_rebuild_not_completed">No se pudo reconstruir el índice. La biblioteca no ha cambiado.</string>
     <string name="library_filters">Filtros</string>
     <string name="library_switch_to_list">Cambiar a vista de lista</string>
     <string name="library_switch_to_grid">Cambiar a vista de cuadrícula</string>

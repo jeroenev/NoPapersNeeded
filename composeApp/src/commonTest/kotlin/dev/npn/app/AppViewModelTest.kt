@@ -6,6 +6,8 @@ import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.nav.QueueStatus
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.app.QueuedWork
+import dev.npn.core.app.RebuildFailure
+import dev.npn.core.app.RebuildOutcome
 import dev.npn.core.app.WorkStage
 import dev.npn.core.app.WorkState
 import dev.npn.core.index.MetadataWriteBlocked
@@ -22,6 +24,8 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_writes_journal_incomplete
+import no_papers_needed.composeapp.generated.resources.library_rebuild_failed
+import no_papers_needed.composeapp.generated.resources.library_rebuild_not_completed
 import no_papers_needed.composeapp.generated.resources.library_refresh_failed
 import kotlin.coroutines.ContinuationInterceptor
 import kotlin.test.Test
@@ -138,6 +142,35 @@ class AppViewModelTest : MainDispatcherTest() {
                 .getValue("/lib")
                 .ingest.rescans shouldBe 1
             messages shouldBe emptyList()
+        }
+
+    /**
+     * Rebuild index builds the open library's index again from its folder, saying nothing when that
+     * is done; a rebuild that did not finish says so, and one that threw gives its reason.
+     */
+    @Test
+    fun rebuildIndexRebuildsTheOpenLibrarysIndexAndSaysWhyWhenItCannot() =
+        runTest(dispatcher) {
+            val env = env(savedLocation = "/lib")
+            val vm = model(env)
+            val messages = collecting(vm.messages.map { it.text })
+            val maintenance = env.sessions.getValue("/lib").maintenance
+
+            vm.rebuildIndex()
+            runCurrent()
+            maintenance.rebuildOutcome = RebuildOutcome.Failed(RebuildFailure.NOT_COMPLETED)
+            vm.rebuildIndex()
+            runCurrent()
+            maintenance.failRebuild = { error("disk full") }
+            vm.rebuildIndex()
+            runCurrent()
+
+            maintenance.rebuilds shouldBe 2
+            messages shouldBe
+                listOf(
+                    uiText(Res.string.library_rebuild_not_completed),
+                    failure(Res.string.library_rebuild_failed, "disk full"),
+                )
         }
 
     /**

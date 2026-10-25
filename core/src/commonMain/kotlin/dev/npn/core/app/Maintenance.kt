@@ -32,6 +32,16 @@ interface MaintenanceFacade {
         docId: String,
         segments: List<IntRange>,
     ): SplitOutcome
+
+    /**
+     * Drop this device's index of the library and build it again from the folder alone, as a fresh
+     * device would: the way out of a write block a journal object nobody holds any more left
+     * ([dev.npn.core.index.WriteBlock.JOURNAL_DAMAGED]), which no rescan can lift. A rebuild that
+     * cannot finish returns [RebuildOutcome.Failed] and leaves the index as it was; it throws only
+     * when the session is closed. Not available in this build yet.
+     */
+    suspend fun rebuildIndex(): RebuildOutcome =
+        throw UnsupportedOperationException("Rebuilding the index is not available yet")
 }
 
 sealed interface SplitOutcome {
@@ -46,4 +56,20 @@ sealed interface SplitOutcome {
     data class Failed(
         val reason: SplitFailure,
     ) : SplitOutcome
+}
+
+/** What [MaintenanceFacade.rebuildIndex] came to. */
+sealed interface RebuildOutcome {
+    /** The index is built again from the folder, and writes are taken. */
+    data object Done : RebuildOutcome
+
+    data class Failed(
+        val reason: RebuildFailure,
+    ) : RebuildOutcome
+}
+
+/** Why a rebuild of the index did not finish; the index is as it was. */
+enum class RebuildFailure {
+    /** The folder could not be read whole, or the index could not be written. */
+    NOT_COMPLETED,
 }

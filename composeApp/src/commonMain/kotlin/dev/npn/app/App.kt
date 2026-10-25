@@ -47,6 +47,7 @@ import dev.npn.app.ui.detail.BrowseContext
 import dev.npn.app.ui.detail.DocumentDraftHost
 import dev.npn.app.ui.detail.DocumentDrafts
 import dev.npn.app.ui.nav.MainNav
+import dev.npn.app.ui.nav.WriteBlockActions
 import dev.npn.app.ui.onboarding.OnboardingScreen
 import dev.npn.app.ui.onboarding.OpenFailureMessage
 import dev.npn.app.ui.onboarding.RestoreFailedScreen
@@ -252,6 +253,14 @@ private fun AppRoot(
                         val aiConfigured by vm.aiConfigured.collectAsStateWithLifecycle()
                         val queue by vm.queueStatus.collectAsStateWithLifecycle()
                         val writeBlock by vm.writeBlock.collectAsStateWithLifecycle()
+                        val writeBlockActions =
+                            remember(vm) {
+                                object : WriteBlockActions {
+                                    override fun retry() = vm.retryWrites()
+
+                                    override fun rebuildIndex() = vm.rebuildIndex()
+                                }
+                            }
                         // Never null here: LocalizedApp remembers it for the session this state opened.
                         // Keyed, so nothing remembered for one library's screens carries over to
                         // another's when the session changes with no screen in between.
@@ -267,7 +276,7 @@ private fun AppRoot(
                                         writeBlock = writeBlock,
                                         snackbar = snackbar,
                                         onOpenLibrary = vm::open,
-                                        onRetryWrites = vm::retryWrites,
+                                        writeBlockActions = writeBlockActions,
                                     )
                                 }
                             }
