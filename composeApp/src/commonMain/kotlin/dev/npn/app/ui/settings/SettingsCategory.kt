@@ -108,8 +108,6 @@ internal data class SettingsPaneState(
     val fieldDialog: FieldDialog? = null,
     /** An OCR language code typed and not added yet. */
     val ocrLanguageTyped: String = "",
-    /** Whether turning the inbox workflow on is asking which documents count as reviewed. */
-    val confirmingInboxMigration: Boolean = false,
 )
 
 /** What a settings pane can do: change a setting ([SettingsActions]), or open what one leads to. */
@@ -124,9 +122,6 @@ internal interface SettingsPaneActions : SettingsActions {
 
     /** What is typed into the field that adds an OCR language. */
     fun typeOcrLanguage(text: String)
-
-    /** Ask, or stop asking, which documents count as reviewed when the inbox workflow turns on. */
-    fun confirmInboxMigration(open: Boolean)
 }
 
 /**

@@ -1,7 +1,6 @@
 package dev.npn.app
 
 import dev.npn.app.ui.common.uiText
-import dev.npn.app.ui.trash.TrashConfirm
 import dev.npn.app.ui.trash.TrashTab
 import dev.npn.app.ui.trash.TrashUiState
 import dev.npn.app.ui.trash.TrashViewModel
@@ -27,9 +26,9 @@ import kotlin.test.Test
 class TrashViewModelTest : MainDispatcherTest() {
     private fun vm(session: FakeLibrarySession = FakeLibrarySession()) = TrashViewModel(session)
 
-    /** A restored process shows the tab the user was on, and the deletion they were confirming. */
+    /** A restored process shows the tab the user was on. */
     @Test
-    fun aRestoredProcessKeepsTheTabAndTheOpenConfirmation() =
+    fun aRestoredProcessKeepsTheTab() =
         runTest(dispatcher) {
             val session =
                 FakeLibrarySession().apply {
@@ -37,10 +36,9 @@ class TrashViewModelTest : MainDispatcherTest() {
                 }
             val screen = recreatable { TrashViewModel(session, it) }
             screen.vm.selectTab(TrashTab.MISSING)
-            screen.vm.confirm(TrashConfirm.DeleteForever("doc-1"))
 
-            val restored = screen.recreate(this, { combine(it.state, it.tab, it.confirm, ::Triple) })
-            restored.confirm.value shouldBe TrashConfirm.DeleteForever("doc-1")
+            val restored = screen.recreate(this, { combine(it.state, it.tab, ::Pair) })
+            restored.tab.value shouldBe TrashTab.MISSING
         }
 
     /** Not loaded is not empty: the screen shows its empty states only once the trash has loaded. */

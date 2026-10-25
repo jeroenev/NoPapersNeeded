@@ -718,18 +718,23 @@ death. For that one, a viewmodel takes the `SavedStateHandle` its entry hands it
 saved as `NpnJson.Persisted` JSON on every change, restored when the new viewmodel is built, and
 dropped when too large for Android's saved state (a selection or a filter over thousands of
 documents comes back empty). A document's viewmodel lives in the document's own store, which no
-entry saves, so the view showing it saves its handle (`rememberDocumentSavedState`). State the
-screens share or hand each other belongs to `LibrarySessionUi`: the drafts (saved at the root, for
-a restored process) and the hand-offs (not saved; a viewmodel that needs one after a restore, as AI
-edit does its documents, saves its own copy). A modal dialog's own edit buffer (the text in a
-`TextInputDialog`) may stay in the dialog's `rememberSaveable` while the viewmodel holds which
-dialog is open, as long as the dialog keeps its place across layouts: a language change cannot
-happen under a modal, and content that changes place with the width class moves as one
-`movableContentOf` (the navigation content, a document's metadata tabs). What a composable may keep
-is what nobody misses: hover, focus, an open menu, animation, a gesture under way, a splitter or
+entry saves, so the view showing it saves its handle (`rememberDocumentSavedState`): the one
+bridge between a keyed store and the saved state, not a pattern to copy. State the screens share
+or hand each other belongs to `LibrarySessionUi`: the drafts (saved at the root, for a restored
+process) and the hand-offs (not saved; a viewmodel that needs one after a restore, as AI edit does
+its documents, saves its own copy). Dialogs follow one rule: the viewmodel holds *which* dialog is
+open and what it is about (the field being edited, the document being deleted); the dialog holds
+its own buffer (the text typed, a box ticked, a pending confirmation) in `rememberSaveable`; and a
+host whose place in the tree depends on the width class moves as one `movableContentOf` (the
+navigation content, a document's metadata tabs, the open settings pane), so the buffer keeps its
+place across the breakpoint. A language change cannot happen under a modal. A plain yes/no
+confirmation with nothing typed into it is the composable's own `rememberSaveable` too: nobody
+misses it, and a viewmodel key for it buys nothing. What a composable may keep without saving is
+what nobody misses either: hover, focus, an open menu, animation, a gesture under way, a splitter or
 scroll position. What a restored process legitimately loses is work in flight (a rescan, a model
-call, a write), messages not yet shown, and what lived only in memory (results fetched on demand,
-the last scan's report). Every viewmodel test recreates its viewmodel at least once mid-interaction
+call, a write), messages not yet shown, what lived only in memory (results fetched on demand, the
+last scan's report), and what is one tap from its default (what a queued review had ticked, which
+reopens with nothing ticked). Every viewmodel test recreates its viewmodel at least once mid-interaction
 through `Recreatable` (`composeApp` commonTest), which saves the handle as a process death does,
 builds a new viewmodel from it and the same fakes, and checks the screen renders the same; its
 `Transient` lists the exceptions, each with why.

@@ -10,7 +10,6 @@ import dev.npn.core.app.aiedit.EditScope
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -19,11 +18,11 @@ import kotlin.test.Test
 class AiEditBatchWorkflowTest : MainDispatcherTest() {
     /**
      * A restored process opens AI edit on the run the user had configured, over the documents
-     * handed to it (whose hand-off is gone), without the ones a batch already spent: a next Start
-     * carries on where the run was.
+     * handed to it (whose hand-off is gone). What a batch already spent is not kept: the run is a
+     * new one, as it is whenever the page is left, so the whole scope is offered again.
      */
     @Test
-    fun aRestoredProcessKeepsTheRunsSetupHandOffAndSpentDocuments() =
+    fun aRestoredProcessKeepsTheRunsSetupAndHandOffButNotWhatABatchSpent() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             var handOff = listOf("a", "b", "c")
@@ -56,10 +55,11 @@ class AiEditBatchWorkflowTest : MainDispatcherTest() {
             // The restored page is opened without a hand-off: it went with the process.
             handOff = emptyList()
 
-            val restored = screen.recreate(this, { combine(it.ui, it.preview, ::Pair) })
+            val restored = screen.recreate(this, { it.ui })
             restored.ui.value.selectionSize shouldBe 3
-            restored.preview.value.batch
-                .map { it.doc.docId } shouldBe listOf("b")
+            collecting(restored.preview)
+            advanceUntilIdle()
+            restored.preview.value.total shouldBe 3
         }
 
     @Test

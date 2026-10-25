@@ -3,8 +3,6 @@ package dev.npn.app.ui.ai
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.reasonText
-import dev.npn.app.ui.common.restored
-import dev.npn.app.ui.common.saveUiState
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.aiedit.ApplyResult
@@ -15,8 +13,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.serialization.builtins.nullable
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_review_discard_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_review_open_failed
@@ -79,39 +77,33 @@ class AiEditReviewViewModel(
 
     private var run: Job? = null
 
-    /** The run's documents as it opened, ticked as stored: what the saved ticks' `opened` base is ([SavedTicks]). */
-    private var defaults: List<ReviewDoc> = emptyList()
-
     init {
+        // What the user ticked is not saved: a restored process reopens the run with nothing ticked,
+        // never with the run's own selection, which could tick what the user had taken off. One tap
+        // on selectRecommended brings the run's selection back.
+        val reopened = saved.get<Boolean>(OPENED_KEY) == true
+        saved[OPENED_KEY] = true
         viewModelScope.launch {
             val opened =
                 runCatchingCancellable { queue.openEditRun(jobId) }
                     .onFailure { message(uiText(Res.string.ai_edit_review_open_failed, it.reasonText())) }
                     .getOrNull()
-            // A restored process gets back what the user had ticked and unticked, over the run as it is now.
-            val ticks = saved.restored<List<String>?>(TICKS_KEY, TicksSerializer, null)
             _phase.value =
                 opened?.let {
-                    defaults = it.docs
-                    val docs = ticks?.let { stored -> SavedTicks.restore(it.docs, stored) } ?: it.docs
+                    val docs = if (reopened) it.docs.setAllSelected(false) else it.docs
                     QueuedReviewPhase.Review(ReviewBatchState(docs, it.emptyDocs), it)
                 } ?: QueuedReviewPhase.Unavailable
         }
     }
 
-    /** Show [review], saving its ticks for a restored process. */
-    private fun show(review: QueuedReviewPhase.Review) {
-        _phase.value = review
-        saved.saveUiState(TICKS_KEY, TicksSerializer, SavedTicks.of(review.batch.docs, defaults))
-    }
-
     /** Leaving destroys the only copy of an answer already paid for, so it is a discard. */
     override val reviewExit = ReviewExit.DISCARD_RUN
 
-    override fun updateReview(transform: (List<ReviewDoc>) -> List<ReviewDoc>) {
-        val current = _phase.value as? QueuedReviewPhase.Review ?: return
-        show(current.copy(batch = current.batch.copy(docs = transform(current.batch.docs))))
-    }
+    override fun updateReview(transform: (List<ReviewDoc>) -> List<ReviewDoc>) =
+        _phase.update { phase ->
+            val current = phase as? QueuedReviewPhase.Review ?: return@update phase
+            current.copy(batch = current.batch.copy(docs = transform(current.batch.docs)))
+        }
 
     /**
      * Write the selected suggestions; a fully applied run leaves the queue. A failed write comes back
@@ -129,7 +121,7 @@ class AiEditReviewViewModel(
                     current.batch,
                     Res.string.ai_edit_review_queue_drop_failed,
                     write = current.run::apply,
-                    showReview = { show(current.copy(batch = it)) },
+                    showReview = { _phase.value = current.copy(batch = it) },
                     showDone = { _phase.value = QueuedReviewPhase.Done(it) },
                 )
             }
@@ -155,11 +147,7 @@ class AiEditReviewViewModel(
     }
 
     private companion object {
-        /**
-         * Not the earlier `review.toggled`, whose entries were flips of the run's own ticks: read as
-         * states, those would tick what the user had unticked.
-         */
-        const val TICKS_KEY = "review.ticks"
-        val TicksSerializer = SavedTicks.serializer.nullable
+        /** Set once this entry opened the run: a restored process finds it and ticks nothing. */
+        const val OPENED_KEY = "review.opened"
     }
 }

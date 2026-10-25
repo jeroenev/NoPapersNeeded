@@ -2,7 +2,6 @@ package dev.npn.app
 
 import androidx.lifecycle.ViewModelStore
 import dev.npn.app.platform.FolderPick
-import dev.npn.app.ui.common.FieldDefFormState
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.settings.FieldDialog
 import dev.npn.app.ui.settings.ReviewMigration
@@ -35,39 +34,30 @@ import kotlin.test.Test
 class SettingsViewModelTest : MainDispatcherTest() {
     /**
      * A restored process shows Settings as the user left it: the pane picked on a wide window, the
-     * search typed into the list, a field being edited with what was typed into its form, an OCR
-     * language typed and not added, the inbox migration being asked, and the offer to go back to a
-     * document's unsaved changes.
+     * search typed into the list, the field being edited, and an OCR language typed and not added.
+     * What is typed into the field's dialog is the dialog's own saveable state.
      */
     @Test
-    fun aRestoredProcessKeepsThePaneTheSearchAndTheOpenDialogs() =
+    fun aRestoredProcessKeepsThePaneTheSearchAndTheOpenDialog() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val settings = FakeSettingsRepository()
             val screen = recreatable { settingsVm(settings, session, it) }
-            val typed = FieldDefFormState(label = "Invoice no.", key = "invoiceNo", keyEdited = true)
             screen.vm.apply {
                 pick(SettingsCategoryId.DOCUMENTS)
                 searchCategories("field")
-                openFieldDialog(FieldDialog.Edit("invoiceNo", typed, confirmingTypeChange = true))
-                offerDraft("doc-1")
+                openFieldDialog(FieldDialog.Edit("invoiceNo"))
                 typeOcrLanguage("deu+fra")
-                confirmInboxMigration(true)
             }
 
             val restored =
                 screen.recreate(this, { model ->
-                    combine(
-                        model.paneState,
-                        model.picked,
-                        model.categoryQuery,
-                        model.draftToResume,
-                    ) { pane, picked, query, draft ->
-                        listOf(pane, picked, query, draft)
+                    combine(model.paneState, model.picked, model.categoryQuery) { pane, picked, query ->
+                        listOf(pane, picked, query)
                     }
                 })
-            restored.paneState.value.fieldDialog shouldBe
-                FieldDialog.Edit("invoiceNo", typed, confirmingTypeChange = true)
+            restored.paneState.value.fieldDialog shouldBe FieldDialog.Edit("invoiceNo")
+            restored.paneState.value.ocrLanguageTyped shouldBe "deu+fra"
         }
 
     @Test

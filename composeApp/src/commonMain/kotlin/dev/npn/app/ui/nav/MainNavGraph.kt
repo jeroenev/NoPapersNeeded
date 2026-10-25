@@ -47,7 +47,7 @@ import org.jetbrains.compose.resources.stringResource
  * The open library's screens: the navigation shell around the [library]'s nav graph, with the
  * banners that sit above every screen. [queue] is the shell's badge; [snackbar] is the shell's own,
  * for what is reported outside any one screen. [writeBlock] is why the library refuses writes now,
- * if it does, and [onRetryWrites] reads its journal again.
+ * if it does, and [writeBlockActions] the ways out of it.
  */
 @Composable
 internal fun MainNav(
@@ -60,7 +60,7 @@ internal fun MainNav(
     writeBlock: WriteBlock?,
     snackbar: SnackbarHostState,
     onOpenLibrary: (location: String) -> Unit,
-    onRetryWrites: () -> Unit,
+    writeBlockActions: WriteBlockActions,
 ) {
     val nav = library.nav
     val entry by nav.currentBackStackEntryAsState()
@@ -70,7 +70,7 @@ internal fun MainNav(
 
     PublishWindowTitle(windowTitle(destination, topLevel, ai))
     WithUpdateBanner(settings, snackbar) {
-        WithWriteBlockBanner(writeBlock, onRetry = onRetryWrites) {
+        WithWriteBlockBanner(writeBlock, writeBlockActions) {
             WithDraftResumeBanner(onOpen = { docId -> nav.resumeDraft(docId, library.browse) }) {
                 // The rail carries AI edit on a wide window, so the chat's top bar offers it only on a
                 // compact one.

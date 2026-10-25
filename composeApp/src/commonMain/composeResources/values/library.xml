@@ -4,6 +4,8 @@
     <string name="library_documents">Documents</string>
     <string name="library_refresh">Refresh</string>
     <string name="library_refresh_failed">Could not refresh the library: %1$s</string>
+    <string name="library_rebuild_failed">Could not rebuild the index: %1$s</string>
+    <string name="library_rebuild_not_completed">Could not rebuild the index. The library was left as it was.</string>
     <string name="library_filters">Filters</string>
     <string name="library_switch_to_list">Switch to list view</string>
     <string name="library_switch_to_grid">Switch to grid view</string>

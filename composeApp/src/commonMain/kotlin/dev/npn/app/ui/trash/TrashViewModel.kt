@@ -73,28 +73,6 @@ interface TrashWrites {
 internal enum class TrashTab { TRASH, DUPLICATES, MISSING }
 
 /**
- * The confirmation open on the trash screen, if any: each of these writes cannot be undone.
- * [TrashViewModel.confirm] keeps it, so it is open again after the screen is recreated.
- */
-@Serializable
-internal sealed interface TrashConfirm {
-    @Serializable
-    data class DeleteForever(
-        val docId: String,
-    ) : TrashConfirm
-
-    @Serializable
-    data object RestoreAll : TrashConfirm
-
-    @Serializable
-    data object EmptyTrash : TrashConfirm
-}
-
-/** Whether this confirmation is for a document no longer among [trashed]. */
-internal fun TrashConfirm.leftTheTrash(trashed: List<DocListItem>): Boolean =
-    this is TrashConfirm.DeleteForever && trashed.none { it.doc.docId == docId }
-
-/**
  * Trash + maintenance. Trashed docs come from the repository; duplicates (extra copies sharing a
  * hash) and missing files (relink candidates) come from the repository / last scan report.
  */
@@ -135,16 +113,6 @@ class TrashViewModel(
     internal val tab: StateFlow<TrashTab> = tabState.flow
 
     internal fun selectTab(tab: TrashTab) = tabState.set(tab)
-
-    private val confirmState = saved.uiState<TrashConfirm?>(CONFIRM_KEY, null)
-
-    /**
-     * The confirmation the screen has open, if any. One restored with a restored process is shown
-     * only once the trash has loaded, and dropped if its document has left it meanwhile.
-     */
-    internal val confirm: StateFlow<TrashConfirm?> = confirmState.flow
-
-    internal fun confirm(confirm: TrashConfirm?) = confirmState.set(confirm)
 
     override fun restore(docId: String) =
         launchReporting(Res.string.common_trash_restore_failed) { docLifecycle.restoreDoc(docId) }
@@ -200,6 +168,5 @@ class TrashViewModel(
 
     private companion object {
         const val TAB_KEY = "trash.tab"
-        const val CONFIRM_KEY = "trash.confirm"
     }
 }

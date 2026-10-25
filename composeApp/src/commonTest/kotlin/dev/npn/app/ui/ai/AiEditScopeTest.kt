@@ -1,7 +1,9 @@
 package dev.npn.app.ui.ai
 
+import androidx.lifecycle.SavedStateHandle
 import dev.npn.app.FakeLibrarySession
 import dev.npn.app.MainDispatcherTest
+import dev.npn.app.afterProcessDeath
 import dev.npn.app.collecting
 import dev.npn.app.recreatable
 import dev.npn.core.app.LibraryFilter
@@ -45,6 +47,30 @@ class AiEditScopeTest : MainDispatcherTest() {
 
             val restored = screen.recreate(this, { combine(it.ui, it.preview, ::Pair) })
             restored.ui.value.savedViewId shouldBe "v2"
+        }
+
+    /**
+     * A hand-off too large to save (the ids of hundreds of documents) is gone with the process: the
+     * restored page keeps the rest of its setup but falls back to the default scope, rather than
+     * offering a selection of nothing.
+     */
+    @Test
+    fun aRestoredProcessWhoseHandOffDidNotFitFallsBackToTheDefaultScope() =
+        runTest(dispatcher) {
+            val ids = List(UNSAVABLE_SELECTION) { it.toString().padStart(DOC_ID_LENGTH, '0') }
+            val handle = SavedStateHandle()
+            val model = vm(selection = ids, saved = handle, task = null)
+            collecting(model.ui)
+            advanceUntilIdle()
+            model.ui.value.scope shouldBe EditScope.SELECTION
+            model.setCustomPrompt("Only invoices")
+
+            val restored = vm(saved = handle.afterProcessDeath(), task = null)
+            collecting(restored.ui)
+            advanceUntilIdle()
+            restored.ui.value.scope shouldBe EditScope.UNTAGGED
+            restored.ui.value.selectionSize shouldBe 0
+            restored.ui.value.customPrompt shouldBe "Only invoices"
         }
 
     @Test
@@ -207,4 +233,10 @@ class AiEditScopeTest : MainDispatcherTest() {
             run.requests.shouldBeEmpty()
             model.ui.value.phase shouldBe EditPhase.Idle
         }
+
+    private companion object {
+        /** Document ids as long as real ones, enough that their list does not fit the saved state. */
+        const val UNSAVABLE_SELECTION = 400
+        const val DOC_ID_LENGTH = 64
+    }
 }

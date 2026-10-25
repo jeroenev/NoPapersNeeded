@@ -27,8 +27,12 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.movableContentOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -96,7 +100,7 @@ fun SettingsScreen(
     val snackbar = rememberSnackbarMessages(vm.messages)
 
     val drafts = LocalDocumentDrafts.current
-    val draftToResume by vm.draftToResume.collectAsStateWithLifecycle()
+    var draftToResume by rememberSaveable { mutableStateOf<String?>(null) }
     val pickLibrary =
         rememberLibraryFolderPicker(
             useSaf = paneState.settings.snapshot.useSafStorage,
@@ -108,7 +112,7 @@ fun SettingsScreen(
         // Resolved with the same predicate the dialog acts on, so "Continue editing" always has a
         // document to go to, even when the only unsaved work is a save still in flight.
         val pending = drafts.state.entries.firstOrNull { it.value.dirty || it.value.saving }
-        if (pending != null) vm.offerDraft(pending.key) else pickLibrary()
+        if (pending != null) draftToResume = pending.key else pickLibrary()
     }
 
     // The viewmodel's writes, plus the two ways out of a pane; one object for the screen's life,
@@ -125,8 +129,6 @@ fun SettingsScreen(
                 override fun openFieldDialog(dialog: FieldDialog?) = vm.openFieldDialog(dialog)
 
                 override fun typeOcrLanguage(text: String) = vm.typeOcrLanguage(text)
-
-                override fun confirmInboxMigration(open: Boolean) = vm.confirmInboxMigration(open)
             }
         }
 
@@ -168,10 +170,10 @@ fun SettingsScreen(
             message = stringResource(Res.string.ux_library_draft_warning),
             confirmLabel = stringResource(Res.string.ux_resume_draft),
             onConfirm = {
-                vm.offerDraft(null)
+                draftToResume = null
                 onResumeDraft(docId)
             },
-            onDismiss = { vm.offerDraft(null) },
+            onDismiss = { draftToResume = null },
         )
     }
 }
@@ -196,6 +198,15 @@ private fun SettingsScaffold(
     // no back arrow — it would be a dead end duplicating the rail or bar. The one place a back
     // arrow belongs is the compact category drill-down, where it walks back to the category list.
     val drilledDown = !wide && openCategory != null
+    // One composition of the open pane, moved between the two layouts rather than built again in
+    // each: a dialog open over it and what is typed into it stay when the window crosses the
+    // wide/compact breakpoint.
+    val pane =
+        remember {
+            movableContentOf { args: SettingsPaneArgs ->
+                SettingsPane(args.category, args.state, args.actions, args.showTitle, args.modifier)
+            }
+        }
     Scaffold(
         topBar = {
             SettingsTopBar(
@@ -217,18 +228,28 @@ private fun SettingsScaffold(
                             modifier = Modifier.width(CategoryListWidth).fillMaxHeight(),
                         )
                         VerticalDivider()
-                        SettingsPane(
-                            openCategory,
-                            paneState,
-                            paneActions,
-                            showTitle = true,
-                            Modifier.weight(1f).fillMaxHeight(),
+                        pane(
+                            SettingsPaneArgs(
+                                openCategory,
+                                paneState,
+                                paneActions,
+                                showTitle = true,
+                                Modifier.weight(1f).fillMaxHeight(),
+                            ),
                         )
                     }
                 }
 
                 openCategory != null -> {
-                    SettingsPane(openCategory, paneState, paneActions, showTitle = false, Modifier.fillMaxSize())
+                    pane(
+                        SettingsPaneArgs(
+                            openCategory,
+                            paneState,
+                            paneActions,
+                            showTitle = false,
+                            Modifier.fillMaxSize(),
+                        ),
+                    )
                 }
 
                 else -> {
@@ -324,6 +345,15 @@ private fun SettingsCategoryRow(
         modifier = Modifier.padding(horizontal = 12.dp),
     )
 }
+
+/** What [SettingsPane] is shown with, as one value its movable content takes. */
+private class SettingsPaneArgs(
+    val category: SettingsCategory?,
+    val state: SettingsPaneState,
+    val actions: SettingsPaneActions,
+    val showTitle: Boolean,
+    val modifier: Modifier,
+)
 
 /**
  * Hosts one category's controls. Panes emit a run of [SettingsSection]s and nothing else; the

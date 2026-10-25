@@ -6,6 +6,7 @@ import dev.npn.app.di.LibraryUnavailableException
 import dev.npn.app.di.OpenFailureReason
 import dev.npn.app.platform.createLibraryFolder
 import dev.npn.app.ui.common.MessagesViewModel
+import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.asUiText
 import dev.npn.app.ui.common.clearThumbCache
@@ -13,6 +14,8 @@ import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.nav.QueueStatus
 import dev.npn.app.ui.nav.queueStatus
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.app.RebuildFailure
+import dev.npn.core.app.RebuildOutcome
 import dev.npn.core.app.importAll
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
@@ -41,6 +44,8 @@ import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_save_setting_failed
 import no_papers_needed.composeapp.generated.resources.library_drop_needs_library
 import no_papers_needed.composeapp.generated.resources.library_import_failed
+import no_papers_needed.composeapp.generated.resources.library_rebuild_failed
+import no_papers_needed.composeapp.generated.resources.library_rebuild_not_completed
 import no_papers_needed.composeapp.generated.resources.library_refresh_failed
 
 /** A library that did not open, as the user is told: a localized [reason], with [details] for support. */
@@ -179,6 +184,21 @@ class AppViewModel(
         launchReporting(Res.string.library_refresh_failed) { session.ingest.rescan() }
     }
 
+    /**
+     * Build this device's index of the open library again from the folder alone, as a fresh device
+     * would: the way out of a block that no reading of the journal lifts (a journal object nobody
+     * holds any more). A rebuild that does not finish says so.
+     */
+    fun rebuildIndex() {
+        val session = env.session.value ?: return
+        launchReporting(Res.string.library_rebuild_failed) {
+            when (val outcome = session.maintenance.rebuildIndex()) {
+                RebuildOutcome.Done -> Unit
+                is RebuildOutcome.Failed -> message(outcome.reason.text())
+            }
+        }
+    }
+
     /** Try the saved library again. */
     fun retry() = restore()
 
@@ -269,3 +289,8 @@ private fun Throwable.toOpenFailure(): OpenFailure =
             },
         details = reason(),
     )
+
+private fun RebuildFailure.text(): UiText =
+    when (this) {
+        RebuildFailure.NOT_COMPLETED -> uiText(Res.string.library_rebuild_not_completed)
+    }
