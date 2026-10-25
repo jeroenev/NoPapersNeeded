@@ -1,0 +1,82 @@
+package dev.npn.core.journal
+
+import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.SystemProperty
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+
+/**
+ * A relink target's metadata and its predecessors' are one set of registers: per field or
+ * property the latest write wins, a clear included, and its tags are one OR-set.
+ */
+class InheritedViewsTest {
+    private val a = "a".repeat(64)
+    private val b = "b".repeat(64)
+    private val c = "c".repeat(64)
+
+    private fun title(
+        doc: String,
+        value: String?,
+        t: Long,
+    ) = event(JournalOp.FieldSet(FieldKeys.TITLE, value), doc, t, t)
+
+    private fun relink(
+        old: String,
+        new: String,
+        t: Long,
+    ) = event(JournalOp.Relink(new), old, t, t)
+
+    /** [verify] the fold of [events] in their order and in reverse. */
+    private fun folded(
+        vararg events: JournalEvent,
+        verify: (FoldedState) -> Unit,
+    ) {
+        verify(JournalFolder.fold(events.toList()))
+        verify(JournalFolder.fold(events.reversed()))
+    }
+
+    @Test
+    fun aClearOnTheTargetMasksAnInheritedValue() =
+        folded(title(a, "Water bill", 10), relink(a, b, 20), title(b, null, 30)) { state ->
+            assertEquals(emptyMap(), state.inheritedFields(b))
+            assertEquals(mapOf(FieldKeys.TITLE to "Water bill"), state.effectiveFields(a))
+        }
+
+    @Test
+    fun aLaterWriteOnAPredecessorWinsOverTheTargetsOwn() =
+        folded(title(b, "Own", 10), title(a, "Inherited", 20), relink(a, b, 30)) { state ->
+            assertEquals(mapOf(FieldKeys.TITLE to "Inherited"), state.inheritedFields(b))
+        }
+
+    @Test
+    fun aChainShowsItsNewestValueWhateverTheIds() {
+        for ((older, newer) in listOf(a to b, b to a)) {
+            folded(title(older, "Old", 10), title(newer, "New", 20), relink(older, newer, 30), relink(newer, c, 40)) {
+                assertEquals(mapOf(FieldKeys.TITLE to "New"), it.inheritedFields(c))
+            }
+        }
+    }
+
+    @Test
+    fun aClearMasksAnInheritedProperty() {
+        val pin = event(JournalOp.PropSet(SystemProperty.OCR_ENGINE, "tesseract"), a, 10, 10)
+        val unpin = event(JournalOp.PropSet(SystemProperty.OCR_ENGINE, null), b, 30, 30)
+        folded(pin, relink(a, b, 20)) { assertEquals("tesseract", it.inheritedProp(b, SystemProperty.OCR_ENGINE)) }
+        folded(pin, relink(a, b, 20), unpin) { assertNull(it.inheritedProp(b, SystemProperty.OCR_ENGINE)) }
+    }
+
+    @Test
+    fun removingAnInheritedTagRemovesThePredecessorsAdds() {
+        val add = event(JournalOp.TagAdd("filed"), a, 10, 10)
+        val state = JournalFolder.fold(listOf(add, relink(a, b, 20)))
+        assertEquals(setOf("filed"), state.inheritedTags(b))
+
+        val removal = state.tagRemovalOps(listOf(b, a), "filed")
+
+        assertEquals(listOf(PendingOp.tagRemove(b, "filed", listOf(add.dot))), removal)
+        state.apply(event(removal.single().op, b, 30, 30))
+        assertEquals(emptySet(), state.inheritedTags(b))
+        assertEquals(emptySet(), state.effectiveTags(a))
+    }
+}

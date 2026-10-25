@@ -144,12 +144,7 @@ kept 5 days. ci.yml keeps running only the CI-sized test above, as part of `:cor
 - `SimGenerator` picks an `OpKind` by weight: the app's writes through the facets, rescans, OCR
   completions, several operations at once (with external events landing while they run), an
   operation left running in the background, time steps, every external event, faults, crashes, close
-  and reopen, and dropping the index. Among the external events is a device on an older build
-  (`main`), which records a relink with no copies and folds a target over its predecessors: it
-  bakes a live document in place, and its baked bytes (written over the document's file, as the
-  sync tool delivers them) and its bare `relink` onto them arrive in either order, minutes apart at
-  most, the relink sometimes with its first read failing, so the ingest that folds it fails and
-  recovers. Each document is baked so once at most, across every replica. `ExtraPlanner` adds bake in place, multi-page imports and split,
+  and reopen, and dropping the index. `ExtraPlanner` adds bake in place, multi-page imports and split,
   the relink of a missing document to other bytes, auto-match rule saves, deletes and toggles (whose
   field sets drive the storage-path rule, which moves documents on every replica), the watched folder
   (new, slowly written, known, overwritten and removed files, and sweeps, beside the importer each
@@ -224,12 +219,6 @@ do not converge, which fails the run. Then:
   everything yet) is judged on what it has: its index must show what its own folder holds. A
   document the live index has in the trash may show in the rebuild only where the check above lets
   its bytes be back.
-- **Relink copies**: every relink target shows on its own what an older build shows it by
-  inheritance over its relink chain (`RelinkInheritanceUpgrade.copies` of the replica's fold is
-  empty), at rest and already before the quiescent rescan, once the watch and the periodic
-  reconcile have folded everything delivered: the session copies after a watch ingest or reconcile
-  as after a rescan. Before the rescan a target is passed over whose predecessor the replica itself
-  edited after the relink, which this build copies only at the next rescan.
 - What each replica wrote under a device's name in the library (sidecars, markers) is under its own.
 - **The app never removes a document's last copy**: every document some replica's index has a row
   for, that no replica's journal deleted for good or relinked onto other bytes, is held by a file in
@@ -299,11 +288,8 @@ why next to it. Fail through `fail(...)`, which attaches the seed and the trace.
   object, and reads the snapshots earlier builds wrote. The simulation makes none, so it does not
   exercise folding a snapshot beside the objects it replaced; `CompactionReconcileTest`,
   `OlderBuildSnapshotTest` and `UndoneCompactionTest` do.
-- **Mixed-build libraries**, beyond one thing an older build does: a device on `main` records a
-  relink with no copies and folds a target over its predecessors, and the generator delivers such a
-  device's bake in place, its baked bytes and its bare relink (`EXT_OLDER_BUILD_BAKE`). That device's other writes, its fold, and a build newer
-  than this one (an op or a field type this build refuses) are not modelled: every replica runs
-  this build.
+- **Mixed-build libraries**: another build's writes and fold, and a build newer than this one (an
+  op or a field type this build refuses), are not modelled: every replica runs this build.
 - **mtime-preserving overwrites** of the same size: with mtimes, every generated PDF has a size of
   its own. Where storage reports no mtimes, same-size replacements are modelled: every generated PDF
   has one of a few sizes, so only a hash tells a replacement apart.

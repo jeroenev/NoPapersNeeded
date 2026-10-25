@@ -286,17 +286,13 @@ internal class JournalCoordinator(
             }
         }
 
-    /**
-     * Fold the journal object at [relPath] in, as a watch event brings it. Returns whether the fold
-     * moved: the object held events new to it, or the pass refolded in full. Only then may a relink
-     * target's inherited view have changed (`RelinkInheritanceUpgrade`).
-     */
-    suspend fun ingestObject(relPath: String): Boolean =
+    /** Fold the journal object at [relPath] in, as a watch event brings it. */
+    suspend fun ingestObject(relPath: String) =
         locked {
             // The full path reads this object too.
             if (writerState.refoldOwed) {
                 pass(OnFailure.BLOCK) { recoverDurableProjection() }
-                return@locked true
+                return@locked
             }
             pass(OnFailure.RECOVER) {
                 // Fold before opening the transaction: loadState reads the events as they stand
@@ -327,23 +323,19 @@ internal class JournalCoordinator(
                     // open can reuse it instead of refolding.
                     accumulator.markReady(current.maxHlc)
                 }
-                step.moved
             }
         }
 
     /** Strictly reconcile metadata before touching the document projection. */
     suspend fun rescan(): ScanReport = locked { pass(OnFailure.BLOCK) { rescanFrom(foldedState()) } }
 
-    /**
-     * Read the journal folder again and fold what changed in it. Returns whether the fold moved, as
-     * [ingestObject] does: events new to it, or a full refold.
-     */
-    suspend fun reconcileMetadata(): Boolean =
+    /** Read the journal folder again and fold what changed in it. */
+    suspend fun reconcileMetadata() =
         locked {
             pass(OnFailure.BLOCK) {
                 if (writerState.refoldOwed) {
                     recoverDurableProjection()
-                    return@locked true
+                    return@locked
                 }
                 val reconciliation = accumulator.reconcile(folded)
                 val step = PassDecision.afterReconcile(reconciliation)
@@ -353,7 +345,7 @@ internal class JournalCoordinator(
                     // needed the fold. There is nothing to project, and replaying the journal just
                     // to prove that is what made the periodic tick as expensive as a boot.
                     transition(PassOutcome.Projected)
-                    return@locked false
+                    return@locked
                 }
                 adopt(current) {
                     // Bounded projection when reconcile only ADDED events onto the prior state;
@@ -371,7 +363,6 @@ internal class JournalCoordinator(
                         ProjectionStep.Unchanged, ProjectionStep.Current -> {}
                     }
                 }
-                step.moved
             }
         }
 
@@ -591,33 +582,19 @@ internal class JournalCoordinator(
      * same critical section.
      *
      * Unlike [commitBuilt] (which only refolds), this is for ops such as `relink` whose fold effect
-     * needs a full rescan to mark the superseded doc. Serializing this against every other write
-     * keeps the write, the fold it is built on and the rescan that projects it in one order.
+     * needs a full rescan to carry metadata onto the new id and mark the superseded doc. Serializing
+     * this against every other write keeps the write, the fold it is built on and the rescan that
+     * projects it in one order.
      *
      * Throws only before publication, when nothing changed (a bake then restores its original
      * file). Once the transaction is published the change stands: a projection or rescan failure is
      * dealt with as for any commit (writes latched, the projection rebuilt from the store) and
      * logged, and the call returns null instead of the [ScanReport].
      */
-    suspend fun commitAndRescan(ops: List<PendingOp>): ScanReport? = commitBuiltAndRescan { ops }
-
-    /**
-     * Relink [oldDoc] onto [newDoc] as [commitAndRescan] commits: one transaction holding the
-     * `relink` and the copies of [oldDoc]'s metadata onto [newDoc] ([FoldedState.relinkOps]), built
-     * on the live fold under the lock, so no write lands between what is copied and the relink.
-     * [alongside] adds what else that fold asks to go with it.
-     */
-    suspend fun relinkAndRescan(
-        oldDoc: String,
-        newDoc: String,
-        alongside: (FoldedState) -> List<PendingOp> = { emptyList() },
-    ): ScanReport? = commitBuiltAndRescan { alongside(it) + it.relinkOps(oldDoc, newDoc) }
-
-    private suspend fun commitBuiltAndRescan(build: (FoldedState) -> List<PendingOp>): ScanReport? =
+    suspend fun commitAndRescan(ops: List<PendingOp>): ScanReport? =
         locked {
             ensureWritable()
             val current = foldedState()
-            val ops = build(current)
             withContext(NonCancellable) {
                 val published = writeTransaction(ops)
                 log.runLogged("Projecting the published ${published.relPath} and rescanning") {
@@ -755,10 +732,7 @@ internal class JournalCoordinator(
         } catch (failure: Throwable) {
             transition(PassOutcome.failed(failure))
             if (onFailure == OnFailure.RECOVER) {
-                runCatchingCancellable {
-                    recoverDurableProjection()
-                    recoveredRefold.value = true
-                }.onFailure { recoveryFailure ->
+                runCatchingCancellable { recoverDurableProjection() }.onFailure { recoveryFailure ->
                     transition(PassOutcome.failed(recoveryFailure))
                     failure.addSuppressed(recoveryFailure)
                 }
@@ -822,22 +796,6 @@ internal class JournalCoordinator(
         val current = accumulator.reconcile().state ?: accumulator.loadState()
         adopt(current) { indexer.refreshState(current) }
     }
-
-    // Set when a full refold recovered a failed pass: see takeRecoveredRefold.
-    private val recoveredRefold = MutableStateFlow(false)
-
-    /**
-     * Whether a full refold recovered a failed pass ([OnFailure.RECOVER]: an ingest, or the
-     * projection of a commit, a relink's or a bake's rescan included) since the last call. That
-     * refold read the whole journal, so it may have taken in events another device wrote that no
-     * ingest or reconcile reports as folded: what follows a fold that moved (a relink's copies,
-     * `LibrarySessionImpl.writeRelinkCopies`) is owed.
-     */
-    fun takeRecoveredRefold(): Boolean = recoveredRefold.compareAndSet(expect = true, update = false)
-
-    /** Whether the live fold took in anything: new events, or a full refold. */
-    private val ProjectionStep.moved: Boolean
-        get() = this == ProjectionStep.Whole || (this is ProjectionStep.Events && events.isNotEmpty())
 
     companion object {
         /** How long a document must have been hidden before a rescan records its file's return. */

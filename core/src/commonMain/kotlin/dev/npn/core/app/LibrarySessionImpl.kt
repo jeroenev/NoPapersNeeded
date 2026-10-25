@@ -109,56 +109,17 @@ internal class LibrarySessionImpl(
     /**
      * What follows every rescan that succeeded, this session's own and the one a relink or a bake
      * runs alike ([SessionGraph.rescans]): its report is the last, a file it deferred as still being
-     * written gets a follow-up rescan, the documents it found without OCR are queued for it, a
-     * relink an older build wrote since gets its copies, as a fresh index's open would write them
-     * ([writeRelinkCopies]), and the drains may start.
+     * written gets a follow-up rescan, the documents it found without OCR are queued for it, and
+     * the drains may start.
      */
     private suspend fun afterRescan(report: ScanReport) {
         scanReports.value = report
         report.retryAfterMillis?.let { scheduleSettleRescan(it) }
-        writeRelinkCopies(folded = true)
         ocrFacade.reconcileAfterRescan()
         // The index knows the library's documents and has their stored text: from here on a drain
         // may take a document without a row for one that is gone, so the drains may start.
         drainsReady.complete(Unit)
     }
-
-    // Whether a fold took in events whose relink copies are not written yet: writes were refused
-    // then, or the copy failed. Read and written under its lock, which is taken outside the
-    // coordinator's, never inside it.
-    private val relinkCopiesLock = Mutex()
-    private var relinkCopiesOwed = false
-
-    /**
-     * Write what relink targets lack of their predecessors' metadata ([copyRelinkInheritance]) when
-     * the fold took in new events ([folded]: a rescan, or an ingest or reconcile that moved it), when
-     * a failed pass's recovery refolded since (`JournalCoordinator.takeRecoveredRefold`: a commit's,
-     * a relink's or a bake's), or while an earlier attempt is still owed. An older build's relink, or
-     * another device's edit of a predecessor, then shows on its target as soon as it is folded, not
-     * at the next rescan, which on desktop may be hours away. Called outside the coordinator's lock,
-     * as every commit is.
-     */
-    private suspend fun writeRelinkCopies(folded: Boolean) {
-        relinkCopiesLock.withLock {
-            // A failed pass's recovery refolded in full, folding what it found unannounced: the
-            // periodic reconcile, which folds nothing new then, is what gets to its copies.
-            val refolded = coordinator.takeRecoveredRefold()
-            if (!folded && !refolded && !relinkCopiesOwed) return
-            relinkCopiesOwed = true
-            log.runLogged("Copying relinked documents' metadata") {
-                if (coordinator.copyRelinkInheritance()) relinkCopiesOwed = false
-            }
-        }
-    }
-
-    /**
-     * [writeRelinkCopies] after an ingest or reconcile that returned [folded], null when it failed. A
-     * failed pass may have folded new events all the same: an ingest that fails is recovered by a
-     * full refold, which takes in the object before the failure is rethrown. So only a pass that
-     * said it folded nothing new leaves the copies to an earlier attempt still owed; a failed one
-     * counts as folded, which costs at most a copy pass that finds nothing to write.
-     */
-    private suspend fun writeRelinkCopiesAfter(folded: Boolean?) = writeRelinkCopies(folded = folded != false)
 
     // The one pending follow-up rescan for files a scan deferred as still being written. A file
     // can finish without another watch event, and SAF libraries have no watcher at all.
@@ -289,7 +250,7 @@ internal class LibrarySessionImpl(
         scope.launch {
             while (isActive) {
                 delay(METADATA_RECONCILIATION_INTERVAL_MS)
-                writeRelinkCopiesAfter(log.runLogged("Periodic metadata reconcile") { coordinator.reconcileMetadata() })
+                log.runLogged("Periodic metadata reconcile") { coordinator.reconcileMetadata() }
                 // An initial rescan that failed keeps every drain at the gate, and on desktop nothing
                 // else rescans until the library folder changes (Android rescans on every resume).
                 if (!drainsReady.isCompleted) {
@@ -310,16 +271,12 @@ internal class LibrarySessionImpl(
 
             // A remote OCR-engine override it folds in is re-selected by the ReconcileOcr that
             // settled() holds for it, once per burst.
-            // Either may fold a relink an older build wrote without copies, or an edit of a relinked
-            // document's predecessor: the copies follow at once, as after a rescan.
             is WatchAction.IngestObject -> {
-                writeRelinkCopiesAfter(
-                    log.runLogged("Journal object ingest") { coordinator.ingestObject(action.relPath) },
-                )
+                log.runLogged("Journal object ingest") { coordinator.ingestObject(action.relPath) }
             }
 
             WatchAction.ReconcileJournal -> {
-                writeRelinkCopiesAfter(log.runLogged("Metadata reconcile") { coordinator.reconcileMetadata() })
+                log.runLogged("Metadata reconcile") { coordinator.reconcileMetadata() }
                 log.runLogged("OCR sidecar reconcile") { ocrPipeline.reconcileSidecars() }
             }
 

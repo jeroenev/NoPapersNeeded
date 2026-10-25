@@ -92,7 +92,7 @@ internal class FieldRegistryImpl(
      * own list, so a trashed document or one this device has no row for is among them.
      */
     private fun FoldedState.docsCarrying(key: String): List<String> =
-        docsWithMetadata().filter { resolveDocId(it) == it && key in effectiveFields(it) }
+        docsWithMetadata().map(::resolveDocId).distinct().filter { key in inheritedFields(it) }
 
     override suspend fun move(
         key: String,

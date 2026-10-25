@@ -117,10 +117,11 @@ class ExternalDocumentMovesTest {
 
     /**
      * A path intent for the original that another device journals after the relink, as one that had
-     * not seen it would, no longer moves the replacement: what the relink copied is its own.
+     * not seen it would, moves the replacement: the relink target shows its predecessor's registers
+     * as its own, the newest write winning.
      */
     @Test
-    fun aPathIntentForTheOriginalAfterARelinkLeavesTheReplacementWhereItIs() =
+    fun aPathIntentForTheOriginalAfterARelinkMovesTheReplacement() =
         indexTest { rig ->
             rig.writePdf("original.pdf", "original document")
             rig.writePdf("replacement.pdf", "replacement document")
@@ -129,7 +130,7 @@ class ExternalDocumentMovesTest {
             val coordinator = rig.coordinator(rig.writer("local"))
             coordinator.rescan()
             rig.fs.delete("original.pdf")
-            coordinator.relinkAndRescan(original, replacement)
+            coordinator.commitAndRescan(listOf(PendingOp.relink(original, replacement)))
             rig.clock.advance(100)
             rig
                 .writer("remote")
@@ -142,10 +143,10 @@ class ExternalDocumentMovesTest {
                 .documentDao()
                 .getByDocId(replacement)
                 .shouldNotBeNull()
-                .relPath shouldBe "replacement.pdf"
+                .relPath shouldBe "remote.pdf"
             val state = rig.accumulator.loadState()
+            state.inheritedProp(replacement, SystemProperty.STORAGE_PATH) shouldBe "remote.pdf"
             state.effectiveProp(replacement, SystemProperty.STORAGE_PATH) shouldBe null
-            state.effectiveProp(original, SystemProperty.STORAGE_PATH) shouldBe "remote.pdf"
         }
 
     @Test

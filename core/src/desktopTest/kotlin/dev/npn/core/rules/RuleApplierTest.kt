@@ -180,9 +180,8 @@ class RuleApplierTest {
         }
 
     /**
-     * A relink copies the old document's values and live tags onto the new one, but no clear and no
-     * removal. What someone cleared or removed on the old document stays taken away on the document it
-     * became: a rule on it reads the whole relink chain for what was ever set or carried.
+     * What someone cleared or removed on the old document stays taken away on the document it became:
+     * a rule on it reads the whole relink chain for what was ever set or carried, as the fold does.
      */
     @Test
     fun rulesDoNotRefillWhatWasTakenAwayBeforeARelink() =
@@ -203,7 +202,7 @@ class RuleApplierTest {
             )
             coordinator.commitAndApply(listOf(PendingOp.fieldSet(original, FieldKeys.DOC_TYPE, null)))
             coordinator.commitBuilt { state -> state.tagRemovalOps(listOf(original), "Paid") }
-            coordinator.relinkAndRescan(original, baked)
+            coordinator.commitAndRescan(listOf(PendingOp.relink(original, baked)))
             val applier =
                 RuleApplier(
                     rules = {

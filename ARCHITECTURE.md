@@ -464,34 +464,24 @@ Kept by `BakeService`, `BakeRelink`, `DocContentFacadeImpl` and `FoldedState`:
   the same temporary file, and its relink must name the bytes it installed. A trash or delete for
   good holds that lock too, so it waits for a bake and then acts on the document the bake made
   (`changeLifecycle` follows the relink).
-- **A document's metadata is its own.** Every view the fold projects reads the document's own
-  events, a relink target's included. A relink (a bake, or a missing document relinked to the file
-  that took its place) writes, in the same transaction as the `relink` op, ordinary `field-set`,
-  `prop-set` and `tag-add` copies of the old document's effective metadata onto the new one
-  (`FoldedState.relinkOps`, `JournalCoordinator.relinkAndRescan`): every field value, every system
-  property (storage path, review mark, OCR engine pin) and every live tag, a value of the old
-  document's replacing the new one's and their tags joined. The relink op itself only supersedes:
-  the old document is hidden (`resolveDocId`, `isCurrent`) and its bytes are a duplicate of the
-  target while the library shows it (section 6.2).
-- So an edit of the old document made after the relink, by a device that had not seen it, does not
-  reach the target through the fold; the next rescan's copies bring it over when its HLC is the
-  later one. A document's history is its own events, so a relink target's shows the copies, not its
-  predecessors' edits.
-- Older builds still write relinks without copies and fold a target over its predecessors. At every
-  open, after every rescan, after every watch ingest or metadata reconcile that folded new events
-  or failed, at the next of those or the periodic reconcile after any failed pass whose recovery
-  refolded in full (a commit's projection, a relink's or a bake's rescan: the refold may take in
-  another device's objects unannounced), with a write refused or failed then owed until the next
-  one, and in every relink,
-  `RelinkInheritanceUpgrade.kt` copies onto each target whatever that
-  inherited view shows and its own does not, idempotently (nothing when they agree); a relink copies
-  the old document's inherited view, and a tag removal lists the predecessors' dots too. The copies
-  accept one race: one written before a concurrent edit reached its device wins when its HLC is later.
+- **A relink target inherits its chain.** A relink (a bake, or a missing document relinked to the
+  file that took its place) writes one `relink` event and nothing else. The fold shows the target
+  its predecessors' metadata as its own (`FoldedState.inheritedFields`, `inheritedProp`,
+  `inheritedTags`): per field or system property one register over the whole chain, the latest
+  write winning, a clear included, and the chain's live tag adds as one OR-set, so a removal from
+  the target lists the predecessors' dots too (`tagRemovalOps`). Every reader of a document's
+  metadata, the projection, the metadata writer, the rules and the path rule included, reads the
+  inherited views; the own-register views are test seams. The relink op supersedes: the old
+  document is hidden (`resolveDocId`, `isCurrent`) and its bytes are a duplicate of the target
+  while the library shows it (section 6.2).
+- So an edit of the old document made after the relink, by a device that had not seen it, reaches
+  the target as soon as it is folded, and nothing is copied, converges or can overwrite a newer
+  edit. A document's history is its own events.
 - A bake changes no page, so its relink hands the original's text on: before it, the original's OCR
   versions are published again under the baked hash as this device's (`OcrPipeline.copyText`) and
   its enrichment mark is copied; after it, that text is indexed, so the baked document is
-  searchable at once and is neither OCR'd nor enriched again. A relink to other bytes hands on the
-  copied metadata and nothing else.
+  searchable at once and is neither OCR'd nor enriched again. A relink to other bytes hands on
+  nothing but the inherited metadata.
 
 ### 6.6 Journal storage
 
