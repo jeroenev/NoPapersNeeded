@@ -550,7 +550,8 @@ class InMemoryLibraryFileSystem(
 
     /** Journal objects and snapshots, under their canonical names, whose name is not the hash of their bytes. */
     fun misnamedObjects(): List<String> =
-        files.mapNotNull { (path, node) ->
+        files.keysWithPrefix("${NpnPaths.JOURNAL_DIR}/").mapNotNull { path ->
+            val node = files.getValue(path)
             val expected =
                 when (val kind = JournalPaths.classify(path)) {
                     is JournalPath.ObjectV2 -> kind.expectedHash
@@ -588,8 +589,8 @@ class InMemoryLibraryFileSystem(
     private fun entriesUnder(norm: String): List<FileMeta> {
         val prefix = if (norm.isEmpty()) "" else "$norm/"
         val out = TreeSet<String>()
-        dirs.keys.filterTo(out) { it.startsWith(prefix) && it != norm }
-        files.keys.filterTo(out) { it.startsWith(prefix) }
+        out += dirs.keysWithPrefix(prefix)
+        out += files.keysWithPrefix(prefix)
         return out.map(::metaOf)
     }
 
@@ -644,10 +645,10 @@ class InMemoryLibraryFileSystem(
             dirs.containsKey(from) -> {
                 ensureParents(to)
                 val prefix = "$from/"
-                dirs.keys.filter { it == from || it.startsWith(prefix) }.forEach { dir ->
+                (listOf(from) + dirs.keysWithPrefix(prefix)).forEach { dir ->
                     dirs[to + dir.removePrefix(from)] = dirs.remove(dir) ?: now()
                 }
-                files.keys.filter { it.startsWith(prefix) }.forEach { file ->
+                files.keysWithPrefix(prefix).forEach { file ->
                     files[to + file.removePrefix(from)] = files.remove(file) ?: return@forEach
                     wrote(to + file.removePrefix(from), byApp)
                 }
@@ -673,11 +674,11 @@ class InMemoryLibraryFileSystem(
         }
         if (!dirs.containsKey(norm)) return
         val prefix = "$norm/"
-        files.keys.filter { it.startsWith(prefix) }.forEach {
+        files.keysWithPrefix(prefix).forEach {
             files.remove(it)?.let { node -> lost(it, node, byApp) }
             if (byApp) appRemovals += it
         }
-        dirs.keys.filter { it == norm || it.startsWith(prefix) }.forEach { dirs.remove(it) }
+        (listOf(norm) + dirs.keysWithPrefix(prefix)).forEach { dirs.remove(it) }
         touch(norm)
     }
 
@@ -811,3 +812,10 @@ class InMemoryLibraryFileSystem(
         const val NPN_PREFIX = "${NpnPaths.NPN_DIR}/"
     }
 }
+
+/**
+ * The keys starting with [prefix], in order. They are one range of the sorted map, so a listing
+ * costs its own size, not a scan of every path in the library.
+ */
+private fun <V> TreeMap<String, V>.keysWithPrefix(prefix: String): List<String> =
+    tailMap(prefix, true).keys.takeWhile { it.startsWith(prefix) }
