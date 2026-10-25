@@ -69,16 +69,6 @@ fun <T> SavedStateHandle.saveUiState(
     if (json.length <= SavedUiState.MAX_SAVED_CHARS) set(key, json) else remove<String>(key)
 }
 
-/**
- * Whether [saveUiState] saves [value] rather than dropping it: its JSON is at most
- * [SavedUiState.MAX_SAVED_CHARS] long. For a value that must never be dropped, which saves a smaller
- * stand-in when it does not fit.
- */
-fun <T> fitsUiState(
-    serializer: KSerializer<T>,
-    value: T,
-): Boolean = NpnJson.Persisted.encodeToString(serializer, value).length <= SavedUiState.MAX_SAVED_CHARS
-
 /** What [saveUiState] saved under [key], or [initial] when nothing was, or it no longer decodes. */
 fun <T> SavedStateHandle.restored(
     key: String,

@@ -168,7 +168,7 @@ internal fun vm(
     background: Boolean? = false,
     task: EditTask? = EditTask.CUSTOM,
     saved: SavedStateHandle = SavedStateHandle(),
-) = AiEditViewModel(session, settings, selection, saved, run).also { model ->
+) = AiEditViewModel(session, settings, selection, saved) { run }.also { model ->
     task?.let(model::setTask)
     background?.let(model::setBackground)
 }

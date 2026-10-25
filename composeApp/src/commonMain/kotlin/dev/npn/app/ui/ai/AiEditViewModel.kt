@@ -107,7 +107,8 @@ private data class SavedAiEditSetup(
 
     fun appliedTo(state: AiEditUiState): AiEditUiState =
         state.copy(
-            scope = scope,
+            // A hand-off too large to save is gone with the process: its scope falls back.
+            scope = if (scope == EditScope.SELECTION && state.selectionSize == 0) state.scope else scope,
             savedViewId = savedViewId,
             task = task,
             maxTags = maxTags,
@@ -124,7 +125,6 @@ private data class SavedAiEditSetup(
 
 private const val SETUP_KEY = "aiEdit.setup"
 private const val SELECTION_KEY = "aiEdit.selection"
-private const val PROCESSED_KEY = "aiEdit.processed"
 private val IdsSerializer = ListSerializer(String.serializer())
 
 /**
@@ -161,14 +161,17 @@ class AiEditViewModel(
     selection: List<String> = emptyList(),
     /** What the screen's back-stack entry saves for a restored process; a new one opens it afresh. */
     private val saved: SavedStateHandle = SavedStateHandle(),
-    /** The run this page drives, over the same [selection]. */
-    private val edit: AiEditRun = AiEditRun(session, handedOver(saved, selection)),
+    /** The run this page drives, over the documents handed to it. */
+    editRun: (handedOver: List<String>) -> AiEditRun = { AiEditRun(session, it) },
 ) : ReviewViewModel(),
     AiEditSetupActions {
     private val editQueue = session.aiEditQueue
     private val fieldRegistry = session.fieldRegistry
     private val reviewConfig = session.reviewConfig
     private val savedViewRepository = session.savedViews
+
+    private val handed = handedOver(saved, selection)
+    private val edit = editRun(handed)
 
     /** The setup a restored process saved, which the registry's first answer must not reseed. */
     private val restoredSetup =
@@ -180,15 +183,13 @@ class AiEditViewModel(
 
     private val _ui =
         MutableStateFlow(
-            handedOver(saved, selection).let { handed ->
-                AiEditUiState(
-                    scope = if (handed.isEmpty()) EditScope.UNTAGGED else EditScope.SELECTION,
-                    selectionSize = handed.size,
-                    // The per-run overrides start from the Settings defaults.
-                    maxTags = settings.settings.value.aiMaxTagsPerDoc,
-                    maxNewTags = settings.settings.value.aiMaxNewTagsPerDoc,
-                ).let { restoredSetup?.appliedTo(it) ?: it }
-            },
+            AiEditUiState(
+                scope = if (handed.isEmpty()) EditScope.UNTAGGED else EditScope.SELECTION,
+                selectionSize = handed.size,
+                // The per-run overrides start from the Settings defaults.
+                maxTags = settings.settings.value.aiMaxTagsPerDoc,
+                maxNewTags = settings.settings.value.aiMaxNewTagsPerDoc,
+            ).let { restoredSetup?.appliedTo(it) ?: it },
         )
     val ui: StateFlow<AiEditUiState> = _ui.asStateFlow()
 
@@ -197,22 +198,6 @@ class AiEditViewModel(
         val before = SavedAiEditSetup(_ui.value)
         val after = SavedAiEditSetup(_ui.updateAndGet(transform))
         if (after != before) saved.saveUiState(SETUP_KEY, SavedAiEditSetup.serializer(), after)
-    }
-
-    init {
-        // The documents the run already spent, which a restored run must not offer again; but not a
-        // Review's, whose suggestions went with the process before anything was written.
-        saved.restored(PROCESSED_KEY, IdsSerializer, emptyList()).takeIf { it.isNotEmpty() }?.let(edit::markHandedOff)
-        viewModelScope.launch {
-            combine(edit.processed, _ui.map { (it.phase as? EditPhase.Review)?.batch }) { done, review ->
-                done -
-                    review
-                        ?.docs
-                        ?.map { it.docId }
-                        .orEmpty()
-                        .toSet()
-            }.collect { spent -> saved.saveUiState(PROCESSED_KEY, IdsSerializer, spent.toList()) }
-        }
     }
 
     init {
