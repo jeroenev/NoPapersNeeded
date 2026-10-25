@@ -7,6 +7,7 @@ import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.index.JournalCoordinator
+import dev.npn.core.journal.JournalOp
 import dev.npn.core.util.reason
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.delay
@@ -25,8 +26,6 @@ data class SimConfig(
     val watchOverflowRate: Double,
     /** Run the expensive invariants (rebuild oracle, files hold their hashes) every this many steps, and at the end. */
     val quiesceEvery: Int = 40,
-    /** Operations left out, each for a reason recorded where it is left out ([KnownIssues]). */
-    val disabled: Set<OpKind> = KnownIssues.disabledOps,
 ) {
     companion object {
         /** The storage, watcher and mtime knobs a seed picks, so a seed alone replays a run. */
@@ -56,20 +55,27 @@ data class SimConfig(
 }
 
 /**
- * Operations and invariants the simulation leaves out for now, each because it found a core bug
- * that is reported but not fixed yet (see docs/SIMULATION.md). A follow-up that fixes one turns
- * its knob back on.
+ * The findings of the simulation that are written up and not fixed yet (docs/SIMULATION.md): a
+ * switch for what the app does not do yet, and the failures that are reported findings. A seed that
+ * hits one stops there (its library is broken from then on), and is counted instead of failing the
+ * test, so a long run goes on to find what else there is. A new finding is never added here before
+ * it is written up; a fixed one is removed.
  */
 object KnownIssues {
-    val disabledOps: Set<OpKind> = emptySet()
-
     /**
-     * Failures that are reported findings, by a phrase of their message. A seed that hits one stops
-     * there (its library is broken from then on), and is counted instead of failing the test, so a
-     * long run goes on to find what else there is. A new finding is never added here before it is
-     * written up; a fixed one is removed.
+     * Finding 8, the documented cost of `doc-undelete` not being written yet (ARCHITECTURE.md 6.4):
+     * the bytes of a document deleted for good that come back (an import, or a file a sync tool
+     * delivers) bring it back on the device that imported them, for that session, and in the scan
+     * that finds the file, and nowhere else: devices disagree on whether the library shows it, and a
+     * device disagrees with a rebuild of its own index. Off once this build writes the op.
      */
-    val knownFailures: Map<String, String> = emptyMap()
+    const val DELETED_RETURNS_UNRECORDED = !JournalOp.DocUndelete.WRITTEN
+
+    /** Each finding by the phrases its failure message holds, all of them. */
+    val knownFailures: Map<List<String>, String> = emptyMap()
+
+    /** The finding [message] reports, or null for a new failure. */
+    fun classify(message: String): String? = knownFailures.entries.firstOrNull { it.key.all(message::contains) }?.value
 }
 
 /** A broken invariant: the run stops at the first. */
@@ -93,7 +99,7 @@ internal class Simulation(
     /** Changes the copy of the files the rebuild oracle opens: the harness's own tests plant a difference. */
     private val tamperWithRebuild: (InMemoryLibraryFileSystem) -> Unit = {},
     /** Set when this is one replica of several ([SyncSimulation]): what it shares with them, and its own parts. */
-    private val setup: ReplicaSetup? = null,
+    setup: ReplicaSetup? = null,
 ) {
     val world = setup?.world ?: SimWorld(scheduler)
     private val random = setup?.random ?: Random(config.seed)
@@ -126,7 +132,8 @@ internal class Simulation(
         SimGenerator(
             random,
             this,
-            OpKind.entries.filterNot { it in config.disabled },
+            // With other replicas, the sync tool delivers what another device wrote; alone, the generator does.
+            OpKind.entries.filterNot { it.fromAnotherDevice && (setup?.peers ?: 1) > 1 },
             labelBase = setup?.labelBase ?: 0,
             remoteDevice = setup?.let { "remote-device-${it.name}" } ?: "remote-device",
         )
@@ -291,7 +298,6 @@ internal class Simulation(
             if (!failure.isInjected() && isBugFailure(failure)) fail("opening the library failed: ${failure.reason()}")
             trace += "   open failed (${failure.reason()}); faults cleared, opening again"
             fs.faults.disarmAll()
-            setup?.beforeReopen?.invoke(failure)
             runCatching { replica.open() }.exceptionOrNull()?.let {
                 fail(
                     "opening the library failed again: ${it.reason()}",
@@ -472,7 +478,7 @@ internal class Simulation(
         // Bytes a relink superseded (a bake's original) are no document: a rescan gives them no row.
         // Nor, while this build writes no doc-undelete, are the bytes of a document deleted for good
         // that came back: a rescan shows such a file for that scan only (ARCHITECTURE.md 6.4).
-        val operations = if (SyncKnownIssues.DELETED_RETURNS_UNRECORDED) "('relink', 'doc-delete')" else "('relink')"
+        val operations = if (KnownIssues.DELETED_RETURNS_UNRECORDED) "('relink', 'doc-delete')" else "('relink')"
         val superseded =
             world.read("superseded") {
                 replica.indexDb
@@ -632,7 +638,7 @@ internal class Simulation(
             // A deleted document's file back in the folder: a rebuild's rescan shows it.
             val remaining =
                 explained.filterNot { (line, _) ->
-                    SyncKnownIssues.DELETED_RETURNS_UNRECORDED && "(live index: DELETED)" in line
+                    KnownIssues.DELETED_RETURNS_UNRECORDED && "(live index: DELETED)" in line
                 }
             if (remaining.isNotEmpty()) {
                 fail(
@@ -654,13 +660,7 @@ internal class Simulation(
 
     // ---- failing --------------------------------------------------------------------------------
 
-    fun fail(message: String): Nothing =
-        throw SimFailure(
-            report(message),
-            KnownIssues.knownFailures.entries
-                .firstOrNull { message.contains(it.key) }
-                ?.value,
-        )
+    fun fail(message: String): Nothing = throw SimFailure(report(message), KnownIssues.classify(message))
 
     private fun report(message: String): String =
         buildString {

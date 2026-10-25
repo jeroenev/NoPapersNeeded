@@ -3,8 +3,6 @@ package dev.npn.core.sim
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
-import dev.npn.core.journal.JournalPath
-import dev.npn.core.journal.JournalPaths
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.delay
 import java.time.Instant
@@ -31,11 +29,6 @@ data class SyncOptions(
     val inPlacePdfPercent: Int,
     /** The share of deliveries made a second time, as a tool that re-pulls a file it already has does. */
     val duplicatePercent: Int,
-    /**
-     * Whether the tool sometimes writes a journal object in place, partial at its final name for a
-     * while: damage the library cannot tell from a lost object, and so a reason it may block writes.
-     */
-    val journalInPlace: Boolean,
 )
 
 /** One version of one path, as the tool's index holds it: its bytes (null for a deletion), mtime and version vector. */
@@ -63,17 +56,19 @@ internal class SyncPeer(
  * device records what changed there since its last scan as new versions (a version vector per path)
  * and sends each to every other device, where it lands after a seeded delay, so deliveries arrive out
  * of order, now and then twice, under the tool's temporary name first and then renamed into place,
- * or (for a PDF, sometimes) written in place over a while. Journal objects, OCR sidecars, device
- * markers, staging files and PDFs travel alike; a deletion travels as a version too. A delivery a
- * device's own unscanned change, or a version it has that does not descend from it, contends with is
- * a conflict: identical bytes merge, a modification beats a deletion, and otherwise the newer mtime
- * (then the higher device id) keeps the name while the other is kept as a conflict copy, which then
- * syncs like any new file. Modification times travel with the bytes.
+ * or (for a PDF, sometimes) written in place over a while, as `cp`, a scanner app or `adb push`
+ * write one; what is not a PDF, a journal object above all, always lands whole by a rename, as every
+ * tool of this kind does it. Journal objects, OCR sidecars, device markers, staging files and PDFs
+ * travel alike; a deletion travels as a version too. A delivery a device's own unscanned change, or
+ * a version it has that does not descend from it, contends with is a conflict: identical bytes
+ * merge, a modification beats a deletion, and otherwise the newer mtime (then the higher device id)
+ * keeps the name while the other is kept as a conflict copy, which then syncs like any new file.
+ * Modification times travel with the bytes. A device the folder is shared with later ([join]) is
+ * sent what the others hold, over the same seeded delays, as the tool fills a folder it was just
+ * given; until then it is scanned by nothing and sent nothing.
  *
- * What it did that a library could not tell from damage (a journal object partial at its final
- * name) is recorded per device ([damagedAt]), so the simulation can tell a block it explains from
- * one it does not. A conflict on a write-once name under `.npn/` is a violation of the library's
- * naming ([violations]): two writers published different bytes under one name.
+ * A conflict on a write-once name under `.npn/` is a violation of the library's naming
+ * ([violations]): two writers published different bytes under one name.
  */
 internal class SimSync(
     private val world: SimWorld,
@@ -81,9 +76,17 @@ internal class SimSync(
     private val random: Random,
     val options: SyncOptions,
     private val trace: MutableList<String>,
+    /** Which devices share the folder from the start; the others [join] later. */
+    present: List<Boolean> = peers.map { true },
 ) {
     /** What the tool last recorded at each path of each device: its local index. */
     private val known = peers.map { HashMap<String, SyncVersion>() }
+
+    /** Which devices share the folder now. */
+    private val present = present.toBooleanArray()
+
+    /** The indices of the devices that share the folder now. */
+    private val sharing: List<Int> get() = peers.indices.filter { present[it] }
 
     /** Version counters, one per device. */
     private val counters = LongArray(peers.size)
@@ -95,9 +98,6 @@ internal class SimSync(
     private val transferring = peers.map { HashSet<String>() }
 
     private val inFlight = ArrayList<Pair<String, Deferred<Unit>>>()
-
-    /** The step at which each device last got a journal object partial at its final name, or -1. */
-    val damagedAt = IntArray(peers.size) { -1 }
 
     /** Conflict copies made, for the trace and the summary. */
     val conflicts = ArrayList<String>()
@@ -121,6 +121,7 @@ internal class SimSync(
         peer: Int,
         immediate: Boolean = false,
     ): Int {
+        if (!present[peer]) return 0
         val fs = peers[peer].fs
         val index = known[peer]
         val files = fs.allFiles().filterKeys { synced(it) && it !in writing[peer] }
@@ -158,7 +159,7 @@ internal class SimSync(
         version: SyncVersion,
         immediate: Boolean,
     ) {
-        peers.indices.filter { it != from }.forEach { to ->
+        sharing.filter { it != from }.forEach { to ->
             if (immediate) {
                 apply(to, path, version, Delivery.Atomic, immediate = true)
             } else {
@@ -181,12 +182,7 @@ internal class SimSync(
                 roll < 95 -> random.nextLong(3_000, 60_000)
                 else -> random.nextLong(60_000, 10L * 60_000)
             }
-        val inPlace =
-            version.bytes != null &&
-                (
-                    (isPdf(path) && random.chance(options.inPlacePdfPercent)) ||
-                        (options.journalInPlace && isJournalObject(path) && random.chance(JOURNAL_IN_PLACE_PERCENT))
-                )
+        val inPlace = version.bytes != null && isPdf(path) && random.chance(options.inPlacePdfPercent)
         val delivery =
             when {
                 inPlace -> Delivery.InPlace(random.nextInt(2, CHUNKS), random.nextLong(200, CHUNK_INTERVAL_MILLIS))
@@ -354,7 +350,7 @@ internal class SimSync(
                 (version.mtime == localMtime && peers[remote].deviceShort > peers[to].deviceShort)
         val loser = if (remoteWins) peers[to] else peers[remote]
         val copy = conflictName(path, loser.deviceShort)
-        if (writeOnceName(path)) {
+        if (SimNames.isWriteOnce(path)) {
             violations += "step ${world.step}: conflicting versions of the write-once '$path' " +
                 "(${sha256Bytes(current).take(ID)} on ${peers[to].name}, " +
                 "${sha256Bytes(version.bytes!!).take(ID)} from ${peers[remote].name})"
@@ -395,11 +391,6 @@ internal class SimSync(
 
             delivery is Delivery.InPlace -> {
                 writing[to] += path
-                if (isJournalObject(path)) {
-                    damagedAt[to] = world.step
-                    trace +=
-                        "   sync: writing journal object '$path' in place at ${peers[to].name}, partial for a while"
-                }
                 inFlight +=
                     "in place '$path' at ${peers[to].name}" to
                     world.launch {
@@ -424,6 +415,32 @@ internal class SimSync(
             else -> {
                 fs.bySyncTool { fs.externalWriteAtomic(path, bytes, version.mtime) }
             }
+        }
+    }
+
+    // ---- joining --------------------------------------------------------------------------------
+
+    /**
+     * Share the folder with [peer] from now on, its folder empty: the tool sends it the latest
+     * version every other device holds of each path (the one that descends from all the others',
+     * or the newest where none does, as a conflict would resolve), each over a seeded delay, so the
+     * folder fills over virtual time while the app may already be open on it.
+     */
+    fun join(peer: Int) {
+        check(!present[peer]) { "${peers[peer].name} shares the folder already" }
+        val others = sharing
+        present[peer] = true
+        val paths = others.flatMap { known[it].keys }.toSortedSet()
+        for (path in paths) {
+            val held = others.mapNotNull { from -> known[from][path]?.let { from to it } }
+            val (from, version) =
+                held.firstOrNull { (_, candidate) -> held.all { (_, other) -> candidate.dominates(other.vector) } }
+                    ?: held.maxWith(
+                        compareBy<Pair<Int, SyncVersion>> { it.second.mtime }.thenBy { peers[it.first].deviceShort },
+                    )
+            if (version.bytes == null) continue
+            trace += "   sync: sending ${version.describe()} '$path' to ${peers[peer].name}, which joined"
+            schedule(peer, path, SyncVersion(version.bytes, version.mtime, version.vector, from), duplicate = false)
         }
     }
 
@@ -466,7 +483,7 @@ internal class SimSync(
         var total = 0
         repeat(FLUSH_ROUNDS) {
             finishInFlight()
-            val changed = peers.indices.sumOf { peer -> scan(peer, immediate = true) } + pullAll()
+            val changed = sharing.sumOf { peer -> scan(peer, immediate = true) } + pullAll()
             total += changed
             if (changed == 0) return total
         }
@@ -477,22 +494,25 @@ internal class SimSync(
      * Bring every device every version another holds that its own does not descend from, as the
      * tool does when it compares a device's index with the others': what a lost or overtaken
      * delivery left out comes now. Returns how many it brought.
+     *
+     * Two devices recording different bytes under one version vector would be a slip of this model
+     * (every version a device makes bumps its own counter, so no two contents share a vector), never
+     * the tool's: it fails the run, rather than being quietly settled and hiding the next slip.
      */
     private fun pullAll(): Int {
         var pulled = 0
-        val paths = known.flatMap { it.keys }.toSortedSet()
+        val paths = sharing.flatMap { known[it].keys }.toSortedSet()
         for (path in paths) {
-            for (to in peers.indices) {
-                for (from in peers.indices.filter { it != to }) {
+            for (to in sharing) {
+                for (from in sharing.filter { it != to }) {
                     val theirs = known[from][path] ?: continue
                     val mine = known[to][path]
-                    if (mine != null && mine.vector == theirs.vector && !same(mine.bytes, theirs.bytes)) {
-                        // One vector for two contents (a model slip, never Syncthing's): theirs wins.
-                        val winner = SyncVersion(theirs.bytes, theirs.mtime, bump(theirs.vector, from), from)
-                        known[from][path] = winner
-                        apply(to, path, winner, Delivery.Atomic, immediate = true)
-                        pulled++
-                    } else if (mine?.dominates(theirs.vector) != true) {
+                    check(mine == null || mine.vector != theirs.vector || same(mine.bytes, theirs.bytes)) {
+                        "sync model: ${peers[to].name} and ${peers[from].name} record different contents of " +
+                            "'$path' under one version vector ${theirs.vector} " +
+                            "(${mine?.describe()} and ${theirs.describe()})"
+                    }
+                    if (mine?.dominates(theirs.vector) != true) {
                         apply(to, path, theirs, Delivery.Atomic, immediate = true)
                         pulled++
                     }
@@ -502,24 +522,28 @@ internal class SimSync(
         return pulled
     }
 
-    /** The paths whose files differ between the devices (missing on some, or other bytes); empty when all agree. */
+    /**
+     * The paths whose files differ between the devices sharing the folder (missing on some, or other
+     * bytes); empty when all agree.
+     */
     fun differences(): List<String> {
-        val maps = peers.map { peer -> peer.fs.allFiles().filterKeys(::synced) }
+        val devices = sharing
+        val maps = devices.map { peers[it].fs.allFiles().filterKeys(::synced) }
         val paths = maps.flatMap { it.keys }.toSortedSet()
         return paths.mapNotNull { path ->
             val hashes = maps.map { files -> files[path]?.let { sha256Bytes(it).take(ID) } ?: "-" }
             path.takeIf { hashes.distinct().size > 1 }?.let {
                 "'$it': " +
-                    peers.indices.joinToString { i ->
+                    devices.withIndex().joinToString { (slot, i) ->
                         val recorded = known[i][it]
                         val held =
                             recorded?.bytes?.let { bytes -> sha256Bytes(bytes).take(ID) } ?: recorded?.let { "deleted" }
                                 ?: "none"
                         val busy = if (it in writing[i]) ", writing" else ""
-                        "${peers[i].name}=${hashes[i]} (tool has $held ${recorded?.vector}$busy)"
+                        "${peers[i].name}=${hashes[slot]} (tool has $held ${recorded?.vector}$busy)"
                     } +
                     // A journal object some device keeps writing says what it keeps deciding.
-                    if (isJournalObject(it)) {
+                    if (SimNames.isJournalObject(it)) {
                         "\n    holding: " +
                             maps.firstNotNullOf { files -> files[it] }.decodeToString().trim()
                     } else {
@@ -534,15 +558,8 @@ internal class SimSync(
     private fun synced(path: String): Boolean = !NpnPaths.isSyncTemp(NpnPaths.fileName(path))
 
     private fun tempName(path: String): String {
-        val name = NpnPaths.fileName(path)
-        val temp =
-            when (options.tool) {
-                SyncTool.SYNCTHING -> ".syncthing.$name.tmp"
-                SyncTool.NEXTCLOUD -> ".$name.~${random.nextInt(0x10000, 0xfffff).toString(16)}"
-                SyncTool.RESILIO -> "$name.!sync"
-            }
-        val dir = NpnPaths.parentDir(path)
-        return if (dir.isEmpty()) temp else "$dir/$temp"
+        val nonce = if (options.tool == SyncTool.NEXTCLOUD) random.nextInt(NONCE_FROM, NONCE_UNTIL) else 0
+        return SimNames.syncTemp(path, options.tool, nonce)
     }
 
     private fun conflictName(
@@ -584,28 +601,15 @@ internal class SimSync(
         private const val CHUNKS = 5
         private const val CHUNK_INTERVAL_MILLIS = 3_000L
         private const val TRANSFER_MILLIS = 2_500L
-        private const val JOURNAL_IN_PLACE_PERCENT = 10
         private const val FLUSH_ROUNDS = 12
         private const val BUSY_POLL_MILLIS = 500L
         private const val LONG_WAIT_MILLIS = 15L * 60_000
+        private const val NONCE_FROM = 0x10000
+        private const val NONCE_UNTIL = 0xfffff
         private val SYNCTHING_TIME = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC)
         private val NEXTCLOUD_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HHmmss").withZone(ZoneOffset.UTC)
 
         fun isPdf(path: String): Boolean = NpnPaths.indexable(FileMeta(path, NpnPaths.fileName(path), 1, 0, false))
-
-        fun isJournalObject(path: String): Boolean =
-            JournalPaths.classify(path).let {
-                it is JournalPath.ObjectV2 ||
-                    it is JournalPath.SnapshotV2
-            }
-
-        /** Names the library writes once and never again: two different versions of one is a broken invariant. */
-        fun writeOnceName(path: String): Boolean =
-            isJournalObject(path) ||
-                (
-                    path.endsWith(".json") &&
-                        (path.startsWith("${NpnPaths.OCR_DIR}/") || path.startsWith("${NpnPaths.DEVICES_DIR}/"))
-                )
 
         /** Whether every folder above [path] is a folder (or not there yet) on [fs], so a file can be put there. */
         fun placeable(

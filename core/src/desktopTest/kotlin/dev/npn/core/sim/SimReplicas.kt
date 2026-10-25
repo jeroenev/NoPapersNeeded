@@ -2,8 +2,8 @@ package dev.npn.core.sim
 
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
-import dev.npn.core.index.MetadataWriteBlocked
 import dev.npn.core.index.WriteBlock
+import dev.npn.core.journal.EventDecoderRegistry
 import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.JournalOp
 import dev.npn.core.util.NpnLog
@@ -23,6 +23,12 @@ data class SyncConfig(
     val watched: List<Boolean>,
     val deleteAfterImport: List<Boolean>,
     val options: SyncOptions,
+    /**
+     * The step at which each replica joins, 0 for one there from the start: a late one starts with
+     * an empty folder the sync tool fills, as a second device set up later does, and opens the
+     * library on it at once.
+     */
+    val joinsAt: List<Int> = List(replicas) { 0 },
 ) {
     companion object {
         fun forSeed(config: SimConfig): SyncConfig {
@@ -41,6 +47,12 @@ data class SyncConfig(
                         }
                     }
                 }
+            val options =
+                SyncOptions(
+                    tool = random.pick(SyncTool.entries),
+                    inPlacePdfPercent = if (random.nextBoolean()) IN_PLACE_PERCENT else 0,
+                    duplicatePercent = DUPLICATE_PERCENT,
+                )
             return SyncConfig(
                 replicas = count,
                 profiles = profiles,
@@ -50,13 +62,17 @@ data class SyncConfig(
                     },
                 watched = List(count) { random.chance(50) },
                 deleteAfterImport = List(count) { random.nextBoolean() },
-                options =
-                    SyncOptions(
-                        tool = random.pick(SyncTool.entries),
-                        inPlacePdfPercent = if (random.nextBoolean()) IN_PLACE_PERCENT else 0,
-                        duplicatePercent = DUPLICATE_PERCENT,
-                        journalInPlace = random.chance(JOURNAL_IN_PLACE_SEEDS),
-                    ),
+                options = options,
+                joinsAt =
+                    List(count) { i ->
+                        if (i > 0 &&
+                            random.chance(LATE_JOIN_PERCENT)
+                        ) {
+                            1 + random.nextInt(maxOf(1, config.steps / 2))
+                        } else {
+                            0
+                        }
+                    },
             )
         }
 
@@ -65,34 +81,7 @@ data class SyncConfig(
         private const val MAX_REPLICAS = 4
         private const val IN_PLACE_PERCENT = 15
         private const val DUPLICATE_PERCENT = 10
-        private const val JOURNAL_IN_PLACE_SEEDS = 15
-    }
-}
-
-/**
- * The findings of the multi-replica simulation that are written up and not fixed yet, as
- * [KnownIssues] holds the single replica's: a seed that hits one stops there and is counted, so a
- * long run goes on to find what else there is. A fixed one is removed.
- */
-object SyncKnownIssues {
-    /**
-     * Finding 8, the documented cost of `doc-undelete` not being written yet (ARCHITECTURE.md 6.4):
-     * the bytes of a document deleted for good that come back (an import, or a file a sync tool
-     * delivers) bring it back on the device that imported them, for that session, and in the scan
-     * that finds the file, and nowhere else: devices disagree on whether the library shows it, and a
-     * device disagrees with a rebuild of its own index. Off once this build writes the op.
-     */
-    const val DELETED_RETURNS_UNRECORDED = !JournalOp.DocUndelete.WRITTEN
-
-    /** Each finding by the phrases its failure message holds, all of them. */
-    val knownFailures: Map<List<String>, String> = emptyMap()
-
-    /** [failure] as a known finding when it is one, else as it is. */
-    internal fun classify(failure: SimFailure): SimFailure {
-        if (failure.known != null) return failure
-        val message = failure.message.orEmpty()
-        val known = knownFailures.entries.firstOrNull { it.key.all(message::contains) }?.value ?: return failure
-        return SimFailure(message, known)
+        private const val LATE_JOIN_PERCENT = 25
     }
 }
 
@@ -106,8 +95,8 @@ internal class ReplicaSetup(
     val known: HashMap<String, ByteArray>,
     val trace: MutableList<String>,
     val labelBase: Int,
-    /** Runs before an open that failed is tried again: what lets the world mend what made it fail. */
-    val beforeReopen: (Throwable) -> Unit = {},
+    /** How many replicas the run has: with more than one, the sync tool is the other devices. */
+    val peers: Int,
 )
 
 /** The world's log, each entry naming the replica it came from. */
@@ -130,20 +119,23 @@ internal class ReplicaLog(
  * [ExtraPlanner]'s), or one of the tool's.
  *
  * Invariants beyond each replica's own: no sync conflict on a name written once, no replica
- * deleting a journal object or another device's sidecar or marker, device ids never shared, and a
- * replica blocking writes as `JOURNAL_DAMAGED` only after the tool damaged a journal object there
- * since it was last at rest. At rest every replica is checked against a rebuild of
+ * deleting a journal object or another device's sidecar or marker, device ids never shared, and no
+ * replica blocking writes as `JOURNAL_DAMAGED`, since the tool delivers every journal object whole
+ * and nothing deletes one. At rest every replica is checked against a rebuild of
  * its own folder, whatever it has not received yet; after a full sync (sometimes, and at the end)
- * the folders must be equal and every replica must show the same library.
+ * the folders must be equal and every replica must show the same library. A replica that joins
+ * late ([SyncConfig.joinsAt]) takes part from the step it joins, its folder empty until the tool
+ * fills it.
  */
 internal class SyncSimulation(
     scheduler: TestCoroutineScheduler,
     val config: SimConfig,
     /** Runs after each step, before the invariants across replicas: the harness's own tests break things here. */
     private val afterStep: SyncSimulation.(step: Int) -> Unit = {},
+    /** The replicas and the tool, as the seed draws them unless a harness test says otherwise. */
+    val sync: SyncConfig = SyncConfig.forSeed(config),
 ) {
     val world = SimWorld(scheduler)
-    val sync = SyncConfig.forSeed(config)
     private val random = Random(config.seed xor ORCHESTRA_SALT)
 
     /** Every step and what it came to, as a trace file holds it. */
@@ -183,9 +175,8 @@ internal class SyncSimulation(
                         known,
                         trace,
                         LABEL_STRIDE * index,
-                    ) { failure ->
-                        reopenAfter(this, failure)
-                    },
+                        sync.replicas,
+                    ),
             )
         val watched = if (sync.watched[index]) SimWatchedFolder(name, world.clock::nowMillis, ::accounted) else null
 
@@ -204,8 +195,9 @@ internal class SyncSimulation(
 
         val extra = ExtraPlanner(Random(salted(6)), sim, name, watched, sync.deleteAfterImport[index], log)
 
-        /** The step at which this replica was last seen at rest with writes allowed. */
-        var cleanStep = 0
+        /** The step this replica joins at (0: from the start), and whether it has. */
+        val joinsAt = sync.joinsAt[index]
+        var joined = false
         var removalsSeen = 0
 
         init {
@@ -217,6 +209,9 @@ internal class SyncSimulation(
     }
 
     val members = List(sync.replicas) { Member(it) }
+
+    /** The replicas that have joined: the ones that take steps and are checked. */
+    private val present: List<Member> get() = members.filter { it.joined }
 
     /**
      * The documents [hash]'s relink chains in [member]'s index end at: followed from [hash] through
@@ -249,7 +244,9 @@ internal class SyncSimulation(
     ): List<String> =
         member.replica.indexDb
             .rows("SELECT canonicalJson FROM metadata_events WHERE operation = 'relink' AND documentId = '$hash'")
-            .mapNotNull { (json) -> json?.let { RELINK_TARGET.find(it)?.groupValues?.get(1) } }
+            .mapNotNull { (json) ->
+                json?.let { (EventDecoderRegistry.decodeStored(it).op as? JournalOp.Relink)?.newDoc }
+            }
 
     val tool =
         SimSync(
@@ -261,28 +258,24 @@ internal class SyncSimulation(
             Random(config.seed xor TOOL_SALT),
             sync.options,
             trace,
+            present = members.map { it.joinsAt == 0 },
         )
 
-    fun run() {
-        try {
-            runSteps()
-        } catch (failure: SimFailure) {
-            throw SyncKnownIssues.classify(failure)
-        }
-    }
+    fun run() = runSteps()
 
     private fun runSteps() {
         try {
             trace += "config: $config"
             trace += "replicas: $sync"
-            members.forEach { it.sim.open() }
+            members.filter { it.joinsAt == 0 }.forEach { open(it) }
             for (step in 1..config.steps) {
                 world.step = step
                 val started = System.nanoTime()
+                members.filter { !it.joined && it.joinsAt == step }.forEach { join(it, step) }
                 if (random.chance(SYNC_PERCENT)) {
                     syncStep(step)
                 } else {
-                    val member = random.pick(members)
+                    val member = random.pick(present)
                     val extra = if (random.chance(EXTRA_PERCENT)) member.extra.next(member.sim.snapshot()) else null
                     member.sim.step(step, extra ?: member.sim.nextPlanned())
                 }
@@ -303,6 +296,22 @@ internal class SyncSimulation(
         }
     }
 
+    private fun open(member: Member) {
+        member.sim.open()
+        member.joined = true
+    }
+
+    /** [member] is given the folder, empty, at [step], and opens the library on it while the tool fills it. */
+    private fun join(
+        member: Member,
+        step: Int,
+    ) {
+        tool.join(member.index)
+        trace += "#$step t=${world.scheduler.currentTime} ${member.name} joins with an empty folder " +
+            "(${tool.pendingDeliveries} delivering)"
+        open(member)
+    }
+
     // ---- the sync tool's steps ------------------------------------------------------------------
 
     private fun syncStep(step: Int) {
@@ -310,7 +319,7 @@ internal class SyncSimulation(
         val text =
             when {
                 roll < 65 -> {
-                    val member = random.pick(members)
+                    val member = random.pick(present)
                     val changed = tool.scan(member.index)
                     "sync: scan ${member.name}, $changed path(s) changed"
                 }
@@ -327,7 +336,7 @@ internal class SyncSimulation(
                 }
             }
         trace += "#$step t=${world.scheduler.currentTime} $text (${tool.pendingDeliveries} delivering)"
-        members.forEach { it.sim.checkCheap() }
+        present.forEach { it.sim.checkCheap() }
     }
 
     // ---- invariants across replicas -------------------------------------------------------------
@@ -351,39 +360,18 @@ internal class SyncSimulation(
                 }
             }
         }
+        // The tool delivers every journal object whole, by a rename, and nothing deletes one: a
+        // library that finds its journal damaged found a bug.
         members.forEach { member ->
             val block =
                 member.replica.session
                     ?.writeBlock
-                    ?.value ?: return@forEach
-            if (block == WriteBlock.JOURNAL_DAMAGED && !explained(member)) {
-                fail(
-                    member,
-                    "${member.name} blocks writes as JOURNAL_DAMAGED, though the sync tool damaged no journal object " +
-                        "there since step ${member.cleanStep} (the log says why)",
-                )
+                    ?.value
+            if (block == WriteBlock.JOURNAL_DAMAGED) {
+                fail(member, "${member.name} blocks writes as JOURNAL_DAMAGED (the log says why)")
             }
         }
     }
-
-    /**
-     * An open refused (a damaged journal over an index with nothing to show refuses the library):
-     * when the tool damaged a journal object there, let its deliveries land, which mends it, before
-     * the open is tried again. An open the simulation does not explain is tried again as it is.
-     */
-    private fun reopenAfter(
-        member: Member,
-        failure: Throwable,
-    ) {
-        if (failure is MetadataWriteBlocked && explained(member)) {
-            trace += "   ${member.name}'s open was refused while the sync tool had a journal object half written; " +
-                "letting deliveries land"
-            tool.finishInFlight()
-        }
-    }
-
-    /** Whether something the simulation did explains a damaged journal on [member] since it was last clean. */
-    private fun explained(member: Member): Boolean = tool.damagedAt[member.index] > member.cleanStep
 
     /** A replica deletes no journal object, and no sidecar or device marker but its own. */
     private fun checkRemovals(member: Member) {
@@ -393,8 +381,8 @@ internal class SyncSimulation(
             val own = path in member.fs.appPublished
             val problem =
                 when {
-                    SimSync.isJournalObject(path) -> "deleted the journal object '$path'"
-                    SimSync.writeOnceName(path) && !own -> "deleted '$path', which another device wrote"
+                    SimNames.isJournalObject(path) -> "deleted the journal object '$path'"
+                    SimNames.isWriteOnce(path) && !own -> "deleted '$path', which another device wrote"
                     else -> null
                 }
             problem?.let { fail(member, "${member.name} $it") }
@@ -441,7 +429,7 @@ internal class SyncSimulation(
             var rounds = 0
             while (true) {
                 val moved = tool.flush()
-                members.forEach { it.sim.settle() }
+                present.forEach { it.sim.settle() }
                 tool.finishInFlight()
                 val differences = tool.differences()
                 trace += "   == sync round ${rounds + 1}: $moved path(s) moved, " +
@@ -458,20 +446,17 @@ internal class SyncSimulation(
                 }
             }
         } else {
-            members.forEach { it.sim.settle() }
+            present.forEach { it.sim.settle() }
         }
-        members.forEach { member ->
+        present.forEach { member ->
             member.replica.session?.writeBlock?.value?.let {
                 fail(member, "${member.name} still blocks writes at rest ($it; the log says why)")
             }
         }
-        val views = members.map { it.sim.checkAtRest() }
-        members.forEach(::checkOwnNames)
+        val views = present.associateWith { it.sim.checkAtRest() }
+        present.forEach(::checkOwnNames)
         checkLastCopies()
         if (full) checkConvergence(views)
-        members.forEach { member ->
-            member.cleanStep = world.step
-        }
     }
 
     /**
@@ -569,7 +554,7 @@ internal class SyncSimulation(
             .maxWithOrNull(compareBy<LossAt> { it.atMillis }.thenBy { it.loss == Loss.APP })
 
     /** After a full sync every replica shows the library the first one shows, but for what each alone remembers. */
-    private fun checkConvergence(views: List<LibraryView>) {
+    private fun checkConvergence(views: Map<Member, LibraryView>) {
         val first = members[0]
 
         fun holds(
@@ -577,15 +562,15 @@ internal class SyncSimulation(
             a: String,
             b: String,
         ) = listOf(a, b).all { path -> first.fs.bytesAt(path)?.let(::sha256Bytes) == docId }
-        members.drop(1).forEach { member ->
-            val a = views[0]
-            val b = views[member.index]
+        views.keys.filter { it != first }.forEach { member ->
+            val a = views.getValue(first)
+            val b = views.getValue(member)
             // A row only one index holds for a document neither shows is what that replica alone saw
             // (a file gone missing, a deletion it watched): device-local, as for the rebuild oracle.
             // While this build writes no doc-undelete, a document deleted for good that an import
             // brought back shows on the importing device for that session only (ARCHITECTURE.md 6.4).
             val returned =
-                if (!SyncKnownIssues.DELETED_RETURNS_UNRECORDED) {
+                if (!KnownIssues.DELETED_RETURNS_UNRECORDED) {
                     emptySet()
                 } else {
                     world.read("deleted documents") {
@@ -624,8 +609,8 @@ internal class SyncSimulation(
             members.forEach { member ->
                 appendLine(
                     "  ${member.name}: ${member.replica.installationId}, device ids ${member.replica.deviceIds}, " +
-                        "${member.fs.allFiles().size} files, clean at step ${member.cleanStep}, " +
-                        "journal damaged at step ${tool.damagedAt[member.index]}",
+                        "${member.fs.allFiles().size} files" +
+                        if (member.joinsAt > 0) ", joined at step ${member.joinsAt}" else "",
                 )
             }
             appendLine("Sync: ${tool.pendingDeliveries} deliveries under way, ${tool.conflicts.size} conflict copies")
@@ -659,6 +644,5 @@ internal class SyncSimulation(
         const val HLC_PHYSICAL = 2
         const val HLC_COUNTER = 3
         const val HLC_DEVICE = 4
-        val RELINK_TARGET = Regex("\"newDoc\":\"([0-9a-f]{64})\"")
     }
 }

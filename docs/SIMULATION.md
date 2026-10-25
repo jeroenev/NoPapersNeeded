@@ -57,15 +57,15 @@ replica's storage profile and mtimes, the watcher's losses, the sync tool), the 
 the last steps of the trace, the end of the session log (each entry names its replica), the failing
 replica's files with their hashes and its index's document rows, the history of a path whose file is
 not its document's, the journal events behind a document the rebuild shows otherwise, and the sync
-tool's state (conflict copies, deliveries under way, damage it did). A seed that hits a failure listed
-in `KnownIssues.knownFailures` or `SyncKnownIssues.knownFailures` (a finding already written up) stops
+tool's state (conflict copies, deliveries under way). A seed that hits a failure listed
+in `KnownIssues.knownFailures` (a finding already written up) stops
 there. Such a seed is counted and printed instead of failing the test, so a long run goes on to find
 new bugs. A replay of that one seed still fails.
 
 `SimulationHarnessTest` and `SyncSimulationHarnessTest` check that the harness itself can fail: the
 rebuild opening other files, a rewritten journal object, a logged programming error, two versions of
 a write-once name meeting in the sync tool, a replica deleting a journal object, and a damaged journal
-nothing in the simulation explains each fail the run. Storage with no publication primitive refuses
+object each fail the run. Storage with no publication primitive refuses
 the library.
 
 ## Scheduled runs
@@ -104,11 +104,15 @@ kept 5 days. ci.yml keeps running only the CI-sized test above, as part of `:cor
   a conflict: identical bytes merge, a modification beats a deletion, otherwise the newer mtime (then
   the higher device id) keeps the name and the other is kept as a conflict copy (Syncthing's
   `.sync-conflict-<date>-<time>-<device>` or Nextcloud's `(conflicted copy <date> <time>)`), which
-  then syncs like any new file. On some seeds the tool also writes journal objects in place, which
-  a library cannot tell from damage; the tool records each such delivery (`damagedAt`).
+  then syncs like any new file. What is not a PDF, a journal object above all, always lands whole by
+  a rename, as every tool of this kind does it. A device given the folder later (`SyncConfig.joinsAt`:
+  a quarter of the replicas after the first, at a step in the first half of the run) starts with an
+  empty folder, which the tool fills with the latest version of every path over the same delays,
+  while the app opens on it at once, as a second device set up later is.
 - A full sync (`SimSync.flush`) lets every delivery under way land, scans every device and delivers at
   once, and brings each device every version another holds that its own does not descend from, until
-  a round changes nothing.
+  a round changes nothing. Two devices recording different bytes under one version vector would be
+  a slip of the model, never the tool's, and fail the run rather than being settled quietly.
 - `InMemoryLibraryFileSystem` implements `LibraryFileSystem` with the semantics of
   `JvmLibraryFileSystem`, or of `SafLibraryFileSystem` under `StorageProfile.SAF`: publication
   without replacement by hard link or exclusive rename, `sameFile` through hard links, no document
@@ -123,6 +127,11 @@ kept 5 days. ci.yml keeps running only the CI-sized test above, as part of `:cor
   and sync-tool temporary files.
 - `SimFaults` fails any filesystem method once or N times, at any path or under a prefix, before
   the call takes effect or after it landed.
+- `SimNames` is the one place the outside world's names come from, derived from `NpnPaths` and
+  `JournalPaths`: a sync tool's temporary name (checked against `NpnPaths.isSyncTemp`), what is a
+  journal object, and what the library writes once. `LibraryFileSystemContractTest` runs one
+  contract over `JvmLibraryFileSystem` and `InMemoryLibraryFileSystem`, so the fake cannot drift
+  from the real filesystem silently.
 - `SimWorld` puts all time on one `TestCoroutineScheduler`. The sessions' scopes, their computation
   dispatcher (`SessionDeps.computation`), the watch's time source, Room's query dispatcher, the sync
   tool and every operation run on one `SimDispatcher` over a `StandardTestDispatcher`. `EpochClock`
@@ -144,8 +153,9 @@ kept 5 days. ci.yml keeps running only the CI-sized test above, as part of `:cor
   `WatchedFolderImporter`) and in-memory thumbnails.
 - `SimGenerator` picks an `OpKind` by weight: the app's writes through the facets, rescans, OCR
   completions, several operations at once (with external events landing while they run), an
-  operation left running in the background, time steps, every external event, faults, crashes, close
-  and reopen, and dropping the index. `ExtraPlanner` adds bake in place, multi-page imports and split,
+  operation left running in the background, time steps, every external event (another device's
+  journal object or OCR sidecar only when the replica runs alone: with others, the sync tool
+  delivers theirs), faults, crashes, close and reopen, and dropping the index. `ExtraPlanner` adds bake in place, multi-page imports and split,
   the relink of a missing document to other bytes, auto-match rule saves, deletes and toggles (whose
   field sets drive the storage-path rule, which moves documents on every replica), the watched folder
   (new, slowly written, known, overwritten and removed files, and sweeps, beside the importer each
@@ -176,10 +186,9 @@ Across replicas, after every step:
   snapshot, an OCR sidecar, a device marker): two writers published different bytes under one name.
 - No replica deletes or moves away a journal object, nor another device's sidecar or marker.
 - No two replicas share a device id.
-- A replica blocks writes as `JOURNAL_DAMAGED` only after the sync tool wrote a journal object in
-  place there since it was last at rest. Anything else
-  that blocks writes is a bug: objects are write-once and named by their hash, and a sync tool's
-  file in transfer shows under its temporary name.
+- No replica blocks writes as `JOURNAL_DAMAGED`: objects are write-once and named by their hash, the
+  tool delivers each whole by a rename and shows a file in transfer under its temporary name, and
+  nothing deletes one, so a journal a library finds damaged is a bug.
 - A watched folder's importer deletes only a file whose bytes the library has a document of: bytes
   a file in the replica's folder holds, or bytes a relink superseded whose final target, the relink
   chain followed to its end, a file in that folder holds.
@@ -237,12 +246,11 @@ do not converge, which fails the run. Then:
 
 ## Known issues
 
-`KnownIssues` (in `Simulation.kt`) holds the single replica's switches and known failures;
-`SyncKnownIssues` (in `SimReplicas.kt`) holds the ones only several replicas find. Each entry's
-comment names the finding. Fixing a finding means turning its switch off (or removing its
-`knownFailures` entry) and making a long run pass.
+`KnownIssues` (in `Simulation.kt`) holds the switches and the known failures, each with a comment
+that names the finding; a known failure is listed by the phrases its message holds. Fixing a finding
+means turning its switch off (or removing its `knownFailures` entry) and making a long run pass.
 
-- **Finding 8**, `SyncKnownIssues.DELETED_RETURNS_UNRECORDED`: the documented cost of `doc-undelete`
+- **Finding 8**, `KnownIssues.DELETED_RETURNS_UNRECORDED`: the documented cost of `doc-undelete`
   not being written yet (ARCHITECTURE.md 6.4). A document deleted for good whose bytes come back is
   live on the device that imported them, for that session, and in the scan that finds the file, and
   nowhere else, so devices disagree, and a device disagrees with a rebuild of its own index. Off by
@@ -276,9 +284,10 @@ why next to it. Fail through `fail(...)`, which attaches the seed and the trace.
   moment before, but what the process did to files during the transaction would stay. Modelling
   that needs file-backed databases copied at the crash point.
 - **The sync tool losing a file it delivered**, or a device that never syncs again. The tool here
-  delivers everything eventually; it damages only by writing a journal object in place for a while.
+  delivers everything eventually, and never damages a file: it writes only PDFs in place.
 - **Directory renames and deletions** by the sync tool: it syncs files, and folders follow them.
-- **Devices that join late** with an empty folder, or leave: every replica opens at step 0.
+- **Devices that leave**, or come back after a long time away: a replica that has joined takes part
+  to the end.
 - **Partial listings** from a document provider still loading (`DocumentsContract.EXTRA_LOADING`):
   SAF storage is on its way out, so the simulation spends nothing on what only it can do. The SAF
   profile stays for its publication and relocation rules while the app supports it.

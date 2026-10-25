@@ -9,6 +9,8 @@ import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.PendingOp
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import kotlinx.coroutines.test.TestScope
@@ -21,6 +23,13 @@ import kotlin.test.Test
  */
 class SyncSimulationHarnessTest {
     private fun config(steps: Int = STEPS) = SimConfig.forSeed(HARNESS_SEED, steps).copy(quiesceEvery = steps * 2)
+
+    /** A run whose every replica is there from the start, so a test can reach into any of them at its first steps. */
+    private fun TestScope.allFromTheStart(afterStep: SyncSimulation.(step: Int) -> Unit): SyncSimulation {
+        val config = config()
+        val sync = SyncConfig.forSeed(config).let { it.copy(joinsAt = List(it.replicas) { 0 }) }
+        return SyncSimulation(testScheduler, config, afterStep, sync)
+    }
 
     private fun SyncSimulation.anObject(member: Int): String =
         members[member]
@@ -40,19 +49,59 @@ class SyncSimulationHarnessTest {
         once() shouldBe once()
     }
 
+    /**
+     * A replica given the folder later starts with nothing, is filled by the tool while the app is
+     * open on it, and at the end shows the library the others show: the final full sync's
+     * convergence check passes, and its last quiescence counts the same live documents as the first
+     * replica's, some of them.
+     */
+    @Test
+    fun aReplicaJoiningLateWithAnEmptyFolderConvergesWithTheOthers() =
+        runTest {
+            val base = config(JOIN_STEPS)
+            val sync =
+                SyncConfig.forSeed(base).let {
+                    it.copy(
+                        joinsAt =
+                            List(it.replicas) { i ->
+                                if (i ==
+                                    0
+                                ) {
+                                    0
+                                } else {
+                                    JOIN_AT
+                                }
+                            },
+                    )
+                }
+            val simulation = SyncSimulation(testScheduler, base, sync = sync)
+            simulation.run()
+            simulation.trace.any { "r1 joins with an empty folder" in it }.shouldBeTrue()
+
+            fun liveAtTheEnd(name: String) =
+                simulation.trace
+                    .last { "[$name] quiescent: " in it }
+                    .substringAfter("quiescent: ")
+                    .substringBefore(" live")
+                    .toInt()
+            val first = liveAtTheEnd("r0")
+            first shouldBeGreaterThan 0
+            (1 until sync.replicas).forEach { liveAtTheEnd("r$it") shouldBe first }
+        }
+
     @Test
     fun twoVersionsOfAWriteOnceNameFailTheRun() =
         runTest {
             val failure =
                 shouldThrow<SimFailure> {
-                    SyncSimulation(testScheduler, config(), afterStep = { step ->
+                    allFromTheStart { step ->
                         if (step == 2) {
                             val path = ".npn/ocr/${"a".repeat(HASH)}.device.tesseract.json"
                             members[0].fs.externalWriteAtomic(path, "{\"one\":1}".encodeToByteArray())
                             members[1].fs.externalWriteAtomic(path, "{\"two\":2}".encodeToByteArray())
                             tool.scan(0, immediate = true)
                         }
-                    }).run()
+                    }.run()
                 }
             failure.message shouldContain "two versions of a name written once"
         }
@@ -62,24 +111,25 @@ class SyncSimulationHarnessTest {
         runTest {
             val failure =
                 shouldThrow<SimFailure> {
-                    SyncSimulation(testScheduler, config(), afterStep = { step ->
+                    allFromTheStart { step ->
                         if (step == 2) world.read("delete") { members[0].fs.delete(anObject(0)) }
-                    }).run()
+                    }.run()
                 }
             failure.message shouldContain "deleted the journal object"
         }
 
+    /** The tool delivers every journal object whole, so a journal a library finds damaged is a bug. */
     @Test
-    fun aDamagedJournalNoSyncExplainsFailsTheRun() =
+    fun aDamagedJournalObjectFailsTheRun() =
         runTest {
             val failure =
                 shouldThrow<SimFailure> {
-                    SyncSimulation(testScheduler, config(), afterStep = { step ->
+                    allFromTheStart { step ->
                         if (step == 2) {
                             members[1].fs.externalOverwriteInPlace(anObject(1), "{}\n".encodeToByteArray())
                             world.run("rescan") { members[1].replica.session!!.rescan() }
                         }
-                    }).run()
+                    }.run()
                 }
             failure.message shouldContain "blocks writes as JOURNAL_DAMAGED"
         }
@@ -121,7 +171,7 @@ class SyncSimulationHarnessTest {
         trashCopyLast: Boolean = false,
     ): SimFailure =
         shouldThrow<SimFailure> {
-            SyncSimulation(testScheduler, config(), afterStep = { step ->
+            allFromTheStart { step ->
                 if (step == 2) {
                     val fs = members[0].fs
                     val bytes = SimPdf.bytes("only copy", "v", BAKED_SIZE + 1)
@@ -137,7 +187,7 @@ class SyncSimulationHarnessTest {
                         if (trashCopyLast) fs.delete(trashCopy)
                     }
                 }
-            }).run()
+            }.run()
         }
 
     /**
@@ -153,7 +203,7 @@ class SyncSimulationHarnessTest {
             val baked = SimPdf.bytes("baked elsewhere", "w", BAKED_SIZE)
             val rebaked = SimPdf.bytes("baked again elsewhere", "w", BAKED_SIZE + 2)
             val answers = ArrayList<Boolean>()
-            SyncSimulation(testScheduler, config(), afterStep = { step ->
+            allFromTheStart { step ->
                 if (step == 1) {
                     val relinked = members[1]
                     val elsewhere = InMemoryLibraryFileSystem(world.clock::nowMillis)
@@ -175,7 +225,7 @@ class SyncSimulationHarnessTest {
                     members[0].fs.externalWriteAtomic("rebaked.pdf", rebaked)
                     answers += world.read("accounted with the final target") { members[0].accounted(original) }
                 }
-            }).run()
+            }.run()
             answers shouldBe listOf(false, false, false, true)
         }
 
@@ -184,6 +234,8 @@ class SyncSimulationHarnessTest {
         const val HARNESS_SEED = 3L
         const val STEPS = 20
         const val REPLAY_STEPS = 120
+        const val JOIN_STEPS = 60
+        const val JOIN_AT = 20
         const val HASH = 64
     }
 }

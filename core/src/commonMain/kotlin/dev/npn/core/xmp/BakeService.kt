@@ -153,8 +153,10 @@ internal class BakeService(
             // name until the relink stands, so a crash in between loses nothing.
             val aside = NpnPaths.Temp.recoveryPath(beside = norm, nonce = ids.next())
             var standing = false
+            var movedAside = false
             try {
                 fs.move(norm, aside)
+                movedAside = true
                 if (!holdsWhatWasRead(aside, read, docId)) {
                     standing = true
                     putBack(norm, aside, tmpPath)
@@ -165,7 +167,7 @@ internal class BakeService(
                 standing = true
             } finally {
                 @Suppress("SuspendFunInFinallySection") // The whole block runs in NonCancellable.
-                if (!standing) restoreOriginal(norm, docId, newSha, tmpPath, aside)
+                if (!standing) restoreOriginal(norm, docId, newSha, tmpPath, aside, movedAside)
             }
             log.runLogged("Removing the original of $norm after its bake") {
                 if (holdsWhatWasRead(aside, read, docId)) fs.delete(aside)
@@ -215,7 +217,10 @@ internal class BakeService(
      * [tmpPath] goes only once [norm] holds the original again (until then
      * [dev.npn.core.fs.TempFileSweep] keeps it, as it keeps any bake's temporary file whose bytes
      * are not at its document's path). The caller still sees the swap's failure; a restore that
-     * fails too is logged with where the original is, which the next rescan indexes.
+     * fails too is logged with where the original is, which the next rescan indexes. One whose
+     * swap never got to move the original ([movedAside] false) and finds it at neither place lost
+     * nothing: another hand (the app's own path move, a sync tool, the user) took the file between
+     * the bake's last look and its move, and that hand's rescan indexes it where it went.
      */
     private suspend fun restoreOriginal(
         norm: String,
@@ -223,8 +228,18 @@ internal class BakeService(
         bakedSha: String,
         tmpPath: String,
         aside: String,
+        movedAside: Boolean,
     ) {
         suspend fun asideHolds() = runCatchingCancellable { fs.holds(aside, oldSha) }.getOrDefault(false)
+
+        suspend fun normHolds() = runCatchingCancellable { fs.holds(norm, oldSha) }.getOrDefault(false)
+        if (!movedAside && !normHolds() && !asideHolds()) {
+            // The swap never moved the original: another hand took the file before it could, and
+            // nothing of the document's is at the bake's path to restore. The baked bytes stay a
+            // leftover the next bake of the document removes first.
+            log.warn("$norm was moved away before its bake could swap it; the baked bytes stay at $tmpPath")
+            return
+        }
         runCatchingCancellable {
             if (!fs.holds(norm, oldSha)) {
                 if (fs.exists(norm)) {
@@ -258,23 +273,20 @@ internal class BakeService(
             // put right, so a warning. Only an original on disk nowhere is an error.
             val kept =
                 when {
-                    runCatchingCancellable { fs.holds(norm, oldSha) }.getOrDefault(false) -> norm
+                    normHolds() -> norm
                     asideHolds() -> aside
                     else -> null
                 }
+            val baked =
+                if (runCatchingCancellable { fs.exists(tmpPath) }.getOrDefault(false)) {
+                    ", the baked bytes at $tmpPath"
+                } else {
+                    ""
+                }
             if (kept != null) {
-                val baked =
-                    if (runCatchingCancellable {
-                            fs.exists(tmpPath)
-                        }.getOrDefault(false)
-                    ) {
-                        ", the baked bytes at $tmpPath"
-                    } else {
-                        ""
-                    }
                 log.warn("$message; the original is at $kept, where the next rescan finds it$baked", failure)
             } else {
-                log.error("$message; the original is on disk nowhere", failure)
+                log.error("$message; the original is on disk nowhere$baked", failure)
             }
         }
     }

@@ -261,7 +261,14 @@ class InMemoryLibraryFileSystem(
         val from = NpnPaths.normalize(fromRelPath)
         val to = NpnPaths.normalize(toRelPath)
         io(FsMethod.CLAIM, to) {
-            if (existsNow(to)) throw FileAlreadyExistsException(to)
+            // An exclusive rename replaces nothing and makes no folder: a claim stays within one.
+            val refused =
+                when {
+                    existsNow(to) -> FileAlreadyExistsException(to)
+                    !existsNow(NpnPaths.parentDir(to)) -> NoSuchFileException(NpnPaths.parentDir(to))
+                    else -> null
+                }
+            if (refused != null) throw refused
             relocate(from, to)
         }
     }
@@ -498,18 +505,11 @@ class InMemoryLibraryFileSystem(
         mtime: Long = now(),
     ) {
         val norm = NpnPaths.normalize(relPath)
-        val temp = syncthingTemp(norm)
+        val temp = SimNames.syncTemp(norm, SyncTool.SYNCTHING)
         externalWriteAtomic(temp, bytes, mtime)
         if (transferMillis > 0) delay(transferMillis)
         if (!files.containsKey(temp)) return
         externalMove(temp, norm)
-    }
-
-    /** Syncthing's temporary name for [relPath]: `.syncthing.<name>.tmp` beside it. */
-    fun syncthingTemp(relPath: String): String {
-        val dir = NpnPaths.parentDir(relPath)
-        val name = ".syncthing.${NpnPaths.fileName(relPath)}.tmp"
-        return if (dir.isEmpty()) name else "$dir/$name"
     }
 
     // ---- what the simulation inspects ------------------------------------------------------------
@@ -710,7 +710,7 @@ class InMemoryLibraryFileSystem(
         norm: String,
         bytes: ByteArray,
     ) {
-        if (!isWriteOnce(norm)) return
+        if (!SimNames.isWriteOnce(norm)) return
         val hash = sha256Bytes(bytes)
         val first = writeOnce.putIfAbsent(norm, hash)
         if (first != null && first != hash) {
@@ -723,13 +723,6 @@ class InMemoryLibraryFileSystem(
                 else -> null
             }
         if (expected != null && expected != hash) writeOnceViolations += "$norm holds bytes hashing to $hash"
-    }
-
-    private fun isWriteOnce(norm: String): Boolean {
-        val kind = JournalPaths.classify(norm)
-        if (kind is JournalPath.ObjectV2 || kind is JournalPath.SnapshotV2) return true
-        return norm.endsWith(".json") &&
-            (norm.startsWith("${NpnPaths.OCR_DIR}/") || norm.startsWith("${NpnPaths.DEVICES_DIR}/"))
     }
 
     /** The app's call taking effect right now, or null for the outside world. */

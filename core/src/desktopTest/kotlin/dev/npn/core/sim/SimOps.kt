@@ -23,8 +23,7 @@ import kotlin.random.Random
 
 /**
  * Every kind of step the generator can take, with its weight: how often it is picked relative to
- * the others. An operation the simulation must not run for now (a known issue it would keep
- * finding) is left out through [SimConfig.disabled], never by deleting it here.
+ * the others.
  */
 enum class OpKind(
     val weight: Int,
@@ -70,6 +69,8 @@ enum class OpKind(
     EXT_BACKUP(1),
     EXT_RESTORE_BACKUP(1),
     EXT_SYNC_TEMP(2),
+
+    // Another device's writes, as a sync tool delivers them: only when this replica runs alone.
     EXT_REMOTE_OBJECT(3),
     EXT_REMOTE_SIDECAR(2),
 
@@ -79,6 +80,9 @@ enum class OpKind(
     CLOSE_REOPEN(1),
     DROP_INDEX(1),
 }
+
+/** Whether this is another device's write stood in for: the sync tool's job when there are other replicas. */
+val OpKind.fromAnotherDevice: Boolean get() = this == OpKind.EXT_REMOTE_OBJECT || this == OpKind.EXT_REMOTE_SIDECAR
 
 /** A step the generator planned: what the trace says it is, and what it does. */
 internal sealed interface Planned {
@@ -541,15 +545,28 @@ internal class SimGenerator(
         val beside = s.live.pickOrNull()?.relPath ?: pathIn(random.pick(DIRS), pickName())
         val bucket = "${NpnPaths.JOURNAL_DIR}/objects-v2-${random.pick(BUCKETS)}"
         val dir = if (random.chance(30)) bucket else NpnPaths.parentDir(beside)
-        val name = NpnPaths.fileName(beside)
-        val temp =
+        val path =
             when (random.nextInt(4)) {
-                0 -> ".syncthing.$name.tmp"
-                1 -> "~syncthing~$name.tmp"
-                2 -> ".$name.~${random.nextInt(0x10000, 0xfffff).toString(16)}"
-                else -> "$name.!sync"
+                0 -> {
+                    SimNames.syncTemp(pathIn(dir, NpnPaths.fileName(beside)), SyncTool.SYNCTHING)
+                }
+
+                1 -> {
+                    SimNames.syncTemp(pathIn(dir, NpnPaths.fileName(beside)), SyncTool.SYNCTHING, older = true)
+                }
+
+                2 -> {
+                    SimNames.syncTemp(
+                        pathIn(dir, NpnPaths.fileName(beside)),
+                        SyncTool.NEXTCLOUD,
+                        random.nextInt(0x10000, 0xfffff),
+                    )
+                }
+
+                else -> {
+                    SimNames.syncTemp(pathIn(dir, NpnPaths.fileName(beside)), SyncTool.RESILIO)
+                }
             }
-        val path = pathIn(dir, temp)
         syncTemps += path
         return Planned.Control("external: sync tool writes '$path'", instant = true) {
             sim.fs.externalWriteAtomic(path, SimPdf.bytes("partial").copyOf(PARTIAL))
