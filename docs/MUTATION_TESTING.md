@@ -123,7 +123,7 @@ test that fails with the mutant applied by hand, and the complete run above incl
 | `ImportService.takeBack`: delete only the import's own moved copy | `ImportTakeBackTest`: `anImportThatFoundTheBytesInPlaceLeavesThatFileWhenItsReturnCannotBeRecorded`, `anImportsCopyWrittenOverBeforeItIsTakenBackStays` |
 | `JournalCoordinator.recordRestores`: the settle edge | `JournalCoordinatorWritesTest.aReturnIsRecordedExactlyWhenTheSettleWindowHasPassed` |
 | `MetadataAccumulator.stage`: skip an applied source whose fingerprint is unchanged | Equivalent: the stat gate before it already returns for every case it could match, so the check is gone. `MetadataAccumulatorTest.aTouchedObjectLosesNothingAndIsNotReadAgain` pins what a touched object does |
-| `JournalCoordinator.withDurableProjectionRecovery` / `blockWrites` (now `JournalCoordinator.pass` / `PassOutcome.failed`): the pass's own block, kept | `JournalCoordinatorWritesTest.aWriteAfterAFailedIngestWhoseRebuildWasCutShortIsRefusedForTheIngestsReason` |
+| `JournalCoordinator.withDurableProjectionRecovery` / `blockWrites`: the pass's own block, kept | `JournalCoordinatorWritesTest.aWriteAfterAFailedIngestWhoseRebuildWasCutShortIsRefusedForTheIngestsReason` |
 | `JournalCoordinator.recordWritten`: the write clock moves past a local write | `JournalCoordinatorWritesTest.aLocalWriteMovesTheStoredWriteClockPastIt` |
 | `HlcWatermarkAllocator.observe`: the receive rule's counter | `HlcTest` (`observeAtTheSamePhysicalTime...`, `observeOfARemote...`), `HlcAllocatorPropertyTest` |
 | `MetadataAccumulator.runReconcilePass`: an older `PROJECTION_VERSION` is wiped and rebuilt | `MetadataAccumulatorTest.aStoredProjectionOfAnOlderVersionIsRebuiltAtTheNextPass` |
