@@ -51,10 +51,12 @@ val npnWmClass = npnMainClass.replace('.', '-')
 val npnIconPng = layout.projectDirectory.file("src/main/resources/icon.png")
 val npnIconIco = layout.projectDirectory.file("src/main/resources/icon.ico")
 
-// Per-OS files jpackage puts in the app image; only a Windows build has any (the bundled
-// Tesseract, see prepareWindowsTesseract below).
+// Files jpackage puts in the app image beside the app, which finds them through
+// compose.application.resources.dir: the bundled rclone on every host, and on Windows the bundled
+// Tesseract (stageAppResources below).
 val isWindowsHost = System.getProperty("os.name").startsWith("Windows")
 val windowsAppResources = layout.buildDirectory.dir("tesseract-windows/app-resources")
+val appResources = layout.buildDirectory.dir("app-resources")
 
 compose.desktop {
     application {
@@ -91,7 +93,7 @@ compose.desktop {
             packageVersion = npnAppVersion
             description = npnDescription
             licenseFile.set(rootProject.file("LICENSE"))
-            if (isWindowsHost) appResourcesRootDir.set(windowsAppResources)
+            appResourcesRootDir.set(appResources)
             linux {
                 shortcut = true
                 iconFile.set(npnIconPng)
@@ -310,12 +312,6 @@ val prepareWindowsTesseract =
         outDir.set(windowsAppResources)
     }
 
-// Compose registers prepareAppResources after this script is evaluated, so match it by name
-// lazily instead of looking it up now.
-if (isWindowsHost) {
-    tasks.named { it == "prepareAppResources" }.configureEach { dependsOn(prepareWindowsTesseract) }
-}
-
 // --- Linux tarball (Flatpak input) -------------------------------------------
 // The jpackage app image plus the files a desktop install needs, in the layout the Flatpak
 // manifest (desktopApp/flatpak/) installs from: app/ is the app image, share/ holds the
@@ -393,8 +389,8 @@ tasks.register<Tar>("packageLinuxTarball") {
 
 // --- Bundled rclone --------------------------------------------------------
 // Cloud sync shells out to rclone, so every desktop package carries the official build for the
-// host platform at `<app>/lib/rclone/rclone`, where core's bundledRcloneBinary() looks after the
-// NPN_RCLONE override. Pinned by hash like every download a package ships: the values are the ones
+// host platform in its app resources, `rclone/rclone` (`rclone.exe` on Windows), where core's
+// bundledRcloneBinary() looks after the NPN_RCLONE override. Pinned by hash like every download a package ships: the values are the ones
 // rclone lists in the PGP-signed SHA256SUMS of the release (check its signature when bumping).
 val rcloneVersion = "v1.75.1"
 val rcloneSha256 =
@@ -434,18 +430,33 @@ val downloadRclone =
         binary.set(layout.buildDirectory.file("rclone/$rcloneExecutable"))
     }
 
-// Every package is built from createDistributable's app image, so the engine goes into it there.
+// The app resources: Compose copies `common/` and the host OS's folder into the app image (and
+// every package is built from that image, the Windows installers included).
+val stageAppResources =
+    tasks.register<Sync>("stageAppResources") {
+        group = "compose desktop"
+        description = "Stages the files the app image carries beside the app: rclone, and Tesseract on Windows."
+        from(downloadRclone) { into("common/rclone") }
+        if (isWindowsHost) from(prepareWindowsTesseract)
+        into(appResources)
+    }
+
+// Compose registers prepareAppResources after this script is evaluated, so match it by name
+// lazily instead of looking it up now.
+tasks.named { it == "prepareAppResources" }.configureEach { dependsOn(stageAppResources) }
+
+// jpackage copies the app resources into the app image without their execute bits, and an installed
+// package (root-owned, or a read-only AppImage) cannot get them back: give the engine its bit here,
+// in the app image every Linux package is built from.
 tasks.named { it == "createDistributable" }.configureEach {
-    // Locals only: the action is stored in the configuration cache, which cannot hold the script.
-    val engine = downloadRclone.flatMap { it.binary }
-    val bundled = "lib/rclone/$rcloneExecutable"
     val appImage = distributableAppImage
-    inputs.file(engine)
     doLast {
-        val target = appImage.get().file(bundled).asFile
-        target.parentFile.mkdirs()
-        engine.get().asFile.copyTo(target, overwrite = true)
-        target.setExecutable(true, false)
+        appImage
+            .get()
+            .asFile
+            .walk()
+            .filter { it.isFile && it.name == "rclone" && it.parentFile.name == "rclone" }
+            .forEach { it.setExecutable(true, false) }
     }
 }
 

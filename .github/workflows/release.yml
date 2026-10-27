@@ -13,7 +13,7 @@ name: Release
 # Secrets are scoped to the steps that need them: GH_TOKEN (contents: write, plus actions: read in
 # the draft job for that check) to the steps that call `gh`, the signing key to the one Gradle run
 # that signs the APK. Every other step, including the downloaded tools the packaging runs
-# (appimagetool, flatpak-builder), runs without them. Actions are pinned to a commit, with the
+# (appimagetool, flatpak-builder) and the Go build of the APK's rclone, runs without them. Actions are pinned to a commit, with the
 # release they came from in a comment. The build jobs restore no Gradle cache (`cache-disabled`):
 # the other workflows save theirs on main, and Gradle re-verifies neither the distribution nor the
 # jars a restored home holds, so the signing step and every package build would run whatever those
@@ -92,10 +92,27 @@ jobs:
         with:
           cache-disabled: true
 
-      # First, before any downloaded tool has run, and the only step that sees the signing key: the
-      # keystore is decoded here and deleted when the step ends. The run leaves nothing holding the
-      # key behind either: no Gradle or Kotlin daemon to outlive the step (their environment would
-      # still contain the password), no configuration cache entry with the password in it.
+      # The APK bundles rclone, cross-compiled with Go and the NDK. It is built in a step of its own,
+      # without the key and before it is decoded, so the Go toolchain and rclone's modules never run
+      # with the key in their environment; the signing step below skips the task and packages what
+      # this one built. No Go cache is restored, for the reason no Gradle cache is.
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: "1.26.x"
+          cache: false
+
+      - name: Install Android NDK (for the bundled rclone)
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;29.0.14206865"
+
+      - name: Cross-compile the bundled rclone
+        run: ./gradlew --no-daemon --no-configuration-cache :androidApp:buildRcloneAndroid
+
+      # The only step that sees the signing key, and the first to run Gradle with it, before any
+      # packaging tool has run: the keystore is decoded here and deleted when the step ends. The run
+      # leaves nothing holding the key behind either: no Gradle or Kotlin daemon to outlive the step
+      # (their environment would still contain the password), no configuration cache entry with the
+      # password in it.
       - name: Build signed APK
         env:
           NPN_KEYSTORE_BASE64: ${{ secrets.NPN_KEYSTORE_BASE64 }}
@@ -111,7 +128,12 @@ jobs:
           echo "$NPN_KEYSTORE_BASE64" | base64 --decode > "$NPN_KEYSTORE_FILE"
           ./gradlew --no-daemon --no-configuration-cache \
             -Pkotlin.compiler.execution.strategy=in-process \
-            :androidApp:assembleRelease
+            :androidApp:assembleRelease -x :androidApp:buildRcloneAndroid
+
+      # Skipped above, the engine build could have left nothing to package, and the APK would still
+      # build: without the engine, cloud sync would be "not installed" on every phone.
+      - name: Check the APK carries rclone
+        run: unzip -l androidApp/build/outputs/apk/release/androidApp-release.apk | grep -q 'lib/arm64-v8a/librclone.so'
 
       - name: Install rpmbuild and flatpak-builder
         run: |
@@ -126,6 +148,9 @@ jobs:
           :desktopApp:packageDeb
           :desktopApp:packageRpm
           :desktopApp:packageLinuxTarball
+
+      - name: Check the bundled rclone
+        run: bash .github/scripts/check-bundled-rclone.sh
 
       # Reuses the app image built above; also downloads the Flatpak SDK and compiles Tesseract.
       - name: Build Flatpak bundle
@@ -179,6 +204,10 @@ jobs:
       - name: Check the bundled Tesseract
         shell: bash
         run: bash .github/scripts/check-bundled-tesseract.sh
+
+      - name: Check the bundled rclone
+        shell: bash
+        run: bash .github/scripts/check-bundled-rclone.sh
 
       - name: Upload to draft release
         shell: bash

@@ -1,6 +1,5 @@
 package dev.npn.core.app
 
-import dev.npn.core.settings.PlatformDirs
 import java.io.File
 
 /**
@@ -9,12 +8,11 @@ import java.io.File
  *
  * 1. `-Dnpn.rclone=…` or `NPN_RCLONE=…` — an explicit override; the Gradle `run`/`hotRun` tasks set
  *    the former to the engine they download, and the live rclone tests use the latter;
- * 2. the jpackage app image, `<app>/lib/rclone/rclone`, where the deb/AppImage/MSI packaging copies
- *    the downloaded binary next to the launcher;
+ * 2. the app resources of a packaged build (`compose.application.resources.dir`), where every
+ *    package carries `rclone/rclone` (`rclone.exe` on Windows; `stageAppResources` in
+ *    `desktopApp/build.gradle.kts`);
  * 3. a source checkout's `desktopApp/build/rclone/rclone`, so `mise hot` / `mise desktop` find the
- *    engine without a packaged build;
- * 4. a per-platform archive embedded as a resource in the uber-jar, extracted once into the app data
- *    directory and made executable.
+ *    engine without a packaged build.
  *
  * The Android side is different: it execs the `librclone.so` the APK ships in its native library
  * directory, which only Android may execute, so that host resolves its own path.
@@ -26,12 +24,7 @@ private object BundledRclone {
 
     fun resolve(): File? = resolved
 
-    private fun resolveUncached(): File? {
-        override()?.let { return it }
-        besideTheLauncher()?.let { return it }
-        fromSourceCheckout()?.let { return it }
-        return extractedFromResources()
-    }
+    private fun resolveUncached(): File? = override() ?: inAppResources() ?: fromSourceCheckout()
 
     /** An explicit executable from a flag or the environment; blank and non-executables are ignored. */
     private fun override(): File? {
@@ -42,30 +35,10 @@ private object BundledRclone {
         return null
     }
 
-    /**
-     * `<app>/lib/rclone/rclone` in a jpackage app image. `jpackage.app-path` names the launcher; the
-     * code-source fallback covers hosts (the uber-jar) where that property is absent.
-     */
-    private fun besideTheLauncher(): File? {
-        val appDir = launcherAppDir() ?: return null
-        return executable(File(appDir, "lib/rclone/${executableName()}"))
-    }
-
-    private fun launcherAppDir(): File? {
-        System.getProperty("jpackage.app-path")?.takeIf { it.isNotBlank() }?.let { launcher ->
-            return File(launcher).parentFile?.parentFile
-        }
-        val here =
-            runCatching {
-                File(
-                    BundledRclone::class.java.protectionDomain
-                        ?.codeSource
-                        ?.location
-                        ?.toURI() ?: return null,
-                )
-            }.getOrNull() ?: return null
-        // The uber-jar lives in `<app>/lib/app`; a packaged app image puts it in the same shape.
-        return here.parentFile?.parentFile
+    /** `rclone/rclone` in the app resources Compose copies into a packaged app image, on every OS alike. */
+    private fun inAppResources(): File? {
+        val resources = System.getProperty("compose.application.resources.dir")?.takeIf { it.isNotBlank() }
+        return resources?.let { executable(File(it, "rclone/${executableName()}")) }
     }
 
     /**
@@ -84,37 +57,9 @@ private object BundledRclone {
         return null
     }
 
-    private fun extractedFromResources(): File? {
-        val resource = "/rclone/${platformKey()}/${executableName()}"
-        val target = File(PlatformDirs.appDataDir(), "rclone/${platformKey()}/${executableName()}")
-        if (target.isFile && target.canExecute()) return target
-        val bytes = BundledRclone::class.java.getResourceAsStream(resource) ?: return null
-        return runCatching {
-            target.parentFile?.mkdirs()
-            bytes.use { input -> target.outputStream().use { output -> input.copyTo(output) } }
-            target.setExecutable(true, false)
-            target.takeIf { it.canExecute() }
-        }.getOrNull()
-    }
-
     private fun executable(file: File): File? = file.takeIf { it.isFile && it.canExecute() }
 
     private fun executableName(): String = if (isWindows()) "rclone.exe" else "rclone"
-
-    private fun platformKey(): String {
-        val os =
-            when {
-                isWindows() -> "windows"
-                osName().contains("mac") || osName().contains("darwin") -> "macos"
-                else -> "linux"
-            }
-        val arch =
-            when (System.getProperty("os.arch").orEmpty().lowercase()) {
-                "aarch64", "arm64" -> "arm64"
-                else -> "amd64"
-            }
-        return "$os-$arch"
-    }
 
     private fun isWindows(): Boolean = osName().contains("win")
 
