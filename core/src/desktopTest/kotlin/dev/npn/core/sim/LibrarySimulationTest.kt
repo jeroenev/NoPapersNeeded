@@ -23,10 +23,9 @@ import kotlin.time.Duration.Companion.minutes
  * ```
  *
  * `npn.sim.seeds` runs seeds 1 to n (from `npn.sim.firstSeed` if set); `npn.sim.seed` runs just
- * that one, in the shard it falls to; `npn.sim.replicas` forces the number of replicas (1: one
- * replica, no sync), `npn.sim.maxReported` how many failing seeds each shard of a long run reports,
- * and `npn.sim.traceDir` where every seed's trace goes. The build forwards all of these and
- * `npn.sim.steps` to the test JVMs.
+ * that one, the only seed of the run, so in shard 1; `npn.sim.maxReported` says how many failing
+ * seeds each shard of a long run reports, and `npn.sim.traceDir` where every seed's trace goes. The
+ * build forwards all of these and `npn.sim.steps` to the test JVMs.
  */
 @Suppress("AbstractClassCanBeConcreteClass") // Abstract keeps JUnit from running the base as a ninth class.
 abstract class LibrarySimulationShard(

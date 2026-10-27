@@ -144,14 +144,20 @@ class SyncSimulationHarnessTest {
             appDeletesTheLastCopy().message shouldContain "the app removed the last copy"
         }
 
-    /**
-     * What the outside world took of the same bytes earlier excuses nothing: the latest loss decides,
-     * and here that is the app's.
-     */
+    /** What the outside world took of the same bytes before the app took the last copy excuses nothing. */
     @Test
     fun theAppDeletingALastCopyAfterAnOutsideLossOfTheSameBytesFailsTheRun() =
         runTest {
-            appDeletesTheLastCopy(outsideLossFirst = true).message shouldContain "the app removed the last copy"
+            val failure = appDeletesTheLastCopy(outsideLoss = OutsideLoss.BEFORE)
+            failure.message shouldContain "the app removed the last copy"
+        }
+
+    /** Nor does what the outside world took of them afterwards: the app's loss of the last copy stands. */
+    @Test
+    fun anOutsideLossOfTheSameBytesAfterTheAppDeletedTheLastCopyExcusesNothing() =
+        runTest {
+            val failure = appDeletesTheLastCopy(outsideLoss = OutsideLoss.AFTER)
+            failure.message shouldContain "the app removed the last copy"
         }
 
     /** The app deleting a copy in its trash excuses nothing for a document the journal does not have there. */
@@ -162,12 +168,91 @@ class SyncSimulationHarnessTest {
         }
 
     /**
-     * At step 2, the app imports bytes and then deletes its file: with [outsideLossFirst], after
-     * another process wrote the same bytes elsewhere and deleted them; with [trashCopyLast], the
-     * last copy it deletes is one it put in its trash, of a document it never trashed.
+     * A copy another replica holds at another path keeps the library's: the app taking this folder's
+     * last copy then is no finding, and here another process takes the other one afterwards.
+     */
+    @Test
+    fun theAppDeletingACopyAnotherReplicaHoldsIsNoFinding() =
+        runTest {
+            val bytes = SimPdf.bytes("held elsewhere", "v", BAKED_SIZE + 3)
+            val losses = ArrayList<LossAt>()
+            allFromTheStart { step ->
+                if (step == 2) {
+                    members[1].fs.externalWriteAtomic("elsewhere.pdf", bytes)
+                    world.read("import, then delete as the app") {
+                        val imported = members[0].replica.session!!.importPdfBytes(bytes, "here.pdf")
+                        members[0].fs.delete((imported as ImportOutcome.Imported).relPath)
+                    }
+                    members[1].fs.externalDelete("elsewhere.pdf")
+                    losses += members[0].fs.losses.recordsOf(sha256Bytes(bytes))
+                }
+            }.run()
+            losses.single { it.loss == Loss.APP }.lastAnywhere shouldBe false
+        }
+
+    /** A copy at the same path in another folder keeps nothing: the sync tool carries the app's deletion there. */
+    @Test
+    fun theAppDeletingACopyAnotherReplicaHoldsAtTheSamePathFailsTheRun() =
+        runTest {
+            val failure =
+                shouldThrow<SimFailure> {
+                    allFromTheStart { step ->
+                        if (step == 2) {
+                            val bytes = SimPdf.bytes("same path", "v", BAKED_SIZE + 4)
+                            val other = members[1].fs
+                            world.read("import, then delete as the app") {
+                                val imported = members[0].replica.session!!.importPdfBytes(bytes, "same.pdf")
+                                val path = (imported as ImportOutcome.Imported).relPath
+                                other.externalWriteAtomic(path, bytes)
+                                members[0].fs.delete(path)
+                                other.bySyncTool { other.externalDelete(path) }
+                            }
+                        }
+                    }.run()
+                }
+            failure.message shouldContain "the app removed the last copy"
+        }
+
+    /**
+     * A bake's temporary file holds output no journal names until the bake's relink: the app deleting
+     * it, after a failed bake, takes no document's copy, though the same bytes are a document.
+     */
+    @Test
+    fun theAppDeletingABakesTemporaryFileIsNoFinding() =
+        runTest {
+            val bytes = SimPdf.bytes("baked twice", "v", BAKED_SIZE + 5)
+            val losses = ArrayList<LossAt>()
+            allFromTheStart { step ->
+                if (step == 2) {
+                    val fs = members[0].fs
+                    val path =
+                        world.read("import as the app") {
+                            val imported = members[0].replica.session!!.importPdfBytes(bytes, "baked.pdf")
+                            (imported as ImportOutcome.Imported).relPath
+                        }
+                    fs.externalDelete(path)
+                    val temp = NpnPaths.Temp.bakePath("other.pdf")
+                    world.read("a bake's output, discarded") {
+                        fs.writeBytesOnce(temp, bytes)
+                        fs.delete(temp)
+                    }
+                    losses += fs.losses.recordsOf(sha256Bytes(bytes))
+                }
+            }.run()
+            losses.map { it.loss } shouldBe listOf(Loss.OUTSIDE)
+        }
+
+    /** When another process writes the bytes elsewhere and deletes them again, if it does. */
+    private enum class OutsideLoss { NONE, BEFORE, AFTER }
+
+    /**
+     * At step 2, the app imports bytes and then deletes its file: with [outsideLoss], another
+     * process writes the same bytes elsewhere and deletes them, before or after; with
+     * [trashCopyLast], the last copy it deletes is one it put in its trash, of a document it never
+     * trashed.
      */
     private fun TestScope.appDeletesTheLastCopy(
-        outsideLossFirst: Boolean = false,
+        outsideLoss: OutsideLoss = OutsideLoss.NONE,
         trashCopyLast: Boolean = false,
     ): SimFailure =
         shouldThrow<SimFailure> {
@@ -175,10 +260,12 @@ class SyncSimulationHarnessTest {
                 if (step == 2) {
                     val fs = members[0].fs
                     val bytes = SimPdf.bytes("only copy", "v", BAKED_SIZE + 1)
-                    if (outsideLossFirst) {
+
+                    fun writeAndDeleteElsewhere() {
                         fs.externalWriteAtomic("elsewhere.pdf", bytes)
                         fs.externalDelete("elsewhere.pdf")
                     }
+                    if (outsideLoss == OutsideLoss.BEFORE) writeAndDeleteElsewhere()
                     world.read("import, then delete as the app") {
                         val imported = members[0].replica.session!!.importPdfBytes(bytes, "only.pdf")
                         val trashCopy = "${NpnPaths.TRASH_DIR}/only.pdf"
@@ -186,6 +273,7 @@ class SyncSimulationHarnessTest {
                         fs.delete((imported as ImportOutcome.Imported).relPath)
                         if (trashCopyLast) fs.delete(trashCopy)
                     }
+                    if (outsideLoss == OutsideLoss.AFTER) writeAndDeleteElsewhere()
                 }
             }.run()
         }

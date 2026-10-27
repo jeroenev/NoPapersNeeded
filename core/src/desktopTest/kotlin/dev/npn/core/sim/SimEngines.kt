@@ -1,5 +1,6 @@
 package dev.npn.core.sim
 
+import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.ocr.OcrEngineId
@@ -7,8 +8,16 @@ import dev.npn.core.pdf.PdfDocumentHandle
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.PdfOpenException
 import dev.npn.core.pdf.ThumbnailStore
+import dev.npn.core.watch.WatchedFolder
+import dev.npn.core.watch.WatchedFolderFile
 import dev.npn.core.xmp.PdfXmpIO
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import java.nio.file.Path
 import kotlin.io.encoding.Base64
 
 /**
@@ -95,12 +104,8 @@ class SimPdfEngine(
 ) : PdfEngine {
     private var made = 0
 
-    var opened = 0
-        private set
-
     override suspend fun open(bytes: ByteArray): PdfDocumentHandle {
         if (!SimPdf.isPdf(bytes)) throw PdfOpenException("Not a simulated PDF")
-        opened++
         return object : PdfDocumentHandle {
             override val pageCount: Int = SimPdf.pagesOf(bytes)
 
@@ -140,7 +145,13 @@ class SimPdfEngine(
  * or [openGate] for all), so OCR runs stay in flight across other operations, as a slow Tesseract
  * does. Its text names the page it read, so a document's OCR text is its own.
  */
-class GatedOcrEngine : OcrEngine {
+class GatedOcrEngine(
+    /**
+     * False for an installation without the engine, as a desktop before Tesseract is installed: the
+     * pipeline then runs no OCR at all, and keeps a document's own text layer where it has none.
+     */
+    private val installed: Boolean = true,
+) : OcrEngine {
     override val name: String = OcrEngineId.TESSERACT.column
 
     private val waiting = ArrayDeque<CompletableDeferred<Unit>>()
@@ -148,12 +159,9 @@ class GatedOcrEngine : OcrEngine {
     /** While true, pages are read at once. */
     var gateOpen = false
 
-    var recognized = 0
-        private set
-
     val inFlight: Int get() = waiting.size
 
-    override suspend fun available(): Boolean = true
+    override suspend fun available(): Boolean = installed
 
     override suspend fun recognizePng(
         png: ByteArray,
@@ -168,7 +176,6 @@ class GatedOcrEngine : OcrEngine {
                 waiting.remove(turn)
             }
         }
-        recognized++
         return "ocr " + png.decodeToString().substringAfter("png:").take(OCR_LABEL)
     }
 
@@ -242,5 +249,101 @@ class SimXmpIO(
 
     private companion object {
         const val LABEL = 10
+    }
+}
+
+/**
+ * A watched inbox folder held in memory, outside the library: a scanner app's output folder. Its
+ * files are read through the library filesystem's [InMemoryLibraryFileSystem.externalSources] hook,
+ * by the path [ExternalSource] names. A delete keeps to the interface's contract (only while the
+ * file still holds what was imported), and records as a violation a delete of bytes the library
+ * has no document of.
+ */
+internal class SimWatchedFolder(
+    private val name: String,
+    private val now: () -> Long,
+    /** Whether the library has a document of these bytes: holds them, or a relink superseded them. */
+    private val accounted: suspend (hash: String) -> Boolean,
+) : WatchedFolder {
+    private class Entry(
+        var bytes: ByteArray,
+        var mtime: Long,
+    )
+
+    private val files = sortedMapOf<String, Entry>()
+    private val events = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
+    /** Deletes of a file whose bytes the library held nowhere: the importer threw away a document. */
+    val violations = ArrayList<String>()
+
+    val root = "/sim-watched/$name"
+
+    val names: List<String> get() = files.keys.toList()
+
+    fun bytesFor(path: Path): ByteArray? =
+        path.toString().takeIf { it.startsWith("$root/") }?.let { files[it.removePrefix("$root/")]?.bytes?.copyOf() }
+
+    fun write(
+        file: String,
+        bytes: ByteArray,
+    ) {
+        files[file] = Entry(bytes.copyOf(), now())
+        events.tryEmit(Unit)
+    }
+
+    /** Write [bytes] as [file] in place, [chunks] pieces [intervalMillis] apart, as a scanner app saving slowly. */
+    suspend fun writeInChunks(
+        file: String,
+        bytes: ByteArray,
+        chunks: Int,
+        intervalMillis: Long,
+    ) {
+        val step = (bytes.size + chunks - 1) / chunks
+        var written = 0
+        while (written < bytes.size) {
+            written = minOf(bytes.size, written + step)
+            val entry = files.getOrPut(file) { Entry(ByteArray(0), now()) }
+            entry.bytes = bytes.copyOf(written)
+            entry.mtime = now()
+            events.tryEmit(Unit)
+            if (written < bytes.size) delay(intervalMillis)
+        }
+    }
+
+    fun remove(file: String) {
+        files.remove(file)
+        events.tryEmit(Unit)
+    }
+
+    override suspend fun listPdfs(): List<WatchedFolderFile> =
+        files.filterKeys { it.endsWith(".pdf") }.map { (file, entry) ->
+            WatchedFolderFile(
+                "$root/$file",
+                file,
+                entry.bytes.size.toLong(),
+                entry.mtime,
+                ExternalSource(Path.of(root, file)),
+            )
+        }
+
+    override suspend fun delete(
+        file: WatchedFolderFile,
+        docId: String,
+    ): Boolean {
+        val entry = files[file.name] ?: return false
+        if (!file.stillHolds(docId, entry.bytes.size.toLong(), entry.mtime) { sha256Bytes(entry.bytes) }) return false
+        val hash = sha256Bytes(entry.bytes)
+        if (!accounted(hash)) {
+            violations += "$name deleted '${file.name}' (${hash.take(ID)}), which the library holds nowhere"
+        }
+        files.remove(file.name)
+        events.tryEmit(Unit)
+        return true
+    }
+
+    override fun changes(): Flow<Unit> = events.asSharedFlow()
+
+    private companion object {
+        const val ID = 10
     }
 }

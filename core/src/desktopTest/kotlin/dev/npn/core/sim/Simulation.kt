@@ -6,13 +6,11 @@ import dev.npn.core.db.missingSentinel
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
-import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.journal.JournalOp
+import dev.npn.core.ocr.OcrSidecarName
 import dev.npn.core.util.reason
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.test.TestCoroutineScheduler
-import java.io.File
 import kotlin.random.Random
 
 /** How one run is set up. Everything a seed decides is derived from it in [SimConfig.forSeed]. */
@@ -63,11 +61,12 @@ data class SimConfig(
  */
 object KnownIssues {
     /**
-     * Finding 8, the documented cost of `doc-undelete` not being written yet (ARCHITECTURE.md 6.4):
-     * the bytes of a document deleted for good that come back (an import, or a file a sync tool
-     * delivers) bring it back on the device that imported them, for that session, and in the scan
-     * that finds the file, and nowhere else: devices disagree on whether the library shows it, and a
-     * device disagrees with a rebuild of its own index. Off once this build writes the op.
+     * This build writes no `doc-undelete` yet (`JournalOp.DocUndelete.WRITTEN` is false; ARCHITECTURE.md
+     * 6.4), the documented cost of keeping builds from before the op working: the bytes of a document
+     * deleted for good that come back (an import, or a file a sync tool delivers) bring it back on the
+     * device that imported them, for that session, and in the scan that finds the file, and nowhere
+     * else: devices disagree on whether the library shows it, and a device disagrees with a rebuild of
+     * its own index. Off once this build writes the op.
      */
     const val DELETED_RETURNS_UNRECORDED = !JournalOp.DocUndelete.WRITTEN
 
@@ -86,100 +85,48 @@ class SimFailure(
 ) : AssertionError(message)
 
 /**
- * One simulation run: a single replica over an [InMemoryLibraryFileSystem], driven [SimConfig.steps]
- * steps by a [SimGenerator] seeded with [SimConfig.seed], with every invariant checked after each
- * step and the expensive ones (the rebuild oracle above all) at quiescence. A failure throws
- * [SimFailure] carrying the seed, the configuration and the trace.
+ * One replica of a [SyncSimulation]: its session driven step by step by a [SimGenerator], every
+ * invariant of its own checked after each step, and the expensive ones (the rebuild oracle above
+ * all) at quiescence. A failure throws [SimFailure] carrying the seed, the configuration and the
+ * trace.
  */
 internal class Simulation(
-    scheduler: TestCoroutineScheduler,
     val config: SimConfig,
-    /** Runs after each step, before its invariants: the harness's own tests break the library here. */
-    private val afterStep: Simulation.(step: Int) -> Unit = {},
+    /** What it shares with the other replicas, and its own parts. */
+    setup: ReplicaSetup,
     /** Changes the copy of the files the rebuild oracle opens: the harness's own tests plant a difference. */
-    private val tamperWithRebuild: (InMemoryLibraryFileSystem) -> Unit = {},
-    /** Set when this is one replica of several ([SyncSimulation]): what it shares with them, and its own parts. */
-    setup: ReplicaSetup? = null,
+    private val tamperWithRebuild: (InMemoryLibraryFileSystem) -> Unit,
 ) {
-    val world = setup?.world ?: SimWorld(scheduler)
-    private val random = setup?.random ?: Random(config.seed)
-
-    val fs =
-        setup?.fs ?: InMemoryLibraryFileSystem(
-            now = world.clock::nowMillis,
-            options =
-                SimFsOptions(
-                    profile = config.profile,
-                    mtimes = config.mtimes,
-                    watchDropRate = config.watchDropRate,
-                    watchOverflowRate = config.watchOverflowRate,
-                ),
-            latency = SimLatency(Random(config.seed * LATENCY_SALT + 1)),
-            watchRandom = Random(config.seed * LATENCY_SALT + 2),
-        )
-
-    val replica =
-        setup?.replica
-            ?: SimReplica(world, "sim-installation", fs, ids = SimIds(Random(config.seed * LATENCY_SALT + 3)))
+    val world = setup.world
+    val fs = setup.fs
+    val replica = setup.replica
 
     /** Every PDF the simulation made, by hash, so a later step can import its bytes again. */
-    val known = setup?.known ?: HashMap()
+    val known = setup.known
 
-    private val trace = setup?.trace ?: ArrayList()
-    private val label = setup?.let { "[${it.name}] " }.orEmpty()
+    private val trace = setup.trace
+    private val label = "[${setup.name}] "
 
-    private val generator =
-        SimGenerator(
-            random,
-            this,
-            // With other replicas, the sync tool delivers what another device wrote; alone, the generator does.
-            OpKind.entries.filterNot { it.fromAnotherDevice && (setup?.peers ?: 1) > 1 },
-            labelBase = setup?.labelBase ?: 0,
-            remoteDevice = setup?.let { "remote-device-${it.name}" } ?: "remote-device",
-        )
+    private val generator = SimGenerator(setup.random, this, setup.labelBase, setup.watched, setup.deleteAfterImport)
 
-    /** How many times each outcome happened, for the summary. */
-    val stats = HashMap<String, Int>()
+    init {
+        replica.onOpen = generator::startImporter
+    }
 
     private val session: LibrarySessionImpl get() = replica.session ?: throw SimFailure(report("no session is open"))
 
-    fun run() {
-        try {
-            open()
-            for (step in 1..config.steps) {
-                world.step = step
-                step(step)
-                if (step % config.quiesceEvery == 0) quiesceAndCheck()
-            }
-            quiesceAndCheck()
-        } finally {
-            // With -Dnpn.sim.traceDir=<dir>, every run leaves its whole trace there, failing or not.
-            System.getProperty(TRACE_DIR_PROPERTY)?.let { dir ->
-                File(dir).apply { mkdirs() }.resolve("seed-${config.seed}.txt").writeText(trace.joinToString("\n"))
-            }
-            replica.dispose()
-            world.dispose()
-        }
-    }
-
-    // ---- the phases of a run, for a SyncSimulation driving several replicas ---------------------
+    // ---- the phases of a run, for the SyncSimulation driving the replicas -----------------------
 
     fun open() = openReplica()
 
-    /** One step: [planned] (by default the generator's next), its outcome traced, and the cheap invariants. */
-    fun step(
-        step: Int,
-        planned: Planned = generator.next(snapshot()),
-    ) {
+    /** One step: the generator's next, its outcome traced, and the cheap invariants. */
+    fun step(step: Int) {
+        val planned = generator.next(snapshot())
         val outcome = execute(planned)
         trace += "#$step t=${world.scheduler.currentTime} $label${planned.text} -> $outcome"
         harvest()
-        afterStep(step)
         checkCheap()
     }
-
-    /** The generator's next step for this replica, for a planner that runs it beside one of its own. */
-    fun nextPlanned(): Planned = generator.next(snapshot())
 
     /** A hard crash: the killed process's background operations are dropped, never awaited; then reopen. */
     fun hardCrashAndReopen(): String {
@@ -195,7 +142,6 @@ internal class Simulation(
     private fun execute(planned: Planned): String =
         when (planned) {
             is Planned.Control -> {
-                count(planned.text.substringBefore(' '))
                 planned.body()
             }
 
@@ -261,7 +207,6 @@ internal class Simulation(
         text: String,
         deferred: Deferred<String>,
     ): String {
-        count(text.substringBefore(' '))
         @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
         val failure = deferred.getCompletionExceptionOrNull()
         return when {
@@ -286,8 +231,6 @@ internal class Simulation(
             }
         }
     }
-
-    private fun count(what: String) = stats.merge(what, 1, Int::plus)
 
     // ---- the process's lifecycle ----------------------------------------------------------------
 
@@ -398,23 +341,21 @@ internal class Simulation(
         }
     }
 
-    /**
-     * Let everything settle (OCR let through, faults cleared, time on past every settle window, one
-     * more rescan), then check what holds only at rest: each live document's file holds its bytes,
-     * every settled PDF in the folder is a document or a known duplicate, and a fresh index over the
-     * same files shows the same library ([rebuildOracle]).
-     */
-    private fun quiesceAndCheck() {
-        settle()
-        checkAtRest()
-    }
-
-    /** The first half of [quiesceAndCheck]: everything let through and settled, and one more rescan. */
-    fun settle() {
-        trace += "   -- ${label}quiescence at t=${world.scheduler.currentTime}"
+    /** Faults cleared, OCR let through and every background operation ended: where settling starts. */
+    fun letThrough() {
         fs.faults.disarmAll()
         replica.ocr.openGate()
         finishBackground()
+    }
+
+    /**
+     * Let everything settle ([letThrough], time on past every settle window, one more rescan), for
+     * [checkAtRest]. The restore settle window is the quiescence's to pass first
+     * ([SyncSimulation.quiesce]), once for every replica.
+     */
+    fun settle() {
+        trace += "   -- ${label}quiescence at t=${world.scheduler.currentTime}"
+        letThrough()
         world.advance(SETTLE_MILLIS)
         // A fault a concurrent step armed while it ran (Planned.Group.during) may have landed since.
         fs.faults.disarmAll()
@@ -429,7 +370,11 @@ internal class Simulation(
         world.advance(AFTER_RESCAN_MILLIS)
     }
 
-    /** The second half of [quiesceAndCheck]: the invariants at rest; returns the library the replica shows. */
+    /**
+     * The invariants at rest, once [settle]d: each live document's file holds its bytes, every
+     * settled PDF in the folder is a document or a known duplicate, and a fresh index over the same
+     * files shows the same library ([rebuildOracle]). Returns the library the replica shows.
+     */
     fun checkAtRest(): LibraryView {
         checkCheap()
         val live = world.read("live view") { LibraryView.read(session, replica.indexDb) }
@@ -486,15 +431,13 @@ internal class Simulation(
                     .mapNotNull { it[0] }
                     .toSet()
             }
-        val settling = settlingReturns()
         val unaccounted =
             fs.allFiles().filter { (path, bytes) ->
                 NpnPaths.indexable(FileMeta(path, NpnPaths.fileName(path), bytes.size.toLong(), 0, false)) &&
                     bytes.isNotEmpty() &&
                     path !in livePaths &&
                     path !in duplicatePaths &&
-                    sha256Bytes(bytes) !in superseded &&
-                    (path to sha256Bytes(bytes)) !in settling
+                    sha256Bytes(bytes) !in superseded
             }
         if (unaccounted.isNotEmpty()) {
             fail(
@@ -504,65 +447,6 @@ internal class Simulation(
                     ) { "'$it' (${sha256Bytes(unaccounted.getValue(it)).take(ID)})" },
             )
         }
-    }
-
-    /**
-     * Each (path, document) where a trashed document's own bytes may be back at its path (or the path
-     * it was trashed from) while it was trashed less than RESTORE_SETTLE_MS ago, and something other
-     * than this app put them there: the app records such a return only once the window has passed
-     * (JournalCoordinator.recordRestores), and until then a rescan shows the document for that scan only
-     * and the next fold hides it again. That is legitimate in two cases:
-     *
-     * - another replica trashed it, and the sync tool has not delivered that device's move of the
-     *   file yet, or kept a version it saw modified over it;
-     * - the last write at the path came from outside (a backup put back, another process, the sync
-     *   tool) since the app took the document's bytes from there (or, where it never did, since the
-     *   trash).
-     *
-     * The app's own trash whose file is back by the app's own hand (a move undone after a publish
-     * that failed but landed) is neither, and stays a finding.
-     */
-    internal fun settlingReturns(): Set<Pair<String, String>> =
-        world.read("trashed returns within the settle window") {
-            val since = world.clock.nowMillis() - JournalCoordinator.RESTORE_SETTLE_MS
-            val rows =
-                replica.indexDb.rows(
-                    "SELECT docId, relPath, trashedOrigPath, trashedAt FROM documents " +
-                        "WHERE trashed = 1 AND deleted = 0 AND trashedAt > $since",
-                )
-            rows.flatMapTo(HashSet()) { row ->
-                val docId = row[0]!!
-                val at = row[3]!!.toLong()
-                val othersTrash = !trashedHere(docId)
-                listOfNotNull(row[1], row[2])
-                    .filter { path ->
-                        // Since the app took the bytes from there: the trash moves the file before its
-                        // commit stamps the trash, so a return may land before trashedAt.
-                        val since = fs.writes.appTookAwayAt(path, docId) ?: at
-                        othersTrash ||
-                            fs.writes
-                                .lastWriteAt(
-                                    path,
-                                )?.let { !it.byApp && it.hash == docId && it.atMillis >= since } ==
-                            true
-                    }.map { it to docId }
-            }
-        }
-
-    /**
-     * Whether the trash that hides [docId] now (its latest `doc-trash`) is one this replica wrote:
-     * an object it published holds it.
-     */
-    private suspend fun trashedHere(docId: String): Boolean {
-        val sources =
-            replica.indexDb.rows(
-                "SELECT s.sourcePath FROM metadata_events e JOIN metadata_source_events s " +
-                    "ON s.eventDeviceId = e.deviceId AND s.eventSequence = e.sequence " +
-                    "WHERE e.operation = 'doc-trash' AND e.documentId = '$docId' AND e.hlcPhysical = (" +
-                    "SELECT MAX(hlcPhysical) FROM metadata_events " +
-                    "WHERE operation = 'doc-trash' AND documentId = '$docId')",
-            )
-        return sources.any { (path) -> path in fs.appPublished }
     }
 
     /**
@@ -598,9 +482,10 @@ internal class Simulation(
      * [live] shows ([diff], which says what is compared and what is device-local).
      */
     private fun rebuildOracle(live: LibraryView) {
-        val settling = settlingReturns()
         val copy = fs.snapshot().also(tamperWithRebuild)
-        val oracle = SimReplica(world, "oracle-installation", copy, GatedOcrEngine().apply { openGate() })
+        // No OCR engine: the rebuild runs no OCR, so it publishes no sidecar of a document the
+        // folder has one of, and no page of it ever waits on a gate.
+        val oracle = SimReplica(world, "oracle-installation", copy, GatedOcrEngine(installed = false))
         try {
             runCatching { oracle.open() }.exceptionOrNull()?.let {
                 fail(
@@ -610,6 +495,7 @@ internal class Simulation(
             val opened = oracle.session!!
             world.read("rebuild's initial rescan") { opened.awaitInitialRescan() }
             world.advance(AFTER_RESCAN_MILLIS)
+            checkRebuildPublished(oracle, copy)
             val rebuilt = world.read("rebuilt view") { LibraryView.read(opened, oracle.indexDb) }
             // A row hidden by a file that went missing, or a tombstone of a document deleted for good,
             // is a past observation the index keeps and a rebuild cannot know of: device-local.
@@ -618,7 +504,6 @@ internal class Simulation(
                     live,
                     rebuilt,
                     hiddenOnlyLive = { _, hidden -> hidden != Hidden.TRASHED },
-                    trashedOnlyLive = { docId, path -> (path to docId) in settling },
                     bothHold = {
                         docId,
                         a,
@@ -651,6 +536,47 @@ internal class Simulation(
         }
     }
 
+    /**
+     * The rebuild publishes nothing but its device marker, and its own OCR sidecar of a document
+     * [copy] held no sidecar of: the live replica's runs of that document failed until its queue gave
+     * up, and the rebuild's fresh queue runs it once (its engine not installed, it keeps the text
+     * layer). Its trash purge publishes nothing. Anything else it published (a restore it recorded,
+     * a move, a field seeding) is a write the live replica owed the library and did not make.
+     */
+    private fun checkRebuildPublished(
+        oracle: SimReplica,
+        copy: InMemoryLibraryFileSystem,
+    ) {
+        val deviceId = oracle.session!!.deviceId
+        val marker = "${NpnPaths.DEVICES_DIR}/$deviceId/${oracle.installationId}"
+        val sidecarsHeld =
+            copy
+                .allFiles()
+                .keys
+                .filter { it.startsWith("${NpnPaths.OCR_DIR}/") && it !in copy.appPublished }
+                .mapNotNullTo(HashSet()) { OcrSidecarName.parse(NpnPaths.fileName(it))?.hash }
+
+        fun ownSidecarOfANewDocument(path: String): Boolean {
+            if (!path.startsWith("${NpnPaths.OCR_DIR}/")) return false
+            val name = OcrSidecarName.parse(NpnPaths.fileName(path)) ?: return false
+            return OcrSidecarName.writer(name.writerKey).deviceId == deviceId && name.hash !in sidecarsHeld
+        }
+        val unexpected = copy.appPublished.filterNot { it.startsWith(marker) || ownSidecarOfANewDocument(it) }
+        if (unexpected.isNotEmpty()) {
+            fail(
+                "the rebuild published what the live replica owed the library:\n  " +
+                    unexpected.sorted().joinToString("\n  ") { path ->
+                        "'$path': " +
+                            copy
+                                .bytesAt(path)
+                                ?.decodeToString()
+                                ?.trim()
+                                ?.take(PUBLISHED_CHARS)
+                    },
+            )
+        }
+    }
+
     /** [eventsDiffer] for [docId], between this replica's index and [oracle]'s over [copy]. */
     private fun eventsOf(
         docId: String,
@@ -666,6 +592,7 @@ internal class Simulation(
         buildString {
             appendLine("Simulation failed at step ${world.step} (t=${world.scheduler.currentTime}ms) $label: $message")
             appendLine()
+            // The seed and the step count decide everything else (SimConfig.forSeed, SyncConfig.forSeed).
             appendLine(
                 "Replay: ./gradlew :core:desktopTest --tests 'dev.npn.core.sim.LibrarySimulationTest*' " +
                     "-Dnpn.sim.seed=${config.seed} -Dnpn.sim.steps=${config.steps}",
@@ -708,10 +635,7 @@ internal class Simulation(
         }
 
     companion object {
-        /** The system property naming a directory to write each run's trace to. */
-        const val TRACE_DIR_PROPERTY = "npn.sim.traceDir"
         private const val ID = 10
-        private const val LATENCY_SALT = 31L
         private const val SETTLE_MILLIS = 20L * 60L * 1000L
         private const val AFTER_RESCAN_MILLIS = 2L * 60L * 1000L
         private const val TRACE_LINES = 120
@@ -719,5 +643,6 @@ internal class Simulation(
         private const val STACK_LINES = 25
         private const val STACK_CHARS = 3_000
         private const val REPORT_READ_MILLIS = 60_000L
+        private const val PUBLISHED_CHARS = 600
     }
 }

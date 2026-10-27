@@ -1,6 +1,5 @@
 package dev.npn.core.sim
 
-import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
 import kotlinx.coroutines.Deferred
@@ -25,8 +24,6 @@ enum class SyncTool {
 /** How a seed's sync tool behaves. Everything here is drawn from the seed ([SyncConfig.forSeed]). */
 data class SyncOptions(
     val tool: SyncTool,
-    /** The share of PDF deliveries written in place over time, partial at their final name meanwhile. */
-    val inPlacePdfPercent: Int,
     /** The share of deliveries made a second time, as a tool that re-pulls a file it already has does. */
     val duplicatePercent: Int,
 )
@@ -56,10 +53,9 @@ internal class SyncPeer(
  * device records what changed there since its last scan as new versions (a version vector per path)
  * and sends each to every other device, where it lands after a seeded delay, so deliveries arrive out
  * of order, now and then twice, under the tool's temporary name first and then renamed into place,
- * or (for a PDF, sometimes) written in place over a while, as `cp`, a scanner app or `adb push`
- * write one; what is not a PDF, a journal object above all, always lands whole by a rename, as every
- * tool of this kind does it. Journal objects, OCR sidecars, device markers, staging files and PDFs
- * travel alike; a deletion travels as a version too. A delivery a device's own unscanned change, or
+ * so every file lands whole, as every tool of this kind (Syncthing, Nextcloud, Dropbox, Resilio)
+ * delivers one. Journal objects, OCR sidecars, device markers, staging files and PDFs travel alike;
+ * a deletion travels as a version too. A delivery a device's own unscanned change, or
  * a version it has that does not descend from it, contends with is a conflict: identical bytes
  * merge, a modification beats a deletion, and otherwise the newer mtime (then the higher device id)
  * keeps the name while the other is kept as a conflict copy, which then syncs like any new file.
@@ -91,9 +87,6 @@ internal class SimSync(
     /** Version counters, one per device. */
     private val counters = LongArray(peers.size)
 
-    /** Paths the tool is writing in place on each device, which its scans of that device leave alone. */
-    private val writing = peers.map { HashSet<String>() }
-
     /** Paths a delivery is transferring to each device now. */
     private val transferring = peers.map { HashSet<String>() }
 
@@ -124,7 +117,7 @@ internal class SimSync(
         if (!present[peer]) return 0
         val fs = peers[peer].fs
         val index = known[peer]
-        val files = fs.allFiles().filterKeys { synced(it) && it !in writing[peer] }
+        val files = fs.allFiles().filterKeys(::synced)
         val changes = ArrayList<Pair<String, SyncVersion>>()
         files.forEach { (path, bytes) ->
             val recorded = index[path]
@@ -140,7 +133,7 @@ internal class SimSync(
             }
         }
         index.forEach { (path, recorded) ->
-            if (recorded.bytes != null && path !in files && path !in writing[peer]) {
+            if (recorded.bytes != null && path !in files) {
                 changes += path to SyncVersion(null, world.clock.nowMillis(), bump(recorded.vector, peer), peer)
             }
         }
@@ -161,7 +154,7 @@ internal class SimSync(
     ) {
         sharing.filter { it != from }.forEach { to ->
             if (immediate) {
-                apply(to, path, version, Delivery.Atomic, immediate = true)
+                apply(to, path, version, immediate = true)
             } else {
                 schedule(to, path, version, duplicate = false)
                 if (random.chance(options.duplicatePercent)) schedule(to, path, version, duplicate = true)
@@ -182,32 +175,14 @@ internal class SimSync(
                 roll < 95 -> random.nextLong(3_000, 60_000)
                 else -> random.nextLong(60_000, 10L * 60_000)
             }
-        val inPlace = version.bytes != null && isPdf(path) && random.chance(options.inPlacePdfPercent)
-        val delivery =
-            when {
-                inPlace -> Delivery.InPlace(random.nextInt(2, CHUNKS), random.nextLong(200, CHUNK_INTERVAL_MILLIS))
-                else -> Delivery.ViaTemp(random.nextLong(0, TRANSFER_MILLIS))
-            }
+        val transferMillis = random.nextLong(0, TRANSFER_MILLIS)
         val what = "${if (duplicate) "again " else ""}${version.describe()} '$path' to ${peers[to].name}"
         inFlight +=
             what to
             world.launch {
                 delay(wait)
-                deliver(to, path, version, delivery, duplicate)
+                deliver(to, path, version, transferMillis, duplicate)
             }
-    }
-
-    private sealed interface Delivery {
-        data object Atomic : Delivery
-
-        data class ViaTemp(
-            val transferMillis: Long,
-        ) : Delivery
-
-        data class InPlace(
-            val chunks: Int,
-            val intervalMillis: Long,
-        ) : Delivery
     }
 
     // ---- delivering -----------------------------------------------------------------------------
@@ -216,52 +191,45 @@ internal class SimSync(
         to: Int,
         path: String,
         version: SyncVersion,
-        delivery: Delivery,
+        transferMillis: Long,
         duplicate: Boolean,
     ) {
         val fs = peers[to].fs
         // One transfer of a path to a device at a time: they share its temporary name.
-        while (path in transferring[to] || path in writing[to]) delay(BUSY_POLL_MILLIS)
+        while (path in transferring[to]) delay(BUSY_POLL_MILLIS)
         transferring[to] += path
         try {
-            transfer(to, path, version, delivery, duplicate, fs)
+            transfer(to, path, version, transferMillis, duplicate, fs)
         } finally {
             transferring[to] -= path
         }
     }
 
+    /** Write [version]'s bytes under the tool's temporary name, and [transferMillis] later put them in place. */
     private suspend fun transfer(
         to: Int,
         path: String,
         version: SyncVersion,
-        delivery: Delivery,
+        transferMillis: Long,
         duplicate: Boolean,
         fs: InMemoryLibraryFileSystem,
     ) {
-        when (delivery) {
-            is Delivery.ViaTemp -> {
-                val bytes = version.bytes
-                if (bytes == null) {
-                    apply(to, path, version, Delivery.Atomic, immediate = false, duplicate = duplicate)
-                    return
-                }
-                val temp = tempName(path)
-                if (!placeable(fs, temp)) {
-                    undeliverable += "${peers[to].name}: '$path'"
-                    return
-                }
-                fs.bySyncTool { fs.externalWriteAtomic(temp, bytes, version.mtime) }
-                if (delivery.transferMillis > 0) delay(delivery.transferMillis)
-                // The temporary file is the tool's; if it went meanwhile, the next pull starts over.
-                if (fs.bytesAt(temp) == null) return
-                apply(to, path, version, delivery, immediate = false, duplicate = duplicate, temp = temp)
-                fs.bySyncTool { fs.externalDelete(temp) }
-            }
-
-            Delivery.Atomic, is Delivery.InPlace -> {
-                apply(to, path, version, delivery, immediate = false, duplicate = duplicate)
-            }
+        val bytes = version.bytes
+        if (bytes == null) {
+            apply(to, path, version, immediate = false, duplicate = duplicate)
+            return
         }
+        val temp = tempName(path)
+        if (!placeable(fs, temp)) {
+            undeliverable += "${peers[to].name}: '$path'"
+            return
+        }
+        fs.bySyncTool { fs.externalWriteAtomic(temp, bytes, version.mtime) }
+        if (transferMillis > 0) delay(transferMillis)
+        // The temporary file is the tool's; if it went meanwhile, the next pull starts over.
+        if (fs.bytesAt(temp) == null) return
+        apply(to, path, version, immediate = false, duplicate = duplicate, temp = temp)
+        fs.bySyncTool { fs.externalDelete(temp) }
     }
 
     /**
@@ -273,7 +241,6 @@ internal class SimSync(
         to: Int,
         path: String,
         version: SyncVersion,
-        delivery: Delivery,
         immediate: Boolean,
         duplicate: Boolean = false,
         temp: String? = null,
@@ -293,13 +260,13 @@ internal class SimSync(
             if (duplicate && current != null &&
                 same(current, version.bytes)
             ) {
-                put(fs, path, version, Delivery.Atomic, temp)
+                put(fs, path, version, temp)
             }
             return
         }
         val concurrent = localChange || (recorded != null && !version.dominates(recorded.vector))
         if (!concurrent) {
-            put(fs, path, version, delivery, temp, to)
+            put(fs, path, version, temp)
             known[to][path] = version
             return
         }
@@ -320,13 +287,13 @@ internal class SimSync(
             current == null -> {
                 // What it recorded here is not on disk any more: the delivery puts the file there,
                 // and a device holding the recorded version meets this one as a conflict of its own.
-                put(fs, path, version, delivery, temp, to)
+                put(fs, path, version, temp)
                 // A version of its own, so no other content ever has its vector.
                 known[to][path] = SyncVersion(version.bytes.copyOf(), version.mtime, bump(joined, to), to)
             }
 
             else -> {
-                conflict(to, path, version, current, joined, delivery, immediate, temp)
+                conflict(to, path, version, current, joined, immediate, temp)
             }
         }
     }
@@ -338,7 +305,6 @@ internal class SimSync(
         version: SyncVersion,
         current: ByteArray,
         joined: Map<Int, Long>,
-        delivery: Delivery,
         immediate: Boolean,
         temp: String?,
     ) {
@@ -357,7 +323,7 @@ internal class SimSync(
         }
         if (remoteWins) {
             fs.bySyncTool { fs.externalMove(path, copy) }
-            put(fs, path, version, delivery, temp, to)
+            put(fs, path, version, temp)
             known[to][path] = SyncVersion(version.bytes!!.copyOf(), version.mtime, bump(joined, to), to)
         } else {
             if (temp !=
@@ -379,33 +345,12 @@ internal class SimSync(
         fs: InMemoryLibraryFileSystem,
         path: String,
         version: SyncVersion,
-        delivery: Delivery,
         temp: String?,
-        to: Int = -1,
     ) {
         val bytes = version.bytes
         when {
             bytes == null -> {
                 fs.bySyncTool { fs.externalDelete(path) }
-            }
-
-            delivery is Delivery.InPlace -> {
-                writing[to] += path
-                inFlight +=
-                    "in place '$path' at ${peers[to].name}" to
-                    world.launch {
-                        try {
-                            fs.externalWriteInChunks(
-                                path,
-                                bytes,
-                                delivery.chunks,
-                                delivery.intervalMillis,
-                                bySync = true,
-                            )
-                        } finally {
-                            writing[to] -= path
-                        }
-                    }
             }
 
             temp != null && fs.bytesAt(temp) != null -> {
@@ -513,7 +458,7 @@ internal class SimSync(
                             "(${mine?.describe()} and ${theirs.describe()})"
                     }
                     if (mine?.dominates(theirs.vector) != true) {
-                        apply(to, path, theirs, Delivery.Atomic, immediate = true)
+                        apply(to, path, theirs, immediate = true)
                         pulled++
                     }
                 }
@@ -539,8 +484,7 @@ internal class SimSync(
                         val held =
                             recorded?.bytes?.let { bytes -> sha256Bytes(bytes).take(ID) } ?: recorded?.let { "deleted" }
                                 ?: "none"
-                        val busy = if (it in writing[i]) ", writing" else ""
-                        "${peers[i].name}=${hashes[slot]} (tool has $held ${recorded?.vector}$busy)"
+                        "${peers[i].name}=${hashes[slot]} (tool has $held ${recorded?.vector})"
                     } +
                     // A journal object some device keeps writing says what it keeps deciding.
                     if (SimNames.isJournalObject(it)) {
@@ -598,8 +542,6 @@ internal class SimSync(
 
     companion object {
         private const val ID = 8
-        private const val CHUNKS = 5
-        private const val CHUNK_INTERVAL_MILLIS = 3_000L
         private const val TRANSFER_MILLIS = 2_500L
         private const val FLUSH_ROUNDS = 12
         private const val BUSY_POLL_MILLIS = 500L
@@ -608,8 +550,6 @@ internal class SimSync(
         private const val NONCE_UNTIL = 0xfffff
         private val SYNCTHING_TIME = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC)
         private val NEXTCLOUD_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HHmmss").withZone(ZoneOffset.UTC)
-
-        fun isPdf(path: String): Boolean = NpnPaths.indexable(FileMeta(path, NpnPaths.fileName(path), 1, 0, false))
 
         /** Whether every folder above [path] is a folder (or not there yet) on [fs], so a file can be put there. */
         fun placeable(

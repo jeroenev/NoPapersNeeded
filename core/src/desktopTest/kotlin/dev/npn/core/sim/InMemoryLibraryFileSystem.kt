@@ -42,17 +42,17 @@ enum class StorageProfile(
     NONE(hardLinks = false, exclusiveRename = false, saf = false),
 }
 
-/** The knobs of an [InMemoryLibraryFileSystem]; all may change while a simulation runs. */
+/** The knobs of an [InMemoryLibraryFileSystem], fixed for its life. */
 class SimFsOptions(
-    var profile: StorageProfile = StorageProfile.DIRECT_LINKS,
+    val profile: StorageProfile = StorageProfile.DIRECT_LINKS,
     /** False for a provider that reports no mtime (SAF can give 0): listings and stats carry 0. */
-    var mtimes: Boolean = true,
+    val mtimes: Boolean = true,
     /** Whether [InMemoryLibraryFileSystem.watch] reports changes (never on [StorageProfile.SAF]). */
-    var watch: Boolean = true,
+    val watch: Boolean = true,
     /** The share of change events the watcher silently drops, as a real watch service may. */
-    var watchDropRate: Double = 0.0,
+    val watchDropRate: Double = 0.0,
     /** The share of change events that arrive as an overflow (`relPath == null`) instead. */
-    var watchOverflowRate: Double = 0.0,
+    val watchOverflowRate: Double = 0.0,
 )
 
 /**
@@ -116,15 +116,6 @@ class InMemoryLibraryFileSystem(
 
     val writeOnceViolations = ArrayList<String>()
 
-    /** Bumped by every change the external world makes; [externalChanges] maps a path to its last. */
-    var externalSeq = 0L
-        private set
-
-    val externalChanges = HashMap<String, Long>()
-
-    /** How many calls each method took, for a summary of a run. */
-    val calls = HashMap<FsMethod, Int>()
-
     override val publicationMayBeLost: Boolean get() = !options.profile.saf
 
     override val supportsDocumentRelocation: Boolean get() = !options.profile.saf
@@ -136,7 +127,6 @@ class InMemoryLibraryFileSystem(
         path: String,
         effect: () -> T,
     ): T {
-        calls.merge(method, 1, Int::plus)
         latency.pause()
         faults.check(method, path, SimFaults.Point.BEFORE)
         actor = method
@@ -228,7 +218,6 @@ class InMemoryLibraryFileSystem(
                 }
             } else {
                 files[canonical] = node
-                wrote(canonical, byApp = true)
                 touch(canonical)
                 recordWrite(canonical, node.bytes)
             }
@@ -340,13 +329,11 @@ class InMemoryLibraryFileSystem(
         mtime: Long = now(),
     ) {
         val norm = NpnPaths.normalize(relPath)
-        external(norm)
         if (dirs.containsKey(norm)) remove(norm)
         // The same bytes again (a backup put back over the file it copied) take nothing away.
         files[norm]?.takeIf { sha256Bytes(it.bytes) != sha256Bytes(bytes) }?.let { lost(norm, it, byApp = false) }
         ensureParents(norm)
         files[norm] = Node(bytes.copyOf(), mtime)
-        wrote(norm, byApp = false)
         touch(norm)
     }
 
@@ -360,14 +347,12 @@ class InMemoryLibraryFileSystem(
         bytes: ByteArray,
         chunks: Int,
         intervalMillis: Long,
-        /** The sync tool writing a version in place, rather than another process. */
-        bySync: Boolean = false,
     ) {
         val norm = NpnPaths.normalize(relPath)
         val step = (bytes.size + chunks - 1) / chunks
         writing += norm
         try {
-            writeChunks(norm, bytes, step, intervalMillis, bySync)
+            writeChunks(norm, bytes, step, intervalMillis)
         } finally {
             writing -= norm
         }
@@ -381,22 +366,12 @@ class InMemoryLibraryFileSystem(
         bytes: ByteArray,
         step: Int,
         intervalMillis: Long,
-        bySync: Boolean,
     ) {
         var written = 0
         while (written < bytes.size) {
             written = minOf(bytes.size, written + step)
-            external(norm)
             val node = files[norm]
-            node?.let {
-                if (bySync) {
-                    bySyncTool {
-                        lost(norm, it, byApp = false, inPlace = true)
-                    }
-                } else {
-                    lost(norm, it, byApp = false, inPlace = true)
-                }
-            }
+            node?.let { lost(norm, it, byApp = false, inPlace = true) }
             if (node == null) {
                 if (dirs.containsKey(norm)) remove(norm)
                 ensureParents(norm)
@@ -405,29 +380,21 @@ class InMemoryLibraryFileSystem(
                 node.bytes = bytes.copyOf(written)
                 node.mtime = now()
             }
-            wrote(norm, byApp = false)
             touch(norm)
             if (written < bytes.size) delay(intervalMillis)
         }
     }
 
-    /**
-     * Change the bytes of the file at [relPath] in place (every hard link sees them). With
-     * [keepStat] the size is unchanged only if the new bytes have the old length, and the mtime is
-     * the old one: a tool that preserves mtimes.
-     */
+    /** Change the bytes of the file at [relPath] in place (every hard link sees them), with a new mtime. */
     fun externalOverwriteInPlace(
         relPath: String,
         bytes: ByteArray,
-        keepStat: Boolean = false,
     ) {
         val norm = NpnPaths.normalize(relPath)
         val node = files[norm] ?: return externalWriteAtomic(norm, bytes)
-        external(norm)
         if (sha256Bytes(node.bytes) != sha256Bytes(bytes)) lost(norm, node, byApp = false, inPlace = true)
         node.bytes = bytes.copyOf()
-        if (!keepStat) node.mtime = now()
-        wrote(norm, byApp = false)
+        node.mtime = now()
         touch(norm)
     }
 
@@ -438,7 +405,6 @@ class InMemoryLibraryFileSystem(
     fun externalTouch(relPath: String) {
         val norm = NpnPaths.normalize(relPath)
         val node = files[norm] ?: return
-        external(norm)
         node.mtime = now()
         touch(norm)
     }
@@ -447,7 +413,6 @@ class InMemoryLibraryFileSystem(
     fun externalDelete(relPath: String) {
         val norm = NpnPaths.normalize(relPath)
         if (!existsNow(norm)) return
-        external(norm)
         remove(norm)
     }
 
@@ -459,8 +424,6 @@ class InMemoryLibraryFileSystem(
         val src = NpnPaths.normalize(from)
         val dst = NpnPaths.normalize(to)
         if (!existsNow(src) || src == dst) return
-        external(src)
-        external(dst)
         if (existsNow(dst)) remove(dst)
         relocate(src, dst, byApp = false)
     }
@@ -616,7 +579,6 @@ class InMemoryLibraryFileSystem(
         check(!existsNow(norm)) { "Target already exists: $norm" }
         ensureParents(norm)
         files[norm] = Node(bytes, now())
-        wrote(norm, byApp = true)
         touch(norm)
         recordWrite(norm, bytes)
     }
@@ -632,12 +594,10 @@ class InMemoryLibraryFileSystem(
                 ensureParents(to)
                 files.remove(from)
                 files[to] = node
-                wrote(to, byApp)
                 touch(from)
                 touch(to)
                 if (byApp) {
                     appRemovals += from
-                    writes.tookAway(from, sha256Bytes(node.bytes), now())
                     recordWrite(to, node.bytes)
                 }
             }
@@ -650,7 +610,6 @@ class InMemoryLibraryFileSystem(
                 }
                 files.keysWithPrefix(prefix).forEach { file ->
                     files[to + file.removePrefix(from)] = files.remove(file) ?: return@forEach
-                    wrote(to + file.removePrefix(from), byApp)
                 }
                 touch(from)
                 touch(to)
@@ -680,11 +639,6 @@ class InMemoryLibraryFileSystem(
         }
         (listOf(norm) + dirs.keysWithPrefix(prefix)).forEach { dirs.remove(it) }
         touch(norm)
-    }
-
-    private fun external(norm: String) {
-        externalSeq++
-        externalChanges[norm] = externalSeq
     }
 
     /** Report a change at [norm] to the watcher, as inotify would (possibly dropped or as an overflow). */
@@ -728,12 +682,9 @@ class InMemoryLibraryFileSystem(
     /** The app's call taking effect right now, or null for the outside world. */
     private var actor: FsMethod? = null
 
-    /** Who wrote at each path, and when the app last took bytes away from one. */
-    val writes = PathWrites()
-
     /**
-     * Each time bytes were taken from a path here; never from an import's staging file, which is the
-     * import's copy of its source, not one of the library's.
+     * Each time bytes were taken from a path here; never from a file that is none of the library's
+     * copies (an import's staging file, a bake's temporary file: [Losses.isNoCopy]).
      */
     val losses = Losses()
 
@@ -766,32 +717,39 @@ class InMemoryLibraryFileSystem(
                 syncCalls > 0 -> Loss.SYNC
                 else -> Loss.OUTSIDE
             }
+        if (Losses.isNoCopy(norm)) return
         val hash = sha256Bytes(node.bytes)
-        if (byApp) writes.tookAway(norm, hash, now())
-        // An import's staging file is the import's copy of its source, none of the library's: it
-        // neither takes a document's bytes away when it goes nor keeps them while it is there.
-        if (Losses.isImportStaging(norm)) return
         val kept =
             files.any { (path, other) ->
-                path != norm && !(inPlace && other === node) && !Losses.isImportStaging(path) &&
+                path != norm && !(inPlace && other === node) && !Losses.isNoCopy(path) &&
                     sha256Bytes(other.bytes) == hash
             }
-        losses.record(hash, LossAt(now(), cause, norm, lastHere = !kept))
+        val lastAnywhere = !kept && !heldElsewhere(hash, norm)
+        losses.record(hash, LossAt(now(), cause, norm, lastHere = !kept, lastAnywhere = lastAnywhere))
     }
+
+    /**
+     * Whether a file in another replica's folder, at another path than the one losing them, holds the
+     * bytes hashing to the given hash, so a loss here leaves the library a copy; the [SyncSimulation]
+     * holding this folder sets it. A copy at the same path does not count: the sync tool carries this
+     * folder's change there, so a loss here takes that one too.
+     */
+    var heldElsewhere: (hash: String, path: String) -> Boolean = { _, _ -> false }
+
+    /** Whether one of the library's copies here ([Losses.isNoCopy]), not at [except], holds [hash]'s bytes. */
+    fun holdsCopy(
+        hash: String,
+        except: String,
+    ): Boolean =
+        files.any { (path, node) ->
+            path != except && !Losses.isNoCopy(path) && sha256Bytes(node.bytes) == hash
+        }
 
     /** Each path the bytes hashing to [hash] were taken from, with that path's history: what a failure shows. */
     fun lossesAt(hash: String): List<String> =
         losses.pathsOf(hash).map { path ->
             "'$path': " + historyOf(path).joinToString("; ")
         }
-
-    private fun wrote(
-        norm: String,
-        byApp: Boolean,
-    ) {
-        val node = files[norm] ?: return
-        writes.wrote(norm, LastWrite(now(), byApp, sha256Bytes(node.bytes)))
-    }
 
     /** The last changes at each path, and who made them: what a failure at a path shows. */
     private val history = HashMap<String, ArrayDeque<String>>()

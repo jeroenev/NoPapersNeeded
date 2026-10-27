@@ -34,12 +34,14 @@ JVMs at once (half the processors, within `--max-workers`), so a long run takes 
 the time on a machine with the cores. Within a JVM the seeds run one after the other: a seed is one
 single-threaded run, and seeds sharing a JVM slow each other down far more than they share the
 machine (the JVM's own shared structures, from the coroutine library's debug ids to the stack walks
-Room does on every connection it hands out). A replay of one seed runs in the shard it falls to;
-the other classes report that no seed fell to them and pass.
+Room does on every connection it hands out). A replay of one seed is a run of that one seed, so it
+always runs in `LibrarySimulationTest1`; the other classes report that no seed fell to them and
+pass.
 
 `core/build.gradle.kts` forwards `npn.sim.seed`, `npn.sim.seeds`, `npn.sim.firstSeed`,
-`npn.sim.steps`, `npn.sim.traceDir`, `npn.sim.replicas` (force the number of replicas; 1 runs one
-replica with every operation and no sync) and `npn.sim.maxReported` (per shard) to the test JVMs, given as `-D` or `-P`. A changed value reruns the test task
+`npn.sim.steps`, `npn.sim.traceDir` and `npn.sim.maxReported` (per shard) to the test JVMs, given as
+`-D` or `-P`. A replay needs only the seed and the step count, which decide everything else; a
+failure's `Replay:` line names both. A changed value reruns the test task
 instead of reusing its cached result. With `-Dnpn.sim.traceDir=<dir>`, every seed writes its whole
 trace to `<dir>/seed-<n>.txt`, whether it fails or not. Each shard prints its seeds' real time, and
 any step that took over a second.
@@ -64,9 +66,14 @@ new bugs. A replay of that one seed still fails.
 
 `SimulationHarnessTest` and `SyncSimulationHarnessTest` check that the harness itself can fail: the
 rebuild opening other files, a rewritten journal object, a logged programming error, two versions of
-a write-once name meeting in the sync tool, a replica deleting a journal object, and a damaged journal
-object each fail the run. Storage with no publication primitive refuses
-the library.
+a write-once name meeting in the sync tool, a replica deleting a journal object, a damaged journal
+object, and the app deleting a document's last copy (alone, after or before another process took
+the same bytes, in its trash for a document it never trashed, or while another replica holds the
+bytes at the same path) each fail the run, while the app deleting a copy another replica holds at
+another path, or a bake's temporary file, does not. Storage with no
+publication primitive refuses the library. They also check that relinked bytes count as held only
+with the relink chain's final target in the folder, that a replica joining late with an empty
+folder ends up showing what the others show, and that a seed replays the same virtual timeline.
 
 ## Scheduled runs
 
@@ -89,23 +96,24 @@ kept 5 days. ci.yml keeps running only the CI-sized test above, as part of `:cor
 - `SyncSimulation` holds the replicas. Each one (`SyncSimulation.Member`) has its own
   `InMemoryLibraryFileSystem` (its own storage profile and mtimes), its own `SimReplica` (an
   installation id, `index.db` and `device.db`, a seeded id source, a log that names it), its own
-  `Simulation` (generator, background operations, invariants, rebuild oracle), an `ExtraPlanner`, and
-  sometimes a watched inbox folder. A step is one replica's operation, from its `SimGenerator` or its
-  `ExtraPlanner`, or one of the sync tool's.
+  `Simulation` (generator, background operations, invariants, rebuild oracle), and sometimes a
+  watched inbox folder. A step is one replica's operation, from its `SimGenerator`, or one of the
+  sync tool's.
 - `SimSync` is the sync tool, modelled on Syncthing and its kind. A `scan` of one device records
   what changed in its folder since its last scan (a new file, other bytes, a deletion) as a version
   with a version vector, and sends it to every other device. A delivery lands after a seeded delay
   (mostly seconds, sometimes minutes), so deliveries arrive out of order; one in ten comes twice.
   It is written under the tool's temporary name (`NpnPaths.isSyncTemp`: Syncthing, Nextcloud or
-  Resilio, per seed) and renamed into place, or, for some PDFs on some seeds, written in place over a
-  few seconds, partial at its final name meanwhile. Journal objects, OCR sidecars, device markers,
-  staging files and PDFs travel alike, with their modification times. Before it replaces a file the
+  Resilio, per seed) and renamed into place, so it lands whole: no tool of this kind (Syncthing,
+  Nextcloud, Dropbox, Resilio) writes a file in place at its final name. A file written in place
+  over a while comes from another process on one device (`EXT_CHUNKED_WRITE`), which the tool then
+  carries to the others whole. Journal objects, OCR sidecars, device markers, staging files and PDFs
+  travel alike, with their modification times. Before it replaces a file the
   tool checks the device did not change it since its last scan. Two versions neither descends from are
   a conflict: identical bytes merge, a modification beats a deletion, otherwise the newer mtime (then
   the higher device id) keeps the name and the other is kept as a conflict copy (Syncthing's
   `.sync-conflict-<date>-<time>-<device>` or Nextcloud's `(conflicted copy <date> <time>)`), which
-  then syncs like any new file. What is not a PDF, a journal object above all, always lands whole by
-  a rename, as every tool of this kind does it. A device given the folder later (`SyncConfig.joinsAt`:
+  then syncs like any new file. A device given the folder later (`SyncConfig.joinsAt`:
   a quarter of the replicas after the first, at a step in the first half of the run) starts with an
   empty folder, which the tool fills with the latest version of every path over the same delays,
   while the app opens on it at once, as a second device set up later is.
@@ -119,8 +127,8 @@ kept 5 days. ci.yml keeps running only the CI-sized test above, as part of `:cor
   relocation and no watcher on SAF, and listings with no mtimes when `SimFsOptions.mtimes` is off.
   Each call suspends at least once and sometimes waits a seeded stretch of virtual time
   (`SimLatency`). It records every journal object, snapshot, OCR sidecar and device marker the app
-  creates, every file the app removes, the last changes at each path and who made them, and the
-  last write at each path: when, the app's or the outside world's, and the bytes it left.
+  creates, every file the app removes, the last changes at each path and who made them, and every
+  time bytes left a path (`Losses`).
 - Its `external*` members are the outside world: an atomic write, a write in place in chunks over
   virtual time (`cp`, a scanner app), an overwrite in place or by rename, a touch (a new mtime over
   the same bytes), a delete, a move, a backup (which skips a file still being written) put back,
@@ -147,20 +155,20 @@ kept 5 days. ci.yml keeps running only the CI-sized test above, as part of `:cor
 - The fakes are `SimPdfEngine` (any bytes starting `%PDF-` open; `text:` lines are the text layer,
   `pages:` the page count, so documents split; every split part is a new file, as PDFBox stamps a
   new document's `/ID` from the clock, so two replicas splitting one document make other parts),
-  `SimXmpIO` (a bake writes the XMP packet as an `xmp:`
-  line, so bake-in-place relinks), `GatedOcrEngine` (each page waits until the simulation lets it
-  finish), `SimWatchedFolder` (a watched inbox folder in memory, swept by the real
-  `WatchedFolderImporter`) and in-memory thumbnails.
-- `SimGenerator` picks an `OpKind` by weight: the app's writes through the facets, rescans, OCR
-  completions, several operations at once (with external events landing while they run), an
-  operation left running in the background, time steps, every external event (another device's
-  journal object or OCR sidecar only when the replica runs alone: with others, the sync tool
-  delivers theirs), faults, crashes, close and reopen, and dropping the index. `ExtraPlanner` adds bake in place, multi-page imports and split,
-  the relink of a missing document to other bytes, auto-match rule saves, deletes and toggles (whose
+  `SimXmpIO` (a bake writes the XMP packet as an `xmp:` line, so bake-in-place relinks),
+  `GatedOcrEngine` (each page waits until the simulation lets it finish; the rebuild oracle's has no
+  engine installed, so it runs no OCR), `SimWatchedFolder` (a watched inbox folder in memory, swept
+  by the real `WatchedFolderImporter`) and in-memory thumbnails.
+- `SimGenerator` picks an `OpKind` by weight, from one seeded stream per replica: the app's writes
+  through the facets, rescans, OCR completions, bake in place, multi-page imports and split, the
+  relink of a missing document to other bytes, auto-match rule saves, deletes and toggles (whose
   field sets drive the storage-path rule, which moves documents on every replica), the watched folder
-  (new, slowly written, known, overwritten and removed files, and sweeps, beside the importer each
-  session runs with delete-after-import on or off) and a hard crash, and its operations run beside
-  one of the first generator's.
+  where the replica has one (new, slowly written, known, overwritten and removed files, and sweeps,
+  beside the importer each session runs with delete-after-import on or off), several operations at
+  once (with external events landing while they run), an operation left running in the background,
+  time steps, every external event, faults, crashes (a hard one included), close and reopen, and
+  dropping the index. Another device's journal objects and OCR sidecars are the sync tool's to
+  deliver.
 
 ## Invariants
 
@@ -177,8 +185,8 @@ After every step, on every replica:
 - Write-once: no object the app published changes bytes, and every journal object the app wrote is
   named by its hash.
 - Index structure: every live row is at a document path, and a row waiting at a sentinel waits at
-  its own (`missingSentinel`). OCR queue rows stay in their declared states, and attempts never go
-  negative.
+  its own (`missingSentinel`). OCR queue rows stay in their declared states, and neither their
+  attempts nor the enrichment queue's go negative.
 
 Across replicas, after every step:
 
@@ -194,23 +202,26 @@ Across replicas, after every step:
   chain followed to its end, a file in that folder holds.
 
 At rest (every `quiesceEvery` steps, and at the end), deliveries under way land, faults are
-cleared, OCR runs through, background operations end, 20 virtual minutes pass, and every replica
-rescans. Half the time, and always at the end, that comes after a full sync, round after round
-until a round leaves every folder equal; replicas that keep changing their folders after six rounds
-do not converge, which fails the run. Then:
+cleared, OCR runs through and background operations end on every replica, the sync tool scans
+every device once and lets those deliveries land (it runs through the day as well; frozen, it
+would leave another device's trash unannounced, and the file still at its path would pass the
+window as one come back), and then a virtual day (`RESTORE_SETTLE_MS`) passes, so every trash is
+older than the restore settle window by the rescans
+that follow: the app records the return of a trashed document's own bytes as a restore only once
+that window has passed (`JournalCoordinator.recordRestores`), and before it a rescan shows such a
+file for that scan only. The day runs everything time brings (the 15-minute tick, the queues'
+backoffs, and a trash purge after any rescan the watch starts). Then 20 virtual minutes pass and
+every replica rescans. Half the time, and always at the end, that comes after a full sync, round
+after round until a round leaves every folder equal; replicas that keep changing their folders
+after six rounds do not converge, which fails the run. Then:
 
 - No replica blocks writes.
 - On each replica: every live document's file holds its hash; every live row stores its file's
   size and mtime, the proof by stat the rescan, trash and import take from it (a file touched since
   was hashed and its row given the new stat); and every settled PDF in its folder is
   a live document, a known duplicate, or bytes a relink superseded (or, while doc-undelete is not
-  written, a document deleted for good). A trashed document's own bytes back at its path, or the
-  path it was trashed from, within `RESTORE_SETTLE_MS` of the trash pass too, but only when another
-  replica trashed it (the sync tool has not delivered that device's move of the file yet) or the
-  last write at that path since the app took the document's bytes from there (the trash moves the
-  file before its commit stamps it) came from outside the app (another process, a backup put back,
-  the sync tool): the app records such a return only once the window has passed. The app's
-  own trash whose file the app itself put back is a finding.
+  written, a document deleted for good). A trashed document's own bytes back at its path is no
+  exception: past the window, the rescan has recorded its restore.
 - No bake's original lingers: no file under a recovery name holds bytes a relink superseded while
   the live document they became has its own bytes at its path. The bake deletes its original once
   its relink stands, and the rescan one a crash (the simulation's hard crash stops a bake at any
@@ -224,23 +235,28 @@ do not converge, which fails the run. Then:
   device id, queues, enrichment marks, thumbnails, OCR state and page counts, `addedAt`, a row's
   stat, rows hidden as missing or deleted that only the live index remembers, and which of several
   identical files is a document's path. A replica that is behind (the sync tool has not brought it
-  everything yet) is judged on what it has: its index must show what its own folder holds. A
-  document the live index has in the trash may show in the rebuild only where the check above lets
-  its bytes be back.
+  everything yet) is judged on what it has: its index must show what its own folder holds. The
+  rebuild publishes nothing but its device marker, and its own OCR sidecar of a document the folder
+  held no sidecar of (the live replica's runs of it failed until its queue gave up; the rebuild,
+  with no engine, keeps the text layer). Anything else it publishes (a restore, a move, a field
+  seeding) is a write the live replica owed the library, and fails the run. Its first rescan's trash
+  purge deletes files in the trash and records nothing, so it changes nothing compared.
 - What each replica wrote under a device's name in the library (sidecars, markers) is under its own.
 - **The app never removes a document's last copy**: every document some replica's index has a row
-  for, that no replica's journal deleted for good or relinked onto other bytes, is held by a file in
-  some replica's folder, unless what last took its bytes away explains it. Each folder records every
-  time bytes left a path (deleted, or replaced by other bytes; the same bytes written again take
-  nothing): when, by whom (the app, in its trash or elsewhere; the sync tool, carrying out another
-  device's change, so never the cause itself; or the outside world), and whether no other file
-  there still held them (an import's staging file, a copy of the import's source, counts neither
-  way). Of the losses of a folder's last copy, the sync tool's left out, the latest on any replica
-  decides: another process explains it; the app in its trash (the purge, a delete for good)
-  explains it only for a document the replicas' journals, taken together, had in the trash at that
-  time; the app anywhere else is a finding. A document whose only file the app deleted shows as
-  missing in the live index and in a rebuild alike, so the rebuild oracle cannot see it. The check
-  runs in every run, a single replica's included.
+  for, that no replica's journal deleted for good or relinked onto other bytes, and that no
+  replica's folder holds a file of, was never taken by the app while it was the library's last
+  copy. Each folder records every time bytes left a path (deleted, or replaced by other bytes; the
+  same bytes written again take nothing): when, by whom (the app, in its trash or elsewhere; the sync
+  tool, carrying out another device's change, so never the cause itself; or the outside world), and
+  whether no other file held them, there or in another replica's folder. A copy another replica
+  holds at the same path does not count, since the sync tool carries the change there and takes it
+  too. Two kinds of file are none of the library's copies and count neither way: an import's staging
+  file (a copy of the import's source) and a bake's temporary file (output no journal names until
+  the bake's relink, which a failed bake discards). Any loss of the library's last copy by the app
+  is a finding, whatever happened to the bytes before or after, but in its trash (the purge, a
+  delete for good) for a document the replicas' journals, taken together, had in the trash at that
+  time. A document whose only file the app deleted shows as missing in the live
+  index and in a rebuild alike, so the rebuild oracle cannot see it.
 - After a full sync, **convergence**: every replica shows the library the first one shows, by the
   same comparison, a row only one of them remembers for a document neither shows excepted.
 
@@ -250,17 +266,17 @@ do not converge, which fails the run. Then:
 that names the finding; a known failure is listed by the phrases its message holds. Fixing a finding
 means turning its switch off (or removing its `knownFailures` entry) and making a long run pass.
 
-- **Finding 8**, `KnownIssues.DELETED_RETURNS_UNRECORDED`: the documented cost of `doc-undelete`
-  not being written yet (ARCHITECTURE.md 6.4). A document deleted for good whose bytes come back is
-  live on the device that imported them, for that session, and in the scan that finds the file, and
-  nowhere else, so devices disagree, and a device disagrees with a rebuild of its own index. Off by
-  itself once the op is written.
+- **The app writes no `doc-undelete` yet**, `KnownIssues.DELETED_RETURNS_UNRECORDED`: the
+  documented cost of keeping builds from before the op working (`JournalOp.DocUndelete.WRITTEN`,
+  ARCHITECTURE.md 6.4). A document deleted for good whose bytes come back is live on the device that
+  imported them, for that session, and in the scan that finds the file, and nowhere else, so devices
+  disagree, and a device disagrees with a rebuild of its own index. Off by itself once the op is
+  written.
 
 ## Adding an operation
 
-1. Add an `OpKind` with a weight (or an `ExtraKind`, for an operation only several replicas, or a
-   world beyond the folder, make sense of).
-2. Plan it in `SimGenerator.plan` (or `ExtraPlanner.planners`). Use a `Planned.Act` for a call into
+1. Add an `OpKind` with a weight.
+2. Plan it in `SimGenerator.plan`. Use a `Planned.Act` for a call into
    the session (it may run concurrently or in the background, so add it to `CONCURRENT_KINDS` if it
    should). Use a `Planned.Control` for something done to the world, marked `instant` when it needs
    no scheduler (an external file change, a fault), so it can land during a group (`DURING_KINDS`).
@@ -284,7 +300,7 @@ why next to it. Fail through `fail(...)`, which attaches the seed and the trace.
   moment before, but what the process did to files during the transaction would stay. Modelling
   that needs file-backed databases copied at the crash point.
 - **The sync tool losing a file it delivered**, or a device that never syncs again. The tool here
-  delivers everything eventually, and never damages a file: it writes only PDFs in place.
+  delivers everything eventually, and never damages a file: it writes nothing in place.
 - **Directory renames and deletions** by the sync tool: it syncs files, and folders follow them.
 - **Devices that leave**, or come back after a long time away: a replica that has joined takes part
   to the end.
@@ -299,8 +315,9 @@ why next to it. Fail through `fail(...)`, which attaches the seed and the trace.
 - **Mixed-build libraries**: another build's writes and fold, and a build newer than this one (an
   op or a field type this build refuses), are not modelled: every replica runs this build.
 - **mtime-preserving overwrites** of the same size: with mtimes, every generated PDF has a size of
-  its own. Where storage reports no mtimes, same-size replacements are modelled: every generated PDF
-  has one of a few sizes, so only a hash tells a replacement apart.
+  its own, and an overwrite in place gives the file a new mtime. Where storage reports no mtimes,
+  same-size replacements are modelled: every generated PDF has one of a few sizes, so only a hash
+  tells a replacement apart.
 - **The app's temporary files under one name on several devices**: a bake writes
   `<document>.npnbake.tmp`, which the sync tool copies to other devices like any file, where it can
   replace the temporary file of a bake of the same document under way there. The simulation counts

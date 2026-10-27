@@ -58,10 +58,6 @@ class SimFaults {
 
     private val armed = ArrayList<Armed>()
 
-    /** How many faults have fired, for the trace. */
-    var fired = 0
-        private set
-
     fun arm(rule: Rule) {
         armed += Armed(rule, rule.times)
     }
@@ -83,7 +79,6 @@ class SimFaults {
                     (it.rule.pathPrefix == null || path.startsWith(it.rule.pathPrefix))
             } ?: return
         if (--hit.left <= 0) armed.remove(hit)
-        fired++
         throw SimFaultException("Injected fault: $method ${point.name.lowercase()} at '$path'")
     }
 }

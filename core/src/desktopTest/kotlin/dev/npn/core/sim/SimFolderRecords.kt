@@ -19,14 +19,15 @@ enum class Loss {
 }
 
 /**
- * One time bytes were taken from [path] in a folder: when, by whom, and whether [lastHere], no other
- * file there held them.
+ * One time bytes were taken from [path] in a folder: when, by whom, whether [lastHere], no other
+ * file there held them, and whether [lastAnywhere], no file in another replica's folder did either.
  */
 data class LossAt(
     val atMillis: Long,
     val loss: Loss,
     val path: String,
     val lastHere: Boolean,
+    val lastAnywhere: Boolean,
 )
 
 /** Every time a folder ([InMemoryLibraryFileSystem]) lost bytes, by their hash. */
@@ -50,52 +51,14 @@ class Losses {
     fun pathsOf(hash: String): List<String> = byHash[hash].orEmpty().map { it.path }.distinct()
 
     companion object {
-        /** Whether [path] is an import's staging file, the import's copy of its source. */
-        fun isImportStaging(path: String) = NpnPaths.Temp.kindOf(path) == NpnPaths.Temp.Kind.IMPORT
+        /**
+         * Whether a file at [path] is none of the library's copies, so it neither takes a document's
+         * bytes away when it goes nor keeps them while it is there: an import's staging file is the
+         * import's copy of its source, and a bake's temporary file holds output no journal names
+         * until the bake's relink, which a failed bake discards.
+         */
+        fun isNoCopy(path: String) = NpnPaths.Temp.kindOf(path) in NO_COPY
+
+        private val NO_COPY = setOf(NpnPaths.Temp.Kind.IMPORT, NpnPaths.Temp.Kind.BAKE)
     }
-}
-
-/**
- * Who last put bytes at a path and when: the app through one of its calls, or the outside world
- * (another process, a backup put back, the sync tool, which all go through the `external*` members
- * of [InMemoryLibraryFileSystem]). A touch puts no bytes anywhere, and a delete leaves the entry as
- * it was.
- */
-data class LastWrite(
-    val atMillis: Long,
-    val byApp: Boolean,
-    /** The hash of the bytes that write left there. */
-    val hash: String,
-)
-
-/** Who wrote at each path of a folder, and when the app last took bytes away from one. */
-class PathWrites {
-    private val lastWrites = HashMap<String, LastWrite>()
-
-    // When the app last moved or deleted the bytes of a hash away from a path, by path and hash.
-    private val appTookAway = HashMap<Pair<String, String>, Long>()
-
-    fun wrote(
-        path: String,
-        write: LastWrite,
-    ) {
-        lastWrites[path] = write
-    }
-
-    fun tookAway(
-        path: String,
-        hash: String,
-        atMillis: Long,
-    ) {
-        appTookAway[path to hash] = atMillis
-    }
-
-    /** The last write at [path], or null when nothing ever wrote there. */
-    fun lastWriteAt(path: String): LastWrite? = lastWrites[path]
-
-    /** When the app last moved or deleted the bytes hashing to [hash] away from [path]; null when it never did. */
-    fun appTookAwayAt(
-        path: String,
-        hash: String,
-    ): Long? = appTookAway[path to hash]
 }

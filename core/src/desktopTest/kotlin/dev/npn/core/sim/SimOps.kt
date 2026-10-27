@@ -1,24 +1,24 @@
 package dev.npn.core.sim
 
+import dev.npn.core.app.BakeOutcome
 import dev.npn.core.app.ImportOutcome
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySessionImpl
 import dev.npn.core.app.SavedView
+import dev.npn.core.app.SplitOutcome
 import dev.npn.core.app.TrashReceipt
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
-import dev.npn.core.journal.ContentAddressedJournalWriter
-import dev.npn.core.journal.HlcWatermarkAllocator
-import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
 import dev.npn.core.model.ReviewMode
-import dev.npn.core.ocr.OcrEngineId
-import dev.npn.core.ocr.OcrSidecar
-import dev.npn.core.ocr.OcrSidecarCodec
-import dev.npn.core.ocr.OcrSidecarName
-import dev.npn.core.util.EpochClock
+import dev.npn.core.rules.AutoMatchRule
+import dev.npn.core.rules.MatchAlgorithm
+import dev.npn.core.rules.RuleField
+import dev.npn.core.watch.WatchedFolderImporter
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.sync.Mutex
 import kotlin.random.Random
 
 /**
@@ -49,9 +49,31 @@ enum class OpKind(
     RESCAN(3),
     OCR_COMPLETE(4),
 
-    // Several of the above at once, interleaving at their suspension points, with what other
+    // The app's content operations: bake in place, multi-page imports and split, and the relink of
+    // a missing document to other bytes.
+    BAKE(4),
+    IMPORT_MULTIPAGE(3),
+    SPLIT(4),
+    RELINK_MISSING(2),
+
+    // The auto-match rules, whose field sets drive the storage-path rule, which moves documents on
+    // every replica.
+    RULE_SAVE(4),
+    RULE_DELETE(1),
+    RULE_TOGGLE(1),
+
+    // The watched inbox folder, where the seed gives the replica one: new, slowly
+    // written, known, overwritten and removed files, and a sweep beside the importer the host runs.
+    WATCHED_DROP(4),
+    WATCHED_CHUNKED(1),
+    WATCHED_KNOWN(1),
+    WATCHED_OVERWRITE(1),
+    WATCHED_REMOVE(1),
+    WATCHED_SWEEP(2),
+
+    // Several of the app's writes at once, interleaving at their suspension points, with what other
     // processes do landing while they run; or one left running while the next steps go on.
-    CONCURRENT(7),
+    CONCURRENT(10),
     IN_BACKGROUND(5),
 
     // Time.
@@ -70,19 +92,13 @@ enum class OpKind(
     EXT_RESTORE_BACKUP(1),
     EXT_SYNC_TEMP(2),
 
-    // Another device's writes, as a sync tool delivers them: only when this replica runs alone.
-    EXT_REMOTE_OBJECT(3),
-    EXT_REMOTE_SIDECAR(2),
-
-    // Storage failures, and the process's own end.
+    // Storage failures, and the process's own end: a crash cancels its scope, a hard crash kills it.
     FAULT(3),
     CRASH(1),
+    HARD_CRASH(2),
     CLOSE_REOPEN(1),
     DROP_INDEX(1),
 }
-
-/** Whether this is another device's write stood in for: the sync tool's job when there are other replicas. */
-val OpKind.fromAnotherDevice: Boolean get() = this == OpKind.EXT_REMOTE_OBJECT || this == OpKind.EXT_REMOTE_SIDECAR
 
 /** A step the generator planned: what the trace says it is, and what it does. */
 internal sealed interface Planned {
@@ -138,32 +154,34 @@ internal data class SimDoc(
 )
 
 /**
- * Plans steps from a seeded [random]: which [OpKind] (by weight, among those [enabled]), and its
- * arguments from the [Snapshot]. Everything it chooses goes through [random], so a seed replays the
- * same plan as long as the library reaches the same states.
+ * Plans steps from a seeded [random]: which [OpKind] (by weight), and its arguments from the
+ * [Snapshot]. Everything it chooses goes through [random], so a seed replays the same plan as long
+ * as the library reaches the same states.
  */
 internal class SimGenerator(
     private val random: Random,
     private val sim: Simulation,
-    private val enabled: List<OpKind>,
     /** Where this generator numbers its PDFs from, so several generators never make the same one. */
-    labelBase: Int = 0,
-    /** The other device this generator delivers journal objects and OCR sidecars from. */
-    private val remoteDevice: String = "remote-device",
+    labelBase: Int,
+    /** This replica's watched folder, or null where the seed gave it none. */
+    private val watched: SimWatchedFolder?,
+    /** Whether the watched folder's importer deletes what it imported. */
+    private val deleteAfterImport: Boolean,
 ) {
     private var nextLabel = labelBase
     private val receipts = ArrayList<TrashReceipt>()
     private val backups = ArrayList<InMemoryLibraryFileSystem.Backup>()
     private val syncTemps = ArrayList<String>()
 
-    /** Another device's journal writer, its clock a little off ours, as a phone's may be. */
-    private val remoteClock = EpochClock { sim.world.clock.nowMillis() - REMOTE_SKEW_MILLIS }
-    private val remoteAllocator = HlcWatermarkAllocator(remoteClock)
+    /** The kinds this replica can take: the watched folder's only where it has one. */
+    private val kinds = OpKind.entries.filter { watched != null || it !in WATCHED_KINDS }
+    private val totalWeight = kinds.sumOf { it.weight }
 
-    /** The other device's actor ids, from the generator's own stream so a seed replays them. */
-    private val remoteIds = SimIds(random)
-
-    private val totalWeight = enabled.sumOf { it.weight }
+    /**
+     * Shared by every importer of this replica's folder in one process, so two sweeps never
+     * overlap. A process's own: a killed one may die holding it.
+     */
+    private var sweepLock = Mutex()
 
     fun next(snapshot: Snapshot): Planned {
         repeat(ATTEMPTS) {
@@ -174,11 +192,11 @@ internal class SimGenerator(
 
     private fun pickKind(): OpKind {
         var roll = random.nextInt(totalWeight)
-        for (kind in enabled) {
+        for (kind in kinds) {
             roll -= kind.weight
             if (roll < 0) return kind
         }
-        return enabled.last()
+        return kinds.last()
     }
 
     private fun plan(
@@ -205,6 +223,19 @@ internal class SimGenerator(
             OpKind.SAVED_VIEW -> savedView(s)
             OpKind.RESCAN -> rescan()
             OpKind.OCR_COMPLETE -> ocrComplete()
+            OpKind.BAKE -> s.live.pickOrNull()?.let(::bake)
+            OpKind.IMPORT_MULTIPAGE -> importMultipage()
+            OpKind.SPLIT -> splitAny(s)
+            OpKind.RELINK_MISSING -> relinkMissing(s)
+            OpKind.RULE_SAVE -> saveRule()
+            OpKind.RULE_DELETE -> ruleAct("delete") { session, id -> session.rules.delete(id) }
+            OpKind.RULE_TOGGLE -> ruleToggle()
+            OpKind.WATCHED_DROP -> watchedDrop(newPdf())
+            OpKind.WATCHED_CHUNKED -> watchedChunked()
+            OpKind.WATCHED_KNOWN -> watchedKnown()
+            OpKind.WATCHED_OVERWRITE -> watched?.names?.pickOrNull()?.let(::watchedOverwrite)
+            OpKind.WATCHED_REMOVE -> watched?.names?.pickOrNull()?.let(::watchedRemove)
+            OpKind.WATCHED_SWEEP -> watchedSweep()
             OpKind.CONCURRENT -> concurrent(s)
             OpKind.IN_BACKGROUND -> background(s)
             OpKind.ADVANCE_SHORT -> advance(random.nextLong(50, SHORT_MAX_MILLIS))
@@ -219,13 +250,24 @@ internal class SimGenerator(
             OpKind.EXT_BACKUP -> extBackup()
             OpKind.EXT_RESTORE_BACKUP -> backups.pickOrNull()?.let(::extRestore)
             OpKind.EXT_SYNC_TEMP -> extSyncTemp(s)
-            OpKind.EXT_REMOTE_OBJECT -> s.live.pickOrNull()?.let { extRemoteObject(it, s.fields) }
-            OpKind.EXT_REMOTE_SIDECAR -> s.live.pickOrNull()?.let(::extRemoteSidecar)
             OpKind.FAULT -> fault()
             OpKind.CRASH -> Planned.Control("crash and reopen") { sim.crashAndReopen() }
+            OpKind.HARD_CRASH -> Planned.Control("hard crash (killed) and reopen") { sim.hardCrashAndReopen() }
             OpKind.CLOSE_REOPEN -> Planned.Control("close and reopen") { sim.closeAndReopen() }
             OpKind.DROP_INDEX -> dropIndex()
         }
+
+    private fun splitAny(s: Snapshot) =
+        s.live
+            .filter { pagesOf(it) > 1 }
+            .pickOrNull()
+            ?.let(::split)
+
+    private fun watchedKnown() =
+        sim.known.keys
+            .sorted()
+            .pickOrNull()
+            ?.let { watchedDrop(sim.known.getValue(it)) }
 
     private fun rescan() =
         Planned.Act("rescan") { session ->
@@ -238,7 +280,7 @@ internal class SimGenerator(
 
     // ---- the app's writes -----------------------------------------------------------------------
 
-    private fun newPdf(): ByteArray {
+    private fun newPdf(pages: Int = 1): ByteArray {
         val n = nextLabel++
         val label = "doc-$n"
         // Half carry a text layer; the rest are scans only OCR can read. Where storage reports no
@@ -247,7 +289,8 @@ internal class SimGenerator(
         // the same virtual millisecond, one then renamed over the other, would have one stat, and an
         // mtime-preserving overwrite of the same size is out of scope (docs/SIMULATION.md).
         val size = if (sim.config.mtimes) SIZE_BASE + n else SIZE_BASE + random.nextInt(SHARED_SIZES)
-        val bytes = SimPdf.bytes(label, if (random.chance(50)) "text of $label ${random.pick(WORDS)}" else null, size)
+        val text = if (random.chance(50)) "text of $label ${random.pick(WORDS)}" else null
+        val bytes = SimPdf.bytes(label, text, size, pages = pages)
         sim.known[sha256Bytes(bytes)] = bytes
         return bytes
     }
@@ -425,25 +468,18 @@ internal class SimGenerator(
     private fun concurrent(s: Snapshot): Planned? {
         val acts =
             (1..random.nextInt(2, CONCURRENCY + 1)).mapNotNull {
-                val kinds = CONCURRENT_KINDS.filter(enabled::contains)
-                if (kinds.isEmpty()) return null
-                plan(random.pick(kinds), s) as? Planned.Act
+                plan(random.pick(CONCURRENT_KINDS), s) as? Planned.Act
             }
         val during =
             (0 until random.nextInt(0, DURING + 1)).mapNotNull {
-                val kinds = DURING_KINDS.filter(enabled::contains)
-                if (kinds.isEmpty()) return@mapNotNull null
-                val control = (plan(random.pick(kinds), s) as? Planned.Control)?.takeIf(Planned.Control::instant)
+                val control = (plan(random.pick(DURING_KINDS), s) as? Planned.Control)?.takeIf(Planned.Control::instant)
                 control?.let { random.nextLong(0, DURING_MILLIS) to control }
             }
         return if (acts.isNotEmpty() && acts.size + during.size >= 2) Planned.Group(acts, during) else null
     }
 
-    private fun background(s: Snapshot): Planned? {
-        val kinds = CONCURRENT_KINDS.filter { it in enabled }
-        if (kinds.isEmpty()) return null
-        return (plan(random.pick(kinds), s) as? Planned.Act)?.let(Planned::Background)
-    }
+    private fun background(s: Snapshot): Planned? =
+        (plan(random.pick(CONCURRENT_KINDS), s) as? Planned.Act)?.let(Planned::Background)
 
     private fun advance(millis: Long) =
         Planned.Control("advance ${millis}ms") {
@@ -574,55 +610,172 @@ internal class SimGenerator(
         }
     }
 
-    private fun extRemoteObject(
-        doc: SimDoc,
-        fields: List<FieldDef>,
-    ): Planned.Control {
-        val ops =
-            when (random.nextInt(3)) {
-                0 -> listOf(PendingOp.tagAdd(doc.docId, random.pick(TAGS)))
-                1 -> fields.pickOrNull()?.let { listOf(PendingOp.fieldSet(doc.docId, it.key, valueFor(it.type))) }
-                else -> listOf(PendingOp.tagStyle(random.pick(TAGS), random.pick(COLORS), null))
-            } ?: listOf(PendingOp.tagAdd(doc.docId, random.pick(TAGS)))
-        val transfer = random.nextLong(0, TRANSFER_MILLIS)
-        val what = ops.joinToString { it.op::class.simpleName.orEmpty() }
-        return Planned.Control("external: another device's $what on ${doc.short()} arrives over ${transfer}ms") {
-            val (path, bytes) = remoteObject(ops)
-            sim.world.launch { sim.fs.externalSyncDelivery(path, bytes, transfer) }
-            path.substringAfterLast('/').take(ID)
+    // ---- content --------------------------------------------------------------------------------
+
+    private fun bake(doc: SimDoc) =
+        Planned.Act("bake ${doc.short()} in place") { session ->
+            when (val outcome = session.content.bakeInPlace(doc.docId)) {
+                BakeOutcome.Baked -> "baked"
+                is BakeOutcome.Failed -> "failed: ${outcome.reason}"
+            }
+        }
+
+    private fun importMultipage(): Planned.Act {
+        val bytes = newPdf(pages = random.nextInt(2, MAX_PAGES + 1))
+        val name = pickName()
+        return Planned.Act("import ${SimPdf.pagesOf(bytes)}-page ${hash(bytes)} as '$name'") { session ->
+            session.importPdfBytes(bytes, name).describe()
         }
     }
 
-    /** Another device's OCR sidecar for [doc], once per document and engine, as a sync tool delivers it. */
-    private fun extRemoteSidecar(doc: SimDoc): Planned.Control? {
-        val engine = random.pick(listOf(OcrEngineId.TESSERACT, OcrEngineId.MLKIT)).column
-        val name = OcrSidecarName(doc.docId, OcrSidecarName.writerKey(remoteDevice, engine))
-        if (!remoteSidecars.add(name.path)) return null
-        val transfer = random.nextLong(0, TRANSFER_MILLIS)
-        return Planned.Control("external: another device's $engine OCR of ${doc.short()} arrives over ${transfer}ms") {
-            val sidecar =
-                OcrSidecar(
-                    doc = doc.docId,
-                    dev = remoteDevice,
-                    engine = engine,
-                    lang = "eng",
-                    createdAt = remoteClock.nowMillis(),
-                    pages = listOf("remote $engine text of ${doc.docId.take(ID)}"),
-                )
-            val bytes = OcrSidecarCodec.encode(sidecar).encodeToByteArray()
-            sim.world.launch { sim.fs.externalSyncDelivery(name.path, bytes, transfer) }
-            "delivering"
+    private fun pagesOf(doc: SimDoc): Int = sim.known[doc.docId]?.let(SimPdf::pagesOf) ?: 1
+
+    private fun split(doc: SimDoc): Planned.Act {
+        val pages = SimPdf.pagesOf(sim.known.getValue(doc.docId))
+        val cuts = (1 until pages).filter { random.nextBoolean() }.ifEmpty { listOf(1 + random.nextInt(pages - 1)) }
+        val bounds = listOf(0) + cuts + listOf(pages)
+        val segments = bounds.zipWithNext { from, to -> from until to }
+        return Planned.Act("split ${doc.short()} into $segments") { session ->
+            when (val outcome = session.maintenance.splitPdf(doc.docId, segments)) {
+                is SplitOutcome.Done -> "parts ${outcome.partDocIds.joinToString { it.take(ID) }}"
+                is SplitOutcome.Failed -> "failed: ${outcome.reason}"
+            }
         }
     }
 
-    private val remoteSidecars = HashSet<String>()
+    private fun relinkMissing(s: Snapshot): Planned.Act? {
+        val missing =
+            sim.world
+                .read("missing rows") {
+                    sim.replica.indexDb.rows(
+                        "SELECT docId FROM documents WHERE missing = 1 AND trashed = 0 AND deleted = 0 ORDER BY docId",
+                    )
+                }.map { it[0]!! }
+        val old = missing.pickOrNull() ?: return null
+        val target = s.live.pickOrNull() ?: return null
+        return Planned.Act("relink missing ${old.take(ID)} to ${target.short()}") { session ->
+            session.maintenance.applyRelink(old, target.docId)
+            "done"
+        }
+    }
 
-    /** One object another device published, as its bytes and the path they belong at. */
-    private fun remoteObject(ops: List<PendingOp>): Pair<String, ByteArray> {
-        val scratch = InMemoryLibraryFileSystem(now = remoteClock::nowMillis)
-        val writer = ContentAddressedJournalWriter(scratch, "remote-installation", remoteAllocator, remoteIds)
-        val published = sim.world.read("another device's commit") { writer.commit(ops) }
-        return published.relPath to scratch.bytesAt(published.relPath)!!
+    // ---- auto-match rules -----------------------------------------------------------------------
+
+    private fun saveRule(): Planned.Act {
+        val id = "rule-${random.nextInt(RULES)}"
+        val onName = random.chance(30)
+        val rule =
+            AutoMatchRule(
+                id = id,
+                name = "Rule $id ${random.nextInt(LABELS)}",
+                enabled = random.chance(85),
+                field = if (onName) RuleField.FileName else RuleField.Content,
+                algorithm =
+                    if (onName) {
+                        MatchAlgorithm.ANY_WORD
+                    } else {
+                        random.pick(listOf(MatchAlgorithm.ANY_WORD, MatchAlgorithm.EXACT))
+                    },
+                pattern = if (onName) random.pick(listOf("scan", "invoice", "Letter")) else random.pick(WORDS),
+                tags = listOfNotNull(random.pick(TAGS).takeIf { random.chance(60) }),
+                sets =
+                    if (random.chance(60)) {
+                        mapOf(
+                            random.pick(listOf(FieldKeys.CORRESPONDENT, FieldKeys.DOC_TYPE, "project")) to
+                                random.pick(WORDS),
+                        )
+                    } else {
+                        emptyMap()
+                    },
+                position = random.nextInt(RULES),
+            )
+        return Planned.Act("save rule $rule") { session ->
+            session.rules.save(rule)
+            "saved"
+        }
+    }
+
+    private fun ruleToggle(): Planned.Act {
+        val on = random.nextBoolean()
+        return ruleAct("enabled=$on") { session, id -> session.rules.setEnabled(id, on) }
+    }
+
+    private fun ruleAct(
+        what: String,
+        body: suspend (LibrarySessionImpl, String) -> Unit,
+    ): Planned.Act {
+        val id = "rule-${random.nextInt(RULES)}"
+        return Planned.Act("rule $id $what") { session ->
+            body(session, id)
+            "done"
+        }
+    }
+
+    // ---- the watched folder ---------------------------------------------------------------------
+
+    /** The continuous importer a host runs beside the session, started in its scope. */
+    fun startImporter(
+        session: LibrarySessionImpl,
+        scope: CoroutineScope,
+    ) {
+        sweepLock = Mutex()
+        val folder = watched ?: return
+        importer(session, folder).start(scope, POLL_MILLIS, sim.world.scheduler.timeSource)
+    }
+
+    private fun importer(
+        session: LibrarySessionImpl,
+        folder: SimWatchedFolder,
+    ) = WatchedFolderImporter(
+        ingest = session,
+        folder = folder,
+        deleteAfterImport = { deleteAfterImport },
+        log = sim.replica.log,
+        sweepLock = sweepLock,
+        clock = sim.world.clock,
+    )
+
+    private fun watchedDrop(bytes: ByteArray): Planned.Control? {
+        val folder = watched ?: return null
+        val name = random.pick(NAMES)
+        return Planned.Control("watched folder: write ${hash(bytes)} as '$name'", instant = true) {
+            folder.write(name, bytes)
+            "done"
+        }
+    }
+
+    private fun watchedChunked(): Planned.Control? {
+        val folder = watched ?: return null
+        val bytes = newPdf()
+        val name = random.pick(NAMES)
+        val chunks = random.nextInt(2, CHUNKS)
+        val interval = random.nextLong(200, CHUNK_INTERVAL_MILLIS)
+        val text = "watched folder: write ${hash(bytes)} as '$name' in $chunks chunks ${interval}ms apart"
+        return Planned.Control(text, instant = true) {
+            sim.world.launch { folder.writeInChunks(name, bytes, chunks, interval) }
+            "started"
+        }
+    }
+
+    private fun watchedOverwrite(name: String): Planned.Control {
+        val bytes = newPdf()
+        return Planned.Control("watched folder: overwrite '$name' with ${hash(bytes)}", instant = true) {
+            watched?.write(name, bytes)
+            "done"
+        }
+    }
+
+    private fun watchedRemove(name: String) =
+        Planned.Control("watched folder: remove '$name'", instant = true) {
+            watched?.remove(name)
+            "done"
+        }
+
+    private fun watchedSweep(): Planned.Act? {
+        val folder = watched ?: return null
+        return Planned.Act("sweep the watched folder once (deleteAfterImport=$deleteAfterImport)") { session ->
+            importer(session, folder).scanOnce().toString()
+        }
     }
 
     // ---- faults ---------------------------------------------------------------------------------
@@ -659,97 +812,110 @@ internal class SimGenerator(
             is ImportOutcome.Duplicate -> "duplicate of ${existingDocId.take(ID)} at '$existingPath'"
             is ImportOutcome.Failed -> "failed: $reason"
         }
-
-    companion object {
-        private const val ATTEMPTS = 20
-        private const val SIZE_BASE = 400
-        private const val SHARED_SIZES = 3
-        private const val ID = 8
-        private const val CLEAR_PERCENT = 20
-        private const val SHORT_MAX_MILLIS = 6_000L
-        private const val TICK_MIN_MILLIS = 60_000L
-        private const val TICK_MAX_MILLIS = 20L * 60L * 1000L
-        private const val DAY_MILLIS = 25L * 60L * 60L * 1000L
-        private const val CHUNKS = 6
-        private const val CHUNK_INTERVAL_MILLIS = 2_500L
-        private const val TRANSFER_MILLIS = 3_000L
-        private const val REMOTE_SKEW_MILLIS = 90_000L
-        private const val FAULT_TIMES = 4
-        private const val OCR_BURST = 4
-        private const val CONCURRENCY = 3
-        private const val DURING = 2
-        private const val DURING_MILLIS = 600L
-        private const val RETENTION_MAX_DAYS = 60
-        private const val LABELS = 5
-        private const val VIEWS = 3
-        private const val NAMED = 12
-        private const val PARTIAL = 12
-
-        private val NAMES = listOf("scan.pdf", "invoice.pdf", "Letter.pdf", "report 2024.pdf", "scan (1).pdf")
-        private val DIRS = listOf("", "", NpnPaths.DEFAULT_INBOX, "archive", "archive/2024", "Tax")
-        private val WORDS = listOf("ACME", "Globex", "acme", "Initech", "Umbrella Corp", "Q3 report")
-        private val DATES = listOf("2024-01-15", "2023-12-31", "2024-02-29")
-        private val NUMBERS = listOf("7", "007", "42", "-3")
-        private val DECIMALS = listOf("1.5", "1.50", "0.25", "12")
-        private val TAGS = listOf("tax", "bank", "Tax", "receipts", "todo")
-        private val COLORS = listOf("#ff0000", "#00ff00", null)
-        private val BUCKETS = listOf("00", "3f", "a1")
-        private val TEMPLATES =
-            listOf(
-                "{correspondent}/{title}.pdf",
-                "{doc_date:yyyy}/{title}.pdf",
-                "{tags}/{title}.pdf",
-                "{field:project}/{title}.pdf",
-            )
-        private val FAULT_PREFIXES =
-            listOf(
-                null,
-                null,
-                NpnPaths.JOURNAL_DIR,
-                NpnPaths.TRASH_DIR,
-                NpnPaths.OCR_DIR,
-                NpnPaths.TMP_DIR,
-                NpnPaths.DEFAULT_INBOX,
-            )
-        private val CUSTOM_FIELDS =
-            listOf(
-                "amount" to FieldType.DECIMAL,
-                "pages" to FieldType.NUMBER,
-                "due" to FieldType.DATE,
-                "project" to FieldType.TEXT,
-                FieldKeys.CORRESPONDENT to FieldType.TEXT,
-            )
-        private val DURING_KINDS =
-            listOf(
-                OpKind.EXT_DROP_PDF,
-                OpKind.EXT_CHUNKED_WRITE,
-                OpKind.EXT_OVERWRITE,
-                OpKind.EXT_TOUCH,
-                OpKind.EXT_DELETE,
-                OpKind.EXT_MOVE,
-                OpKind.EXT_RESTORE_BACKUP,
-                OpKind.EXT_SYNC_TEMP,
-                OpKind.FAULT,
-                OpKind.OCR_COMPLETE,
-            )
-        private val CONCURRENT_KINDS =
-            listOf(
-                OpKind.IMPORT_NEW,
-                OpKind.IMPORT_DUPLICATE,
-                OpKind.IMPORT_HIDDEN,
-                OpKind.TRASH,
-                OpKind.RESTORE,
-                OpKind.UNDO_TRASH,
-                OpKind.DELETE_FOR_GOOD,
-                OpKind.EMPTY_TRASH,
-                OpKind.RENAME,
-                OpKind.MOVE,
-                OpKind.SET_FIELD,
-                OpKind.ADD_TAG,
-                OpKind.REMOVE_TAG,
-                OpKind.DEFINE_FIELD,
-                OpKind.STORAGE_PATH_RULE,
-                OpKind.RESCAN,
-            )
-    }
 }
+
+// [SimGenerator]'s limits, and the names, words and kinds it draws from.
+private const val ATTEMPTS = 20
+private const val SIZE_BASE = 400
+private const val SHARED_SIZES = 3
+private const val ID = 8
+private const val CLEAR_PERCENT = 20
+private const val SHORT_MAX_MILLIS = 6_000L
+private const val TICK_MIN_MILLIS = 60_000L
+private const val TICK_MAX_MILLIS = 20L * 60L * 1000L
+private const val DAY_MILLIS = 25L * 60L * 60L * 1000L
+private const val CHUNKS = 6
+private const val CHUNK_INTERVAL_MILLIS = 2_500L
+private const val FAULT_TIMES = 4
+private const val OCR_BURST = 4
+private const val CONCURRENCY = 3
+private const val DURING = 2
+private const val DURING_MILLIS = 600L
+private const val RETENTION_MAX_DAYS = 60
+private const val LABELS = 5
+private const val VIEWS = 3
+private const val NAMED = 12
+private const val PARTIAL = 12
+private const val MAX_PAGES = 4
+private const val RULES = 4
+private const val POLL_MILLIS = 60_000L
+
+private val NAMES = listOf("scan.pdf", "invoice.pdf", "Letter.pdf", "report 2024.pdf", "scan (1).pdf")
+private val DIRS = listOf("", "", NpnPaths.DEFAULT_INBOX, "archive", "archive/2024", "Tax")
+private val WORDS = listOf("ACME", "Globex", "acme", "Initech", "Umbrella Corp", "Q3 report")
+private val DATES = listOf("2024-01-15", "2023-12-31", "2024-02-29")
+private val NUMBERS = listOf("7", "007", "42", "-3")
+private val DECIMALS = listOf("1.5", "1.50", "0.25", "12")
+private val TAGS = listOf("tax", "bank", "Tax", "receipts", "todo")
+private val BUCKETS = listOf("00", "3f", "a1")
+private val TEMPLATES =
+    listOf(
+        "{correspondent}/{title}.pdf",
+        "{doc_date:yyyy}/{title}.pdf",
+        "{tags}/{title}.pdf",
+        "{field:project}/{title}.pdf",
+    )
+private val FAULT_PREFIXES =
+    listOf(
+        null,
+        null,
+        NpnPaths.JOURNAL_DIR,
+        NpnPaths.TRASH_DIR,
+        NpnPaths.OCR_DIR,
+        NpnPaths.TMP_DIR,
+        NpnPaths.DEFAULT_INBOX,
+    )
+private val CUSTOM_FIELDS =
+    listOf(
+        "amount" to FieldType.DECIMAL,
+        "pages" to FieldType.NUMBER,
+        "due" to FieldType.DATE,
+        "project" to FieldType.TEXT,
+        FieldKeys.CORRESPONDENT to FieldType.TEXT,
+    )
+private val DURING_KINDS =
+    listOf(
+        OpKind.EXT_DROP_PDF,
+        OpKind.EXT_CHUNKED_WRITE,
+        OpKind.EXT_OVERWRITE,
+        OpKind.EXT_TOUCH,
+        OpKind.EXT_DELETE,
+        OpKind.EXT_MOVE,
+        OpKind.EXT_RESTORE_BACKUP,
+        OpKind.EXT_SYNC_TEMP,
+        OpKind.FAULT,
+        OpKind.OCR_COMPLETE,
+    )
+private val CONCURRENT_KINDS =
+    listOf(
+        OpKind.IMPORT_NEW,
+        OpKind.IMPORT_DUPLICATE,
+        OpKind.IMPORT_HIDDEN,
+        OpKind.TRASH,
+        OpKind.RESTORE,
+        OpKind.UNDO_TRASH,
+        OpKind.DELETE_FOR_GOOD,
+        OpKind.EMPTY_TRASH,
+        OpKind.RENAME,
+        OpKind.MOVE,
+        OpKind.SET_FIELD,
+        OpKind.ADD_TAG,
+        OpKind.REMOVE_TAG,
+        OpKind.DEFINE_FIELD,
+        OpKind.STORAGE_PATH_RULE,
+        OpKind.RESCAN,
+        OpKind.BAKE,
+        OpKind.SPLIT,
+        OpKind.RULE_SAVE,
+        OpKind.RELINK_MISSING,
+        OpKind.WATCHED_SWEEP,
+    )
+private val WATCHED_KINDS =
+    setOf(
+        OpKind.WATCHED_DROP,
+        OpKind.WATCHED_CHUNKED,
+        OpKind.WATCHED_KNOWN,
+        OpKind.WATCHED_OVERWRITE,
+        OpKind.WATCHED_REMOVE,
+        OpKind.WATCHED_SWEEP,
+    )

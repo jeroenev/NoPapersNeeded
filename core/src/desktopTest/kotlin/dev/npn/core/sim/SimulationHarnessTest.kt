@@ -1,38 +1,37 @@
 package dev.npn.core.sim
 
-import dev.npn.core.app.ImportOutcome
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
-import dev.npn.core.journal.ContentAddressedJournalWriter
-import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
-import dev.npn.core.journal.PendingOp
-import dev.npn.core.util.EpochClock
 import dev.npn.core.util.NpnLog
 import io.kotest.assertions.throwables.shouldThrow
-import io.kotest.matchers.collections.shouldContain
-import io.kotest.matchers.collections.shouldNotContain
-import io.kotest.matchers.nulls.shouldNotBeNull
-import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
-import io.kotest.matchers.types.shouldBeInstanceOf
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 
 /**
- * The simulation's own checks fail when the library breaks: a harness whose invariants never fire
+ * Each replica's own checks fail when its library breaks: a harness whose invariants never fire
  * would pass every seed and prove nothing.
  */
 class SimulationHarnessTest {
-    private fun config() = SimConfig.forSeed(HARNESS_SEED, STEPS).copy(quiesceEvery = STEPS * 2)
+    /** A run whose every replica is there from the start, so a test can reach into any of them at its first steps. */
+    private fun TestScope.allFromTheStart(
+        tamperWithRebuild: (InMemoryLibraryFileSystem) -> Unit = {},
+        afterStep: SyncSimulation.(step: Int) -> Unit,
+    ): SyncSimulation {
+        val config = SimConfig.forSeed(HARNESS_SEED, STEPS).copy(quiesceEvery = STEPS * 2)
+        val sync = SyncConfig.forSeed(config).let { it.copy(joinsAt = List(it.replicas) { 0 }) }
+        return SyncSimulation(testScheduler, config, afterStep, sync, tamperWithRebuild)
+    }
 
-    /** Plant a document at the first step, so the library has one to break. */
-    private val plant: Simulation.(Int) -> Unit = { step ->
+    /** Plant a document in the first replica at the first step, so the library has one to break. */
+    private fun SyncSimulation.plant(step: Int) {
         if (step == 1) {
             val bytes = SimPdf.bytes("planted", "x", PLANTED_SIZE)
-            world.read("plant") { replica.session!!.importPdfBytes(bytes, "planted.pdf") }
+            world.read("plant") { members[0].replica.session!!.importPdfBytes(bytes, "planted.pdf") }
         }
     }
 
@@ -41,13 +40,15 @@ class SimulationHarnessTest {
         runTest {
             val failure =
                 shouldThrow<SimFailure> {
-                    Simulation(testScheduler, config(), afterStep = plant, tamperWithRebuild = { copy ->
-                        copy
-                            .allFiles()
-                            .keys
-                            .filter { NpnPaths.indexable(FileMeta(it, NpnPaths.fileName(it), 1, 0, false)) }
-                            .forEach(copy::externalDelete)
-                    }).run()
+                    allFromTheStart(
+                        tamperWithRebuild = { copy ->
+                            copy
+                                .allFiles()
+                                .keys
+                                .filter { NpnPaths.indexable(FileMeta(it, NpnPaths.fileName(it), 1, 0, false)) }
+                                .forEach(copy::externalDelete)
+                        },
+                    ) { step -> plant(step) }.run()
                 }
             failure.message shouldContain "rebuild oracle"
             failure.message shouldContain "-Dnpn.sim.seed=$HARNESS_SEED"
@@ -58,16 +59,22 @@ class SimulationHarnessTest {
         runTest {
             val failure =
                 shouldThrow<SimFailure> {
-                    Simulation(testScheduler, config(), afterStep = { step ->
+                    allFromTheStart { step ->
                         plant(step)
                         if (step == 2) {
-                            val path = fs.allFiles().keys.first { JournalPaths.classify(it) is JournalPath.ObjectV2 }
-                            world.read("rewrite") {
-                                fs.delete(path)
-                                fs.writeBytesOnce(path, "{}\n".encodeToByteArray())
-                            }
+                            val replica = members[0]
+                            val path =
+                                replica.fs
+                                    .allFiles()
+                                    .keys
+                                    .first { JournalPaths.classify(it) is JournalPath.ObjectV2 }
+                            // Taken away by another process, then written again as the app.
+                            replica.fs.externalDelete(path)
+                            world.read("rewrite") { replica.fs.writeBytesOnce(path, "{}\n".encodeToByteArray()) }
+                            // Checked at once, as the replica's next step would.
+                            replica.sim.checkCheap()
                         }
-                    }).run()
+                    }.run()
                 }
             failure.message shouldContain "write-once broken"
         }
@@ -77,114 +84,12 @@ class SimulationHarnessTest {
         runTest {
             val failure =
                 shouldThrow<SimFailure> {
-                    Simulation(testScheduler, config(), afterStep = { step ->
+                    allFromTheStart { step ->
                         val broken = IllegalStateException("broken check")
                         if (step == 1) world.log.log(NpnLog.Level.WARN, "Something failed", broken)
-                    }).run()
+                    }.run()
                 }
             failure.message shouldContain "a bug was logged"
-        }
-
-    /**
-     * The at-rest checks pass over a trashed document's bytes back at its path within the restore
-     * settle window only when another replica trashed it or something outside the app put them back
-     * since. This replica's own trash whose file the app itself put back (a move undone after a
-     * publication that failed but landed) is a finding: the next rescan past the window would
-     * un-trash it. A single replica's rescan shows such a file for that scan in the live index and
-     * in a rebuild alike, so the exemption is checked here directly.
-     */
-    @Test
-    fun aTrashTheAppItselfUndidIsNoSettlingReturn() =
-        runTest {
-            var appPutBack: Set<Pair<String, String>>? = null
-            var outsidePutBack: Set<Pair<String, String>>? = null
-            var trashed: Pair<String, String>? = null
-            Simulation(testScheduler, config(), afterStep = { step ->
-                if (step == STEPS) {
-                    fs.faults.disarmAll()
-                    val bytes = SimPdf.bytes("trashed", "y", PLANTED_SIZE + 1)
-                    val (docId, from) =
-                        world.read("import and trash") {
-                            val session = replica.session!!
-                            val imported = session.importPdfBytes(bytes, "trashed.pdf")
-                            val docId = imported.shouldBeInstanceOf<ImportOutcome.Imported>().docId
-                            session.docLifecycle.trashDoc(docId)
-                            docId to
-                                replica.indexDb
-                                    .rows("SELECT trashedOrigPath FROM documents WHERE docId = '$docId'")
-                                    .single()[0]!!
-                        }
-                    trashed = from to docId
-                    world.read("the app puts the file back") { fs.writeBytesOnce(from, bytes) }
-                    appPutBack = settlingReturns()
-                    fs.externalWriteAtomic(from, bytes)
-                    outsidePutBack = settlingReturns()
-                }
-            }).run()
-            appPutBack.shouldNotBeNull() shouldNotContain trashed
-            outsidePutBack.shouldNotBeNull() shouldContain trashed
-        }
-
-    /**
-     * A trash moves the document's file before its commit stamps the trash, and the stamp is an HLC,
-     * which a device whose clock runs ahead pushes past this one's clock: the outside world putting
-     * the bytes back after the move counts as their return from outside, though it is earlier than
-     * the trash's stamp.
-     */
-    @Test
-    fun aReturnAfterTheTrashsMoveButBeforeItsStampIsASettlingReturn() =
-        runTest {
-            var returned: Set<Pair<String, String>>? = null
-            var trashed: Pair<String, String>? = null
-            var stampAhead = false
-            Simulation(testScheduler, config(), afterStep = { step ->
-                if (step == STEPS) {
-                    fs.faults.disarmAll()
-                    val elsewhere = InMemoryLibraryFileSystem(world.clock::nowMillis)
-                    val ahead =
-                        ContentAddressedJournalWriter(
-                            elsewhere,
-                            "clock ahead",
-                            HlcWatermarkAllocator(EpochClock { world.clock.nowMillis() + HOUR_MILLIS }),
-                        )
-                    val remote =
-                        world.read("a device whose clock runs ahead") {
-                            ahead.commit(listOf(PendingOp.tagStyle("ahead", "#00ff00", null)))
-                        }
-                    fs.externalWriteAtomic(remote.relPath, elsewhere.bytesAt(remote.relPath)!!)
-                    val bytes = SimPdf.bytes("trashed ahead", "y", PLANTED_SIZE + 5)
-                    val (docId, from) =
-                        world.read("ingest, import and trash") {
-                            val session = replica.session!!
-                            session.rescan()
-                            val docId =
-                                session
-                                    .importPdfBytes(
-                                        bytes,
-                                        "trashed.pdf",
-                                    ).shouldBeInstanceOf<ImportOutcome.Imported>()
-                                    .docId
-                            session.docLifecycle.trashDoc(docId)
-                            docId to
-                                replica.indexDb
-                                    .rows("SELECT trashedOrigPath FROM documents WHERE docId = '$docId'")
-                                    .single()[0]!!
-                        }
-                    trashed = from to docId
-                    fs.externalWriteAtomic(from, bytes)
-                    val trashedAt =
-                        world.read("the trash's stamp") {
-                            replica.indexDb
-                                .rows("SELECT trashedAt FROM documents WHERE docId = '$docId'")
-                                .single()[0]!!
-                                .toLong()
-                        }
-                    stampAhead = trashedAt > fs.writes.lastWriteAt(from)!!.atMillis
-                    returned = settlingReturns()
-                }
-            }).run()
-            stampAhead shouldBe true
-            returned.shouldNotBeNull() shouldContain trashed
         }
 
     @Test
@@ -205,6 +110,5 @@ class SimulationHarnessTest {
         const val HARNESS_SEED = 7L
         const val STEPS = 30
         const val PLANTED_SIZE = 900
-        const val HOUR_MILLIS = 60L * 60L * 1000L
     }
 }

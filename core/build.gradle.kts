@@ -102,7 +102,6 @@ val simulationProperties =
         "npn.sim.firstSeed",
         "npn.sim.steps",
         "npn.sim.traceDir",
-        "npn.sim.replicas",
         "npn.sim.maxReported",
     )
 tasks.withType<Test>().configureEach {
@@ -123,8 +122,8 @@ tasks.withType<Test>().matching { it.name == "desktopTest" }.configureEach {
     maxParallelForks = (Runtime.getRuntime().availableProcessors() / 2).coerceIn(1, 8)
 }
 
-// Mutation testing over the desktop target (docs/MUTATION_TESTING.md): on demand and in the weekly
-// mutation.yml, never in `check`. -Pnpn.mutation.packages=a.b,c.d picks other packages (each with
+// Mutation testing over the desktop target (docs/MUTATION_TESTING.md): on demand only, locally or
+// through mutation.yml, never in `check`. -Pnpn.mutation.packages=a.b,c.d picks other packages (each with
 // its subpackages), -Pnpn.mutation.threads the number of test processes.
 val pitest =
     configurations.create("pitest") {

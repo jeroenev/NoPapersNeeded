@@ -2,6 +2,7 @@ package dev.npn.core.sim
 
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
+import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.index.WriteBlock
 import dev.npn.core.journal.EventDecoderRegistry
 import dev.npn.core.journal.Hlc
@@ -14,7 +15,7 @@ import kotlin.random.Random
 /**
  * What a seed decides about the devices and the sync tool between them, beside its [SimConfig]
  * (which the first replica keeps): how many replicas, each one's storage, whether it has a watched
- * inbox folder, and how the tool behaves. `-Dnpn.sim.replicas=<n>` overrides the count.
+ * inbox folder, and how the tool behaves.
  */
 data class SyncConfig(
     val replicas: Int,
@@ -33,8 +34,7 @@ data class SyncConfig(
     companion object {
         fun forSeed(config: SimConfig): SyncConfig {
             val random = Random(config.seed xor SYNC_SALT)
-            val drawn = MIN_REPLICAS + random.nextInt(MAX_REPLICAS - MIN_REPLICAS + 1)
-            val count = System.getProperty("npn.sim.replicas")?.toInt() ?: drawn
+            val count = MIN_REPLICAS + random.nextInt(MAX_REPLICAS - MIN_REPLICAS + 1)
             val profiles =
                 List(count) { i ->
                     if (i == 0) {
@@ -50,7 +50,6 @@ data class SyncConfig(
             val options =
                 SyncOptions(
                     tool = random.pick(SyncTool.entries),
-                    inPlacePdfPercent = if (random.nextBoolean()) IN_PLACE_PERCENT else 0,
                     duplicatePercent = DUPLICATE_PERCENT,
                 )
             return SyncConfig(
@@ -79,7 +78,6 @@ data class SyncConfig(
         private const val SYNC_SALT = 0x5_7AC_1L
         private const val MIN_REPLICAS = 2
         private const val MAX_REPLICAS = 4
-        private const val IN_PLACE_PERCENT = 15
         private const val DUPLICATE_PERCENT = 10
         private const val LATE_JOIN_PERCENT = 25
     }
@@ -95,8 +93,10 @@ internal class ReplicaSetup(
     val known: HashMap<String, ByteArray>,
     val trace: MutableList<String>,
     val labelBase: Int,
-    /** How many replicas the run has: with more than one, the sync tool is the other devices. */
-    val peers: Int,
+    /** Its watched inbox folder, or null where the seed gave it none. */
+    val watched: SimWatchedFolder?,
+    /** Whether the watched folder's importer deletes what it imported. */
+    val deleteAfterImport: Boolean,
 )
 
 /** The world's log, each entry naming the replica it came from. */
@@ -115,8 +115,8 @@ internal class ReplicaLog(
  * Several replicas of one library, each a device with its own folder ([InMemoryLibraryFileSystem]),
  * index and device databases, device and installation id, and its own [Simulation] (generator,
  * background operations, invariants, rebuild oracle), on one virtual clock, with a sync tool
- * ([SimSync]) between their folders. A step is one replica's operation (its [SimGenerator]'s, or an
- * [ExtraPlanner]'s), or one of the tool's.
+ * ([SimSync]) between their folders. A step is one replica's operation (its [SimGenerator]'s), or
+ * one of the tool's.
  *
  * Invariants beyond each replica's own: no sync conflict on a name written once, no replica
  * deleting a journal object or another device's sidecar or marker, device ids never shared, and no
@@ -134,6 +134,8 @@ internal class SyncSimulation(
     private val afterStep: SyncSimulation.(step: Int) -> Unit = {},
     /** The replicas and the tool, as the seed draws them unless a harness test says otherwise. */
     val sync: SyncConfig = SyncConfig.forSeed(config),
+    /** Changes the copy of the files each rebuild oracle opens: the harness's own tests plant a difference. */
+    private val tamperWithRebuild: (InMemoryLibraryFileSystem) -> Unit = {},
 ) {
     val world = SimWorld(scheduler)
     private val random = Random(config.seed xor ORCHESTRA_SALT)
@@ -159,26 +161,26 @@ internal class SyncSimulation(
                 latency = SimLatency(Random(salted(1))),
                 watchRandom = Random(salted(2)),
             )
-        val log = ReplicaLog(name, world.log)
-        val replica = SimReplica(world, "sim-$name", fs, ids = SimIds(Random(salted(3))), log = log)
+        val replica =
+            SimReplica(world, "sim-$name", fs, ids = SimIds(Random(salted(3))), log = ReplicaLog(name, world.log))
+        val watched = if (sync.watched[index]) SimWatchedFolder(name, world.clock::nowMillis, ::accounted) else null
         val sim =
             Simulation(
-                world.scheduler,
                 config.copy(profile = sync.profiles[index], mtimes = sync.mtimes[index]),
-                setup =
-                    ReplicaSetup(
-                        world,
-                        name,
-                        Random(salted(5)),
-                        fs,
-                        replica,
-                        known,
-                        trace,
-                        LABEL_STRIDE * index,
-                        sync.replicas,
-                    ),
+                ReplicaSetup(
+                    world,
+                    name,
+                    Random(salted(5)),
+                    fs,
+                    replica,
+                    known,
+                    trace,
+                    LABEL_STRIDE * index,
+                    watched,
+                    sync.deleteAfterImport[index],
+                ),
+                tamperWithRebuild,
             )
-        val watched = if (sync.watched[index]) SimWatchedFolder(name, world.clock::nowMillis, ::accounted) else null
 
         /**
          * Whether the library holds [hash]: a file here has the bytes, or a relink superseded them and
@@ -193,8 +195,6 @@ internal class SyncSimulation(
             return hash in held || members.any { member -> finalTargets(member, hash).any { it in held } }
         }
 
-        val extra = ExtraPlanner(Random(salted(6)), sim, name, watched, sync.deleteAfterImport[index], log)
-
         /** The step this replica joins at (0: from the start), and whether it has. */
         val joinsAt = sync.joinsAt[index]
         var joined = false
@@ -202,7 +202,8 @@ internal class SyncSimulation(
 
         init {
             watched?.let { folder -> fs.externalSources = folder::bytesFor }
-            replica.onOpen = { session, scope -> extra.startImporter(session, scope) }
+            // A copy in another replica's folder keeps the library's: the last copy is the library's last.
+            fs.heldElsewhere = { hash, path -> members.any { it !== this && it.fs.holdsCopy(hash, except = path) } }
         }
 
         private fun salted(n: Int) = config.seed * SALT + index * REPLICA_SALT + n
@@ -261,9 +262,7 @@ internal class SyncSimulation(
             present = members.map { it.joinsAt == 0 },
         )
 
-    fun run() = runSteps()
-
-    private fun runSteps() {
+    fun run() {
         try {
             trace += "config: $config"
             trace += "replicas: $sync"
@@ -275,9 +274,7 @@ internal class SyncSimulation(
                 if (random.chance(SYNC_PERCENT)) {
                     syncStep(step)
                 } else {
-                    val member = random.pick(present)
-                    val extra = if (random.chance(EXTRA_PERCENT)) member.extra.next(member.sim.snapshot()) else null
-                    member.sim.step(step, extra ?: member.sim.nextPlanned())
+                    random.pick(present).sim.step(step)
                 }
                 afterStep(step)
                 checkAcross()
@@ -288,7 +285,8 @@ internal class SyncSimulation(
             }
             quiesce(full = true)
         } finally {
-            System.getProperty(Simulation.TRACE_DIR_PROPERTY)?.let { dir ->
+            // With -Dnpn.sim.traceDir=<dir>, every run leaves its whole trace there, failing or not.
+            System.getProperty(TRACE_DIR_PROPERTY)?.let { dir ->
                 File(dir).apply { mkdirs() }.resolve("seed-${config.seed}.txt").writeText(trace.joinToString("\n"))
             }
             members.forEach { it.replica.dispose() }
@@ -417,14 +415,16 @@ internal class SyncSimulation(
     // ---- quiescence -----------------------------------------------------------------------------
 
     /**
-     * Let the replicas come to rest and check them. Deliveries under way land first. With [full], the
-     * tool then syncs everything and the replicas settle, round after round, until a round leaves
-     * every folder equal; then every replica must show the same library. Either way, each replica is
-     * checked against a rebuild of its own folder: one that is behind is judged on what it has.
+     * Let the replicas come to rest and check them. Deliveries under way land first, and then a day
+     * passes ([passRestoreWindow]). With [full], the tool then syncs everything and the replicas
+     * settle, round after round, until a round leaves every folder equal; then every replica must
+     * show the same library. Either way, each replica is checked against a rebuild of its own folder:
+     * one that is behind is judged on what it has.
      */
     private fun quiesce(full: Boolean) {
         trace += "   == quiescence at t=${world.scheduler.currentTime}${if (full) ", full sync" else ""}"
         tool.finishInFlight()
+        passRestoreWindow()
         if (full) {
             var rounds = 0
             while (true) {
@@ -460,19 +460,43 @@ internal class SyncSimulation(
     }
 
     /**
+     * Let [JournalCoordinator.RESTORE_SETTLE_MS] pass with every replica let through and its changes
+     * synced once, so every trash the replicas know of is older than that by the rescans of settling
+     * (whose own wait is the margin): each records the return of a trashed document's own bytes to
+     * its path as a restore, as the app does once that window has passed
+     * (`JournalCoordinator.recordRestores`), and the live index, a rebuild and the other replicas
+     * agree on it. The day runs everything time brings: the
+     * 15-minute tick, the queues' backoffs, and a trash purge after any rescan the watch starts. A
+     * purge deletes files in the trash and records nothing, so a rebuild's own (its first rescan's)
+     * changes nothing it is compared on.
+     */
+    private fun passRestoreWindow() {
+        present.forEach { it.sim.letThrough() }
+        // The sync tool runs through the day as well: what each device changed reaches the others
+        // before the window passes. Frozen for the day, it would leave another device's trash
+        // unannounced, and the file still at its path would pass the window as one come back.
+        present.forEach { tool.scan(it.index) }
+        tool.finishInFlight()
+        world.advance(JournalCoordinator.RESTORE_SETTLE_MS)
+        trace += "   == past the restore settle window at t=${world.scheduler.currentTime}"
+    }
+
+    /**
      * At rest: the app never removes a document's last copy. Every document some replica's index has
-     * a row for, which no replica's journal deleted for good or relinked onto other bytes, is held by
-     * a file in some replica's folder (its path, a duplicate, the trash, a conflict copy), or what
-     * last took its bytes away explains it. Each folder records every time it lost bytes, when, by
-     * whom, and whether no other file there still held them; the latest loss of the last of them in
-     * a folder, on any replica, decides, the sync tool's left out, since it only
-     * carries out another device's change, whose cause is on that device. Another process explains
-     * the loss; the app in its trash (the trash purge, a delete for good) explains it only for a
-     * document the journals, all replicas' events together, had in the trash when the loss happened
-     * (a restore since, of bytes the purge took, is not the purge's doing); nothing explains the app
-     * deleting it elsewhere. A document nothing ever took bytes from is not counted. What is
-     * left is the app deleting the last copy of a document it still shows, or would: the live index
-     * and a rebuild then both hide it as missing, which neither oracle sees.
+     * a row for, which no replica's journal deleted for good or relinked onto other bytes, and which
+     * no replica's folder holds a file of (at its path, a duplicate, the trash, a conflict copy), was
+     * never taken from a folder by the app while no file in any replica's folder held it. Each folder
+     * records every time it lost bytes, when, by whom, and whether no other file there, nor in another
+     * replica's folder, still held them ([LossAt.lastAnywhere]): the last copy is the library's, so a
+     * copy another replica holds, which the sync tool will bring back, keeps it. An import's staging
+     * file and a bake's temporary file are none of the library's copies ([Losses.isNoCopy]). The app
+     * taking the library's last copy is a finding whatever happened to the bytes before or after, but
+     * in its trash (the trash purge, a delete for good) for a document the journals, all replicas'
+     * events together, had in the trash when the loss happened (a restore since, of bytes the purge
+     * took, is not the purge's doing). The sync tool only carries out another device's change, whose
+     * cause is on that device, and another process is no finding of the app's. What this finds is the
+     * app deleting the last copy of a document it still shows, or would: the live index and a rebuild
+     * then both hide it as missing, which neither oracle sees.
      */
     private fun checkLastCopies() {
         val known = HashSet<String>()
@@ -515,22 +539,27 @@ internal class SyncSimulation(
                     .values
                     .map(::sha256Bytes)
             }
-        val lost =
-            (known - gone - held).sorted().filter { hash ->
-                val latest = latestLoss(hash)
-                when (latest?.loss) {
-                    Loss.APP -> true
-                    Loss.APP_TRASH -> !trashedAt(hash, latest.atMillis)
-                    Loss.OUTSIDE, Loss.SYNC, null -> false
+
+        // The app's taking of the library's last copy of a document's bytes that nothing explains.
+        fun appLosses(hash: String): List<LossAt> =
+            members
+                .flatMap { it.fs.losses.recordsOf(hash) }
+                .filter { it.lastAnywhere }
+                .filter { loss ->
+                    when (loss.loss) {
+                        Loss.APP -> true
+                        Loss.APP_TRASH -> !trashedAt(hash, loss.atMillis)
+                        Loss.OUTSIDE, Loss.SYNC -> false
+                    }
                 }
-            }
+        val lost = (known - gone - held).sorted().filter { appLosses(it).isNotEmpty() }
         if (lost.isNotEmpty()) {
             fail(
                 members[0],
                 "the app removed the last copy of a document no journal deleted or relinked:\n  " +
                     lost.joinToString("\n  ") { hash ->
                         "${hash.take(ID)}: " + members.joinToString { "${it.name} ${it.fs.losses.of(hash)}" } +
-                            ", latest ${latestLoss(hash)}" +
+                            ", by the app ${appLosses(hash)}" +
                             ", lifecycle " +
                             lifecycle[hash].orEmpty().sortedBy { it.first }.map { "${it.second}@${it.first}" } +
                             members.joinToString("") { member ->
@@ -540,18 +569,6 @@ internal class SyncSimulation(
             )
         }
     }
-
-    /**
-     * The latest time some replica lost the last of the bytes hashing to [hash] in its folder, the
-     * sync tool's losses left out; at one instant the app's own loss counts as the latest. A copy the
-     * app removed while another file there still held the bytes (a duplicate) took no document away;
-     * an import's staging file counts neither way ([InMemoryLibraryFileSystem.losses]).
-     */
-    private fun latestLoss(hash: String): LossAt? =
-        members
-            .flatMap { it.fs.losses.recordsOf(hash) }
-            .filter { it.loss != Loss.SYNC && it.lastHere }
-            .maxWithOrNull(compareBy<LossAt> { it.atMillis }.thenBy { it.loss == Loss.APP })
 
     /** After a full sync every replica shows the library the first one shows, but for what each alone remembers. */
     private fun checkConvergence(views: Map<Member, LibraryView>) {
@@ -621,8 +638,9 @@ internal class SyncSimulation(
         }
 
     private companion object {
+        /** The system property naming a directory to write each run's trace to. */
+        const val TRACE_DIR_PROPERTY = "npn.sim.traceDir"
         const val SYNC_PERCENT = 22
-        const val EXTRA_PERCENT = 25
         const val FULL_SYNC_PERCENT = 50
         const val FULL_SYNC_ROUNDS = 6
         const val LAND_MILLIS = 30_000L
