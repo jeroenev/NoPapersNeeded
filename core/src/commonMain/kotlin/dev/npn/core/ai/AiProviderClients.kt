@@ -203,7 +203,7 @@ internal object AiProviderClients {
             GoogleLLMClient(apiKey, GoogleClientSettings(baseUrl = trimBaseUrl(baseUrl)), http)
         }
 
-    // Mistral, DeepSeek and OpenRouter: Koog 1.1.1 exposes no reasoning knob for these clients, so
+    // Mistral, DeepSeek and OpenRouter: Koog 1.3.0 exposes no reasoning knob for these clients, so
     // the level is ignored (endpoint default).
 
     private val mistral =

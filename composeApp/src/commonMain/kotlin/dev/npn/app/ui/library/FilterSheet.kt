@@ -27,7 +27,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -202,7 +201,10 @@ fun rememberFilterEditorState(filter: LibraryFilter): FilterEditorState {
     // After composition rather than during it: the editor's state is not written while composing.
     // A filter that changes under an open editor (the search box's debounce) shows in the draft a
     // frame later, which nobody can see.
-    LaunchedEffect(editor, filter) { editor.bringUpTo(filter) }
+    DisposableEffect(editor, filter) {
+        editor.bringUpTo(filter)
+        onDispose {}
+    }
     return editor
 }
 
@@ -480,7 +482,10 @@ private fun NumberBound(
     // Report validity on entry and whenever it changes, and clear the invalid flag when this field
     // leaves the composition (the row was removed) so a stale error never blocks Apply.
     val reportValidity by rememberUpdatedState(onValidity)
-    LaunchedEffect(input.invalid) { reportValidity(!input.invalid) }
+    DisposableEffect(input.invalid) {
+        reportValidity(!input.invalid)
+        onDispose {}
+    }
     DisposableEffect(Unit) { onDispose { reportValidity(true) } }
     NumberInputField(
         input = input,

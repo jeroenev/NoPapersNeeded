@@ -32,7 +32,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -124,8 +124,9 @@ fun LibraryScreen(
     val ui = state.ui
     val docs = state.results?.items
 
-    LaunchedEffect(Unit) {
+    DisposableEffect(Unit) {
         filterHandoff.consume()?.let(vm::setFilter)
+        onDispose {}
     }
 
     // Opening a doc records the current sorted+filtered order so the detail screen can page between

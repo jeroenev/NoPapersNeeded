@@ -29,7 +29,7 @@ import kotlinx.serialization.json.jsonObject
  * A chunk with no `choices` cannot produce a [ai.koog.prompt.streaming.StreamFrame] (Koog skips
  * it), so it decodes to a well-formed empty-choices response instead. Any other chunk still goes
  * through the strict decode, and one that fails it still ends the stream. The override uses only
- * Koog's multiplatform API (`decodeStreamingResponse` is `protected` in Koog 1.1.1); Koog's own
+ * Koog's multiplatform API (`decodeStreamingResponse` is `protected` in Koog 1.3.0); Koog's own
  * `Json` is module-internal, so a lenient one reads the `choices` field.
  */
 internal class TolerantOpenAILLMClient(
@@ -44,7 +44,7 @@ internal class TolerantOpenAILLMClient(
      * The same tolerance for the Responses API, where the gateway appends its trailer as an SSE
      * `event: ping` carrying a cost (`{"type":"ping","cost":"0"}`) AFTER `response.completed`.
      *
-     * Koog 1.1.1 decodes Responses events privately, with no unknown-event fallback, so only the
+     * Koog 1.3.0 decodes Responses events privately, with no unknown-event fallback, so only the
      * whole flow can be overridden. Once Koog has emitted its terminal [StreamFrame.End], every
      * text delta and tool call has reached the caller (`ZenGoResponsesStreamTest` checks this
      * against a captured gateway stream), so a parse failure after it is dropped. Before End a

@@ -1,7 +1,7 @@
 package dev.npn.app.ui.common
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import dev.npn.core.fs.ExternalSource
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,7 +24,8 @@ object DesktopBridge {
 /** Make [title] the native window title (desktop); null leaves the title to a screen below. */
 @Composable
 fun PublishWindowTitle(title: String?) {
-    LaunchedEffect(title) {
+    DisposableEffect(title) {
         if (title != null) DesktopBridge.windowTitle.value = title
+        onDispose {}
     }
 }

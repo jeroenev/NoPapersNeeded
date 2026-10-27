@@ -3,7 +3,7 @@ package dev.npn.app.ui.detail
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -72,11 +72,12 @@ internal fun DocumentView(
     val ui by vm.ui.collectAsStateWithLifecycle()
     val metadata by vm.metadata.collectAsStateWithLifecycle()
     val currentOnClose by rememberUpdatedState(onClose)
-    LaunchedEffect(ui.left) {
+    DisposableEffect(ui.left) {
         if (ui.left) {
             vm.closed()
             currentOnClose()
         }
+        onDispose {}
     }
 
     Box(modifier) {

@@ -3,6 +3,7 @@ package dev.npn.app
 import dev.npn.app.ui.common.UiMessage
 import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.resolve
+import kotlinx.coroutines.runBlocking
 import org.jetbrains.compose.resources.ResourceEnvironment
 import org.jetbrains.compose.resources.getSystemResourceEnvironment
 import java.util.Locale
@@ -26,6 +27,8 @@ fun resourcesIn(locale: Locale): ResourceEnvironment {
 /** The default `values/` resources. */
 val English: ResourceEnvironment by lazy { resourcesIn(Locale.US) }
 
-suspend fun UiText.english(): String = resolve(English)
+// Blocking: from Compose 1.12 the resource read suspends on real I/O, which a test scheduler's
+// advanceUntilIdle does not wait for, so a message collected through it came back empty.
+fun UiText.english(): String = runBlocking { resolve(English) }
 
-suspend fun UiMessage.english(): String = text.english()
+fun UiMessage.english(): String = text.english()

@@ -45,7 +45,7 @@ enum class AiProvider(
  * How much reasoning/thinking effort a model call may spend, chosen separately for the chat
  * assistant and for AI-edit suggestion calls. [DEFAULT] keeps the endpoint's own behaviour.
  * Mapping is provider-specific (OpenAI `reasoning_effort`, Anthropic/Google thinking budgets,
- * Ollama `think`); providers without a supported knob in Koog 1.1.1 (OpenRouter, DeepSeek,
+ * Ollama `think`); providers without a supported knob in Koog 1.3.0 (OpenRouter, DeepSeek,
  * Mistral) always behave like [DEFAULT] — see `AiRuntime.reasoningParams`.
  */
 enum class AiReasoningLevel {

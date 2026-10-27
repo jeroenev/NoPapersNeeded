@@ -142,9 +142,8 @@ internal fun OcrTextTab(
             activeQuery = query
         }
     }
-    var current by remember { mutableIntStateOf(0) }
     val matches = remember(visibleText, activeQuery) { findMatchStarts(visibleText, activeQuery) }
-    LaunchedEffect(matches) { current = 0 }
+    var current by remember(matches) { mutableIntStateOf(0) }
     val effectiveCurrent = if (matches.isEmpty()) 0 else current.coerceIn(0, matches.size - 1)
 
     val scrollState = rememberScrollState()

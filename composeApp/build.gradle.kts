@@ -69,7 +69,7 @@ kotlin {
         }
         getByName("desktopMain") {
             dependencies {
-                implementation(compose.desktop.common)
+                implementation(libs.compose.desktop)
                 implementation(libs.kotlinx.coroutines.swing)
             }
         }

@@ -19,7 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -109,7 +109,12 @@ internal fun FieldsSettingsPane(
     if (key != null && def == null) {
         // The field went away (removed on another device) while its dialog was open. An empty
         // registry is one still loading, as after the screen was recreated: never a library's.
-        if (fields.isNotEmpty()) LaunchedEffect(key) { close() }
+        if (fields.isNotEmpty()) {
+            DisposableEffect(key) {
+                close()
+                onDispose {}
+            }
+        }
         return
     }
     when (open) {

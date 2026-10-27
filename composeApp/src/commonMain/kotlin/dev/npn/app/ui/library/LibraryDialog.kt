@@ -1,7 +1,7 @@
 package dev.npn.app.ui.library
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import dev.npn.app.ui.common.ConfirmDialog
@@ -92,7 +92,10 @@ internal fun LibraryDialogHost(
 ) {
     val orphaned = dialog?.actsOnSelection == true && selectedCount == 0
     val currentOnDismiss by rememberUpdatedState(onDismiss)
-    LaunchedEffect(orphaned) { if (orphaned) currentOnDismiss() }
+    DisposableEffect(orphaned) {
+        if (orphaned) currentOnDismiss()
+        onDispose {}
+    }
     val confirmed = { action: () -> Unit ->
         action()
         onDismiss()

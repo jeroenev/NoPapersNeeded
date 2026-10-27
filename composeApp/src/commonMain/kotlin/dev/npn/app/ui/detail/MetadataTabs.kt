@@ -19,7 +19,7 @@ import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -85,10 +85,11 @@ internal fun MetadataTabs(
             if (previewTab != null) PanelTab.entries.toList() else PanelTab.entries.filter { it != PanelTab.PREVIEW }
         }
     val tab = state.tab?.takeIf { it in tabs } ?: tabs.first()
-    LaunchedEffect(tab) {
+    DisposableEffect(tab) {
         if (tab == PanelTab.HISTORY) {
             actions.loadHistory()
         }
+        onDispose {}
     }
     // Shared with OcrTextTab so Ctrl+F can move focus into its find field. Focus is only requested
     // when Ctrl+F raises the counter, never on a plain tab tap (which would pop the keyboard).

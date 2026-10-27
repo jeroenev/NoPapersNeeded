@@ -30,7 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -156,7 +156,10 @@ fun TrashScreen(
     // has loaded nothing is known to have left it, so a confirmation restored with the screen waits
     // for it, unshown, rather than closing or counting an empty trash.
     val stale = loaded != null && confirm?.leftTheTrash(state.trashed) == true
-    LaunchedEffect(stale) { if (stale) confirm = null }
+    DisposableEffect(stale) {
+        if (stale) confirm = null
+        onDispose {}
+    }
     confirm?.takeUnless { stale || loaded == null }?.let {
         TrashConfirmDialog(
             confirm = it,

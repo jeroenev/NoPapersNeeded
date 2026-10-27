@@ -16,7 +16,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -226,10 +226,11 @@ internal fun NewFieldDialog(
     // refuse, or what the old editor refused, so the dialog never confirms a value its editor does
     // not show, or one that would fail to write (the definition is committed before the value, so a
     // rejected value would otherwise leave the field half-applied).
-    LaunchedEffect(form.type) {
+    DisposableEffect(form.type) {
         val read = FieldValues.canonicalize(form.type, FieldValues.display(form.type, value, locale), locale)
         value = if (refused) "" else (read as? FieldParse.Ok)?.canonical.orEmpty()
         refused = false
+        onDispose {}
     }
 
     ConfirmDialog(

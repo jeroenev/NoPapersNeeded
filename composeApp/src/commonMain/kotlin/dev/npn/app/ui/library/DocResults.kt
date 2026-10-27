@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.ZoomOut
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -102,11 +103,12 @@ internal fun DocGrid(
     val echoes = remember { EchoTracker(columnWidth) }
     // The width last committed or last heard from the owner: what a commit is compared against.
     var requested by remember { mutableIntStateOf(columnWidth) }
-    LaunchedEffect(columnWidth) {
+    DisposableEffect(columnWidth) {
         echoes.ownerValue(columnWidth)?.let {
             requested = it
             width = it.toFloat()
         }
+        onDispose {}
     }
 
     // Debounced commit so pinches and fine-grained touchpad deltas don't write settings per event.
