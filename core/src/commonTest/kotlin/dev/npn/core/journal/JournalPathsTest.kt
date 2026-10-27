@@ -12,7 +12,7 @@ class JournalPathsTest {
         JournalPaths.classify(canonical) shouldBe JournalPath.ObjectV2(hash)
         JournalPaths.classify(".npn/journal/objects-v3-ab/$hash.jsonl") shouldBe
             JournalPath.UnsupportedObjectStore(3)
-        // A storage-v1 segment is no source this build reads; the reconcile refuses the journal over it.
+        // A storage-v1 segment is no source this build reads; the reconcile passes over it like any unknown file.
         JournalPaths.classify(".npn/journal/dev1/0001.jsonl") shouldBe JournalPath.Unknown
     }
 

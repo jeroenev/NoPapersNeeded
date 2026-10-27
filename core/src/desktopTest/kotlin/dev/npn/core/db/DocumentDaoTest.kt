@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.test.assertFails
 import kotlin.test.assertFailsWith
 
 /** Document rows: upserts, the live/trashed/missing views, and one row per path. */
@@ -90,65 +91,60 @@ class DocumentDaoTest {
             }
         }
 
-    /**
-     * A hidden row moved onto another hidden row's path takes it, as a live one would; one moved onto
-     * a live row's path waits at its own sentinel. Neither fails the write.
-     */
+    /** A hidden row moved onto another hidden row's path takes it, as a live one would. */
     @Test
-    fun aHiddenRowTakesAHiddenRowsPathAndWaitsBesideALiveOne() =
+    fun aHiddenRowTakesAHiddenRowsPath() =
         runTest {
             val dao = db.documentDao()
             val first = documentEntity("a".repeat(64), relPath = "a.pdf", deleted = true)
             val second = documentEntity("b".repeat(64), relPath = "b.pdf", deleted = true)
-            val live = documentEntity("c".repeat(64), relPath = "c.pdf")
-            dao.upsertAll(listOf(first, second, live))
+            dao.upsertAll(listOf(first, second))
 
-            dao.upsertAll(listOf(second.copy(relPath = "a.pdf"), first.copy(trashed = true, relPath = "c.pdf")))
+            dao.upsertAll(listOf(second.copy(relPath = "a.pdf")))
 
             dao.getByRelPath("a.pdf")?.docId shouldBe second.docId
             dao.getByDocId(first.docId)?.relPath shouldBe missingSentinel(first.docId)
-            dao.getByRelPath("c.pdf")?.docId shouldBe live.docId
         }
 
-    /**
-     * Within one write, a hidden row lands on a path a live row leaves earlier in it, and waits at its
-     * sentinel on a path a live row takes earlier in it.
-     */
+    /** Within one write, a hidden row lands on a path a live row leaves earlier in it. */
     @Test
     fun aHiddenRowFollowsTheLiveRowsWrittenBeforeIt() =
         runTest {
             val dao = db.documentDao()
             val moving = documentEntity("a".repeat(64), relPath = "a.pdf")
             val hidden = documentEntity("b".repeat(64), relPath = "b.pdf", deleted = true)
-            val other = documentEntity("c".repeat(64), relPath = "c.pdf", missing = true)
-            dao.upsertAll(listOf(moving, hidden, other))
+            dao.upsertAll(listOf(moving, hidden))
 
-            dao.upsertAll(
-                listOf(
-                    moving.copy(relPath = "elsewhere.pdf"),
-                    hidden.copy(relPath = "a.pdf"),
-                    documentEntity("d".repeat(64), relPath = "new.pdf"),
-                    other.copy(relPath = "new.pdf"),
-                ),
-            )
+            dao.upsertAll(listOf(moving.copy(relPath = "elsewhere.pdf"), hidden.copy(relPath = "a.pdf")))
 
             dao.getByRelPath("a.pdf")?.docId shouldBe hidden.docId
-            dao.getByRelPath("new.pdf")?.docId shouldBe "d".repeat(64)
-            dao.getByDocId(other.docId)?.relPath shouldBe missingSentinel(other.docId)
+            dao.getByRelPath("elsewhere.pdf")?.docId shouldBe moving.docId
         }
 
-    /** Two live rows on one path is a bug, and the write says so instead of dropping one. */
+    /**
+     * A row on a live row's path is a bug, hidden or not, and the write says so instead of dropping
+     * one: no writer puts a row there.
+     */
     @Test
     fun aRowOnTheWayOfALiveOneFailsTheWrite() =
         runTest {
             val dao = db.documentDao()
-            dao.upsert(documentEntity("a".repeat(64), relPath = "a.pdf"))
+            val live = documentEntity("a".repeat(64), relPath = "a.pdf")
+            val hidden = documentEntity("c".repeat(64), relPath = "c.pdf", deleted = true)
+            dao.upsertAll(listOf(live, hidden))
 
             assertFailsWith<IllegalStateException> {
                 dao.upsertAll(listOf(documentEntity("b".repeat(64), relPath = "a.pdf")))
             }
+            assertFailsWith<IllegalStateException> {
+                dao.upsertAll(listOf(documentEntity("d".repeat(64), relPath = "a.pdf", trashed = true)))
+            }
+            // An existing row's move there fails in the UPDATE Room's upsert falls back to.
+            assertFails { dao.upsertAll(listOf(hidden.copy(relPath = "a.pdf"))) }
 
-            dao.allPathsAndMeta().map { it.docId } shouldContainExactly listOf("a".repeat(64))
+            dao.getByRelPath("a.pdf")?.docId shouldBe live.docId
+            dao.getByDocId(hidden.docId)?.relPath shouldBe "c.pdf"
+            dao.getByDocId("b".repeat(64)) shouldBe null
         }
 
     @Test

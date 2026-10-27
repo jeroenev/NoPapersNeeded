@@ -105,7 +105,7 @@ class UndoneCompactionTest {
 
             Files.delete(rig.libRoot.resolve(snapshot))
             putBack(backup, objects)
-            repeat(2) { coordinator.reconcileMetadata() }
+            coordinator.reconcileMetadata()
 
             val dao = rig.db.metadataProjectionDao()
             checkNotNull(dao.state()).migrationState shouldBe ProjectionStatus.READY
@@ -144,7 +144,7 @@ class UndoneCompactionTest {
             Files.delete(rig.libRoot.resolve(journalFiles<JournalPath.SnapshotV2>().single()))
             putBack(firstBackup, first)
             putBack(secondBackup, second)
-            repeat(2) { coordinator.reconcileMetadata() }
+            coordinator.reconcileMetadata()
 
             checkNotNull(rig.db.metadataProjectionDao().state()).migrationState shouldBe ProjectionStatus.READY
             rig.db

@@ -31,7 +31,7 @@ class DocumentPathReplicationTest {
                         if (fromRelPath == "old.pdf") rig.writePdf("old.pdf", "replacement")
                     }
                 }
-            DocumentPaths(racing).reconcile(hash, "old.pdf", "new.pdf") shouldBe "new.pdf"
+            DocumentPaths(racing).settle(hash, "old.pdf", "new.pdf").path shouldBe "new.pdf"
             rig.fs.sha256("new.pdf") shouldBe hash
             rig.fs.readBytes("old.pdf").decodeToString() shouldBe "replacement"
         }
@@ -43,7 +43,7 @@ class DocumentPathReplicationTest {
             val hash = rig.fs.sha256("old.pdf")
             val watched = WatchedFileSystem(rig.fs).also { it.db = rig.db }
 
-            DocumentPaths(watched).reconcile(hash, "old.pdf", "archive/new.pdf") shouldBe "archive/new.pdf"
+            DocumentPaths(watched).settle(hash, "old.pdf", "archive/new.pdf").path shouldBe "archive/new.pdf"
 
             watched.calls("sha256").size shouldBe 1
             watched.calls("copy") shouldBe emptyList()
@@ -174,7 +174,7 @@ class DocumentPathReplicationTest {
                     }
                 }
             // The claimed bytes are not the document's, so they go back where they were.
-            DocumentPaths(racing).reconcile(hash, "old.pdf", "new.pdf") shouldBe "old.pdf"
+            DocumentPaths(racing).settle(hash, "old.pdf", "new.pdf").path shouldBe "old.pdf"
             rig.exists("new.pdf") shouldBe false
             rig.fs.readBytes("old.pdf").decodeToString() shouldBe "replacement"
             rig.fs.listAllUnder("").filter { it.name.startsWith(NpnPaths.Temp.RECOVERY_PREFIX) } shouldBe emptyList()
@@ -197,7 +197,7 @@ class DocumentPathReplicationTest {
                         toRelPath: String,
                     ): Unit = error("refused")
                 }
-            assertFailsWith<IllegalStateException> { DocumentPaths(failing).reconcile(hash, "old.pdf", "new.pdf") }
+            assertFailsWith<IllegalStateException> { DocumentPaths(failing).settle(hash, "old.pdf", "new.pdf") }
             rig.fs.sha256("old.pdf") shouldBe hash
             rig.exists("new.pdf") shouldBe false
             rig.fs.listAllUnder("").filter { it.name.startsWith(NpnPaths.Temp.RECOVERY_PREFIX) } shouldBe emptyList()
@@ -216,7 +216,7 @@ class DocumentPathReplicationTest {
                         toRelPath: String,
                     ): Unit = throw java.nio.file.FileSystemException(fromRelPath, toRelPath, "EXDEV")
                 }
-            DocumentPaths(otherVolume).reconcile(hash, "old.pdf", "archive/new.pdf") shouldBe "archive/new.pdf"
+            DocumentPaths(otherVolume).settle(hash, "old.pdf", "archive/new.pdf").path shouldBe "archive/new.pdf"
             rig.fs.sha256("archive/new.pdf") shouldBe hash
             rig.exists("old.pdf") shouldBe false
             rig.fs.listAllUnder("").filter { it.name.startsWith(NpnPaths.Temp.RECOVERY_PREFIX) } shouldBe emptyList()
@@ -295,7 +295,7 @@ class DocumentPathReplicationTest {
                     }
                 }
             // A claim that fails moves nothing: the source stays where it was.
-            assertFailsWith<IllegalStateException> { DocumentPaths(failing).reconcile(hash, "old.pdf", "new.pdf") }
+            assertFailsWith<IllegalStateException> { DocumentPaths(failing).settle(hash, "old.pdf", "new.pdf") }
             rig.fs.sha256("old.pdf") shouldBe hash
             rig.exists("new.pdf") shouldBe false
             rig.coordinator(rig.writer("remote")).commitAndApply(
@@ -309,29 +309,28 @@ class DocumentPathReplicationTest {
         }
 
     /**
-     * A duplicate beside a document already at its intended path stays, so a rescan has nothing to
-     * check at that path: it reads only the copy it does not know, not the document's own file.
+     * A copy the rescan finds at the path a pending intent names (another device's move, whose
+     * deletion of the old file is still on its way) is a duplicate only until the rescan's own path
+     * work moves the document onto it: then it is the document's file, and the old one is the copy,
+     * which the next rescan lists.
      */
     @Test
-    fun aRescanReadsNoFileOfADocumentAtItsIntendedPathForItsDuplicate() =
-        runTest {
-            var watched: WatchedFileSystem? = null
-            IndexRig.create(files = { raw -> WatchedFileSystem(raw).also { watched = it } }).use { rig ->
-                val files = checkNotNull(watched).also { it.db = rig.db }
-                rig.writePdf("old.pdf", "document")
-                rig.rescan()
-                val hash = rig.fs.sha256("old.pdf")
-                rig.coordinator(rig.writer("remote")).commitAndApply(
-                    listOf(PendingOp.propSet(hash, SystemProperty.STORAGE_PATH, "new.pdf")),
-                )
-                rig.copyFile("new.pdf", "old.pdf")
-                files.clear()
+    fun aCopyTheRescanMovesItsDocumentOntoIsNoDuplicateOfIt() =
+        indexTest { rig ->
+            rig.writePdf("old.pdf", "document")
+            rig.rescan()
+            val hash = rig.fs.sha256("old.pdf")
+            rig.copyFile("old.pdf", "new.pdf")
+            rig.writer("remote").commit(listOf(PendingOp.propSet(hash, SystemProperty.STORAGE_PATH, "new.pdf")))
 
-                rig.rescan().duplicates shouldBe listOf(DuplicateReport(hash, "old.pdf"))
+            rig.rescan().duplicates shouldBe emptyList()
 
-                files.calls("sha256") shouldBe listOf("sha256 old.pdf")
-                rig.fs.sha256("new.pdf") shouldBe hash
-            }
+            rig.db
+                .documentDao()
+                .requireByDocId(hash)
+                .relPath shouldBe "new.pdf"
+            rig.db.duplicateDao().forDoc(hash) shouldBe emptyList()
+            rig.rescan().duplicates shouldBe listOf(DuplicateReport(hash, "old.pdf"))
         }
 
     @Test

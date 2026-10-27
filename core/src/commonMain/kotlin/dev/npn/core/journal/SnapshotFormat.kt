@@ -1,12 +1,9 @@
 package dev.npn.core.journal
 
-import dev.npn.core.fs.SHA256_HEX
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.util.reason
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * On-disk format of a compaction snapshot object, which builds before this one wrote when they
@@ -31,10 +28,14 @@ import kotlinx.serialization.json.jsonPrimitive
  */
 internal data class SnapshotManifest(
     val version: Int,
-    val supersedes: List<String>,
 ) {
     companion object {
         const val FIELD_SNAP = "snap"
+
+        /**
+         * The objects the snapshot replaced, as the compacting build named them. Not read: whether a
+         * snapshot holds what it names is the event tables' to say ([dev.npn.core.index.SourceSetValidator]).
+         */
         const val FIELD_SUPERSEDES = "supersedes"
     }
 }
@@ -50,12 +51,7 @@ internal object SnapshotCodec {
             requireNotNull((obj[SnapshotManifest.FIELD_SNAP] as? JsonPrimitive)?.content?.toIntOrNull()) {
                 "Snapshot manifest version must be an integer"
             }
-        val supersedes =
-            requireNotNull((obj[SnapshotManifest.FIELD_SUPERSEDES] as? JsonArray)?.map { it.jsonPrimitive.content }) {
-                "Snapshot manifest supersedes must be an array"
-            }
-        require(supersedes.all { SHA256_HEX.matches(it) }) { "Superseded hash is not a SHA-256" }
-        return SnapshotManifest(version, supersedes)
+        return SnapshotManifest(version)
     }
 
     const val SNAPSHOT_MANIFEST_VERSION = 2

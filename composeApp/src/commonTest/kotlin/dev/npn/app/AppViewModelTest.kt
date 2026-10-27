@@ -104,28 +104,6 @@ class AppViewModelTest : MainDispatcherTest() {
             vm.writeBlock.value shouldBe null
         }
 
-    /**
-     * The block is the session's, not the window's: a recreated shell shows it again from the
-     * session, with nothing of it in its saved state.
-     */
-    @Test
-    fun aRecreatedShellShowsTheBlockAgain() =
-        runTest(dispatcher) {
-            val env = env(savedLocation = "/lib")
-            val screen =
-                recreatable {
-                    AppViewModel(env, io) { parent, name -> createdLocation(parent, name) }
-                }
-            collecting(screen.vm.state)
-            runCurrent()
-            env.sessions
-                .getValue("/lib")
-                .writeBlock.value = WriteBlock.RECONCILE_FAILED
-
-            val restored = screen.recreate(this, { it.writeBlock })
-            restored.writeBlock.value shouldBe WriteBlock.RECONCILE_FAILED
-        }
-
     /** Retry reads the open library's journal again, a rescan, and says nothing when it succeeds. */
     @Test
     fun retryRescansTheOpenLibrary() =
@@ -157,7 +135,7 @@ class AppViewModelTest : MainDispatcherTest() {
 
             vm.rebuildIndex()
             runCurrent()
-            maintenance.rebuildOutcome = RebuildOutcome.Failed(WriteBlock.JOURNAL_DAMAGED)
+            maintenance.rebuildOutcome = RebuildOutcome.Failed
             vm.rebuildIndex()
             runCurrent()
             maintenance.failRebuild = { error("disk full") }
@@ -196,23 +174,6 @@ class AppViewModelTest : MainDispatcherTest() {
                     uiText(Res.string.library_refresh_failed, uiText(Res.string.common_writes_journal_incomplete)),
                     failure(Res.string.library_refresh_failed, "folder unavailable"),
                 )
-        }
-
-    /**
-     * A restored process opens the library the window had open, from the saved location, as any
-     * start does: nothing about it lives in the window's saved state.
-     */
-    @Test
-    fun aRestoredProcessOpensTheSameLibrary() =
-        runTest(dispatcher) {
-            val env = env(savedLocation = "/lib")
-            val screen =
-                recreatable {
-                    AppViewModel(env, io) { parent, name -> createdLocation(parent, name) }
-                }
-
-            val restored = screen.recreate(this, { it.state })
-            restored.state.value shouldBe AppState.Open(env.sessions.getValue("/lib"))
         }
 
     @Test

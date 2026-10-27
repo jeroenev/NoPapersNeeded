@@ -1,7 +1,6 @@
 package dev.npn.core.app
 
 import dev.npn.core.index.SplitFailure
-import dev.npn.core.index.WriteBlock
 
 /** Repair and surgery on existing documents: duplicates, relinks, and splitting; and on the index. */
 interface MaintenanceFacade {
@@ -49,10 +48,11 @@ sealed interface RebuildOutcome {
     /** The index is the fold of the folder's journal again, and writes are taken. */
     data object Rebuilt : RebuildOutcome
 
-    /** The rebuild failed (logged): writes stay refused with [block], and the index shows what it showed. */
-    data class Failed(
-        val block: WriteBlock,
-    ) : RebuildOutcome
+    /**
+     * The rebuild failed (logged): writes stay refused ([LibrarySession.writeBlock] says why), and the
+     * index shows what it showed.
+     */
+    data object Failed : RebuildOutcome
 }
 
 sealed interface SplitOutcome {

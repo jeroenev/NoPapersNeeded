@@ -193,7 +193,7 @@ class AppViewModel(
             // The banner keeps showing the block a failed rebuild leaves; the message says it did not finish.
             when (session.maintenance.rebuildIndex()) {
                 RebuildOutcome.Rebuilt -> Unit
-                is RebuildOutcome.Failed -> message(uiText(Res.string.library_rebuild_not_completed))
+                RebuildOutcome.Failed -> message(uiText(Res.string.library_rebuild_not_completed))
             }
         }
     }

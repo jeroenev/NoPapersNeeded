@@ -55,6 +55,9 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
 
 - Tests: `./gradlew :core:desktopTest` and `./gradlew :composeApp:desktopTest`
   (viewmodel tests). `mise test-fast` runs both; `mise test` runs only core.
+  Every `:core:desktopTest` run forks up to half the cores' worth of test JVMs (at most eight,
+  capped by `--max-workers`), each with its own heap; on a laptop short of memory pass a lower
+  `--max-workers`.
 - Same suites on the Android target: `./gradlew :core:testAndroidHostTest
   :composeApp:testAndroidHostTest`. Both are in `check`/`allTests`, so `mise test-all` and
   `mise check` cover them; `mise test-fast` deliberately does not.
@@ -76,7 +79,7 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
 - Mutation testing (PIT, slow): `./gradlew :core:mutationTest` (`mise mutation`) mutates
   `dev.npn.core.index` and `dev.npn.core.app` against core's desktop tests;
   `-Pnpn.mutation.packages=dev.npn.core.journal` picks others. Report in
-  `core/build/reports/pitest/`; baseline and how to read it in `docs/MUTATION_TESTING.md`. Never in
+  `core/build/reports/pitest/`; how to read a report in `docs/MUTATION_TESTING.md`. Never in
   `check` or `ci.yml`: `mutation.yml` runs it on demand.
 - Formatting and lint: `./gradlew spotlessCheck detekt`, then `./gradlew detektTyped` (see
   Detekt below; it compiles first, so keep it a separate invocation from spotless).
@@ -230,7 +233,9 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   invariant would have caught, not style.
 - Done is measured, not reviewed: the long simulation run passes with `KnownIssues` empty, and the
   mutation score of `core.index`/`core.app`/`core.journal` (docs/MUTATION_TESTING.md,
-  `./gradlew :core:mutationTest`) does not drop. Another review round is not a stopping criterion.
+  `./gradlew :core:mutationTest`) does not drop, compared by hand against the last run's
+  `mutations.xml`/report, as nothing compares runs automatically. Another review round is not a
+  stopping criterion.
 - Before adding complexity for a speculative or vanishingly unlikely race or security edge case,
   explain the concrete failure mode, likelihood, and complexity cost to the user and get their
   buy-in. Do not silently expand scope for theoretical robustness.

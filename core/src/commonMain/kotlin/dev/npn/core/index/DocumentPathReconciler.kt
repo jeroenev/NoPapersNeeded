@@ -120,7 +120,8 @@ internal class DocumentPathReconciler(
         // Metadata can arrive before a scan updates another document's old path in the cache.
         val owner = db.documentDao().getByRelPath(intended)
         if (owner != null && owner.docId != row.docId) return row
-        // Physical failures leave the journal intent pending, as for reconcileAvailable.
+        // Physical failures leave the journal intent pending, surfaced by conflicts(). They must
+        // not prevent unrelated documents and metadata from being projected.
         val settled = runCatchingCancellable { paths.settle(row.docId, row.relPath, intended) }.getOrNull()
         // The stat of the bytes the move checked, never one of the path taken since: a sync tool
         // may have put another file there in the meantime, whose stat would vouch for it as the
@@ -171,35 +172,4 @@ internal class DocumentPathReconciler(
             val intended = state.intendedPath(row.docId)
             if (intended == null || intended == row.relPath) null else PathConflict(row.docId, row.relPath, intended)
         }
-
-    /**
-     * Return the extra copies in [duplicates] still on disk, for the caller to record. An extra copy
-     * of a document whose row sits at its intended path stays where it is (`DocumentPaths.settle`
-     * explains why), unless that intended file is gone: then the copy moves there.
-     */
-    suspend fun reconcileDuplicates(
-        state: FoldedState,
-        duplicates: List<DuplicateReport>,
-    ): List<DuplicateReport> {
-        val rows = db.documentDao().getByDocIds(duplicates.map { it.docId }.distinct()).associateBy { it.docId }
-        val retained = ArrayList<DuplicateReport>()
-        for (duplicate in duplicates) {
-            val intended = state.intendedPath(duplicate.docId)
-            val row = rows[duplicate.docId]
-            if (intended != null && row?.relPath == intended && !fs.exists(intended)) {
-                reconcileAvailable(duplicate.docId, duplicate.extraRelPath, intended)
-            }
-            if (fs.exists(duplicate.extraRelPath) && duplicate.extraRelPath != row?.relPath) retained.add(duplicate)
-        }
-        return retained
-    }
-
-    private suspend fun reconcileAvailable(
-        docId: String,
-        source: String,
-        target: String,
-    ): String =
-        // Physical failures leave the journal intent pending, surfaced by conflicts(). They must
-        // not prevent unrelated documents and metadata from being projected.
-        runCatchingCancellable { paths.reconcile(docId, source, target) }.getOrDefault(source)
 }

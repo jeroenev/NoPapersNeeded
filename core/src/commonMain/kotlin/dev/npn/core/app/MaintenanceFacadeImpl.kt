@@ -7,7 +7,6 @@ import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.index.ScanReport
 import dev.npn.core.index.SplitFailure
 import dev.npn.core.index.SplitService
-import dev.npn.core.index.WriteBlock
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.util.NpnLog
@@ -36,7 +35,7 @@ internal class MaintenanceFacadeImpl(
                 onSuccess = { RebuildOutcome.Rebuilt },
                 onFailure = { failure ->
                     log.warn("Rebuilding the index from the library folder failed", failure)
-                    RebuildOutcome.Failed(coordinator.writeBlock.value ?: WriteBlock.RECONCILE_FAILED)
+                    RebuildOutcome.Failed
                 },
             )
         }

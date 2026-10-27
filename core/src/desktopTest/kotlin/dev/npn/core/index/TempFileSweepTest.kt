@@ -83,7 +83,7 @@ class TempFileSweepTest {
                 )
             // A move interrupted mid-way: the document's only copy, under its recovery name.
             val recovery = file("docs/" + NpnPaths.Temp.recoveryName(NONCE))
-            // A bake interrupted after the original was deleted: the baked document's only copy.
+            // A bake cut short in its swap, its original moved aside: maybe the baked bytes' only copy.
             val orphanBake = file(NpnPaths.Temp.bakePath("docs/gone.pdf"))
             // A user's own file that only looks like one of ours.
             val lookalike = file("notes/npn-tmp.part")
@@ -96,9 +96,10 @@ class TempFileSweepTest {
         }
 
     /**
-     * A bake interrupted between deleting the original and moving the baked bytes into place leaves
-     * its temporary file as the document's only copy. A file that took the document's path since (a
-     * sync putting another PDF there) does not make it a leftover; only one holding its bytes does.
+     * A bake cut short in its swap (its original moved aside under a recovery name, the baked bytes
+     * still in its temporary file, or parked back there by an undone swap) can leave that file as the
+     * only copy of the baked bytes. A file that took the document's path since (a sync putting another
+     * PDF there) does not make it a leftover; only one holding its bytes does.
      */
     @Test
     fun aBakeTempIsKeptWhenAnotherFileTookItsDocumentsPath() =

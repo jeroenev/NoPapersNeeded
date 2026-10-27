@@ -179,9 +179,13 @@ internal class Indexer(
                         }
                     }
                 }
-            val duplicates =
-                plan.duplicates.takeIf { it.isEmpty() }
-                    ?: documentPaths.reconcileDuplicates(metadataState, plan.duplicates)
+            // A copy at the path its document's intent names is the document's own file once the path
+            // work moved the document onto it; its old file is then the copy, which the next rescan lists.
+            val held =
+                documentDao
+                    .getByDocIds(plan.duplicates.map { it.docId }.distinct())
+                    .associate { it.docId to it.relPath }
+            val duplicates = plan.duplicates.filterNot { held[it.docId] == it.extraRelPath }
             // Every rescan lists the whole library, so its duplicates are all there are: a copy since
             // deleted, or overwritten with another document, loses its row.
             duplicateDao.replaceAll(duplicates.map { DuplicateEntity(it.docId, it.extraRelPath) })

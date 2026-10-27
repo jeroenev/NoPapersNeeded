@@ -171,11 +171,8 @@ internal class FoldedState {
 
             is JournalOp.PropSet -> {
                 props.getOrPut(doc) { HashMap() }.putIfNewerHlc(op.key, hlc) { PropVal(op.value, hlc) }
-                if (op.key ==
-                    SystemProperty.STORAGE_PATH
-                ) {
-                    op.value?.let { namedPaths.getOrPut(doc) { HashSet() }.add(it) }
-                }
+                val namesStoragePath = op.key == SystemProperty.STORAGE_PATH
+                if (namesStoragePath) op.value?.let { namedPaths.getOrPut(doc) { HashSet() }.add(it) }
             }
 
             is JournalOp.FieldSet -> {
@@ -293,7 +290,8 @@ internal class FoldedState {
      * Effective custom fields for a document: only keys whose winning value is non-null (a null
      * value means the field was cleared). Ordered by key for deterministic projection. Values are
      * read in the registry type's canonical form ([FieldValues.normalized]), so a number an older
-     * build stored as `007` folds to `7`. A test seam: main code reads [inheritedFields].
+     * build stored as `007` folds to `7`. [doc]'s own registers alone: every other reader goes
+     * through [inheritedFields], which this answers for a document without predecessors.
      */
     internal fun effectiveFields(doc: String): Map<String, String> = fields[doc]?.let(::nonNullFields).orEmpty()
 
@@ -526,7 +524,8 @@ internal class FoldedState {
         tag: String,
     ): List<PendingOp> {
         val listed = HashSet<Dot>()
-        return docIds.distinct().mapNotNull { docId ->
+        // A document listed twice finds its dots listed already, so it gets one remove.
+        return docIds.mapNotNull { docId ->
             val dots = chainOf(docId).flatMap { liveTagDots(it, tag) }.filter(listed::add)
             if (dots.isEmpty()) null else PendingOp.tagRemove(docId, tag, dots)
         }

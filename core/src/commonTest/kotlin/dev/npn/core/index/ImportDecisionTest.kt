@@ -72,4 +72,14 @@ class ImportDecisionTest {
                 imported.reindexName shouldBe (existing != null)
             }
         }
+
+    /** A document back under the file name its row had already is searchable under it: nothing to reindex. */
+    @Test
+    fun aDocumentBackUnderItsOwnFileNameHasNoNameToReindex() =
+        propTest {
+            checkAll(Exhaustive.collection(existings.filterNotNull())) { existing ->
+                val sameName = existing.copy(fileName = stat.name)
+                ImportDecision.row(hash, target, sameName, stat, now = 9_000).reindexName shouldBe false
+            }
+        }
 }

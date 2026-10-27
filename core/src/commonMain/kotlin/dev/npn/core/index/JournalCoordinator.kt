@@ -293,8 +293,9 @@ internal class JournalCoordinator(
                 }
             }.getOrElse { failure ->
                 // The failed pass blocked writes, dropped the live fold and owes a full refold.
-                val block = blocked?.block
-                if (block == null || block == WriteBlock.NEWER_FORMAT || !indexer.hasDocuments()) throw failure
+                // latching blocks for every failure it rethrows, and cancellation is not caught here.
+                val block = checkNotNull(blocked) { "A failed refresh left writes allowed" }.block
+                if (block == WriteBlock.NEWER_FORMAT || !indexer.hasDocuments()) throw failure
                 syncedSettings.seed(accumulator.loadStateOf(JournalOp.SettingSet.WIRE))
             }
         }

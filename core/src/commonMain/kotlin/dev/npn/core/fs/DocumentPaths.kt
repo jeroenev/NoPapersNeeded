@@ -25,13 +25,6 @@ internal class DocumentPaths(
         val stat: FileMeta?,
     )
 
-    /** Move [docId]'s file from [source] to [target] where it can; returns where it is now. */
-    suspend fun reconcile(
-        docId: String,
-        source: String,
-        target: String,
-    ): String = settle(docId, source, target).path
-
     /**
      * Move [docId]'s file from [source] to [target] where it can, and say where it is now with the
      * stat of the bytes the move checked: taken before the move, of the file it moved, never of the
