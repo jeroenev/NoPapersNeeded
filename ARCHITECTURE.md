@@ -710,8 +710,13 @@ death. For that one, a viewmodel takes the `SavedStateHandle` its entry hands it
 saved as `NpnJson.Persisted` JSON on every change, restored when the new viewmodel is built, and
 dropped when too large for Android's saved state (a selection or a filter over thousands of
 documents comes back empty). A document's viewmodel lives in the document's own store, which no
-entry saves, so the view showing it saves its handle (`rememberDocumentSavedState`): the one
-bridge between a keyed store and the saved state, not a pattern to copy. State the screens share
+entry saves, so it keeps the page without a handle: the view showing it saves the page in
+`rememberSaveable`, and a viewmodel that view builds starts there. The document's panel tab and the
+fields added to the panel before they have a value are the composables' own `rememberSaveable`
+state. The tab is `MetadataPanel`'s, above the moved tabs: the wide layout composes them in a
+subcomposition (`BoxWithConstraints`), and movable content keeps its state moving out of one, not
+into one, so what the tabs hold survives a window turning compact, and only the tab survives it
+turning wide (the side panel's tab does not carry into the detail screen it expands into). State the screens share
 or hand each other belongs to `LibrarySessionUi`: the drafts (saved at the root, for a restored
 process) and the hand-offs (not saved; a viewmodel that needs one after a restore, as AI edit does
 its documents, saves its own copy). Dialogs follow one rule: the viewmodel holds *which* dialog is
@@ -726,10 +731,10 @@ what nobody misses either: hover, focus, an open menu, animation, a gesture unde
 scroll position. What a restored process legitimately loses is work in flight (a rescan, a model
 call, a write), messages not yet shown, what lived only in memory (results fetched on demand, the
 last scan's report), and what is one tap from its default (what a queued review had ticked, which
-reopens with nothing ticked). Every viewmodel test recreates its viewmodel at least once mid-interaction
-through `Recreatable` (`composeApp` commonTest), which saves the handle as a process death does,
-builds a new viewmodel from it and the same fakes, and checks the screen renders the same; its
-`Transient` lists the exceptions, each with why.
+reopens with nothing ticked). A viewmodel that reads saved state has a test that recreates it
+mid-interaction through `Recreatable` (`composeApp` commonTest), which saves the handle as a process
+death does, builds a new viewmodel from it and the same fakes, and checks the screen renders the
+same; its `Transient` lists what a restored process may lose there, each with why.
 
 ### 7.2 Dependency wiring (`app/di`)
 

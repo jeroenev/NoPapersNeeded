@@ -103,7 +103,6 @@ class FieldHintTest : LocaleRestoringTest() {
                     refused = emptySet(),
                     defs = defs,
                     vocabulary = VocabularyState(),
-                    revealed = emptySet(),
                     actions = NoFieldEdits,
                 )
             }

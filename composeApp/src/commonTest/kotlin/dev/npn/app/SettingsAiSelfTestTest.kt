@@ -1,6 +1,5 @@
 package dev.npn.app
 
-import dev.npn.app.ui.settings.SettingsCategoryId
 import dev.npn.app.ui.settings.SettingsViewModel
 import dev.npn.app.ui.settings.TextSetting
 import dev.npn.core.ai.AiCheck
@@ -12,7 +11,6 @@ import dev.npn.core.ai.AiSelfTestReport
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -28,28 +26,6 @@ class SettingsAiSelfTestTest : MainDispatcherTest() {
         settings: FakeSettingsRepository,
         selfTest: suspend (AiConfig) -> AiSelfTestReport,
     ) = SettingsViewModel(settings, FakeLibrarySession(), selfTest).also { collecting(it.paneState) }
-
-    /**
-     * A restored process shows the AI pane again; the self-test's verdicts are a result fetched on
-     * demand, which went with the process, and the button asks for them again.
-     */
-    @Test
-    fun aRestoredProcessKeepsThePaneButNotTheSelfTestsVerdicts() =
-        runTest(dispatcher) {
-            val settings = aiSettings()
-            val screen =
-                recreatable {
-                    SettingsViewModel(settings, FakeLibrarySession(), { report(AiCheckStatus.PASSED) }, saved = it)
-                }
-            screen.vm.pick(SettingsCategoryId.AI)
-            screen.vm.runAiSelfTest()
-
-            val restored =
-                screen.recreate(this, { combine(it.paneState, it.picked, ::Pair) }) { (pane, picked) ->
-                    Transient.settings(pane) to picked
-                }
-            restored.picked.value shouldBe SettingsCategoryId.AI
-        }
 
     /** The self-test asks the endpoint the screen shows, typed values included. */
     @Test

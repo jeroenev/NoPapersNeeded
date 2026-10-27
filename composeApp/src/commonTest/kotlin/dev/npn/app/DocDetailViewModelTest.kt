@@ -3,7 +3,6 @@ package dev.npn.app
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.detail.DocDetailViewModel
 import dev.npn.app.ui.detail.HistoryUiState
-import dev.npn.app.ui.detail.PanelTab
 import dev.npn.core.ai.AiEditSuggestion
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.FieldSuggestion
@@ -30,7 +29,6 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.maps.shouldContainExactly
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -50,31 +48,14 @@ import kotlin.test.Test
 class DocDetailViewModelTest : MainDispatcherTest() {
     private fun tagSuggestions(vararg tags: String): List<TagSuggestion> = tags.map { TagSuggestion(it, isNew = false) }
 
-    /**
-     * A restored process shows the document at the page and on the panel tab the user left it at,
-     * with the field they added from "Add field" and not filled yet.
-     */
+    /** A viewmodel built for a restored process's view starts at the page that view saved. */
     @Test
-    fun aRestoredProcessKeepsThePageAndThePanelTab() =
+    fun aViewModelStartsAtTheInitialPage() =
         runTest(dispatcher) {
-            val session =
-                FakeLibrarySession().apply {
-                    content.pageCountValue = 3
-                    documents.singleDoc.value = listItem("doc-1", tags = listOf("invoice"))
-                }
-            val screen = recreatable { DocDetailViewModel("doc-1", session, aiConfiguredSettings(), saved = it) }
-            collecting(screen.vm.metadata)
+            val session = FakeLibrarySession().apply { content.pageCountValue = 3 }
+            val model = DocDetailViewModel("doc-1", session, aiConfiguredSettings(), initialPage = 2)
             advanceUntilIdle()
-            screen.vm.goToPage(2)
-            screen.vm.showTab(PanelTab.TEXT)
-            screen.vm.revealField(FieldKeys.CORRESPONDENT)
-
-            val restored =
-                screen.recreate(this, { combine(it.ui, it.metadata, ::Pair) }) { (ui, metadata) ->
-                    Transient.document(ui) to Transient.document(metadata)
-                }
-            restored.ui.value.pageIndex shouldBe 2
-            restored.metadata.value.revealed shouldBe setOf(FieldKeys.CORRESPONDENT)
+            model.ui.value.pageIndex shouldBe 2
         }
 
     @Test

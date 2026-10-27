@@ -77,6 +77,9 @@ internal fun MetadataTabs(
     refused: Set<String>,
     writeBlocked: Boolean,
     actions: MetadataActions,
+    /** The tab picked, null for the first; a tab the layout lacks (Preview) falls back to the first. */
+    picked: PanelTab?,
+    onPick: (PanelTab) -> Unit,
     previewTab: (@Composable (Modifier) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
@@ -84,7 +87,7 @@ internal fun MetadataTabs(
         remember(previewTab != null) {
             if (previewTab != null) PanelTab.entries.toList() else PanelTab.entries.filter { it != PanelTab.PREVIEW }
         }
-    val tab = state.tab?.takeIf { it in tabs } ?: tabs.first()
+    val tab = picked?.takeIf { it in tabs } ?: tabs.first()
     DisposableEffect(tab) {
         if (tab == PanelTab.HISTORY) {
             actions.loadHistory()
@@ -97,7 +100,7 @@ internal fun MetadataTabs(
     var findRequestCounter by remember { mutableIntStateOf(0) }
     Column(
         modifier.findKeys {
-            actions.showTab(PanelTab.TEXT)
+            onPick(PanelTab.TEXT)
             findRequestCounter++
         },
     ) {
@@ -105,7 +108,7 @@ internal fun MetadataTabs(
             tabs.forEach { t ->
                 Tab(
                     selected = tab == t,
-                    onClick = { actions.showTab(t) },
+                    onClick = { onPick(t) },
                     modifier = Modifier.testTag(TestTags.panelTab(t.name)),
                     text = {
                         Text(
@@ -170,6 +173,9 @@ internal fun DocumentUnavailable(modifier: Modifier = Modifier) {
     )
 }
 
+/** The metadata panel's tabs; [PREVIEW] only where the page viewer cannot sit beside them. */
+internal enum class PanelTab { PREVIEW, DETAILS, TEXT, HISTORY }
+
 @Composable
 private fun DetailsTab(
     state: MetadataUiState,
@@ -200,7 +206,6 @@ private fun DetailsTab(
             refused = refused,
             defs = state.document.fieldDefs,
             vocabulary = vocabulary,
-            revealed = state.revealed,
             actions = actions,
         )
         AiMetadataSuggestions(

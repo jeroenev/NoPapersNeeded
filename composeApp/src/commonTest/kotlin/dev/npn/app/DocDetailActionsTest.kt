@@ -1,8 +1,6 @@
 package dev.npn.app
 
 import dev.npn.app.ui.common.uiText
-import dev.npn.app.ui.detail.DocDetailViewModel
-import dev.npn.app.ui.detail.PanelTab
 import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.AiOcrOutcome
 import dev.npn.core.app.BakeFailure
@@ -13,7 +11,6 @@ import dev.npn.core.index.SplitFailure
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -39,27 +36,6 @@ import kotlin.test.Test
  * viewmodel and reports through its message channel, so a result outlives the dialog that started it.
  */
 class DocDetailActionsTest : MainDispatcherTest() {
-    /**
-     * A restored process shows the document on the tab it was on, still in the library after a trash
-     * that failed; the message saying so went with the old process.
-     */
-    @Test
-    fun aRestoredProcessKeepsTheTabAfterAFailedTrashButNotItsMessage() =
-        runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { docLifecycle.failTrashDocIds = setOf("doc-1") }
-            val screen = recreatable { DocDetailViewModel("doc-1", session, aiConfiguredSettings(), saved = it) }
-            screen.vm.showTab(PanelTab.HISTORY)
-            screen.vm.trash()
-            advanceUntilIdle()
-
-            val restored =
-                screen.recreate(this, { combine(it.ui, it.metadata, ::Pair) }) { (ui, metadata) ->
-                    Transient.document(ui) to Transient.document(metadata)
-                }
-            restored.metadata.value.tab shouldBe PanelTab.HISTORY
-            collecting(restored.messages).shouldBeEmpty()
-        }
-
     @Test
     fun trashCallsSessionAndLeaves() =
         runTest(dispatcher) {

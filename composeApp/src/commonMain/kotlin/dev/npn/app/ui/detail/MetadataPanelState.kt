@@ -8,7 +8,6 @@ import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldParse
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.ocr.OcrEngineRef
-import kotlinx.serialization.Serializable
 
 /**
  * Everything [MetadataPanel] renders, in four groups assembled by [DocDetailViewModel.metadata].
@@ -24,15 +23,7 @@ data class MetadataUiState(
     val vocabulary: VocabularyState = VocabularyState(),
     val ai: AiPanelState = AiPanelState(),
     val history: HistoryUiState = HistoryUiState.NotLoaded,
-    /** The tab the user picked, which the panel shows where it has one; null shows its first. */
-    val tab: PanelTab? = null,
-    /** Fields picked from "Add field" that show although the document carries no value for them yet. */
-    val revealed: Set<String> = emptySet(),
 )
-
-/** The metadata panel's tabs; [PREVIEW] only where the page viewer cannot sit beside them. */
-@Serializable
-enum class PanelTab { PREVIEW, DETAILS, TEXT, HISTORY }
 
 /**
  * The document itself plus the library-wide settings that decide how it is shown. [loadState]
@@ -113,18 +104,6 @@ interface DocumentWrites : AiSuggestionActions {
 
     /** Show the history (its tab opened), or read it again when [refresh] is set. */
     fun loadHistory(refresh: Boolean = false)
-
-    /**
-     * Show [tab]. The viewmodel keeps it, so the panel opens on it again in another layout, in the
-     * detail screen the side panel expands into, and in a restored process.
-     */
-    fun showTab(tab: PanelTab)
-
-    /**
-     * Show the field [key] although the document carries no value for it yet, as picked from "Add
-     * field". The viewmodel keeps it, so the empty row stays through recreation until a value lands.
-     */
-    fun revealField(key: String)
 }
 
 /**

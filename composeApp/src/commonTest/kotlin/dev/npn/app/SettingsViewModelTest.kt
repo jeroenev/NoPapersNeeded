@@ -34,8 +34,8 @@ import kotlin.test.Test
 class SettingsViewModelTest : MainDispatcherTest() {
     /**
      * A restored process shows Settings as the user left it: the pane picked on a wide window, the
-     * search typed into the list, the field being edited, and an OCR language typed and not added.
-     * What is typed into the field's dialog is the dialog's own saveable state.
+     * search typed into the list and the field being edited. What is typed into the field's dialog,
+     * or into the field that adds an OCR language, is the composable's own saveable state.
      */
     @Test
     fun aRestoredProcessKeepsThePaneTheSearchAndTheOpenDialog() =
@@ -47,7 +47,6 @@ class SettingsViewModelTest : MainDispatcherTest() {
                 pick(SettingsCategoryId.DOCUMENTS)
                 searchCategories("field")
                 openFieldDialog(FieldDialog.Edit("invoiceNo"))
-                typeOcrLanguage("deu+fra")
             }
 
             val restored =
@@ -57,7 +56,6 @@ class SettingsViewModelTest : MainDispatcherTest() {
                     }
                 })
             restored.paneState.value.fieldDialog shouldBe FieldDialog.Edit("invoiceNo")
-            restored.paneState.value.ocrLanguageTyped shouldBe "deu+fra"
         }
 
     @Test

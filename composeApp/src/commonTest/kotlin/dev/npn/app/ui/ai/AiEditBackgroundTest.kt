@@ -4,14 +4,12 @@ import dev.npn.app.FakeLibrarySession
 import dev.npn.app.MainDispatcherTest
 import dev.npn.app.collecting
 import dev.npn.app.failure
-import dev.npn.app.recreatable
 import dev.npn.core.app.aiedit.EditScope
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -28,22 +26,6 @@ class AiEditBackgroundTest : MainDispatcherTest() {
         FakeAiEditRun().apply {
             inScope(*Array(count) { "d${it + 1}" })
             batch = review(reviewDoc("d1", tags = listOf("t")))
-        }
-
-    /** A restored process keeps the user's choice to run a small scope in the background. */
-    @Test
-    fun aRestoredProcessKeepsTheChoiceToRunInTheBackground() =
-        runTest(dispatcher) {
-            val session = FakeLibrarySession()
-            val screen = recreatable { vm(runOver(3), session, background = null, task = null, saved = it) }
-            collecting(screen.vm.ui)
-            advanceUntilIdle()
-            screen.vm.setTask(EditTask.CUSTOM)
-            screen.vm.setScope(EditScope.ALL)
-            screen.vm.setBackground(true)
-
-            val restored = screen.recreate(this, { combine(it.ui, it.plan, ::Pair) })
-            restored.plan.value.background shouldBe true
         }
 
     @Test

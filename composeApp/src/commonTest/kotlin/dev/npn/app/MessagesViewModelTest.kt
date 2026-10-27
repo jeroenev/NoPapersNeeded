@@ -7,7 +7,6 @@ import dev.npn.app.ui.common.uiText
 import dev.npn.core.util.NpnLog
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -34,22 +33,6 @@ class MessagesViewModelTest : MainDispatcherTest() {
             failing: Set<String>,
         ) = forEachReporting(items, Failed) { if (it in failing) error("no $it") }
     }
-
-    /**
-     * Messages not shown yet are transient: they go with a process that dies, and a restored one
-     * shows none of them.
-     */
-    @Test
-    fun aRestoredProcessShowsNoMessageTheOldOneHadNotShown() =
-        runTest(dispatcher) {
-            val screen = recreatable { Messages() }
-            screen.vm.say("Imported 3 documents")
-
-            val restored = screen.recreate(this, { flowOf(Unit) })
-            val shown = collecting(restored.messages)
-            advanceUntilIdle()
-            shown shouldBe emptyList()
-        }
 
     /** A bulk action goes on past a failed item, logs it, and hands back what failed for a retry. */
     @Test

@@ -106,8 +106,6 @@ internal data class SettingsPaneState(
     val fieldUsage: Map<String, Int>,
     /** The field manager's open dialog, if any. */
     val fieldDialog: FieldDialog? = null,
-    /** An OCR language code typed and not added yet. */
-    val ocrLanguageTyped: String = "",
 )
 
 /** What a settings pane can do: change a setting ([SettingsActions]), or open what one leads to. */
@@ -119,9 +117,6 @@ internal interface SettingsPaneActions : SettingsActions {
 
     /** Open the field manager's [dialog], or change what it holds; null closes it. */
     fun openFieldDialog(dialog: FieldDialog?)
-
-    /** What is typed into the field that adds an OCR language. */
-    fun typeOcrLanguage(text: String)
 }
 
 /**

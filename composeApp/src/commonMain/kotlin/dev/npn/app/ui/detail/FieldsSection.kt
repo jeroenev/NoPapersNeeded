@@ -41,7 +41,9 @@ import dev.npn.core.model.FieldParse
 import dev.npn.core.model.FieldType
 import dev.npn.core.model.FieldValues
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.SetSerializer
 import kotlinx.serialization.builtins.nullable
+import kotlinx.serialization.builtins.serializer
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_save
 import no_papers_needed.composeapp.generated.resources.detail_add_field
@@ -67,10 +69,12 @@ internal fun FieldsSection(
     refused: Set<String>,
     defs: List<FieldDef>,
     vocabulary: VocabularyState,
-    /** Keys the user picked from "Add field"; they render empty until a value lands. */
-    revealed: Set<String>,
     actions: MetadataActions,
 ) {
+    // Keys the user picked from "Add field"; they render empty until a value lands.
+    var revealed by rememberSaveable(doc.docId, stateSaver = jsonSaver(SetSerializer(String.serializer()))) {
+        mutableStateOf(emptySet())
+    }
     var newField by rememberSaveable(
         stateSaver = jsonSaver(NewFieldSeed.serializer().nullable),
     ) { mutableStateOf(null) }
@@ -123,7 +127,7 @@ internal fun FieldsSection(
         AddFieldMenu(
             label = stringResource(Res.string.detail_add_field),
             fields = defs.filter { it !in shown },
-            onPick = { actions.revealField(it.key) },
+            onPick = { revealed = revealed + it.key },
             newLabel = stringResource(Res.string.detail_new_field_menu),
             onNew = { newField = NewFieldSeed() },
         )

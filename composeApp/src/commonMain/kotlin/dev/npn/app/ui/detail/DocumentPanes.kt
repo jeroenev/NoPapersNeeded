@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -63,9 +64,13 @@ fun MetadataPanel(
     previewTab: @Composable (Modifier) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // The tab picked lives here, not in the tabs: the wide layout composes them inside
+    // BoxWithConstraints, a subcomposition, and movable content keeps its state when it moves out
+    // of one but not into one, so a tab picked on a compact window would be lost on a wide one.
+    var picked by rememberSaveable { mutableStateOf<PanelTab?>(null) }
     // One composition of the tabs, moved between the two layouts rather than built again in each:
     // what they hold (a dialog open over them, text typed into it, an editor's entry) stays when the
-    // window crosses the wide/compact breakpoint.
+    // window turns compact.
     val tabs =
         remember {
             movableContentOf { args: MetadataTabsArgs ->
@@ -75,23 +80,48 @@ fun MetadataPanel(
                     args.refused,
                     args.writeBlocked,
                     args.actions,
+                    args.picked,
+                    args.onPick,
                     args.previewTab,
                     args.modifier,
                 )
             }
         }
+    val onPick = { tab: PanelTab -> picked = tab }
     Box(modifier) {
         if (LocalWindowWidthClass.current.isWide) {
             DocumentPanes(
                 preview = previewTab,
                 details = {
                     tabs(
-                        MetadataTabsArgs(state, item, refused, writeBlocked, actions, previewTab = null, it),
+                        MetadataTabsArgs(
+                            state,
+                            item,
+                            refused,
+                            writeBlocked,
+                            actions,
+                            picked,
+                            onPick,
+                            previewTab = null,
+                            it,
+                        ),
                     )
                 },
             )
         } else {
-            tabs(MetadataTabsArgs(state, item, refused, writeBlocked, actions, previewTab, Modifier.fillMaxSize()))
+            tabs(
+                MetadataTabsArgs(
+                    state,
+                    item,
+                    refused,
+                    writeBlocked,
+                    actions,
+                    picked,
+                    onPick,
+                    previewTab,
+                    Modifier.fillMaxSize(),
+                ),
+            )
         }
     }
 }
@@ -103,6 +133,8 @@ private class MetadataTabsArgs(
     val refused: Set<String>,
     val writeBlocked: Boolean,
     val actions: MetadataActions,
+    val picked: PanelTab?,
+    val onPick: (PanelTab) -> Unit,
     val previewTab: (@Composable (Modifier) -> Unit)?,
     val modifier: Modifier,
 )

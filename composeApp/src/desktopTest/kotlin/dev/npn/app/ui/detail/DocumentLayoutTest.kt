@@ -7,10 +7,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.State
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
@@ -23,6 +20,7 @@ import dev.npn.app.ui.click
 import dev.npn.app.ui.closing
 import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.ProvideWindowWidthClass
+import dev.npn.app.ui.common.TestTags
 import dev.npn.app.ui.common.WindowWidthClass
 import dev.npn.app.ui.editableText
 import dev.npn.app.ui.hostedScene
@@ -141,6 +139,27 @@ class DocumentLayoutTest : EnglishLocaleTest() {
         }
 
     /**
+     * The tab picked on a compact window is still the one shown once the window turns wide: the
+     * panel's tabs move to the other layout with their saveable state rather than being built again.
+     */
+    @Test
+    fun thePickedTabStaysPickedAcrossTheBreakpoint() =
+        onUiThread {
+            val widthClass = mutableStateOf(WindowWidthClass.COMPACT)
+            scene(1280, 800, widthClass = widthClass).closing {
+                render()
+                click { it.config.getOrNull(SemanticsProperties.TestTag) == TestTags.panelTab("TEXT") }
+                render()
+                assertTrue(tabSelected("TEXT"))
+
+                widthClass.value = WindowWidthClass.WIDE
+                render()
+                render()
+                assertTrue(tabSelected("TEXT"))
+            }
+        }
+
+    /**
      * Accepting a suggestion overwrites the value on screen, so the row says what it replaces, as
      * the bulk Review does. On screen means the draft: what the user typed is what gets replaced.
      */
@@ -172,16 +191,6 @@ class DocumentLayoutTest : EnglishLocaleTest() {
         store.field("invoice", FieldKeys.TITLE, "Electricity invoice 2026", persisted = "Electricity invoice")
         return hostedScene(width, height, LocalDocumentDrafts provides store, density = Density(1f, fontScale)) {
             // The scene is the window: wide or compact from its width, as the app root decides.
-            // The panel's tab, kept as the document's viewmodel keeps it.
-            var shownTab by remember { mutableStateOf<PanelTab?>(null) }
-            val writes =
-                remember {
-                    object : DocumentWrites by NoWrites {
-                        override fun showTab(tab: PanelTab) {
-                            shownTab = tab
-                        }
-                    }
-                }
             ProvideWidthClass(widthClass?.value) {
                 NpnTheme(darkTheme = false) {
                     Surface {
@@ -208,9 +217,8 @@ class DocumentLayoutTest : EnglishLocaleTest() {
                                                 },
                                         ),
                                     ai = ai,
-                                    tab = shownTab,
                                 ),
-                            writes = writes,
+                            writes = NoWrites,
                             preview = { Text("PDF preview", modifier = it) },
                             onReviewNext = {},
                             hasNext = true,
@@ -234,6 +242,13 @@ class DocumentLayoutTest : EnglishLocaleTest() {
     }
 
     private fun ImageComposeScene.text(value: String): SemanticsNode? = nodes().firstOrNull { value in it.texts() }
+
+    /** Whether the panel's tab [name] is the selected one. */
+    private fun ImageComposeScene.tabSelected(name: String): Boolean {
+        val tab = nodes().first { it.config.getOrNull(SemanticsProperties.TestTag) == TestTags.panelTab(name) }
+        return (generateSequence(tab) { it.parent } + tab.children)
+            .any { it.config.getOrNull(SemanticsProperties.Selected) == true }
+    }
 
     /** The text field currently holding [value], by its editable content rather than its label. */
     private fun ImageComposeScene.editable(value: String): SemanticsNode? =
@@ -289,8 +304,4 @@ internal object NoWrites : DocumentWrites {
     override fun dismissAiMetadata(key: String) = Unit
 
     override fun loadHistory(refresh: Boolean) = Unit
-
-    override fun showTab(tab: PanelTab) = Unit
-
-    override fun revealField(key: String) = Unit
 }

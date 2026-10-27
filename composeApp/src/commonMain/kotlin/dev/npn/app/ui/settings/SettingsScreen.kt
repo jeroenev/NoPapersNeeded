@@ -127,8 +127,6 @@ fun SettingsScreen(
                 override fun openAutoMatchRules() = currentAutoMatchRules()
 
                 override fun openFieldDialog(dialog: FieldDialog?) = vm.openFieldDialog(dialog)
-
-                override fun typeOcrLanguage(text: String) = vm.typeOcrLanguage(text)
             }
         }
 

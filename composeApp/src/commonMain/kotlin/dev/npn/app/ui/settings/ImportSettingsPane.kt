@@ -20,6 +20,10 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
@@ -84,8 +88,6 @@ internal fun ImportSettingsPane(
         if (ocrHasLanguageSetting()) {
             OcrLanguageSettings(
                 setting = state.settings.snapshot.ocrLanguage,
-                other = state.ocrLanguageTyped,
-                onOtherChange = actions::typeOcrLanguage,
                 onChange = { value -> actions.edit { it.copy(ocrLanguage = value) } },
             )
         } else {
@@ -176,11 +178,10 @@ internal fun watchedFolderPick(
 @Composable
 private fun ColumnScope.OcrLanguageSettings(
     setting: String?,
-    /** A code typed and not added yet; the settings viewmodel keeps it. */
-    other: String,
-    onOtherChange: (String) -> Unit,
     onChange: (String?) -> Unit,
 ) {
+    // A code typed and not added yet. The pane moves as one across the breakpoint, so it keeps this.
+    var other by rememberSaveable { mutableStateOf("") }
     val automatic = setting == null
     val selected = setting?.let(OcrLanguages::parse) ?: OcrLanguages.forAppLanguage(LocalAppLocale.current)
     SwitchRow(
@@ -222,12 +223,12 @@ private fun ColumnScope.OcrLanguageSettings(
         val add = {
             val codes = OcrLanguages.parse(other)
             if (codes.isNotEmpty()) onChange(OcrLanguages.format((selected + codes).distinct()))
-            onOtherChange("")
+            other = ""
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(
                 value = other,
-                onValueChange = onOtherChange,
+                onValueChange = { other = it },
                 label = { Text(text = stringResource(Res.string.common_settings_ocr_other_language)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),

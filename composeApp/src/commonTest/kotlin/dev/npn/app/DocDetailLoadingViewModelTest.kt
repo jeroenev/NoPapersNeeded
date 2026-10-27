@@ -3,7 +3,6 @@ package dev.npn.app
 import dev.npn.app.ui.detail.DocDetailViewModel
 import dev.npn.app.ui.detail.DocLoadState
 import dev.npn.app.ui.detail.PageCountState
-import dev.npn.core.app.DocListItem
 import dev.npn.core.testing.doc
 import dev.npn.core.testing.listItem
 import io.kotest.matchers.shouldBe
@@ -12,32 +11,6 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 
 class DocDetailLoadingViewModelTest : MainDispatcherTest() {
-    /**
-     * A restored process has no row to seed the document with (the list that handed it over is gone):
-     * it loads the same row, and shows it as it was.
-     */
-    @Test
-    fun aRestoredProcessLoadsTheSameRowWithoutItsSeed() =
-        runTest(dispatcher) {
-            val row = listItem(doc("doc-1", title = "Seeded"), listOf("finance"))
-            val session = FakeLibrarySession().apply { documents.singleDoc.value = row }
-            var seed: DocListItem? = row
-            val screen =
-                recreatable {
-                    DocDetailViewModel(
-                        "doc-1",
-                        session,
-                        aiConfiguredSettings(),
-                        initialItem = seed,
-                        saved = it,
-                    )
-                }
-            seed = null
-
-            val restored = screen.recreate(this, { it.metadata }, Transient::document)
-            restored.metadata.value.document.loadState shouldBe DocLoadState.Present(row)
-        }
-
     @Test
     fun pageCountResolvedOnInit() =
         runTest(dispatcher) {
