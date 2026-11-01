@@ -1,5 +1,5 @@
 [versions]
-agp = "9.4.1"
+agp = "9.5.0"
 # The JDK that runs Gradle, compiles everything and is bundled with the desktop app.
 jdk = "25"
 # The bytecode every module targets. Android shares it and only offers newer Java library APIs on
