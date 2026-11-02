@@ -265,6 +265,7 @@ class AiMetadataAcceptanceTest : MainDispatcherTest() {
         "one",
         mutableStateOf(mapOf(FieldKeys.TITLE to "Stored")),
         mutableStateOf(mapOf(FieldKeys.TITLE to FieldType.TEXT)),
+        mutableStateOf("Stored"),
     )
 
     private fun suggestion(value: String) =

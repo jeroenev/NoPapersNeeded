@@ -89,7 +89,7 @@ internal fun MainNav(
                 status = syncStatus,
                 onOpenSettings = { nav.navigate(Route.Settings(SettingsCategoryId.CLOUD_SYNC.routeKey)) },
             ) {
-                WithDraftResumeBanner(onOpen = { docId -> nav.resumeDraft(docId, library.browse) }) {
+                WithDraftResumeBanner(snackbar, onOpen = { docId -> nav.resumeDraft(docId, library.browse) }) {
                     NavigationShell(
                         current = topLevel,
                         assistantCurrent = assistant,

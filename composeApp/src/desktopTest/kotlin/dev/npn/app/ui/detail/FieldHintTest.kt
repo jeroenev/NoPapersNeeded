@@ -128,6 +128,8 @@ class FieldHintTest : LocaleRestoringTest() {
             entry: FieldParse,
         ) = Unit
 
+        override fun commitDraft() = Unit
+
         override fun removeField(key: String) = Unit
 
         override fun setReviewed(reviewed: Boolean) = Unit

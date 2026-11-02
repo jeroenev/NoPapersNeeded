@@ -64,11 +64,21 @@ internal fun DocumentView(
     ) -> Unit,
 ) {
     var shownPage by rememberSaveable(docId) { mutableIntStateOf(0) }
+    // What outlives this view (a trash and its Undo) is shown by the library shell, not [snackbar].
+    val notices = LocalDocumentDrafts.current.notices
 
     @Suppress("ViewModelInjection") // not a parameter's default: a viewmodel built here starts at shownPage
     val vm =
         viewModel(viewModelStoreOwner = viewModels) {
-            DocDetailViewModel(docId, session, settings, searchQuery, initialItem, initialPage = shownPage)
+            DocDetailViewModel(
+                docId,
+                session,
+                settings,
+                searchQuery,
+                initialItem,
+                initialPage = shownPage,
+                notices = notices,
+            )
         }
     SnackbarMessages(vm.messages, snackbar)
     val ui by vm.ui.collectAsStateWithLifecycle()

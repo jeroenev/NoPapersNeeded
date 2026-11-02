@@ -48,7 +48,7 @@ import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.TestScope
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.ux_save_changes
+import no_papers_needed.composeapp.generated.resources.ux_review_finish
 import org.jetbrains.compose.resources.getString
 import java.util.Locale
 import kotlin.test.Test
@@ -88,10 +88,27 @@ class NumberFieldEntryTest : EnglishLocaleTest() {
                 shown() shouldBe "12."
                 field().config.getOrNull(SemanticsProperties.Error).shouldNotBeNull()
                 scene.has { it.texts().contains("Enter a number") } shouldBe true
-                scene
-                    .node { it.texts().contains("Save changes") && it.config.contains(SemanticsActions.OnClick) }
-                    .config
-                    .contains(SemanticsProperties.Disabled) shouldBe true
+                scene.has { it.texts().contains(INVALID_DRAFT) } shouldBe true
+                reviewButton().shouldNotBeNull().isEnabled() shouldBe false
+                // Leaving the field is no save either: the draft waits for a value it can write.
+                field(COUNT_LABEL).config[SemanticsActions.RequestFocus].action?.invoke()
+                scene.render()
+                drain()
+                writer.batchedEdits shouldBe emptyList()
+            }
+        }
+
+    /** Focus leaving a field saves what it holds, in one write. */
+    @Test
+    fun leavingAFieldSavesItsValueOnce() =
+        onUiThread {
+            editor {
+                type("12.05")
+                writer.batchedEdits shouldBe emptyList()
+                field(COUNT_LABEL).config[SemanticsActions.RequestFocus].action?.invoke()
+                scene.render()
+                drain()
+                writer.batchedEdits.single().fields shouldBe mapOf(KEY to "12.05")
             }
         }
 
@@ -141,18 +158,18 @@ class NumberFieldEntryTest : EnglishLocaleTest() {
      */
     @Test
     fun aDotDecimalInACommaLocaleCannotBeSaved() {
-        val save = DUTCH_SAVE
+        val review = DUTCH_REVIEW
         onUiThread {
             editor(language = "nl") {
                 type("12.34")
                 shown() shouldBe "12.34"
                 field().hasError() shouldBe true
-                saveButton(save).shouldNotBeNull().isEnabled() shouldBe false
+                reviewButton(review).shouldNotBeNull().isEnabled() shouldBe false
 
                 type("12,34")
                 field().hasError() shouldBe false
                 committed() shouldBe "12.34"
-                val button = saveButton(save).shouldNotBeNull()
+                val button = reviewButton(review).shouldNotBeNull()
                 button.isEnabled() shouldBe true
                 button.config[SemanticsActions.OnClick].action?.invoke()
                 drain()
@@ -164,14 +181,14 @@ class NumberFieldEntryTest : EnglishLocaleTest() {
     /** `1,234` is 1.234 in Dutch, no whole number: refused, and never stored as 1234. */
     @Test
     fun aWholeNumberWithACommaInACommaLocaleCannotBeSaved() {
-        val save = DUTCH_SAVE
+        val review = DUTCH_REVIEW
         onUiThread {
             editor(language = "nl") {
                 type("1,234", label = COUNT_LABEL)
                 field(COUNT_LABEL).hasError() shouldBe true
-                saveButton(save).shouldNotBeNull().isEnabled() shouldBe false
+                reviewButton(review).shouldNotBeNull().isEnabled() shouldBe false
                 // Nor through the save shortcut, which asks the store directly.
-                store.save(DOC_ID)
+                store.commit(DOC_ID, item.doc.fields, item.doc.displayTitle)
                 drain()
                 writer.batchedEdits shouldBe emptyList()
             }
@@ -200,13 +217,13 @@ class NumberFieldEntryTest : EnglishLocaleTest() {
      */
     @Test
     fun aRefusedEntryLikeTheStoredNumberStaysUntilDiscarded() {
-        val save = DUTCH_SAVE
+        val review = DUTCH_REVIEW
         onUiThread {
             editor(language = "nl", amount = "12.34") {
                 shown() shouldBe "12,34"
                 type("12.34")
                 shown() shouldBe "12.34"
-                saveButton(save).shouldNotBeNull().isEnabled() shouldBe false
+                reviewButton(review).shouldNotBeNull().isEnabled() shouldBe false
 
                 store.discard(DOC_ID)
                 scene.render()
@@ -234,9 +251,9 @@ class NumberFieldEntryTest : EnglishLocaleTest() {
 
         fun committed(): String? = store.state[item.doc.docId]?.fields?.get(KEY)
 
-        /** The save bar's button, whose text is [save] in the editor's language; null while there is no draft. */
-        fun saveButton(save: String = "Save changes"): SemanticsNode? =
-            scene.nodes().firstOrNull { save in it.texts() && it.config.contains(SemanticsActions.OnClick) }
+        /** The status line's "mark reviewed" button, whose text is [review] in the editor's language. */
+        fun reviewButton(review: String = "Mark reviewed & finish"): SemanticsNode? =
+            scene.nodes().firstOrNull { review in it.texts() && it.config.contains(SemanticsActions.OnClick) }
 
         /** Run the saves started so far up to their first hop back to the UI thread, which is past the write. */
         fun drain() = saves.testScheduler.runCurrent()
@@ -326,9 +343,11 @@ class NumberFieldEntryTest : EnglishLocaleTest() {
         val COUNT =
             FieldDef("count", COUNT_LABEL, FieldType.NUMBER, showByDefault = true, aiEnabled = false, position = 11)
 
-        /** The save bar's button in Dutch, read before a scene sets the JVM's locale. */
-        val DUTCH_SAVE: String by lazy {
-            runBlocking { getString(resourcesIn(Locale.forLanguageTag("nl")), Res.string.ux_save_changes) }
+        /** The status line's "mark reviewed" button in Dutch, read before a scene sets the JVM's locale. */
+        val DUTCH_REVIEW: String by lazy {
+            runBlocking { getString(resourcesIn(Locale.forLanguageTag("nl")), Res.string.ux_review_finish) }
         }
+
+        const val INVALID_DRAFT = "A value does not fit its field, so these changes are not saved yet."
     }
 }

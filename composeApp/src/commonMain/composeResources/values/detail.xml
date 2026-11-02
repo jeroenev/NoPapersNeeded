@@ -13,11 +13,11 @@
     <string name="detail_trash_prompt">Move this document to trash? You can restore it later.</string>
     <string name="detail_trash">Trash</string>
     <string name="detail_split_failed">Split failed: %1$s</string>
-    <string name="detail_bake_metadata_in_place">Embed tags and details in original PDF</string>
-    <string name="detail_bake_prompt">This rewrites the library file itself to embed tags and properties as XMP. The file's content hash changes and the rewrite syncs to other devices. Prefer Export for a portable copy that leaves the library untouched. Continue?</string>
-    <string name="detail_bake_in_place">Update original PDF</string>
-    <string name="detail_baked_in_place">Original PDF updated</string>
-    <string name="detail_bake_failed">Could not update the original PDF: %1$s</string>
+    <string name="detail_bake_metadata_in_place">Write details into the PDF file</string>
+    <string name="detail_bake_prompt">This writes the tags and details into the PDF file in your library, so other apps can read them. The file itself changes, on your other devices too. To leave the library file as it is, use Export for a copy instead. Continue?</string>
+    <string name="detail_bake_in_place">Write into the file</string>
+    <string name="detail_baked_in_place">Details written into the PDF file</string>
+    <string name="detail_bake_failed">Could not write the details into the PDF file: %1$s</string>
     <string name="detail_document_position">%1$d of %2$d</string>
     <string name="detail_previous_document">Previous document</string>
     <string name="detail_next_document">Next document</string>
@@ -27,15 +27,15 @@
     <string name="detail_shared_baked_copy">PDF shared with tags and details</string>
     <string name="detail_share_failed">Share failed: %1$s</string>
     <string name="detail_more_actions">More actions</string>
-    <string name="detail_rerunning_ocr">Re-running OCR...</string>
-    <string name="detail_rerun_ocr">Re-run OCR</string>
+    <string name="detail_rerunning_ocr">Running text recognition again…</string>
+    <string name="detail_rerun_ocr">Run text recognition again</string>
     <string name="detail_ai_ocr">Read text with assistant</string>
     <string name="detail_ai_ocr_large">Read text with assistant (%1$d pages)</string>
-    <string name="detail_ai_ocr_large_prompt">This document has %1$d pages. The assistant reads one page per request, so this will cost about %1$d requests. On-device OCR is free and stays available.</string>
+    <string name="detail_ai_ocr_large_prompt">This document has %1$d pages. The assistant reads one page per request, so this will cost about %1$d requests. Text recognition on this device is free and stays available.</string>
     <string name="detail_ai_ocr_confirm">Read anyway</string>
     <string name="detail_splitting">Splitting...</string>
     <string name="detail_split_document">Split document</string>
-    <string name="detail_baking">Updating PDF…</string>
+    <string name="detail_baking">Writing details into the PDF…</string>
 
     <string name="detail_tab_preview">Preview</string>
     <string name="detail_tab_details">Details</string>
@@ -51,8 +51,8 @@
     <string name="detail_location">Location</string>
     <string name="detail_created">Created</string>
     <string name="detail_pages">Pages</string>
-    <string name="detail_ocr">OCR</string>
-    <string name="detail_ocr_details_failed">Could not load this document’s OCR details: %1$s</string>
+    <string name="detail_ocr">Text recognition</string>
+    <string name="detail_ocr_details_failed">Could not load this document’s text sources: %1$s</string>
     <string name="detail_suggest_tags">Suggest tags</string>
     <string name="detail_suggest_metadata">Suggest details</string>
     <string name="detail_suggesting_tags">Suggesting tags…</string>
@@ -85,9 +85,9 @@
     <string name="detail_field_seed_hint_title">What the document is, in a few words (e.g. Electricity invoice January 2024). Keep company names, reference numbers and other proper nouns as printed. This is not the file name: use "Rename file" to change that.</string>
     <string name="detail_field_seed_hint_correspondent">The other party: the company, institution or person that sent or issued the document, never the archive’s owner.</string>
     <string name="detail_field_seed_hint_doc_date">The date the document was issued (invoice, letter or issue date), not when it was scanned.</string>
-    <string name="detail_text_queued">Text extraction is queued for this document.</string>
-    <string name="detail_text_failed">Text extraction failed for this document.</string>
-    <string name="detail_text_not_extracted">No text has been extracted from this document yet.</string>
+    <string name="detail_text_queued">Text recognition is queued for this document.</string>
+    <string name="detail_text_failed">Text recognition failed for this document.</string>
+    <string name="detail_text_not_extracted">No text has been read from this document yet.</string>
     <string name="detail_text_unavailable">No text available.</string>
     <string name="detail_no_history">No history events yet.</string>
     <string name="detail_history_load_failed">History could not be loaded: %1$s</string>
@@ -125,15 +125,14 @@
     <string name="detail_page_range">Page (1-%1$d)</string>
     <string name="detail_go">Go</string>
 
-    <string name="detail_history_undecodable">Could not decode journal event '%1$s'</string>
     <string name="detail_history_tag_added">Added tag '%1$s'</string>
     <string name="detail_history_tag_removed">Removed tag '%1$s'</string>
     <string name="detail_history_marked_reviewed">Marked reviewed</string>
     <string name="detail_history_marked_needs_review">Marked needs review</string>
     <string name="detail_history_review_state_cleared">Cleared review state</string>
     <string name="detail_history_review_state_changed">Set review state to '%1$s'</string>
-    <string name="detail_history_ocr_engine_cleared">Cleared OCR engine pin</string>
-    <string name="detail_history_ocr_engine_pinned">Pinned OCR engine to %1$s</string>
+    <string name="detail_history_ocr_engine_cleared">Set the text source back to automatic</string>
+    <string name="detail_history_ocr_engine_pinned">Set the text source to %1$s</string>
     <string name="detail_history_storage_path_set">Set intended file location to %1$s</string>
     <string name="detail_history_storage_path_cleared">Cleared intended file location</string>
     <string name="detail_history_field_removed">Cleared %1$s</string>
@@ -141,13 +140,11 @@
     <string name="detail_history_document_trashed">Trashed document from '%1$s'</string>
     <string name="detail_history_document_restored">Restored document</string>
     <string name="detail_history_document_deleted">Permanently deleted document</string>
-    <string name="detail_history_document_relinked">Relinked to document %1$s</string>
+    <string name="detail_history_document_relinked">Wrote the details into the PDF file</string>
     <string name="detail_history_tag_renamed">Tag renamed from '%1$s' to '%2$s'</string>
     <string name="detail_history_tag_merged">Tag '%1$s' merged into '%2$s'</string>
     <string name="detail_history_tag_styled">Styled tag '%1$s'</string>
     <string name="detail_history_setting_changed">Changed setting '%1$s'</string>
-    <string name="detail_history_unknown_event">Unknown event '%1$s'</string>
-    <string name="detail_history_unknown_event_payload">Unknown event '%1$s': %2$s</string>
 
     <string name="detail_title_hint">Title is metadata. Use "Rename file" to change the file name.</string>
     <string name="detail_find_in_text">Find in text</string>
@@ -159,9 +156,9 @@
     <string name="detail_split_failed_invalid_parts">Could not split the document: the parts must cover every page once, in order.</string>
     <string name="detail_split_failed_unreadable">Could not split the document: the PDF could not be read.</string>
     <string name="detail_split_failed_not_completed">Could not split the document. The library was left as it was.</string>
-    <string name="detail_bake_failed_unavailable">Could not update the original PDF: the document is no longer in the library.</string>
-    <string name="detail_bake_failed_unsupported">Could not update the original PDF: this PDF cannot carry the tags and details. It was left unchanged.</string>
-    <string name="detail_bake_failed_not_saved">Could not save the updated PDF to the library.</string>
+    <string name="detail_bake_failed_unavailable">Could not write the details into the PDF file: the document is no longer in the library.</string>
+    <string name="detail_bake_failed_unsupported">Could not write the details into the PDF file: this PDF cannot carry them. It was left unchanged.</string>
+    <string name="detail_bake_failed_not_saved">Could not save the updated PDF file to the library.</string>
     <string name="detail_ai_ocr_no_endpoint">Set up an AI assistant in Settings to read text with it.</string>
     <string name="detail_add_tag_failed">Could not add the tag: %1$s</string>
     <string name="detail_create_tag_failed">Could not create the tag: %1$s</string>
@@ -175,6 +172,28 @@
     <string name="detail_rename_taken">Could not rename the file: another file in its folder already has that name.</string>
     <string name="detail_rename_invalid">Could not rename the file: the library cannot keep a document under that name.</string>
     <string name="detail_ai_ocr_failed">Could not read the text with the assistant: %1$s</string>
-    <string name="detail_ocr_engine_failed">Could not change the OCR engine: %1$s</string>
+    <string name="detail_ocr_engine_failed">Could not change the text source: %1$s</string>
     <string name="detail_tag_removed">Removed tag “%1$s”.</string>
+    <string name="detail_saved_changes">Saved changes to “%1$s”.</string>
+    <string name="detail_undo_save_failed">Could not undo the changes: %1$s</string>
+    <string name="detail_draft_invalid">A value does not fit its field, so these changes are not saved yet.</string>
+    <plurals name="detail_drafts_invalid">
+        <item quantity="one">%1$d document has a value that does not fit its field, so its changes are not saved.</item>
+        <item quantity="other">%1$d documents have values that do not fit their fields, so their changes are not saved.</item>
+    </plurals>
+    <plurals name="detail_drafts_failed">
+        <item quantity="one">Changes to %1$d document could not be written to the library.</item>
+        <item quantity="other">Changes to %1$d documents could not be written to the library.</item>
+    </plurals>
+    <plurals name="detail_drafts_unsaved">
+        <item quantity="one">%1$d document has changes that are not saved yet.</item>
+        <item quantity="other">%1$d documents have changes that are not saved yet.</item>
+    </plurals>
+    <string name="detail_moved_to_trash">Moved “%1$s” to the trash.</string>
+    <string name="detail_moved_to_trash_untitled">Moved the document to the trash.</string>
+    <plurals name="detail_history_newer_changes">
+        <item quantity="one">%1$d change from a newer version of the app</item>
+        <item quantity="other">%1$d changes from a newer version of the app</item>
+    </plurals>
+    <string name="detail_go_to_page_hint">Go to page (Ctrl+G)</string>
 </resources>

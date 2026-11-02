@@ -54,7 +54,6 @@ import no_papers_needed.composeapp.generated.resources.detail_tab_history
 import no_papers_needed.composeapp.generated.resources.detail_tab_preview
 import no_papers_needed.composeapp.generated.resources.detail_tab_text
 import no_papers_needed.composeapp.generated.resources.detail_tags
-import no_papers_needed.composeapp.generated.resources.ux_tags_saved
 import org.jetbrains.compose.resources.stringResource
 
 /**
@@ -220,7 +219,6 @@ private fun DetailsTab(
         HorizontalDivider()
 
         SectionHeading(stringResource(Res.string.detail_tags), style = MaterialTheme.typography.labelLarge)
-        Text(stringResource(Res.string.ux_tags_saved), style = MaterialTheme.typography.bodySmall)
         TagEditor(
             tags = item.tags,
             allTagNames = vocabulary.allTagNames,
@@ -270,7 +268,7 @@ private fun ReviewStatusSection(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ReviewedBadge(reviewed)
-        // Writes straight through (it also commits the draft), so it follows the save bar's rules.
+        // Writes straight through (it also commits the draft), so it follows the status line's rules.
         OutlinedButton(onClick = { onReviewedChange(!reviewed) }, enabled = enabled) {
             Text(
                 stringResource(

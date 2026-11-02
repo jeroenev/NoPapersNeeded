@@ -40,8 +40,10 @@ import dev.npn.core.app.HistoryEntry
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_retry
 import no_papers_needed.composeapp.generated.resources.detail_history_load_failed
+import no_papers_needed.composeapp.generated.resources.detail_history_newer_changes
 import no_papers_needed.composeapp.generated.resources.detail_history_secondary
 import no_papers_needed.composeapp.generated.resources.detail_no_history
+import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
 /** Immutable journal timeline for the document: HLC-ordered icon + description rows. */
@@ -79,6 +81,16 @@ internal fun HistoryTab(
             is HistoryUiState.Loaded -> {
                 for (item in history.items) {
                     HistoryRow(item)
+                }
+                // One muted line for what this build cannot read, rather than a row of jargon each.
+                if (history.newerChanges > 0) {
+                    HelpText(
+                        pluralStringResource(
+                            Res.plurals.detail_history_newer_changes,
+                            history.newerChanges,
+                            history.newerChanges,
+                        ),
+                    )
                 }
             }
         }

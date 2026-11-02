@@ -20,6 +20,7 @@ import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.OcrVersion
 import dev.npn.core.app.RelocationOutcome
 import dev.npn.core.app.SplitOutcome
+import dev.npn.core.app.TrashReceipt
 import dev.npn.core.app.reusableFieldValues
 import dev.npn.core.index.SplitFailure
 import dev.npn.core.model.FieldDef
@@ -51,6 +52,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_rerun_ocr_failed
+import no_papers_needed.composeapp.generated.resources.common_restore_documents_failed
+import no_papers_needed.composeapp.generated.resources.common_trash_restore_failed
 import no_papers_needed.composeapp.generated.resources.detail_add_field_failed
 import no_papers_needed.composeapp.generated.resources.detail_add_tag_failed
 import no_papers_needed.composeapp.generated.resources.detail_ai_ocr_failed
@@ -64,6 +67,8 @@ import no_papers_needed.composeapp.generated.resources.detail_could_not_bake_cop
 import no_papers_needed.composeapp.generated.resources.detail_create_tag_failed
 import no_papers_needed.composeapp.generated.resources.detail_export_failed
 import no_papers_needed.composeapp.generated.resources.detail_exported_baked_copy
+import no_papers_needed.composeapp.generated.resources.detail_moved_to_trash
+import no_papers_needed.composeapp.generated.resources.detail_moved_to_trash_untitled
 import no_papers_needed.composeapp.generated.resources.detail_ocr_details_failed
 import no_papers_needed.composeapp.generated.resources.detail_ocr_engine_failed
 import no_papers_needed.composeapp.generated.resources.detail_remove_tag_failed
@@ -110,8 +115,10 @@ sealed interface HistoryUiState {
 
     data object Empty : HistoryUiState
 
+    /** The [items] this build can describe, and how many [newerChanges] a newer version of the app made. */
     data class Loaded(
         val items: List<HistoryItem>,
+        val newerChanges: Int = 0,
     ) : HistoryUiState
 
     data class Error(
@@ -149,6 +156,8 @@ class DocDetailViewModel private constructor(
     initialPage: Int,
     /** Taken around every metadata write made from here, the AI suggestions' included. */
     private val metadataMutex: Mutex,
+    /** Where a result that outlives this document's screen is reported. */
+    notices: DocumentNotices?,
     private val aiSuggestions: DocAiSuggestions = DocAiSuggestions(docId, session, scope, sink, metadataMutex),
 ) : MessagesViewModel(scope, sink),
     DocumentWrites,
@@ -172,6 +181,11 @@ class DocDetailViewModel private constructor(
          * back-stack entry holds this viewmodel; 0 for a document opened afresh.
          */
         initialPage: Int = 0,
+        /**
+         * The library's [DocumentNotices], which show what outlives this document's screen (a trash
+         * and its Undo) once the screen is gone. Null reports it through this viewmodel's own messages.
+         */
+        notices: DocumentNotices? = null,
     ) : this(
         docId,
         session,
@@ -184,7 +198,11 @@ class DocDetailViewModel private constructor(
         },
         initialPage,
         Mutex(),
+        notices,
     )
+
+    /** The library's notices when given one, else this viewmodel's own messages. */
+    private val notices: DocumentNotices = notices ?: DocumentNotices(scope, sink)
 
     private val documents = session.documents
     private val meta = session.meta
@@ -395,9 +413,18 @@ class DocDetailViewModel private constructor(
     private suspend fun readHistory(): HistoryUiState =
         runCatchingCancellable {
             val labels = fieldRegistry.current().associate { it.key to it.label }
-            HistoryMapper.toHistoryItems(documents.history(docId)) { key -> labels[key] ?: key }
+            HistoryMapper.toTimeline(documents.history(docId)) { key -> labels[key] ?: key }
         }.fold(
-            onSuccess = { items -> if (items.isEmpty()) HistoryUiState.Empty else HistoryUiState.Loaded(items) },
+            onSuccess = { timeline ->
+                if (timeline.isEmpty) {
+                    HistoryUiState.Empty
+                } else {
+                    HistoryUiState.Loaded(
+                        timeline.items,
+                        timeline.newerChanges,
+                    )
+                }
+            },
             onFailure = { error -> HistoryUiState.Error(error.reason()) },
         )
 
@@ -445,12 +472,37 @@ class DocDetailViewModel private constructor(
         block: suspend () -> Unit,
     ) = launchReporting(failed) { metadataMutex.withLock { block() } }
 
-    /** On success the document has [DetailUiState.left]; a failure keeps it and is reported. */
+    /**
+     * On success the document has [DetailUiState.left], and [notices] say so with an Undo that takes
+     * back exactly this trash, from wherever the user is by then; a failure keeps it and is reported.
+     */
     override fun trash() =
         launchReporting(Res.string.detail_trash_failed) {
-            docLifecycle.trashDoc(docId)
+            val title =
+                loadState.value.item
+                    ?.doc
+                    ?.displayTitle
+            val receipt = docLifecycle.trashDoc(docId)
             _ui.update { it.copy(left = true) }
+            // No receipt: the document was already gone, and restoring it would undo that instead.
+            if (receipt != null) {
+                notices.message(
+                    title?.let { uiText(Res.string.detail_moved_to_trash, it) }
+                        ?: uiText(Res.string.detail_moved_to_trash_untitled),
+                    UiMessage.Action(uiText(Res.string.library_undo)) { undoTrash(receipt) },
+                )
+            }
         }
+
+    /** The trash message's Undo: restore the document while [receipt]'s trash still holds it. */
+    private fun undoTrash(receipt: TrashReceipt) {
+        notices.launchReporting(Res.string.common_trash_restore_failed) {
+            // A failure counted rather than thrown has its cause in the session log.
+            if (docLifecycle.undoTrash(listOf(receipt)) > 0) {
+                notices.message(uiText(Res.plurals.common_restore_documents_failed, 1, 1, 1))
+            }
+        }
+    }
 
     /**
      * The host closed after [DetailUiState.left]. This viewmodel can outlive the host's composition

@@ -1,6 +1,8 @@
 package dev.npn.app
 
 import dev.npn.app.ui.common.uiText
+import dev.npn.app.ui.detail.DocDetailViewModel
+import dev.npn.app.ui.detail.DocumentNotices
 import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.AiOcrOutcome
 import dev.npn.core.app.BakeFailure
@@ -8,8 +10,11 @@ import dev.npn.core.app.BakeOutcome
 import dev.npn.core.app.RelocationOutcome
 import dev.npn.core.app.SplitOutcome
 import dev.npn.core.index.SplitFailure
+import dev.npn.core.testing.doc
+import dev.npn.core.testing.listItem
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -23,6 +28,7 @@ import no_papers_needed.composeapp.generated.resources.detail_bake_failed_unsupp
 import no_papers_needed.composeapp.generated.resources.detail_baked_in_place
 import no_papers_needed.composeapp.generated.resources.detail_could_not_bake_copy
 import no_papers_needed.composeapp.generated.resources.detail_exported_baked_copy
+import no_papers_needed.composeapp.generated.resources.detail_moved_to_trash
 import no_papers_needed.composeapp.generated.resources.detail_rename_invalid
 import no_papers_needed.composeapp.generated.resources.detail_rename_taken
 import no_papers_needed.composeapp.generated.resources.detail_rename_unsupported
@@ -45,6 +51,52 @@ class DocDetailActionsTest : MainDispatcherTest() {
             advanceUntilIdle()
             session.docLifecycle.trashedDocs shouldContainExactly listOf("doc-1")
             model.ui.value.left shouldBe true
+        }
+
+    /**
+     * A trash from the document says so where the user lands (the library's notices, not this
+     * screen's messages, which leave with it), and its Undo restores the document from there.
+     */
+    @Test
+    fun trashSaysSoBeyondTheScreenAndUndoRestoresTheDocument() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply {
+                    documents.singleDoc.value =
+                        listItem(doc("doc-1", title = "Invoice"))
+                }
+            val notices = DocumentNotices(this)
+            val model = DocDetailViewModel("doc-1", session, aiConfiguredSettings(), notices = notices)
+            collecting(model.metadata)
+            val own = collecting(model.messages)
+            val shown = collecting(notices.messages)
+            advanceUntilIdle()
+
+            model.trash()
+            advanceUntilIdle()
+
+            own.shouldBeEmpty()
+            shown.map { it.text } shouldContainExactly listOf(uiText(Res.string.detail_moved_to_trash, "Invoice"))
+            shown
+                .single()
+                .action
+                .shouldNotBeNull()
+                .onPerform()
+            advanceUntilIdle()
+            session.docLifecycle.restoredDocs shouldContainExactly listOf("doc-1")
+        }
+
+    /** A document already gone (trashed elsewhere) is left alone: no Undo that would restore it. */
+    @Test
+    fun aTrashThatFoundTheDocumentGoneOffersNoUndo() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession().apply { docLifecycle.goneDocIds = setOf("doc-1") }
+            val model = docDetailVm(session = session)
+            val messages = collecting(model.messages)
+            model.trash()
+            advanceUntilIdle()
+            model.ui.value.left shouldBe true
+            messages.shouldBeEmpty()
         }
 
     @Test

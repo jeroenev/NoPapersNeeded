@@ -47,6 +47,16 @@ class DocumentKeysTest {
             ran shouldContainExactly listOf("page 2", "page 0")
         }
 
+    /** Ctrl+G asks which page to go to, as the page counter does; a plain G does nothing. */
+    @Test
+    fun ctrlGInTheViewerAsksWhichPageToGoTo() =
+        onUiThread {
+            pressIn(Focused.VIEWER, Key.G)
+            pressIn(Focused.VIEWER, Key.G, ctrl = true)
+
+            ran shouldContainExactly listOf("go to page")
+        }
+
     /** The pane divider moves on a plain arrow and leaves Ctrl+arrows to document paging too. */
     @Test
     fun ctrlArrowsOnThePaneDividerWalkToAnotherDocument() =
@@ -85,6 +95,7 @@ class DocumentKeysTest {
                                     containerSize = { Size.Zero },
                                     fittedSize = { Size.Zero },
                                     onPage = { ran += "page $it" },
+                                    onGoToPage = { ran += "go to page" },
                                 )
                             }
 

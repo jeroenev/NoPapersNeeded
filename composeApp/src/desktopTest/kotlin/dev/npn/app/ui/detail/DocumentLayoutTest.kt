@@ -75,11 +75,8 @@ class DocumentLayoutTest : EnglishLocaleTest() {
                 val title = text("Title")
                 assertNotNull(title)
                 assertTrue(title.boundsInRoot.left >= 0 && title.boundsInRoot.right <= 360)
-                val saveButton = text("Save changes")
                 val reviewButton = text("Mark reviewed & next")
-                assertNotNull(saveButton)
                 assertNotNull(reviewButton)
-                assertTrue(saveButton.boundsInRoot.bottom <= 740)
                 assertTrue(reviewButton.boundsInRoot.bottom <= 740)
                 assertTrue(reviewButton.boundsInRoot.right <= 360)
                 save(this, "phone-document")
@@ -302,6 +299,8 @@ internal object NoWrites : DocumentWrites {
     ) = Unit
 
     override fun dismissAiMetadata(key: String) = Unit
+
+    override fun clearAiMetadataSuggestions() = Unit
 
     override fun loadHistory(refresh: Boolean) = Unit
 }

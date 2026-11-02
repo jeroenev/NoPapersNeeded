@@ -109,7 +109,7 @@ private fun AiTagChip(
  * ([available], shared with the tag probe). Offers a "Suggest details" button (spinner while
  * running) and renders each suggested field as a row labelled from the registry, showing the
  * [current] value it would replace the way the bulk Review does: the check accepts it through the
- * normal commit path, the × dismisses it.
+ * normal commit path, the × dismisses it, and "Dismiss all" (with more than one) clears the lot.
  */
 @Composable
 internal fun AiMetadataSuggestions(
@@ -139,6 +139,12 @@ internal fun AiMetadataSuggestions(
                 onAccept = { actions.acceptAiMetadata(it) },
                 onDismiss = actions::dismissAiMetadata,
             )
+        }
+        // As the tag suggestions offer: more than one suggestion can be waved away in one go.
+        if (state.suggestion.values.size > 1) {
+            TextButton(onClick = actions::clearAiMetadataSuggestions) {
+                Text(stringResource(Res.string.detail_dismiss_all))
+            }
         }
     }
 }

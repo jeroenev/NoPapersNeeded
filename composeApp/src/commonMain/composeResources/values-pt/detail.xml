@@ -13,11 +13,11 @@
     <string name="detail_trash_prompt">Mover este documento para a lixeira? Você pode restaurá-lo depois.</string>
     <string name="detail_trash">Lixeira</string>
     <string name="detail_split_failed">Falha ao dividir: %1$s</string>
-    <string name="detail_bake_metadata_in_place">Incorporar etiquetas e detalhes no PDF original</string>
-    <string name="detail_bake_prompt">Isso reescreve o próprio arquivo da biblioteca para incorporar etiquetas e propriedades como XMP. O hash do conteúdo do arquivo muda e a reescrita é sincronizada com os outros dispositivos. Prefira Exportar para ter uma cópia portátil que não altera a biblioteca. Continuar?</string>
-    <string name="detail_bake_in_place">Atualizar PDF original</string>
-    <string name="detail_baked_in_place">PDF original atualizado</string>
-    <string name="detail_bake_failed">Não foi possível atualizar o PDF original: %1$s</string>
+    <string name="detail_bake_metadata_in_place">Gravar os detalhes no arquivo PDF</string>
+    <string name="detail_bake_prompt">Isso grava as etiquetas e os detalhes no arquivo PDF da sua biblioteca, para que outros apps possam lê-los. O próprio arquivo muda, também nos seus outros dispositivos. Para deixar o arquivo da biblioteca como está, use Exportar para ter uma cópia. Continuar?</string>
+    <string name="detail_bake_in_place">Gravar no arquivo</string>
+    <string name="detail_baked_in_place">Detalhes gravados no arquivo PDF</string>
+    <string name="detail_bake_failed">Não foi possível gravar os detalhes no arquivo PDF: %1$s</string>
     <string name="detail_document_position">%1$d de %2$d</string>
     <string name="detail_previous_document">Documento anterior</string>
     <string name="detail_next_document">Próximo documento</string>
@@ -27,15 +27,15 @@
     <string name="detail_shared_baked_copy">PDF compartilhado com etiquetas e detalhes</string>
     <string name="detail_share_failed">Falha ao compartilhar: %1$s</string>
     <string name="detail_more_actions">Mais ações</string>
-    <string name="detail_rerunning_ocr">Refazendo OCR...</string>
-    <string name="detail_rerun_ocr">Refazer OCR</string>
+    <string name="detail_rerunning_ocr">Refazendo o reconhecimento de texto…</string>
+    <string name="detail_rerun_ocr">Refazer o reconhecimento de texto</string>
     <string name="detail_ai_ocr">Ler texto com o assistente</string>
     <string name="detail_ai_ocr_large">Ler texto com o assistente (%1$d páginas)</string>
-    <string name="detail_ai_ocr_large_prompt">Este documento tem %1$d páginas. O assistente lê uma página por solicitação, então isso custará cerca de %1$d solicitações. O OCR no dispositivo é gratuito e continua disponível.</string>
+    <string name="detail_ai_ocr_large_prompt">Este documento tem %1$d páginas. O assistente lê uma página por solicitação, então isso custará cerca de %1$d solicitações. O reconhecimento de texto no dispositivo é gratuito e continua disponível.</string>
     <string name="detail_ai_ocr_confirm">Ler mesmo assim</string>
     <string name="detail_splitting">Dividindo...</string>
     <string name="detail_split_document">Dividir documento</string>
-    <string name="detail_baking">Atualizando PDF…</string>
+    <string name="detail_baking">Gravando os detalhes no PDF…</string>
 
     <string name="detail_tab_preview">Prévia</string>
     <string name="detail_tab_details">Detalhes</string>
@@ -50,8 +50,8 @@
     <string name="detail_location">Local</string>
     <string name="detail_created">Criado</string>
     <string name="detail_pages">Páginas</string>
-    <string name="detail_ocr">OCR</string>
-    <string name="detail_ocr_details_failed">Não foi possível carregar os dados de OCR deste documento: %1$s</string>
+    <string name="detail_ocr">Reconhecimento de texto</string>
+    <string name="detail_ocr_details_failed">Não foi possível carregar as origens do texto deste documento: %1$s</string>
     <string name="detail_suggest_tags">Sugerir etiquetas</string>
     <string name="detail_suggest_metadata">Sugerir detalhes</string>
     <string name="detail_suggesting_tags">Sugerindo etiquetas…</string>
@@ -83,9 +83,9 @@
     <string name="detail_field_seed_hint_title">O que é o documento, em poucas palavras (ex.: Conta de luz janeiro 2024). Mantenha nomes de empresas, números de referência e outros nomes próprios como aparecem impressos. Não é o nome do arquivo: use "Renomear arquivo" para mudá-lo.</string>
     <string name="detail_field_seed_hint_correspondent">A outra parte: a empresa, instituição ou pessoa que enviou ou emitiu o documento, nunca quem guarda estes documentos.</string>
     <string name="detail_field_seed_hint_doc_date">A data em que o documento foi emitido (data da fatura, da carta ou de emissão), não quando foi digitalizado.</string>
-    <string name="detail_text_queued">A extração de texto deste documento está na fila.</string>
-    <string name="detail_text_failed">Falha na extração de texto deste documento.</string>
-    <string name="detail_text_not_extracted">Nenhum texto foi extraído deste documento ainda.</string>
+    <string name="detail_text_queued">O reconhecimento de texto deste documento está na fila.</string>
+    <string name="detail_text_failed">Falha no reconhecimento de texto deste documento.</string>
+    <string name="detail_text_not_extracted">Nenhum texto foi lido deste documento ainda.</string>
     <string name="detail_text_unavailable">Nenhum texto disponível.</string>
     <string name="detail_no_history">Nenhum evento no histórico ainda.</string>
     <string name="detail_history_load_failed">Não foi possível carregar o histórico: %1$s</string>
@@ -120,15 +120,14 @@
     <string name="detail_page_range">Página (1-%1$d)</string>
     <string name="detail_go">Ir</string>
 
-    <string name="detail_history_undecodable">Não foi possível decodificar o evento do registro '%1$s'</string>
     <string name="detail_history_tag_added">Etiqueta '%1$s' adicionada</string>
     <string name="detail_history_tag_removed">Etiqueta '%1$s' removida</string>
     <string name="detail_history_marked_reviewed">Marcado como revisado</string>
     <string name="detail_history_marked_needs_review">Marcado para revisão</string>
     <string name="detail_history_review_state_cleared">Status de revisão removido</string>
     <string name="detail_history_review_state_changed">Status de revisão definido como '%1$s'</string>
-    <string name="detail_history_ocr_engine_cleared">Fixação do mecanismo de OCR removida</string>
-    <string name="detail_history_ocr_engine_pinned">Mecanismo de OCR fixado em %1$s</string>
+    <string name="detail_history_ocr_engine_cleared">Origem do texto voltou para automática</string>
+    <string name="detail_history_ocr_engine_pinned">Origem do texto definida como %1$s</string>
     <string name="detail_history_storage_path_set">Local pretendido do arquivo definido como %1$s</string>
     <string name="detail_history_storage_path_cleared">Local pretendido do arquivo removido</string>
     <string name="detail_history_field_removed">Valor de %1$s removido</string>
@@ -136,13 +135,11 @@
     <string name="detail_history_document_trashed">Documento movido para a lixeira (de '%1$s')</string>
     <string name="detail_history_document_restored">Documento restaurado</string>
     <string name="detail_history_document_deleted">Documento excluído permanentemente</string>
-    <string name="detail_history_document_relinked">Revinculado ao documento %1$s</string>
+    <string name="detail_history_document_relinked">Detalhes gravados no arquivo PDF</string>
     <string name="detail_history_tag_renamed">Etiqueta renomeada de '%1$s' para '%2$s'</string>
     <string name="detail_history_tag_merged">Etiqueta '%1$s' mesclada em '%2$s'</string>
     <string name="detail_history_tag_styled">Estilo da etiqueta '%1$s' alterado</string>
     <string name="detail_history_setting_changed">Configuração '%1$s' alterada</string>
-    <string name="detail_history_unknown_event">Evento desconhecido '%1$s'</string>
-    <string name="detail_history_unknown_event_payload">Evento desconhecido '%1$s': %2$s</string>
 
     <string name="detail_title_hint">O título é um metadado. Use "Renomear arquivo" para mudar o nome do arquivo.</string>
     <string name="detail_find_in_text">Buscar no texto</string>
@@ -154,9 +151,9 @@
     <string name="detail_split_failed_invalid_parts">Não foi possível dividir o documento: as partes devem cobrir cada página uma única vez, em ordem.</string>
     <string name="detail_split_failed_unreadable">Não foi possível dividir o documento: não foi possível ler o PDF.</string>
     <string name="detail_split_failed_not_completed">Não foi possível dividir o documento. A biblioteca não foi alterada.</string>
-    <string name="detail_bake_failed_unavailable">Não foi possível atualizar o PDF original: o documento não está mais na biblioteca.</string>
-    <string name="detail_bake_failed_unsupported">Não foi possível atualizar o PDF original: este PDF não pode conter as etiquetas e os detalhes. Ele não foi alterado.</string>
-    <string name="detail_bake_failed_not_saved">Não foi possível salvar o PDF atualizado na biblioteca.</string>
+    <string name="detail_bake_failed_unavailable">Não foi possível gravar os detalhes no arquivo PDF: o documento não está mais na biblioteca.</string>
+    <string name="detail_bake_failed_unsupported">Não foi possível gravar os detalhes no arquivo PDF: este PDF não pode contê-los. Ele não foi alterado.</string>
+    <string name="detail_bake_failed_not_saved">Não foi possível salvar o arquivo PDF atualizado na biblioteca.</string>
     <string name="detail_ai_ocr_no_endpoint">Configure um assistente de IA nas Configurações para ler o texto com ele.</string>
     <string name="detail_add_tag_failed">Não foi possível adicionar a etiqueta: %1$s</string>
     <string name="detail_create_tag_failed">Não foi possível criar a etiqueta: %1$s</string>
@@ -170,6 +167,28 @@
     <string name="detail_rename_taken">Não foi possível renomear o arquivo: outro arquivo na pasta já tem esse nome.</string>
     <string name="detail_rename_invalid">Não foi possível renomear o arquivo: a biblioteca não pode manter um documento com esse nome.</string>
     <string name="detail_ai_ocr_failed">Não foi possível ler o texto com o assistente: %1$s</string>
-    <string name="detail_ocr_engine_failed">Não foi possível alterar o mecanismo de OCR: %1$s</string>
+    <string name="detail_ocr_engine_failed">Não foi possível alterar a origem do texto: %1$s</string>
     <string name="detail_tag_removed">Etiqueta “%1$s” removida.</string>
+    <string name="detail_saved_changes">Alterações em “%1$s” salvas.</string>
+    <string name="detail_undo_save_failed">Não foi possível desfazer as alterações: %1$s</string>
+    <string name="detail_draft_invalid">Um valor não combina com o campo, então estas alterações ainda não foram salvas.</string>
+    <plurals name="detail_drafts_invalid">
+        <item quantity="one">%1$d documento tem um valor que não combina com o campo, então as alterações não foram salvas.</item>
+        <item quantity="other">%1$d documentos têm valores que não combinam com os campos, então as alterações não foram salvas.</item>
+    </plurals>
+    <plurals name="detail_drafts_failed">
+        <item quantity="one">Não foi possível gravar na biblioteca as alterações de %1$d documento.</item>
+        <item quantity="other">Não foi possível gravar na biblioteca as alterações de %1$d documentos.</item>
+    </plurals>
+    <plurals name="detail_drafts_unsaved">
+        <item quantity="one">%1$d documento tem alterações ainda não salvas.</item>
+        <item quantity="other">%1$d documentos têm alterações ainda não salvas.</item>
+    </plurals>
+    <string name="detail_moved_to_trash">“%1$s” movido para a lixeira.</string>
+    <string name="detail_moved_to_trash_untitled">Documento movido para a lixeira.</string>
+    <plurals name="detail_history_newer_changes">
+        <item quantity="one">%1$d alteração de uma versão mais recente do app</item>
+        <item quantity="other">%1$d alterações de uma versão mais recente do app</item>
+    </plurals>
+    <string name="detail_go_to_page_hint">Ir para a página (Ctrl+G)</string>
 </resources>

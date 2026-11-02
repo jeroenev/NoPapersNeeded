@@ -13,10 +13,10 @@ import dev.npn.app.ui.common.previewKeyShortcuts
 // or something inside it holds focus.
 
 /**
- * The page viewer: arrows / PageUp-PageDown page, Home/End jump to the first/last page, and +/-/0
- * zoom in/out/reset. Paging is delegated to [onPage] (which animates the pager); zoom mutates
- * [transform] via [onTransform], anchored at the container center. Ctrl+arrows pass on to
- * [docPagingKeys].
+ * The page viewer: arrows / PageUp-PageDown page, Home/End jump to the first/last page, Ctrl+G
+ * asks which page to go to ([onGoToPage]), and +/-/0 zoom in/out/reset. Paging is delegated to
+ * [onPage] (which animates the pager); zoom mutates [transform] via [onTransform], anchored at the
+ * container center. Ctrl+arrows pass on to [docPagingKeys].
  *
  * The detail screen gives the viewer focus on entry, so these work before anything is clicked.
  */
@@ -28,6 +28,7 @@ internal fun Modifier.viewerKeys(
     containerSize: () -> Size,
     fittedSize: () -> Size,
     onPage: (Int) -> Unit,
+    onGoToPage: () -> Unit,
 ): Modifier =
     keyShortcuts { event ->
         val page = pagerState.currentPage
@@ -43,6 +44,7 @@ internal fun Modifier.viewerKeys(
             Key.PageDown -> toPage(page + 1)
             Key.MoveHome -> toPage(0)
             Key.MoveEnd -> toPage(pageCount - 1)
+            Key.G -> onGoToPage.takeIf { event.isCtrlPressed }
             Key.Plus, Key.Equals -> zoomBy(ZOOM_STEP)
             Key.Minus -> zoomBy(-ZOOM_STEP)
             Key.Zero -> resetZoom

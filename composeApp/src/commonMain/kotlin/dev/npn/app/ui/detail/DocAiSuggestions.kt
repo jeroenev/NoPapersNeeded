@@ -66,6 +66,8 @@ interface AiSuggestionActions {
     )
 
     fun dismissAiMetadata(key: String)
+
+    fun clearAiMetadataSuggestions()
 }
 
 /**
@@ -203,5 +205,9 @@ internal class DocAiSuggestions(
 
     override fun dismissAiMetadata(key: String) {
         _metadata.update { it.copy(suggestion = it.suggestion.without(key)) }
+    }
+
+    override fun clearAiMetadataSuggestions() {
+        _metadata.update { it.copy(suggestion = FieldSuggestion.EMPTY) }
     }
 }

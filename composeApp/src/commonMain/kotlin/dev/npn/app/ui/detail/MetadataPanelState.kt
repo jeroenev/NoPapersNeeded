@@ -108,8 +108,8 @@ interface DocumentWrites : AiSuggestionActions {
 
 /**
  * Everything the metadata panel can do: the [DocumentWrites], plus the edits that wait in the
- * document's draft until Save. [DocumentEditor] provides it, so the panel never decides which of
- * its edits are immediate.
+ * document's draft until the edit is done ([commitDraft]). [DocumentEditor] provides it, so the
+ * panel never decides which of its edits are immediate.
  */
 interface MetadataActions : DocumentWrites {
     /**
@@ -120,6 +120,12 @@ interface MetadataActions : DocumentWrites {
         key: String,
         entry: FieldParse,
     )
+
+    /**
+     * The user finished an edit (a field lost focus, a date was picked): write the draft, if it
+     * changed anything and can be written.
+     */
+    fun commitDraft()
 
     fun removeField(key: String)
 

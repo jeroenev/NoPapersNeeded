@@ -30,8 +30,6 @@ import no_papers_needed.composeapp.generated.resources.detail_history_tag_merged
 import no_papers_needed.composeapp.generated.resources.detail_history_tag_removed
 import no_papers_needed.composeapp.generated.resources.detail_history_tag_renamed
 import no_papers_needed.composeapp.generated.resources.detail_history_tag_styled
-import no_papers_needed.composeapp.generated.resources.detail_history_undecodable
-import no_papers_needed.composeapp.generated.resources.detail_history_unknown_event
 import kotlin.test.Test
 
 class HistoryMapperTest {
@@ -59,12 +57,11 @@ class HistoryMapperTest {
                 HistoryEntry.Restored,
                 HistoryEntry.Deleted,
                 HistoryEntry.Relinked("b".repeat(64)),
-                HistoryEntry.Unknown("future-op", null),
             )
 
         // Registry labels stand in for keys; a key the registry does not know shows as itself.
         val labels = FieldKeys.SEED_LABELS
-        val items = HistoryMapper.toHistoryItems(entries.map { record(it) }) { labels[it] ?: it }
+        val items = HistoryMapper.toTimeline(entries.map { record(it) }) { labels[it] ?: it }.items
 
         items.map { it.description } shouldContainExactly
             listOf(
@@ -82,26 +79,26 @@ class HistoryMapperTest {
                 uiText(Res.string.detail_history_document_trashed, "orig.pdf"),
                 uiText(Res.string.detail_history_document_restored),
                 uiText(Res.string.detail_history_document_deleted),
-                uiText(Res.string.detail_history_document_relinked, "bbbbbbbb..."),
-                uiText(Res.string.detail_history_unknown_event, "future-op"),
+                uiText(Res.string.detail_history_document_relinked),
             )
         items.map { it.entry } shouldContainExactly entries
     }
 
-    /** A pin names its engine as the OCR panel does; one this build does not know, by its label. */
+    /** A pin names its engine as the text-source picker does; one this build does not know, by its label. */
     @Test
     fun anEnginePinNamesTheEngineAsThePanelDoes() =
         runTest {
             val items =
-                HistoryMapper.toHistoryItems(
-                    listOf(
-                        record(HistoryEntry.OcrEnginePinned(OcrEngineRef.Known(OcrEngineId.EMBEDDED))),
-                        record(HistoryEntry.OcrEnginePinned(OcrEngineRef.Unknown("future"))),
-                    ),
-                )
+                HistoryMapper
+                    .toTimeline(
+                        listOf(
+                            record(HistoryEntry.OcrEnginePinned(OcrEngineRef.Known(OcrEngineId.EMBEDDED))),
+                            record(HistoryEntry.OcrEnginePinned(OcrEngineRef.Unknown("future"))),
+                        ),
+                    ).items
 
             items.map { it.description.english() } shouldContainExactly
-                listOf("Pinned OCR engine to Embedded text", "Pinned OCR engine to future")
+                listOf("Set the text source to Embedded text", "Set the text source to future")
         }
 
     @Test
@@ -111,7 +108,7 @@ class HistoryMapperTest {
                 record(HistoryEntry.TagAdded("second"), timeMillis = 200),
                 record(HistoryEntry.TagAdded("first"), timeMillis = 100),
             )
-        val items = HistoryMapper.toHistoryItems(records)
+        val items = HistoryMapper.toTimeline(records).items
         items.map { it.description } shouldContainExactly
             listOf(
                 uiText(Res.string.detail_history_tag_added, "second"),
@@ -129,7 +126,7 @@ class HistoryMapperTest {
                 HistoryEntry.OcrEnginePinned(null),
                 HistoryEntry.ReviewUnreadable("maybe"),
             )
-        val items = HistoryMapper.toHistoryItems(entries.map { record(it) })
+        val items = HistoryMapper.toTimeline(entries.map { record(it) }).items
         items.map { it.description } shouldContainExactly
             listOf(
                 uiText(Res.string.detail_history_field_removed, FieldKeys.TITLE),
@@ -148,7 +145,7 @@ class HistoryMapperTest {
                 HistoryEntry.TagStyled("invoice"),
                 HistoryEntry.SettingChanged("reviewMode"),
             )
-        val items = HistoryMapper.toHistoryItems(entries.map { record(it) })
+        val items = HistoryMapper.toTimeline(entries.map { record(it) }).items
 
         items.map { it.description } shouldContainExactly
             listOf(
@@ -160,18 +157,33 @@ class HistoryMapperTest {
         items.map { it.entry } shouldContainExactly entries
     }
 
+    /**
+     * What this build cannot read (an op it does not know, or cannot decode) is no row of its own:
+     * the timeline counts it, for one line about a newer version of the app.
+     */
     @Test
-    fun mapsUndecodableRecord() {
-        val item = HistoryMapper.toHistoryItems(listOf(record(HistoryEntry.Undecodable("future-op")))).single()
+    fun changesThisBuildCannotReadAreCountedNotListed() {
+        val timeline =
+            HistoryMapper.toTimeline(
+                listOf(
+                    record(HistoryEntry.Unknown("future-op", "{}")),
+                    record(HistoryEntry.TagAdded("invoice")),
+                    record(HistoryEntry.Undecodable("other-op")),
+                ),
+            )
 
-        item.entry shouldBe HistoryEntry.Undecodable("future-op")
-        item.description shouldBe uiText(Res.string.detail_history_undecodable, "future-op")
+        timeline.items.map { it.description } shouldContainExactly
+            listOf(uiText(Res.string.detail_history_tag_added, "invoice"))
+        timeline.newerChanges shouldBe 2
+        timeline.isEmpty shouldBe false
+        HistoryMapper.toTimeline(listOf(record(HistoryEntry.Undecodable("op")))).isEmpty shouldBe false
+        HistoryMapper.toTimeline(emptyList()).isEmpty shouldBe true
     }
 
     @Test
     fun clipsLongFieldValues() {
         val long = "x".repeat(200)
-        val items = HistoryMapper.toHistoryItems(listOf(record(HistoryEntry.FieldSet(FieldKeys.NOTES, long))))
+        val items = HistoryMapper.toTimeline(listOf(record(HistoryEntry.FieldSet(FieldKeys.NOTES, long)))).items
         val shown = (items.single().description as UiText.Res).args[1] as String
         shown.length shouldBe 80
         shown.endsWith("\u2026") shouldBe true

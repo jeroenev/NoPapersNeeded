@@ -13,11 +13,11 @@
     <string name="detail_trash_prompt">Dit document naar de prullenbak verplaatsen? Je kunt het later herstellen.</string>
     <string name="detail_trash">Naar prullenbak</string>
     <string name="detail_split_failed">Splitsen mislukt: %1$s</string>
-    <string name="detail_bake_metadata_in_place">Tags en details in originele pdf opslaan</string>
-    <string name="detail_bake_prompt">Het bibliotheekbestand wordt herschreven met tags en eigenschappen als XMP. De hash verandert en de wijziging wordt gesynchroniseerd. Gebruik Exporteren om de bibliotheek niet te wijzigen. Doorgaan?</string>
-    <string name="detail_bake_in_place">Originele pdf bijwerken</string>
-    <string name="detail_baked_in_place">Originele pdf bijgewerkt</string>
-    <string name="detail_bake_failed">De originele pdf kon niet worden bijgewerkt: %1$s</string>
+    <string name="detail_bake_metadata_in_place">Details in het pdf-bestand schrijven</string>
+    <string name="detail_bake_prompt">De tags en details worden in het pdf-bestand in je bibliotheek geschreven, zodat andere apps ze kunnen lezen. Het bestand zelf verandert, ook op je andere toestellen. Gebruik Exporteren voor een kopie als je het bibliotheekbestand ongewijzigd wilt laten. Doorgaan?</string>
+    <string name="detail_bake_in_place">In het bestand schrijven</string>
+    <string name="detail_baked_in_place">Details in het pdf-bestand geschreven</string>
+    <string name="detail_bake_failed">De details konden niet in het pdf-bestand worden geschreven: %1$s</string>
     <string name="detail_document_position">%1$d van %2$d</string>
     <string name="detail_previous_document">Vorig document</string>
     <string name="detail_next_document">Volgend document</string>
@@ -27,15 +27,15 @@
     <string name="detail_shared_baked_copy">Pdf met tags en details gedeeld</string>
     <string name="detail_share_failed">Delen mislukt: %1$s</string>
     <string name="detail_more_actions">Meer acties</string>
-    <string name="detail_rerunning_ocr">OCR opnieuw uitvoeren...</string>
-    <string name="detail_rerun_ocr">OCR opnieuw uitvoeren</string>
+    <string name="detail_rerunning_ocr">Tekstherkenning opnieuw uitvoeren…</string>
+    <string name="detail_rerun_ocr">Tekstherkenning opnieuw uitvoeren</string>
     <string name="detail_ai_ocr">Tekst uitlezen met assistent</string>
     <string name="detail_ai_ocr_large">Tekst uitlezen met assistent (%1$d pagina's)</string>
-    <string name="detail_ai_ocr_large_prompt">Dit document heeft %1$d pagina's. De assistent leest één pagina per aanvraag, dus dit kost ongeveer %1$d aanvragen. OCR op het toestel is gratis en blijft beschikbaar.</string>
+    <string name="detail_ai_ocr_large_prompt">Dit document heeft %1$d pagina's. De assistent leest één pagina per aanvraag, dus dit kost ongeveer %1$d aanvragen. Tekstherkenning op het toestel is gratis en blijft beschikbaar.</string>
     <string name="detail_ai_ocr_confirm">Toch uitlezen</string>
     <string name="detail_splitting">Splitsen...</string>
     <string name="detail_split_document">Document splitsen</string>
-    <string name="detail_baking">Pdf bijwerken…</string>
+    <string name="detail_baking">Details in de pdf schrijven…</string>
 
     <string name="detail_tab_preview">Voorbeeld</string>
     <string name="detail_tab_details">Details</string>
@@ -50,8 +50,8 @@
     <string name="detail_location">Locatie</string>
     <string name="detail_created">Aangemaakt</string>
     <string name="detail_pages">Pagina's</string>
-    <string name="detail_ocr">OCR</string>
-    <string name="detail_ocr_details_failed">Kan de OCR-gegevens van dit document niet laden: %1$s</string>
+    <string name="detail_ocr">Tekstherkenning</string>
+    <string name="detail_ocr_details_failed">Kan de tekstbronnen van dit document niet laden: %1$s</string>
     <string name="detail_suggest_tags">Tags voorstellen</string>
     <string name="detail_suggest_metadata">Details voorstellen</string>
     <string name="detail_suggesting_tags">Tags voorstellen…</string>
@@ -83,9 +83,9 @@
     <string name="detail_field_seed_hint_title">Wat het document is, in een paar woorden (bv. Elektriciteitsfactuur januari 2024). Neem bedrijfsnamen, referentienummers en andere eigennamen over zoals ze gedrukt staan. Dit is niet de bestandsnaam: gebruik "Bestand hernoemen" om die te wijzigen.</string>
     <string name="detail_field_seed_hint_correspondent">De andere partij: het bedrijf, de instelling of de persoon die het document heeft verstuurd of uitgegeven, nooit de eigenaar van het archief.</string>
     <string name="detail_field_seed_hint_doc_date">De datum waarop het document is uitgegeven (factuur-, brief- of uitgiftedatum), niet wanneer het is gescand.</string>
-    <string name="detail_text_queued">Tekstextractie voor dit document staat in de wachtrij.</string>
-    <string name="detail_text_failed">Tekstextractie voor dit document is mislukt.</string>
-    <string name="detail_text_not_extracted">Er is nog geen tekst uit dit document geëxtraheerd.</string>
+    <string name="detail_text_queued">Tekstherkenning voor dit document staat in de wachtrij.</string>
+    <string name="detail_text_failed">Tekstherkenning voor dit document is mislukt.</string>
+    <string name="detail_text_not_extracted">Er is nog geen tekst uit dit document gelezen.</string>
     <string name="detail_text_unavailable">Geen tekst beschikbaar.</string>
     <string name="detail_no_history">Nog geen geschiedenis.</string>
     <string name="detail_history_load_failed">De geschiedenis kon niet worden geladen: %1$s</string>
@@ -120,15 +120,14 @@
     <string name="detail_page_range">Pagina (1-%1$d)</string>
     <string name="detail_go">Ga</string>
 
-    <string name="detail_history_undecodable">Journaalgebeurtenis '%1$s' kon niet worden gedecodeerd</string>
     <string name="detail_history_tag_added">Tag '%1$s' toegevoegd</string>
     <string name="detail_history_tag_removed">Tag '%1$s' verwijderd</string>
     <string name="detail_history_marked_reviewed">Als beoordeeld gemarkeerd</string>
     <string name="detail_history_marked_needs_review">Als te beoordelen gemarkeerd</string>
     <string name="detail_history_review_state_cleared">Beoordelingsstatus gewist</string>
     <string name="detail_history_review_state_changed">Beoordelingsstatus ingesteld op '%1$s'</string>
-    <string name="detail_history_ocr_engine_cleared">Vastgezette OCR-engine gewist</string>
-    <string name="detail_history_ocr_engine_pinned">OCR-engine vastgezet op %1$s</string>
+    <string name="detail_history_ocr_engine_cleared">Tekstbron teruggezet op automatisch</string>
+    <string name="detail_history_ocr_engine_pinned">Tekstbron ingesteld op %1$s</string>
     <string name="detail_history_storage_path_set">Gewenste bestandslocatie ingesteld op %1$s</string>
     <string name="detail_history_storage_path_cleared">Gewenste bestandslocatie gewist</string>
     <string name="detail_history_field_removed">%1$s gewist</string>
@@ -136,13 +135,11 @@
     <string name="detail_history_document_trashed">Document van '%1$s' naar de prullenbak verplaatst</string>
     <string name="detail_history_document_restored">Document hersteld</string>
     <string name="detail_history_document_deleted">Document permanent verwijderd</string>
-    <string name="detail_history_document_relinked">Opnieuw gekoppeld aan document %1$s</string>
+    <string name="detail_history_document_relinked">Details in het pdf-bestand geschreven</string>
     <string name="detail_history_tag_renamed">Tag hernoemd van '%1$s' naar '%2$s'</string>
     <string name="detail_history_tag_merged">Tag '%1$s' samengevoegd met '%2$s'</string>
     <string name="detail_history_tag_styled">Stijl van tag '%1$s' gewijzigd</string>
     <string name="detail_history_setting_changed">Instelling '%1$s' gewijzigd</string>
-    <string name="detail_history_unknown_event">Onbekende gebeurtenis '%1$s'</string>
-    <string name="detail_history_unknown_event_payload">Onbekende gebeurtenis '%1$s': %2$s</string>
 
     <string name="detail_title_hint">Titel is metadata. Gebruik "Bestand hernoemen" om de bestandsnaam te wijzigen.</string>
     <string name="detail_find_in_text">Zoeken in tekst</string>
@@ -154,9 +151,9 @@
     <string name="detail_split_failed_invalid_parts">Het document kon niet worden gesplitst: de delen moeten elke pagina precies één keer en op volgorde bevatten.</string>
     <string name="detail_split_failed_unreadable">Het document kon niet worden gesplitst: de pdf kon niet worden gelezen.</string>
     <string name="detail_split_failed_not_completed">Het document kon niet worden gesplitst. De bibliotheek is ongewijzigd gebleven.</string>
-    <string name="detail_bake_failed_unavailable">De originele pdf kon niet worden bijgewerkt: het document staat niet meer in de bibliotheek.</string>
-    <string name="detail_bake_failed_unsupported">De originele pdf kon niet worden bijgewerkt: deze pdf kan de tags en details niet bevatten. Het bestand is ongewijzigd gebleven.</string>
-    <string name="detail_bake_failed_not_saved">De bijgewerkte pdf kon niet in de bibliotheek worden opgeslagen.</string>
+    <string name="detail_bake_failed_unavailable">De details konden niet in het pdf-bestand worden geschreven: het document staat niet meer in de bibliotheek.</string>
+    <string name="detail_bake_failed_unsupported">De details konden niet in het pdf-bestand worden geschreven: deze pdf kan ze niet bevatten. Het bestand is ongewijzigd gebleven.</string>
+    <string name="detail_bake_failed_not_saved">Het bijgewerkte pdf-bestand kon niet in de bibliotheek worden opgeslagen.</string>
     <string name="detail_ai_ocr_no_endpoint">Stel in Instellingen een AI-assistent in om er tekst mee te lezen.</string>
     <string name="detail_add_tag_failed">De tag kon niet worden toegevoegd: %1$s</string>
     <string name="detail_create_tag_failed">De tag kon niet worden aangemaakt: %1$s</string>
@@ -170,6 +167,28 @@
     <string name="detail_rename_taken">Het bestand kon niet worden hernoemd: een ander bestand in de map heeft al die naam.</string>
     <string name="detail_rename_invalid">Het bestand kon niet worden hernoemd: de bibliotheek kan geen document onder die naam bewaren.</string>
     <string name="detail_ai_ocr_failed">De tekst kon niet met de assistent worden uitgelezen: %1$s</string>
-    <string name="detail_ocr_engine_failed">De OCR-engine kon niet worden gewijzigd: %1$s</string>
+    <string name="detail_ocr_engine_failed">De tekstbron kon niet worden gewijzigd: %1$s</string>
     <string name="detail_tag_removed">Tag '%1$s' verwijderd.</string>
+    <string name="detail_saved_changes">Wijzigingen aan '%1$s' opgeslagen.</string>
+    <string name="detail_undo_save_failed">De wijzigingen konden niet ongedaan worden gemaakt: %1$s</string>
+    <string name="detail_draft_invalid">Een waarde past niet bij het veld, dus deze wijzigingen zijn nog niet opgeslagen.</string>
+    <plurals name="detail_drafts_invalid">
+        <item quantity="one">%1$d document heeft een waarde die niet bij het veld past, dus de wijzigingen zijn niet opgeslagen.</item>
+        <item quantity="other">%1$d documenten hebben waarden die niet bij hun velden passen, dus de wijzigingen zijn niet opgeslagen.</item>
+    </plurals>
+    <plurals name="detail_drafts_failed">
+        <item quantity="one">Wijzigingen aan %1$d document konden niet naar de bibliotheek worden geschreven.</item>
+        <item quantity="other">Wijzigingen aan %1$d documenten konden niet naar de bibliotheek worden geschreven.</item>
+    </plurals>
+    <plurals name="detail_drafts_unsaved">
+        <item quantity="one">%1$d document heeft wijzigingen die nog niet zijn opgeslagen.</item>
+        <item quantity="other">%1$d documenten hebben wijzigingen die nog niet zijn opgeslagen.</item>
+    </plurals>
+    <string name="detail_moved_to_trash">'%1$s' naar de prullenbak verplaatst.</string>
+    <string name="detail_moved_to_trash_untitled">Document naar de prullenbak verplaatst.</string>
+    <plurals name="detail_history_newer_changes">
+        <item quantity="one">%1$d wijziging uit een nieuwere versie van de app</item>
+        <item quantity="other">%1$d wijzigingen uit een nieuwere versie van de app</item>
+    </plurals>
+    <string name="detail_go_to_page_hint">Ga naar pagina (Ctrl+G)</string>
 </resources>

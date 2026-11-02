@@ -56,6 +56,7 @@ import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_retry
 import no_papers_needed.composeapp.generated.resources.detail_go
 import no_papers_needed.composeapp.generated.resources.detail_go_to_page
+import no_papers_needed.composeapp.generated.resources.detail_go_to_page_hint
 import no_papers_needed.composeapp.generated.resources.detail_next_page
 import no_papers_needed.composeapp.generated.resources.detail_no_pages
 import no_papers_needed.composeapp.generated.resources.detail_page_number
@@ -136,6 +137,7 @@ fun PageViewer(
                     containerSize = { containerSize },
                     fittedSize = { cache.fittedSizeFor(currentPage.value, containerSize) },
                     onPage = { goToPage(it) },
+                    onGoToPage = { showGoToPage = true },
                 ).viewerScroll(
                     // Ctrl+scroll: cursor-anchored zoom.
                     onZoom = { delta, position ->
@@ -487,6 +489,7 @@ private fun PageIndicator(
             onPrevious = onPrev.takeIf { pageIndex > 0 },
             onNext = onNext.takeIf { pageIndex < pageCount - 1 },
             onPositionClick = onClick,
+            positionLabel = stringResource(Res.string.detail_go_to_page_hint),
         )
     }
 }

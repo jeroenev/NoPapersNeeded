@@ -20,10 +20,12 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.AddFieldMenu
 import dev.npn.app.ui.common.ConfirmDialog
@@ -92,6 +94,7 @@ internal fun FieldsSection(
                     // The title stands in for the file name when empty, so the file name is its placeholder.
                     placeholder = doc.fileName.takeIf { def.key == FieldKeys.TITLE },
                     onCommit = { actions.commitField(def.key, it) },
+                    onDone = actions::commitDraft,
                 ) {
                     if (!def.showByDefault) RemoveFieldButton(def.label) { actions.removeField(def.key) }
                 }
@@ -112,7 +115,12 @@ internal fun FieldsSection(
                 key("orphan:$orphan") {
                     val value = doc.fields.getValue(orphan)
                     // Shown verbatim as text: without a definition there is no type to judge it by.
-                    FieldRow(def = orphanDef(orphan), value = value, onCommit = { actions.commitField(orphan, it) }) {
+                    FieldRow(
+                        def = orphanDef(orphan),
+                        value = value,
+                        onCommit = { actions.commitField(orphan, it) },
+                        onDone = actions::commitDraft,
+                    ) {
                         TooltipIconButton(
                             Icons.AutoMirrored.Filled.PlaylistAdd,
                             stringResource(Res.string.detail_add_to_fields),
@@ -147,19 +155,28 @@ internal fun FieldsSection(
     }
 }
 
-/** One field's editor, followed by the [actions] offered on it, such as removing it. */
+/**
+ * One field's editor, followed by the [actions] offered on it, such as removing it. [onDone] runs
+ * when the edit is finished: focus leaves the row, or the editor says so (a date picked).
+ */
 @Composable
 private fun FieldRow(
     def: FieldDef,
     value: String?,
     onCommit: (FieldParse) -> Unit,
+    onDone: () -> Unit,
     refused: Boolean = false,
     suggestions: List<String> = emptyList(),
     placeholder: String? = null,
     actions: @Composable RowScope.() -> Unit,
 ) {
+    // Read only in the focus callback, so it needs no snapshot state.
+    val focus = remember { FocusSeen() }
     Row(
-        Modifier.fillMaxWidth(),
+        Modifier.fillMaxWidth().onFocusChanged {
+            if (focus.had && !it.hasFocus) onDone()
+            focus.had = it.hasFocus
+        },
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -170,10 +187,16 @@ private fun FieldRow(
             suggestions = suggestions,
             placeholder = placeholder,
             onCommit = onCommit,
+            onDone = onDone,
             modifier = Modifier.weight(1f),
         )
         actions()
     }
+}
+
+/** Whether a row held focus at its last focus change, to tell focus leaving it from never having had it. */
+private class FocusSeen {
+    var had = false
 }
 
 @Composable

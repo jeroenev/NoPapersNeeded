@@ -57,6 +57,9 @@ fun rememberFieldLocale(): FieldLocale {
  * instead of silently discarding what was typed. Only the editor can give that verdict, since it
  * reads a number the way [locale] writes it. A stored value that does not fit the type is shown
  * as-is with the same warning and is never rewritten.
+ *
+ * [onDone] says an edit is finished without focus leaving the field: a date picked from the calendar.
+ * A caller that saves when the edit is done also listens for focus leaving the editor.
  */
 @Composable
 fun FieldEditor(
@@ -64,6 +67,7 @@ fun FieldEditor(
     value: String?,
     onCommit: (FieldParse) -> Unit,
     modifier: Modifier = Modifier,
+    onDone: () -> Unit = {},
     suggestions: List<String> = emptyList(),
     placeholder: String? = null,
     refused: Boolean = false,
@@ -93,7 +97,7 @@ fun FieldEditor(
         }
 
         FieldType.DATE -> {
-            DateField(def, value.orEmpty(), hint, commitText, modifier)
+            DateField(def, value.orEmpty(), hint, commitText, onDone, modifier)
         }
     }
 }
@@ -203,6 +207,7 @@ private fun DateField(
     value: String,
     hint: String?,
     onCommit: (String) -> Unit,
+    onPicked: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showPicker by remember { mutableStateOf(false) }
@@ -233,6 +238,7 @@ private fun DateField(
             onSelect = { iso ->
                 showPicker = false
                 onCommit(iso.orEmpty())
+                onPicked()
             },
             onDismiss = { showPicker = false },
         )

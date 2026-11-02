@@ -13,11 +13,11 @@
     <string name="detail_trash_prompt">Mettre ce document à la corbeille ? Vous pourrez le restaurer plus tard.</string>
     <string name="detail_trash">Corbeille</string>
     <string name="detail_split_failed">Échec de la division : %1$s</string>
-    <string name="detail_bake_metadata_in_place">Intégrer étiquettes et infos au PDF d’origine</string>
-    <string name="detail_bake_prompt">Cela réécrit le fichier de la bibliothèque pour y intégrer les étiquettes et les informations au format XMP. L’empreinte du fichier change et la réécriture est synchronisée avec vos autres appareils. Préférez l’export pour obtenir une copie portable qui laisse la bibliothèque intacte. Continuer ?</string>
-    <string name="detail_bake_in_place">Mettre à jour le PDF</string>
-    <string name="detail_baked_in_place">PDF d’origine mis à jour</string>
-    <string name="detail_bake_failed">Impossible de mettre à jour le PDF d’origine : %1$s</string>
+    <string name="detail_bake_metadata_in_place">Écrire les infos dans le fichier PDF</string>
+    <string name="detail_bake_prompt">Cela écrit les étiquettes et les informations dans le fichier PDF de votre bibliothèque, pour que d’autres applications puissent les lire. Le fichier lui-même change, y compris sur vos autres appareils. Pour laisser le fichier de la bibliothèque intact, utilisez plutôt l’export pour obtenir une copie. Continuer ?</string>
+    <string name="detail_bake_in_place">Écrire dans le fichier</string>
+    <string name="detail_baked_in_place">Infos écrites dans le fichier PDF</string>
+    <string name="detail_bake_failed">Impossible d’écrire les infos dans le fichier PDF : %1$s</string>
     <string name="detail_document_position">%1$d sur %2$d</string>
     <string name="detail_previous_document">Document précédent</string>
     <string name="detail_next_document">Document suivant</string>
@@ -27,15 +27,15 @@
     <string name="detail_shared_baked_copy">PDF partagé avec étiquettes et informations</string>
     <string name="detail_share_failed">Échec du partage : %1$s</string>
     <string name="detail_more_actions">Plus d’actions</string>
-    <string name="detail_rerunning_ocr">Relance de l’OCR…</string>
-    <string name="detail_rerun_ocr">Relancer l’OCR</string>
+    <string name="detail_rerunning_ocr">Relance de la reconnaissance de texte…</string>
+    <string name="detail_rerun_ocr">Relancer la reconnaissance de texte</string>
     <string name="detail_ai_ocr">Lire le texte avec l’assistant</string>
     <string name="detail_ai_ocr_large">Lire le texte avec l’assistant (%1$d pages)</string>
-    <string name="detail_ai_ocr_large_prompt">Ce document compte %1$d pages. L’assistant lit une page par requête, ce qui coûtera environ %1$d requêtes. L’OCR sur l’appareil est gratuit et reste disponible.</string>
+    <string name="detail_ai_ocr_large_prompt">Ce document compte %1$d pages. L’assistant lit une page par requête, ce qui coûtera environ %1$d requêtes. La reconnaissance de texte sur l’appareil est gratuite et reste disponible.</string>
     <string name="detail_ai_ocr_confirm">Lire quand même</string>
     <string name="detail_splitting">Division en cours…</string>
     <string name="detail_split_document">Diviser le document</string>
-    <string name="detail_baking">Mise à jour du PDF…</string>
+    <string name="detail_baking">Écriture des infos dans le PDF…</string>
 
     <string name="detail_tab_preview">Aperçu</string>
     <string name="detail_tab_details">Détails</string>
@@ -50,8 +50,8 @@
     <string name="detail_location">Emplacement</string>
     <string name="detail_created">Créé le</string>
     <string name="detail_pages">Pages</string>
-    <string name="detail_ocr">OCR</string>
-    <string name="detail_ocr_details_failed">Impossible de charger les informations OCR de ce document : %1$s</string>
+    <string name="detail_ocr">Reconnaissance de texte</string>
+    <string name="detail_ocr_details_failed">Impossible de charger les sources du texte de ce document : %1$s</string>
     <string name="detail_suggest_tags">Suggérer des étiquettes</string>
     <string name="detail_suggest_metadata">Suggérer des informations</string>
     <string name="detail_suggesting_tags">Recherche d’étiquettes…</string>
@@ -83,9 +83,9 @@
     <string name="detail_field_seed_hint_title">Ce qu’est le document, en quelques mots (p. ex. Facture d’électricité janvier 2024). Recopiez les noms d’entreprise, numéros de référence et autres noms propres tels qu’ils sont imprimés. Ce n’est pas le nom du fichier : utilisez « Renommer le fichier » pour le changer.</string>
     <string name="detail_field_seed_hint_correspondent">L’autre partie : l’entreprise, l’organisme ou la personne qui a envoyé ou émis le document, jamais le propriétaire des archives.</string>
     <string name="detail_field_seed_hint_doc_date">La date à laquelle le document a été émis (date de facture, de lettre ou d’émission), pas celle de sa numérisation.</string>
-    <string name="detail_text_queued">L’extraction du texte est en file d’attente pour ce document.</string>
-    <string name="detail_text_failed">L’extraction du texte a échoué pour ce document.</string>
-    <string name="detail_text_not_extracted">Aucun texte n’a encore été extrait de ce document.</string>
+    <string name="detail_text_queued">La reconnaissance de texte est en file d’attente pour ce document.</string>
+    <string name="detail_text_failed">La reconnaissance de texte a échoué pour ce document.</string>
+    <string name="detail_text_not_extracted">Aucun texte n’a encore été lu dans ce document.</string>
     <string name="detail_text_unavailable">Aucun texte disponible.</string>
     <string name="detail_no_history">Aucun événement dans l’historique pour l’instant.</string>
     <string name="detail_history_load_failed">Impossible de charger l’historique : %1$s</string>
@@ -120,15 +120,14 @@
     <string name="detail_page_range">Page (1-%1$d)</string>
     <string name="detail_go">Aller</string>
 
-    <string name="detail_history_undecodable">Impossible de décoder l’événement de journal « %1$s »</string>
     <string name="detail_history_tag_added">Étiquette « %1$s » ajoutée</string>
     <string name="detail_history_tag_removed">Étiquette « %1$s » retirée</string>
     <string name="detail_history_marked_reviewed">Marqué comme vérifié</string>
     <string name="detail_history_marked_needs_review">Marqué comme à vérifier</string>
     <string name="detail_history_review_state_cleared">État de vérification effacé</string>
     <string name="detail_history_review_state_changed">État de vérification défini sur « %1$s »</string>
-    <string name="detail_history_ocr_engine_cleared">Moteur OCR imposé retiré</string>
-    <string name="detail_history_ocr_engine_pinned">Moteur OCR imposé : %1$s</string>
+    <string name="detail_history_ocr_engine_cleared">Source du texte remise en automatique</string>
+    <string name="detail_history_ocr_engine_pinned">Source du texte définie sur %1$s</string>
     <string name="detail_history_storage_path_set">Emplacement prévu du fichier défini sur %1$s</string>
     <string name="detail_history_storage_path_cleared">Emplacement prévu du fichier effacé</string>
     <string name="detail_history_field_removed">%1$s effacé</string>
@@ -136,13 +135,11 @@
     <string name="detail_history_document_trashed">Document mis à la corbeille depuis « %1$s »</string>
     <string name="detail_history_document_restored">Document restauré</string>
     <string name="detail_history_document_deleted">Document supprimé définitivement</string>
-    <string name="detail_history_document_relinked">Relié au document %1$s</string>
+    <string name="detail_history_document_relinked">Infos écrites dans le fichier PDF</string>
     <string name="detail_history_tag_renamed">Étiquette « %1$s » renommée en « %2$s »</string>
     <string name="detail_history_tag_merged">Étiquette « %1$s » fusionnée dans « %2$s »</string>
     <string name="detail_history_tag_styled">Style de l’étiquette « %1$s » modifié</string>
     <string name="detail_history_setting_changed">Paramètre « %1$s » modifié</string>
-    <string name="detail_history_unknown_event">Événement inconnu « %1$s »</string>
-    <string name="detail_history_unknown_event_payload">Événement inconnu « %1$s » : %2$s</string>
 
     <string name="detail_title_hint">Le titre est une information du document. Utilisez « Renommer le fichier » pour changer le nom du fichier.</string>
     <string name="detail_find_in_text">Rechercher dans le texte</string>
@@ -154,9 +151,9 @@
     <string name="detail_split_failed_invalid_parts">Impossible de diviser le document : les parties doivent couvrir chaque page une seule fois, dans l’ordre.</string>
     <string name="detail_split_failed_unreadable">Impossible de diviser le document : le PDF n’a pas pu être lu.</string>
     <string name="detail_split_failed_not_completed">Impossible de diviser le document. La bibliothèque est restée inchangée.</string>
-    <string name="detail_bake_failed_unavailable">Impossible de mettre à jour le PDF d’origine : le document n’est plus dans la bibliothèque.</string>
-    <string name="detail_bake_failed_unsupported">Impossible de mettre à jour le PDF d’origine : ce PDF ne peut pas contenir les étiquettes et les informations. Il est resté inchangé.</string>
-    <string name="detail_bake_failed_not_saved">Impossible d’enregistrer le PDF mis à jour dans la bibliothèque.</string>
+    <string name="detail_bake_failed_unavailable">Impossible d’écrire les infos dans le fichier PDF : le document n’est plus dans la bibliothèque.</string>
+    <string name="detail_bake_failed_unsupported">Impossible d’écrire les infos dans le fichier PDF : ce PDF ne peut pas les contenir. Il est resté inchangé.</string>
+    <string name="detail_bake_failed_not_saved">Impossible d’enregistrer le fichier PDF mis à jour dans la bibliothèque.</string>
     <string name="detail_ai_ocr_no_endpoint">Configurez un assistant IA dans les Paramètres pour lire le texte avec lui.</string>
     <string name="detail_add_tag_failed">Impossible d’ajouter l’étiquette : %1$s</string>
     <string name="detail_create_tag_failed">Impossible de créer l’étiquette : %1$s</string>
@@ -170,6 +167,28 @@
     <string name="detail_rename_taken">Impossible de renommer le fichier : un autre fichier de son dossier porte déjà ce nom.</string>
     <string name="detail_rename_invalid">Impossible de renommer le fichier : la bibliothèque ne peut pas conserver un document sous ce nom.</string>
     <string name="detail_ai_ocr_failed">Impossible de lire le texte avec l’assistant : %1$s</string>
-    <string name="detail_ocr_engine_failed">Impossible de changer de moteur OCR : %1$s</string>
+    <string name="detail_ocr_engine_failed">Impossible de changer la source du texte : %1$s</string>
     <string name="detail_tag_removed">Étiquette « %1$s » supprimée.</string>
+    <string name="detail_saved_changes">Modifications de « %1$s » enregistrées.</string>
+    <string name="detail_undo_save_failed">Impossible d’annuler les modifications : %1$s</string>
+    <string name="detail_draft_invalid">Une valeur ne correspond pas à son champ : ces modifications ne sont pas encore enregistrées.</string>
+    <plurals name="detail_drafts_invalid">
+        <item quantity="one">%1$d document a une valeur qui ne correspond pas à son champ : ses modifications ne sont pas enregistrées.</item>
+        <item quantity="other">%1$d documents ont des valeurs qui ne correspondent pas à leurs champs : leurs modifications ne sont pas enregistrées.</item>
+    </plurals>
+    <plurals name="detail_drafts_failed">
+        <item quantity="one">Les modifications de %1$d document n’ont pas pu être écrites dans la bibliothèque.</item>
+        <item quantity="other">Les modifications de %1$d documents n’ont pas pu être écrites dans la bibliothèque.</item>
+    </plurals>
+    <plurals name="detail_drafts_unsaved">
+        <item quantity="one">%1$d document a des modifications pas encore enregistrées.</item>
+        <item quantity="other">%1$d documents ont des modifications pas encore enregistrées.</item>
+    </plurals>
+    <string name="detail_moved_to_trash">« %1$s » mis à la corbeille.</string>
+    <string name="detail_moved_to_trash_untitled">Document mis à la corbeille.</string>
+    <plurals name="detail_history_newer_changes">
+        <item quantity="one">%1$d modification d’une version plus récente de l’application</item>
+        <item quantity="other">%1$d modifications d’une version plus récente de l’application</item>
+    </plurals>
+    <string name="detail_go_to_page_hint">Aller à la page (Ctrl+G)</string>
 </resources>

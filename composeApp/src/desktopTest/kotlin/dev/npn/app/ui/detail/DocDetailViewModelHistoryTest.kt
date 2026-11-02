@@ -48,6 +48,30 @@ class DocDetailViewModelHistoryTest : MainDispatcherTest() {
                 )
         }
 
+    /**
+     * Changes only a newer version of the app can read are one count, not a row each; with nothing
+     * else, they are still a history.
+     */
+    @Test
+    fun changesFromANewerVersionAreCountedNotListed() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply {
+                    documents.singleDoc.value = listItem("doc-1")
+                    documents.historyList =
+                        listOf(
+                            DocumentHistoryRecord(100, "dev-a", HistoryEntry.Unknown("future-op", null)),
+                            DocumentHistoryRecord(90, "dev-b", HistoryEntry.Undecodable("other-op")),
+                        )
+                }
+            val model = liveDocDetailVm(session, settings = FakeSettingsRepository())
+
+            model.loadHistory()
+            advanceUntilIdle()
+
+            model.metadata.value.history shouldBe HistoryUiState.Loaded(items = emptyList(), newerChanges = 2)
+        }
+
     @Test
     fun loadHistoryDoesNotReloadWithoutRefreshAndExposesFailure() =
         runTest(dispatcher) {
