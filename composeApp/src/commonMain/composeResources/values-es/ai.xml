@@ -181,4 +181,10 @@
     </plurals>
     <string name="ai_edit_queue_failed">No se pudo poner en cola la edición con IA: %1$s</string>
     <string name="ai_edit_start_failed">No se pudo iniciar la edición con IA: %1$s</string>
+    <string name="ai_chat_empty_title">Pregunta lo que quieras a tus documentos</string>
+    <string name="ai_chat_empty_subtitle">Busca en tu biblioteca, compara importes o encuentra una fecha de caducidad. Las respuestas salen de tus documentos.</string>
+    <string name="ai_chat_example_renewal">¿Cuándo se renueva mi seguro de coche?</string>
+    <string name="ai_chat_example_utilities">Encuentra mi última factura de la luz.</string>
+    <string name="ai_chat_example_contract">Encuentra el contrato que firmé con Acme.</string>
+    <string name="ai_chat_example_untagged">¿Quién es mi arrendador?</string>
 </resources>

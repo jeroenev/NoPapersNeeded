@@ -178,10 +178,14 @@ class ScreenRestorationTest : EnglishLocaleTest() {
             restored(
                 content = { TrashScreen(session) },
                 before = { scene ->
-                    scene.tap { it.text() == "Delete" }
-                    scene.has { it.text() == "Delete forever" } shouldBe true
+                    scene.tap { it.text() == "Delete forever" }
+                    // The row button and the dialog share their label, so look for the dialog's
+                    // own sentence: otherwise the row alone would satisfy the check.
+                    scene.has { it.text()?.startsWith("Permanently delete this document?") == true } shouldBe true
                 },
-                after = { scene -> scene.has { it.text() == "Delete forever" } shouldBe true },
+                after = { scene ->
+                    scene.has { it.text()?.startsWith("Permanently delete this document?") == true } shouldBe true
+                },
             )
         }
 

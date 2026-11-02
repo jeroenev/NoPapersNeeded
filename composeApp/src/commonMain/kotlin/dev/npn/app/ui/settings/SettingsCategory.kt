@@ -250,6 +250,8 @@ internal val SettingsCategories: List<SettingsCategory> =
                     Res.string.common_settings_ai_auto_on_ocr,
                     Res.string.common_settings_ai_ocr_auto,
                     Res.string.common_settings_ai_test,
+                    // The reasoning and tag-limit controls sit behind this disclosure.
+                    Res.string.common_settings_advanced,
                 ),
             content = { state, actions -> AiSettingsPane(state, actions) },
         ),

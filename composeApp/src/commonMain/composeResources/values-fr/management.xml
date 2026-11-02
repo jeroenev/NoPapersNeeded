@@ -125,4 +125,9 @@
     <string name="common_rules_save_failed">Impossible d’enregistrer la règle : %1$s</string>
     <string name="common_rules_delete_failed">Impossible de supprimer la règle : %1$s</string>
     <string name="common_rules_update_failed">Impossible de mettre à jour la règle : %1$s</string>
+    <plurals name="common_trash_retention_help">
+        <item quantity="one">Les documents de la corbeille sont définitivement supprimés après %1$d jour.</item>
+        <item quantity="other">Les documents de la corbeille sont définitivement supprimés après %1$d jours.</item>
+    </plurals>
+    <string name="common_trash_retention_help_immediate">Les documents de la corbeille sont définitivement supprimés lors du prochain nettoyage.</string>
 </resources>

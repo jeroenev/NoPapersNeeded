@@ -80,6 +80,7 @@ import no_papers_needed.composeapp.generated.resources.common_rules_summary
 import no_papers_needed.composeapp.generated.resources.common_rules_tags_to_add
 import no_papers_needed.composeapp.generated.resources.common_rules_title
 import no_papers_needed.composeapp.generated.resources.common_save
+import no_papers_needed.composeapp.generated.resources.common_settings_syncs_across_devices
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -156,26 +157,32 @@ private fun AutoMatchRulesScaffold(
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
-        if (rules == null) {
-            LoadingIndicator(Modifier.padding(padding))
-        } else if (rules.isEmpty()) {
-            EmptyState(
-                icon = Icons.AutoMirrored.Filled.Rule,
-                title = stringResource(Res.string.common_rules_empty_title),
-                modifier = Modifier.padding(padding),
-                subtitle = stringResource(Res.string.common_rules_empty_subtitle),
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            HelpText(
+                stringResource(Res.string.common_settings_syncs_across_devices),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
-        } else {
-            LazyColumn(Modifier.fillMaxSize().padding(padding)) {
-                items(rules, key = { it.id }) { rule ->
-                    RuleCard(
-                        rule = rule,
-                        fields = fields,
-                        onEdit = onEdit,
-                        onDelete = onDelete,
-                        onToggle = onToggle,
-                    )
-                    HorizontalDivider()
+            if (rules == null) {
+                LoadingIndicator(Modifier.weight(1f))
+            } else if (rules.isEmpty()) {
+                EmptyState(
+                    icon = Icons.AutoMirrored.Filled.Rule,
+                    title = stringResource(Res.string.common_rules_empty_title),
+                    modifier = Modifier.weight(1f),
+                    subtitle = stringResource(Res.string.common_rules_empty_subtitle),
+                )
+            } else {
+                LazyColumn(Modifier.fillMaxSize()) {
+                    items(rules, key = { it.id }) { rule ->
+                        RuleCard(
+                            rule = rule,
+                            fields = fields,
+                            onEdit = onEdit,
+                            onDelete = onDelete,
+                            onToggle = onToggle,
+                        )
+                        HorizontalDivider()
+                    }
                 }
             }
         }

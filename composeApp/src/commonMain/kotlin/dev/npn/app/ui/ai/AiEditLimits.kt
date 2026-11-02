@@ -4,7 +4,7 @@ package dev.npn.app.ui.ai
 object AiEditLimits {
     /**
      * Bounds for how many documents one bulk-tagging run processes. This cap is per run and
-     * adjustable on the AI tagging page (Idle phase); the remainder carries over to the next batch.
+     * adjustable on the AI edit page (Idle phase); the remainder carries over to the next batch.
      */
     const val MIN_BATCH_DOCS = 1
     const val MAX_BATCH_DOCS = 100

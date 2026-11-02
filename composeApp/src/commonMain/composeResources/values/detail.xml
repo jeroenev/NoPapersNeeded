@@ -176,4 +176,5 @@
     <string name="detail_rename_invalid">Could not rename the file: the library cannot keep a document under that name.</string>
     <string name="detail_ai_ocr_failed">Could not read the text with the assistant: %1$s</string>
     <string name="detail_ocr_engine_failed">Could not change the OCR engine: %1$s</string>
+    <string name="detail_tag_removed">Removed tag “%1$s”.</string>
 </resources>

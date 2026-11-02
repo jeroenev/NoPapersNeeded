@@ -74,6 +74,12 @@ import dev.npn.core.app.LibrarySession
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_ask_documents
 import no_papers_needed.composeapp.generated.resources.ai_assistant_title
+import no_papers_needed.composeapp.generated.resources.ai_chat_empty_subtitle
+import no_papers_needed.composeapp.generated.resources.ai_chat_empty_title
+import no_papers_needed.composeapp.generated.resources.ai_chat_example_contract
+import no_papers_needed.composeapp.generated.resources.ai_chat_example_renewal
+import no_papers_needed.composeapp.generated.resources.ai_chat_example_untagged
+import no_papers_needed.composeapp.generated.resources.ai_chat_example_utilities
 import no_papers_needed.composeapp.generated.resources.ai_chat_history
 import no_papers_needed.composeapp.generated.resources.ai_clear_conversation
 import no_papers_needed.composeapp.generated.resources.ai_configure_in_settings
@@ -119,6 +125,8 @@ fun AiChatScreen(
     val items = ui.transcript.items
     val lastLen = (items.lastOrNull() as? TranscriptItem.AssistantTurn)?.text?.length ?: 0
     val historySessions = ui.sessions.filterNot { it.id == ui.currentSessionId && items.isEmpty() }
+    // A blank chat with a working assistant gets the examples; a busy or loading one keeps the room.
+    val showExamples = items.isEmpty() && configured && !ui.loading && !ui.busy
 
     // Keep new output visible by following the bottom — but only while the user is already there,
     // so a position they scrolled to (or one restored by navigation/process death, which shows up
@@ -168,6 +176,15 @@ fun AiChatScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                // A blank chat is a dead end without an example: show what the assistant can answer.
+                if (showExamples) {
+                    item(key = "chat-empty") {
+                        ChatEmptyState { question ->
+                            vm.send(question)
+                            vm.type("")
+                        }
+                    }
+                }
                 // Keyed by session and item, so a row's own state (an expanded tool row) stays with
                 // its item, and never carries over to whatever sits at that position in another chat.
                 items(items, key = { "${ui.currentSessionId}:${it.id}" }) { item ->
@@ -190,6 +207,45 @@ fun AiChatScreen(
             } else {
                 ConfigureHint()
             }
+        }
+    }
+}
+
+/**
+ * What a fresh chat shows: what the assistant can do, and a few questions to start from. Each
+ * example fills and sends the chat, so the first question is one tap rather than a blank page.
+ */
+@Composable
+private fun ChatEmptyState(onAsk: (String) -> Unit) {
+    val examples =
+        listOf(
+            stringResource(Res.string.ai_chat_example_renewal),
+            stringResource(Res.string.ai_chat_example_utilities),
+            stringResource(Res.string.ai_chat_example_contract),
+            stringResource(Res.string.ai_chat_example_untagged),
+        )
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            stringResource(Res.string.ai_chat_empty_title),
+            style = MaterialTheme.typography.titleMedium,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            stringResource(Res.string.ai_chat_empty_subtitle),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        )
+        examples.forEach { example ->
+            AssistChip(
+                onClick = { onAsk(example) },
+                label = { Text(example) },
+            )
         }
     }
 }

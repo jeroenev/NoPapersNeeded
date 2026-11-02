@@ -119,9 +119,9 @@
     <string name="common_settings_reasoning_high">Hoog</string>
     <string name="common_settings_ai_request_help">Bij aanvragen wordt documenttekst naar de ingestelde server verzonden.</string>
     <string name="common_settings_max_suggested_tags">Standaardmaximum voorgestelde tags per document</string>
-    <string name="common_settings_max_suggested_tags_help">Aantal tags dat de assistent per document voorstelt (%1$d-%2$d). Per uitvoering aanpasbaar.</string>
+    <string name="common_settings_max_suggested_tags_help">Aantal tags dat de assistent per document voorstelt (%1$d-%2$d). Per uitvoering aanpasbaar bij AI-bewerken.</string>
     <string name="common_settings_max_new_tags">Standaardmaximum nieuwe tags per document</string>
-    <string name="common_settings_max_new_tags_help">Aantal nieuwe tags per document (%1$d-%2$d; 0 = nooit). Per uitvoering aanpasbaar.</string>
+    <string name="common_settings_max_new_tags_help">Aantal nieuwe tags per document (%1$d-%2$d; 0 = nooit). Per uitvoering aanpasbaar bij AI-bewerken.</string>
     <string name="common_settings_ai_auto_on_ocr">Nieuwe documenten automatisch taggen en invullen</string>
     <string name="common_settings_ai_auto_on_ocr_help">Zodra een document is gescand of geïmporteerd en de tekst is uitgelezen, kent de assistent tags toe uit je bestaande tags (nooit nieuwe) en vult elk veld met "Laat AI dit invullen" in zolang het leeg is. Wordt zonder controle toegepast, dus elk nieuw document kost één aanvraag.</string>
     <string name="common_settings_ai_ocr_auto">Tekst uitlezen met de assistent in plaats van met OCR op het toestel</string>

@@ -1,5 +1,6 @@
 package dev.npn.app.ui.common
 
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.runtime.Composable
 import dev.npn.core.index.MetadataWriteBlocked
 import dev.npn.core.index.WriteBlock
@@ -48,9 +49,14 @@ data class UiMessage(
     val text: UiText,
     val action: Action? = null,
 ) {
-    /** The snackbar's action button: [label], and [onPerform] run when the user taps it. */
+    /**
+     * The snackbar's action button: [label], and [onPerform] run when the user taps it. A message
+     * with an action stays up [duration]; the default is Long rather than Material's indefinite,
+     * since a snackbar nobody dismisses would hold up every later message.
+     */
     class Action(
         val label: UiText,
+        val duration: SnackbarDuration = SnackbarDuration.Long,
         val onPerform: () -> Unit,
     )
 }

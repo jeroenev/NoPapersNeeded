@@ -75,6 +75,7 @@ import no_papers_needed.composeapp.generated.resources.library_clear_filters
 import no_papers_needed.composeapp.generated.resources.library_import
 import no_papers_needed.composeapp.generated.resources.library_import_pdf
 import no_papers_needed.composeapp.generated.resources.library_no_documents_subtitle
+import no_papers_needed.composeapp.generated.resources.library_no_documents_subtitle_scan
 import no_papers_needed.composeapp.generated.resources.library_no_documents_title
 import no_papers_needed.composeapp.generated.resources.library_no_matches_subtitle
 import no_papers_needed.composeapp.generated.resources.library_no_matches_title
@@ -494,7 +495,16 @@ private fun LibraryContent(
                         EmptyState(
                             icon = Icons.Filled.Description,
                             title = stringResource(Res.string.library_no_documents_title),
-                            subtitle = stringResource(Res.string.library_no_documents_subtitle),
+                            // Say every way in that this platform has, not just the import button:
+                            // dragging files, a watched folder and scanning are easy to miss.
+                            subtitle =
+                                stringResource(
+                                    if (scan != null) {
+                                        Res.string.library_no_documents_subtitle_scan
+                                    } else {
+                                        Res.string.library_no_documents_subtitle
+                                    },
+                                ),
                             actionLabel = stringResource(Res.string.library_import_pdf),
                             onAction = onImport,
                         )

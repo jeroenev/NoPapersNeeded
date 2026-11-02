@@ -1,5 +1,6 @@
 package dev.npn.app.ui.common
 
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
@@ -16,7 +17,8 @@ import org.jetbrains.compose.resources.rememberResourceEnvironment
  *
  * A message is taken from the flow only once the previous snackbar is gone, so messages sent
  * together queue up rather than replace each other, and one not yet taken stays with its viewmodel
- * for the next collector. A message's [UiMessage.Action] becomes the snackbar's action button.
+ * for the next collector. A message's [UiMessage.Action] becomes the snackbar's action button; it
+ * carries its own [SnackbarDuration], so an Undo does not hold the queue indefinitely.
  */
 @Composable
 fun SnackbarMessages(
@@ -29,7 +31,13 @@ fun SnackbarMessages(
         messages.collect { message ->
             val text = message.text.resolve(environment)
             val label = message.action?.label?.resolve(environment)
-            val result = snackbar.showSnackbar(text, label, withDismissAction = label != null)
+            val result =
+                snackbar.showSnackbar(
+                    message = text,
+                    actionLabel = label,
+                    withDismissAction = label != null,
+                    duration = message.action?.duration ?: SnackbarDuration.Short,
+                )
             if (result == SnackbarResult.ActionPerformed) message.action?.onPerform()
         }
     }

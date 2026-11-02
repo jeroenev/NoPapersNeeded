@@ -10,6 +10,7 @@ import dev.npn.core.app.Doc
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.PermanentDeleteOutcome
+import dev.npn.core.app.TrashSettings
 import dev.npn.core.index.DuplicateReport
 import dev.npn.core.index.RelinkCandidate
 import kotlinx.coroutines.flow.StateFlow
@@ -36,6 +37,8 @@ data class TrashUiState(
     val missing: List<Doc> = emptyList(),
     /** Where each missing document may have gone, by its id, best match first. */
     val relinks: Map<String, List<RelinkCandidate>> = emptyMap(),
+    /** Days before the trash empties itself; 0 means at the next cleanup. */
+    val retentionDays: Int = TrashSettings.DEFAULT_TRASH_RETENTION_DAYS,
 )
 
 /** What the trash screen writes: restore and purge, alone or all at once, and the repairs. */
@@ -93,7 +96,8 @@ class TrashViewModel(
             session.documents.observeDuplicates(),
             session.documents.observeMissing(),
             session.ingest.lastScanReport,
-        ) { trashed, duplicates, missing, report ->
+            session.trashRetention.trashRetentionDays,
+        ) { trashed, duplicates, missing, report, retention ->
             TrashUiState(
                 trashed = trashed,
                 duplicates = duplicates,
@@ -104,6 +108,7 @@ class TrashViewModel(
                         .orEmpty()
                         .sortedByDescending { it.score }
                         .groupBy { it.oldDocId },
+                retentionDays = retention,
             )
         }.stateIn(viewModelScope, WhileSubscribedTimeout, null)
 

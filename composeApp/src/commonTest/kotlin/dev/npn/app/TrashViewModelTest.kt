@@ -54,6 +54,22 @@ class TrashViewModelTest : MainDispatcherTest() {
             model.state.value shouldBe TrashUiState()
         }
 
+    /** The screen explains the real retention, including the "at the next cleanup" zero. */
+    @Test
+    fun theStateCarriesTheLibrarysRetention() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession().apply { trashRetention.days.value = 7 }
+            val model = TrashViewModel(session)
+            collecting(model.state)
+            advanceUntilIdle()
+
+            model.state.value?.retentionDays shouldBe 7
+
+            session.trashRetention.days.value = 0
+            advanceUntilIdle()
+            model.state.value?.retentionDays shouldBe 0
+        }
+
     @Test
     fun relinkCandidatesEmptyWhenNoReport() =
         runTest(dispatcher) {

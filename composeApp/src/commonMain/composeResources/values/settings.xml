@@ -120,9 +120,9 @@
     <string name="common_settings_reasoning_high">High</string>
     <string name="common_settings_ai_request_help">Requests send document text to the configured server.</string>
     <string name="common_settings_max_suggested_tags">Default max suggested tags per document</string>
-    <string name="common_settings_max_suggested_tags_help">Default number of tags the assistant proposes per document (%1$d-%2$d); can be changed per run on the AI tagging page.</string>
+    <string name="common_settings_max_suggested_tags_help">Default number of tags the assistant proposes per document (%1$d-%2$d); can be changed per run on the AI edit page.</string>
     <string name="common_settings_max_new_tags">Default max new tags per document</string>
-    <string name="common_settings_max_new_tags_help">Default number of brand-new tags (not already in your library) the assistant may propose per document (%1$d-%2$d; 0 = never); can be changed per run on the AI tagging page.</string>
+    <string name="common_settings_max_new_tags_help">Default number of brand-new tags (not already in your library) the assistant may propose per document (%1$d-%2$d; 0 = never); can be changed per run on the AI edit page.</string>
     <string name="common_settings_ai_auto_on_ocr">Tag and fill in new documents automatically</string>
     <string name="common_settings_ai_auto_on_ocr_help">Right after a document is scanned or imported and its text is read, the assistant applies tags from your existing tags (it never creates new ones) and fills in every field marked "Let AI fill this in" when it is still empty. Applied without review, so each new document costs one request.</string>
     <string name="common_settings_ai_ocr_auto">Read text with the assistant instead of on-device OCR</string>

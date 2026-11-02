@@ -3,6 +3,7 @@
 package dev.npn.app.ui.trash
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -63,7 +64,6 @@ import dev.npn.core.index.RelinkCandidate
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.nullable
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.common_delete
 import no_papers_needed.composeapp.generated.resources.common_empty_trash
 import no_papers_needed.composeapp.generated.resources.common_empty_trash_question
 import no_papers_needed.composeapp.generated.resources.common_more_actions
@@ -85,6 +85,8 @@ import no_papers_needed.composeapp.generated.resources.common_trash_possible_mat
 import no_papers_needed.composeapp.generated.resources.common_trash_relink
 import no_papers_needed.composeapp.generated.resources.common_trash_remove_extra
 import no_papers_needed.composeapp.generated.resources.common_trash_restore
+import no_papers_needed.composeapp.generated.resources.common_trash_retention_help
+import no_papers_needed.composeapp.generated.resources.common_trash_retention_help_immediate
 import no_papers_needed.composeapp.generated.resources.common_trash_tab
 import no_papers_needed.composeapp.generated.resources.common_trash_tab_count
 import no_papers_needed.composeapp.generated.resources.common_trash_was_path
@@ -277,12 +279,28 @@ private fun TrashTabContent(
 ) {
     when (tab) {
         TrashTab.TRASH -> {
-            TrashList(
-                items = state.trashed,
-                content = content,
-                onRestore = writes::restore,
-                onDeleteForever = { onConfirm(TrashConfirm.DeleteForever(it)) },
-            )
+            Column(Modifier.fillMaxSize()) {
+                HelpText(
+                    if (state.retentionDays <= 0) {
+                        stringResource(Res.string.common_trash_retention_help_immediate)
+                    } else {
+                        pluralStringResource(
+                            Res.plurals.common_trash_retention_help,
+                            state.retentionDays,
+                            state.retentionDays,
+                        )
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+                Box(Modifier.weight(1f)) {
+                    TrashList(
+                        items = state.trashed,
+                        content = content,
+                        onRestore = writes::restore,
+                        onDeleteForever = { onConfirm(TrashConfirm.DeleteForever(it)) },
+                    )
+                }
+            }
         }
 
         TrashTab.DUPLICATES -> {
@@ -323,14 +341,18 @@ private fun TrashTabs(
     state: TrashUiState,
     onSelectTab: (TrashTab) -> Unit,
 ) {
-    PrimaryTabRow(selectedTabIndex = selectedTab.ordinal) {
-        TrashTab.entries.forEach { tab ->
-            val badge =
-                when (tab) {
-                    TrashTab.TRASH -> state.trashed.size
-                    TrashTab.DUPLICATES -> state.duplicates.size
-                    TrashTab.MISSING -> state.missing.size
-                }
+    fun count(tab: TrashTab): Int =
+        when (tab) {
+            TrashTab.TRASH -> state.trashed.size
+            TrashTab.DUPLICATES -> state.duplicates.size
+            TrashTab.MISSING -> state.missing.size
+        }
+    // Duplicates and Missing are repairs, not everyday places: hide them while there is nothing
+    // to repair, but keep the one the user is on so resolving its last item does not teleport them.
+    val visible = TrashTab.entries.filter { tab -> tab == TrashTab.TRASH || count(tab) > 0 || tab == selectedTab }
+    PrimaryTabRow(selectedTabIndex = visible.indexOf(selectedTab).coerceAtLeast(0)) {
+        visible.forEach { tab ->
+            val badge = count(tab)
             Tab(
                 selected = selectedTab == tab,
                 onClick = { onSelectTab(tab) },
@@ -392,7 +414,7 @@ private fun TrashList(
                             Text(stringResource(Res.string.common_trash_restore))
                         }
                         TextButton(onClick = { onDeleteForever(item.doc.docId) }) {
-                            Text(stringResource(Res.string.common_delete))
+                            Text(stringResource(Res.string.common_trash_delete_forever))
                         }
                     }
                 }

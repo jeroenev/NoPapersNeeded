@@ -23,12 +23,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.Dropdown
+import dev.npn.app.ui.common.ExpanderRow
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.NumericField
 import dev.npn.app.ui.common.SettingsSection
@@ -43,6 +45,7 @@ import dev.npn.core.ai.AiReasoningLevel
 import dev.npn.core.ai.AiTagging
 import dev.npn.core.ocr.OcrEngineSelector
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_settings_advanced
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_auto_on_ocr
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_auto_on_ocr_help
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_check_api
@@ -177,26 +180,9 @@ private fun AiBehaviourSettings(
     state: SettingsUiState,
     actions: SettingsActions,
 ) {
-    AiReasoningDropdown(
-        label = { level -> stringResource(Res.string.common_settings_reasoning_assistant, level) },
-        current = state.snapshot.aiReasoningAssistant,
-        onSelect = { level -> actions.edit { it.copy(aiReasoningAssistant = level) } },
-    )
-    AiReasoningDropdown(
-        label = { level -> stringResource(Res.string.common_settings_reasoning_edit, level) },
-        current = state.snapshot.aiReasoningEdit,
-        onSelect = { level -> actions.edit { it.copy(aiReasoningEdit = level) } },
-    )
-    HelpText(stringResource(Res.string.common_settings_reasoning_help))
-    AiTagCapDefaults(
-        maxTagsPerDoc = state.snapshot.aiMaxTagsPerDoc,
-        onSetMaxTagsPerDoc = { value -> actions.edit { it.copy(aiMaxTagsPerDoc = value) } },
-        maxNewTagsPerDoc = state.snapshot.aiMaxNewTagsPerDoc,
-        onSetMaxNewTagsPerDoc = { value -> actions.edit { it.copy(aiMaxNewTagsPerDoc = value) } },
-    )
     // The unattended post-OCR enrichment switch. It lives here (and is therefore only reachable
     // once AI is on) because it spends the same endpoint; the help text spells out that it writes
-    // without a review step, which is what separates it from the AI tagging page.
+    // without a review step, which is what separates it from an AI edit run.
     SwitchRow(
         label = stringResource(Res.string.common_settings_ai_auto_on_ocr),
         help = stringResource(Res.string.common_settings_ai_auto_on_ocr_help),
@@ -217,6 +203,31 @@ private fun AiBehaviourSettings(
         checked = state.snapshot.aiOcrAuto,
         onCheckedChange = { on -> actions.edit { it.copy(aiOcrAuto = on) } },
     )
+    // Tuning knobs most people never need: sensible defaults are picked for them, and the tag caps
+    // stay available per run. Last in the section so the common path stays short.
+    var advanced by rememberSaveable { mutableStateOf(false) }
+    ExpanderRow(advanced, onToggle = { advanced = !advanced }) {
+        Text(stringResource(Res.string.common_settings_advanced), Modifier.weight(1f))
+    }
+    if (advanced) {
+        AiReasoningDropdown(
+            label = { level -> stringResource(Res.string.common_settings_reasoning_assistant, level) },
+            current = state.snapshot.aiReasoningAssistant,
+            onSelect = { level -> actions.edit { it.copy(aiReasoningAssistant = level) } },
+        )
+        AiReasoningDropdown(
+            label = { level -> stringResource(Res.string.common_settings_reasoning_edit, level) },
+            current = state.snapshot.aiReasoningEdit,
+            onSelect = { level -> actions.edit { it.copy(aiReasoningEdit = level) } },
+        )
+        HelpText(stringResource(Res.string.common_settings_reasoning_help))
+        AiTagCapDefaults(
+            maxTagsPerDoc = state.snapshot.aiMaxTagsPerDoc,
+            onSetMaxTagsPerDoc = { value -> actions.edit { it.copy(aiMaxTagsPerDoc = value) } },
+            maxNewTagsPerDoc = state.snapshot.aiMaxNewTagsPerDoc,
+            onSetMaxNewTagsPerDoc = { value -> actions.edit { it.copy(aiMaxNewTagsPerDoc = value) } },
+        )
+    }
     HelpText(stringResource(Res.string.common_settings_ai_request_help))
 }
 
@@ -488,7 +499,7 @@ private fun reasoningLevelLabel(level: AiReasoningLevel): String =
         AiReasoningLevel.HIGH -> stringResource(Res.string.common_settings_reasoning_high)
     }
 
-/** Default per-run tag caps for the AI assistant (overridable on the AI tagging page). */
+/** Default per-run tag caps for the AI assistant (overridable on the AI edit page). */
 @Composable
 private fun AiTagCapDefaults(
     maxTagsPerDoc: Int,

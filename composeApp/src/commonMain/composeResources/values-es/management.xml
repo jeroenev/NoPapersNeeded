@@ -125,4 +125,9 @@
     <string name="common_rules_save_failed">No se pudo guardar la regla: %1$s</string>
     <string name="common_rules_delete_failed">No se pudo eliminar la regla: %1$s</string>
     <string name="common_rules_update_failed">No se pudo actualizar la regla: %1$s</string>
+    <plurals name="common_trash_retention_help">
+        <item quantity="one">Los documentos de la papelera se eliminan definitivamente tras %1$d día.</item>
+        <item quantity="other">Los documentos de la papelera se eliminan definitivamente tras %1$d días.</item>
+    </plurals>
+    <string name="common_trash_retention_help_immediate">Los documentos de la papelera se eliminan definitivamente en la próxima limpieza.</string>
 </resources>

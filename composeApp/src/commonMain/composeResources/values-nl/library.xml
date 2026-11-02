@@ -17,7 +17,7 @@
     <string name="library_sort_descending">Aflopend</string>
 
     <string name="library_no_documents_title">Nog geen documenten</string>
-    <string name="library_no_documents_subtitle">Importeer een pdf om aan de slag te gaan.</string>
+    <string name="library_no_documents_subtitle">Sleep pdf's in dit venster, laat een bewaakte map ze oppikken of importeer ze.</string>
     <string name="library_no_matches_title">Geen resultaten</string>
     <string name="library_no_matches_subtitle">Pas je zoekopdracht of filters aan.</string>
     <string name="library_import_pdf">Pdf importeren</string>
@@ -156,4 +156,6 @@
     </plurals>
     <string name="library_save_view_failed">De weergave kon niet worden opgeslagen: %1$s</string>
     <string name="library_delete_view_failed">De weergave kon niet worden verwijderd: %1$s</string>
+    <string name="library_no_documents_subtitle_scan">Scan met de camera, deel een pdf met de app of importeer er een.</string>
+    <string name="library_view_deleted">Opgeslagen weergave '%1$s' verwijderd.</string>
 </resources>

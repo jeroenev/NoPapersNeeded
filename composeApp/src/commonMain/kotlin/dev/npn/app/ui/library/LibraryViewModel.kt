@@ -81,6 +81,7 @@ import no_papers_needed.composeapp.generated.resources.library_review_failed
 import no_papers_needed.composeapp.generated.resources.library_save_view_failed
 import no_papers_needed.composeapp.generated.resources.library_trash_failed
 import no_papers_needed.composeapp.generated.resources.library_undo
+import no_papers_needed.composeapp.generated.resources.library_view_deleted
 import org.jetbrains.compose.resources.StringResource
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -698,9 +699,19 @@ class LibraryViewModel(
             savedViewRepository.save(view.copy(pinned = !view.pinned))
         }
 
-    /** Delete [view] by id. */
+    /** Delete [view] by id, with an Undo that puts the same view (and id) back. */
     override fun deleteSavedView(view: SavedView) =
-        launchReporting(Res.string.library_delete_view_failed) { savedViewRepository.delete(view.id) }
+        launchReporting(Res.string.library_delete_view_failed) {
+            savedViewRepository.delete(view.id)
+            message(
+                uiText(Res.string.library_view_deleted, view.name),
+                UiMessage.Action(uiText(Res.string.library_undo)) {
+                    viewModelScope.launch {
+                        reporting(Res.string.library_save_view_failed) { savedViewRepository.save(view) }
+                    }
+                },
+            )
+        }
 
     /** Capture the given [ui] (filter/sort/view) as a new [SavedView] named [name]. */
     private fun newSavedView(

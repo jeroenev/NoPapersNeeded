@@ -125,4 +125,9 @@
     <string name="common_rules_save_failed">Die Regel konnte nicht gespeichert werden: %1$s</string>
     <string name="common_rules_delete_failed">Die Regel konnte nicht gelöscht werden: %1$s</string>
     <string name="common_rules_update_failed">Die Regel konnte nicht aktualisiert werden: %1$s</string>
+    <plurals name="common_trash_retention_help">
+        <item quantity="one">Dokumente im Papierkorb werden nach %1$d Tag endgültig gelöscht.</item>
+        <item quantity="other">Dokumente im Papierkorb werden nach %1$d Tagen endgültig gelöscht.</item>
+    </plurals>
+    <string name="common_trash_retention_help_immediate">Dokumente im Papierkorb werden bei der nächsten Bereinigung endgültig gelöscht.</string>
 </resources>

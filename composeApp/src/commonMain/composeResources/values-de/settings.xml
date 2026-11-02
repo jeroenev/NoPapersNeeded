@@ -119,9 +119,9 @@
     <string name="common_settings_reasoning_high">Hoch</string>
     <string name="common_settings_ai_request_help">Anfragen senden Dokumenttext an den konfigurierten Server.</string>
     <string name="common_settings_max_suggested_tags">Max. Tag-Vorschläge pro Dokument</string>
-    <string name="common_settings_max_suggested_tags_help">Standardanzahl der Tags, die der Assistent pro Dokument vorschlägt (%1$d-%2$d); kann pro Durchlauf auf der Seite für KI-Tagging geändert werden.</string>
+    <string name="common_settings_max_suggested_tags_help">Standardanzahl der Tags, die der Assistent pro Dokument vorschlägt (%1$d-%2$d); kann pro Durchlauf auf der Seite „KI-Bearbeitung“ geändert werden.</string>
     <string name="common_settings_max_new_tags">Max. neue Tags pro Dokument</string>
-    <string name="common_settings_max_new_tags_help">Standardanzahl ganz neuer Tags (die noch nicht in deiner Bibliothek sind), die der Assistent pro Dokument vorschlagen darf (%1$d-%2$d; 0 = nie); kann pro Durchlauf auf der Seite für KI-Tagging geändert werden.</string>
+    <string name="common_settings_max_new_tags_help">Standardanzahl ganz neuer Tags (die noch nicht in deiner Bibliothek sind), die der Assistent pro Dokument vorschlagen darf (%1$d-%2$d; 0 = nie); kann pro Durchlauf auf der Seite „KI-Bearbeitung“ geändert werden.</string>
     <string name="common_settings_ai_auto_on_ocr">Neue Dokumente automatisch taggen und ausfüllen</string>
     <string name="common_settings_ai_auto_on_ocr_help">Direkt nachdem ein Dokument gescannt oder importiert und sein Text gelesen wurde, wendet der Assistent Tags aus deinen vorhandenen Tags an (er erstellt nie neue) und füllt jedes Feld aus, das mit „Von der KI ausfüllen lassen“ markiert und noch leer ist. Wird ohne Prüfung angewendet, daher kostet jedes neue Dokument eine Anfrage.</string>
     <string name="common_settings_ai_ocr_auto">Text mit Assistent statt Geräte-OCR lesen</string>

@@ -181,4 +181,10 @@
     </plurals>
     <string name="ai_edit_queue_failed">De AI-bewerking kon niet in de wachtrij worden gezet: %1$s</string>
     <string name="ai_edit_start_failed">De AI-bewerking kon niet worden gestart: %1$s</string>
+    <string name="ai_chat_empty_title">Vraag je documenten alles</string>
+    <string name="ai_chat_empty_subtitle">Doorzoek je bibliotheek, vergelijk bedragen of vind een vervaldatum. De antwoorden komen uit je documenten.</string>
+    <string name="ai_chat_example_renewal">Wanneer wordt mijn autoverzekering verlengd?</string>
+    <string name="ai_chat_example_utilities">Zoek mijn laatste energierekening.</string>
+    <string name="ai_chat_example_contract">Zoek het contract dat ik met Acme heb ondertekend.</string>
+    <string name="ai_chat_example_untagged">Wie is mijn verhuurder?</string>
 </resources>

@@ -126,4 +126,9 @@
     <string name="common_rules_save_failed">Could not save the rule: %1$s</string>
     <string name="common_rules_delete_failed">Could not delete the rule: %1$s</string>
     <string name="common_rules_update_failed">Could not update the rule: %1$s</string>
+    <plurals name="common_trash_retention_help">
+        <item quantity="one">Documents in the trash are permanently deleted after %1$d day.</item>
+        <item quantity="other">Documents in the trash are permanently deleted after %1$d days.</item>
+    </plurals>
+    <string name="common_trash_retention_help_immediate">Documents in the trash are permanently deleted at the next cleanup.</string>
 </resources>

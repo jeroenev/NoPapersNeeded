@@ -119,9 +119,9 @@
     <string name="common_settings_reasoning_high">Alto</string>
     <string name="common_settings_ai_request_help">As solicitações enviam o texto dos documentos ao servidor configurado.</string>
     <string name="common_settings_max_suggested_tags">Máximo padrão de etiquetas sugeridas por documento</string>
-    <string name="common_settings_max_suggested_tags_help">Número padrão de etiquetas que o assistente propõe por documento (%1$d-%2$d); pode ser alterado a cada execução na página de etiquetagem com IA.</string>
+    <string name="common_settings_max_suggested_tags_help">Número padrão de etiquetas que o assistente propõe por documento (%1$d-%2$d); pode ser alterado a cada execução na página Edição com IA.</string>
     <string name="common_settings_max_new_tags">Máximo padrão de novas etiquetas por documento</string>
-    <string name="common_settings_max_new_tags_help">Número padrão de etiquetas totalmente novas (que ainda não estão na sua biblioteca) que o assistente pode propor por documento (%1$d-%2$d; 0 = nunca); pode ser alterado a cada execução na página de etiquetagem com IA.</string>
+    <string name="common_settings_max_new_tags_help">Número padrão de etiquetas totalmente novas (que ainda não estão na sua biblioteca) que o assistente pode propor por documento (%1$d-%2$d; 0 = nunca); pode ser alterado a cada execução na página Edição com IA.</string>
     <string name="common_settings_ai_auto_on_ocr">Etiquetar e preencher novos documentos automaticamente</string>
     <string name="common_settings_ai_auto_on_ocr_help">Logo após um documento ser digitalizado ou importado e o texto dele ser lido, o assistente aplica etiquetas das que você já tem (nunca cria novas) e preenche todo campo marcado com "Deixar a IA preencher" quando ainda estiver vazio. É aplicado sem revisão, então cada novo documento custa uma solicitação.</string>
     <string name="common_settings_ai_ocr_auto">Ler o texto com o assistente em vez do OCR no dispositivo</string>

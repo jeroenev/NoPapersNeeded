@@ -78,7 +78,7 @@ Download the latest version from the
 
 The app tells you when a new version is out.
 
-Available in English and Dutch.
+Available in English, Dutch, German, Spanish, French and Portuguese.
 
 ## For developers
 

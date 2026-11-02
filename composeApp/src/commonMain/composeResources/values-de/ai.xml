@@ -181,4 +181,10 @@
     </plurals>
     <string name="ai_edit_queue_failed">KI-Bearbeitung konnte nicht eingereiht werden: %1$s</string>
     <string name="ai_edit_start_failed">KI-Bearbeitung konnte nicht gestartet werden: %1$s</string>
+    <string name="ai_chat_empty_title">Frag deine Dokumente alles</string>
+    <string name="ai_chat_empty_subtitle">Durchsuche deine Bibliothek, vergleiche Beträge oder finde ein Ablaufdatum. Die Antworten stammen aus deinen Dokumenten.</string>
+    <string name="ai_chat_example_renewal">Wann wird meine Kfz-Versicherung verlängert?</string>
+    <string name="ai_chat_example_utilities">Finde meine letzte Stromrechnung.</string>
+    <string name="ai_chat_example_contract">Finde den Vertrag, den ich mit Acme unterschrieben habe.</string>
+    <string name="ai_chat_example_untagged">Wer ist mein Vermieter?</string>
 </resources>

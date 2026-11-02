@@ -171,4 +171,5 @@
     <string name="detail_rename_invalid">Het bestand kon niet worden hernoemd: de bibliotheek kan geen document onder die naam bewaren.</string>
     <string name="detail_ai_ocr_failed">De tekst kon niet met de assistent worden uitgelezen: %1$s</string>
     <string name="detail_ocr_engine_failed">De OCR-engine kon niet worden gewijzigd: %1$s</string>
+    <string name="detail_tag_removed">Tag '%1$s' verwijderd.</string>
 </resources>

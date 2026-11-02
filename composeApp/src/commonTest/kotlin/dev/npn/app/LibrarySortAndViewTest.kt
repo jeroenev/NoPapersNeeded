@@ -1,5 +1,6 @@
 package dev.npn.app
 
+import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.library.LibraryDialog
 import dev.npn.app.ui.library.LibraryViewModel
 import dev.npn.core.app.LibraryFilter
@@ -19,6 +20,8 @@ import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_save_setting_failed
 import no_papers_needed.composeapp.generated.resources.library_save_view_failed
+import no_papers_needed.composeapp.generated.resources.library_undo
+import no_papers_needed.composeapp.generated.resources.library_view_deleted
 import kotlin.test.Test
 
 /** How the library shows its documents: view type, sort and grid width, kept in settings, and saved views. */
@@ -204,6 +207,30 @@ class LibrarySortAndViewTest : MainDispatcherTest() {
             model.deleteSavedView(SavedView(id = "v1", name = "Doomed"))
             advanceUntilIdle()
             session.savedViews.deleted shouldContainExactly listOf("v1")
+        }
+
+    /** Deleting a view is reversible: Undo saves the same view, id included, back into the library. */
+    @Test
+    fun deletingASavedViewOffersUndoThatRestoresIt() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = vm(session = session)
+            val view = SavedView(id = "v1", name = "Doomed", pinned = true)
+            val messages = collecting(model.messages)
+            advanceUntilIdle()
+
+            model.deleteSavedView(view)
+            advanceUntilIdle()
+
+            session.savedViews.deleted shouldContainExactly listOf("v1")
+            val undo = messages.single { it.action != null }.action!!
+            messages.single { it.action != null }.text shouldBe
+                uiText(Res.string.library_view_deleted, "Doomed")
+            undo.label shouldBe uiText(Res.string.library_undo)
+
+            undo.onPerform()
+            advanceUntilIdle()
+            session.savedViews.saved shouldContainExactly listOf(view)
         }
 
     @Test

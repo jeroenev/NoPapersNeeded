@@ -125,4 +125,9 @@
     <string name="common_rules_save_failed">De regel kon niet worden opgeslagen: %1$s</string>
     <string name="common_rules_delete_failed">De regel kon niet worden verwijderd: %1$s</string>
     <string name="common_rules_update_failed">De regel kon niet worden bijgewerkt: %1$s</string>
+    <plurals name="common_trash_retention_help">
+        <item quantity="one">Documenten in de prullenbak worden na %1$d dag definitief verwijderd.</item>
+        <item quantity="other">Documenten in de prullenbak worden na %1$d dagen definitief verwijderd.</item>
+    </plurals>
+    <string name="common_trash_retention_help_immediate">Documenten in de prullenbak worden bij de volgende opruiming definitief verwijderd.</string>
 </resources>

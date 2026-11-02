@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -17,7 +18,8 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.InputChip
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -26,6 +28,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
@@ -70,15 +73,34 @@ fun TagEditor(
         if (tags.isNotEmpty()) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 tags.forEach { tag ->
-                    InputChip(
-                        selected = false,
-                        onClick = { onRemove(tag) },
-                        label = { Text(tag) },
-                        leadingIcon = { TagColorDot(tagColors[tag]) },
-                        trailingIcon = {
-                            Icon(Icons.Filled.Clear, stringResource(Res.string.common_remove_tag, tag))
-                        },
-                    )
+                    // Only the × removes a tag; the chip body is not a remove button, so a stray
+                    // tap on a tag cannot silently strip it from the document.
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(start = 10.dp, end = 2.dp, top = 2.dp, bottom = 2.dp),
+                        ) {
+                            TagColorDot(tagColors[tag])
+                            Text(
+                                tag,
+                                style = MaterialTheme.typography.labelLarge,
+                                modifier = Modifier.padding(start = if (tagColors[tag] != null) 6.dp else 0.dp),
+                            )
+                            IconButton(
+                                onClick = { onRemove(tag) },
+                                modifier = Modifier.size(28.dp),
+                            ) {
+                                Icon(
+                                    Icons.Filled.Clear,
+                                    contentDescription = stringResource(Res.string.common_remove_tag, tag),
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }

@@ -17,7 +17,7 @@
     <string name="library_sort_descending">Décroissant</string>
 
     <string name="library_no_documents_title">Aucun document pour l’instant</string>
-    <string name="library_no_documents_subtitle">Importez un PDF pour commencer.</string>
+    <string name="library_no_documents_subtitle">Déposez des PDF dans cette fenêtre, laissez un dossier surveillé les récupérer ou importez-les.</string>
     <string name="library_no_matches_title">Aucun résultat</string>
     <string name="library_no_matches_subtitle">Essayez de modifier votre recherche ou vos filtres.</string>
     <string name="library_import_pdf">Importer un PDF</string>
@@ -156,4 +156,6 @@
     </plurals>
     <string name="library_save_view_failed">Impossible d’enregistrer la vue : %1$s</string>
     <string name="library_delete_view_failed">Impossible de supprimer la vue : %1$s</string>
+    <string name="library_no_documents_subtitle_scan">Scannez avec l’appareil photo, partagez un PDF avec l’app ou importez-en un.</string>
+    <string name="library_view_deleted">Vue enregistrée « %1$s » supprimée.</string>
 </resources>

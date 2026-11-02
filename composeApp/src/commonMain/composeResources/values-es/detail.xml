@@ -171,4 +171,5 @@
     <string name="detail_rename_invalid">No se pudo renombrar el archivo: la biblioteca no puede guardar un documento con ese nombre.</string>
     <string name="detail_ai_ocr_failed">No se pudo leer el texto con el asistente: %1$s</string>
     <string name="detail_ocr_engine_failed">No se pudo cambiar el motor de OCR: %1$s</string>
+    <string name="detail_tag_removed">Etiqueta «%1$s» eliminada.</string>
 </resources>

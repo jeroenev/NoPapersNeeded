@@ -3,6 +3,7 @@ package dev.npn.app.ui.detail
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.MessageSink
 import dev.npn.app.ui.common.MessagesViewModel
+import dev.npn.app.ui.common.UiMessage
 import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.colorsByName
@@ -77,7 +78,9 @@ import no_papers_needed.composeapp.generated.resources.detail_split_failed_inval
 import no_papers_needed.composeapp.generated.resources.detail_split_failed_not_completed
 import no_papers_needed.composeapp.generated.resources.detail_split_failed_unavailable
 import no_papers_needed.composeapp.generated.resources.detail_split_failed_unreadable
+import no_papers_needed.composeapp.generated.resources.detail_tag_removed
 import no_papers_needed.composeapp.generated.resources.detail_trash_failed
+import no_papers_needed.composeapp.generated.resources.library_undo
 import org.jetbrains.compose.resources.StringResource
 
 /**
@@ -410,10 +413,20 @@ class DocDetailViewModel private constructor(
         if (color != null) tagAdmin.setTagStyle(tag, color, null)
     }
 
-    override fun removeTag(tag: String) =
-        launchMetadata(Res.string.detail_remove_tag_failed) {
-            meta.removeTag(listOf(docId), tag)
+    override fun removeTag(tag: String) {
+        viewModelScope.launch {
+            val removed =
+                reporting(Res.string.detail_remove_tag_failed) {
+                    metadataMutex.withLock { meta.removeTag(listOf(docId), tag) }
+                }
+            if (removed) {
+                message(
+                    uiText(Res.string.detail_tag_removed, tag),
+                    UiMessage.Action(uiText(Res.string.library_undo)) { addTag(tag) },
+                )
+            }
         }
+    }
 
     /**
      * Register [def] and, when [value] is non-blank, set it on this document. The definition goes

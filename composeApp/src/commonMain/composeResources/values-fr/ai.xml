@@ -181,4 +181,10 @@
     </plurals>
     <string name="ai_edit_queue_failed">Impossible de mettre la modification IA en file : %1$s</string>
     <string name="ai_edit_start_failed">Impossible de lancer la modification IA : %1$s</string>
+    <string name="ai_chat_empty_title">Interrogez vos documents</string>
+    <string name="ai_chat_empty_subtitle">Cherchez dans votre bibliothèque, comparez des montants ou trouvez une date d’échéance. Les réponses viennent de vos documents.</string>
+    <string name="ai_chat_example_renewal">Quand mon assurance auto se renouvelle-t-elle ?</string>
+    <string name="ai_chat_example_utilities">Trouve ma dernière facture d’électricité.</string>
+    <string name="ai_chat_example_contract">Trouve le contrat que j’ai signé avec Acme.</string>
+    <string name="ai_chat_example_untagged">Qui est mon propriétaire ?</string>
 </resources>

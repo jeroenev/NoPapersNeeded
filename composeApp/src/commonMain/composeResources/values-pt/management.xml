@@ -125,4 +125,9 @@
     <string name="common_rules_save_failed">Não foi possível salvar a regra: %1$s</string>
     <string name="common_rules_delete_failed">Não foi possível excluir a regra: %1$s</string>
     <string name="common_rules_update_failed">Não foi possível atualizar a regra: %1$s</string>
+    <plurals name="common_trash_retention_help">
+        <item quantity="one">Os documentos na lixeira são excluídos definitivamente após %1$d dia.</item>
+        <item quantity="other">Os documentos na lixeira são excluídos definitivamente após %1$d dias.</item>
+    </plurals>
+    <string name="common_trash_retention_help_immediate">Os documentos na lixeira são excluídos definitivamente na próxima limpeza.</string>
 </resources>

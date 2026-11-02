@@ -36,6 +36,7 @@ import no_papers_needed.composeapp.generated.resources.common_settings_storage_s
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_sample_title
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_sample_type
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_variables
+import no_papers_needed.composeapp.generated.resources.common_settings_syncs_across_devices
 import no_papers_needed.composeapp.generated.resources.common_settings_thumbnail_cache_help
 import no_papers_needed.composeapp.generated.resources.common_settings_use_saf
 import no_papers_needed.composeapp.generated.resources.common_settings_use_saf_help
@@ -174,4 +175,5 @@ internal fun StoragePathRuleEditor(
         modifier = Modifier.fillMaxWidth(),
     )
     HelpText(stringResource(Res.string.common_settings_storage_variables, STORAGE_PATH_VARIABLES))
+    HelpText(stringResource(Res.string.common_settings_syncs_across_devices))
 }

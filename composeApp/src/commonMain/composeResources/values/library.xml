@@ -17,7 +17,7 @@
     <string name="library_sort_descending">Descending</string>
 
     <string name="library_no_documents_title">No documents yet</string>
-    <string name="library_no_documents_subtitle">Import a PDF to get started.</string>
+    <string name="library_no_documents_subtitle">Drop PDFs into this window, let a watched folder pick them up, or import them.</string>
     <string name="library_no_matches_title">No matches</string>
     <string name="library_no_matches_subtitle">Try adjusting your search or filters.</string>
     <string name="library_import_pdf">Import PDF</string>
@@ -156,4 +156,6 @@
     </plurals>
     <string name="library_save_view_failed">Could not save the view: %1$s</string>
     <string name="library_delete_view_failed">Could not delete the view: %1$s</string>
+    <string name="library_no_documents_subtitle_scan">Scan with the camera, share a PDF to the app, or import one.</string>
+    <string name="library_view_deleted">Deleted the saved view “%1$s”.</string>
 </resources>

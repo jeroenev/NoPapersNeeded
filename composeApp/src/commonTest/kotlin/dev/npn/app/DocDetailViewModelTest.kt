@@ -43,6 +43,8 @@ import no_papers_needed.composeapp.generated.resources.detail_ocr_details_failed
 import no_papers_needed.composeapp.generated.resources.detail_ocr_engine_failed
 import no_papers_needed.composeapp.generated.resources.detail_suggest_details_failed
 import no_papers_needed.composeapp.generated.resources.detail_suggest_tags_failed
+import no_papers_needed.composeapp.generated.resources.detail_tag_removed
+import no_papers_needed.composeapp.generated.resources.library_undo
 import kotlin.test.Test
 
 class DocDetailViewModelTest : MainDispatcherTest() {
@@ -100,6 +102,28 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
             session.meta.addedTags shouldContainExactly listOf(listOf("doc-1") to "finance")
             session.meta.removedTags shouldContainExactly listOf(listOf("doc-1") to "draft")
+        }
+
+    /** Removing a tag is reversible in place: the message carries Undo, which puts it back. */
+    @Test
+    fun removingATagOffersUndoThatAddsItBack() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = liveDocDetailVm(session = session)
+            val messages = collecting(model.messages)
+            advanceUntilIdle()
+
+            model.removeTag("draft")
+            advanceUntilIdle()
+
+            session.meta.removedTags shouldContainExactly listOf(listOf("doc-1") to "draft")
+            val undo = messages.single { it.action != null }.action!!
+            messages.single { it.action != null }.text shouldBe uiText(Res.string.detail_tag_removed, "draft")
+            undo.label shouldBe uiText(Res.string.library_undo)
+
+            undo.onPerform()
+            advanceUntilIdle()
+            session.meta.addedTags shouldContainExactly listOf(listOf("doc-1") to "draft")
         }
 
     @Test
