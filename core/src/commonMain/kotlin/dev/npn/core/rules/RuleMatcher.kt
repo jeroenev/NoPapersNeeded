@@ -46,6 +46,13 @@ object RuleMatcher {
     }
 
     /**
+     * [rule]'s test, compiled once, as a pass over the library applies it: true for a value of the
+     * rule's field that it matches, false for any other value and for a missing one. Read-only, for
+     * showing which documents a rule matches before it is saved.
+     */
+    fun matcher(rule: AutoMatchRule): (String?) -> Boolean = compile(rule)::matches
+
+    /**
      * Whether [pattern] can match anything under [algorithm], judged as [compile] reads it (trimmed,
      * a regular expression case-insensitive): false only for a regular expression that does not
      * compile, which never matches. Blankness is the caller's to judge.

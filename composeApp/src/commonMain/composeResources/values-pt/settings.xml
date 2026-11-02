@@ -3,14 +3,14 @@
     <string name="common_settings_title">Configurações</string>
     <string name="common_settings_search">Buscar nas configurações</string>
     <string name="common_settings_search_no_results">Nenhuma configuração corresponde a “%1$s”.</string>
-    <string name="common_settings_category_import">Importação e OCR</string>
+    <string name="common_settings_category_import">Importação e reconhecimento de texto</string>
     <string name="common_settings_category_documents">Documentos</string>
     <string name="common_settings_category_appearance">Aparência</string>
     <string name="common_settings_library">Biblioteca</string>
     <string name="common_settings_no_library">Nenhuma biblioteca selecionada</string>
     <string name="common_settings_change_library">Trocar biblioteca</string>
     <string name="common_settings_watched_folder">Pasta monitorada</string>
-    <string name="common_settings_ocr">OCR</string>
+    <string name="common_settings_ocr">Reconhecimento de texto</string>
     <string name="common_settings_ocr_match_app_language">Usar o idioma do app</string>
     <string name="common_settings_ocr_match_app_language_help">Reconhece o idioma do app e o inglês.</string>
     <string name="common_settings_ocr_languages_help">Escolha todos os idiomas em que seus documentos estão escritos. Cada idioma a mais deixa o reconhecimento um pouco mais lento; idiomas sem modelo instalado são ignorados.</string>
@@ -51,9 +51,7 @@
         <item quantity="one">'%1$s' é usado em %2$d documento. Os valores existentes não são convertidos e podem deixar de se encaixar no novo tipo.</item>
         <item quantity="other">'%1$s' é usado em %2$d documentos. Os valores existentes não são convertidos e podem deixar de se encaixar no novo tipo.</item>
     </plurals>
-    <string name="common_settings_auto_matching">Regras automáticas</string>
     <string name="common_settings_auto_matching_rules">Regras automáticas</string>
-    <string name="common_settings_auto_matching_help">Etiqueta documentos e define metadados automaticamente quando o texto importado corresponde a uma regra.</string>
     <string name="common_settings_about">Sobre</string>
     <string name="common_settings_product_version">%1$s %2$s</string>
     <string name="common_settings_about_help">App pessoal e de código aberto para documentos sem papel. Os arquivos são a fonte da verdade.</string>
@@ -86,7 +84,7 @@
     <string name="common_settings_storage_error_invalid_segment">Segmento de nome de arquivo inválido: %1$s</string>
     <string name="common_settings_storage_rule_stays_off">A organização automática continua desativada porque o modelo de caminho é inválido: %1$s</string>
 
-    <string name="common_settings_watched_folder_help">Os PDFs salvos nesta pasta (por exemplo, por um app de digitalização) são importados automaticamente para a biblioteca e processados com OCR.</string>
+    <string name="common_settings_watched_folder_help">Os PDFs salvos nesta pasta (por exemplo, por um app de digitalização) são importados automaticamente para a biblioteca, e o texto deles é reconhecido.</string>
     <string name="common_settings_no_watched_folder">Nenhuma pasta monitorada</string>
     <string name="common_settings_choose_folder">Escolher pasta</string>
     <string name="common_settings_stop_watching">Parar de monitorar</string>
@@ -149,7 +147,7 @@
     <string name="common_settings_language_help">Idioma da interface neste dispositivo. Padrão do sistema segue o sistema operacional.</string>
     <string name="common_settings_language_system">Padrão do sistema</string>
     <string name="common_settings_enable_inbox">Ativar caixa de entrada</string>
-    <string name="common_settings_inbox_help">Os novos documentos caem em uma caixa de entrada e você os marca como revisados manualmente. Desativado: os documentos simplesmente aparecem e contam como revisados depois de etiquetados.</string>
+    <string name="common_settings_inbox_help">Os novos documentos esperam na caixa de entrada até você marcá-los como revisados. Desativado: os documentos simplesmente aparecem e contam como revisados depois de etiquetados.</string>
     <string name="common_settings_syncs_across_devices">Esta configuração é sincronizada entre seus dispositivos.</string>
     <string name="common_settings_inbox_migration_question">Como os documentos existentes devem ser marcados? Os novos documentos sempre começam como "para revisar".</string>
     <string name="common_settings_mark_all_reviewed">Marcar todos como revisados</string>

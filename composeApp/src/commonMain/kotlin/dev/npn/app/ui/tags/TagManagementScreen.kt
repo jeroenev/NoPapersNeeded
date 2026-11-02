@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Sell
+import androidx.compose.material.icons.outlined.AutoMode
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -71,6 +72,7 @@ import dev.npn.app.ui.common.rememberSnackbarMessages
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.TagInfo
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.automation_title
 import no_papers_needed.composeapp.generated.resources.common_delete
 import no_papers_needed.composeapp.generated.resources.common_document_count
 import no_papers_needed.composeapp.generated.resources.common_rename
@@ -104,6 +106,8 @@ import org.jetbrains.compose.resources.stringResource
 @Composable
 fun TagManagementScreen(
     session: LibrarySession,
+    /** Open the Automation overview: what tags documents without anyone asking. */
+    onOpenAutomation: () -> Unit = {},
     vm: TagManagementViewModel = viewModel { TagManagementViewModel(session, createSavedStateHandle()) },
 ) {
     val tags by vm.tags.collectAsStateWithLifecycle()
@@ -120,6 +124,7 @@ fun TagManagementScreen(
         selected = selected,
         selection = vm,
         onOpen = vm::openDialog,
+        onOpenAutomation = onOpenAutomation,
     )
     dialog?.let { open ->
         TagDialogHost(
@@ -145,6 +150,7 @@ private fun TagListScaffold(
     selected: List<String>,
     selection: TagSelectionActions,
     onOpen: (TagDialog) -> Unit,
+    onOpenAutomation: () -> Unit,
 ) {
     val rows = loadedRows.orEmpty()
     val selectionActive = selected.isNotEmpty()
@@ -160,6 +166,13 @@ private fun TagListScaffold(
             } else {
                 TopAppBar(
                     title = { Text(stringResource(Res.string.common_tags_title)) },
+                    actions = {
+                        TooltipIconButton(
+                            Icons.Outlined.AutoMode,
+                            stringResource(Res.string.automation_title),
+                            onClick = onOpenAutomation,
+                        )
+                    },
                 )
             }
         },

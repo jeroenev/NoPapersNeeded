@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="automation_title">Automatisering</string>
+    <string name="automation_intro">Nieuwe documenten worden in drie stappen geordend, in deze volgorde. Elke stap vult alleen in wat de stappen ervoor leeg lieten.</string>
+    <string name="automation_rules_title">1. Regels</string>
+    <string name="automation_rules_help">Je regels lopen eerst, zodra de tekst van een document gelezen is. Ze zijn gratis en direct: als de tekst past, voegen ze tags toe en vullen ze velden in.</string>
+    <string name="automation_rules_none">Nog geen regels.</string>
+    <plurals name="automation_rules_state">
+        <item quantity="one">%1$d van %2$d regel staat aan.</item>
+        <item quantity="other">%1$d van %2$d regels staan aan.</item>
+    </plurals>
+    <string name="automation_ai_title">2. Automatisch ordenen met de assistent</string>
+    <string name="automation_ai_help">Als automatisch ordenen aan staat, voegt de assistent daarna tags toe uit de tags die je al hebt en vult hij velden in die nog leeg zijn. Elk nieuw document kost één verzoek bij je AI-aanbieder.</string>
+    <string name="automation_ai_state_on">Aan. Deze instelling geldt alleen voor dit apparaat.</string>
+    <string name="automation_ai_state_off">Uit. Deze instelling geldt alleen voor dit apparaat.</string>
+    <string name="automation_ai_state_no_ai">Uit: de AI-assistent staat op dit apparaat niet aan.</string>
+    <string name="automation_ai_open">Instellingen van de AI-assistent</string>
+    <string name="automation_inbox_title">3. Inbox</string>
+    <string name="automation_inbox_help">Wat dan nog geen tag heeft, wacht in de inbox op je. Met de inboxworkflow aan wacht elk nieuw document daar tot je het als beoordeeld markeert.</string>
+    <string name="automation_inbox_state_on">De inboxworkflow staat aan.</string>
+    <string name="automation_inbox_state_off">De inboxworkflow staat uit: alleen documenten zonder tags wachten in de inbox.</string>
+    <string name="automation_inbox_open">Instellingen van de inbox</string>
+    <string name="automation_manual_title">Als je erom vraagt</string>
+    <string name="automation_manual_help">Suggesties voor één document en bulkbewerking voor veel documenten lopen alleen als je ze start, en veranderen alleen wat je accepteert.</string>
+
+    <string name="automation_rules_order_help">Regels lopen van boven naar beneden. Elke passende regel voegt zijn tags toe; als twee regels hetzelfde veld invullen, wint de onderste. Regels vullen alleen in wat een document nog niet heeft.</string>
+    <string name="automation_algorithm_exact_help">Past als de tekst het patroon precies zo bevat als het getypt is, spaties en leestekens inbegrepen. Hoofdletters maken niet uit.</string>
+    <string name="automation_algorithm_any_word_help">Past als de tekst minstens één woord van het patroon als heel woord bevat. Hoofdletters maken niet uit.</string>
+    <string name="automation_algorithm_all_words_help">Past als de tekst elk woord van het patroon als heel woord bevat, in willekeurige volgorde. Hoofdletters maken niet uit.</string>
+    <string name="automation_algorithm_regex_help">Past op een reguliere expressie, voor patronen zoals factuur- of klantnummers. Hoofdletters maken niet uit.</string>
+    <string name="automation_algorithm_fuzzy_help">Past op tekst die op het patroon lijkt, zodat scanfouten en kleine typfouten toch passen.</string>
+    <string name="automation_rule_preview_hint">Typ een patroon om te zien op welke documenten het past.</string>
+    <string name="automation_rule_preview_checking">Je documenten worden nagekeken…</string>
+    <plurals name="automation_rule_preview_count">
+        <item quantity="one">Past nu op %1$d document.</item>
+        <item quantity="other">Past nu op %1$d documenten.</item>
+    </plurals>
+    <plurals name="automation_rule_preview_more">
+        <item quantity="one">…en nog %1$d.</item>
+        <item quantity="other">…en nog %1$d.</item>
+    </plurals>
+    <string name="automation_rule_preview_fills_in">Bij opslaan wordt de regel op deze documenten toegepast, maar hij overschrijft nooit een waarde en zet nooit een tag terug die iemand verwijderd heeft.</string>
+    <string name="automation_rule_move_failed">Kan de regel niet verplaatsen: %1$s</string>
+</resources>

@@ -4,9 +4,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import dev.npn.app.platform.isAppPrivateLocation
 import dev.npn.app.platform.supportsSafStorage
+import dev.npn.app.ui.common.ExpanderRow
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.SettingsSection
 import dev.npn.app.ui.common.SwitchRow
@@ -48,8 +51,9 @@ private const val STORAGE_PATH_VARIABLES =
     "{title}, {doc_date}, {doc_date:yyyy-MM}, {docType}, {correspondent}, {tags}, {field:key}, {field:key:yyyy}"
 
 /**
- * Where documents live: which folder is the library, how PDFs are laid out inside it, and the
- * derived thumbnail cache that can be thrown away at any time.
+ * Where documents live: which folder is the library and how PDFs are laid out inside it. Behind
+ * Advanced: the derived thumbnail cache that can be thrown away at any time, and on Android the
+ * Storage Access Framework switch.
  */
 @Composable
 internal fun LibrarySettingsPane(
@@ -94,23 +98,32 @@ internal fun LibrarySettingsPane(
             onTemplateChange = actions::setStoragePathTemplate,
             onEnabledChange = actions::setStoragePathEnabled,
         )
-        SettingsActionRow(
-            label = stringResource(Res.string.common_settings_clear_thumbnail_cache),
-            onClick = actions::clearThumbnailCache,
-            help = stringResource(Res.string.common_settings_thumbnail_cache_help),
-        )
     }
 
-    // Android only: the Storage Access Framework stays available for folders that have no path
-    // (cloud document providers). It changes what the next folder choice persists, nothing else.
-    if (supportsSafStorage()) {
-        SettingsSection(title = stringResource(Res.string.common_settings_advanced)) {
-            SwitchRow(
-                label = stringResource(Res.string.common_settings_use_saf),
-                help = stringResource(Res.string.common_settings_use_saf_help),
-                checked = state.settings.snapshot.useSafStorage,
-                onCheckedChange = { on -> actions.edit { it.copy(useSafStorage = on) } },
+    // What most people never need, behind a disclosure a settings search opens when it finds one.
+    SettingsSection(title = null) {
+        var advanced by rememberAdvancedExpanded()
+        ExpanderRow(advanced, onToggle = { advanced = !advanced }) {
+            Text(stringResource(Res.string.common_settings_advanced), Modifier.weight(1f))
+        }
+        if (advanced) {
+            SettingsActionRow(
+                label = stringResource(Res.string.common_settings_clear_thumbnail_cache),
+                onClick = actions::clearThumbnailCache,
+                help = stringResource(Res.string.common_settings_thumbnail_cache_help),
             )
+            // Android only: the Storage Access Framework stays available for folders that have no
+            // path (cloud document providers). It changes what the next folder choice persists,
+            // nothing else, so a library already opened through it keeps working however it is set;
+            // the folder picker's "not on device storage" message points here.
+            if (supportsSafStorage()) {
+                SwitchRow(
+                    label = stringResource(Res.string.common_settings_use_saf),
+                    help = stringResource(Res.string.common_settings_use_saf_help),
+                    checked = state.settings.snapshot.useSafStorage,
+                    onCheckedChange = { on -> actions.edit { it.copy(useSafStorage = on) } },
+                )
+            }
         }
     }
 }

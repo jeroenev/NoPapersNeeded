@@ -26,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.mutableStateOf
@@ -79,6 +80,10 @@ private val PaneGroupSpacing: Dp = 24.dp
  * A null category means "no pane chosen yet": the list on compact, the first category on wide,
  * where an empty right-hand pane would just be a hole.
  *
+ * A category opened from a search whose hit sits behind the pane's Advanced disclosure opens with it
+ * expanded: [onOpenCategory] says so, and the route hands it back as [revealAdvanced]; on a wide
+ * window the pane beside the list reads the search itself.
+ *
  * Changing the library hands the picked folder to [onOpenLibrary], which closes this library. A
  * document with unsaved changes would go with it, so the user is sent back to it first
  * ([onResumeDraft]) rather than shown the picker.
@@ -88,11 +93,12 @@ fun SettingsScreen(
     settings: SettingsRepository,
     session: LibrarySession,
     category: SettingsCategoryId?,
-    onOpenCategory: (SettingsCategoryId) -> Unit,
+    onOpenCategory: (SettingsCategoryId, revealAdvanced: Boolean) -> Unit,
     onBack: () -> Unit,
     onOpenLibrary: (location: String) -> Unit,
     onResumeDraft: (docId: String) -> Unit,
     onAutoMatchRules: () -> Unit,
+    revealAdvanced: Boolean = false,
     vm: SettingsViewModel = viewModel { SettingsViewModel(settings, session, saved = createSavedStateHandle()) },
 ) {
     val paneState by vm.paneState.collectAsStateWithLifecycle()
@@ -115,10 +121,15 @@ fun SettingsScreen(
         if (pending != null) draftToResume = pending.key else pickLibrary()
     }
 
-    // The viewmodel's writes, plus the two ways out of a pane; one object for the screen's life,
+    val wide = LocalWindowWidthClass.current.isWide
+    // Picking a pane: a selection on wide, a drill-down on compact (see below).
+    val select = { id: SettingsCategoryId, reveal: Boolean -> if (wide) vm.pick(id) else onOpenCategory(id, reveal) }
+
+    // The viewmodel's writes, plus the ways out of a pane; one object for the screen's life,
     // calling whichever callbacks the latest composition passed.
     val currentChangeLibrary by rememberUpdatedState(onChangeLibrary)
     val currentAutoMatchRules by rememberUpdatedState(onAutoMatchRules)
+    val currentSelect by rememberUpdatedState(select)
     val paneActions =
         remember(vm) {
             object : SettingsPaneActions, SettingsActions by vm {
@@ -126,11 +137,12 @@ fun SettingsScreen(
 
                 override fun openAutoMatchRules() = currentAutoMatchRules()
 
+                override fun openCategory(id: SettingsCategoryId) = currentSelect(id, false)
+
                 override fun openFieldDialog(dialog: FieldDialog?) = vm.openFieldDialog(dialog)
             }
         }
 
-    val wide = LocalWindowWidthClass.current.isWide
     // Wide layouts keep the list on screen, so switching panes is a selection, not navigation:
     // it must not stack back-stack entries, and it must not reset the search box by tearing
     // the screen down. Compact layouts drill down for real, which is what makes system back
@@ -157,9 +169,10 @@ fun SettingsScreen(
         snackbar = snackbar,
         paneState = paneState,
         paneActions = paneActions,
+        revealAdvanced = revealAdvanced,
         query = query,
         onQueryChange = vm::searchCategories,
-        onSelect = { id -> if (wide) vm.pick(id) else onOpenCategory(id) },
+        onSelect = select,
         onBack = { if (closePicked) vm.pick(null) else onBack() },
     )
     draftToResume?.let { docId ->
@@ -183,13 +196,18 @@ private fun SettingsScaffold(
     snackbar: SnackbarHostState,
     paneState: SettingsPaneState,
     paneActions: SettingsPaneActions,
+    /** Whether the route asked for the open pane's Advanced disclosure expanded. */
+    revealAdvanced: Boolean,
     /** What is typed into the table of contents' search. */
     query: String,
     onQueryChange: (String) -> Unit,
-    onSelect: (SettingsCategoryId) -> Unit,
+    onSelect: (SettingsCategoryId, revealAdvanced: Boolean) -> Unit,
     onBack: () -> Unit,
 ) {
     val openCategory = selected?.let(::settingsCategory)
+    val labels = settingsCategoryLabels()
+    // The pane beside the list reads the search as it is typed; a drilled-down one, what its route says.
+    val reveal = revealAdvanced || labels.any { it.category.id == selected && it.revealsAdvanced(query) }
     // On compact the pane replaces the list, so the bar has to say which pane is open.
     val paneTitle = if (wide) null else openCategory?.title
     // Settings is a top-level destination reached from the persistent shell, so the top level has
@@ -202,7 +220,7 @@ private fun SettingsScaffold(
     val pane =
         remember {
             movableContentOf { args: SettingsPaneArgs ->
-                SettingsPane(args.category, args.state, args.actions, args.showTitle, args.modifier)
+                SettingsPane(args.category, args.state, args.actions, args.showTitle, args.reveal, args.modifier)
             }
         }
     Scaffold(
@@ -219,6 +237,7 @@ private fun SettingsScaffold(
                 wide -> {
                     Row(Modifier.fillMaxSize()) {
                         SettingsCategoryList(
+                            labels = labels,
                             selected = selected,
                             query = query,
                             onQueryChange = onQueryChange,
@@ -232,6 +251,7 @@ private fun SettingsScaffold(
                                 paneState,
                                 paneActions,
                                 showTitle = true,
+                                reveal,
                                 Modifier.weight(1f).fillMaxHeight(),
                             ),
                         )
@@ -245,6 +265,7 @@ private fun SettingsScaffold(
                             paneState,
                             paneActions,
                             showTitle = false,
+                            reveal,
                             Modifier.fillMaxSize(),
                         ),
                     )
@@ -252,6 +273,7 @@ private fun SettingsScaffold(
 
                 else -> {
                     SettingsCategoryList(
+                        labels = labels,
                         selected = null,
                         query = query,
                         onQueryChange = onQueryChange,
@@ -283,13 +305,13 @@ private fun SettingsTopBar(
  */
 @Composable
 private fun SettingsCategoryList(
+    labels: List<SettingsCategoryLabels>,
     selected: SettingsCategoryId?,
     query: String,
     onQueryChange: (String) -> Unit,
-    onSelect: (SettingsCategoryId) -> Unit,
+    onSelect: (SettingsCategoryId, revealAdvanced: Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val labels = settingsCategoryLabels()
     val results = labels.filter { it.matches(query) }
     Column(modifier) {
         SearchField(
@@ -312,7 +334,7 @@ private fun SettingsCategoryList(
                     entry = entry,
                     query = query,
                     selected = entry.category.id == selected,
-                    onClick = { onSelect(entry.category.id) },
+                    onClick = { onSelect(entry.category.id, entry.revealsAdvanced(query)) },
                 )
             }
         }
@@ -350,6 +372,8 @@ private class SettingsPaneArgs(
     val state: SettingsPaneState,
     val actions: SettingsPaneActions,
     val showTitle: Boolean,
+    /** Whether the pane opens its Advanced disclosure ([LocalRevealAdvanced]). */
+    val reveal: Boolean,
     val modifier: Modifier,
 )
 
@@ -363,6 +387,7 @@ private fun SettingsPane(
     state: SettingsPaneState,
     actions: SettingsPaneActions,
     showTitle: Boolean,
+    reveal: Boolean,
     modifier: Modifier = Modifier,
 ) {
     if (category == null) return
@@ -373,6 +398,8 @@ private fun SettingsPane(
         if (showTitle) {
             Text(text = stringResource(category.title), style = MaterialTheme.typography.headlineSmall)
         }
-        category.content(state, actions)
+        CompositionLocalProvider(LocalRevealAdvanced provides reveal) {
+            category.content(state, actions)
+        }
     }
 }

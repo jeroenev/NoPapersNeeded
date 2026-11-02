@@ -19,6 +19,7 @@ import dev.npn.core.model.ReviewMode
 import dev.npn.core.pathrules.StoragePathContext
 import dev.npn.core.pathrules.StoragePathExpansion
 import dev.npn.core.pathrules.StoragePathTemplate
+import dev.npn.core.rules.AutoMatchRule
 import dev.npn.core.settings.SettingsRepository
 import dev.npn.core.settings.SettingsSnapshot
 import dev.npn.core.settings.toAiConfig
@@ -155,6 +156,10 @@ class SettingsViewModel(
     private val fields: StateFlow<List<FieldDef>> =
         fieldRegistry.fields.stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
+    /** The library's auto-match rules, for the Automation pane's count of those that are on. */
+    private val rules: StateFlow<List<AutoMatchRule>?> =
+        session.rules.observeRules().stateIn(viewModelScope, WhileSubscribedTimeout, null)
+
     /** Documents carrying a value per field key, for the field manager's usage column and delete warning. */
     private val fieldUsage: StateFlow<Map<String, Int>> =
         fieldRegistry.usageCounts().stateIn(viewModelScope, WhileSubscribedTimeout, emptyMap())
@@ -245,10 +250,10 @@ class SettingsViewModel(
             state,
             aiModels,
             aiSelfTest,
-            combine(reviewMode, cloudState, ::Pair),
+            combine(reviewMode, cloudState, rules, ::Triple),
             combine(fields, fieldUsage, fieldDialog.flow, ::Triple),
-        ) { ui, models, selfTest, (mode, cloudState), (defs, usage, dialog) ->
-            SettingsPaneState(ui, models, selfTest, mode, defs, usage, dialog, cloudState)
+        ) { ui, models, selfTest, (mode, cloudState, rules), (defs, usage, dialog) ->
+            SettingsPaneState(ui, models, selfTest, mode, defs, usage, dialog, cloudState, rules)
         }.stateIn(
             viewModelScope,
             WhileSubscribedTimeout,
@@ -260,6 +265,7 @@ class SettingsViewModel(
                 fields.value,
                 fieldUsage.value,
                 fieldDialog.value,
+                rules = rules.value,
             ),
         )
 

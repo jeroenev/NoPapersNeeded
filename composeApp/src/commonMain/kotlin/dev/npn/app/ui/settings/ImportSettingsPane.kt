@@ -41,9 +41,6 @@ import dev.npn.app.ui.common.rememberStorageAccess
 import dev.npn.core.ocr.OcrLanguages
 import io.github.vinceglb.filekit.dialogs.compose.rememberDirectoryPickerLauncher
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.common_settings_auto_matching
-import no_papers_needed.composeapp.generated.resources.common_settings_auto_matching_help
-import no_papers_needed.composeapp.generated.resources.common_settings_auto_matching_rules
 import no_papers_needed.composeapp.generated.resources.common_settings_choose_folder
 import no_papers_needed.composeapp.generated.resources.common_settings_no_watched_folder
 import no_papers_needed.composeapp.generated.resources.common_settings_ocr
@@ -65,8 +62,8 @@ import org.jetbrains.compose.resources.stringResource
 private const val OTHER_OCR_LANGUAGE_EXAMPLES = "ita, pol"
 
 /**
- * How documents get into the library and what happens to them on the way in: the watched folder,
- * text recognition, and the rules that fill in metadata from the recognised text.
+ * How documents get into the library and how their text is read: the watched folder and text
+ * recognition. What organizes them once the text is read lives in the Automation pane.
  */
 @Composable
 internal fun ImportSettingsPane(
@@ -93,14 +90,6 @@ internal fun ImportSettingsPane(
         } else {
             HelpText(stringResource(Res.string.common_settings_ocr_android_help))
         }
-    }
-
-    SettingsSection(title = stringResource(Res.string.common_settings_auto_matching)) {
-        SettingsActionRow(
-            label = stringResource(Res.string.common_settings_auto_matching_rules),
-            onClick = actions::openAutoMatchRules,
-            help = stringResource(Res.string.common_settings_auto_matching_help),
-        )
     }
 }
 

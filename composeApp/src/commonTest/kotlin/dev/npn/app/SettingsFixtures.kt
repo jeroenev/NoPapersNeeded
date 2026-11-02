@@ -7,6 +7,7 @@ import dev.npn.app.ui.settings.AiSelfTestState
 import dev.npn.app.ui.settings.CloudSetupActions
 import dev.npn.app.ui.settings.FieldDialog
 import dev.npn.app.ui.settings.ReviewMigration
+import dev.npn.app.ui.settings.SettingsCategoryId
 import dev.npn.app.ui.settings.SettingsPaneActions
 import dev.npn.app.ui.settings.SettingsPaneState
 import dev.npn.app.ui.settings.SettingsUiState
@@ -100,6 +101,8 @@ internal open class NoSettingsPaneActions : SettingsPaneActions {
     override fun changeLibrary() = Unit
 
     override fun openAutoMatchRules() = Unit
+
+    override fun openCategory(id: SettingsCategoryId) = Unit
 
     override fun openFieldDialog(dialog: FieldDialog?) = Unit
 }

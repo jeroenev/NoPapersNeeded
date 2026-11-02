@@ -83,4 +83,24 @@ class SettingsCategoryTest {
     fun blankQueryHasNoMatchedKeywordToExplain() {
         labels("Library", "Clear thumbnail cache").matchedKeyword("").shouldBeNull()
     }
+
+    /** A search that finds a setting behind the pane's Advanced disclosure opens it; one that does not, not. */
+    @Test
+    fun aSearchHitBehindAdvancedRevealsIt() {
+        val entry =
+            labels("Library", "Path template", "Clear thumbnail cache")
+                .copy(advancedKeywords = listOf("Advanced", "Clear thumbnail cache"))
+        entry.revealsAdvanced("thumbnail") shouldBe true
+        entry.revealsAdvanced(" ADVANCED ") shouldBe true
+        entry.revealsAdvanced("template") shouldBe false
+        entry.revealsAdvanced("") shouldBe false
+    }
+
+    /** Every setting behind a disclosure is searchable at all: an advanced keyword is a keyword. */
+    @Test
+    fun everyAdvancedKeywordIsAKeyword() {
+        SettingsCategories.flatMap { category ->
+            (category.advancedKeywords - category.keywords.toSet()).map { "${category.id}: $it" }
+        } shouldContainExactly emptyList()
+    }
 }

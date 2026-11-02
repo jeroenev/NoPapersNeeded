@@ -3,14 +3,14 @@
     <string name="common_settings_title">Einstellungen</string>
     <string name="common_settings_search">Einstellungen durchsuchen</string>
     <string name="common_settings_search_no_results">Keine Einstellungen für „%1$s“ gefunden.</string>
-    <string name="common_settings_category_import">Import &amp; OCR</string>
+    <string name="common_settings_category_import">Import &amp; Texterkennung</string>
     <string name="common_settings_category_documents">Dokumente</string>
     <string name="common_settings_category_appearance">Darstellung</string>
     <string name="common_settings_library">Bibliothek</string>
     <string name="common_settings_no_library">Keine Bibliothek ausgewählt</string>
     <string name="common_settings_change_library">Bibliothek wechseln</string>
     <string name="common_settings_watched_folder">Überwachter Ordner</string>
-    <string name="common_settings_ocr">OCR</string>
+    <string name="common_settings_ocr">Texterkennung</string>
     <string name="common_settings_ocr_match_app_language">App-Sprache verwenden</string>
     <string name="common_settings_ocr_match_app_language_help">Erkennt die App-Sprache und Englisch.</string>
     <string name="common_settings_ocr_languages_help">Wähle alle Sprachen, in denen deine Dokumente geschrieben sind. Jede weitere Sprache macht die Erkennung etwas langsamer; Sprachen ohne installiertes Modell werden übersprungen.</string>
@@ -51,9 +51,7 @@
         <item quantity="one">„%1$s“ wird in %2$d Dokument verwendet. Vorhandene Werte werden nicht umgewandelt und passen eventuell nicht mehr zum neuen Typ.</item>
         <item quantity="other">„%1$s“ wird in %2$d Dokumenten verwendet. Vorhandene Werte werden nicht umgewandelt und passen eventuell nicht mehr zum neuen Typ.</item>
     </plurals>
-    <string name="common_settings_auto_matching">Automatische Zuordnung</string>
     <string name="common_settings_auto_matching_rules">Zuordnungsregeln</string>
-    <string name="common_settings_auto_matching_help">Dokumente automatisch taggen und Metadaten setzen, wenn der importierte Text zu einer Regel passt.</string>
     <string name="common_settings_about">Info</string>
     <string name="common_settings_product_version">%1$s %2$s</string>
     <string name="common_settings_about_help">Persönliche Open-Source-App für papierlose Dokumente. Deine Dateien sind die maßgebliche Quelle.</string>
@@ -86,7 +84,7 @@
     <string name="common_settings_storage_error_invalid_segment">Ungültiger Teil des Pfads: %1$s</string>
     <string name="common_settings_storage_rule_stays_off">Automatisches Ordnen bleibt aus, weil die Pfadvorlage ungültig ist: %1$s</string>
 
-    <string name="common_settings_watched_folder_help">PDFs, die in diesem Ordner gespeichert werden (zum Beispiel von einer Scanner-App), werden automatisch in die Bibliothek importiert und per OCR verarbeitet.</string>
+    <string name="common_settings_watched_folder_help">PDFs, die in diesem Ordner gespeichert werden (zum Beispiel von einer Scanner-App), werden automatisch in die Bibliothek importiert, und ihr Text wird erkannt.</string>
     <string name="common_settings_no_watched_folder">Kein Ordner überwacht</string>
     <string name="common_settings_choose_folder">Ordner wählen</string>
     <string name="common_settings_stop_watching">Überwachung beenden</string>
@@ -149,7 +147,7 @@
     <string name="common_settings_language_help">Oberflächensprache für dieses Gerät. Systemstandard folgt dem Betriebssystem.</string>
     <string name="common_settings_language_system">Systemstandard</string>
     <string name="common_settings_enable_inbox">Posteingang nutzen</string>
-    <string name="common_settings_inbox_help">Neue Dokumente landen in einem Posteingang und du markierst sie von Hand als geprüft. Wenn deaktiviert, erscheinen Dokumente einfach und gelten als geprüft, sobald sie Tags haben.</string>
+    <string name="common_settings_inbox_help">Neue Dokumente warten im Posteingang, bis du sie von Hand als geprüft markierst. Wenn deaktiviert, erscheinen Dokumente einfach und gelten als geprüft, sobald sie Tags haben.</string>
     <string name="common_settings_syncs_across_devices">Diese Einstellung wird auf deine Geräte synchronisiert.</string>
     <string name="common_settings_inbox_migration_question">Wie sollen vorhandene Dokumente markiert werden? Neue Dokumente gelten immer zunächst als zu prüfen.</string>
     <string name="common_settings_mark_all_reviewed">Alle als geprüft markieren</string>

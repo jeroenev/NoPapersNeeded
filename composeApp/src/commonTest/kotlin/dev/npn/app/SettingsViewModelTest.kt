@@ -14,6 +14,7 @@ import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.rules.AutoMatchRule
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.combine
@@ -56,6 +57,23 @@ class SettingsViewModelTest : MainDispatcherTest() {
                     }
                 })
             restored.paneState.value.fieldDialog shouldBe FieldDialog.Edit("invoiceNo")
+        }
+
+    /** The Automation pane counts the library's rules from the pane state, as they change. */
+    @Test
+    fun thePaneStateCarriesTheLibrarysRules() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = settingsVm(session = session)
+            collecting(model.paneState)
+            advanceUntilIdle()
+            model.paneState.value.rules shouldBe emptyList()
+
+            val rule = AutoMatchRule(id = "r", name = "Power", pattern = "electricity", enabled = false)
+            session.rules.rules.value = listOf(rule)
+            advanceUntilIdle()
+
+            model.paneState.value.rules shouldBe listOf(rule)
         }
 
     @Test

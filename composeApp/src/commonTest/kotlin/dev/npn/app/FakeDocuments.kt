@@ -7,6 +7,7 @@ import dev.npn.core.rules.AutoMatchRule
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 
 /**
  * Read-side test doubles: saved views and auto-match rules (the documents' and the tags' are shared,
@@ -20,7 +21,9 @@ class FakeAutoMatchRuleRepository : AutoMatchRuleRepository {
     val deletedIds = mutableListOf<String>()
     val enabledSets = mutableListOf<Pair<String, Boolean>>()
 
-    override fun observeRules(): Flow<List<AutoMatchRule>> = rules
+    /** In run order, as the real repository lists them: by position, then by id. */
+    override fun observeRules(): Flow<List<AutoMatchRule>> =
+        rules.map { list -> list.sortedWith(compareBy(AutoMatchRule::position, AutoMatchRule::id)) }
 
     override suspend fun save(rule: AutoMatchRule): String {
         saved += rule

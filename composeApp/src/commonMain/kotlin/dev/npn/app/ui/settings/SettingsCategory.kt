@@ -2,6 +2,7 @@ package dev.npn.app.ui.settings
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.AutoMode
 import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.FolderOpen
@@ -13,10 +14,19 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.vector.ImageVector
 import dev.npn.app.platform.ocrHasLanguageSetting
 import dev.npn.app.platform.supportsSafStorage
+import dev.npn.app.ui.automation.AutomationSettingsPane
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.rules.AutoMatchRule
 import kotlinx.serialization.Serializable
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.automation_ai_open
+import no_papers_needed.composeapp.generated.resources.automation_ai_title
+import no_papers_needed.composeapp.generated.resources.automation_inbox_open
+import no_papers_needed.composeapp.generated.resources.automation_inbox_title
+import no_papers_needed.composeapp.generated.resources.automation_manual_title
+import no_papers_needed.composeapp.generated.resources.automation_rules_title
+import no_papers_needed.composeapp.generated.resources.automation_title
 import no_papers_needed.composeapp.generated.resources.common_settings_about
 import no_papers_needed.composeapp.generated.resources.common_settings_about_help
 import no_papers_needed.composeapp.generated.resources.common_settings_advanced
@@ -91,6 +101,7 @@ import org.jetbrains.compose.resources.stringResource
 enum class SettingsCategoryId {
     LIBRARY,
     IMPORT,
+    AUTOMATION,
     DOCUMENTS,
     CLOUD_SYNC,
     AI,
@@ -121,6 +132,8 @@ internal data class SettingsPaneState(
     /** The field manager's open dialog, if any. */
     val fieldDialog: FieldDialog? = null,
     val cloud: CloudSyncState = CloudSyncState(),
+    /** The library's auto-match rules in run order; null until they load. */
+    val rules: List<AutoMatchRule>? = null,
 )
 
 /** What a settings pane can do: change a setting ([SettingsActions]), or open what one leads to. */
@@ -129,6 +142,9 @@ internal interface SettingsPaneActions : SettingsActions {
     fun changeLibrary()
 
     fun openAutoMatchRules()
+
+    /** Open another category's pane, as picking it in the list does. */
+    fun openCategory(id: SettingsCategoryId)
 
     /** Open the field manager's [dialog], or change what it holds; null closes it. */
     fun openFieldDialog(dialog: FieldDialog?)
@@ -142,6 +158,9 @@ internal interface SettingsPaneActions : SettingsActions {
  * entry. They deliberately reuse the controls' resource keys rather than adding translated copies;
  * a label with a value in it ("Default view: %1$s") is searched by its name. Every label a pane
  * shows must be among them, which `SettingsSearchCoverageTest` checks by rendering the panes.
+ *
+ * [advancedKeywords] are those of [keywords] the pane keeps behind its Advanced disclosure: a search
+ * that matches one opens the pane with the disclosure expanded ([rememberAdvancedExpanded]).
  */
 @Immutable
 internal class SettingsCategory(
@@ -150,6 +169,7 @@ internal class SettingsCategory(
     val icon: ImageVector,
     val keywords: List<StringResource>,
     val content: @Composable (SettingsPaneState, SettingsPaneActions) -> Unit,
+    val advancedKeywords: List<StringResource> = emptyList(),
 )
 
 /**
@@ -169,12 +189,18 @@ internal val SettingsCategories: List<SettingsCategory> =
                     Res.string.common_settings_storage,
                     Res.string.common_settings_storage_organize_paths,
                     Res.string.common_settings_storage_path_template,
+                    Res.string.common_settings_advanced,
                     Res.string.common_settings_clear_thumbnail_cache,
                     // Only Android offers the Storage Access Framework.
-                    Res.string.common_settings_advanced.takeIf { supportsSafStorage() },
                     Res.string.common_settings_use_saf.takeIf { supportsSafStorage() },
                 ),
             content = { state, actions -> LibrarySettingsPane(state, actions) },
+            advancedKeywords =
+                listOfNotNull(
+                    Res.string.common_settings_advanced,
+                    Res.string.common_settings_clear_thumbnail_cache,
+                    Res.string.common_settings_use_saf.takeIf { supportsSafStorage() },
+                ),
         ),
         SettingsCategory(
             id = SettingsCategoryId.IMPORT,
@@ -190,9 +216,24 @@ internal val SettingsCategories: List<SettingsCategory> =
                     // Only desktop shows the OCR language settings; Android's OCR takes no language.
                     Res.string.common_settings_ocr_match_app_language.takeIf { ocrHasLanguageSetting() },
                     Res.string.common_settings_ocr_other_language.takeIf { ocrHasLanguageSetting() },
-                    Res.string.common_settings_auto_matching_rules,
                 ),
             content = { state, actions -> ImportSettingsPane(state, actions) },
+        ),
+        SettingsCategory(
+            id = SettingsCategoryId.AUTOMATION,
+            title = Res.string.automation_title,
+            icon = Icons.Outlined.AutoMode,
+            keywords =
+                listOf(
+                    Res.string.automation_rules_title,
+                    Res.string.common_settings_auto_matching_rules,
+                    Res.string.automation_ai_title,
+                    Res.string.automation_ai_open,
+                    Res.string.automation_inbox_title,
+                    Res.string.automation_inbox_open,
+                    Res.string.automation_manual_title,
+                ),
+            content = { state, actions -> AutomationSettingsPane(state, actions) },
         ),
         SettingsCategory(
             id = SettingsCategoryId.DOCUMENTS,
@@ -254,6 +295,15 @@ internal val SettingsCategories: List<SettingsCategory> =
                     Res.string.common_settings_advanced,
                 ),
             content = { state, actions -> AiSettingsPane(state, actions) },
+            advancedKeywords =
+                listOf(
+                    Res.string.common_settings_advanced,
+                    Res.string.common_settings_reasoning_assistant,
+                    Res.string.common_settings_reasoning_edit,
+                    Res.string.common_settings_reasoning_help,
+                    Res.string.common_settings_max_suggested_tags,
+                    Res.string.common_settings_max_new_tags,
+                ),
         ),
         SettingsCategory(
             id = SettingsCategoryId.APPEARANCE,
@@ -287,6 +337,8 @@ internal data class SettingsCategoryLabels(
     val category: SettingsCategory,
     val title: String,
     val keywords: List<String>,
+    /** The resolved [SettingsCategory.advancedKeywords]. */
+    val advancedKeywords: List<String> = emptyList(),
 ) {
     fun matches(query: String): Boolean {
         val trimmed = query.trim()
@@ -300,6 +352,12 @@ internal data class SettingsCategoryLabels(
         if (trimmed.isEmpty()) return null
         return keywords.firstOrNull { it.contains(trimmed, ignoreCase = true) }
     }
+
+    /** Whether [query] finds a setting behind this pane's Advanced disclosure, which then opens expanded. */
+    fun revealsAdvanced(query: String): Boolean {
+        val trimmed = query.trim()
+        return trimmed.isNotEmpty() && advancedKeywords.any { it.contains(trimmed, ignoreCase = true) }
+    }
 }
 
 @Composable
@@ -309,6 +367,7 @@ internal fun settingsCategoryLabels(): List<SettingsCategoryLabels> =
             category = category,
             title = stringResource(category.title),
             keywords = category.keywords.map { searchableLabel(stringResource(it)) },
+            advancedKeywords = category.advancedKeywords.map { searchableLabel(stringResource(it)) },
         )
     }
 

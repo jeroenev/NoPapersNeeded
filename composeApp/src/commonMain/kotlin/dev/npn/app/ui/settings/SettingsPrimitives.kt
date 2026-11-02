@@ -5,8 +5,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.HelpText
@@ -28,4 +31,22 @@ internal fun SettingsActionRow(
         OutlinedButton(onClick = onClick) { Text(text = label) }
         if (help != null) HelpText(help)
     }
+}
+
+/**
+ * Whether the settings pane on screen should open its Advanced disclosure: a settings search found
+ * a setting behind it ([SettingsCategory.advancedKeywords]). Provided by the pane's host.
+ */
+internal val LocalRevealAdvanced = compositionLocalOf { false }
+
+/**
+ * Whether a pane's Advanced disclosure is open: closed at first, opened when [reveal] says a
+ * settings search found something behind it, and from then on the user's to close again. A pane
+ * reads it as `var advanced by rememberAdvancedExpanded()`.
+ */
+@Composable
+internal fun rememberAdvancedExpanded(reveal: Boolean = LocalRevealAdvanced.current): MutableState<Boolean> {
+    val expanded = rememberSaveable { mutableStateOf(reveal) }
+    LaunchedEffect(reveal) { if (reveal) expanded.value = true }
+    return expanded
 }

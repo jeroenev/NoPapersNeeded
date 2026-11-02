@@ -3,14 +3,14 @@
     <string name="common_settings_title">Paramètres</string>
     <string name="common_settings_search">Rechercher dans les paramètres</string>
     <string name="common_settings_search_no_results">Aucun paramètre ne correspond à « %1$s ».</string>
-    <string name="common_settings_category_import">Import &amp; OCR</string>
+    <string name="common_settings_category_import">Import &amp; reconnaissance de texte</string>
     <string name="common_settings_category_documents">Documents</string>
     <string name="common_settings_category_appearance">Apparence</string>
     <string name="common_settings_library">Bibliothèque</string>
     <string name="common_settings_no_library">Aucune bibliothèque sélectionnée</string>
     <string name="common_settings_change_library">Changer de bibliothèque</string>
     <string name="common_settings_watched_folder">Dossier surveillé</string>
-    <string name="common_settings_ocr">OCR</string>
+    <string name="common_settings_ocr">Reconnaissance de texte</string>
     <string name="common_settings_ocr_match_app_language">Suivre la langue de l’app</string>
     <string name="common_settings_ocr_match_app_language_help">Reconnaît la langue de l’app et l’anglais.</string>
     <string name="common_settings_ocr_languages_help">Choisissez toutes les langues de vos documents. Chaque langue en plus ralentit un peu la reconnaissance ; les langues dont le modèle n’est pas installé sont ignorées.</string>
@@ -51,9 +51,7 @@
         <item quantity="one">« %1$s » est utilisé sur %2$d document. Les valeurs existantes ne sont pas converties et peuvent ne plus correspondre au nouveau type.</item>
         <item quantity="other">« %1$s » est utilisé sur %2$d documents. Les valeurs existantes ne sont pas converties et peuvent ne plus correspondre au nouveau type.</item>
     </plurals>
-    <string name="common_settings_auto_matching">Correspondance automatique</string>
     <string name="common_settings_auto_matching_rules">Règles automatiques</string>
-    <string name="common_settings_auto_matching_help">Étiquette automatiquement les documents et renseigne les informations quand le texte importé correspond à une règle.</string>
     <string name="common_settings_about">À propos</string>
     <string name="common_settings_product_version">%1$s %2$s</string>
     <string name="common_settings_about_help">Application personnelle et open source de gestion de documents sans papier. Les fichiers font foi.</string>
@@ -86,7 +84,7 @@
     <string name="common_settings_storage_error_invalid_segment">Segment non valide : %1$s</string>
     <string name="common_settings_storage_rule_stays_off">L’organisation automatique reste désactivée, car le modèle de chemin n’est pas valide : %1$s</string>
 
-    <string name="common_settings_watched_folder_help">Les PDF enregistrés dans ce dossier (par exemple par une application de numérisation) sont importés automatiquement dans la bibliothèque et traités par OCR.</string>
+    <string name="common_settings_watched_folder_help">Les PDF enregistrés dans ce dossier (par exemple par une application de numérisation) sont importés automatiquement dans la bibliothèque, et leur texte est reconnu.</string>
     <string name="common_settings_no_watched_folder">Aucun dossier surveillé</string>
     <string name="common_settings_choose_folder">Choisir un dossier</string>
     <string name="common_settings_stop_watching">Arrêter la surveillance</string>
@@ -149,7 +147,7 @@
     <string name="common_settings_language_help">Langue de l’interface sur cet appareil. « Langue du système » suit le système d’exploitation.</string>
     <string name="common_settings_language_system">Langue du système</string>
     <string name="common_settings_enable_inbox">Activer la boîte de réception</string>
-    <string name="common_settings_inbox_help">Les nouveaux documents arrivent dans une boîte de réception et vous les marquez comme vérifiés vous-même. Désactivé : ils apparaissent simplement et sont considérés comme vérifiés dès qu’ils sont étiquetés.</string>
+    <string name="common_settings_inbox_help">Les nouveaux documents attendent dans la boîte de réception jusqu’à ce que vous les marquiez comme vérifiés. Désactivé : ils apparaissent simplement et sont considérés comme vérifiés dès qu’ils sont étiquetés.</string>
     <string name="common_settings_syncs_across_devices">Ce paramètre est synchronisé entre vos appareils.</string>
     <string name="common_settings_inbox_migration_question">Comment marquer les documents existants ? Les nouveaux documents commenceront toujours « à vérifier ».</string>
     <string name="common_settings_mark_all_reviewed">Tout marquer comme vérifié</string>

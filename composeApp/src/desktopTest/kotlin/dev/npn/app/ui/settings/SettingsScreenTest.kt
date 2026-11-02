@@ -11,6 +11,7 @@ import dev.npn.app.BuildInfo
 import dev.npn.app.EnglishLocaleTest
 import dev.npn.app.FakeLibrarySession
 import dev.npn.app.FakeSettingsRepository
+import dev.npn.app.settingsVm
 import dev.npn.app.ui.click
 import dev.npn.app.ui.closing
 import dev.npn.app.ui.common.LocalWindowWidthClass
@@ -51,7 +52,7 @@ class SettingsScreenTest : EnglishLocaleTest() {
                             settings = FakeSettingsRepository(),
                             session = FakeLibrarySession(),
                             category = null,
-                            onOpenCategory = {},
+                            onOpenCategory = { _, _ -> },
                             onBack = { leftSettings = true },
                             onOpenLibrary = {},
                             onResumeDraft = {},
@@ -96,7 +97,7 @@ class SettingsScreenTest : EnglishLocaleTest() {
                                 settings = FakeSettingsRepository(),
                                 session = FakeLibrarySession(),
                                 category = null,
-                                onOpenCategory = {},
+                                onOpenCategory = { _, _ -> },
                                 onBack = {},
                                 onOpenLibrary = {},
                                 onResumeDraft = {},
@@ -118,6 +119,56 @@ class SettingsScreenTest : EnglishLocaleTest() {
 
                 // Only the About pane shows the version, in any language.
                 has { node -> node.texts().any { BuildInfo.VERSION in it } } shouldBe true
+            }
+        }
+
+    /**
+     * A search that finds a setting behind a pane's Advanced disclosure opens the pane with it
+     * expanded: beside the list on a wide window, and through the route on a compact one.
+     */
+    @Test
+    fun aSearchHitBehindAdvancedOpensThePaneExpanded() =
+        onUiThread {
+            var widthClass by mutableStateOf(WindowWidthClass.WIDE)
+            val opened = mutableListOf<Pair<SettingsCategoryId, Boolean>>()
+            val vm = settingsVm()
+            val drafts = DocumentDrafts(FakeMetadataWriter(), CoroutineScope(Dispatchers.Unconfined))
+            hostedScene(WIDTH, HEIGHT) {
+                CompositionLocalProvider(
+                    LocalWindowWidthClass provides widthClass,
+                    LocalDocumentDrafts provides drafts,
+                ) {
+                    NpnTheme(darkTheme = false) {
+                        SettingsScreen(
+                            settings = FakeSettingsRepository(),
+                            session = FakeLibrarySession(),
+                            category = null,
+                            onOpenCategory = { id, reveal -> opened += id to reveal },
+                            onBack = {},
+                            onOpenLibrary = {},
+                            onResumeDraft = {},
+                            onAutoMatchRules = {},
+                            vm = vm,
+                        )
+                    }
+                }
+            }.closing {
+                vm.searchCategories("template")
+                vm.pick(SettingsCategoryId.LIBRARY)
+                render()
+                has { "Clear thumbnail cache" in it.texts() } shouldBe false
+
+                vm.searchCategories("thumbnail")
+                render()
+                render()
+                has { "Clear thumbnail cache" in it.texts() } shouldBe true
+
+                vm.pick(null)
+                widthClass = WindowWidthClass.COMPACT
+                Snapshot.sendApplyNotifications()
+                render()
+                click { "Library" in it.texts() }
+                opened shouldBe listOf(SettingsCategoryId.LIBRARY to true)
             }
         }
 

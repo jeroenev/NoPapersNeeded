@@ -3,14 +3,14 @@
     <string name="common_settings_title">Settings</string>
     <string name="common_settings_search">Search settings</string>
     <string name="common_settings_search_no_results">No settings match “%1$s”.</string>
-    <string name="common_settings_category_import">Import &amp; OCR</string>
+    <string name="common_settings_category_import">Import &amp; text recognition</string>
     <string name="common_settings_category_documents">Documents</string>
     <string name="common_settings_category_appearance">Appearance</string>
     <string name="common_settings_library">Library</string>
     <string name="common_settings_no_library">No library selected</string>
     <string name="common_settings_change_library">Change library</string>
     <string name="common_settings_watched_folder">Watched folder</string>
-    <string name="common_settings_ocr">OCR</string>
+    <string name="common_settings_ocr">Text recognition</string>
     <string name="common_settings_ocr_match_app_language">Match app language</string>
     <string name="common_settings_ocr_match_app_language_help">Recognizes the app language plus English.</string>
     <string name="common_settings_ocr_languages_help">Pick every language your documents are written in. Each extra language makes recognition a bit slower, and languages whose model is not installed are skipped.</string>
@@ -52,9 +52,7 @@
         <item quantity="one">'%1$s' is used on %2$d document. Existing values are not converted and may no longer fit the new type.</item>
         <item quantity="other">'%1$s' is used on %2$d documents. Existing values are not converted and may no longer fit the new type.</item>
     </plurals>
-    <string name="common_settings_auto_matching">Auto-matching</string>
     <string name="common_settings_auto_matching_rules">Auto-matching rules</string>
-    <string name="common_settings_auto_matching_help">Automatically tag documents and set metadata when imported text matches a rule.</string>
     <string name="common_settings_about">About</string>
     <string name="common_settings_product_version">%1$s %2$s</string>
     <string name="common_settings_about_help">Personal, open-source paperless document app. Files are the source of truth.</string>
@@ -87,7 +85,7 @@
     <string name="common_settings_storage_error_invalid_segment">Invalid filename segment %1$s</string>
     <string name="common_settings_storage_rule_stays_off">Automatic organizing stays off because the path template is invalid: %1$s</string>
 
-    <string name="common_settings_watched_folder_help">PDFs saved to this folder (for example by a scanner app) are imported into the library automatically and processed with OCR.</string>
+    <string name="common_settings_watched_folder_help">PDFs saved to this folder (for example by a scanner app) are imported into the library automatically, and their text is recognized.</string>
     <string name="common_settings_no_watched_folder">No folder watched</string>
     <string name="common_settings_choose_folder">Choose folder</string>
     <string name="common_settings_stop_watching">Stop watching</string>
@@ -156,7 +154,7 @@
     <string name="common_settings_language_spanish" translatable="false">Español</string>
     <string name="common_settings_language_portuguese" translatable="false">Português (Brasil)</string>
     <string name="common_settings_enable_inbox">Enable inbox workflow</string>
-    <string name="common_settings_inbox_help">New documents land in an inbox and you mark them reviewed by hand. When off, documents just appear and count as reviewed once tagged.</string>
+    <string name="common_settings_inbox_help">New documents wait in the Inbox until you mark them reviewed. When off, documents just appear and count as reviewed once tagged.</string>
     <string name="common_settings_syncs_across_devices">This setting syncs across your devices.</string>
     <string name="common_settings_inbox_migration_question">How should existing documents be marked? New documents will always start as needing review.</string>
     <string name="common_settings_mark_all_reviewed">Mark all as reviewed</string>

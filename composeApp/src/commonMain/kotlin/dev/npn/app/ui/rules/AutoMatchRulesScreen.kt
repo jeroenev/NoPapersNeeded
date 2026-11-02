@@ -7,13 +7,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Rule
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -27,8 +29,10 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.createSavedStateHandle
@@ -39,9 +43,9 @@ import dev.npn.app.ui.common.Dropdown
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.LoadingIndicator
-import dev.npn.app.ui.common.NumericField
 import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.rememberSnackbarMessages
+import dev.npn.app.ui.common.resolve
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.labelFor
@@ -51,6 +55,15 @@ import dev.npn.core.rules.RuleField
 import dev.npn.core.rules.RuleMatcher
 import kotlinx.serialization.Serializable
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.automation_algorithm_all_words_help
+import no_papers_needed.composeapp.generated.resources.automation_algorithm_any_word_help
+import no_papers_needed.composeapp.generated.resources.automation_algorithm_exact_help
+import no_papers_needed.composeapp.generated.resources.automation_algorithm_fuzzy_help
+import no_papers_needed.composeapp.generated.resources.automation_algorithm_regex_help
+import no_papers_needed.composeapp.generated.resources.automation_rule_preview_checking
+import no_papers_needed.composeapp.generated.resources.automation_rule_preview_fills_in
+import no_papers_needed.composeapp.generated.resources.automation_rule_preview_hint
+import no_papers_needed.composeapp.generated.resources.automation_rules_order_help
 import no_papers_needed.composeapp.generated.resources.common_delete
 import no_papers_needed.composeapp.generated.resources.common_name
 import no_papers_needed.composeapp.generated.resources.common_rules_actions_set
@@ -74,12 +87,13 @@ import no_papers_needed.composeapp.generated.resources.common_rules_join_parts
 import no_papers_needed.composeapp.generated.resources.common_rules_match_field
 import no_papers_needed.composeapp.generated.resources.common_rules_new_title
 import no_papers_needed.composeapp.generated.resources.common_rules_pattern
-import no_papers_needed.composeapp.generated.resources.common_rules_priority
 import no_papers_needed.composeapp.generated.resources.common_rules_set_field
 import no_papers_needed.composeapp.generated.resources.common_rules_summary
 import no_papers_needed.composeapp.generated.resources.common_rules_tags_to_add
 import no_papers_needed.composeapp.generated.resources.common_rules_title
 import no_papers_needed.composeapp.generated.resources.common_save
+import no_papers_needed.composeapp.generated.resources.common_settings_field_move_down
+import no_papers_needed.composeapp.generated.resources.common_settings_field_move_up
 import no_papers_needed.composeapp.generated.resources.common_settings_syncs_across_devices
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
@@ -96,16 +110,35 @@ fun AutoMatchRulesScreen(
 
     // The viewmodel's, form fields included, so an open dialog is back after the screen is recreated.
     val dialog by vm.dialog.collectAsStateWithLifecycle()
+    val preview by vm.preview.collectAsStateWithLifecycle()
+
+    val actions =
+        remember(vm) {
+            object : RuleListActions {
+                override fun add() = vm.openDialog(RuleDialog.Form(RuleFormState()))
+
+                override fun edit(rule: AutoMatchRule) = vm.openDialog(RuleDialog.Form(RuleFormState.of(rule)))
+
+                override fun delete(rule: AutoMatchRule) = vm.openDialog(RuleDialog.Delete(rule.id))
+
+                override fun setEnabled(
+                    id: String,
+                    enabled: Boolean,
+                ) = vm.setEnabled(id, enabled)
+
+                override fun move(
+                    id: String,
+                    delta: Int,
+                ) = vm.move(id, delta)
+            }
+        }
 
     AutoMatchRulesScaffold(
         rules = rules,
         fields = fields,
         snackbar = snackbar,
         onBack = onBack,
-        onAdd = { vm.openDialog(RuleDialog.Form(RuleFormState())) },
-        onEdit = { vm.openDialog(RuleDialog.Form(RuleFormState.of(it))) },
-        onDelete = { vm.openDialog(RuleDialog.Delete(it.id)) },
-        onToggle = vm::setEnabled,
+        actions = actions,
     )
 
     when (val open = dialog) {
@@ -113,6 +146,7 @@ fun AutoMatchRulesScreen(
             RuleFormDialog(
                 state = open.form,
                 fields = fields,
+                preview = preview,
                 onChange = { vm.openDialog(RuleDialog.Form(it)) },
                 onConfirm = {
                     vm.save(open.form.toRule())
@@ -136,32 +170,52 @@ fun AutoMatchRulesScreen(
     }
 }
 
+/** What the rule list can do to its rules. */
+internal interface RuleListActions {
+    fun add()
+
+    fun edit(rule: AutoMatchRule)
+
+    fun delete(rule: AutoMatchRule)
+
+    fun setEnabled(
+        id: String,
+        enabled: Boolean,
+    )
+
+    /** Move rule [id] [delta] places in the run order: -1 up, +1 down. */
+    fun move(
+        id: String,
+        delta: Int,
+    )
+}
+
 @Composable
 private fun AutoMatchRulesScaffold(
-    /** Null until the first load, which shows a spinner rather than the empty state. */
+    /** Null until the first load, which shows a spinner rather than the empty state. In run order. */
     rules: List<AutoMatchRule>?,
     fields: List<FieldDef>,
     snackbar: SnackbarHostState,
     onBack: () -> Unit,
-    onAdd: () -> Unit,
-    onEdit: (AutoMatchRule) -> Unit,
-    onDelete: (AutoMatchRule) -> Unit,
-    onToggle: (String, Boolean) -> Unit,
+    actions: RuleListActions,
 ) {
     Scaffold(
         topBar = { BackTopBar(title = stringResource(Res.string.common_rules_title), onBack = onBack) },
         floatingActionButton = {
-            FloatingActionButton(onClick = onAdd) {
+            FloatingActionButton(onClick = actions::add) {
                 Icon(Icons.Filled.Add, contentDescription = stringResource(Res.string.common_rules_add))
             }
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            HelpText(
-                stringResource(Res.string.common_settings_syncs_across_devices),
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            )
+            Column(
+                Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                HelpText(stringResource(Res.string.automation_rules_order_help))
+                HelpText(stringResource(Res.string.common_settings_syncs_across_devices))
+            }
             if (rules == null) {
                 LoadingIndicator(Modifier.weight(1f))
             } else if (rules.isEmpty()) {
@@ -173,13 +227,13 @@ private fun AutoMatchRulesScaffold(
                 )
             } else {
                 LazyColumn(Modifier.fillMaxSize()) {
-                    items(rules, key = { it.id }) { rule ->
+                    itemsIndexed(rules, key = { _, rule -> rule.id }) { index, rule ->
                         RuleCard(
                             rule = rule,
                             fields = fields,
-                            onEdit = onEdit,
-                            onDelete = onDelete,
-                            onToggle = onToggle,
+                            canMoveUp = index > 0,
+                            canMoveDown = index < rules.lastIndex,
+                            actions = actions,
                         )
                         HorizontalDivider()
                     }
@@ -208,12 +262,12 @@ private fun DeleteRuleDialog(
 private fun RuleCard(
     rule: AutoMatchRule,
     fields: List<FieldDef>,
-    onEdit: (AutoMatchRule) -> Unit,
-    onDelete: (AutoMatchRule) -> Unit,
-    onToggle: (String, Boolean) -> Unit,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    actions: RuleListActions,
 ) {
     Card(
-        onClick = { onEdit(rule) },
+        onClick = { actions.edit(rule) },
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -224,14 +278,32 @@ private fun RuleCard(
                 }
                 Switch(
                     checked = rule.enabled,
-                    onCheckedChange = { onToggle(rule.id, it) },
+                    onCheckedChange = { actions.setEnabled(rule.id, it) },
                 )
             }
             if (rule.tags.isNotEmpty() || rule.sets.isNotEmpty()) {
                 HelpText(buildActionsLabel(rule, fields))
             }
-            // The card itself opens the rule for editing; only deleting needs a button of its own.
-            TooltipIconButton(Icons.Filled.Delete, stringResource(Res.string.common_delete), { onDelete(rule) })
+            // The card itself opens the rule for editing; moving and deleting need buttons of their own.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TooltipIconButton(
+                    Icons.Filled.KeyboardArrowUp,
+                    stringResource(Res.string.common_settings_field_move_up),
+                    onClick = { actions.move(rule.id, -1) },
+                    enabled = canMoveUp,
+                )
+                TooltipIconButton(
+                    Icons.Filled.KeyboardArrowDown,
+                    stringResource(Res.string.common_settings_field_move_down),
+                    onClick = { actions.move(rule.id, 1) },
+                    enabled = canMoveDown,
+                )
+                TooltipIconButton(
+                    Icons.Filled.Delete,
+                    stringResource(Res.string.common_delete),
+                    { actions.delete(rule) },
+                )
+            }
         }
     }
 }
@@ -263,13 +335,13 @@ private fun buildRuleSummary(
         fieldLabel(rule.field, fields),
         algorithmLabel(rule.algorithm),
         rule.pattern,
-        rule.position,
     )
 
 @Composable
 private fun RuleFormDialog(
     state: RuleFormState,
     fields: List<FieldDef>,
+    preview: RulePreview?,
     onChange: (RuleFormState) -> Unit,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
@@ -284,7 +356,7 @@ private fun RuleFormDialog(
         confirmLabel = stringResource(Res.string.common_save),
         confirmEnabled = state.canSave,
     ) {
-        RuleFormFields(state, fields, onChange)
+        RuleFormFields(state, fields, preview, onChange)
     }
 }
 
@@ -346,6 +418,7 @@ internal data class RuleFormState(
 private fun RuleFormFields(
     state: RuleFormState,
     fields: List<FieldDef>,
+    preview: RulePreview?,
     onChange: (RuleFormState) -> Unit,
 ) {
     val regexValid = state.patternValid
@@ -361,6 +434,7 @@ private fun RuleFormFields(
         )
         FieldDropdown(state.field, fields) { onChange(state.copy(field = it)) }
         AlgorithmDropdown(state.algorithm) { onChange(state.copy(algorithm = it)) }
+        HelpText(stringResource(state.algorithm.helpResource))
         OutlinedTextField(
             state.pattern,
             { onChange(state.copy(pattern = it)) },
@@ -378,12 +452,7 @@ private fun RuleFormFields(
             isError = !regexValid,
             singleLine = true,
         )
-        NumericField(
-            value = state.position,
-            onValueChange = { onChange(state.copy(position = it)) },
-            range = RULE_PRIORITIES,
-            label = stringResource(Res.string.common_rules_priority),
-        )
+        RulePreviewText(preview)
         FormTextField(state.tags, stringResource(Res.string.common_rules_tags_to_add)) {
             onChange(state.copy(tags = it))
         }
@@ -397,8 +466,33 @@ private fun RuleFormFields(
     }
 }
 
-/** The priorities a rule can have; rules run in priority order, lowest first. */
-private val RULE_PRIORITIES = 0..9999
+/**
+ * What the rule as typed matches in the library now: how many documents, the first few by name, and
+ * that saving only fills in what they lack. A hint while there is no pattern to match yet.
+ */
+@Composable
+private fun RulePreviewText(preview: RulePreview?) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        when (preview) {
+            null -> {
+                HelpText(stringResource(Res.string.automation_rule_preview_hint))
+            }
+
+            RulePreview.Checking -> {
+                HelpText(stringResource(Res.string.automation_rule_preview_checking))
+            }
+
+            is RulePreview.Matches -> {
+                Text(preview.summary.resolve(), style = MaterialTheme.typography.bodyMedium)
+                for (title in preview.titles) {
+                    HelpText(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                preview.more?.let { HelpText(it.resolve()) }
+                if (preview.count > 0) HelpText(stringResource(Res.string.automation_rule_preview_fills_in))
+            }
+        }
+    }
+}
 
 @Composable
 private fun FormTextField(
@@ -460,4 +554,15 @@ private val MatchAlgorithm.labelResource: StringResource
             MatchAlgorithm.ALL_WORDS -> Res.string.common_rules_algorithm_all_words
             MatchAlgorithm.REGEX -> Res.string.common_rules_algorithm_regex
             MatchAlgorithm.FUZZY -> Res.string.common_rules_algorithm_fuzzy
+        }
+
+/** What [MatchAlgorithm] does, in plain words, shown under the algorithm picker. */
+private val MatchAlgorithm.helpResource: StringResource
+    get() =
+        when (this) {
+            MatchAlgorithm.EXACT -> Res.string.automation_algorithm_exact_help
+            MatchAlgorithm.ANY_WORD -> Res.string.automation_algorithm_any_word_help
+            MatchAlgorithm.ALL_WORDS -> Res.string.automation_algorithm_all_words_help
+            MatchAlgorithm.REGEX -> Res.string.automation_algorithm_regex_help
+            MatchAlgorithm.FUZZY -> Res.string.automation_algorithm_fuzzy_help
         }

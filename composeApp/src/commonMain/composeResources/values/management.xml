@@ -15,12 +15,11 @@
     <string name="common_rules_actions_tags">Tags: %1$s</string>
     <string name="common_rules_actions_set">%1$s: %2$s</string>
     <string name="common_rules_join_parts">%1$s · %2$s</string>
-    <string name="common_rules_summary">%1$s · %2$s · %3$s · priority %4$d</string>
+    <string name="common_rules_summary">%1$s · %2$s · %3$s</string>
     <string name="common_rules_new_title">New rule</string>
     <string name="common_rules_edit_title">Edit rule</string>
     <string name="common_rules_pattern">Pattern</string>
     <string name="common_rules_invalid_regex">Invalid regular expression</string>
-    <string name="common_rules_priority">Priority</string>
     <string name="common_rules_tags_to_add">Tags to add (comma separated)</string>
     <string name="common_rules_set_field">Set %1$s (optional)</string>
     <string name="common_rules_match_field">Match field</string>

@@ -272,8 +272,13 @@ private fun MainNavHost(
         composable<Route.Trash> {
             TrashScreen(session = session)
         }
-        composable<Route.TagManagement> {
-            TagManagementScreen(session = session)
+        composable<Route.TagManagement> { entry ->
+            TagManagementScreen(
+                session = session,
+                onOpenAutomation = {
+                    nav.from(entry) { navigate(Route.Settings(SettingsCategoryId.AUTOMATION.routeKey)) }
+                },
+            )
         }
         composable<Route.Queue> { entry ->
             QueueScreen(
@@ -301,11 +306,13 @@ private fun NavGraphBuilder.settingsRoutes(
     onOpenLibrary: (location: String) -> Unit,
 ) {
     composable<Route.Settings> { entry ->
+        val route = entry.toRoute<Route.Settings>()
         SettingsScreen(
             settings = settings,
             session = session,
-            category = SettingsCategoryId.fromRouteKey(entry.toRoute<Route.Settings>().category),
-            onOpenCategory = { id -> nav.from(entry) { navigate(Route.Settings(id.routeKey)) } },
+            category = SettingsCategoryId.fromRouteKey(route.category),
+            revealAdvanced = route.revealAdvanced,
+            onOpenCategory = { id, reveal -> nav.from(entry) { navigate(Route.Settings(id.routeKey, reveal)) } },
             onBack = { nav.from(entry) { popBackStack() } },
             onOpenLibrary = onOpenLibrary,
             onResumeDraft = { docId -> nav.from(entry) { resumeDraft(docId, browse) } },

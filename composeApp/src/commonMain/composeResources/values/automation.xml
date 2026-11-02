@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="automation_title">Automation</string>
+    <string name="automation_intro">New documents are organized in three steps, in this order. Each step only fills in what the steps before it left empty.</string>
+    <string name="automation_rules_title">1. Rules</string>
+    <string name="automation_rules_help">Your rules run first, as soon as a document’s text has been read. They are free and instant: when the text matches, they add tags and fill in fields.</string>
+    <string name="automation_rules_none">No rules yet.</string>
+    <plurals name="automation_rules_state">
+        <item quantity="one">%1$d of %2$d rule is on.</item>
+        <item quantity="other">%1$d of %2$d rules are on.</item>
+    </plurals>
+    <string name="automation_ai_title">2. Auto-organize with the assistant</string>
+    <string name="automation_ai_help">If auto-organize is on, the assistant then adds tags from the ones you already have and fills in fields that are still empty. Each new document costs one request to your AI provider.</string>
+    <string name="automation_ai_state_on">On. This setting applies to this device only.</string>
+    <string name="automation_ai_state_off">Off. This setting applies to this device only.</string>
+    <string name="automation_ai_state_no_ai">Off: the AI assistant is not turned on on this device.</string>
+    <string name="automation_ai_open">AI assistant settings</string>
+    <string name="automation_inbox_title">3. Inbox</string>
+    <string name="automation_inbox_help">Whatever is still untagged waits in the Inbox for you. With the inbox workflow on, every new document waits there until you mark it reviewed.</string>
+    <string name="automation_inbox_state_on">The inbox workflow is on.</string>
+    <string name="automation_inbox_state_off">The inbox workflow is off: only untagged documents wait in the Inbox.</string>
+    <string name="automation_inbox_open">Inbox settings</string>
+    <string name="automation_manual_title">When you ask</string>
+    <string name="automation_manual_help">Suggestions for one document, and Bulk edit for many, run only when you start them, and change only what you accept.</string>
+
+    <string name="automation_rules_order_help">Rules run from top to bottom. Every matching rule adds its tags; when two rules set the same field, the lower one wins. Rules only fill in what a document does not have yet.</string>
+    <string name="automation_algorithm_exact_help">Matches when the text contains the pattern exactly as typed, spaces and punctuation included. Capitals do not matter.</string>
+    <string name="automation_algorithm_any_word_help">Matches when the text contains at least one of the pattern’s words as a whole word. Capitals do not matter.</string>
+    <string name="automation_algorithm_all_words_help">Matches when the text contains every word of the pattern as a whole word, in any order. Capitals do not matter.</string>
+    <string name="automation_algorithm_regex_help">Matches a regular expression, for patterns such as invoice or customer numbers. Capitals do not matter.</string>
+    <string name="automation_algorithm_fuzzy_help">Matches text that is close to the pattern, so scanning errors and small typos still match.</string>
+    <string name="automation_rule_preview_hint">Type a pattern to see which documents it matches.</string>
+    <string name="automation_rule_preview_checking">Checking your documents…</string>
+    <plurals name="automation_rule_preview_count">
+        <item quantity="one">Matches %1$d document now.</item>
+        <item quantity="other">Matches %1$d documents now.</item>
+    </plurals>
+    <plurals name="automation_rule_preview_more">
+        <item quantity="one">…and %1$d more.</item>
+        <item quantity="other">…and %1$d more.</item>
+    </plurals>
+    <string name="automation_rule_preview_fills_in">Saving applies the rule to them, but it never overwrites a value or brings back a tag someone removed.</string>
+    <string name="automation_rule_move_failed">Could not move the rule: %1$s</string>
+</resources>

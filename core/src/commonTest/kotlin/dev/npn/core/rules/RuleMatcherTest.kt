@@ -22,6 +22,15 @@ class RuleMatcherTest {
     ) = RuleMatcher.compile(rule).matches(text)
 
     @Test
+    fun thePublicMatcherTestsAsTheCompiledRuleDoes() {
+        val test = RuleMatcher.matcher(rule(MatchAlgorithm.ANY_WORD, "invoice receipt"))
+        test("The invoice arrived") shouldBe true
+        test("The invo arrived") shouldBe false
+        test(null) shouldBe false
+        test("   ") shouldBe false
+    }
+
+    @Test
     fun exactMatchesSubstringIgnoringCase() {
         matches(rule(MatchAlgorithm.EXACT, "INVOICE"), "Monthly invoice") shouldBe true
         matches(rule(MatchAlgorithm.EXACT, "receipt"), "Monthly invoice") shouldBe false

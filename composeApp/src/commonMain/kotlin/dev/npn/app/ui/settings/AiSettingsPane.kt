@@ -23,7 +23,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -205,7 +204,7 @@ private fun AiBehaviourSettings(
     )
     // Tuning knobs most people never need: sensible defaults are picked for them, and the tag caps
     // stay available per run. Last in the section so the common path stays short.
-    var advanced by rememberSaveable { mutableStateOf(false) }
+    var advanced by rememberAdvancedExpanded()
     ExpanderRow(advanced, onToggle = { advanced = !advanced }) {
         Text(stringResource(Res.string.common_settings_advanced), Modifier.weight(1f))
     }

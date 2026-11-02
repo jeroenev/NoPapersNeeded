@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="automation_title">Automatisation</string>
+    <string name="automation_intro">Les nouveaux documents sont classés en trois étapes, dans cet ordre. Chaque étape ne complète que ce que les étapes précédentes ont laissé vide.</string>
+    <string name="automation_rules_title">1. Règles</string>
+    <string name="automation_rules_help">Vos règles passent en premier, dès que le texte d’un document a été lu. Elles sont gratuites et immédiates : quand le texte correspond, elles ajoutent des étiquettes et remplissent des champs.</string>
+    <string name="automation_rules_none">Aucune règle pour l’instant.</string>
+    <plurals name="automation_rules_state">
+        <item quantity="one">%1$d règle sur %2$d est activée.</item>
+        <item quantity="other">%1$d règles sur %2$d sont activées.</item>
+    </plurals>
+    <string name="automation_ai_title">2. Classement automatique par l’assistant</string>
+    <string name="automation_ai_help">Si le classement automatique est activé, l’assistant ajoute ensuite des étiquettes parmi celles que vous avez déjà et remplit les champs encore vides. Chaque nouveau document coûte une requête à votre fournisseur d’IA.</string>
+    <string name="automation_ai_state_on">Activé. Ce paramètre ne concerne que cet appareil.</string>
+    <string name="automation_ai_state_off">Désactivé. Ce paramètre ne concerne que cet appareil.</string>
+    <string name="automation_ai_state_no_ai">Désactivé : l’assistant IA n’est pas activé sur cet appareil.</string>
+    <string name="automation_ai_open">Paramètres de l’assistant IA</string>
+    <string name="automation_inbox_title">3. Boîte de réception</string>
+    <string name="automation_inbox_help">Ce qui reste sans étiquette vous attend dans la boîte de réception. Avec la boîte de réception activée, chaque nouveau document y attend jusqu’à ce que vous le marquiez comme vérifié.</string>
+    <string name="automation_inbox_state_on">La boîte de réception est activée.</string>
+    <string name="automation_inbox_state_off">La boîte de réception est désactivée : seuls les documents sans étiquette y attendent.</string>
+    <string name="automation_inbox_open">Paramètres de la boîte de réception</string>
+    <string name="automation_manual_title">Quand vous le demandez</string>
+    <string name="automation_manual_help">Les suggestions pour un document et la modification groupée pour plusieurs ne s’exécutent que quand vous les lancez, et ne changent que ce que vous acceptez.</string>
+
+    <string name="automation_rules_order_help">Les règles s’appliquent de haut en bas. Chaque règle qui correspond ajoute ses étiquettes ; quand deux règles remplissent le même champ, celle du bas l’emporte. Les règles ne complètent que ce qui manque encore à un document.</string>
+    <string name="automation_algorithm_exact_help">Correspond quand le texte contient le motif tel qu’il est saisi, espaces et ponctuation compris. Les majuscules ne comptent pas.</string>
+    <string name="automation_algorithm_any_word_help">Correspond quand le texte contient au moins un des mots du motif, en mot entier. Les majuscules ne comptent pas.</string>
+    <string name="automation_algorithm_all_words_help">Correspond quand le texte contient chaque mot du motif, en mot entier, dans n’importe quel ordre. Les majuscules ne comptent pas.</string>
+    <string name="automation_algorithm_regex_help">Correspond à une expression régulière, pour des motifs comme des numéros de facture ou de client. Les majuscules ne comptent pas.</string>
+    <string name="automation_algorithm_fuzzy_help">Correspond à un texte proche du motif, si bien que les erreurs de numérisation et les petites fautes de frappe correspondent quand même.</string>
+    <string name="automation_rule_preview_hint">Saisissez un motif pour voir à quels documents il correspond.</string>
+    <string name="automation_rule_preview_checking">Vérification de vos documents…</string>
+    <plurals name="automation_rule_preview_count">
+        <item quantity="one">Correspond maintenant à %1$d document.</item>
+        <item quantity="other">Correspond maintenant à %1$d documents.</item>
+    </plurals>
+    <plurals name="automation_rule_preview_more">
+        <item quantity="one">…et %1$d autre.</item>
+        <item quantity="other">…et %1$d autres.</item>
+    </plurals>
+    <string name="automation_rule_preview_fills_in">L’enregistrement leur applique la règle, mais elle n’écrase jamais une valeur et ne remet jamais une étiquette que quelqu’un a retirée.</string>
+    <string name="automation_rule_move_failed">Impossible de déplacer la règle : %1$s</string>
+</resources>

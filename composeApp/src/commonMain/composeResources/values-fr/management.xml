@@ -15,12 +15,11 @@
     <string name="common_rules_actions_tags">Étiquettes : %1$s</string>
     <string name="common_rules_actions_set">%1$s : %2$s</string>
     <string name="common_rules_join_parts">%1$s · %2$s</string>
-    <string name="common_rules_summary">%1$s · %2$s · %3$s · priorité %4$d</string>
+    <string name="common_rules_summary">%1$s · %2$s · %3$s</string>
     <string name="common_rules_new_title">Nouvelle règle</string>
     <string name="common_rules_edit_title">Modifier la règle</string>
     <string name="common_rules_pattern">Motif</string>
     <string name="common_rules_invalid_regex">Expression régulière non valide</string>
-    <string name="common_rules_priority">Priorité</string>
     <string name="common_rules_tags_to_add">Étiquettes à ajouter (séparées par des virgules)</string>
     <string name="common_rules_set_field">Définir %1$s (facultatif)</string>
     <string name="common_rules_match_field">Champ à comparer</string>

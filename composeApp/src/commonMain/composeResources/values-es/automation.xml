@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="automation_title">Automatización</string>
+    <string name="automation_intro">Los documentos nuevos se organizan en tres pasos, en este orden. Cada paso solo completa lo que los pasos anteriores dejaron vacío.</string>
+    <string name="automation_rules_title">1. Reglas</string>
+    <string name="automation_rules_help">Tus reglas se ejecutan primero, en cuanto se lee el texto de un documento. Son gratuitas e instantáneas: cuando el texto coincide, añaden etiquetas y completan campos.</string>
+    <string name="automation_rules_none">Aún no hay reglas.</string>
+    <plurals name="automation_rules_state">
+        <item quantity="one">%1$d de %2$d regla está activada.</item>
+        <item quantity="other">%1$d de %2$d reglas están activadas.</item>
+    </plurals>
+    <string name="automation_ai_title">2. Organizar automáticamente con el asistente</string>
+    <string name="automation_ai_help">Si la organización automática está activada, el asistente añade después etiquetas de entre las que ya tienes y completa los campos que siguen vacíos. Cada documento nuevo cuesta una solicitud a tu proveedor de IA.</string>
+    <string name="automation_ai_state_on">Activado. Este ajuste solo se aplica a este dispositivo.</string>
+    <string name="automation_ai_state_off">Desactivado. Este ajuste solo se aplica a este dispositivo.</string>
+    <string name="automation_ai_state_no_ai">Desactivado: el asistente de IA no está activado en este dispositivo.</string>
+    <string name="automation_ai_open">Ajustes del asistente de IA</string>
+    <string name="automation_inbox_title">3. Bandeja de entrada</string>
+    <string name="automation_inbox_help">Lo que sigue sin etiquetas te espera en la bandeja de entrada. Con el flujo de bandeja de entrada activado, cada documento nuevo espera allí hasta que lo marques como revisado.</string>
+    <string name="automation_inbox_state_on">El flujo de bandeja de entrada está activado.</string>
+    <string name="automation_inbox_state_off">El flujo de bandeja de entrada está desactivado: solo los documentos sin etiquetas esperan en la bandeja de entrada.</string>
+    <string name="automation_inbox_open">Ajustes de la bandeja de entrada</string>
+    <string name="automation_manual_title">Cuando tú lo pides</string>
+    <string name="automation_manual_help">Las sugerencias para un documento y la edición masiva para muchos solo se ejecutan cuando las inicias, y solo cambian lo que aceptas.</string>
+
+    <string name="automation_rules_order_help">Las reglas se ejecutan de arriba abajo. Cada regla que coincide añade sus etiquetas; si dos reglas asignan el mismo campo, gana la de más abajo. Las reglas solo completan lo que a un documento aún le falta.</string>
+    <string name="automation_algorithm_exact_help">Coincide cuando el texto contiene el patrón tal como está escrito, con espacios y signos de puntuación. No distingue mayúsculas de minúsculas.</string>
+    <string name="automation_algorithm_any_word_help">Coincide cuando el texto contiene al menos una de las palabras del patrón como palabra completa. No distingue mayúsculas de minúsculas.</string>
+    <string name="automation_algorithm_all_words_help">Coincide cuando el texto contiene todas las palabras del patrón como palabras completas, en cualquier orden. No distingue mayúsculas de minúsculas.</string>
+    <string name="automation_algorithm_regex_help">Coincide con una expresión regular, para patrones como números de factura o de cliente. No distingue mayúsculas de minúsculas.</string>
+    <string name="automation_algorithm_fuzzy_help">Coincide con texto parecido al patrón, así que los errores de escaneo y las pequeñas erratas también coinciden.</string>
+    <string name="automation_rule_preview_hint">Escribe un patrón para ver con qué documentos coincide.</string>
+    <string name="automation_rule_preview_checking">Revisando tus documentos…</string>
+    <plurals name="automation_rule_preview_count">
+        <item quantity="one">Coincide ahora con %1$d documento.</item>
+        <item quantity="other">Coincide ahora con %1$d documentos.</item>
+    </plurals>
+    <plurals name="automation_rule_preview_more">
+        <item quantity="one">…y %1$d más.</item>
+        <item quantity="other">…y %1$d más.</item>
+    </plurals>
+    <string name="automation_rule_preview_fills_in">Al guardar, la regla se aplica a ellos, pero nunca sobrescribe un valor ni recupera una etiqueta que alguien quitó.</string>
+    <string name="automation_rule_move_failed">No se pudo mover la regla: %1$s</string>
+</resources>

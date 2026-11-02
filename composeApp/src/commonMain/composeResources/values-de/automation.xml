@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="automation_title">Automatisierung</string>
+    <string name="automation_intro">Neue Dokumente werden in drei Schritten geordnet, in dieser Reihenfolge. Jeder Schritt füllt nur aus, was die Schritte davor leer gelassen haben.</string>
+    <string name="automation_rules_title">1. Regeln</string>
+    <string name="automation_rules_help">Deine Regeln laufen zuerst, sobald der Text eines Dokuments gelesen ist. Sie sind kostenlos und sofort fertig: Passt der Text, vergeben sie Tags und füllen Felder aus.</string>
+    <string name="automation_rules_none">Noch keine Regeln.</string>
+    <plurals name="automation_rules_state">
+        <item quantity="one">%1$d von %2$d Regel ist aktiv.</item>
+        <item quantity="other">%1$d von %2$d Regeln sind aktiv.</item>
+    </plurals>
+    <string name="automation_ai_title">2. Automatisch ordnen mit dem Assistenten</string>
+    <string name="automation_ai_help">Ist das automatische Ordnen an, vergibt der Assistent danach Tags aus deinen vorhandenen und füllt Felder aus, die noch leer sind. Jedes neue Dokument kostet eine Anfrage bei deinem KI-Anbieter.</string>
+    <string name="automation_ai_state_on">An. Diese Einstellung gilt nur für dieses Gerät.</string>
+    <string name="automation_ai_state_off">Aus. Diese Einstellung gilt nur für dieses Gerät.</string>
+    <string name="automation_ai_state_no_ai">Aus: Der KI-Assistent ist auf diesem Gerät nicht eingeschaltet.</string>
+    <string name="automation_ai_open">Einstellungen des KI-Assistenten</string>
+    <string name="automation_inbox_title">3. Posteingang</string>
+    <string name="automation_inbox_help">Was danach noch keine Tags hat, wartet im Posteingang auf dich. Mit dem Posteingang-Ablauf wartet dort jedes neue Dokument, bis du es als geprüft markierst.</string>
+    <string name="automation_inbox_state_on">Der Posteingang-Ablauf ist an.</string>
+    <string name="automation_inbox_state_off">Der Posteingang-Ablauf ist aus: Nur Dokumente ohne Tags warten im Posteingang.</string>
+    <string name="automation_inbox_open">Einstellungen des Posteingangs</string>
+    <string name="automation_manual_title">Wenn du fragst</string>
+    <string name="automation_manual_help">Vorschläge für ein Dokument und die Massenbearbeitung für viele laufen nur, wenn du sie startest, und ändern nur, was du annimmst.</string>
+
+    <string name="automation_rules_order_help">Regeln laufen von oben nach unten. Jede passende Regel vergibt ihre Tags; setzen zwei Regeln dasselbe Feld, gewinnt die untere. Regeln füllen nur aus, was einem Dokument noch fehlt.</string>
+    <string name="automation_algorithm_exact_help">Passt, wenn der Text das Muster genau so enthält, wie es eingegeben ist, mit Leer- und Satzzeichen. Groß- und Kleinschreibung spielt keine Rolle.</string>
+    <string name="automation_algorithm_any_word_help">Passt, wenn der Text mindestens eines der Wörter des Musters als ganzes Wort enthält. Groß- und Kleinschreibung spielt keine Rolle.</string>
+    <string name="automation_algorithm_all_words_help">Passt, wenn der Text jedes Wort des Musters als ganzes Wort enthält, in beliebiger Reihenfolge. Groß- und Kleinschreibung spielt keine Rolle.</string>
+    <string name="automation_algorithm_regex_help">Passt auf einen regulären Ausdruck, für Muster wie Rechnungs- oder Kundennummern. Groß- und Kleinschreibung spielt keine Rolle.</string>
+    <string name="automation_algorithm_fuzzy_help">Passt auf Text, der dem Muster ähnlich ist, sodass Scanfehler und kleine Tippfehler trotzdem passen.</string>
+    <string name="automation_rule_preview_hint">Gib ein Muster ein, um zu sehen, auf welche Dokumente es passt.</string>
+    <string name="automation_rule_preview_checking">Deine Dokumente werden geprüft…</string>
+    <plurals name="automation_rule_preview_count">
+        <item quantity="one">Passt jetzt auf %1$d Dokument.</item>
+        <item quantity="other">Passt jetzt auf %1$d Dokumente.</item>
+    </plurals>
+    <plurals name="automation_rule_preview_more">
+        <item quantity="one">…und %1$d weiteres.</item>
+        <item quantity="other">…und %1$d weitere.</item>
+    </plurals>
+    <string name="automation_rule_preview_fills_in">Beim Speichern wird die Regel auf sie angewendet, aber sie überschreibt nie einen Wert und bringt keinen Tag zurück, den jemand entfernt hat.</string>
+    <string name="automation_rule_move_failed">Die Regel konnte nicht verschoben werden: %1$s</string>
+</resources>

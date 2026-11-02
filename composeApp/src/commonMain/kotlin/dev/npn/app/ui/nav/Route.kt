@@ -23,11 +23,13 @@ sealed interface Route {
      * than in screen state) is what makes drill-down on compact layouts answer to system back and
      * survive process death, and lets other screens deep-link straight to the pane they mean.
      * The value is a [dev.npn.app.ui.settings.SettingsCategoryId] route key; unknown keys from an
-     * older back stack fall back to the table of contents.
+     * older back stack fall back to the table of contents. [revealAdvanced] opens the pane with its
+     * Advanced disclosure expanded, for a settings search that found something behind it.
      */
     @Serializable
     data class Settings(
         val category: String? = null,
+        val revealAdvanced: Boolean = false,
     ) : Route
 
     @Serializable

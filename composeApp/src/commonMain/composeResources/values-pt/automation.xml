@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="automation_title">Automação</string>
+    <string name="automation_intro">Os novos documentos são organizados em três etapas, nesta ordem. Cada etapa só preenche o que as etapas anteriores deixaram vazio.</string>
+    <string name="automation_rules_title">1. Regras</string>
+    <string name="automation_rules_help">Suas regras rodam primeiro, assim que o texto de um documento é lido. Elas são gratuitas e instantâneas: quando o texto corresponde, adicionam etiquetas e preenchem campos.</string>
+    <string name="automation_rules_none">Nenhuma regra ainda.</string>
+    <plurals name="automation_rules_state">
+        <item quantity="one">%1$d de %2$d regra está ativada.</item>
+        <item quantity="other">%1$d de %2$d regras estão ativadas.</item>
+    </plurals>
+    <string name="automation_ai_title">2. Organização automática com o assistente</string>
+    <string name="automation_ai_help">Se a organização automática estiver ativada, o assistente adiciona em seguida etiquetas dentre as que você já tem e preenche os campos que ainda estão vazios. Cada novo documento custa uma solicitação ao seu provedor de IA.</string>
+    <string name="automation_ai_state_on">Ativada. Esta configuração vale só para este dispositivo.</string>
+    <string name="automation_ai_state_off">Desativada. Esta configuração vale só para este dispositivo.</string>
+    <string name="automation_ai_state_no_ai">Desativada: o assistente de IA não está ativado neste dispositivo.</string>
+    <string name="automation_ai_open">Configurações do assistente de IA</string>
+    <string name="automation_inbox_title">3. Caixa de entrada</string>
+    <string name="automation_inbox_help">O que ainda está sem etiqueta espera por você na caixa de entrada. Com a caixa de entrada ativada, cada novo documento espera lá até você marcá-lo como revisado.</string>
+    <string name="automation_inbox_state_on">A caixa de entrada está ativada.</string>
+    <string name="automation_inbox_state_off">A caixa de entrada está desativada: só os documentos sem etiqueta esperam nela.</string>
+    <string name="automation_inbox_open">Configurações da caixa de entrada</string>
+    <string name="automation_manual_title">Quando você pede</string>
+    <string name="automation_manual_help">As sugestões para um documento e a edição em massa para vários só rodam quando você as inicia, e só mudam o que você aceita.</string>
+
+    <string name="automation_rules_order_help">As regras rodam de cima para baixo. Cada regra que corresponde adiciona suas etiquetas; quando duas regras preenchem o mesmo campo, vale a de baixo. As regras só preenchem o que ainda falta em um documento.</string>
+    <string name="automation_algorithm_exact_help">Corresponde quando o texto contém o padrão exatamente como foi digitado, com espaços e pontuação. Maiúsculas e minúsculas não importam.</string>
+    <string name="automation_algorithm_any_word_help">Corresponde quando o texto contém pelo menos uma das palavras do padrão como palavra inteira. Maiúsculas e minúsculas não importam.</string>
+    <string name="automation_algorithm_all_words_help">Corresponde quando o texto contém todas as palavras do padrão como palavras inteiras, em qualquer ordem. Maiúsculas e minúsculas não importam.</string>
+    <string name="automation_algorithm_regex_help">Corresponde a uma expressão regular, para padrões como números de nota fiscal ou de cliente. Maiúsculas e minúsculas não importam.</string>
+    <string name="automation_algorithm_fuzzy_help">Corresponde a um texto parecido com o padrão, então erros de digitalização e pequenos erros de digitação também correspondem.</string>
+    <string name="automation_rule_preview_hint">Digite um padrão para ver a quais documentos ele corresponde.</string>
+    <string name="automation_rule_preview_checking">Verificando seus documentos…</string>
+    <plurals name="automation_rule_preview_count">
+        <item quantity="one">Corresponde agora a %1$d documento.</item>
+        <item quantity="other">Corresponde agora a %1$d documentos.</item>
+    </plurals>
+    <plurals name="automation_rule_preview_more">
+        <item quantity="one">…e mais %1$d.</item>
+        <item quantity="other">…e mais %1$d.</item>
+    </plurals>
+    <string name="automation_rule_preview_fills_in">Ao salvar, a regra é aplicada a eles, mas nunca substitui um valor nem traz de volta uma etiqueta que alguém removeu.</string>
+    <string name="automation_rule_move_failed">Não foi possível mover a regra: %1$s</string>
+</resources>
