@@ -5,6 +5,7 @@ import dev.npn.app.FakeSettingsRepository
 import dev.npn.app.MainDispatcherTest
 import dev.npn.app.collecting
 import dev.npn.app.failure
+import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.aiedit.ApplyOutcome
@@ -22,6 +23,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.ai_edit_applied
 import no_papers_needed.composeapp.generated.resources.ai_edit_more_remain_failed
 import kotlin.test.Test
 
@@ -214,7 +216,11 @@ class AiEditApplicationTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             model.ui.value.phase shouldBe EditPhase.Done(result)
-            messages shouldContainExactly listOf(failure(Res.string.ai_edit_more_remain_failed, "database closed"))
+            messages shouldContainExactly
+                listOf(
+                    failure(Res.string.ai_edit_more_remain_failed, "database closed"),
+                    uiText(Res.plurals.ai_edit_applied, 1, 1),
+                )
             run.applied.size shouldBe 1
         }
 

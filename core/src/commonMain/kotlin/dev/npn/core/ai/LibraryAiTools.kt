@@ -58,6 +58,19 @@ object ChatTools {
 
     /** The document [GET_DOCUMENT] and [GET_DOCUMENT_TEXT] read. */
     const val ARG_DOC_ID = "docId"
+
+    /** The field [SEARCH_FIELDS] searches: a key or label, or [ANY_FIELD]. */
+    const val ARG_FIELD = "field"
+
+    /** What [SEARCH_FIELDS] looks for in the field's value. */
+    const val ARG_VALUE = "value"
+
+    /** [SEARCH_FIELDS]' inclusive range bounds, for a date or number field. */
+    const val ARG_FROM = "from"
+    const val ARG_TO = "to"
+
+    /** [ARG_FIELD]'s value for every user-authored field at once (also what an omitted field means). */
+    const val ANY_FIELD = "any"
 }
 
 /**

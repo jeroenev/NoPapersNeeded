@@ -4,7 +4,7 @@
     <string name="ai_new_chat">Nova conversa</string>
     <string name="ai_delete_chat">Excluir conversa</string>
     <string name="ai_open_all_documents">Abrir todos os documentos</string>
-    <string name="ai_assistant_title">Assistente de IA</string>
+    <string name="ai_assistant_title">Assistente</string>
     <string name="ai_clear_conversation">Limpar conversa</string>
     <string name="ai_collapse">Recolher</string>
     <string name="ai_expand">Expandir</string>
@@ -12,7 +12,7 @@
     <string name="ai_ask_documents">Pergunte sobre seus documentos</string>
     <string name="ai_stop">Parar</string>
     <string name="ai_send">Enviar</string>
-    <string name="ai_configure_in_settings">Configure o assistente de IA em Configurações</string>
+    <string name="ai_configure_in_settings">Configure o assistente em Configurações</string>
     <string name="ai_tool_searched_documents">Documentos pesquisados: “%1$s”</string>
     <string name="ai_tool_searched_file_names">Nomes de arquivo pesquisados: “%1$s”</string>
     <string name="ai_tool_listed_tagged_documents">Documentos listados com a etiqueta “%1$s”</string>
@@ -22,7 +22,7 @@
     <string name="ai_unknown_value">(desconhecido)</string>
     <string name="ai_unspecified_document">um documento</string>
 
-    <string name="ai_edit_title">Edição com IA</string>
+    <string name="ai_edit_title">Edição em massa</string>
     <string name="ai_edit_applying">Aplicando sugestões...</string>
     <string name="ai_edit_intro">Automatize edições em um conjunto de documentos</string>
     <string name="ai_edit_task_question">O que você quer fazer?</string>
@@ -38,7 +38,7 @@
     <string name="ai_edit_scope">Documentos</string>
     <string name="ai_edit_scope_selection">Documentos selecionados (%1$d)</string>
     <string name="ai_edit_untagged_documents">Documentos sem etiqueta</string>
-    <string name="ai_edit_review_queue">Fila de revisão</string>
+    <string name="ai_edit_review_queue">Caixa de entrada</string>
     <string name="ai_edit_scope_missing_fields">Falta algum campo escolhido</string>
     <string name="ai_edit_scope_saved_view">Filtro salvo</string>
     <string name="ai_edit_saved_view_choose">Escolha um filtro</string>
@@ -70,13 +70,13 @@
     <string name="ai_edit_range">%1$d-%2$d</string>
     <string name="ai_edit_new_tags_range">%1$d-%2$d (%3$d = apenas existentes)</string>
     <string name="ai_edit_run_where">Quando executar</string>
-    <string name="ai_edit_run_now">Revisar agora</string>
+    <string name="ai_edit_run_now">Verificar sugestões agora</string>
     <string name="ai_edit_run_now_help">Sugere um lote e mostra o resultado aqui para revisão.</string>
     <string name="ai_edit_background">Executar em segundo plano</string>
-    <string name="ai_edit_background_help">Abrange todos os documentos do escopo e continua depois que você sai desta página. Os resultados aguardam na fila de processamento para você revisar; nada é gravado sem a sua aprovação.</string>
+    <string name="ai_edit_background_help">Abrange todos os documentos do escopo e continua depois que você sai desta página. Os resultados aguardam em Atividade para você revisar; nada é gravado sem a sua aprovação.</string>
     <string name="ai_edit_recommended">Recomendado</string>
     <string name="ai_edit_start">Iniciar</string>
-    <string name="ai_edit_start_background">Adicionar à fila</string>
+    <string name="ai_edit_start_background">Iniciar em segundo plano</string>
     <string name="ai_edit_summary_tags">etiquetas</string>
     <string name="ai_edit_summary_tag_removals">remoções de etiquetas</string>
     <string name="ai_edit_summary_prompt">instruções extras</string>
@@ -87,7 +87,7 @@
     <string name="ai_edit_blocked_no_documents">Nenhum documento corresponde a este escopo</string>
     <string name="ai_edit_blocked_no_saved_view">Escolha um filtro salvo</string>
     <string name="ai_edit_blocked_loading">Contando documentos...</string>
-    <string name="ai_edit_confirm_large_title">Enviar %1$d documentos para a IA?</string>
+    <string name="ai_edit_confirm_large_title">Enviar %1$d documentos para o assistente?</string>
     <string name="ai_edit_confirm_large_message">Isso é uma solicitação por documento ao seu provedor de IA, o que pode gerar custos. Nada é gravado na sua biblioteca sem a sua revisão.</string>
     <string name="ai_edit_confirm_large_confirm">Enviar</string>
     <string name="ai_edit_cancel_title">Parar esta execução?</string>
@@ -98,8 +98,8 @@
     <string name="ai_edit_leave_confirm">Descartar</string>
     <string name="ai_edit_leave_stay">Ficar</string>
     <string name="ai_edit_change_settings">Alterar configurações</string>
-    <string name="ai_edit_queued_open">Abrir a fila</string>
-    <string name="ai_edit_queued_review_title">Revisar edição com IA</string>
+    <string name="ai_edit_queued_open">Abrir Atividade</string>
+    <string name="ai_edit_queued_review_title">Revisar sugestões</string>
     <string name="ai_edit_queued_loading">Carregando sugestões...</string>
     <string name="ai_edit_queued_gone">Esta execução não está mais disponível</string>
     <string name="ai_edit_queued_gone_subtitle">Ela já foi revisada ou descartada, ou ainda está em andamento.</string>
@@ -112,7 +112,7 @@
     <string name="ai_edit_skip">Pular este lote</string>
     <string name="ai_edit_discard_run">Descartar execução</string>
     <string name="ai_edit_discard_run_title">Descartar esta execução?</string>
-    <string name="ai_edit_discard_run_message">As sugestões já foram geradas. Ao descartar, esta execução sai da fila de processamento sem gravar nada.</string>
+    <string name="ai_edit_discard_run_message">As sugestões já foram geradas. Ao descartar, esta edição em massa sai de Atividade sem gravar nada.</string>
     <string name="ai_edit_open_document">Abrir documento</string>
     <string name="ai_edit_next_batch">Próximo lote</string>
     <string name="ai_edit_done">Concluir</string>
@@ -127,16 +127,16 @@
         <item quantity="other">Sem sugestões (%1$d documentos)</item>
     </plurals>
     <plurals name="ai_edit_queued">
-        <item quantity="one">%1$d documento na fila. Você encontrará as sugestões na fila de processamento.</item>
-        <item quantity="other">%1$d documentos na fila. Você encontrará as sugestões na fila de processamento.</item>
+        <item quantity="one">%1$d documento na fila. As sugestões vão esperar por você em Atividade.</item>
+        <item quantity="other">%1$d documentos na fila. As sugestões vão esperar por você em Atividade.</item>
     </plurals>
     <plurals name="ai_edit_summary_fields">
         <item quantity="one">%1$d campo</item>
         <item quantity="other">%1$d campos</item>
     </plurals>
     <plurals name="ai_edit_summary_requests">
-        <item quantity="one">%1$d solicitação de IA</item>
-        <item quantity="other">%1$d solicitações de IA</item>
+        <item quantity="one">%1$d solicitação</item>
+        <item quantity="other">%1$d solicitações</item>
     </plurals>
     <plurals name="ai_edit_cancel_message">
         <item quantity="one">%1$d documento já tem sugestões; se parar agora, elas serão descartadas.</item>
@@ -150,10 +150,10 @@
     <string name="ai_chat_new_failed">Não foi possível iniciar uma nova conversa: %1$s</string>
     <string name="ai_chat_delete_failed">Não foi possível excluir a conversa: %1$s</string>
     <string name="ai_chat_open_failed">Não foi possível abrir a conversa: %1$s</string>
-    <string name="ai_edit_review_open_failed">Não foi possível abrir a edição com IA: %1$s</string>
-    <string name="ai_edit_review_discard_failed">Não foi possível descartar a edição com IA: %1$s</string>
-    <string name="ai_edit_review_queue_drop_failed">Não foi possível remover a execução concluída da fila: %1$s</string>
-    <string name="ai_edit_setup_load_failed">Não foi possível carregar algumas opções da edição com IA: %1$s</string>
+    <string name="ai_edit_review_open_failed">Não foi possível abrir a edição em massa: %1$s</string>
+    <string name="ai_edit_review_discard_failed">Não foi possível descartar a edição em massa: %1$s</string>
+    <string name="ai_edit_review_queue_drop_failed">Não foi possível remover de Atividade a edição em massa concluída: %1$s</string>
+    <string name="ai_edit_setup_load_failed">Não foi possível carregar algumas opções da edição em massa: %1$s</string>
     <plurals name="ai_edit_apply_tags_failed">
         <item quantity="one">Não foi possível atualizar as etiquetas de %1$d de %2$d documento</item>
         <item quantity="other">Não foi possível atualizar as etiquetas de %1$d de %2$d documentos</item>
@@ -179,12 +179,38 @@
         <item quantity="one">Não foi possível obter sugestões para %1$d de %2$d documento</item>
         <item quantity="other">Não foi possível obter sugestões para %1$d de %2$d documentos</item>
     </plurals>
-    <string name="ai_edit_queue_failed">Não foi possível adicionar a edição com IA à fila: %1$s</string>
-    <string name="ai_edit_start_failed">Não foi possível iniciar a edição com IA: %1$s</string>
+    <string name="ai_edit_queue_failed">Não foi possível iniciar a edição em massa em segundo plano: %1$s</string>
+    <string name="ai_edit_start_failed">Não foi possível iniciar a edição em massa: %1$s</string>
     <string name="ai_chat_empty_title">Pergunte o que quiser aos seus documentos</string>
     <string name="ai_chat_empty_subtitle">Pesquise na sua biblioteca, compare valores ou encontre uma data de validade. As respostas vêm dos seus documentos.</string>
     <string name="ai_chat_example_renewal">Quando renova meu seguro de carro?</string>
     <string name="ai_chat_example_utilities">Encontre minha última fatura de energia.</string>
     <string name="ai_chat_example_contract">Encontre o contrato que assinei com a Acme.</string>
     <string name="ai_chat_example_untagged">Quem é meu locador?</string>
+    <string name="ai_mode_chat">Conversa</string>
+    <string name="ai_mode_bulk_edit">Edição em massa</string>
+    <string name="ai_edit_with_assistant">Editar com o assistente</string>
+    <string name="ai_delete_chat_title">Excluir esta conversa?</string>
+    <string name="ai_delete_chat_message">A conversa é removida deste dispositivo e não pode ser recuperada.</string>
+    <string name="ai_clear_conversation_title">Limpar esta conversa?</string>
+    <string name="ai_clear_conversation_message">Todas as mensagens dela são removidas deste dispositivo e não podem ser recuperadas.</string>
+    <string name="ai_clear_conversation_confirm">Limpar</string>
+    <string name="ai_tool_listed_fields">Campos listados</string>
+    <string name="ai_tool_searched_field">Pesquisa em %1$s: “%2$s”</string>
+    <string name="ai_tool_searched_all_fields">Pesquisa em todos os campos: “%1$s”</string>
+    <string name="ai_tool_listed_field_set">Documentos com %1$s preenchido listados</string>
+    <string name="ai_tool_field_range">de %1$s a %2$s</string>
+    <plurals name="ai_edit_applied">
+        <item quantity="one">%1$d documento atualizado.</item>
+        <item quantity="other">%1$d documentos atualizados.</item>
+    </plurals>
+    <plurals name="ai_edit_undone">
+        <item quantity="one">%1$d documento voltou a ser como era.</item>
+        <item quantity="other">%1$d documentos voltaram a ser como eram.</item>
+    </plurals>
+    <string name="ai_edit_undo_failed">Não foi possível desfazer a edição em massa: %1$s</string>
+    <plurals name="ai_edit_undo_failed_some">
+        <item quantity="one">Não foi possível desfazer %1$d de %2$d alteração</item>
+        <item quantity="other">Não foi possível desfazer %1$d de %2$d alterações</item>
+    </plurals>
 </resources>

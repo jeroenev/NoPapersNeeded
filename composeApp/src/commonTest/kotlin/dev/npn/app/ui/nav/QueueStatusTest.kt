@@ -81,4 +81,18 @@ class QueueStatusTest {
             updatedAt = 0L,
             attempts = 0,
         )
+
+    /**
+     * A stopped entry will not start again by itself: it needs the user, so it is counted apart from
+     * the work in flight, and the running indicator does not turn for it alone.
+     */
+    @Test
+    fun stoppedWorkNeedsAttentionAndIsNotPending() {
+        val stopped = work(WorkStage.OCR).copy(state = WorkState.FAILED)
+        val status = QueueStatus.of(listOf(stopped, work(WorkStage.AI_ENRICHMENT)), emptyList())
+
+        assertEquals(QueueStatus(pending = 1, failed = 1), status)
+        assertTrue(status.running)
+        assertFalse(QueueStatus.of(listOf(stopped), emptyList()).running)
+    }
 }

@@ -1,21 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="queue_title">Verwerkingswachtrij</string>
-    <string name="queue_nav_label">Wachtrij</string>
-    <string name="queue_help">Documenten die nog wachten op tekstherkenning of AI-verrijking. Voltooid werk verdwijnt vanzelf; gestopt werk blijft staan zodat je het opnieuw kunt proberen.</string>
+    <!-- Activity: the page of what the app does in the background (the processing queue underneath). -->
+    <string name="queue_title">Activiteit</string>
+    <!-- Navigation rail and bottom bar item; kept short to fit beside the other labels. -->
+    <string name="queue_nav_label">Activiteit</string>
+    <string name="queue_help">Documenten die nog wachten op tekstherkenning of automatisch ordenen. Voltooid werk verdwijnt vanzelf; gestopt werk blijft hier staan zodat je het opnieuw kunt proberen.</string>
+    <!-- Click label announced for a queue row; the whole row opens the document. -->
     <string name="queue_open_document">Document openen</string>
     <string name="queue_empty">Niets meer te verwerken</string>
-    <string name="queue_empty_subtitle">Elk document is gelezen en verrijkt.</string>
+    <string name="queue_empty_subtitle">Elk document is gelezen en geordend.</string>
 
-    <string name="queue_edit_runs">AI-bewerkingen</string>
+    <!-- Section headings on Activity, problems first. -->
+    <string name="queue_section_problems">Vraagt aandacht</string>
+    <string name="queue_section_imports">Importeren en scannen</string>
+    <string name="queue_section_sync">Cloudsynchronisatie</string>
+
+    <!-- Section above the per-document queue: bulk edits handed to the background. -->
+    <string name="queue_edit_runs">Bulkbewerkingen</string>
     <string name="queue_edit_run_progress">%1$d van %2$d documenten voorgesteld</string>
     <string name="queue_edit_run_review">Nakijken</string>
     <string name="queue_edit_run_discard">Weggooien</string>
-    <string name="queue_edit_run_discard_failed">De AI-bewerking kon niet worden weggegooid: %1$s</string>
+    <string name="queue_edit_run_discard_failed">De bulkbewerking kon niet worden weggegooid: %1$s</string>
 
     <plurals name="queue_edit_run_documents">
-        <item quantity="one">AI-bewerking van %1$d document</item>
-        <item quantity="other">AI-bewerking van %1$d documenten</item>
+        <item quantity="one">Bulkbewerking van %1$d document</item>
+        <item quantity="other">Bulkbewerking van %1$d documenten</item>
     </plurals>
 
     <plurals name="queue_edit_run_failures">
@@ -24,26 +33,43 @@
     </plurals>
 
     <string name="queue_stage_ocr">Tekstherkenning</string>
-    <string name="queue_stage_ai">AI-verrijking</string>
+    <string name="queue_stage_ai">Automatisch ordenen</string>
 
     <string name="queue_state_waiting">Wachten</string>
     <string name="queue_state_running">Bezig</string>
     <string name="queue_state_retrying">Opnieuw proberen</string>
     <string name="queue_state_failed">Mislukt</string>
-    <string name="queue_state_ready">Klaar om na te kijken</string>
+    <string name="queue_state_ready">Suggesties klaar</string>
 
     <string name="queue_retry_after">Volgende poging na %1$s</string>
-    <string name="queue_temporary_failure">Een verwerkingspoging is mislukt. De app probeert het opnieuw.</string>
-    <string name="queue_failed_help">De verwerking is na meerdere fouten gestopt. Controleer de OCR-instellingen en probeer het opnieuw.</string>
+    <!-- Failure lines, one per pass: text recognition runs on this device, Auto-organize and bulk edits on the assistant's provider. -->
+    <string name="queue_ocr_temporary_failure">De tekstherkenning is bij de laatste poging mislukt. De app probeert het opnieuw.</string>
+    <string name="queue_ocr_failed_help">De tekstherkenning is na meerdere fouten gestopt. Controleer de instellingen voor tekstherkenning en probeer het opnieuw.</string>
+    <string name="queue_ai_temporary_failure">De assistent was bij de laatste poging niet bereikbaar. De app probeert het opnieuw.</string>
+    <string name="queue_ai_failed_help">De assistent is na meerdere fouten gestopt. Controleer de instellingen van de assistent en probeer het opnieuw.</string>
 
     <plurals name="queue_attempts">
         <item quantity="one">%1$d mislukte poging</item>
         <item quantity="other">%1$d mislukte pogingen</item>
     </plurals>
 
-    <plurals name="queue_ai_pending">
-        <item quantity="one">AI-verrijking in wachtrij: %1$d</item>
-        <item quantity="other">AI-verrijking in wachtrij: %1$d</item>
+    <!-- The library's one line for text recognition and Auto-organize together; opens Activity. -->
+    <plurals name="queue_processing">
+        <item quantity="one">%1$d document wordt verwerkt</item>
+        <item quantity="other">%1$d documenten worden verwerkt</item>
     </plurals>
 
+    <!-- The scan-issues banner's button, which opens the Trash where conflicts and duplicates are sorted out. -->
+    <string name="queue_open_trash">Prullenbak openen</string>
+
+    <!-- The cloud sync row on Activity. Why a pass failed is said in the cloud sync settings. -->
+    <string name="queue_sync_never">Nog niet gesynchroniseerd</string>
+    <string name="queue_sync_running">Bezig met synchroniseren…</string>
+    <string name="queue_sync_last">Laatst gesynchroniseerd: %1$s</string>
+    <string name="queue_sync_failed">De laatste synchronisatie is niet afgerond. De instellingen voor cloudsynchronisatie vertellen waarom.</string>
+    <string name="queue_sync_now">Nu synchroniseren</string>
+    <string name="queue_sync_settings">Instellingen voor cloudsynchronisatie</string>
+    <string name="queue_sync_now_failed">Synchroniseren is niet gelukt: %1$s</string>
+    <string name="queue_sync_unavailable">Cloudsynchronisatie is niet beschikbaar op dit apparaat. De instellingen voor cloudsynchronisatie vertellen waarom.</string>
+    <string name="queue_sync_not_configured">Deze bibliotheek heeft op dit apparaat nog geen cloudmap. Kies er een in de instellingen voor cloudsynchronisatie.</string>
 </resources>

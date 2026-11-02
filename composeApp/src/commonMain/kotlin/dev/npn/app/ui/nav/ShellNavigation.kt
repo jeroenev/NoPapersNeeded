@@ -17,7 +17,7 @@ internal fun NavHostController.navigateTopLevel(dest: TopLevelDestination) {
             TopLevelDestination.LIBRARY -> Route.Library
             TopLevelDestination.TAGS -> Route.TagManagement
             TopLevelDestination.TRASH -> Route.Trash
-            TopLevelDestination.QUEUE -> Route.Queue
+            TopLevelDestination.ACTIVITY -> Route.Queue
             TopLevelDestination.SETTINGS -> Route.Settings()
         }
     navigate(route) {
@@ -27,7 +27,10 @@ internal fun NavHostController.navigateTopLevel(dest: TopLevelDestination) {
     }
 }
 
-/** AI screens sit one level above Library, never stacked on other pushed screens or each other. */
+/**
+ * The assistant's screens (the chat, bulk edit) sit one level above Library, never stacked on other
+ * pushed screens or each other, so switching between its two modes replaces one with the other.
+ */
 internal fun NavHostController.navigateAi(
     route: Route,
     restoreState: Boolean = false,

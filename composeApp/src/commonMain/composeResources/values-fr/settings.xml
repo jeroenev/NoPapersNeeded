@@ -18,7 +18,7 @@
     <string name="common_settings_ocr_other_language_help">Code Tesseract d’une langue absente de la liste, p. ex. %1$s. Son modèle doit être installé.</string>
     <string name="common_settings_ocr_add_language">Ajouter</string>
     <string name="common_settings_ocr_android_help">Le texte de toute langue en alphabet latin est reconnu automatiquement.</string>
-    <string name="common_settings_ai_assistant">Assistant IA</string>
+    <string name="common_settings_ai_assistant">Assistant</string>
     <string name="common_settings_trash">Corbeille</string>
     <string name="common_settings_trash_retention_days">Durée de conservation (jours)</string>
     <string name="common_settings_views">Vues</string>
@@ -93,7 +93,7 @@
     <string name="common_settings_remove_after_import">Supprimer les fichiers après l’import</string>
     <string name="common_settings_remove_after_import_help">Activé : les fichiers sources sont supprimés du dossier surveillé dès qu’ils sont en sécurité dans la bibliothèque. Désactivé : ils restent et sont simplement ignorés comme doublons lors des analyses suivantes.</string>
 
-    <string name="common_settings_enable_ai">Activer l’assistant IA</string>
+    <string name="common_settings_enable_ai">Activer l’assistant</string>
     <string name="common_settings_ai_help">Utilise le fournisseur d’IA de votre choix pour suggérer des étiquettes et répondre aux questions sur vos documents.</string>
     <string name="common_settings_ai_provider">Fournisseur : %1$s</string>
     <string name="common_settings_ai_provider_help">Les requêtes sont envoyées directement à ce fournisseur avec votre propre clé API. Choisissez Personnalisé pour tout autre serveur compatible OpenAI.</string>
@@ -110,7 +110,7 @@
     <string name="common_settings_models_loading">Chargement des modèles…</string>
     <string name="common_settings_models_error">Impossible de charger les modèles : %1$s</string>
     <string name="common_settings_reasoning_assistant">Raisonnement de l’assistant : %1$s</string>
-    <string name="common_settings_reasoning_edit">Raisonnement de la modification IA : %1$s</string>
+    <string name="common_settings_reasoning_edit">Raisonnement de la modification groupée : %1$s</string>
     <string name="common_settings_reasoning_help">Degré de réflexion autorisé au modèle avant de répondre. « Par défaut » conserve le comportement du serveur ; tous les fournisseurs et modèles ne prennent pas en charge tous les niveaux.</string>
     <string name="common_settings_reasoning_default">Par défaut</string>
     <string name="common_settings_reasoning_none">Désactivé</string>
@@ -119,13 +119,13 @@
     <string name="common_settings_reasoning_high">Élevé</string>
     <string name="common_settings_ai_request_help">Les requêtes envoient le texte des documents au serveur configuré.</string>
     <string name="common_settings_max_suggested_tags">Étiquettes suggérées par document (max.)</string>
-    <string name="common_settings_max_suggested_tags_help">Nombre maximal d’étiquettes proposées par défaut pour chaque document (%1$d-%2$d) ; modifiable à chaque exécution dans Modification IA.</string>
+    <string name="common_settings_max_suggested_tags_help">Nombre maximal d’étiquettes proposées par défaut pour chaque document (%1$d-%2$d) ; modifiable à chaque exécution dans Modification groupée.</string>
     <string name="common_settings_max_new_tags">Nouvelles étiquettes par document (max.)</string>
-    <string name="common_settings_max_new_tags_help">Nombre maximal d’étiquettes entièrement nouvelles (absentes de votre bibliothèque) proposées par défaut pour chaque document (%1$d-%2$d ; 0 = aucune) ; modifiable à chaque exécution dans Modification IA.</string>
-    <string name="common_settings_ai_auto_on_ocr">Étiqueter et compléter automatiquement les nouveaux documents</string>
+    <string name="common_settings_max_new_tags_help">Nombre maximal d’étiquettes entièrement nouvelles (absentes de votre bibliothèque) proposées par défaut pour chaque document (%1$d-%2$d ; 0 = aucune) ; modifiable à chaque exécution dans Modification groupée.</string>
+    <string name="common_settings_ai_auto_on_ocr">Organiser automatiquement les nouveaux documents</string>
     <string name="common_settings_ai_auto_on_ocr_help">Juste après la numérisation ou l’import d’un document et la lecture de son texte, l’assistant applique des étiquettes parmi celles qui existent déjà (il n’en crée jamais de nouvelles) et remplit chaque champ marqué « Laisser l’IA le remplir » s’il est encore vide. Appliqué sans vérification ; chaque nouveau document coûte donc une requête.</string>
-    <string name="common_settings_ai_ocr_auto">Lire le texte avec l’assistant plutôt qu’avec l’OCR de l’appareil</string>
-    <string name="common_settings_ai_ocr_auto_help">Le modèle lit chaque page, ce qui convient bien mieux à l’écriture manuscrite, aux tableaux et aux numérisations pâles que l’OCR de l’appareil. Cela coûte une requête par page (et non par document) et relit aussi les documents déjà traités par l’OCR de l’appareil. Les documents de plus de %1$d pages restent traités par l’OCR de l’appareil ; vous pouvez tout de même demander leur lecture un par un. Laissez désactivé pour lire le texte sur l’appareil et utiliser « Lire le texte avec l’assistant » au cas par cas.</string>
+    <string name="common_settings_ai_ocr_auto">Lire le texte avec l’assistant plutôt que sur l’appareil</string>
+    <string name="common_settings_ai_ocr_auto_help">Le modèle lit chaque page, ce qui convient bien mieux à l’écriture manuscrite, aux tableaux et aux numérisations pâles que la lecture du texte sur l’appareil. Cela coûte une requête par page (et non par document) et relit aussi les documents dont le texte a déjà été lu sur l’appareil. Les documents de plus de %1$d pages restent lus sur l’appareil ; vous pouvez tout de même demander leur lecture un par un. Laissez désactivé pour lire le texte sur l’appareil et utiliser « Lire le texte avec l’assistant » au cas par cas.</string>
 
     <string name="common_settings_ai_test">Tester cette configuration</string>
     <string name="common_settings_ai_test_help">Vérifie trois points à la suite : le serveur répond, le modèle répond à une question et il sait lire le texte d’une image de page. Coûte deux très petites requêtes. La vérification s’arrête au premier échec, car la suite échouerait pour la même raison.</string>

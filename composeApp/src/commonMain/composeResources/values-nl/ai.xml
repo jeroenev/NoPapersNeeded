@@ -4,7 +4,7 @@
     <string name="ai_new_chat">Nieuwe chat</string>
     <string name="ai_delete_chat">Chat verwijderen</string>
     <string name="ai_open_all_documents">Alle documenten openen</string>
-    <string name="ai_assistant_title">AI-assistent</string>
+    <string name="ai_assistant_title">Assistent</string>
     <string name="ai_clear_conversation">Gesprek wissen</string>
     <string name="ai_collapse">Inklappen</string>
     <string name="ai_expand">Uitklappen</string>
@@ -12,7 +12,7 @@
     <string name="ai_ask_documents">Stel een vraag over je documenten</string>
     <string name="ai_stop">Stoppen</string>
     <string name="ai_send">Verzenden</string>
-    <string name="ai_configure_in_settings">Configureer de AI-assistent in de instellingen</string>
+    <string name="ai_configure_in_settings">Stel de assistent in bij de instellingen</string>
     <string name="ai_tool_searched_documents">Documenten doorzocht: “%1$s”</string>
     <string name="ai_tool_searched_file_names">Bestandsnamen doorzocht: “%1$s”</string>
     <string name="ai_tool_listed_tagged_documents">Documenten met de tag “%1$s” weergegeven</string>
@@ -22,7 +22,7 @@
     <string name="ai_unknown_value">(onbekend)</string>
     <string name="ai_unspecified_document">een document</string>
 
-    <string name="ai_edit_title">AI-bewerken</string>
+    <string name="ai_edit_title">Bulkbewerking</string>
     <string name="ai_edit_applying">Suggesties toepassen...</string>
     <string name="ai_edit_intro">Automatiseer bewerkingen over een reeks documenten</string>
     <string name="ai_edit_task_question">Wat wil je doen?</string>
@@ -38,7 +38,7 @@
     <string name="ai_edit_scope">Documenten</string>
     <string name="ai_edit_scope_selection">Geselecteerde documenten (%1$d)</string>
     <string name="ai_edit_untagged_documents">Documenten zonder tags</string>
-    <string name="ai_edit_review_queue">Beoordelingswachtrij</string>
+    <string name="ai_edit_review_queue">Inbox</string>
     <string name="ai_edit_scope_missing_fields">Mist een van de gekozen velden</string>
     <string name="ai_edit_scope_saved_view">Opgeslagen weergave</string>
     <string name="ai_edit_saved_view_choose">Kies een weergave</string>
@@ -70,13 +70,13 @@
     <string name="ai_edit_range">%1$d-%2$d</string>
     <string name="ai_edit_new_tags_range">%1$d-%2$d (%3$d = alleen bestaande)</string>
     <string name="ai_edit_run_where">Wanneer uitvoeren</string>
-    <string name="ai_edit_run_now">Nu nakijken</string>
+    <string name="ai_edit_run_now">Suggesties nu nakijken</string>
     <string name="ai_edit_run_now_help">Stel één batch voor en kijk het resultaat hier na.</string>
     <string name="ai_edit_background">Op de achtergrond uitvoeren</string>
-    <string name="ai_edit_background_help">Behandelt alle documenten in het bereik en loopt door nadat je deze pagina verlaat. De resultaten wachten in de verwerkingswachtrij tot je ze nakijkt; er wordt niets weggeschreven zonder jou.</string>
+    <string name="ai_edit_background_help">Behandelt alle documenten in het bereik en loopt door nadat je deze pagina verlaat. De resultaten wachten in Activiteit tot je ze nakijkt; er wordt niets weggeschreven zonder jou.</string>
     <string name="ai_edit_recommended">Aanbevolen</string>
     <string name="ai_edit_start">Start</string>
-    <string name="ai_edit_start_background">Aan wachtrij toevoegen</string>
+    <string name="ai_edit_start_background">Op de achtergrond starten</string>
     <string name="ai_edit_summary_tags">tags</string>
     <string name="ai_edit_summary_tag_removals">tags verwijderen</string>
     <string name="ai_edit_summary_prompt">extra instructies</string>
@@ -87,7 +87,7 @@
     <string name="ai_edit_blocked_no_documents">Geen documenten in dit bereik</string>
     <string name="ai_edit_blocked_no_saved_view">Kies een opgeslagen weergave</string>
     <string name="ai_edit_blocked_loading">Documenten tellen...</string>
-    <string name="ai_edit_confirm_large_title">%1$d documenten naar de AI sturen?</string>
+    <string name="ai_edit_confirm_large_title">%1$d documenten naar de assistent sturen?</string>
     <string name="ai_edit_confirm_large_message">Dat is één verzoek per document aan je AI-provider, wat geld kan kosten. Er wordt niets naar je bibliotheek weggeschreven zonder dat jij het nakijkt.</string>
     <string name="ai_edit_confirm_large_confirm">Versturen</string>
     <string name="ai_edit_cancel_title">Deze run stoppen?</string>
@@ -98,8 +98,8 @@
     <string name="ai_edit_leave_confirm">Weggooien</string>
     <string name="ai_edit_leave_stay">Blijven</string>
     <string name="ai_edit_change_settings">Instellingen wijzigen</string>
-    <string name="ai_edit_queued_open">Wachtrij openen</string>
-    <string name="ai_edit_queued_review_title">AI-bewerking nakijken</string>
+    <string name="ai_edit_queued_open">Activiteit openen</string>
+    <string name="ai_edit_queued_review_title">Suggesties nakijken</string>
     <string name="ai_edit_queued_loading">Suggesties laden...</string>
     <string name="ai_edit_queued_gone">Deze bewerking is niet meer beschikbaar</string>
     <string name="ai_edit_queued_gone_subtitle">Ze is al nagekeken of weggegooid, of ze is nog bezig.</string>
@@ -112,7 +112,7 @@
     <string name="ai_edit_skip">Deze batch overslaan</string>
     <string name="ai_edit_discard_run">Run weggooien</string>
     <string name="ai_edit_discard_run_title">Deze run weggooien?</string>
-    <string name="ai_edit_discard_run_message">De suggesties zijn al gegenereerd. Weggooien haalt deze run uit de verwerkingswachtrij zonder iets weg te schrijven.</string>
+    <string name="ai_edit_discard_run_message">De suggesties zijn al gegenereerd. Weggooien haalt deze bulkbewerking uit Activiteit zonder iets weg te schrijven.</string>
     <string name="ai_edit_open_document">Document openen</string>
     <string name="ai_edit_next_batch">Volgende batch</string>
     <string name="ai_edit_done">Gereed</string>
@@ -127,16 +127,16 @@
         <item quantity="other">Geen suggesties (%1$d documenten)</item>
     </plurals>
     <plurals name="ai_edit_queued">
-        <item quantity="one">%1$d document in de wachtrij. Je vindt de suggesties in de verwerkingswachtrij.</item>
-        <item quantity="other">%1$d documenten in de wachtrij. Je vindt de suggesties in de verwerkingswachtrij.</item>
+        <item quantity="one">%1$d document in de wachtrij. De suggesties wachten op je in Activiteit.</item>
+        <item quantity="other">%1$d documenten in de wachtrij. De suggesties wachten op je in Activiteit.</item>
     </plurals>
     <plurals name="ai_edit_summary_fields">
         <item quantity="one">%1$d veld</item>
         <item quantity="other">%1$d velden</item>
     </plurals>
     <plurals name="ai_edit_summary_requests">
-        <item quantity="one">%1$d AI-verzoek</item>
-        <item quantity="other">%1$d AI-verzoeken</item>
+        <item quantity="one">%1$d verzoek</item>
+        <item quantity="other">%1$d verzoeken</item>
     </plurals>
     <plurals name="ai_edit_cancel_message">
         <item quantity="one">%1$d document heeft al suggesties; nu stoppen gooit ze weg.</item>
@@ -150,10 +150,10 @@
     <string name="ai_chat_new_failed">Er kon geen nieuwe chat worden gestart: %1$s</string>
     <string name="ai_chat_delete_failed">De chat kon niet worden verwijderd: %1$s</string>
     <string name="ai_chat_open_failed">Het gesprek kon niet worden geopend: %1$s</string>
-    <string name="ai_edit_review_open_failed">De AI-bewerking kon niet worden geopend: %1$s</string>
-    <string name="ai_edit_review_discard_failed">De AI-bewerking kon niet worden verworpen: %1$s</string>
-    <string name="ai_edit_review_queue_drop_failed">De voltooide run kon niet uit de wachtrij worden verwijderd: %1$s</string>
-    <string name="ai_edit_setup_load_failed">Sommige opties voor de AI-bewerking konden niet worden geladen: %1$s</string>
+    <string name="ai_edit_review_open_failed">De bulkbewerking kon niet worden geopend: %1$s</string>
+    <string name="ai_edit_review_discard_failed">De bulkbewerking kon niet worden weggegooid: %1$s</string>
+    <string name="ai_edit_review_queue_drop_failed">De voltooide bulkbewerking kon niet uit Activiteit worden verwijderd: %1$s</string>
+    <string name="ai_edit_setup_load_failed">Sommige opties voor de bulkbewerking konden niet worden geladen: %1$s</string>
     <plurals name="ai_edit_apply_tags_failed">
         <item quantity="one">Kon de tags van %1$d van %2$d document niet bijwerken</item>
         <item quantity="other">Kon de tags van %1$d van de %2$d documenten niet bijwerken</item>
@@ -179,12 +179,38 @@
         <item quantity="one">Kon geen suggesties ophalen voor %1$d van de %2$d documenten</item>
         <item quantity="other">Kon geen suggesties ophalen voor %1$d van de %2$d documenten</item>
     </plurals>
-    <string name="ai_edit_queue_failed">De AI-bewerking kon niet in de wachtrij worden gezet: %1$s</string>
-    <string name="ai_edit_start_failed">De AI-bewerking kon niet worden gestart: %1$s</string>
+    <string name="ai_edit_queue_failed">De bulkbewerking kon niet op de achtergrond worden gestart: %1$s</string>
+    <string name="ai_edit_start_failed">De bulkbewerking kon niet worden gestart: %1$s</string>
     <string name="ai_chat_empty_title">Vraag je documenten alles</string>
     <string name="ai_chat_empty_subtitle">Doorzoek je bibliotheek, vergelijk bedragen of vind een vervaldatum. De antwoorden komen uit je documenten.</string>
     <string name="ai_chat_example_renewal">Wanneer wordt mijn autoverzekering verlengd?</string>
     <string name="ai_chat_example_utilities">Zoek mijn laatste energierekening.</string>
     <string name="ai_chat_example_contract">Zoek het contract dat ik met Acme heb ondertekend.</string>
     <string name="ai_chat_example_untagged">Wie is mijn verhuurder?</string>
+    <string name="ai_mode_chat">Chat</string>
+    <string name="ai_mode_bulk_edit">Bulkbewerking</string>
+    <string name="ai_edit_with_assistant">Bewerken met assistent</string>
+    <string name="ai_delete_chat_title">Deze chat verwijderen?</string>
+    <string name="ai_delete_chat_message">Het gesprek wordt van dit apparaat verwijderd en kan niet worden teruggehaald.</string>
+    <string name="ai_clear_conversation_title">Dit gesprek wissen?</string>
+    <string name="ai_clear_conversation_message">Alle berichten erin worden van dit apparaat verwijderd en kunnen niet worden teruggehaald.</string>
+    <string name="ai_clear_conversation_confirm">Wissen</string>
+    <string name="ai_tool_listed_fields">Velden opgesomd</string>
+    <string name="ai_tool_searched_field">%1$s doorzocht op “%2$s”</string>
+    <string name="ai_tool_searched_all_fields">Alle velden doorzocht op “%1$s”</string>
+    <string name="ai_tool_listed_field_set">Documenten met %1$s ingevuld opgesomd</string>
+    <string name="ai_tool_field_range">%1$s tot %2$s</string>
+    <plurals name="ai_edit_applied">
+        <item quantity="one">%1$d document bijgewerkt.</item>
+        <item quantity="other">%1$d documenten bijgewerkt.</item>
+    </plurals>
+    <plurals name="ai_edit_undone">
+        <item quantity="one">%1$d document teruggezet zoals het was.</item>
+        <item quantity="other">%1$d documenten teruggezet zoals ze waren.</item>
+    </plurals>
+    <string name="ai_edit_undo_failed">De bulkbewerking kon niet ongedaan worden gemaakt: %1$s</string>
+    <plurals name="ai_edit_undo_failed_some">
+        <item quantity="one">%1$d van %2$d wijziging kon niet ongedaan worden gemaakt</item>
+        <item quantity="other">%1$d van %2$d wijzigingen konden niet ongedaan worden gemaakt</item>
+    </plurals>
 </resources>

@@ -1,15 +1,74 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Compact bottom bar item opening the sheet with the destinations the bar cannot hold. -->
     <string name="nav_more">Más</string>
     <string name="nav_more_destinations">Más destinos</string>
+    <!-- Navigation item for the assistant, with its Chat and Bulk edit modes. -->
+    <string name="nav_assistant">Asistente</string>
 
+    <!-- Read out for the Activity item's running indicator, whose spinning ring means nothing on its own. -->
     <plurals name="nav_queue_pending">
         <item quantity="one">%1$d documento aún se está procesando</item>
         <item quantity="other">%1$d documentos aún se están procesando</item>
     </plurals>
 
+    <!-- Same item, when a background bulk edit has finished and its suggestions wait to be reviewed. -->
     <plurals name="nav_queue_review">
-        <item quantity="one">%1$d edición con IA esperando revisión</item>
-        <item quantity="other">%1$d ediciones con IA esperando revisión</item>
+        <item quantity="one">Sugerencias listas para %1$d edición masiva</item>
+        <item quantity="other">Sugerencias listas para %1$d ediciones masivas</item>
     </plurals>
+
+    <!-- Same item, when background work stopped and waits for a retry. -->
+    <plurals name="nav_queue_failed">
+        <item quantity="one">%1$d elemento de Actividad requiere atención</item>
+        <item quantity="other">%1$d elementos de Actividad requieren atención</item>
+    </plurals>
+
+    <!-- Keyboard shortcut list, opened with ? or Ctrl+/ and from the navigation. -->
+    <string name="nav_shortcuts">Atajos de teclado</string>
+    <string name="nav_shortcuts_close">Cerrar</string>
+    <string name="nav_shortcuts_everywhere">En toda la app</string>
+    <string name="nav_shortcuts_library">Biblioteca</string>
+    <string name="nav_shortcuts_document">Documento</string>
+    <string name="nav_shortcuts_assistant">Chat del asistente</string>
+    <string name="nav_shortcuts_tips">Consejos</string>
+
+    <!-- Key names as printed on the keyboard; translate the modifier and key names as the locale's keyboards label them. -->
+    <string name="nav_shortcut_keys_help">? o Ctrl+/</string>
+    <string name="nav_shortcut_keys_escape">Esc</string>
+    <string name="nav_shortcut_keys_search">/ o Ctrl+F</string>
+    <string name="nav_shortcut_keys_ctrl_o">Ctrl+O</string>
+    <string name="nav_shortcut_keys_ctrl_a">Ctrl+A</string>
+    <string name="nav_shortcut_keys_delete">Supr</string>
+    <string name="nav_shortcut_keys_pages">← → o Re Pág / Av Pág</string>
+    <string name="nav_shortcut_keys_home_end">Inicio / Fin</string>
+    <string name="nav_shortcut_keys_zoom">+ / − / 0</string>
+    <string name="nav_shortcut_keys_ctrl_arrows">Ctrl+← / Ctrl+→</string>
+    <string name="nav_shortcut_keys_ctrl_s">Ctrl+S</string>
+    <string name="nav_shortcut_keys_ctrl_f">Ctrl+F</string>
+    <string name="nav_shortcut_keys_arrows">← →</string>
+    <string name="nav_shortcut_keys_enter">Intro</string>
+    <string name="nav_shortcut_keys_shift_enter">Mayús+Intro</string>
+
+    <!-- What each key does, one whole sentence per row. -->
+    <string name="nav_shortcut_show_list">Mostrar esta lista de atajos.</string>
+    <string name="nav_shortcut_back">Volver atrás o cerrar un diálogo.</string>
+    <string name="nav_shortcut_library_search">Buscar en la biblioteca.</string>
+    <string name="nav_shortcut_library_import">Importar PDF.</string>
+    <string name="nav_shortcut_library_select_all">Seleccionar todos los documentos mostrados.</string>
+    <string name="nav_shortcut_library_delete">Mover los documentos seleccionados a la papelera.</string>
+    <string name="nav_shortcut_library_escape">Salir de la selección o borrar la búsqueda.</string>
+    <string name="nav_shortcut_doc_page">Ir a la página anterior o siguiente.</string>
+    <string name="nav_shortcut_doc_first_last">Ir a la primera o a la última página.</string>
+    <string name="nav_shortcut_doc_zoom">Acercar, alejar o restablecer el zoom.</string>
+    <string name="nav_shortcut_doc_next_doc">Abrir el documento anterior o siguiente.</string>
+    <string name="nav_shortcut_doc_save">Guardar los cambios en los datos del documento.</string>
+    <string name="nav_shortcut_doc_find">Buscar una palabra en el texto del documento.</string>
+    <string name="nav_shortcut_doc_resize">Con el divisor seleccionado, ensanchar la página o los datos.</string>
+    <string name="nav_shortcut_assistant_send">Enviar la pregunta.</string>
+    <string name="nav_shortcut_assistant_newline">Empezar una línea nueva en la pregunta.</string>
+
+    <string name="nav_shortcut_tip_page_counter">Haz clic en el contador de páginas para ir a una página por su número.</string>
+    <string name="nav_shortcut_tip_long_press">Mantén pulsado un documento para empezar a seleccionar; luego haz clic en otros para añadirlos.</string>
+    <string name="nav_shortcut_tip_right_click">Haz clic derecho en un documento para abrir su menú.</string>
 </resources>

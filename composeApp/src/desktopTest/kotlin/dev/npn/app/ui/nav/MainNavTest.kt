@@ -4,6 +4,7 @@ package dev.npn.app.ui.nav
 
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.remember
+import androidx.compose.ui.input.key.Key
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import dev.npn.app.EnglishLocaleTest
@@ -14,8 +15,10 @@ import dev.npn.app.LocalizedApp
 import dev.npn.app.ui.click
 import dev.npn.app.ui.contentDescription
 import dev.npn.app.ui.detail.DocumentDraftHost
+import dev.npn.app.ui.has
 import dev.npn.app.ui.hostedScene
 import dev.npn.app.ui.onUiThread
+import dev.npn.app.ui.press
 import dev.npn.app.ui.texts
 import dev.npn.app.ui.theme.NpnTheme
 import io.kotest.matchers.shouldBe
@@ -66,6 +69,38 @@ class MainNavTest : EnglishLocaleTest() {
             settle()
 
             screens() shouldBe listOf("Library", "Settings", "Settings")
+        }
+
+    /** The shortcut list is one tap behind "More" on a compact window, and lists what the screens bind. */
+    @Test
+    fun theShortcutListOpensFromTheMoreSheet() =
+        app {
+            scene.click { "More" in it.texts() }
+            settle()
+            scene.click { "Keyboard shortcuts" in it.texts() }
+            settle()
+
+            scene.has { "Everywhere" in it.texts() } shouldBe true
+            scene.has { "Search the library." in it.texts() } shouldBe true
+        }
+
+    /**
+     * Ctrl+/ opens it from the keyboard, also on a screen that focuses nothing of its own (Activity):
+     * the shell holds focus then.
+     */
+    @Test
+    fun ctrlSlashOpensTheShortcutList() =
+        app {
+            scene.click { "Activity" in it.texts() }
+            settle()
+            scene.press(Key.Slash, ctrl = true)
+            settle()
+
+            scene.has { "Everywhere" in it.texts() } shouldBe true
+
+            scene.click { "Close" in it.texts() }
+            settle()
+            scene.has { "Everywhere" in it.texts() } shouldBe false
         }
 
     private fun app(block: App.() -> Unit) =

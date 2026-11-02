@@ -1,21 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="queue_title">File de traitement</string>
-    <string name="queue_nav_label">Traitement</string>
-    <string name="queue_help">Documents en attente de lecture du texte ou d’enrichissement IA. Les tâches terminées disparaissent d’elles-mêmes ; celles qui se sont arrêtées restent pour que vous puissiez les relancer.</string>
+    <!-- Activity: the page of what the app does in the background (the processing queue underneath). -->
+    <string name="queue_title">Activité</string>
+    <!-- Navigation rail and bottom bar item; kept short to fit beside the other labels. -->
+    <string name="queue_nav_label">Activité</string>
+    <string name="queue_help">Documents en attente de lecture du texte ou d’organisation automatique. Les tâches terminées disparaissent d’elles-mêmes ; celles qui se sont arrêtées restent ici pour que vous puissiez les relancer.</string>
+    <!-- Click label announced for a queue row; the whole row opens the document. -->
     <string name="queue_open_document">Ouvrir le document</string>
     <string name="queue_empty">Plus rien à traiter</string>
-    <string name="queue_empty_subtitle">Chaque document a été lu et enrichi.</string>
+    <string name="queue_empty_subtitle">Chaque document a été lu et organisé.</string>
 
-    <string name="queue_edit_runs">Modifications IA</string>
+    <!-- Section headings on Activity, problems first. -->
+    <string name="queue_section_problems">À traiter</string>
+    <string name="queue_section_imports">Importations et analyses</string>
+    <string name="queue_section_sync">Synchronisation cloud</string>
+
+    <!-- Section above the per-document queue: bulk edits handed to the background. -->
+    <string name="queue_edit_runs">Modifications groupées</string>
     <string name="queue_edit_run_progress">%1$d sur %2$d documents traités</string>
     <string name="queue_edit_run_review">Vérifier</string>
     <string name="queue_edit_run_discard">Abandonner</string>
-    <string name="queue_edit_run_discard_failed">Impossible d’abandonner la modification IA : %1$s</string>
+    <string name="queue_edit_run_discard_failed">Impossible d’abandonner la modification groupée : %1$s</string>
 
     <plurals name="queue_edit_run_documents">
-        <item quantity="one">Modification IA de %1$d document</item>
-        <item quantity="other">Modification IA de %1$d documents</item>
+        <item quantity="one">Modification groupée de %1$d document</item>
+        <item quantity="other">Modification groupée de %1$d documents</item>
     </plurals>
 
     <plurals name="queue_edit_run_failures">
@@ -24,26 +33,43 @@
     </plurals>
 
     <string name="queue_stage_ocr">Lecture du texte</string>
-    <string name="queue_stage_ai">Enrichissement IA</string>
+    <string name="queue_stage_ai">Organisation automatique</string>
 
     <string name="queue_state_waiting">En attente</string>
     <string name="queue_state_running">En cours</string>
     <string name="queue_state_retrying">Nouvel essai</string>
     <string name="queue_state_failed">Échec</string>
-    <string name="queue_state_ready">Prêt à vérifier</string>
+    <string name="queue_state_ready">Suggestions prêtes</string>
 
     <string name="queue_retry_after">Nouvel essai après %1$s</string>
-    <string name="queue_temporary_failure">Une tentative de traitement a échoué. L’application réessaiera.</string>
-    <string name="queue_failed_help">Le traitement s’est arrêté après plusieurs échecs. Vérifiez la configuration de l’OCR, puis réessayez.</string>
+    <!-- Failure lines, one per pass: text recognition runs on this device, Auto-organize and bulk edits on the assistant's provider. -->
+    <string name="queue_ocr_temporary_failure">La lecture du texte a échoué lors du dernier essai. L’application réessaiera.</string>
+    <string name="queue_ocr_failed_help">La lecture du texte s’est arrêtée après plusieurs échecs. Vérifiez les paramètres de lecture du texte, puis réessayez.</string>
+    <string name="queue_ai_temporary_failure">L’assistant était injoignable lors du dernier essai. L’application réessaiera.</string>
+    <string name="queue_ai_failed_help">L’assistant s’est arrêté après plusieurs échecs. Vérifiez les paramètres de l’assistant, puis réessayez.</string>
 
     <plurals name="queue_attempts">
         <item quantity="one">%1$d tentative échouée</item>
         <item quantity="other">%1$d tentatives échouées</item>
     </plurals>
 
-    <plurals name="queue_ai_pending">
-        <item quantity="one">Enrichissement IA en attente : %1$d</item>
-        <item quantity="other">Enrichissement IA en attente : %1$d</item>
+    <!-- The library's one line for text recognition and Auto-organize together; opens Activity. -->
+    <plurals name="queue_processing">
+        <item quantity="one">Traitement de %1$d document</item>
+        <item quantity="other">Traitement de %1$d documents</item>
     </plurals>
 
+    <!-- The scan-issues banner's button, which opens the Trash where conflicts and duplicates are sorted out. -->
+    <string name="queue_open_trash">Ouvrir la corbeille</string>
+
+    <!-- The cloud sync row on Activity. Why a pass failed is said in the cloud sync settings. -->
+    <string name="queue_sync_never">Pas encore synchronisé</string>
+    <string name="queue_sync_running">Synchronisation…</string>
+    <string name="queue_sync_last">Dernière synchronisation : %1$s</string>
+    <string name="queue_sync_failed">La dernière synchronisation n’a pas abouti. Les paramètres de synchronisation cloud indiquent pourquoi.</string>
+    <string name="queue_sync_now">Synchroniser maintenant</string>
+    <string name="queue_sync_settings">Paramètres de synchronisation cloud</string>
+    <string name="queue_sync_now_failed">Synchronisation impossible : %1$s</string>
+    <string name="queue_sync_unavailable">La synchronisation cloud n’est pas disponible sur cet appareil. Les paramètres de synchronisation cloud indiquent pourquoi.</string>
+    <string name="queue_sync_not_configured">Cette bibliothèque n’a pas encore de dossier cloud sur cet appareil. Choisissez-en un dans les paramètres de synchronisation cloud.</string>
 </resources>

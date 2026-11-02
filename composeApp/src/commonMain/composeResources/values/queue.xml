@@ -1,24 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="queue_title">Processing queue</string>
-    <!-- Navigation rail item; kept short to fit beside the other rail labels. -->
-    <string name="queue_nav_label">Queue</string>
-    <string name="queue_help">Documents still waiting on text recognition or AI enrichment. Finished work clears itself; stopped work remains so you can retry it.</string>
+    <!-- Activity: the page of what the app does in the background (the processing queue underneath). -->
+    <string name="queue_title">Activity</string>
+    <!-- Navigation rail and bottom bar item; kept short to fit beside the other labels. -->
+    <string name="queue_nav_label">Activity</string>
+    <string name="queue_help">Documents still waiting for text recognition or Auto-organize. Finished work clears itself; stopped work stays here so you can retry it.</string>
     <!-- Click label announced for a queue row; the whole row opens the document. -->
     <string name="queue_open_document">Open document</string>
     <string name="queue_empty">Nothing left to process</string>
-    <string name="queue_empty_subtitle">Every document has been read and enriched.</string>
+    <string name="queue_empty_subtitle">Every document has been read and organized.</string>
 
-    <!-- Section above the per-document queue: AI edit runs handed to the background. -->
-    <string name="queue_edit_runs">AI edit runs</string>
+    <!-- Section headings on Activity, problems first. -->
+    <string name="queue_section_problems">Needs attention</string>
+    <string name="queue_section_imports">Imports and scans</string>
+    <string name="queue_section_sync">Cloud sync</string>
+
+    <!-- Section above the per-document queue: bulk edits handed to the background. -->
+    <string name="queue_edit_runs">Bulk edits</string>
     <string name="queue_edit_run_progress">%1$d of %2$d documents suggested</string>
     <string name="queue_edit_run_review">Review</string>
     <string name="queue_edit_run_discard">Discard</string>
-    <string name="queue_edit_run_discard_failed">Could not discard the AI edit: %1$s</string>
+    <string name="queue_edit_run_discard_failed">Could not discard the bulk edit: %1$s</string>
 
     <plurals name="queue_edit_run_documents">
-        <item quantity="one">AI edit of %1$d document</item>
-        <item quantity="other">AI edit of %1$d documents</item>
+        <item quantity="one">Bulk edit of %1$d document</item>
+        <item quantity="other">Bulk edit of %1$d documents</item>
     </plurals>
 
     <plurals name="queue_edit_run_failures">
@@ -27,26 +33,43 @@
     </plurals>
 
     <string name="queue_stage_ocr">Text recognition</string>
-    <string name="queue_stage_ai">AI enrichment</string>
+    <string name="queue_stage_ai">Auto-organize</string>
 
     <string name="queue_state_waiting">Waiting</string>
     <string name="queue_state_running">Running</string>
     <string name="queue_state_retrying">Retrying</string>
     <string name="queue_state_failed">Failed</string>
-    <string name="queue_state_ready">Ready to review</string>
+    <string name="queue_state_ready">Suggestions ready</string>
 
     <string name="queue_retry_after">Next try after %1$s</string>
-    <string name="queue_temporary_failure">A processing attempt failed. The app will try again.</string>
-    <string name="queue_failed_help">Processing stopped after repeated failures. Check OCR setup, then retry.</string>
+    <!-- Failure lines, one per pass: text recognition runs on this device, Auto-organize and bulk edits on the assistant's provider. -->
+    <string name="queue_ocr_temporary_failure">Text recognition failed on the last try. The app will try again.</string>
+    <string name="queue_ocr_failed_help">Text recognition stopped after repeated failures. Check the text recognition settings, then retry.</string>
+    <string name="queue_ai_temporary_failure">The assistant could not be reached on the last try. The app will try again.</string>
+    <string name="queue_ai_failed_help">The assistant stopped after repeated failures. Check the assistant settings, then retry.</string>
 
     <plurals name="queue_attempts">
         <item quantity="one">%1$d failed attempt</item>
         <item quantity="other">%1$d failed attempts</item>
     </plurals>
 
-    <plurals name="queue_ai_pending">
-        <item quantity="one">AI enrichment pending: %1$d</item>
-        <item quantity="other">AI enrichment pending: %1$d</item>
+    <!-- The library's one line for text recognition and Auto-organize together; opens Activity. -->
+    <plurals name="queue_processing">
+        <item quantity="one">Processing %1$d document</item>
+        <item quantity="other">Processing %1$d documents</item>
     </plurals>
 
+    <!-- The scan-issues banner's button, which opens the Trash where conflicts and duplicates are sorted out. -->
+    <string name="queue_open_trash">Open trash</string>
+
+    <!-- The cloud sync row on Activity. Why a pass failed is said in the cloud sync settings. -->
+    <string name="queue_sync_never">Not synced yet</string>
+    <string name="queue_sync_running">Syncing…</string>
+    <string name="queue_sync_last">Last synced %1$s</string>
+    <string name="queue_sync_failed">The last sync did not finish. The cloud sync settings say why.</string>
+    <string name="queue_sync_now">Sync now</string>
+    <string name="queue_sync_settings">Cloud sync settings</string>
+    <string name="queue_sync_now_failed">Could not sync: %1$s</string>
+    <string name="queue_sync_unavailable">Cloud sync is not available on this device. The cloud sync settings say why.</string>
+    <string name="queue_sync_not_configured">This library has no cloud folder on this device yet. Choose one in the cloud sync settings.</string>
 </resources>

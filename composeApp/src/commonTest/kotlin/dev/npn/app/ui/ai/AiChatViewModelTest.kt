@@ -10,6 +10,9 @@ import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.AiChatEvent
 import dev.npn.core.ai.AiChatHistoryItem
 import dev.npn.core.ai.AiChatSession
+import dev.npn.core.model.FieldKeys
+import dev.npn.core.testing.doc
+import dev.npn.core.testing.listItem
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
@@ -542,5 +545,40 @@ class AiChatViewModelTest : MainDispatcherTest() {
 
             model.clear()
             model.ui.value.transcript.items shouldBe emptyList()
+        }
+
+    /** A tool row names the document it read by its title, so that document is looked up too. */
+    @Test
+    fun aDocumentAToolReadIsNamedByItsTitle() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val chat = AiChatSession("a", "Bills", 1L)
+            session.aiChat.createdChatSession = chat
+            session.aiChat.savedChatSessions = listOf(chat)
+            session.aiChat.chatTranscripts =
+                mapOf(
+                    chat.id to
+                        listOf(
+                            AiChatHistoryItem.UserTurn("my bill"),
+                            AiChatHistoryItem.ToolUse("get_document", mapOf("docId" to "doc-1"), "text"),
+                        ),
+                )
+            session.documents.singleDoc.value = listItem(doc("doc-1", title = "Electricity bill"))
+            val model = vm(session)
+            collecting(model.ui)
+            advanceUntilIdle()
+
+            model.ui.value.docTitles shouldBe mapOf("doc-1" to "Electricity bill")
+        }
+
+    /** A field search names the field by its label, so the chat keeps the registry's labels. */
+    @Test
+    fun theChatKnowsEachFieldsLabel() =
+        runTest(dispatcher) {
+            val model = vm()
+            collecting(model.ui)
+            advanceUntilIdle()
+
+            model.ui.value.fieldLabels[FieldKeys.CORRESPONDENT] shouldBe "Correspondent"
         }
 }

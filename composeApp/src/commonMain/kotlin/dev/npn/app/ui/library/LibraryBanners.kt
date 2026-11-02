@@ -11,8 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -36,11 +35,9 @@ import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.library_conflict_file_count
 import no_papers_needed.composeapp.generated.resources.library_dismiss
 import no_papers_needed.composeapp.generated.resources.library_duplicate_count
-import no_papers_needed.composeapp.generated.resources.library_ocr_pending
-import no_papers_needed.composeapp.generated.resources.library_ocr_pending_running
 import no_papers_needed.composeapp.generated.resources.library_path_conflict_count
-import no_papers_needed.composeapp.generated.resources.library_review
-import no_papers_needed.composeapp.generated.resources.queue_ai_pending
+import no_papers_needed.composeapp.generated.resources.queue_open_trash
+import no_papers_needed.composeapp.generated.resources.queue_processing
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -49,6 +46,8 @@ import org.jetbrains.compose.resources.stringResource
  * banner ([dismissed] for this scan's report); [onShowDocuments] narrows the library to the documents
  * that could not be moved to their new location, which a scan can report by the thousand (every one
  * a storage-path rule names, on storage that cannot move documents), so the banner only counts them.
+ * What text recognition and Auto-organize still owe is one "Processing N documents" line that opens
+ * Activity ([onOpenQueue]), where any failure is detailed.
  */
 @Composable
 internal fun Banners(
@@ -75,25 +74,13 @@ internal fun Banners(
                 onDismiss = onDismiss,
             )
         }
-        // Both indicators open the same queue view, which is the detail behind either count.
-        val ocr = banners.ocr
-        if (ocr.pending > 0) {
+        // One line for both passes: which pass a document waits on, and why one stopped, is
+        // Activity's to say. A document is owed one pass at a time, so the counts add up.
+        val processing = banners.ocr.pending + banners.enrichmentPending
+        if (processing > 0) {
             QueueStatusIndicator(
-                icon = Icons.Filled.Refresh,
-                label =
-                    pluralStringResource(
-                        if (ocr.running) Res.plurals.library_ocr_pending_running else Res.plurals.library_ocr_pending,
-                        ocr.pending,
-                        ocr.pending,
-                    ),
-                onClick = onOpenQueue,
-            )
-        }
-        val enrichment = banners.enrichmentPending
-        if (enrichment > 0) {
-            QueueStatusIndicator(
-                icon = Icons.Filled.AutoAwesome,
-                label = pluralStringResource(Res.plurals.queue_ai_pending, enrichment, enrichment),
+                icon = Icons.Filled.Sync,
+                label = pluralStringResource(Res.plurals.queue_processing, processing, processing),
                 onClick = onOpenQueue,
             )
         }
@@ -164,14 +151,14 @@ private fun ScanIssuesBanner(
                 }
             }
             if (conflictCount > 0 || duplicateCount > 0) {
-                TextButton(onClick = onGoToTrash) { Text(stringResource(Res.string.library_review)) }
+                TextButton(onClick = onGoToTrash) { Text(stringResource(Res.string.queue_open_trash)) }
             }
             TextButton(onClick = onDismiss) { Text(stringResource(Res.string.library_dismiss)) }
         }
     }
 }
 
-/** One line of "N documents still waiting", clickable through to the queue view behind the count. */
+/** One line of "Processing N documents", clickable through to Activity behind the count. */
 @Composable
 private fun QueueStatusIndicator(
     icon: ImageVector,

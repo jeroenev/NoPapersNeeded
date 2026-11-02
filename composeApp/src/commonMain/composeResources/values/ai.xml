@@ -4,7 +4,7 @@
     <string name="ai_new_chat">New chat</string>
     <string name="ai_delete_chat">Delete chat</string>
     <string name="ai_open_all_documents">Open all documents</string>
-    <string name="ai_assistant_title">AI assistant</string>
+    <string name="ai_assistant_title">Assistant</string>
     <string name="ai_clear_conversation">Clear conversation</string>
     <string name="ai_collapse">Collapse</string>
     <string name="ai_expand">Expand</string>
@@ -12,7 +12,7 @@
     <string name="ai_ask_documents">Ask about your documents</string>
     <string name="ai_stop">Stop</string>
     <string name="ai_send">Send</string>
-    <string name="ai_configure_in_settings">Configure the AI assistant in Settings</string>
+    <string name="ai_configure_in_settings">Set up the assistant in Settings</string>
     <string name="ai_tool_searched_documents">Searched documents: “%1$s”</string>
     <string name="ai_tool_searched_file_names">Searched file names: “%1$s”</string>
     <string name="ai_tool_listed_tagged_documents">Listed documents tagged “%1$s”</string>
@@ -22,7 +22,7 @@
     <string name="ai_unknown_value">(unknown)</string>
     <string name="ai_unspecified_document">a document</string>
 
-    <string name="ai_edit_title">AI edit</string>
+    <string name="ai_edit_title">Bulk edit</string>
     <string name="ai_edit_applying">Applying suggestions...</string>
     <string name="ai_edit_intro">Automate edits across a set of documents</string>
     <string name="ai_edit_task_question">What do you want to do?</string>
@@ -38,7 +38,7 @@
     <string name="ai_edit_scope">Documents</string>
     <string name="ai_edit_scope_selection">Selected documents (%1$d)</string>
     <string name="ai_edit_untagged_documents">Untagged documents</string>
-    <string name="ai_edit_review_queue">Review queue</string>
+    <string name="ai_edit_review_queue">Inbox</string>
     <string name="ai_edit_scope_missing_fields">Missing one of the chosen fields</string>
     <string name="ai_edit_scope_saved_view">Saved view</string>
     <string name="ai_edit_saved_view_choose">Choose a view</string>
@@ -70,13 +70,13 @@
     <string name="ai_edit_range">%1$d-%2$d</string>
     <string name="ai_edit_new_tags_range">%1$d-%2$d (%3$d = existing only)</string>
     <string name="ai_edit_run_where">When to run</string>
-    <string name="ai_edit_run_now">Review now</string>
+    <string name="ai_edit_run_now">Check suggestions now</string>
     <string name="ai_edit_run_now_help">Suggest one batch and review the result here.</string>
     <string name="ai_edit_background">Run in the background</string>
-    <string name="ai_edit_background_help">Covers every document in scope and keeps going after you leave this page. Results wait in the processing queue for you to review; nothing is written without you.</string>
+    <string name="ai_edit_background_help">Covers every document in scope and keeps going after you leave this page. Results wait in Activity for you to review; nothing is written without you.</string>
     <string name="ai_edit_recommended">Recommended</string>
     <string name="ai_edit_start">Start</string>
-    <string name="ai_edit_start_background">Add to queue</string>
+    <string name="ai_edit_start_background">Start in the background</string>
     <string name="ai_edit_summary_tags">tags</string>
     <string name="ai_edit_summary_tag_removals">tag removals</string>
     <string name="ai_edit_summary_prompt">extra instructions</string>
@@ -87,7 +87,7 @@
     <string name="ai_edit_blocked_no_documents">No documents match this scope</string>
     <string name="ai_edit_blocked_no_saved_view">Choose a saved view</string>
     <string name="ai_edit_blocked_loading">Counting documents...</string>
-    <string name="ai_edit_confirm_large_title">Send %1$d documents to the AI?</string>
+    <string name="ai_edit_confirm_large_title">Send %1$d documents to the assistant?</string>
     <string name="ai_edit_confirm_large_message">That is one request per document to your AI provider, which may cost money. Nothing is written to your library without your review.</string>
     <string name="ai_edit_confirm_large_confirm">Send</string>
     <string name="ai_edit_cancel_title">Stop this run?</string>
@@ -98,8 +98,8 @@
     <string name="ai_edit_leave_confirm">Discard</string>
     <string name="ai_edit_leave_stay">Stay</string>
     <string name="ai_edit_change_settings">Change settings</string>
-    <string name="ai_edit_queued_open">Open the queue</string>
-    <string name="ai_edit_queued_review_title">Review AI edit</string>
+    <string name="ai_edit_queued_open">Open Activity</string>
+    <string name="ai_edit_queued_review_title">Review suggestions</string>
     <string name="ai_edit_queued_loading">Loading suggestions...</string>
     <string name="ai_edit_queued_gone">This run is no longer available</string>
     <string name="ai_edit_queued_gone_subtitle">It was already reviewed or discarded, or it is still working.</string>
@@ -112,7 +112,7 @@
     <string name="ai_edit_skip">Skip this batch</string>
     <string name="ai_edit_discard_run">Discard run</string>
     <string name="ai_edit_discard_run_title">Discard this run?</string>
-    <string name="ai_edit_discard_run_message">The suggestions were already generated. Discarding removes this run from the processing queue without writing anything.</string>
+    <string name="ai_edit_discard_run_message">The suggestions were already generated. Discarding removes this bulk edit from Activity without writing anything.</string>
     <string name="ai_edit_open_document">Open document</string>
     <string name="ai_edit_next_batch">Next batch</string>
     <string name="ai_edit_done">Done</string>
@@ -127,16 +127,16 @@
         <item quantity="other">No suggestions (%1$d documents)</item>
     </plurals>
     <plurals name="ai_edit_queued">
-        <item quantity="one">%1$d document queued. You will find the suggestions in the processing queue.</item>
-        <item quantity="other">%1$d documents queued. You will find the suggestions in the processing queue.</item>
+        <item quantity="one">%1$d document queued. Its suggestions will wait for you in Activity.</item>
+        <item quantity="other">%1$d documents queued. Their suggestions will wait for you in Activity.</item>
     </plurals>
     <plurals name="ai_edit_summary_fields">
         <item quantity="one">%1$d field</item>
         <item quantity="other">%1$d fields</item>
     </plurals>
     <plurals name="ai_edit_summary_requests">
-        <item quantity="one">%1$d AI request</item>
-        <item quantity="other">%1$d AI requests</item>
+        <item quantity="one">%1$d request</item>
+        <item quantity="other">%1$d requests</item>
     </plurals>
     <plurals name="ai_edit_cancel_message">
         <item quantity="one">%1$d document already has suggestions; stopping now discards them.</item>
@@ -150,10 +150,10 @@
     <string name="ai_chat_new_failed">Could not start a new chat: %1$s</string>
     <string name="ai_chat_delete_failed">Could not delete the chat: %1$s</string>
     <string name="ai_chat_open_failed">Could not open the conversation: %1$s</string>
-    <string name="ai_edit_review_open_failed">Could not open the AI edit: %1$s</string>
-    <string name="ai_edit_review_discard_failed">Could not discard the AI edit: %1$s</string>
-    <string name="ai_edit_review_queue_drop_failed">Could not remove the finished run from the queue: %1$s</string>
-    <string name="ai_edit_setup_load_failed">Some AI edit options could not be loaded: %1$s</string>
+    <string name="ai_edit_review_open_failed">Could not open the bulk edit: %1$s</string>
+    <string name="ai_edit_review_discard_failed">Could not discard the bulk edit: %1$s</string>
+    <string name="ai_edit_review_queue_drop_failed">Could not remove the finished bulk edit from Activity: %1$s</string>
+    <string name="ai_edit_setup_load_failed">Some bulk edit options could not be loaded: %1$s</string>
     <plurals name="ai_edit_apply_tags_failed">
         <item quantity="one">Could not update the tags of %1$d of %2$d document</item>
         <item quantity="other">Could not update the tags of %1$d of %2$d documents</item>
@@ -179,12 +179,38 @@
         <item quantity="one">Could not get suggestions for %1$d of %2$d document</item>
         <item quantity="other">Could not get suggestions for %1$d of %2$d documents</item>
     </plurals>
-    <string name="ai_edit_queue_failed">Could not queue the AI edit: %1$s</string>
-    <string name="ai_edit_start_failed">Could not start the AI edit: %1$s</string>
+    <string name="ai_edit_queue_failed">Could not start the bulk edit in the background: %1$s</string>
+    <string name="ai_edit_start_failed">Could not start the bulk edit: %1$s</string>
     <string name="ai_chat_empty_title">Ask your documents anything</string>
     <string name="ai_chat_empty_subtitle">Search across your library, compare amounts, or find an expiry date. Answers come from your documents.</string>
     <string name="ai_chat_example_renewal">When does my car insurance renew?</string>
     <string name="ai_chat_example_utilities">Find my latest electricity bill.</string>
     <string name="ai_chat_example_contract">Find the contract I signed with Acme.</string>
     <string name="ai_chat_example_untagged">Who is my landlord?</string>
+    <string name="ai_mode_chat">Chat</string>
+    <string name="ai_mode_bulk_edit">Bulk edit</string>
+    <string name="ai_edit_with_assistant">Edit with assistant</string>
+    <string name="ai_delete_chat_title">Delete this chat?</string>
+    <string name="ai_delete_chat_message">The conversation is removed from this device and cannot be brought back.</string>
+    <string name="ai_clear_conversation_title">Clear this conversation?</string>
+    <string name="ai_clear_conversation_message">Every message in it is removed from this device and cannot be brought back.</string>
+    <string name="ai_clear_conversation_confirm">Clear</string>
+    <string name="ai_tool_listed_fields">Listed fields</string>
+    <string name="ai_tool_searched_field">Searched %1$s for “%2$s”</string>
+    <string name="ai_tool_searched_all_fields">Searched all fields for “%1$s”</string>
+    <string name="ai_tool_listed_field_set">Listed documents with %1$s filled in</string>
+    <string name="ai_tool_field_range">%1$s to %2$s</string>
+    <plurals name="ai_edit_applied">
+        <item quantity="one">Updated %1$d document.</item>
+        <item quantity="other">Updated %1$d documents.</item>
+    </plurals>
+    <plurals name="ai_edit_undone">
+        <item quantity="one">Put %1$d document back as it was.</item>
+        <item quantity="other">Put %1$d documents back as they were.</item>
+    </plurals>
+    <string name="ai_edit_undo_failed">Could not undo the bulk edit: %1$s</string>
+    <plurals name="ai_edit_undo_failed_some">
+        <item quantity="one">Could not undo %1$d of %2$d change</item>
+        <item quantity="other">Could not undo %1$d of %2$d changes</item>
+    </plurals>
 </resources>

@@ -847,7 +847,10 @@ Routes are in `nav/Route.kt`, their composables in `nav/MainNavGraph.kt`. Every 
 starts runs through `nav.from(entry) { … }`, only while its entry is on top, so a double tap
 navigates once. A `TopLevelDestination` is on the rail on wide layouts and in the bottom bar or its
 More sheet on compact ones; its label is the window title, and other screens name theirs in
-`windowTitle`.
+`windowTitle`. The assistant is one shell item (`AssistantDestination`) over two routes, the chat
+and bulk edit, with a segmented control between them. Activity (`Route.Queue`) carries the shell's
+one background-work indicator. On desktop `?` and Ctrl+/ open the keyboard shortcut list
+(`ShortcutsDialog.kt`), which names the keys the screens bind: a key added to a screen goes there too.
 
 ### 7.6 Resources
 

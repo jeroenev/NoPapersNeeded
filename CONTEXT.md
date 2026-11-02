@@ -40,7 +40,7 @@ and discussion; sharpen them here when they drift.
 ## AI editing
 
 - **Edit Run** — a scoped, batched, reviewable AI edit pass over library
-  documents. Owned by `AiEditRun` (core.app.aiedit): holds the run's `processed` docId
+  documents; the UI calls it a **Bulk edit**, the assistant's second mode beside its chat. Owned by `AiEditRun` (core.app.aiedit): holds the run's `processed` docId
   set. One run spans a whole edit session
   (its `processed` set survives cancels and scope changes) and is consumed
   batch by batch via `suggestNextBatch` and `apply`.
@@ -48,9 +48,9 @@ and discussion; sharpen them here when they drift.
   background: `AiEditQueue` (core.app.aiedit) persists the run's request and its
   documents, buys one model call per document on the `QueueDrainer`, and stores
   each answer verbatim. Nothing is written unattended — the run turns into an
-  `EditRunReview` on the processing queue and goes through the same human
+  `EditRunReview` on the processing queue (**Activity** in the UI) and goes through the same human
   Review and Apply as an interactive batch. That is the whole difference from
-  automatic enrichment, which may write because its policy is fixed.
+  automatic enrichment (**Auto-organize** in the UI), which may write because its policy is fixed.
   A queued run covers the WHOLE scope, not one batch: the batch cap exists to
   bound what a human reviews in one sitting, and nobody is sitting. It is the
   default above `AiEditLimits.BACKGROUND_THRESHOLD_DOCS` (composeApp) documents, and the user

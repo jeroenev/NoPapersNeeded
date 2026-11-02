@@ -18,7 +18,7 @@
     <string name="common_settings_ocr_other_language_help">Código do Tesseract para um idioma fora da lista, p. ex. %1$s. O modelo precisa estar instalado.</string>
     <string name="common_settings_ocr_add_language">Adicionar</string>
     <string name="common_settings_ocr_android_help">Texto em qualquer idioma de alfabeto latino é reconhecido automaticamente.</string>
-    <string name="common_settings_ai_assistant">Assistente de IA</string>
+    <string name="common_settings_ai_assistant">Assistente</string>
     <string name="common_settings_trash">Lixeira</string>
     <string name="common_settings_trash_retention_days">Manter na lixeira (dias)</string>
     <string name="common_settings_views">Exibição</string>
@@ -93,7 +93,7 @@
     <string name="common_settings_remove_after_import">Remover arquivos após a importação</string>
     <string name="common_settings_remove_after_import_help">Ativado: os arquivos de origem são excluídos da pasta monitorada assim que estiverem seguros na biblioteca. Desativado: eles permanecem e são simplesmente ignorados como duplicados nas verificações seguintes.</string>
 
-    <string name="common_settings_enable_ai">Ativar assistente de IA</string>
+    <string name="common_settings_enable_ai">Ativar o assistente</string>
     <string name="common_settings_ai_help">Usa um provedor de IA à sua escolha para sugerir etiquetas e responder perguntas sobre seus documentos.</string>
     <string name="common_settings_ai_provider">Provedor: %1$s</string>
     <string name="common_settings_ai_provider_help">As solicitações vão direto a este provedor, com a sua própria chave de API. Escolha Personalizado para qualquer outro servidor compatível com OpenAI.</string>
@@ -110,7 +110,7 @@
     <string name="common_settings_models_loading">Carregando modelos…</string>
     <string name="common_settings_models_error">Não foi possível carregar os modelos: %1$s</string>
     <string name="common_settings_reasoning_assistant">Raciocínio do assistente: %1$s</string>
-    <string name="common_settings_reasoning_edit">Raciocínio da edição com IA: %1$s</string>
+    <string name="common_settings_reasoning_edit">Raciocínio da edição em massa: %1$s</string>
     <string name="common_settings_reasoning_help">Quanto o modelo pode pensar antes de responder. Padrão mantém o comportamento do servidor; nem todo provedor ou modelo aceita todos os níveis.</string>
     <string name="common_settings_reasoning_default">Padrão</string>
     <string name="common_settings_reasoning_none">Desligado</string>
@@ -119,13 +119,13 @@
     <string name="common_settings_reasoning_high">Alto</string>
     <string name="common_settings_ai_request_help">As solicitações enviam o texto dos documentos ao servidor configurado.</string>
     <string name="common_settings_max_suggested_tags">Máximo padrão de etiquetas sugeridas por documento</string>
-    <string name="common_settings_max_suggested_tags_help">Número padrão de etiquetas que o assistente propõe por documento (%1$d-%2$d); pode ser alterado a cada execução na página Edição com IA.</string>
+    <string name="common_settings_max_suggested_tags_help">Número padrão de etiquetas que o assistente propõe por documento (%1$d-%2$d); pode ser alterado a cada execução em Edição em massa.</string>
     <string name="common_settings_max_new_tags">Máximo padrão de novas etiquetas por documento</string>
-    <string name="common_settings_max_new_tags_help">Número padrão de etiquetas totalmente novas (que ainda não estão na sua biblioteca) que o assistente pode propor por documento (%1$d-%2$d; 0 = nunca); pode ser alterado a cada execução na página Edição com IA.</string>
-    <string name="common_settings_ai_auto_on_ocr">Etiquetar e preencher novos documentos automaticamente</string>
+    <string name="common_settings_max_new_tags_help">Número padrão de etiquetas totalmente novas (que ainda não estão na sua biblioteca) que o assistente pode propor por documento (%1$d-%2$d; 0 = nunca); pode ser alterado a cada execução em Edição em massa.</string>
+    <string name="common_settings_ai_auto_on_ocr">Organizar novos documentos automaticamente</string>
     <string name="common_settings_ai_auto_on_ocr_help">Logo após um documento ser digitalizado ou importado e o texto dele ser lido, o assistente aplica etiquetas das que você já tem (nunca cria novas) e preenche todo campo marcado com "Deixar a IA preencher" quando ainda estiver vazio. É aplicado sem revisão, então cada novo documento custa uma solicitação.</string>
-    <string name="common_settings_ai_ocr_auto">Ler o texto com o assistente em vez do OCR no dispositivo</string>
-    <string name="common_settings_ai_ocr_auto_help">Usa o modelo para ler cada página digitalizada, o que lida muito melhor com escrita à mão, tabelas e digitalizações fracas do que o OCR no dispositivo. Isso custa uma solicitação por página, não por documento, e também relê documentos que o OCR no dispositivo já tratou. Documentos com mais de %1$d páginas continuam usando o OCR no dispositivo aqui; você ainda pode pedir a leitura deles um a um. Deixe desativado para ler o texto no dispositivo e usar "Ler texto com o assistente" em documentos individuais.</string>
+    <string name="common_settings_ai_ocr_auto">Ler o texto com o assistente em vez do reconhecimento de texto no dispositivo</string>
+    <string name="common_settings_ai_ocr_auto_help">Usa o modelo para ler cada página digitalizada, o que lida muito melhor com escrita à mão, tabelas e digitalizações fracas do que o reconhecimento de texto no dispositivo. Isso custa uma solicitação por página, não por documento, e também relê documentos que o reconhecimento de texto no dispositivo já tratou. Documentos com mais de %1$d páginas continuam usando o reconhecimento de texto no dispositivo aqui; você ainda pode pedir a leitura deles um a um. Deixe desativado para ler o texto no dispositivo e usar "Ler texto com o assistente" em documentos individuais.</string>
 
     <string name="common_settings_ai_test">Testar esta configuração</string>
     <string name="common_settings_ai_test_help">Verifica três coisas em sequência: se o servidor responde, se o modelo responde a uma pergunta e se ele consegue ler texto na imagem de uma página. Custa duas solicitações bem pequenas. A verificação para na primeira falha, pois tudo o que viria depois falharia pelo mesmo motivo.</string>

@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.outlined.Label
+import androidx.compose.material.icons.automirrored.outlined.ManageSearch
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Add
@@ -47,6 +48,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,6 +65,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.BackTopBar
+import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.ExpandIcon
 import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.expander
@@ -82,22 +85,34 @@ import no_papers_needed.composeapp.generated.resources.ai_chat_example_untagged
 import no_papers_needed.composeapp.generated.resources.ai_chat_example_utilities
 import no_papers_needed.composeapp.generated.resources.ai_chat_history
 import no_papers_needed.composeapp.generated.resources.ai_clear_conversation
+import no_papers_needed.composeapp.generated.resources.ai_clear_conversation_confirm
+import no_papers_needed.composeapp.generated.resources.ai_clear_conversation_message
+import no_papers_needed.composeapp.generated.resources.ai_clear_conversation_title
 import no_papers_needed.composeapp.generated.resources.ai_configure_in_settings
 import no_papers_needed.composeapp.generated.resources.ai_delete_chat
+import no_papers_needed.composeapp.generated.resources.ai_delete_chat_message
+import no_papers_needed.composeapp.generated.resources.ai_delete_chat_title
+import no_papers_needed.composeapp.generated.resources.ai_edit_with_assistant
 import no_papers_needed.composeapp.generated.resources.ai_new_chat
 import no_papers_needed.composeapp.generated.resources.ai_no_output
 import no_papers_needed.composeapp.generated.resources.ai_open_all_documents
 import no_papers_needed.composeapp.generated.resources.ai_send
 import no_papers_needed.composeapp.generated.resources.ai_stop
+import no_papers_needed.composeapp.generated.resources.ai_tool_field_range
+import no_papers_needed.composeapp.generated.resources.ai_tool_listed_field_set
+import no_papers_needed.composeapp.generated.resources.ai_tool_listed_fields
 import no_papers_needed.composeapp.generated.resources.ai_tool_listed_tagged_documents
 import no_papers_needed.composeapp.generated.resources.ai_tool_listed_tags
 import no_papers_needed.composeapp.generated.resources.ai_tool_read_document
 import no_papers_needed.composeapp.generated.resources.ai_tool_read_document_text
+import no_papers_needed.composeapp.generated.resources.ai_tool_searched_all_fields
 import no_papers_needed.composeapp.generated.resources.ai_tool_searched_documents
+import no_papers_needed.composeapp.generated.resources.ai_tool_searched_field
 import no_papers_needed.composeapp.generated.resources.ai_tool_searched_file_names
 import no_papers_needed.composeapp.generated.resources.ai_unknown_value
 import no_papers_needed.composeapp.generated.resources.ai_unspecified_document
-import no_papers_needed.composeapp.generated.resources.library_ai_edit
+import no_papers_needed.composeapp.generated.resources.common_cancel
+import no_papers_needed.composeapp.generated.resources.common_delete
 import org.jetbrains.compose.resources.stringResource
 
 private const val DOC_REF_LABEL_HEX = 8
@@ -112,8 +127,8 @@ fun AiChatScreen(
     onOpenDoc: (String) -> Unit,
     onShowInLibrary: (List<String>) -> Unit,
     onAiEditDocs: (List<String>) -> Unit,
-    /** Hands off to the AI-edit page without preselection; null where the top bar offers no such action. */
-    onAiEdit: (() -> Unit)?,
+    /** Switches the assistant to bulk edit, with no documents handed over. */
+    onBulkEdit: () -> Unit,
     modifier: Modifier = Modifier,
     vm: AiChatViewModel = viewModel { AiChatViewModel(session, createSavedStateHandle()) },
 ) {
@@ -127,6 +142,9 @@ fun AiChatScreen(
     val historySessions = ui.sessions.filterNot { it.id == ui.currentSessionId && items.isEmpty() }
     // A blank chat with a working assistant gets the examples; a busy or loading one keeps the room.
     val showExamples = items.isEmpty() && configured && !ui.loading && !ui.busy
+    // Clearing and deleting cannot be undone: the history lives on this device only.
+    var confirmingClear by rememberSaveable { mutableStateOf(false) }
+    var confirmingDelete by rememberSaveable { mutableStateOf<String?>(null) }
 
     // Keep new output visible by following the bottom — but only while the user is already there,
     // so a position they scrolled to (or one restored by navigation/process death, which shows up
@@ -150,21 +168,21 @@ fun AiChatScreen(
                 clearEnabled = items.isNotEmpty() && !ui.busy && !ui.loading,
                 newSessionEnabled = !ui.busy && !ui.loading,
                 onBack = onBack,
-                onClear = vm::clear,
+                onClear = { confirmingClear = true },
                 onNewSession = vm::newSession,
-                onAiEdit = onAiEdit,
             ) {
                 ChatHistoryMenu(
                     sessions = historySessions,
                     currentSessionId = ui.currentSessionId,
                     enabled = !ui.busy && !ui.loading,
                     onSession = vm::switchSession,
-                    onDeleteSession = vm::deleteSession,
+                    onDeleteSession = { confirmingDelete = it },
                 )
             }
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
+            AssistantModeSwitch(selected = AssistantMode.CHAT, onSelect = { onBulkEdit() })
             // The progress bar only covers the pre-first-token phase; once text streams the
             // growing answer is the progress indicator.
             if (ui.loading || (ui.busy && !hasStreamingText(items))) {
@@ -188,7 +206,7 @@ fun AiChatScreen(
                 // Keyed by session and item, so a row's own state (an expanded tool row) stays with
                 // its item, and never carries over to whatever sits at that position in another chat.
                 items(items, key = { "${ui.currentSessionId}:${it.id}" }) { item ->
-                    TranscriptRow(item, ui.docTitles, onOpenDoc, onShowInLibrary, onAiEditDocs)
+                    TranscriptRow(item, ui.docTitles, ui.fieldLabels, onOpenDoc, onShowInLibrary, onAiEditDocs)
                 }
             }
 
@@ -208,6 +226,58 @@ fun AiChatScreen(
                 ConfigureHint()
             }
         }
+    }
+    ChatConfirmations(
+        confirmingClear = confirmingClear,
+        confirmingDelete = confirmingDelete,
+        onClear = vm::clear,
+        onDelete = vm::deleteSession,
+        onDismiss = {
+            confirmingClear = false
+            confirmingDelete = null
+        },
+    )
+}
+
+/**
+ * The questions before the two actions that cannot be taken back: clearing the open conversation
+ * and deleting a chat ([confirmingDelete] is its id). A chat's history lives only on this device.
+ */
+@Composable
+private fun ChatConfirmations(
+    confirmingClear: Boolean,
+    confirmingDelete: String?,
+    onClear: () -> Unit,
+    onDelete: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    if (confirmingClear) {
+        ConfirmDialog(
+            title = stringResource(Res.string.ai_clear_conversation_title),
+            message = stringResource(Res.string.ai_clear_conversation_message),
+            confirmLabel = stringResource(Res.string.ai_clear_conversation_confirm),
+            dismissLabel = stringResource(Res.string.common_cancel),
+            destructive = true,
+            onConfirm = {
+                onDismiss()
+                onClear()
+            },
+            onDismiss = onDismiss,
+        )
+    }
+    confirmingDelete?.let { sessionId ->
+        ConfirmDialog(
+            title = stringResource(Res.string.ai_delete_chat_title),
+            message = stringResource(Res.string.ai_delete_chat_message),
+            confirmLabel = stringResource(Res.string.common_delete),
+            dismissLabel = stringResource(Res.string.common_cancel),
+            destructive = true,
+            onConfirm = {
+                onDismiss()
+                onDelete(sessionId)
+            },
+            onDismiss = onDismiss,
+        )
     }
 }
 
@@ -266,6 +336,7 @@ private fun chatTitle(
 private fun TranscriptRow(
     item: TranscriptItem,
     docTitles: Map<String, String>,
+    fieldLabels: Map<String, String>,
     onOpenDoc: (String) -> Unit,
     onShowInLibrary: (List<String>) -> Unit,
     onAiEditDocs: (List<String>) -> Unit,
@@ -285,12 +356,12 @@ private fun TranscriptRow(
         }
 
         is TranscriptItem.ToolUse -> {
-            ToolRow(item)
+            ToolRow(item, docTitles, fieldLabels)
         }
     }
 }
 
-/** Back, then the chat's actions; [historyMenu] sits between starting a chat and the AI edit hand-off. */
+/** Back, then the chat's actions; [historyMenu] sits between starting a chat and clearing this one. */
 @Composable
 private fun AiChatTopBar(
     title: String,
@@ -299,8 +370,6 @@ private fun AiChatTopBar(
     onBack: () -> Unit,
     onClear: () -> Unit,
     onNewSession: () -> Unit,
-    /** Hands off to the AI-edit page; null when that page is not offered. */
-    onAiEdit: (() -> Unit)?,
     historyMenu: @Composable () -> Unit,
 ) {
     BackTopBar(title = title, onBack = onBack) {
@@ -311,13 +380,6 @@ private fun AiChatTopBar(
             enabled = newSessionEnabled,
         )
         historyMenu()
-        if (onAiEdit != null) {
-            TooltipIconButton(
-                icon = Icons.Outlined.AutoFixHigh,
-                label = stringResource(Res.string.library_ai_edit),
-                onClick = onAiEdit,
-            )
-        }
         TooltipIconButton(
             icon = Icons.Filled.DeleteSweep,
             label = stringResource(Res.string.ai_clear_conversation),
@@ -411,7 +473,7 @@ private fun AssistantBubble(
                 )
                 AssistChip(
                     onClick = { onAiEditDocs(item.docRefs) },
-                    label = { Text(stringResource(Res.string.library_ai_edit)) },
+                    label = { Text(stringResource(Res.string.ai_edit_with_assistant)) },
                     leadingIcon = { Icon(Icons.Outlined.AutoFixHigh, contentDescription = null) },
                 )
             }
@@ -461,7 +523,11 @@ private fun Bubble(
 }
 
 @Composable
-private fun ToolRow(item: TranscriptItem.ToolUse) {
+private fun ToolRow(
+    item: TranscriptItem.ToolUse,
+    docTitles: Map<String, String>,
+    fieldLabels: Map<String, String>,
+) {
     var expanded by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth()) {
         Row(
@@ -480,7 +546,7 @@ private fun ToolRow(item: TranscriptItem.ToolUse) {
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                toolLabel(item.name, item.args),
+                toolLabel(item.name, item.args, docTitles, fieldLabels),
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -584,18 +650,22 @@ private fun toolIcon(name: String): ImageVector =
         ChatTools.SEARCH_DOCUMENTS, ChatTools.SEARCH_FILENAMES -> Icons.Outlined.Search
         ChatTools.GET_DOCUMENT, ChatTools.GET_DOCUMENT_TEXT -> Icons.Outlined.Description
         ChatTools.LIST_TAGS, ChatTools.DOCUMENTS_WITH_TAG -> Icons.AutoMirrored.Outlined.Label
+        ChatTools.LIST_FIELDS, ChatTools.SEARCH_FIELDS -> Icons.AutoMirrored.Outlined.ManageSearch
         else -> Icons.Outlined.Info
     }
 
 /**
- * A human-readable label for a tool invocation, naming its salient argument from [args]. Kept
- * lenient: a missing argument reads as an unknown value so a row is never blank. Lives in the UI
- * layer since it is purely presentational.
+ * A human-readable label for a tool invocation, naming its salient argument from [args]: a document
+ * by its title from [docTitles] (else a shortened id), a field by its label from [fieldLabels] (else
+ * its key). Kept lenient: a missing argument reads as an unknown value so a row is never blank.
+ * Lives in the UI layer since it is purely presentational.
  */
 @Composable
 internal fun toolLabel(
     name: String,
     args: Map<String, String>,
+    docTitles: Map<String, String> = emptyMap(),
+    fieldLabels: Map<String, String> = emptyMap(),
 ): String =
     when (name) {
         ChatTools.SEARCH_DOCUMENTS -> {
@@ -623,17 +693,25 @@ internal fun toolLabel(
             stringResource(Res.string.ai_tool_listed_tags)
         }
 
+        ChatTools.LIST_FIELDS -> {
+            stringResource(Res.string.ai_tool_listed_fields)
+        }
+
+        ChatTools.SEARCH_FIELDS -> {
+            fieldSearchLabel(args, fieldLabels)
+        }
+
         ChatTools.GET_DOCUMENT -> {
             stringResource(
                 Res.string.ai_tool_read_document,
-                shortId(args[ChatTools.ARG_DOC_ID]),
+                documentName(args[ChatTools.ARG_DOC_ID], docTitles),
             )
         }
 
         ChatTools.GET_DOCUMENT_TEXT -> {
             stringResource(
                 Res.string.ai_tool_read_document_text,
-                shortId(args[ChatTools.ARG_DOC_ID]),
+                documentName(args[ChatTools.ARG_DOC_ID], docTitles),
             )
         }
 
@@ -646,7 +724,39 @@ internal fun toolLabel(
 @Composable
 private fun argument(value: String?): String = value ?: stringResource(Res.string.ai_unknown_value)
 
+/** A document a tool read, by its title once known, else by a shortened id. */
 @Composable
-private fun shortId(value: String?): String =
-    value?.take(DOC_REF_LABEL_HEX)?.takeIf { it.isNotBlank() }
+private fun documentName(
+    docId: String?,
+    docTitles: Map<String, String>,
+): String =
+    docId?.let { docTitles[it] }
+        ?: docId?.take(DOC_REF_LABEL_HEX)?.takeIf { it.isNotBlank() }
         ?: stringResource(Res.string.ai_unspecified_document)
+
+/**
+ * A field search: which field (all of them, or one by its label), and what it looked for: a value,
+ * a range, or only that the field is set.
+ */
+@Composable
+private fun fieldSearchLabel(
+    args: Map<String, String>,
+    fieldLabels: Map<String, String>,
+): String {
+    val field = args[ChatTools.ARG_FIELD]?.takeUnless { it.equals(ChatTools.ANY_FIELD, ignoreCase = true) }
+    val from = args[ChatTools.ARG_FROM]
+    val to = args[ChatTools.ARG_TO]
+    val unknown = stringResource(Res.string.ai_unknown_value)
+    val wanted =
+        if (from != null || to != null) {
+            stringResource(Res.string.ai_tool_field_range, from ?: unknown, to ?: unknown)
+        } else {
+            args[ChatTools.ARG_VALUE]
+        }
+    val label = field?.let { fieldLabels[it] ?: it }
+    return when {
+        label == null -> stringResource(Res.string.ai_tool_searched_all_fields, wanted ?: unknown)
+        wanted == null -> stringResource(Res.string.ai_tool_listed_field_set, label)
+        else -> stringResource(Res.string.ai_tool_searched_field, label, wanted)
+    }
+}

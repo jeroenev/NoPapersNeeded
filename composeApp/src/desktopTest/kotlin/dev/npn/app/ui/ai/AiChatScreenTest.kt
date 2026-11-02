@@ -22,6 +22,8 @@ import dev.npn.app.ui.text
 import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.core.ai.AiChatHistoryItem
 import dev.npn.core.ai.AiChatSession
+import dev.npn.core.testing.doc
+import dev.npn.core.testing.listItem
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
@@ -125,8 +127,123 @@ class AiChatScreenTest : EnglishLocaleTest() {
             scene(FakeLibrarySession(), configured = false).closing {
                 render()
 
-                has { it.text() == "Configure the AI assistant in Settings" } shouldBe true
+                has { it.text() == "Set up the assistant in Settings" } shouldBe true
                 has { it.isEditable() } shouldBe false
+            }
+        }
+
+    /** A field search names the field by its label and what it looked for, not the tool's keys. */
+    @Test
+    fun aFieldSearchRowNamesTheFieldByItsLabel() =
+        onUiThread {
+            val chat = AiChatSession("a", "Letters", 1L)
+            val session =
+                FakeLibrarySession().apply {
+                    aiChat.createdChatSession = chat
+                    aiChat.savedChatSessions = listOf(chat)
+                    aiChat.chatTranscripts =
+                        mapOf(
+                            chat.id to
+                                listOf(
+                                    AiChatHistoryItem.UserTurn("letters from Acme"),
+                                    AiChatHistoryItem.ToolUse("list_fields", emptyMap(), "fields"),
+                                    AiChatHistoryItem.ToolUse(
+                                        "search_fields",
+                                        mapOf("field" to "correspondent", "value" to "Acme"),
+                                        "found one",
+                                    ),
+                                ),
+                        )
+                }
+            scene(session).closing {
+                render()
+
+                has { it.text() == "Listed fields" } shouldBe true
+                has { it.text() == "Searched Correspondent for “Acme”" } shouldBe true
+            }
+        }
+
+    /** A document a tool read is named by its title once the library has it, not by its hash. */
+    @Test
+    fun aReadDocumentRowNamesTheDocumentByItsTitle() =
+        onUiThread {
+            val chat = AiChatSession("a", "Bills", 1L)
+            val docId = "0123456789abcdef"
+            val session =
+                FakeLibrarySession().apply {
+                    aiChat.createdChatSession = chat
+                    aiChat.savedChatSessions = listOf(chat)
+                    aiChat.chatTranscripts =
+                        mapOf(
+                            chat.id to
+                                listOf(
+                                    AiChatHistoryItem.UserTurn("my bill"),
+                                    AiChatHistoryItem.ToolUse("get_document", mapOf("docId" to docId), "text"),
+                                ),
+                        )
+                    documents.singleDoc.value = listItem(doc(docId, title = "Electricity bill"))
+                }
+            scene(session).closing {
+                render()
+                render()
+
+                has { it.text() == "Read document Electricity bill" } shouldBe true
+            }
+        }
+
+    /** Deleting a chat cannot be taken back, so it asks first; only the confirmation deletes it. */
+    @Test
+    fun deletingAChatAsksFirst() =
+        onUiThread {
+            val first = AiChatSession("a", "Taxes", 2L)
+            val second = AiChatSession("b", "Insurance", 1L)
+            val session =
+                FakeLibrarySession().apply {
+                    aiChat.createdChatSession = first
+                    aiChat.savedChatSessions = listOf(first, second)
+                }
+            scene(session).closing {
+                render()
+                click { it.contentDescription() == "Chat history" }
+                render()
+                click { it.contentDescription() == "Delete chat" }
+                render()
+                has { it.text() == "Delete this chat?" } shouldBe true
+                session.aiChat.savedChatSessions shouldContainExactly listOf(first, second)
+
+                click { it.text() == "Delete" }
+                render()
+                render()
+                session.aiChat.savedChatSessions.size shouldBe 1
+            }
+        }
+
+    /** Clearing the conversation asks first too; Cancel keeps it. */
+    @Test
+    fun clearingTheConversationAsksFirst() =
+        onUiThread {
+            val chat = AiChatSession("a", "Taxes", 1L)
+            val session =
+                FakeLibrarySession().apply {
+                    aiChat.createdChatSession = chat
+                    aiChat.savedChatSessions = listOf(chat)
+                    aiChat.chatTranscripts = mapOf(chat.id to toolChat("tax"))
+                }
+            scene(session).closing {
+                render()
+                click { it.contentDescription() == "Clear conversation" }
+                render()
+                has { it.text() == "Clear this conversation?" } shouldBe true
+
+                click { it.text() == "Cancel" }
+                render()
+                session.aiChat.cleared shouldBe emptyList()
+
+                click { it.contentDescription() == "Clear conversation" }
+                render()
+                click { it.text() == "Clear" }
+                render()
+                session.aiChat.cleared shouldContainExactly listOf(chat.id)
             }
         }
 
@@ -151,7 +268,7 @@ class AiChatScreenTest : EnglishLocaleTest() {
                     onOpenDoc = {},
                     onShowInLibrary = {},
                     onAiEditDocs = {},
-                    onAiEdit = null,
+                    onBulkEdit = {},
                 )
             }
         }

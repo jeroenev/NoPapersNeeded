@@ -18,7 +18,7 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 
-/** The background AI edit runs on the queue page. */
+/** Activity: the background bulk edits, problems first, and the cloud sync row. */
 class QueueScreenTest : EnglishLocaleTest() {
     /** Answers already bought are not thrown away in one tap, as the interactive run's Cancel asks too. */
     @Test
@@ -70,7 +70,9 @@ class QueueScreenTest : EnglishLocaleTest() {
 
     private fun scene(session: FakeLibrarySession) =
         hostedScene(WIDTH, HEIGHT) {
-            NpnTheme(darkTheme = false) { QueueScreen(session, onOpenDoc = {}, onOpenEditRun = {}) }
+            NpnTheme(
+                darkTheme = false,
+            ) { QueueScreen(session, onOpenDoc = {}, onOpenEditRun = {}, onOpenCloudSettings = {}) }
         }
 
     private companion object {

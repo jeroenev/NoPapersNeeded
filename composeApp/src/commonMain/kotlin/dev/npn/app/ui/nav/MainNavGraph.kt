@@ -3,7 +3,12 @@ package dev.npn.app.ui.nav
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavBackStackEntry
@@ -18,10 +23,10 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.toRoute
 import dev.npn.app.LibraryUi
 import dev.npn.app.LibraryViewModelHost
+import dev.npn.app.platform.offersKeyboardShortcutList
 import dev.npn.app.ui.ai.AiChatScreen
 import dev.npn.app.ui.ai.AiEditReviewScreen
 import dev.npn.app.ui.ai.AiEditScreen
-import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.PublishWindowTitle
 import dev.npn.app.ui.common.ViewModelStoreLease
 import dev.npn.app.ui.detail.BrowseContext
@@ -47,9 +52,10 @@ import org.jetbrains.compose.resources.stringResource
 
 /**
  * The open library's screens: the navigation shell around the [library]'s nav graph, with the
- * banners that sit above every screen. [queue] is the shell's badge; [snackbar] is the shell's own,
- * for what is reported outside any one screen. [writeBlock] is why the library refuses writes now,
- * if it does, and [writeBlockActions] the ways out of it.
+ * banners that sit above every screen. [queue] is the shell's Activity indicator; [snackbar] is the
+ * shell's own, for what is reported outside any one screen. [writeBlock] is why the library refuses
+ * writes now, if it does, and [writeBlockActions] the ways out of it. Where the platform offers it,
+ * `?` and Ctrl+/ open the keyboard shortcut list from anywhere in the shell.
  */
 @Composable
 internal fun MainNav(
@@ -68,10 +74,15 @@ internal fun MainNav(
     val entry by nav.currentBackStackEntryAsState()
     val destination = entry?.destination
     val topLevel = destination.topLevelDestination()
-    val ai = destination.aiDestination()
+    val assistant = destination.isAssistant()
 
-    PublishWindowTitle(windowTitle(destination, topLevel, ai))
+    PublishWindowTitle(windowTitle(destination, topLevel, assistant))
     val syncStatus by remember(session) { session.sync.status }.collectAsStateWithLifecycle(SyncStatus())
+    var shortcutsOpen by rememberSaveable { mutableStateOf(false) }
+    val openShortcuts: (() -> Unit)? = if (offersKeyboardShortcutList()) ({ shortcutsOpen = true }) else null
+    val shellFocus = remember { FocusRequester() }
+    var shellFocusHeld by remember { mutableStateOf(false) }
+    if (openShortcuts != null) KeepShellFocus(shellFocus, shellFocusHeld)
     WithUpdateBanner(settings, snackbar) {
         WithWriteBlockBanner(writeBlock, writeBlockActions) {
             WithCloudSyncBanner(
@@ -79,17 +90,19 @@ internal fun MainNav(
                 onOpenSettings = { nav.navigate(Route.Settings(SettingsCategoryId.CLOUD_SYNC.routeKey)) },
             ) {
                 WithDraftResumeBanner(onOpen = { docId -> nav.resumeDraft(docId, library.browse) }) {
-                    // The rail carries AI edit on a wide window, so the chat's top bar offers it only on a
-                    // compact one.
-                    val aiEditInSidebar = LocalWindowWidthClass.current.isWide
                     NavigationShell(
                         current = topLevel,
-                        aiCurrent = ai,
+                        assistantCurrent = assistant,
                         aiConfigured = aiConfigured,
                         queue = queue,
                         onNavigate = { dest -> nav.navigateTopLevel(dest) },
-                        onAiChat = { nav.navigateAi(Route.AiChat, restoreState = true) },
-                        onAiEdit = { nav.openAiEdit(library) },
+                        // The item opens the chat; bulk edit is one segment away on its screen.
+                        onAssistant = { if (!assistant) nav.navigateAi(Route.AiChat, restoreState = true) },
+                        onShortcuts = openShortcuts,
+                        modifier =
+                            openShortcuts?.let { open ->
+                                Modifier.shellShortcutKeys(shellFocus, { shellFocusHeld = it }, open)
+                            } ?: Modifier,
                     ) {
                         LibraryViewModelHost(library) {
                             MainNavHost(
@@ -97,7 +110,6 @@ internal fun MainNav(
                                 session = session,
                                 library = library,
                                 aiConfigured = aiConfigured,
-                                showAiEditTopBar = !aiEditInSidebar,
                                 onOpenLibrary = onOpenLibrary,
                             )
                         }
@@ -106,6 +118,7 @@ internal fun MainNav(
             }
         }
     }
+    if (shortcutsOpen) ShortcutsDialog(onDismiss = { shortcutsOpen = false })
 }
 
 /** The shell destination [this] belongs to; null hides the rail/bottom bar. Library before the first entry. */
@@ -115,30 +128,25 @@ private fun NavDestination?.topLevelDestination(): TopLevelDestination? =
         hasRoute<Route.Library>() -> TopLevelDestination.LIBRARY
         hasRoute<Route.TagManagement>() -> TopLevelDestination.TAGS
         hasRoute<Route.Trash>() -> TopLevelDestination.TRASH
-        hasRoute<Route.Queue>() -> TopLevelDestination.QUEUE
+        hasRoute<Route.Queue>() -> TopLevelDestination.ACTIVITY
         hasRoute<Route.Settings>() -> TopLevelDestination.SETTINGS
         else -> null
     }
 
-/** The AI screen [this] is, if any; keeps the rail visible and its AI item selected on wide layouts. */
-private fun NavDestination?.aiDestination(): AiDestination? =
-    when {
-        this == null -> null
-        hasRoute<Route.AiChat>() -> AiDestination.CHAT
-        hasRoute<Route.AiEdit>() -> AiDestination.EDIT
-        else -> null
-    }
+/** Whether [this] is one of the assistant's modes; keeps the shell visible with its item selected. */
+private fun NavDestination?.isAssistant(): Boolean =
+    this != null && (hasRoute<Route.AiChat>() || hasRoute<Route.AiEdit>())
 
 /**
- * The native window title for [destination]: the label the shell gives it ([topLevel], [ai]), the
- * app's name on Library, and null on a document, whose screen publishes the document's own title once
- * it has loaded.
+ * The native window title for [destination]: the label the shell gives it ([topLevel], the
+ * [assistant]), the app's name on Library, and null on a document, whose screen publishes the
+ * document's own title once it has loaded.
  */
 @Composable
 private fun windowTitle(
     destination: NavDestination?,
     topLevel: TopLevelDestination?,
-    ai: AiDestination?,
+    assistant: Boolean,
 ): String? {
     val label =
         when {
@@ -146,12 +154,12 @@ private fun windowTitle(
 
             destination?.hasRoute<Route.AutoMatchRules>() == true -> Res.string.common_rules_title
 
-            // The review of a background run is AI edit's, opened from the queue.
-            destination?.hasRoute<Route.AiEditReview>() == true -> AiDestination.EDIT.label
+            // The review of a background bulk edit is the assistant's, opened from Activity.
+            assistant || destination?.hasRoute<Route.AiEditReview>() == true -> AssistantDestination.label
 
             topLevel == TopLevelDestination.LIBRARY -> Res.string.common_app_name
 
-            else -> topLevel?.label ?: ai?.label ?: Res.string.common_app_name
+            else -> topLevel?.label ?: Res.string.common_app_name
         }
     return stringResource(label)
 }
@@ -172,7 +180,7 @@ private fun NavHostController.resumeDraft(
 
 /**
  * Open [docId]'s detail, paging through [order] with [query] highlighted. A document opened on its
- * own (from the queue, the assistant, an AI edit) gets an order of just itself, so the detail never
+ * own (from Activity, the assistant, a bulk edit) gets an order of just itself, so the detail never
  * shows the previous list's position, neighbours or search.
  */
 private fun NavHostController.openDoc(
@@ -201,7 +209,7 @@ private inline fun NavHostController.from(
     if (currentBackStackEntry == entry) action()
 }
 
-/** Open AI edit on [docIds], handed over through [library]; none opens it to pick its own scope. */
+/** Open bulk edit on [docIds], handed over through [library]; none opens it to pick its own scope. */
 private fun NavHostController.openAiEdit(
     library: LibraryUi,
     docIds: List<String> = emptyList(),
@@ -216,7 +224,6 @@ private fun MainNavHost(
     session: LibrarySession,
     library: LibraryUi,
     aiConfigured: Boolean,
-    showAiEditTopBar: Boolean,
     onOpenLibrary: (location: String) -> Unit,
 ) {
     val nav = library.nav
@@ -228,7 +235,7 @@ private fun MainNavHost(
                 settings = settings,
                 onOpenDoc = { docId, order, query -> nav.from(entry) { openDoc(docId, browse, order, query) } },
                 onTrash = { nav.from(entry) { navigateTopLevel(TopLevelDestination.TRASH) } },
-                onOpenQueue = { nav.from(entry) { navigateTopLevel(TopLevelDestination.QUEUE) } },
+                onOpenQueue = { nav.from(entry) { navigateTopLevel(TopLevelDestination.ACTIVITY) } },
                 onAiEdit =
                     if (aiConfigured) {
                         { docIds -> nav.from(entry) { openAiEdit(library, docIds) } }
@@ -272,13 +279,16 @@ private fun MainNavHost(
             QueueScreen(
                 session = session,
                 // A queued document is a real document; open it on its own, the way the resume banner
-                // does, so Back from detail returns to the queue.
+                // does, so Back from detail returns to Activity.
                 onOpenDoc = { docId -> nav.from(entry) { openDoc(docId, browse) } },
                 onOpenEditRun = { jobId -> nav.from(entry) { navigate(Route.AiEditReview(jobId)) } },
+                onOpenCloudSettings = {
+                    nav.from(entry) { navigate(Route.Settings(SettingsCategoryId.CLOUD_SYNC.routeKey)) }
+                },
             )
         }
         settingsRoutes(nav, settings, session, browse, onOpenLibrary)
-        aiRoutes(library, session, settings, aiConfigured, showAiEditTopBar)
+        aiRoutes(library, session, settings, aiConfigured)
     }
 }
 
@@ -310,13 +320,15 @@ private fun NavGraphBuilder.settingsRoutes(
     }
 }
 
-/** AI assistant + AI tagging destinations (both reached from the library drawer). */
+/**
+ * The assistant's two modes, the chat and bulk edit, which the shell shows as one item with a
+ * segmented control between them; and the review of a background bulk edit, opened from Activity.
+ */
 private fun NavGraphBuilder.aiRoutes(
     library: LibraryUi,
     session: LibrarySession,
     settings: SettingsRepository,
     aiConfigured: Boolean,
-    showAiEditTopBar: Boolean,
 ) {
     val nav = library.nav
     val browse = library.browse
@@ -333,12 +345,7 @@ private fun NavGraphBuilder.aiRoutes(
                 }
             },
             onAiEditDocs = { docIds -> nav.from(entry) { openAiEdit(library, docIds) } },
-            onAiEdit =
-                if (showAiEditTopBar) {
-                    { nav.from(entry) { openAiEdit(library) } }
-                } else {
-                    null
-                },
+            onBulkEdit = { nav.from(entry) { openAiEdit(library) } },
         )
     }
     composable<Route.AiEdit> { entry ->
@@ -348,10 +355,11 @@ private fun NavGraphBuilder.aiRoutes(
             session = session,
             settings = settings,
             onBack = { nav.from(entry) { popBackStack() } },
-            onOpenQueue = { nav.from(entry) { navigateTopLevel(TopLevelDestination.QUEUE) } },
+            onOpenQueue = { nav.from(entry) { navigateTopLevel(TopLevelDestination.ACTIVITY) } },
             // Pushed on top of the review, so coming back finds the batch and its ticked boxes
             // exactly as they were.
             onOpenDoc = { docId -> nav.from(entry) { openDoc(docId, browse) } },
+            onChat = { nav.from(entry) { navigateAi(Route.AiChat, restoreState = true) } },
             selection = selection,
         )
     }

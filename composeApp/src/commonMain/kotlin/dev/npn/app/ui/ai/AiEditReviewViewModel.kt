@@ -69,8 +69,9 @@ class AiEditReviewViewModel(
     private val jobId: String,
     /** What the screen's back-stack entry saves for a restored process; a new one opens it afresh. */
     private val saved: SavedStateHandle = SavedStateHandle(),
-) : ReviewViewModel() {
+) : ReviewViewModel(session.meta, session.documents) {
     private val queue = session.aiEditQueue
+    override val log = session.log
 
     private val _phase = MutableStateFlow<QueuedReviewPhase>(QueuedReviewPhase.Loading)
     val phase: StateFlow<QueuedReviewPhase> = _phase.asStateFlow()

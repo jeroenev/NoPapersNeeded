@@ -64,11 +64,11 @@ class ShellNavigationTest {
             screens() shouldBe listOf("Library")
         }
 
-    /** The library's banners open Trash and Queue as the shell does: Back returns to the library. */
+    /** The library's banners open Trash and Activity as the shell does: Back returns to the library. */
     @Test
     fun aTopLevelScreenSitsOnTheLibraryAndKeepsItsPlace() =
         shell {
-            nav.navigateTopLevel(TopLevelDestination.QUEUE)
+            nav.navigateTopLevel(TopLevelDestination.ACTIVITY)
             settle()
             screens() shouldBe listOf("Library", "Queue")
             nav.popBackStack()
@@ -85,7 +85,7 @@ class ShellNavigationTest {
             screens() shouldBe listOf("Library", "Trash")
         }
 
-    /** However AI edit is left through the shell, its viewmodel goes, and with it a batch it ran. */
+    /** However bulk edit is left through the shell or for the chat, its viewmodel goes, and with it a batch it ran. */
     @Test
     fun leavingAiEditThroughTheShellClearsIt() =
         shell {
@@ -93,9 +93,9 @@ class ShellNavigationTest {
                 listOf(
                     "Library" to { nav.navigateTopLevel(TopLevelDestination.LIBRARY) },
                     "Tags" to { nav.navigateTopLevel(TopLevelDestination.TAGS) },
-                    "Queue" to { nav.navigateTopLevel(TopLevelDestination.QUEUE) },
+                    "Activity" to { nav.navigateTopLevel(TopLevelDestination.ACTIVITY) },
                     "the assistant" to { nav.navigateAi(Route.AiChat, restoreState = true) },
-                    "AI edit afresh" to { nav.navigateAi(Route.AiEdit) },
+                    "bulk edit afresh" to { nav.navigateAi(Route.AiEdit) },
                 )
             for ((way, leave) in ways) {
                 nav.navigateAi(Route.AiEdit)

@@ -56,6 +56,9 @@ internal class FakeAiEditRun : AiEditRun {
     var batch: BatchResult = BatchResult.Empty
     var outcome: ApplyOutcome = ApplyOutcome.NothingSelected
 
+    /** What the Applies answer in turn, before [outcome] takes over. */
+    val outcomes = ArrayDeque<ApplyOutcome>()
+
     /** What [landedSoFar] answers. */
     var landed: ApplyResult = ApplyResult(0, 0, moreRemain = false)
 
@@ -114,7 +117,7 @@ internal class FakeAiEditRun : AiEditRun {
         docs: List<ReviewDoc>,
     ): ApplyOutcome {
         applied += docs
-        return outcome
+        return outcomes.removeFirstOrNull() ?: outcome
     }
 
     override fun landedSoFar(): ApplyResult = landed

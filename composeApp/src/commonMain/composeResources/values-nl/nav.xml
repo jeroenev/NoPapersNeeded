@@ -1,15 +1,74 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Compact bottom bar item opening the sheet with the destinations the bar cannot hold. -->
     <string name="nav_more">Meer</string>
     <string name="nav_more_destinations">Meer bestemmingen</string>
+    <!-- Navigation item for the assistant, with its Chat and Bulk edit modes. -->
+    <string name="nav_assistant">Assistent</string>
 
+    <!-- Read out for the Activity item's running indicator, whose spinning ring means nothing on its own. -->
     <plurals name="nav_queue_pending">
         <item quantity="one">%1$d document wordt nog verwerkt</item>
         <item quantity="other">%1$d documenten worden nog verwerkt</item>
     </plurals>
 
+    <!-- Same item, when a background bulk edit has finished and its suggestions wait to be reviewed. -->
     <plurals name="nav_queue_review">
-        <item quantity="one">%1$d AI-bewerking wacht op controle</item>
-        <item quantity="other">%1$d AI-bewerkingen wachten op controle</item>
+        <item quantity="one">Suggesties klaar voor %1$d bulkbewerking</item>
+        <item quantity="other">Suggesties klaar voor %1$d bulkbewerkingen</item>
     </plurals>
+
+    <!-- Same item, when background work stopped and waits for a retry. -->
+    <plurals name="nav_queue_failed">
+        <item quantity="one">%1$d item in Activiteit vraagt aandacht</item>
+        <item quantity="other">%1$d items in Activiteit vragen aandacht</item>
+    </plurals>
+
+    <!-- Keyboard shortcut list, opened with ? or Ctrl+/ and from the navigation. -->
+    <string name="nav_shortcuts">Sneltoetsen</string>
+    <string name="nav_shortcuts_close">Sluiten</string>
+    <string name="nav_shortcuts_everywhere">Overal</string>
+    <string name="nav_shortcuts_library">Bibliotheek</string>
+    <string name="nav_shortcuts_document">Document</string>
+    <string name="nav_shortcuts_assistant">Chat met de assistent</string>
+    <string name="nav_shortcuts_tips">Tips</string>
+
+    <!-- Key names as printed on the keyboard; translate the modifier and key names as the locale's keyboards label them. -->
+    <string name="nav_shortcut_keys_help">? of Ctrl+/</string>
+    <string name="nav_shortcut_keys_escape">Esc</string>
+    <string name="nav_shortcut_keys_search">/ of Ctrl+F</string>
+    <string name="nav_shortcut_keys_ctrl_o">Ctrl+O</string>
+    <string name="nav_shortcut_keys_ctrl_a">Ctrl+A</string>
+    <string name="nav_shortcut_keys_delete">Delete</string>
+    <string name="nav_shortcut_keys_pages">← → of Page Up / Page Down</string>
+    <string name="nav_shortcut_keys_home_end">Home / End</string>
+    <string name="nav_shortcut_keys_zoom">+ / − / 0</string>
+    <string name="nav_shortcut_keys_ctrl_arrows">Ctrl+← / Ctrl+→</string>
+    <string name="nav_shortcut_keys_ctrl_s">Ctrl+S</string>
+    <string name="nav_shortcut_keys_ctrl_f">Ctrl+F</string>
+    <string name="nav_shortcut_keys_arrows">← →</string>
+    <string name="nav_shortcut_keys_enter">Enter</string>
+    <string name="nav_shortcut_keys_shift_enter">Shift+Enter</string>
+
+    <!-- What each key does, one whole sentence per row. -->
+    <string name="nav_shortcut_show_list">Deze lijst met sneltoetsen tonen.</string>
+    <string name="nav_shortcut_back">Teruggaan of een venster sluiten.</string>
+    <string name="nav_shortcut_library_search">Zoeken in de bibliotheek.</string>
+    <string name="nav_shortcut_library_import">Pdf's importeren.</string>
+    <string name="nav_shortcut_library_select_all">Alle getoonde documenten selecteren.</string>
+    <string name="nav_shortcut_library_delete">De geselecteerde documenten naar de prullenbak verplaatsen.</string>
+    <string name="nav_shortcut_library_escape">De selectie verlaten of de zoekopdracht wissen.</string>
+    <string name="nav_shortcut_doc_page">Naar de vorige of volgende pagina gaan.</string>
+    <string name="nav_shortcut_doc_first_last">Naar de eerste of laatste pagina gaan.</string>
+    <string name="nav_shortcut_doc_zoom">Inzoomen, uitzoomen of de zoom herstellen.</string>
+    <string name="nav_shortcut_doc_next_doc">Het vorige of volgende document openen.</string>
+    <string name="nav_shortcut_doc_save">De wijzigingen aan de gegevens van het document opslaan.</string>
+    <string name="nav_shortcut_doc_find">Een woord zoeken in de tekst van het document.</string>
+    <string name="nav_shortcut_doc_resize">Met de scheidingslijn geselecteerd de pagina of de gegevens breder maken.</string>
+    <string name="nav_shortcut_assistant_send">De vraag versturen.</string>
+    <string name="nav_shortcut_assistant_newline">Een nieuwe regel beginnen in de vraag.</string>
+
+    <string name="nav_shortcut_tip_page_counter">Klik op de paginateller om naar een paginanummer te gaan.</string>
+    <string name="nav_shortcut_tip_long_press">Houd een document ingedrukt om te beginnen met selecteren; klik daarna op andere om ze toe te voegen.</string>
+    <string name="nav_shortcut_tip_right_click">Klik met de rechtermuisknop op een document voor het menu.</string>
 </resources>

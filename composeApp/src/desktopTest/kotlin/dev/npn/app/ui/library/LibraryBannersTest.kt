@@ -13,6 +13,7 @@ import dev.npn.app.ui.has
 import dev.npn.app.ui.onUiThread
 import dev.npn.app.ui.text
 import dev.npn.app.ui.themedScene
+import dev.npn.core.app.OcrStatus
 import dev.npn.core.index.PathConflict
 import dev.npn.core.index.ScanReport
 import io.kotest.matchers.collections.shouldContainExactly
@@ -43,7 +44,7 @@ class LibraryBannersTest : EnglishLocaleTest() {
                 )
             }.closing {
                 render()
-                has { it.text() == "Review" } shouldBe false
+                has { it.text() == "Open trash" } shouldBe false
 
                 click { it.text() == "$UNMOVED documents could not be moved to their new location." }
                 shown.orEmpty() shouldContainExactly List(UNMOVED) { "doc-$it" }
@@ -52,6 +53,27 @@ class LibraryBannersTest : EnglishLocaleTest() {
                 Snapshot.sendApplyNotifications()
                 render()
                 has { it.text()?.contains("could not be moved") == true } shouldBe false
+            }
+        }
+
+    /** Text recognition and Auto-organize are one line, which opens Activity, where a failure is detailed. */
+    @Test
+    fun theBackgroundPassesAreOneLineThatOpensActivity() =
+        onUiThread {
+            var opened = false
+            themedScene(WIDTH, HEIGHT) {
+                Banners(
+                    banners = LibraryBanners(ocr = OcrStatus(pending = 2, running = true), enrichmentPending = 3),
+                    dismissed = false,
+                    onDismiss = {},
+                    onGoToTrash = {},
+                    onShowDocuments = {},
+                    onOpenQueue = { opened = true },
+                )
+            }.closing {
+                render()
+                click { it.text() == "Processing 5 documents" }
+                opened shouldBe true
             }
         }
 

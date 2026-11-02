@@ -55,8 +55,9 @@ import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * The bulk AI-edit page: configure a run, then either watch it suggest and review the result here,
- * or hand it to the background queue and pick the result up from the processing queue later.
+ * The assistant's bulk edit mode: configure a run, then either watch it suggest and review the
+ * result here, or hand it to the background and pick the result up from Activity later. [onChat]
+ * switches the assistant to its chat, asking first when that would discard suggestions, as Back does.
  */
 @Suppress("ViewModelForwarding")
 // The setup and the batch get the viewmodel only as its AiEditSetupActions and ReviewController
@@ -68,6 +69,7 @@ fun AiEditScreen(
     onBack: () -> Unit,
     onOpenQueue: () -> Unit,
     onOpenDoc: (String) -> Unit,
+    onChat: () -> Unit,
     modifier: Modifier = Modifier,
     selection: List<String> = emptyList(),
     vm: AiEditViewModel = viewModel { AiEditViewModel(session, settings, selection, createSavedStateHandle()) },
@@ -78,18 +80,25 @@ fun AiEditScreen(
     // Leaving mid-flight throws away answers that were already paid for, so Back asks first in
     // exactly the phases where that is true: the top-bar arrow, the system gesture and, on
     // desktop, Esc (which the window routes to the same back dispatcher).
-    var confirmingLeave by rememberSaveable { mutableStateOf(false) }
+    var confirmingLeave by rememberSaveable { mutableStateOf<LeaveTo?>(null) }
     val leavingCostsSuggestions = ui.phase.leavingDiscardsSuggestions
-    val requestBack = { if (leavingCostsSuggestions) confirmingLeave = true else onBack() }
-    LeaveGuard(guarding = leavingCostsSuggestions, onBack = { confirmingLeave = true })
+    val leave = { to: LeaveTo ->
+        when {
+            leavingCostsSuggestions -> confirmingLeave = to
+            to == LeaveTo.CHAT -> onChat()
+            else -> onBack()
+        }
+    }
+    LeaveGuard(guarding = leavingCostsSuggestions, onBack = { confirmingLeave = LeaveTo.BACK })
 
     Scaffold(
         modifier = modifier,
-        topBar = { BackTopBar(title = stringResource(Res.string.ai_edit_title), onBack = requestBack) },
+        topBar = { BackTopBar(title = stringResource(Res.string.ai_edit_title), onBack = { leave(LeaveTo.BACK) }) },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         // The one step of the flow that is currently on screen; see [EditPhase].
         Column(Modifier.fillMaxSize().padding(padding)) {
+            AssistantModeSwitch(selected = AssistantMode.BULK_EDIT, onSelect = { leave(LeaveTo.CHAT) })
             when (val phase = ui.phase) {
                 is EditPhase.Idle -> {
                     // Collected only in this phase, so the (possibly library-wide) scope query
@@ -127,7 +136,7 @@ fun AiEditScreen(
             }
         }
     }
-    if (confirmingLeave) {
+    confirmingLeave?.let { to ->
         ConfirmDialog(
             title = stringResource(Res.string.ai_edit_leave_title),
             message = stringResource(Res.string.ai_edit_leave_message),
@@ -135,13 +144,16 @@ fun AiEditScreen(
             dismissLabel = stringResource(Res.string.ai_edit_leave_stay),
             destructive = true,
             onConfirm = {
-                confirmingLeave = false
-                onBack()
+                confirmingLeave = null
+                if (to == LeaveTo.CHAT) onChat() else onBack()
             },
-            onDismiss = { confirmingLeave = false },
+            onDismiss = { confirmingLeave = null },
         )
     }
 }
+
+/** Where leaving bulk edit goes: back where it was opened from, or to the assistant's chat. */
+private enum class LeaveTo { BACK, CHAT }
 
 /**
  * Takes Back — the system gesture or Esc on desktop — while [guarding], calling [onBack] instead

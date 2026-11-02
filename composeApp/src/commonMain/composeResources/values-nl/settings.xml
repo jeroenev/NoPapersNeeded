@@ -18,7 +18,7 @@
     <string name="common_settings_ocr_other_language_help">Tesseract-code voor een taal die er niet tussen staat, bijvoorbeeld %1$s. Het model moet geïnstalleerd zijn.</string>
     <string name="common_settings_ocr_add_language">Toevoegen</string>
     <string name="common_settings_ocr_android_help">Tekst in elke taal met Latijns schrift wordt automatisch herkend.</string>
-    <string name="common_settings_ai_assistant">AI-assistent</string>
+    <string name="common_settings_ai_assistant">Assistent</string>
     <string name="common_settings_trash">Prullenbak</string>
     <string name="common_settings_trash_retention_days">Bewaartermijn prullenbak (dagen)</string>
     <string name="common_settings_views">Weergaven</string>
@@ -93,7 +93,7 @@
     <string name="common_settings_remove_after_import">Bestanden na importeren verwijderen</string>
     <string name="common_settings_remove_after_import_help">Aan: verwijder bronbestanden na veilige import. Uit: laat ze staan en sla ze bij volgende scans over.</string>
 
-    <string name="common_settings_enable_ai">AI-assistent inschakelen</string>
+    <string name="common_settings_enable_ai">Assistent inschakelen</string>
     <string name="common_settings_ai_help">Gebruikt een AI-provider naar keuze om tags voor te stellen en vragen over je documenten te beantwoorden.</string>
     <string name="common_settings_ai_provider">Provider: %1$s</string>
     <string name="common_settings_ai_provider_help">Aanvragen gaan rechtstreeks naar deze provider met je eigen API-sleutel. Kies Custom voor elke andere OpenAI-compatibele server.</string>
@@ -110,7 +110,7 @@
     <string name="common_settings_models_loading">Modellen laden…</string>
     <string name="common_settings_models_error">Kon modellen niet laden: %1$s</string>
     <string name="common_settings_reasoning_assistant">Redeneren assistent: %1$s</string>
-    <string name="common_settings_reasoning_edit">Redeneren AI-bewerken: %1$s</string>
+    <string name="common_settings_reasoning_edit">Redeneren bulkbewerking: %1$s</string>
     <string name="common_settings_reasoning_help">Hoeveel het model mag nadenken voor het antwoordt. Standaard volgt het gedrag van de server; niet elke provider of elk model ondersteunt elk niveau.</string>
     <string name="common_settings_reasoning_default">Standaard</string>
     <string name="common_settings_reasoning_none">Uit</string>
@@ -119,13 +119,13 @@
     <string name="common_settings_reasoning_high">Hoog</string>
     <string name="common_settings_ai_request_help">Bij aanvragen wordt documenttekst naar de ingestelde server verzonden.</string>
     <string name="common_settings_max_suggested_tags">Standaardmaximum voorgestelde tags per document</string>
-    <string name="common_settings_max_suggested_tags_help">Aantal tags dat de assistent per document voorstelt (%1$d-%2$d). Per uitvoering aanpasbaar bij AI-bewerken.</string>
+    <string name="common_settings_max_suggested_tags_help">Aantal tags dat de assistent per document voorstelt (%1$d-%2$d). Per uitvoering aanpasbaar bij Bulkbewerking.</string>
     <string name="common_settings_max_new_tags">Standaardmaximum nieuwe tags per document</string>
-    <string name="common_settings_max_new_tags_help">Aantal nieuwe tags per document (%1$d-%2$d; 0 = nooit). Per uitvoering aanpasbaar bij AI-bewerken.</string>
-    <string name="common_settings_ai_auto_on_ocr">Nieuwe documenten automatisch taggen en invullen</string>
+    <string name="common_settings_max_new_tags_help">Aantal nieuwe tags per document (%1$d-%2$d; 0 = nooit). Per uitvoering aanpasbaar bij Bulkbewerking.</string>
+    <string name="common_settings_ai_auto_on_ocr">Nieuwe documenten automatisch ordenen</string>
     <string name="common_settings_ai_auto_on_ocr_help">Zodra een document is gescand of geïmporteerd en de tekst is uitgelezen, kent de assistent tags toe uit je bestaande tags (nooit nieuwe) en vult elk veld met "Laat AI dit invullen" in zolang het leeg is. Wordt zonder controle toegepast, dus elk nieuw document kost één aanvraag.</string>
-    <string name="common_settings_ai_ocr_auto">Tekst uitlezen met de assistent in plaats van met OCR op het toestel</string>
-    <string name="common_settings_ai_ocr_auto_help">Laat het model elke gescande pagina uitlezen. Dat gaat veel beter om met handschrift, tabellen en vage scans dan OCR op het toestel. Dit kost één aanvraag per pagina, niet per document, en documenten die al met OCR op het toestel zijn uitgelezen worden opnieuw gelezen. Documenten van meer dan %1$d pagina's blijven hier OCR op het toestel gebruiken; je kunt ze nog wel één voor één laten uitlezen. Laat dit uit om tekst op het toestel uit te lezen en gebruik "Tekst uitlezen met assistent" op losse documenten.</string>
+    <string name="common_settings_ai_ocr_auto">Tekst uitlezen met de assistent in plaats van met tekstherkenning op het toestel</string>
+    <string name="common_settings_ai_ocr_auto_help">Laat het model elke gescande pagina uitlezen. Dat gaat veel beter om met handschrift, tabellen en vage scans dan tekstherkenning op het toestel. Dit kost één aanvraag per pagina, niet per document, en documenten die al met tekstherkenning op het toestel zijn uitgelezen worden opnieuw gelezen. Documenten van meer dan %1$d pagina's blijven hier tekstherkenning op het toestel gebruiken; je kunt ze nog wel één voor één laten uitlezen. Laat dit uit om tekst op het toestel uit te lezen en gebruik "Tekst uitlezen met assistent" op losse documenten.</string>
 
     <string name="common_settings_ai_test">Deze instellingen testen</string>
     <string name="common_settings_ai_test_help">Controleert drie dingen op een rij: of de server antwoordt, of het model een vraag beantwoordt, en of het tekst van een pagina-afbeelding kan lezen. Kost twee heel kleine aanvragen. De test stopt bij de eerste fout, omdat alles daarna om dezelfde reden zou mislukken.</string>

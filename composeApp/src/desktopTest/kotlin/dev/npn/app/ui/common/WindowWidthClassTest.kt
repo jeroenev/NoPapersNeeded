@@ -99,12 +99,12 @@ class WindowWidthClassTest {
     private fun Shell(content: @Composable () -> Unit) =
         NavigationShell(
             current = TopLevelDestination.LIBRARY,
-            aiCurrent = null,
+            assistantCurrent = false,
             aiConfigured = false,
             queue = QueueStatus.None,
             onNavigate = {},
-            onAiChat = {},
-            onAiEdit = {},
+            onAssistant = {},
+            onShortcuts = null,
             content = content,
         )
 

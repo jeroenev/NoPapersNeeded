@@ -18,7 +18,7 @@
     <string name="common_settings_ocr_other_language_help">Código de Tesseract para un idioma que no aparece, p. ej. %1$s. Su modelo debe estar instalado.</string>
     <string name="common_settings_ocr_add_language">Añadir</string>
     <string name="common_settings_ocr_android_help">El texto en cualquier idioma con alfabeto latino se reconoce automáticamente.</string>
-    <string name="common_settings_ai_assistant">Asistente de IA</string>
+    <string name="common_settings_ai_assistant">Asistente</string>
     <string name="common_settings_trash">Papelera</string>
     <string name="common_settings_trash_retention_days">Conservación en la papelera (días)</string>
     <string name="common_settings_views">Vistas</string>
@@ -93,7 +93,7 @@
     <string name="common_settings_remove_after_import">Quitar archivos tras la importación</string>
     <string name="common_settings_remove_after_import_help">Si está activado, los archivos de origen se eliminan de la carpeta vigilada en cuanto están a salvo en la biblioteca. Si está desactivado, permanecen y simplemente se omiten como duplicados en análisis posteriores.</string>
 
-    <string name="common_settings_enable_ai">Activar asistente de IA</string>
+    <string name="common_settings_enable_ai">Activar el asistente</string>
     <string name="common_settings_ai_help">Usa un proveedor de IA de tu elección para sugerir etiquetas y responder preguntas sobre tus documentos.</string>
     <string name="common_settings_ai_provider">Proveedor: %1$s</string>
     <string name="common_settings_ai_provider_help">Las solicitudes van directamente a este proveedor con tu propia clave de API. Elige Personalizado para cualquier otro servidor compatible con OpenAI.</string>
@@ -110,7 +110,7 @@
     <string name="common_settings_models_loading">Cargando modelos…</string>
     <string name="common_settings_models_error">No se pudieron cargar los modelos: %1$s</string>
     <string name="common_settings_reasoning_assistant">Razonamiento del asistente: %1$s</string>
-    <string name="common_settings_reasoning_edit">Razonamiento de la edición con IA: %1$s</string>
+    <string name="common_settings_reasoning_edit">Razonamiento de la edición masiva: %1$s</string>
     <string name="common_settings_reasoning_help">Cuánto puede pensar el modelo antes de responder. Predeterminado mantiene el comportamiento del servidor; no todos los proveedores o modelos admiten todos los niveles.</string>
     <string name="common_settings_reasoning_default">Predeterminado</string>
     <string name="common_settings_reasoning_none">Desactivado</string>
@@ -119,13 +119,13 @@
     <string name="common_settings_reasoning_high">Alto</string>
     <string name="common_settings_ai_request_help">Las solicitudes envían el texto del documento al servidor configurado.</string>
     <string name="common_settings_max_suggested_tags">Máx. de etiquetas sugeridas por documento</string>
-    <string name="common_settings_max_suggested_tags_help">Número predeterminado de etiquetas que propone el asistente por documento (%1$d-%2$d); se puede cambiar en cada ejecución en la página Edición con IA.</string>
+    <string name="common_settings_max_suggested_tags_help">Número predeterminado de etiquetas que propone el asistente por documento (%1$d-%2$d); se puede cambiar en cada ejecución en Edición masiva.</string>
     <string name="common_settings_max_new_tags">Máx. de etiquetas nuevas por documento</string>
-    <string name="common_settings_max_new_tags_help">Número predeterminado de etiquetas totalmente nuevas (que aún no están en tu biblioteca) que el asistente puede proponer por documento (%1$d-%2$d; 0 = nunca); se puede cambiar en cada ejecución en la página Edición con IA.</string>
-    <string name="common_settings_ai_auto_on_ocr">Etiquetar y completar documentos nuevos</string>
+    <string name="common_settings_max_new_tags_help">Número predeterminado de etiquetas totalmente nuevas (que aún no están en tu biblioteca) que el asistente puede proponer por documento (%1$d-%2$d; 0 = nunca); se puede cambiar en cada ejecución en Edición masiva.</string>
+    <string name="common_settings_ai_auto_on_ocr">Organizar automáticamente los documentos nuevos</string>
     <string name="common_settings_ai_auto_on_ocr_help">Justo después de escanear o importar un documento y leer su texto, el asistente aplica etiquetas de las que ya tienes (nunca crea nuevas) y rellena cada campo marcado como "Dejar que la IA lo rellene" cuando sigue vacío. Se aplica sin revisión, así que cada documento nuevo cuesta una solicitud.</string>
-    <string name="common_settings_ai_ocr_auto">Leer con el asistente en lugar del OCR local</string>
-    <string name="common_settings_ai_ocr_auto_help">Usa el modelo para leer cada página escaneada, lo que maneja la escritura a mano, las tablas y los escaneos tenues mucho mejor que el OCR del dispositivo. Esto cuesta una solicitud por página, no por documento, y también vuelve a leer los documentos que el OCR del dispositivo ya procesó. Los documentos de más de %1$d páginas siguen usando aquí el OCR del dispositivo; aun así, puedes pedir su lectura uno por uno. Déjalo desactivado para leer el texto en el dispositivo y usar "Leer texto con el asistente" en documentos concretos.</string>
+    <string name="common_settings_ai_ocr_auto">Leer con el asistente en lugar del reconocimiento de texto local</string>
+    <string name="common_settings_ai_ocr_auto_help">Usa el modelo para leer cada página escaneada, lo que maneja la escritura a mano, las tablas y los escaneos tenues mucho mejor que el reconocimiento de texto del dispositivo. Esto cuesta una solicitud por página, no por documento, y también vuelve a leer los documentos que el reconocimiento de texto del dispositivo ya procesó. Los documentos de más de %1$d páginas siguen usando aquí el reconocimiento de texto del dispositivo; aun así, puedes pedir su lectura uno por uno. Déjalo desactivado para leer el texto en el dispositivo y usar "Leer texto con el asistente" en documentos concretos.</string>
 
     <string name="common_settings_ai_test">Probar esta configuración</string>
     <string name="common_settings_ai_test_help">Comprueba tres cosas en orden: que el servidor responde, que el modelo contesta una pregunta y que puede leer texto de la imagen de una página. Cuesta dos solicitudes muy pequeñas. La comprobación se detiene en el primer fallo, ya que todo lo posterior fallaría por la misma razón.</string>

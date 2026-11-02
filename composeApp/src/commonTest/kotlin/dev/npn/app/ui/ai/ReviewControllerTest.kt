@@ -9,6 +9,8 @@ import dev.npn.core.app.aiedit.ApplyOutcome
 import dev.npn.core.app.aiedit.ApplyResult
 import dev.npn.core.app.aiedit.ReviewDoc
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.testing.FakeDocumentRepository
+import dev.npn.core.testing.FakeMetadataWriter
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
@@ -18,6 +20,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.ai_edit_applied
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_fields_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_finish_failed
@@ -44,7 +47,7 @@ private sealed interface Shown {
 private class BatchUnderReview(
     vararg docs: ReviewDoc,
     private val write: suspend (List<ReviewDoc>) -> ApplyOutcome,
-) : ReviewViewModel() {
+) : ReviewViewModel(FakeMetadataWriter(), FakeDocumentRepository()) {
     var shown: Shown = Shown.Review(ReviewBatchState(docs.toList(), emptyDocs = emptyList()))
 
     override val reviewExit = ReviewExit.SKIP_BATCH
@@ -72,6 +75,7 @@ private class BatchUnderReview(
 
 /** Review → Apply as both AI-edit viewmodels share it ([ReviewViewModel.applyReview]). */
 class ReviewControllerTest : MainDispatcherTest() {
+    /** Done shows what landed, and the one message is the Undo of it. */
     @Test
     fun aDoneApplyShowsWhatLanded() =
         runTest(dispatcher) {
@@ -83,7 +87,7 @@ class ReviewControllerTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             model.shown shouldBe Shown.Done(result)
-            messages.shouldBeEmpty()
+            messages shouldContainExactly listOf(uiText(Res.plurals.ai_edit_applied, 1, 1))
         }
 
     /** The writes landed, so the batch is done even when what follows them fails; that is said. */
@@ -102,7 +106,11 @@ class ReviewControllerTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             model.shown shouldBe Shown.Done(result)
-            messages shouldContainExactly listOf(failure(Res.string.ai_edit_more_remain_failed, "database closed"))
+            messages shouldContainExactly
+                listOf(
+                    failure(Res.string.ai_edit_more_remain_failed, "database closed"),
+                    uiText(Res.plurals.ai_edit_applied, 1, 1),
+                )
         }
 
     @Test

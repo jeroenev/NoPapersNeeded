@@ -156,9 +156,9 @@ class AppViewModel(
             .stateIn(viewModelScope, SharingStarted.Eagerly, env.settings.settings.value.aiConfigured)
 
     /**
-     * Outstanding background work in the open library, for the shell's queue badge: the only
-     * standing sign that the app is still busy, or, once a background AI edit finishes, that it is
-     * waiting on the user, while on compact layouts the queue itself sits behind the bar's "More".
+     * Outstanding background work in the open library, for the shell's Activity indicator: the only
+     * standing sign that the app is still busy, or, once a background bulk edit finishes or work
+     * stops, that it is waiting on the user.
      */
     val queueStatus: StateFlow<QueueStatus> =
         env.session

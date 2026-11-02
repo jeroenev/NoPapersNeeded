@@ -6,6 +6,7 @@ import dev.npn.app.MainDispatcherTest
 import dev.npn.app.afterProcessDeath
 import dev.npn.app.collecting
 import dev.npn.app.failure
+import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.aiedit.ApplyOutcome
 import dev.npn.core.app.aiedit.ApplyResult
 import dev.npn.core.app.aiedit.EditRunReview
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.ai_edit_applied
 import no_papers_needed.composeapp.generated.resources.ai_edit_review_discard_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_review_open_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_review_queue_drop_failed
@@ -220,7 +222,10 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
 
             model.phase.value shouldBe QueuedReviewPhase.Done(result)
             messages shouldContainExactly
-                listOf(failure(Res.string.ai_edit_review_queue_drop_failed, "database closed"))
+                listOf(
+                    failure(Res.string.ai_edit_review_queue_drop_failed, "database closed"),
+                    uiText(Res.plurals.ai_edit_applied, 1, 1),
+                )
             review.applied.size shouldBe 1
         }
 

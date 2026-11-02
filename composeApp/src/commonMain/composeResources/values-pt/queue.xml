@@ -1,24 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="queue_title">Fila de processamento</string>
-    <!-- Navigation rail item; kept short to fit beside the other rail labels. -->
-    <string name="queue_nav_label">Fila</string>
-    <string name="queue_help">Documentos que ainda aguardam o reconhecimento de texto ou a análise por IA. O que for concluído some sozinho; o que for interrompido permanece para você tentar de novo.</string>
+    <!-- Activity: the page of what the app does in the background (the processing queue underneath). -->
+    <string name="queue_title">Atividade</string>
+    <!-- Navigation rail and bottom bar item; kept short to fit beside the other labels. -->
+    <string name="queue_nav_label">Atividade</string>
+    <string name="queue_help">Documentos que ainda aguardam o reconhecimento de texto ou a organização automática. O que for concluído some sozinho; o que for interrompido permanece aqui para você tentar de novo.</string>
     <!-- Click label announced for a queue row; the whole row opens the document. -->
     <string name="queue_open_document">Abrir documento</string>
     <string name="queue_empty">Nada mais para processar</string>
-    <string name="queue_empty_subtitle">Todos os documentos foram lidos e analisados.</string>
+    <string name="queue_empty_subtitle">Todos os documentos foram lidos e organizados.</string>
 
-    <!-- Section above the per-document queue: AI edit runs handed to the background. -->
-    <string name="queue_edit_runs">Edições com IA</string>
+    <!-- Section headings on Activity, problems first. -->
+    <string name="queue_section_problems">Precisa de atenção</string>
+    <string name="queue_section_imports">Importações e verificações</string>
+    <string name="queue_section_sync">Sincronização na nuvem</string>
+
+    <!-- Section above the per-document queue: bulk edits handed to the background. -->
+    <string name="queue_edit_runs">Edições em massa</string>
     <string name="queue_edit_run_progress">%1$d de %2$d documentos com sugestões</string>
     <string name="queue_edit_run_review">Revisar</string>
     <string name="queue_edit_run_discard">Descartar</string>
-    <string name="queue_edit_run_discard_failed">Não foi possível descartar a edição com IA: %1$s</string>
+    <string name="queue_edit_run_discard_failed">Não foi possível descartar a edição em massa: %1$s</string>
 
     <plurals name="queue_edit_run_documents">
-        <item quantity="one">Edição com IA de %1$d documento</item>
-        <item quantity="other">Edição com IA de %1$d documentos</item>
+        <item quantity="one">Edição em massa de %1$d documento</item>
+        <item quantity="other">Edição em massa de %1$d documentos</item>
     </plurals>
 
     <plurals name="queue_edit_run_failures">
@@ -27,26 +33,43 @@
     </plurals>
 
     <string name="queue_stage_ocr">Reconhecimento de texto</string>
-    <string name="queue_stage_ai">Análise por IA</string>
+    <string name="queue_stage_ai">Organização automática</string>
 
     <string name="queue_state_waiting">Aguardando</string>
     <string name="queue_state_running">Em execução</string>
     <string name="queue_state_retrying">Nova tentativa</string>
     <string name="queue_state_failed">Falhou</string>
-    <string name="queue_state_ready">Pronto para revisar</string>
+    <string name="queue_state_ready">Sugestões prontas</string>
 
     <string name="queue_retry_after">Próxima tentativa após %1$s</string>
-    <string name="queue_temporary_failure">Uma tentativa de processamento falhou. O app tentará novamente.</string>
-    <string name="queue_failed_help">O processamento parou após falhas repetidas. Verifique a configuração do OCR e tente de novo.</string>
+    <!-- Failure lines, one per pass: text recognition runs on this device, Auto-organize and bulk edits on the assistant's provider. -->
+    <string name="queue_ocr_temporary_failure">O reconhecimento de texto falhou na última tentativa. O app tentará novamente.</string>
+    <string name="queue_ocr_failed_help">O reconhecimento de texto parou após falhas repetidas. Verifique as configurações de reconhecimento de texto e tente de novo.</string>
+    <string name="queue_ai_temporary_failure">Não foi possível falar com o assistente na última tentativa. O app tentará novamente.</string>
+    <string name="queue_ai_failed_help">O assistente parou após falhas repetidas. Verifique as configurações do assistente e tente de novo.</string>
 
     <plurals name="queue_attempts">
         <item quantity="one">%1$d tentativa com falha</item>
         <item quantity="other">%1$d tentativas com falha</item>
     </plurals>
 
-    <plurals name="queue_ai_pending">
-        <item quantity="one">Análise por IA pendente: %1$d</item>
-        <item quantity="other">Análise por IA pendente: %1$d</item>
+    <!-- The library's one line for text recognition and Auto-organize together; opens Activity. -->
+    <plurals name="queue_processing">
+        <item quantity="one">Processando %1$d documento</item>
+        <item quantity="other">Processando %1$d documentos</item>
     </plurals>
 
+    <!-- The scan-issues banner's button, which opens the Trash where conflicts and duplicates are sorted out. -->
+    <string name="queue_open_trash">Abrir a lixeira</string>
+
+    <!-- The cloud sync row on Activity. Why a pass failed is said in the cloud sync settings. -->
+    <string name="queue_sync_never">Ainda não sincronizado</string>
+    <string name="queue_sync_running">Sincronizando…</string>
+    <string name="queue_sync_last">Última sincronização: %1$s</string>
+    <string name="queue_sync_failed">A última sincronização não terminou. As configurações de sincronização na nuvem dizem por quê.</string>
+    <string name="queue_sync_now">Sincronizar agora</string>
+    <string name="queue_sync_settings">Configurações de sincronização na nuvem</string>
+    <string name="queue_sync_now_failed">Não foi possível sincronizar: %1$s</string>
+    <string name="queue_sync_unavailable">A sincronização na nuvem não está disponível neste dispositivo. As configurações de sincronização na nuvem dizem por quê.</string>
+    <string name="queue_sync_not_configured">Esta biblioteca ainda não tem uma pasta na nuvem neste dispositivo. Escolha uma nas configurações de sincronização na nuvem.</string>
 </resources>

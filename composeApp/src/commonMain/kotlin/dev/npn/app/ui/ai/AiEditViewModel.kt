@@ -163,9 +163,10 @@ class AiEditViewModel(
     private val saved: SavedStateHandle = SavedStateHandle(),
     /** The run this page drives, over the documents handed to it. */
     editRun: (handedOver: List<String>) -> AiEditRun = { AiEditRun(session, it) },
-) : ReviewViewModel(),
+) : ReviewViewModel(session.meta, session.documents),
     AiEditSetupActions {
     private val editQueue = session.aiEditQueue
+    override val log = session.log
     private val fieldRegistry = session.fieldRegistry
     private val reviewConfig = session.reviewConfig
     private val savedViewRepository = session.savedViews

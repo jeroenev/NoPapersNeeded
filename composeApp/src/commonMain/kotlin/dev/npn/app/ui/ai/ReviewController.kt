@@ -1,14 +1,27 @@
 package dev.npn.app.ui.ai
 
+import androidx.lifecycle.viewModelScope
+import dev.npn.app.ui.common.BulkFailure
 import dev.npn.app.ui.common.MessagesViewModel
+import dev.npn.app.ui.common.UiMessage
 import dev.npn.app.ui.common.reasonText
 import dev.npn.app.ui.common.uiText
+import dev.npn.core.app.DocListItem
+import dev.npn.core.app.DocumentRepository
+import dev.npn.core.app.MetadataWriter
 import dev.npn.core.app.aiedit.ApplyOutcome
 import dev.npn.core.app.aiedit.ApplyResult
 import dev.npn.core.app.aiedit.ReviewChip
 import dev.npn.core.app.aiedit.ReviewDoc
+import dev.npn.core.util.runLogged
+import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.ai_edit_applied
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_finish_failed
+import no_papers_needed.composeapp.generated.resources.ai_edit_undo_failed
+import no_papers_needed.composeapp.generated.resources.ai_edit_undo_failed_some
+import no_papers_needed.composeapp.generated.resources.ai_edit_undone
+import no_papers_needed.composeapp.generated.resources.library_undo
 import org.jetbrains.compose.resources.StringResource
 
 /**
@@ -26,11 +39,14 @@ enum class ReviewExit {
 
 /**
  * One batch under Review: per-document suggestion chips and field rows awaiting confirmation
- * ([docs]), and the documents the model had nothing for ([emptyDocs]). Nothing is written yet.
+ * ([docs]), and the documents the model had nothing for ([emptyDocs]). Nothing is written yet,
+ * unless an earlier Apply of the batch partly failed: [undo] is what that one wrote, which the
+ * Undo offered once the batch is done puts back with the rest.
  */
 data class ReviewBatchState(
     val docs: List<ReviewDoc>,
     val emptyDocs: List<ReviewDoc>,
+    val undo: ApplyUndo = ApplyUndo.NONE,
 )
 
 /**
@@ -74,10 +90,13 @@ interface ReviewController {
 
 /**
  * The selection half of [ReviewController], written once for both AI-edit viewmodels over the
- * batch that [updateReview] reaches.
+ * batch that [updateReview] reaches, and the Undo of an Apply: [meta] writes it, from the
+ * documents as [documents] reads them just before the Apply.
  */
-abstract class ReviewViewModel :
-    MessagesViewModel(),
+abstract class ReviewViewModel(
+    private val meta: MetadataWriter,
+    private val documents: DocumentRepository,
+) : MessagesViewModel(),
     ReviewController {
     /** Apply [transform] to the batch under review; a no-op while there is none. */
     protected abstract fun updateReview(transform: (List<ReviewDoc>) -> List<ReviewDoc>)
@@ -103,9 +122,9 @@ abstract class ReviewViewModel :
 
     /**
      * Write [batch]'s selected suggestions through [write] and show what that came to: Done with
-     * what landed (a [ApplyOutcome.Done.followUpFailure] reported with [followUpFailed]), or the
-     * Review again — what a Retry still owes, said as such, or the batch as it was when nothing was
-     * selected or the Apply threw, which is reported.
+     * what landed (a [ApplyOutcome.Done.followUpFailure] reported with [followUpFailed]) and an Undo
+     * of all of it, or the Review again — what a Retry still owes, said as such, or the batch as it
+     * was when nothing was selected or the Apply threw, which is reported.
      */
     protected suspend fun applyReview(
         batch: ReviewBatchState,
@@ -114,6 +133,7 @@ abstract class ReviewViewModel :
         showReview: (ReviewBatchState) -> Unit,
         showDone: (ApplyResult) -> Unit,
     ) {
+        val before = snapshot(batch.docs)
         var outcome: ApplyOutcome? = null
         reporting(Res.string.ai_edit_apply_finish_failed) { outcome = write(batch.docs) }
         when (val applied = outcome) {
@@ -124,13 +144,53 @@ abstract class ReviewViewModel :
             is ApplyOutcome.Done -> {
                 applied.followUpFailure?.let { message(uiText(followUpFailed, it.reasonText())) }
                 showDone(applied.result)
+                offerUndo(batch.undo + ApplyUndo.landed(batch.docs, remaining = null, before))
             }
 
             is ApplyOutcome.Retry -> {
                 message(applied.failureText())
-                showReview(batch.copy(docs = applied.remaining))
+                val landed = ApplyUndo.landed(batch.docs, applied.remaining, before)
+                showReview(batch.copy(docs = applied.remaining, undo = batch.undo + landed))
             }
         }
+    }
+
+    /**
+     * The documents [docs] would write to, as they are before the Apply, for the field values an
+     * Undo puts back. When they cannot be read, the values the Review was projected against stand in.
+     */
+    private suspend fun snapshot(docs: List<ReviewDoc>): Map<String, DocListItem> {
+        val ids = docs.filter { it.selectedFieldCount > 0 }.map { it.docId }
+        if (ids.isEmpty()) return emptyMap()
+        return log
+            .runLogged("Reading the documents before applying suggestions") {
+                documents.liveDocuments(ids).associateBy { it.doc.docId }
+            }.orEmpty()
+    }
+
+    /** Say how many documents the Apply changed, with an Undo that puts back what it wrote. */
+    private fun offerUndo(undo: ApplyUndo) {
+        if (undo.isEmpty) return
+        val count = undo.docIds.size
+        message(
+            uiText(Res.plurals.ai_edit_applied, count, count),
+            UiMessage.Action(uiText(Res.string.library_undo)) { undo(undo) },
+        )
+    }
+
+    /** Put back what an Apply wrote; each part that fails is reported, and the rest still goes back. */
+    private fun undo(undo: ApplyUndo) {
+        viewModelScope.launch {
+            val failed = forEachReporting(undo.steps(), UndoFailure) { it.run(meta) }
+            if (failed.isEmpty()) {
+                val count = undo.docIds.size
+                message(uiText(Res.plurals.ai_edit_undone, count, count))
+            }
+        }
+    }
+
+    private companion object {
+        val UndoFailure = BulkFailure(Res.string.ai_edit_undo_failed, Res.plurals.ai_edit_undo_failed_some)
     }
 }
 

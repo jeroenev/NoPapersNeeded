@@ -11,6 +11,7 @@ import dev.npn.core.ai.AiChatHistoryItem
 import dev.npn.core.ai.AiChatSession
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.util.runCatchingCancellable
+import dev.npn.core.util.runLogged
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,9 +32,10 @@ import no_papers_needed.composeapp.generated.resources.common_ai_assistant_unrea
 import org.jetbrains.compose.resources.StringResource
 
 /**
- * Chat UI state. [busy] is true while a request is streaming. [docTitles] resolves cited docRefs to
- * display titles as they appear in the transcript; an unresolved ref falls back to a shortened id at
- * the render site.
+ * Chat UI state. [busy] is true while a request is streaming. [docTitles] resolves the documents the
+ * transcript names (cited docRefs, documents a tool read) to display titles as they appear; an
+ * unresolved ref falls back to a shortened id at the render site. [fieldLabels] names the fields a
+ * tool row searched by their label rather than their key.
  */
 data class AiChatUiState(
     val transcript: ChatTranscript = ChatTranscript.EMPTY,
@@ -43,6 +45,7 @@ data class AiChatUiState(
     /** A session is being created, selected or deleted; sending waits until its history is ready. */
     val loading: Boolean = true,
     val docTitles: Map<String, String> = emptyMap(),
+    val fieldLabels: Map<String, String> = emptyMap(),
 )
 
 /**
@@ -60,6 +63,7 @@ class AiChatViewModel(
 ) : MessagesViewModel() {
     private val ai = session.aiChat
     private val documents = session.documents
+    override val log = session.log
 
     private val _ui = MutableStateFlow(AiChatUiState())
     val ui: StateFlow<AiChatUiState> = _ui.asStateFlow()
@@ -112,6 +116,14 @@ class AiChatViewModel(
                 .map { it.docRefs() }
                 .distinctUntilChanged()
                 .collect { refs -> resolveDocTitles(refs) }
+        }
+        // A tool row names the field it searched; without the registry it shows the key instead.
+        viewModelScope.launch {
+            log.runLogged("Reading the field labels for the chat") {
+                session.fieldRegistry.fields.collect { defs ->
+                    updateUi { it.copy(fieldLabels = defs.associate { def -> def.key to def.label }) }
+                }
+            }
         }
     }
 

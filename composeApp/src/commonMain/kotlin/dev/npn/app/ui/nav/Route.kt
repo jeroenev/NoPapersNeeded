@@ -34,19 +34,22 @@ sealed interface Route {
     data object AutoMatchRules : Route
 
     /**
-     * The processing queue: the OCR / AI-enrichment backlog plus the AI edit runs handed to the
-     * background. A top-level destination ([TopLevelDestination.QUEUE]).
+     * Activity, the processing queue's page: problems first, then the text recognition and
+     * Auto-organize backlog, the bulk edits handed to the background and the cloud sync. A
+     * top-level destination ([TopLevelDestination.ACTIVITY]).
      */
     @Serializable
     data object Queue : Route
 
+    /** The assistant's chat mode ([AssistantDestination]). */
     @Serializable
     data object AiChat : Route
 
+    /** The assistant's bulk edit mode ([AssistantDestination]). */
     @Serializable
     data object AiEdit : Route
 
-    /** Review of one finished background AI edit run, opened from the processing queue. */
+    /** Review of one finished background bulk edit, opened from Activity. */
     @Serializable
     data class AiEditReview(
         val jobId: String,

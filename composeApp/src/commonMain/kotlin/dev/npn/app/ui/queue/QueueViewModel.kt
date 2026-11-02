@@ -3,43 +3,88 @@ package dev.npn.app.ui.queue
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.WhileSubscribedTimeout
+import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.QueuedEditRun
 import dev.npn.core.app.QueuedWork
 import dev.npn.core.app.WorkFacade
+import dev.npn.core.index.IndexProgress
+import dev.npn.core.sync.SyncOutcome
+import dev.npn.core.sync.SyncRunSummary
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_rerun_ocr_failed
 import no_papers_needed.composeapp.generated.resources.queue_edit_run_discard_failed
+import no_papers_needed.composeapp.generated.resources.queue_sync_not_configured
+import no_papers_needed.composeapp.generated.resources.queue_sync_now_failed
+import no_papers_needed.composeapp.generated.resources.queue_sync_unavailable
 
 /**
- * The processing queue: what the OCR and AI-enrichment passes still owe ([items]), and the AI edit
- * runs handed to the background ([editRuns]).
+ * The cloud sync as Activity shows it: a pass [running] now, and how the [lastRun] ended (null
+ * before the first). Why a pass failed, and the engine behind it, stay in the cloud sync settings.
+ */
+data class ActivitySync(
+    val running: Boolean,
+    val lastRun: SyncRunSummary?,
+) {
+    /** The last pass ended early, and none is running to set it right: a problem, shown first. */
+    val failed: Boolean get() = !running && lastRun?.ok == false
+}
+
+/**
+ * Activity, the processing queue's page: what the text recognition and Auto-organize passes still
+ * owe ([items]), the bulk edits handed to the background ([editRuns]), a library scan or import in
+ * progress ([scan]) and the cloud sync ([sync]).
  *
  * Almost read-only — the queues run themselves and nothing here can hurry them. The exceptions are
- * [retry] for a document whose OCR stopped, and [discardEditRun]: an edit run is work the user chose
- * to start, and a run over the wrong scope or against a dead endpoint must be abandonable without
- * waiting for it to finish first. Both report a failure through [messages].
+ * [retry] for a document whose text recognition stopped, [discardEditRun]: a bulk edit is work the
+ * user chose to start, and one over the wrong scope or against a dead endpoint must be abandonable
+ * without waiting for it to finish first; and [syncNow]. Each reports a failure through [messages].
  */
 class QueueViewModel(
     session: LibrarySession,
 ) : MessagesViewModel() {
     private val editQueue = session.aiEditQueue
     private val ocr = session.ocr
+    private val cloud = session.sync
 
     /** Null until the first load, so the screen does not flash "nothing queued" before it. */
     val items: StateFlow<List<QueuedWork>?> =
         session.work.queue.stateIn(viewModelScope, WhileSubscribedTimeout, null)
 
-    /** Queued AI edit runs, finished ones first — see [WorkFacade.editRuns]. Null until the first load. */
+    /** Queued bulk edits, finished ones first — see [WorkFacade.editRuns]. Null until the first load. */
     val editRuns: StateFlow<List<QueuedEditRun>?> =
         session.work.editRuns.stateIn(viewModelScope, WhileSubscribedTimeout, null)
 
-    /** Abandon a queued edit run and the suggestions it has bought so far. */
+    /** The library scan (an import, a rescan) in progress, or null while none is. */
+    val scan: StateFlow<IndexProgress?> =
+        session.ingest.scanProgress.stateIn(viewModelScope, WhileSubscribedTimeout, null)
+
+    /** The cloud sync, or null while this library has no cloud folder on this device. */
+    val sync: StateFlow<ActivitySync?> =
+        combine(cloud.config, cloud.status) { config, status ->
+            if (config.configured) ActivitySync(status.running, status.lastRun) else null
+        }.stateIn(viewModelScope, WhileSubscribedTimeout, null)
+
+    /** Abandon a queued bulk edit and the suggestions it has bought so far. */
     fun discardEditRun(jobId: String) =
         launchReporting(Res.string.queue_edit_run_discard_failed) { editQueue.discardEditRun(jobId) }
 
-    /** Reset a terminal OCR failure to pending and kick its worker through the normal OCR seam. */
+    /** Reset a terminal text recognition failure to pending and kick its worker through the normal seam. */
     fun retry(docId: String) = launchReporting(Res.string.common_rerun_ocr_failed) { ocr.reOcr(docId) }
+
+    /**
+     * Run a cloud sync pass now. How it went shows on the sync row, which points a failure to the
+     * cloud sync settings; only a pass that could not start at all is said here.
+     */
+    fun syncNow() =
+        launchReporting(Res.string.queue_sync_now_failed) {
+            when (cloud.syncNow()) {
+                is SyncOutcome.Unavailable -> message(uiText(Res.string.queue_sync_unavailable))
+                SyncOutcome.NotConfigured -> message(uiText(Res.string.queue_sync_not_configured))
+                is SyncOutcome.Completed, is SyncOutcome.Failed, SyncOutcome.AlreadyRunning -> Unit
+            }
+        }
 }

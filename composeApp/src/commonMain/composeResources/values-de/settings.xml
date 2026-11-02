@@ -18,7 +18,7 @@
     <string name="common_settings_ocr_other_language_help">Tesseract-Code für eine nicht aufgeführte Sprache, z. B. %1$s. Das Modell muss installiert sein.</string>
     <string name="common_settings_ocr_add_language">Hinzufügen</string>
     <string name="common_settings_ocr_android_help">Text in allen Sprachen mit lateinischer Schrift wird automatisch erkannt.</string>
-    <string name="common_settings_ai_assistant">KI-Assistent</string>
+    <string name="common_settings_ai_assistant">Assistent</string>
     <string name="common_settings_trash">Papierkorb</string>
     <string name="common_settings_trash_retention_days">Papierkorb-Aufbewahrung (Tage)</string>
     <string name="common_settings_views">Ansichten</string>
@@ -93,7 +93,7 @@
     <string name="common_settings_remove_after_import">Dateien nach dem Import entfernen</string>
     <string name="common_settings_remove_after_import_help">Wenn aktiviert, werden Quelldateien aus dem überwachten Ordner gelöscht, sobald sie sicher in der Bibliothek liegen. Wenn deaktiviert, bleiben sie und werden bei späteren Scans einfach als Duplikate übersprungen.</string>
 
-    <string name="common_settings_enable_ai">KI-Assistent aktivieren</string>
+    <string name="common_settings_enable_ai">Assistent aktivieren</string>
     <string name="common_settings_ai_help">Nutzt einen KI-Anbieter deiner Wahl, um Tags vorzuschlagen und Fragen zu deinen Dokumenten zu beantworten.</string>
     <string name="common_settings_ai_provider">Anbieter: %1$s</string>
     <string name="common_settings_ai_provider_help">Anfragen gehen mit deinem eigenen API-Schlüssel direkt an diesen Anbieter. Wähle Benutzerdefiniert für jeden anderen OpenAI-kompatiblen Server.</string>
@@ -110,7 +110,7 @@
     <string name="common_settings_models_loading">Modelle werden geladen…</string>
     <string name="common_settings_models_error">Modelle konnten nicht geladen werden: %1$s</string>
     <string name="common_settings_reasoning_assistant">Reasoning des Assistenten: %1$s</string>
-    <string name="common_settings_reasoning_edit">Reasoning der KI-Bearbeitung: %1$s</string>
+    <string name="common_settings_reasoning_edit">Reasoning der Massenbearbeitung: %1$s</string>
     <string name="common_settings_reasoning_help">Wie viel das Modell vor der Antwort nachdenken darf. Standard übernimmt das Verhalten des Servers; nicht jeder Anbieter und nicht jedes Modell unterstützt jede Stufe.</string>
     <string name="common_settings_reasoning_default">Standard</string>
     <string name="common_settings_reasoning_none">Aus</string>
@@ -119,13 +119,13 @@
     <string name="common_settings_reasoning_high">Hoch</string>
     <string name="common_settings_ai_request_help">Anfragen senden Dokumenttext an den konfigurierten Server.</string>
     <string name="common_settings_max_suggested_tags">Max. Tag-Vorschläge pro Dokument</string>
-    <string name="common_settings_max_suggested_tags_help">Standardanzahl der Tags, die der Assistent pro Dokument vorschlägt (%1$d-%2$d); kann pro Durchlauf auf der Seite „KI-Bearbeitung“ geändert werden.</string>
+    <string name="common_settings_max_suggested_tags_help">Standardanzahl der Tags, die der Assistent pro Dokument vorschlägt (%1$d-%2$d); kann pro Durchlauf in der Massenbearbeitung geändert werden.</string>
     <string name="common_settings_max_new_tags">Max. neue Tags pro Dokument</string>
-    <string name="common_settings_max_new_tags_help">Standardanzahl ganz neuer Tags (die noch nicht in deiner Bibliothek sind), die der Assistent pro Dokument vorschlagen darf (%1$d-%2$d; 0 = nie); kann pro Durchlauf auf der Seite „KI-Bearbeitung“ geändert werden.</string>
-    <string name="common_settings_ai_auto_on_ocr">Neue Dokumente automatisch taggen und ausfüllen</string>
+    <string name="common_settings_max_new_tags_help">Standardanzahl ganz neuer Tags (die noch nicht in deiner Bibliothek sind), die der Assistent pro Dokument vorschlagen darf (%1$d-%2$d; 0 = nie); kann pro Durchlauf in der Massenbearbeitung geändert werden.</string>
+    <string name="common_settings_ai_auto_on_ocr">Neue Dokumente automatisch ordnen</string>
     <string name="common_settings_ai_auto_on_ocr_help">Direkt nachdem ein Dokument gescannt oder importiert und sein Text gelesen wurde, wendet der Assistent Tags aus deinen vorhandenen Tags an (er erstellt nie neue) und füllt jedes Feld aus, das mit „Von der KI ausfüllen lassen“ markiert und noch leer ist. Wird ohne Prüfung angewendet, daher kostet jedes neue Dokument eine Anfrage.</string>
-    <string name="common_settings_ai_ocr_auto">Text mit Assistent statt Geräte-OCR lesen</string>
-    <string name="common_settings_ai_ocr_auto_help">Nutzt das Modell, um jede gescannte Seite zu lesen. Das kommt mit Handschrift, Tabellen und blassen Scans deutlich besser zurecht als OCR auf dem Gerät. Das kostet eine Anfrage pro Seite, nicht pro Dokument, und liest auch Dokumente erneut, die die OCR auf dem Gerät schon verarbeitet hat. Dokumente mit mehr als %1$d Seiten nutzen hier weiterhin OCR auf dem Gerät; du kannst sie aber einzeln anfordern. Lass das deaktiviert, um Text auf dem Gerät zu lesen und stattdessen bei einzelnen Dokumenten „Text mit Assistent lesen“ zu nutzen.</string>
+    <string name="common_settings_ai_ocr_auto">Text mit Assistent statt Texterkennung auf dem Gerät lesen</string>
+    <string name="common_settings_ai_ocr_auto_help">Nutzt das Modell, um jede gescannte Seite zu lesen. Das kommt mit Handschrift, Tabellen und blassen Scans deutlich besser zurecht als die Texterkennung auf dem Gerät. Das kostet eine Anfrage pro Seite, nicht pro Dokument, und liest auch Dokumente erneut, die die Texterkennung auf dem Gerät schon verarbeitet hat. Dokumente mit mehr als %1$d Seiten nutzen hier weiterhin die Texterkennung auf dem Gerät; du kannst sie aber einzeln anfordern. Lass das deaktiviert, um Text auf dem Gerät zu lesen und stattdessen bei einzelnen Dokumenten „Text mit Assistent lesen“ zu nutzen.</string>
 
     <string name="common_settings_ai_test">Einrichtung testen</string>
     <string name="common_settings_ai_test_help">Prüft nacheinander drei Dinge: ob der Server antwortet, ob das Modell auf eine Frage antwortet und ob es Text von einem Seitenbild lesen kann. Kostet zwei sehr kleine Anfragen. Die Prüfung stoppt beim ersten Fehler, da alles danach aus demselben Grund scheitern würde.</string>

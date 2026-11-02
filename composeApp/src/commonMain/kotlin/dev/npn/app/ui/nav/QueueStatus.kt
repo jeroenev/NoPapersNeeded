@@ -8,19 +8,25 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 
 /**
- * What the processing queue is carrying, condensed to what a navigation badge can say.
+ * What the background work is carrying, condensed to what the Activity item in the shell can say.
  *
- * Two numbers rather than one, because they ask different things of the user. [pending] is the app
- * being busy — documents owed OCR or enrichment, edit runs still buying suggestions — and clears
- * itself given time and a network. [awaitingReview] is a background AI edit that has finished and
- * will sit in the queue until someone opens or discards it: work that is *owed the user*, and the
- * only reason to interrupt them. The shell shows it in preference to [pending] for that reason.
+ * Three numbers rather than one, because they ask different things of the user. [pending] is the app
+ * being busy — documents owed text recognition or Auto-organize, bulk edits still buying
+ * suggestions — and clears itself given time and a network; it is what the item's running
+ * indicator shows. [failed] is work that stopped and will not start again unless the user retries
+ * it, and [awaitingReview] a background bulk edit that has finished and will sit in Activity until
+ * someone opens or discards it: work that is *owed the user*, and the only reasons to interrupt
+ * them. The badge shows them in preference to [pending], a failure first.
  */
 data class QueueStatus(
     val pending: Int = 0,
     val awaitingReview: Int = 0,
+    val failed: Int = 0,
 ) {
-    val isEmpty: Boolean get() = pending == 0 && awaitingReview == 0
+    val isEmpty: Boolean get() = pending == 0 && awaitingReview == 0 && failed == 0
+
+    /** Whether something is being worked on or waits its turn: the item's running indicator. */
+    val running: Boolean get() = pending > 0
 
     companion object {
         val None = QueueStatus()
@@ -30,12 +36,15 @@ data class QueueStatus(
             editRuns: List<QueuedEditRun>,
         ) = QueueStatus(
             // Entries rather than per-stage counts, so a stage added later still shows up.
-            pending = work.size + editRuns.count { it.state != WorkState.READY },
+            pending =
+                work.count { it.state != WorkState.FAILED } +
+                    editRuns.count { it.state != WorkState.READY && it.state != WorkState.FAILED },
             awaitingReview = editRuns.count { it.state == WorkState.READY },
+            failed = work.count { it.state == WorkState.FAILED } + editRuns.count { it.state == WorkState.FAILED },
         )
     }
 }
 
-/** The [QueueStatus] as the queues change, for the shell's badge. */
+/** The [QueueStatus] as the queues change, for the shell's Activity item. */
 fun WorkFacade.queueStatus(): Flow<QueueStatus> =
     combine(queue, editRuns) { work, editRuns -> QueueStatus.of(work, editRuns) }

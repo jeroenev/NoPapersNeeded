@@ -3,6 +3,7 @@ package dev.npn.app.ui.library
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import dev.npn.app.ui.common.keyShortcuts
 
@@ -28,12 +29,19 @@ internal fun Modifier.libraryKeys(
     keyShortcuts { event ->
         val ctrl = event.isCtrlPressed
         when (event.key) {
-            Key.Slash -> onFocusSearch
+            // Shift+/ types the shortcut list's `?` and Ctrl+/ opens it; both pass on to the shell.
+            Key.Slash -> onFocusSearch.takeUnless { ctrl || event.isShiftPressed }
+
             Key.F -> onFocusSearch.takeIf { ctrl }
+
             Key.O -> onImport.takeIf { ctrl }
+
             Key.A -> onSelectAll.takeIf { ctrl }
+
             Key.Delete -> onRequestTrash.takeIf { selectionMode }
+
             Key.Escape -> if (selectionMode) onClearSelection else onClearQuery
+
             else -> null
         }.takeUnless { searchFocused }
     }

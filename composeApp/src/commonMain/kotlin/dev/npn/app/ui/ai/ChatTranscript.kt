@@ -2,6 +2,7 @@ package dev.npn.app.ui.ai
 
 import dev.npn.core.ai.AiChatEvent
 import dev.npn.core.ai.AiChatHistoryItem
+import dev.npn.core.ai.ChatTools
 import dev.npn.core.ai.extractDocRefs
 
 /** One rendered item in the chat transcript: a user turn, a tool use, or an assistant turn. */
@@ -75,12 +76,19 @@ data class ChatTranscript(
     /** Whether an assistant answer is still streaming in; it cites nothing until it completes. */
     val streaming: Boolean get() = (items.lastOrNull() as? TranscriptItem.AssistantTurn)?.streaming == true
 
-    /** Every document the finished answers cite, in order of first citation. */
+    /**
+     * Every document the transcript names, in order of first mention: what the finished answers
+     * cite, and what the tool calls read, whose rows label a document by its title too.
+     */
     fun docRefs(): List<String> =
         items
-            .filterIsInstance<TranscriptItem.AssistantTurn>()
-            .flatMap { it.docRefs }
-            .distinct()
+            .flatMap { item ->
+                when (item) {
+                    is TranscriptItem.AssistantTurn -> item.docRefs
+                    is TranscriptItem.ToolUse -> listOfNotNull(item.args[ChatTools.ARG_DOC_ID])
+                    is TranscriptItem.UserTurn -> emptyList()
+                }
+            }.distinct()
 
     /** Append a [TranscriptItem.UserTurn] for [text]. */
     fun plusUser(text: String): ChatTranscript = appended(items) { id -> TranscriptItem.UserTurn(id, text) }

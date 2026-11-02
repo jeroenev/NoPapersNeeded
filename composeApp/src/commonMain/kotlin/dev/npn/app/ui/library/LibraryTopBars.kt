@@ -45,8 +45,8 @@ import dev.npn.core.model.ReviewMode
 import dev.npn.core.model.labelFor
 import dev.npn.core.model.reviewMarkerIsAuthoritative
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.ai_edit_with_assistant
 import no_papers_needed.composeapp.generated.resources.common_add_tag
-import no_papers_needed.composeapp.generated.resources.library_ai_edit
 import no_papers_needed.composeapp.generated.resources.library_documents
 import no_papers_needed.composeapp.generated.resources.library_filters
 import no_papers_needed.composeapp.generated.resources.library_mark_needs_review
@@ -176,7 +176,7 @@ internal fun LibrarySelectionTopBar(
         TopBarAction(Icons.AutoMirrored.Filled.LabelOff, stringResource(Res.string.library_remove_tag), onRemoveTag)
     val aiEdit =
         onAiEdit?.let {
-            TopBarAction(Icons.Filled.AutoFixHigh, stringResource(Res.string.library_ai_edit), it)
+            TopBarAction(Icons.Filled.AutoFixHigh, stringResource(Res.string.ai_edit_with_assistant), it)
         }
     val trash = TopBarAction(Icons.Filled.Delete, stringResource(Res.string.library_trash), onRequestTrash)
     // Adding and removing tags and AI edit are all about the selection itself, so a wide bar shows
