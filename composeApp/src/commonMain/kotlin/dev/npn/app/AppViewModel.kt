@@ -7,10 +7,14 @@ import dev.npn.app.di.LibraryUnavailableException
 import dev.npn.app.di.OpenFailureReason
 import dev.npn.app.platform.cloudLibrariesDir
 import dev.npn.app.platform.createLibraryFolder
+import dev.npn.app.ui.common.ImportRequest
 import dev.npn.app.ui.common.MessagesViewModel
+import dev.npn.app.ui.common.UiMessage
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.asUiText
 import dev.npn.app.ui.common.clearThumbCache
+import dev.npn.app.ui.common.importBatch
+import dev.npn.app.ui.common.offerSearchTip
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.nav.QueueStatus
 import dev.npn.app.ui.nav.queueStatus
@@ -20,8 +24,6 @@ import dev.npn.app.ui.settings.CloudSetupState
 import dev.npn.app.ui.settings.newCloudRemoteName
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.RebuildOutcome
-import dev.npn.core.app.importAll
-import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
 import dev.npn.core.index.MetadataWriteBlocked
 import dev.npn.core.index.WriteBlock
@@ -29,6 +31,7 @@ import dev.npn.core.settings.aiConfigured
 import dev.npn.core.sync.CloudSetup
 import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
+import dev.npn.core.util.runLogged
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -53,6 +56,7 @@ import no_papers_needed.composeapp.generated.resources.library_import_failed
 import no_papers_needed.composeapp.generated.resources.library_rebuild_failed
 import no_papers_needed.composeapp.generated.resources.library_rebuild_not_completed
 import no_papers_needed.composeapp.generated.resources.library_refresh_failed
+import no_papers_needed.composeapp.generated.resources.library_show
 
 /** A library that did not open, as the user is told: a localized [reason], with [details] for support. */
 data class OpenFailure(
@@ -355,17 +359,32 @@ class AppViewModel(
     fun dismissFailure() = phase.update { if (it is Phase.Ready) Phase.Ready() else it }
 
     /**
-     * Import [files] (a file and the name to give it) dropped on the window, whatever screen is
-     * showing, and say what became of them.
+     * Import the files dropped on the window ([request]), whatever screen is showing, and say what
+     * became of them, with a Show action handing the new documents to [onShow]; once their text is
+     * read, offer the search tip.
      */
-    fun importFiles(files: List<Pair<ExternalSource, String>>) {
+    fun importFiles(
+        request: ImportRequest,
+        onShow: (docIds: List<String>) -> Unit,
+    ) {
         val session = env.session.value
         if (session == null) {
             message(uiText(Res.string.library_drop_needs_library))
             return
         }
         launchReporting(Res.string.library_import_failed) {
-            message(session.ingest.importAll(files).asUiText())
+            val batch = session.ingest.importBatch(request)
+            message(
+                batch.asUiText(),
+                batch.imported.takeIf { it.isNotEmpty() }?.let { ids ->
+                    UiMessage.Action(uiText(Res.string.library_show)) { onShow(ids) }
+                },
+            )
+            viewModelScope.launch {
+                session.log.runLogged("The search tip") {
+                    offerSearchTip(env.settings, session.documents, batch.imported, ::message)
+                }
+            }
         }
     }
 }

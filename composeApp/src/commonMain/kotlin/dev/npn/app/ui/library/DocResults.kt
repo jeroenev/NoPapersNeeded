@@ -15,28 +15,25 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ZoomIn
-import androidx.compose.material.icons.filled.ZoomOut
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.EchoTracker
-import dev.npn.app.ui.common.FloatingControls
 import dev.npn.app.ui.common.ScrollToTopOnNewResults
 import dev.npn.app.ui.common.ScrollbarWidth
-import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.VerticalScrollbar
 import dev.npn.app.ui.common.ctrlScrollZoom
 import dev.npn.app.ui.common.isLandscape
@@ -45,10 +42,6 @@ import dev.npn.core.app.DocListItem
 import dev.npn.core.settings.GridSizing
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
-import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.library_larger_grid_items
-import no_papers_needed.composeapp.generated.resources.library_smaller_grid_items
-import org.jetbrains.compose.resources.stringResource
 import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.roundToInt
@@ -80,12 +73,51 @@ internal fun gridWidthForColumns(
 ): Float = floor((available + spacing) / columns - spacing)
 
 /**
+ * The grid's item size as the view menu steps it: [zoomIn] (larger items, one column fewer) and
+ * [zoomOut], each enabled while the grid has a column to give or take. The [DocGrid] on screen
+ * answers them; with none, they do nothing and both are disabled.
+ */
+@Stable
+internal class GridZoom {
+    var canZoomIn by mutableStateOf(false)
+        private set
+    var canZoomOut by mutableStateOf(false)
+        private set
+    private var step: ((Int) -> Unit)? = null
+
+    fun zoomIn() {
+        step?.invoke(-1)
+    }
+
+    fun zoomOut() {
+        step?.invoke(1)
+    }
+
+    /** What the grid on screen can do now, and how it steps its column count. */
+    fun attach(
+        canZoomIn: Boolean,
+        canZoomOut: Boolean,
+        step: (Int) -> Unit,
+    ) {
+        this.canZoomIn = canZoomIn
+        this.canZoomOut = canZoomOut
+        this.step = step
+    }
+
+    fun detach() {
+        canZoomIn = false
+        canZoomOut = false
+        step = null
+    }
+}
+
+/**
  * Thumbnail grid with direct-manipulation sizing between [GridSizing.MIN_COLUMN_WIDTH] and
  * [GridSizing.MAX_COLUMN_WIDTH] dp: pinch (touch) resizes continuously; ctrl+scroll (desktop)
- * and the overlay zoom buttons step exactly one column per notch/press at the current grid
- * width, since with adaptive cells the column count is the only visible state. Changes preview
- * live via local state and are committed (debounced) through [onColumnWidthChange], which
- * persists them in settings.
+ * and the view menu's size items step exactly one column per notch/press at the current grid
+ * width, since with adaptive cells the column count is the only visible state. The view menu
+ * steps it the same way, through [zoom]. Changes preview live via local state and are committed
+ * (debounced) through [onColumnWidthChange], which persists them in settings.
  */
 @OptIn(FlowPreview::class)
 @Composable
@@ -96,6 +128,7 @@ internal fun DocGrid(
     selected: Set<String>,
     columnWidth: Int,
     onColumnWidthChange: (Int) -> Unit,
+    zoom: GridZoom,
 ) {
     // Live cell width; re-seeded when the persisted value changes elsewhere (the stored value
     // arriving, another window), never by the late echo of one of its own commits.
@@ -161,6 +194,16 @@ internal fun DocGrid(
             width = (width * factor).coerceIn(minWidth, maxWidth)
         }
 
+        // The view menu's size items step the grid as shown now; zoom in = one column fewer.
+        SideEffect {
+            zoom.attach(
+                canZoomIn = columns > fewestColumns,
+                canZoomOut = columns < mostColumns,
+                ::stepColumns,
+            )
+        }
+        DisposableEffect(zoom) { onDispose(zoom::detach) }
+
         // Accumulates fractional touchpad deltas up to one notch; a mouse wheel notch arrives as a
         // single event with |delta| >= 1 and steps exactly one column regardless of its magnitude.
         val scrollAccumulated = remember { mutableFloatStateOf(0f) }
@@ -194,16 +237,6 @@ internal fun DocGrid(
             )
 
             VerticalScrollbar(gridState)
-
-            // On-screen equivalent of the gestures (discoverability + accessibility).
-            // Bottom-start so it doesn't collide with the FAB.
-            GridZoomControls(
-                canZoomOut = columns < mostColumns,
-                canZoomIn = columns > fewestColumns,
-                onZoomOut = { stepColumns(1) },
-                onZoomIn = { stepColumns(-1) },
-                modifier = Modifier.align(Alignment.BottomStart).padding(12.dp),
-            )
         }
     }
 }
@@ -235,30 +268,6 @@ private fun DocGridCards(
         items(docs, key = { it.doc.docId }) { item ->
             DocGridCard(item, wiring, selectionMode, selected = item.doc.docId in selected)
         }
-    }
-}
-
-@Composable
-private fun GridZoomControls(
-    canZoomOut: Boolean,
-    canZoomIn: Boolean,
-    onZoomOut: () -> Unit,
-    onZoomIn: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    FloatingControls(modifier) {
-        TooltipIconButton(
-            icon = Icons.Filled.ZoomOut,
-            label = stringResource(Res.string.library_smaller_grid_items),
-            onClick = onZoomOut,
-            enabled = canZoomOut,
-        )
-        TooltipIconButton(
-            icon = Icons.Filled.ZoomIn,
-            label = stringResource(Res.string.library_larger_grid_items),
-            onClick = onZoomIn,
-            enabled = canZoomIn,
-        )
     }
 }
 

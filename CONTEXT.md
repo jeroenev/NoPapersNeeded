@@ -37,6 +37,16 @@ and discussion; sharpen them here when they drift.
 - **System property** (`SystemProperty`) — per-document state the app owns rather
   than the user: `reviewed`, `ocrEngine` and `storagePath`. Written as `prop-set`; never a field.
 
+## Library
+
+- **Review queue** — the documents still waiting for the user, by the library's
+  `ReviewMode`: the untagged ones (`UNTAGGED_ONLY`), or with the inbox workflow
+  (`INBOX_WORKFLOW`) the ones not marked reviewed or untagged
+  (`reviewQueueFilter`, `observeReviewQueueCount`). With the inbox workflow the
+  user-facing name is **Inbox** ("Needs review · N" on the library's chip), and
+  without it "Untagged documents"; never "review queue", which only code and the
+  AI edit scope (`REVIEW_QUEUE`) keep. Not the AI edit **Review** below.
+
 ## AI editing
 
 - **Edit Run** — a scoped, batched, reviewable AI edit pass over library
@@ -67,7 +77,8 @@ and discussion; sharpen them here when they drift.
   `AiEditRun.docsFor(scopeKey)` —
   the single definition of what each scope means, shared by the preview count
   and the run itself.
-- **Review** — the phase where suggested edits await human acceptance. The
+- **Review** — the phase where suggested edits await human acceptance (not the
+  library's review queue, which users know as the Inbox). The
   **pre-select policy** is domain logic in core, owned by `ReviewProjector`:
   additions of existing-vocabulary tags are pre-selected; new tags and all
   removals are pre-deselected; metadata fill-ins (empty current value) are

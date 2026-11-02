@@ -26,8 +26,8 @@ import no_papers_needed.composeapp.generated.resources.library_doc_ids_filter
 import no_papers_needed.composeapp.generated.resources.library_field_equals
 import no_papers_needed.composeapp.generated.resources.library_field_from
 import no_papers_needed.composeapp.generated.resources.library_field_to
+import no_papers_needed.composeapp.generated.resources.library_inbox
 import no_papers_needed.composeapp.generated.resources.library_remove_filter
-import no_papers_needed.composeapp.generated.resources.library_review_queue
 import no_papers_needed.composeapp.generated.resources.library_tag_filter_all
 import no_papers_needed.composeapp.generated.resources.library_tag_filter_any
 import no_papers_needed.composeapp.generated.resources.library_tag_filter_none
@@ -125,6 +125,6 @@ private fun chipLabel(
         }
 
         ActiveFilterChip.ReviewQueue -> {
-            stringResource(Res.string.library_review_queue)
+            stringResource(Res.string.library_inbox)
         }
     }

@@ -129,5 +129,5 @@
         <item quantity="one">Documents in the trash are permanently deleted after %1$d day.</item>
         <item quantity="other">Documents in the trash are permanently deleted after %1$d days.</item>
     </plurals>
-    <string name="common_trash_retention_help_immediate">Documents in the trash are permanently deleted at the next cleanup.</string>
+    <string name="common_trash_retention_help_immediate">Documents in the trash are permanently deleted at the next cleanup, which runs when the library is opened or its folder changes.</string>
 </resources>

@@ -258,10 +258,12 @@ private fun TrashScaffold(
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            TrashTabs(tab, state, onSelectTab)
+            // The tabs wait for the first load with the lists: which repair tabs show depends on it,
+            // so a row drawn before would grow its Duplicates and Missing tabs a moment later.
             if (loading) {
                 LoadingIndicator()
             } else {
+                TrashTabs(tab, state, onSelectTab)
                 TrashTabContent(tab, state, content, writes, onConfirm)
             }
         }

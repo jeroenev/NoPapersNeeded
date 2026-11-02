@@ -21,6 +21,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -46,8 +47,11 @@ import dev.npn.app.ui.common.testTagsAsResourceIds
 import dev.npn.app.ui.detail.BrowseContext
 import dev.npn.app.ui.detail.DocumentDraftHost
 import dev.npn.app.ui.detail.DocumentDrafts
+import dev.npn.app.ui.library.DropOverlay
 import dev.npn.app.ui.nav.MainNav
+import dev.npn.app.ui.nav.TopLevelDestination
 import dev.npn.app.ui.nav.WriteBlockActions
+import dev.npn.app.ui.nav.navigateTopLevel
 import dev.npn.app.ui.onboarding.OnboardingScreen
 import dev.npn.app.ui.onboarding.OpenFailureMessage
 import dev.npn.app.ui.onboarding.RestoreFailedScreen
@@ -88,6 +92,12 @@ internal class LibraryUi(
     val browse = held.handover.browse
     val libraryFilter = held.handover.libraryFilter
     val aiEditSelection = held.handover.aiEditSelection
+
+    /** Show the library narrowed to [docIds], from whatever screen is showing (a drop's "Show"). */
+    fun showDocuments(docIds: List<String>) {
+        libraryFilter.set(LibraryFilter(docIds = docIds))
+        nav.navigateTopLevel(TopLevelDestination.LIBRARY)
+    }
 }
 
 /**
@@ -217,8 +227,14 @@ private fun AppRoot(
     LocalizedApp(language, (state as? AppState.Open)?.session, env.appScope) { library ->
         AppSurface {
             val snackbar = rememberSnackbarMessages(vm.messages)
-            // Files dropped on the desktop window import into whichever library is open, from any screen.
-            LaunchedEffect(vm) { DesktopBridge.droppedFiles.receiveAsFlow().collect { vm.importFiles(it) } }
+            // Files dropped on the desktop window import into whichever library is open, from any screen;
+            // the message's Show opens the library on the new documents.
+            val currentLibrary by rememberUpdatedState(library)
+            LaunchedEffect(vm) {
+                DesktopBridge.droppedFiles.receiveAsFlow().collect { request ->
+                    vm.importFiles(request) { docIds -> currentLibrary?.showDocuments(docIds) }
+                }
+            }
             // Without a library there are no screens to title the window; the app's name, in its language.
             if (state !is AppState.Open) PublishWindowTitle(stringResource(Res.string.common_app_name))
 
@@ -288,6 +304,9 @@ private fun AppRoot(
                         current.failure?.let { OpenFailedDialog(it, onDismiss = vm::dismissFailure) }
                     }
                 }
+                // Files dragged over the desktop window: the whole window is the drop target.
+                val dragging by DesktopBridge.dragging.collectAsStateWithLifecycle()
+                if (dragging) DropOverlay()
                 SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
             }
         }

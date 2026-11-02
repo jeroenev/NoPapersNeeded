@@ -5,6 +5,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.platform.ScanResult
 import dev.npn.app.ui.common.BulkFailure
+import dev.npn.app.ui.common.ImportRequest
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiMessage
 import dev.npn.app.ui.common.UiText
@@ -13,6 +14,8 @@ import dev.npn.app.ui.common.activeSearchToken
 import dev.npn.app.ui.common.asUiText
 import dev.npn.app.ui.common.colorsByName
 import dev.npn.app.ui.common.completeActiveSearchToken
+import dev.npn.app.ui.common.importBatch
+import dev.npn.app.ui.common.offerSearchTip
 import dev.npn.app.ui.common.restored
 import dev.npn.app.ui.common.saveUiState
 import dev.npn.app.ui.common.text
@@ -30,7 +33,6 @@ import dev.npn.core.app.TagInfo
 import dev.npn.core.app.TrashReceipt
 import dev.npn.core.app.ViewType
 import dev.npn.core.app.WorkStage
-import dev.npn.core.app.importAll
 import dev.npn.core.app.reviewQueueFilter
 import dev.npn.core.app.textFieldValues
 import dev.npn.core.fs.ExternalSource
@@ -38,8 +40,10 @@ import dev.npn.core.index.IndexProgress
 import dev.npn.core.index.ScanReport
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.model.reviewMarkerIsAuthoritative
 import dev.npn.core.settings.GridSizing
 import dev.npn.core.settings.SettingsRepository
+import dev.npn.core.settings.aiConfigured
 import dev.npn.core.util.runLogged
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -79,6 +83,7 @@ import no_papers_needed.composeapp.generated.resources.library_moved_to_trash
 import no_papers_needed.composeapp.generated.resources.library_refresh_failed
 import no_papers_needed.composeapp.generated.resources.library_review_failed
 import no_papers_needed.composeapp.generated.resources.library_save_view_failed
+import no_papers_needed.composeapp.generated.resources.library_show
 import no_papers_needed.composeapp.generated.resources.library_trash_failed
 import no_papers_needed.composeapp.generated.resources.library_undo
 import no_papers_needed.composeapp.generated.resources.library_view_deleted
@@ -143,7 +148,31 @@ internal data class LibraryContentState(
     val fields: List<FieldDef> = emptyList(),
     val gridColumnWidth: Int = GridSizing.DEFAULT_COLUMN_WIDTH,
     val landscapeListColumns: Boolean = false,
+    /** The "Getting started" card, null while it is not shown. */
+    val gettingStarted: GettingStarted? = null,
 )
+
+/**
+ * The library's "Getting started" card: which of its steps this device and library have taken. Null
+ * (no card) once the user closed it, and while the library has no documents, whose empty state already
+ * says how to add them.
+ */
+@Immutable
+data class GettingStarted(
+    /** A document carries a tag. */
+    val tagged: Boolean = false,
+    /** The user has searched the library on this device. */
+    val searched: Boolean = false,
+    /** The library syncs with a cloud folder, from which another device can open it. */
+    val anotherDevice: Boolean = false,
+    /** New documents wait in the Inbox until marked reviewed. */
+    val inbox: Boolean = false,
+    /** An AI assistant is connected on this device; the one optional step. */
+    val assistant: Boolean = false,
+) {
+    /** Whether every step is taken, the optional one too: the card then has nothing left to offer. */
+    val complete: Boolean get() = tagged && searched && anotherDevice && inbox && assistant
+}
 
 /** What the progress and warning banners above the results report. */
 @Immutable
@@ -182,11 +211,19 @@ interface LibraryActions {
 
     fun startSelection(docId: String)
 
+    /** Shift+click: select every document of [order] from the last one clicked into the selection to [docId]. */
+    fun selectRange(
+        docId: String,
+        order: List<String>,
+    )
+
     fun selectAll(docIds: List<String>)
 
     fun clearSelection()
 
     fun dismissBanner()
+
+    fun dismissGettingStarted()
 
     fun refresh()
 
@@ -304,6 +341,13 @@ class LibraryViewModel(
                 .collect { q ->
                     updateUi { it.copy(filter = it.filter.copy(query = q.ifBlank { null })) }
                 }
+        }
+        // The first search on this device ticks "Try a search" off and keeps the search tip away.
+        if (!settings.settings.value.searchTried) {
+            viewModelScope.launch {
+                _ui.first { !it.filter.query.isNullOrBlank() }
+                log.runLogged("Noting the first search") { settings.edit { it.copy(searchTried = true) } }
+            }
         }
     }
 
@@ -444,10 +488,32 @@ class LibraryViewModel(
             )
         }.stateIn(viewModelScope, WhileSubscribedTimeout, initialContent)
 
+    /** The "Getting started" card, or null when it is not shown; see [GettingStarted]. */
+    val gettingStarted: StateFlow<GettingStarted?> =
+        combine(
+            settings.settings,
+            settings.aiConfigured(),
+            tags.map { all -> all.any { it.count > 0 } }.distinctUntilChanged(),
+            session.sync.config
+                .map { it.configured }
+                .distinctUntilChanged(),
+            combine(reviewMode, documents.map { it?.items?.isNotEmpty() == true }, ::Pair),
+        ) { device, assistant, tagged, synced, (mode, hasDocuments) ->
+            GettingStarted(
+                tagged = tagged,
+                searched = device.searchTried,
+                anotherDevice = synced,
+                inbox = mode.reviewMarkerIsAuthoritative,
+                assistant = assistant,
+            ).takeUnless { device.gettingStartedDismissed || !hasDocuments || it.complete }
+        }.distinctUntilChanged()
+            .stateIn(viewModelScope, WhileSubscribedTimeout, null)
+
     /**
      * Everything the library list shows, in one state: the UI state, the [DocumentResults] (its
      * query and items together, so the list can tell a new query from an update), the search box,
-     * the review queue, the banners, and what decorates and lays out the documents.
+     * the review queue, the banners, the "Getting started" card, and what decorates and lays out the
+     * documents.
      */
     internal val content: StateFlow<LibraryContentState> =
         combine(
@@ -455,7 +521,8 @@ class LibraryViewModel(
             combine(reviewMode, needsReviewCount, ::Pair),
             banners,
             presentation,
-        ) { core, (mode, reviewCount), banners, presentation ->
+            gettingStarted,
+        ) { core, (mode, reviewCount), banners, presentation, gettingStarted ->
             presentation.copy(
                 ui = core.ui,
                 results = core.results,
@@ -464,6 +531,7 @@ class LibraryViewModel(
                 reviewMode = mode,
                 reviewCount = reviewCount,
                 banners = banners,
+                gettingStarted = gettingStarted,
             )
         }.stateIn(viewModelScope, WhileSubscribedTimeout, initialContent)
 
@@ -527,15 +595,39 @@ class LibraryViewModel(
     override fun setGridColumnWidth(dp: Int) =
         launchReporting(Res.string.common_save_setting_failed) { settings.edit { it.copy(gridColumnWidth = dp) } }
 
+    /** The document a Shift+click selects from: the one last clicked into the selection. */
+    private var selectionAnchor: String? = null
+
     override fun toggleSelection(docId: String) {
         updateUi { cur ->
             val next = if (docId in cur.selected) cur.selected - docId else cur.selected + docId
             cur.copy(selected = next)
         }
+        selectionAnchor = docId.takeIf { it in _ui.value.selected }
     }
 
     override fun startSelection(docId: String) {
         updateUi { it.copy(selected = setOf(docId)) }
+        selectionAnchor = docId
+    }
+
+    /**
+     * Add every document of [order] between the anchor (the one last clicked into the selection)
+     * and [docId] to the selection, both included. The anchor stays, so another Shift+click extends
+     * from the same place. Without an anchor among [order], it selects [docId] the way a click does.
+     */
+    override fun selectRange(
+        docId: String,
+        order: List<String>,
+    ) {
+        val from = selectionAnchor?.let(order::indexOf) ?: -1
+        val to = order.indexOf(docId)
+        if (from < 0 || to < 0) {
+            if (docId !in _ui.value.selected) toggleSelection(docId)
+            return
+        }
+        val range = order.subList(minOf(from, to), maxOf(from, to) + 1)
+        updateUi { it.copy(selected = it.selected + range) }
     }
 
     /** Enter selection mode with every visible document selected (desktop Ctrl+A / Select all). */
@@ -545,12 +637,19 @@ class LibraryViewModel(
 
     override fun clearSelection() {
         updateUi { it.copy(selected = emptySet()) }
+        selectionAnchor = null
     }
 
     /** Dismiss the issues banner of the scan report shown now, until another report replaces it. */
     override fun dismissBanner() {
         updateUi { it.copy(dismissedScanReport = lastScanReport.value) }
     }
+
+    /** Close the "Getting started" card on this device for good. */
+    override fun dismissGettingStarted() =
+        launchReporting(Res.string.common_save_setting_failed) {
+            settings.edit { it.copy(gettingStartedDismissed = true) }
+        }
 
     /** Rescan the library folder (pull to refresh); a rescan that fails says so. */
     override fun refresh() =
@@ -643,10 +742,24 @@ class LibraryViewModel(
         }
     }
 
-    /** Import PDFs from external sources, tallying the per-source outcome into a message. */
+    /**
+     * Import PDFs from external sources and say what became of them, with a Show action that narrows
+     * the library to the new documents; once their text is read, offer the search tip.
+     */
     override fun import(sources: List<Pair<ExternalSource, String>>) =
         launchReporting(Res.string.library_import_failed) {
-            message(ingest.importAll(sources).asUiText())
+            val batch = ingest.importBatch(ImportRequest(sources))
+            message(
+                batch.asUiText(),
+                batch.imported.takeIf { it.isNotEmpty() }?.let { ids ->
+                    UiMessage.Action(uiText(Res.string.library_show)) { setFilter(LibraryFilter(docIds = ids)) }
+                },
+            )
+            viewModelScope.launch {
+                log.runLogged("The search tip") {
+                    offerSearchTip(settings, documentRepository, batch.imported, ::message)
+                }
+            }
         }
 
     /** What a platform scan came to: import the PDF, say the scanner failed, or stay quiet. */

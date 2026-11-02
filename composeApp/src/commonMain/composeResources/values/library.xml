@@ -7,8 +7,6 @@
     <string name="library_rebuild_failed">Could not rebuild the index: %1$s</string>
     <string name="library_rebuild_not_completed">Could not rebuild the index. The library was left as it was.</string>
     <string name="library_filters">Filters</string>
-    <string name="library_switch_to_list">Switch to list view</string>
-    <string name="library_switch_to_grid">Switch to grid view</string>
     <string name="library_sort">Sort</string>
     <string name="library_sort_name">Name</string>
     <string name="library_sort_created">Created</string>
@@ -17,10 +15,10 @@
     <string name="library_sort_descending">Descending</string>
 
     <string name="library_no_documents_title">No documents yet</string>
-    <string name="library_no_documents_subtitle">Drop PDFs into this window, let a watched folder pick them up, or import them.</string>
+    <string name="library_no_documents_subtitle">Drop PDFs or images into this window, let a watched folder pick them up, or import them.</string>
     <string name="library_no_matches_title">No matches</string>
     <string name="library_no_matches_subtitle">Try adjusting your search or filters.</string>
-    <string name="library_import_pdf">Import PDF</string>
+    <string name="library_import_pdf">Import PDFs</string>
     <string name="library_clear_filters">Clear filters</string>
 
     <string name="library_review">Review</string>
@@ -84,14 +82,12 @@
         <item quantity="other">OCR pending: %1$d (running)</item>
     </plurals>
 
-    <string name="library_import">Import</string>
     <string name="library_add">Add</string>
     <string name="library_remove">Remove</string>
     <string name="library_remove_tag">Remove tag</string>
     <string name="library_scan_document">Scan document</string>
 
     <string name="library_all_documents">All documents</string>
-    <string name="library_review_queue">Review queue</string>
     <string name="library_untagged_documents">Untagged documents</string>
     <string name="library_tags">Tags</string>
     <string name="library_saved_views">Saved views</string>
@@ -158,4 +154,28 @@
     <string name="library_delete_view_failed">Could not delete the view: %1$s</string>
     <string name="library_no_documents_subtitle_scan">Scan with the camera, share a PDF to the app, or import one.</string>
     <string name="library_view_deleted">Deleted the saved view “%1$s”.</string>
+    <string name="library_view">View</string>
+    <string name="library_view_list">List</string>
+    <string name="library_view_grid">Grid</string>
+    <string name="library_show">Show</string>
+    <string name="library_inbox">Inbox</string>
+    <string name="library_import_reading_text">%1$s · reading text…</string>
+    <string name="library_drop_title">Drop to import</string>
+    <string name="library_drop_subtitle">Each PDF becomes a document, and images dropped together become one PDF.</string>
+    <string name="library_getting_started">Getting started</string>
+    <string name="library_getting_started_progress">%1$d of %2$d done</string>
+    <string name="library_getting_started_close">Close getting started</string>
+    <string name="library_getting_started_tag">Add a tag to a document</string>
+    <string name="library_getting_started_search">Search for a word in your documents</string>
+    <string name="library_getting_started_device">Use your library on another device</string>
+    <string name="library_getting_started_inbox">Let new documents wait in an Inbox</string>
+    <string name="library_getting_started_assistant">Connect an assistant (optional)</string>
+    <string name="library_getting_started_assistant_note">The assistant sends what it reads of your documents to the AI service you choose, which may charge for it.</string>
+    <string name="library_getting_started_done">Done</string>
+    <string name="library_getting_started_to_do">To do</string>
+    <string name="library_trash_retention_zero_help">At 0, the trash is emptied at the next cleanup, which runs when the library is opened or its folder changes.</string>
+    <plurals name="library_search_tip">
+        <item quantity="one">The text of %1$d new document is ready. Try searching for a word from one of its pages.</item>
+        <item quantity="other">The text of %1$d new documents is ready. Try searching for a word from one of their pages.</item>
+    </plurals>
 </resources>

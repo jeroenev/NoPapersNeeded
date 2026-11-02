@@ -33,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,6 +60,7 @@ import dev.npn.app.ui.common.SearchField
 import dev.npn.app.ui.common.TopBarAction
 import dev.npn.app.ui.common.ViewModelStoreLease
 import dev.npn.app.ui.common.rememberSnackbarMessages
+import dev.npn.app.ui.settings.SettingsCategoryId
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
@@ -72,7 +74,6 @@ import io.github.vinceglb.filekit.name
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.library_add
 import no_papers_needed.composeapp.generated.resources.library_clear_filters
-import no_papers_needed.composeapp.generated.resources.library_import
 import no_papers_needed.composeapp.generated.resources.library_import_pdf
 import no_papers_needed.composeapp.generated.resources.library_no_documents_subtitle
 import no_papers_needed.composeapp.generated.resources.library_no_documents_subtitle_scan
@@ -109,8 +110,10 @@ fun LibraryScreen(
      * null while no AI endpoint is configured.
      */
     onAiEdit: ((List<String>) -> Unit)?,
-    /** A filter another screen hands the library to apply when it shows. */
+    /** A filter another screen hands the library to apply when it shows, or while it shows. */
     filterHandoff: Handoff<LibraryFilter>,
+    /** Opens one settings pane, where the "Getting started" card's steps are set. */
+    onOpenSettings: (SettingsCategoryId) -> Unit,
     /** Each document's viewmodel store, shared with the detail screen; the side panel holds the previewed one's. */
     documents: KeyedViewModelStores<String>,
     modifier: Modifier = Modifier,
@@ -125,10 +128,13 @@ fun LibraryScreen(
     val ui = state.ui
     val docs = state.results?.items
 
+    // One handed over before the library showed applies at once; one handed over while it shows
+    // (the "Show" of a drop's import message) as it arrives.
     DisposableEffect(Unit) {
         filterHandoff.consume()?.let(vm::setFilter)
         onDispose {}
     }
+    LaunchedEffect(filterHandoff) { filterHandoff.arrivals.collect(vm::setFilter) }
 
     // Opening a doc records the current sorted+filtered order so the detail screen can page between
     // documents; ids are stable so the order stays valid across navigation. The originating search
@@ -169,8 +175,10 @@ fun LibraryScreen(
                     content = session.content,
                     snackbar = snackbar,
                     onOpenDoc = onDocClick,
-                    onOpenQueue = onOpenQueue,
-                    onOpenTrash = onTrash,
+                    exits =
+                        remember(onOpenQueue, onTrash, onOpenSettings) {
+                            LibraryExits(queue = onOpenQueue, trash = onTrash, settings = onOpenSettings)
+                        },
                     onAiEdit = onAiEdit,
                     onDialog = vm::openDialog,
                 )
@@ -252,11 +260,18 @@ fun LibraryScreen(
     }
 }
 
+/** The other screens the library's banners and its "Getting started" card lead to. */
+private class LibraryExits(
+    val queue: () -> Unit,
+    val trash: () -> Unit,
+    val settings: (SettingsCategoryId) -> Unit,
+)
+
 /**
  * The library list with its bars, search, chips and banners: a renderer of [state] that acts
  * through [actions]. The screen hands over the rest of what the list cannot know: the snackbar it
- * shares with the preview panel, where navigation goes, and [onDialog] for the dialogs the screen
- * hosts. [onAiEdit] is null while no AI endpoint is configured.
+ * shares with the preview panel, where navigation goes ([onOpenDoc], [exits]), and [onDialog] for
+ * the dialogs the screen hosts. [onAiEdit] is null while no AI endpoint is configured.
  */
 @Composable
 private fun LibraryContent(
@@ -265,12 +280,12 @@ private fun LibraryContent(
     content: DocContentFacade,
     snackbar: SnackbarHostState,
     onOpenDoc: (String) -> Unit,
-    onOpenQueue: () -> Unit,
-    onOpenTrash: () -> Unit,
+    exits: LibraryExits,
     onAiEdit: ((selection: List<String>) -> Unit)?,
     onDialog: (LibraryDialog) -> Unit,
 ) {
     val ui = state.ui
+    val gettingStarted = state.gettingStarted
     // A local, not the property: the empty and loading branches below smart-cast it.
     val results = state.results
     val reviewMode = state.reviewMode
@@ -279,6 +294,10 @@ private fun LibraryContent(
     // where compact layouts open it and read "Open".
     val wide = LocalWindowWidthClass.current.isWide
     val allDocIds = remember(results) { results?.items.orEmpty().map { it.doc.docId } }
+    // Read through State by the item wiring, which a result change must not rebuild.
+    val currentDocIds by rememberUpdatedState(allDocIds)
+    // The view menu's grid size items, answered by the grid on screen.
+    val gridZoom = remember { GridZoom() }
 
     val importPicker =
         rememberFilePickerLauncher(
@@ -340,6 +359,7 @@ private fun LibraryContent(
                 previewOnClick = wide,
                 onOpen = onOpenDoc,
                 onToggleSelect = actions::toggleSelection,
+                onSelectRange = { docId -> actions.selectRange(docId, currentDocIds) },
                 onStartSelection = actions::startSelection,
                 onAddTag = onSelection(onAddTag),
                 onRemoveTag = onSelection(onRemoveTag),
@@ -365,13 +385,10 @@ private fun LibraryContent(
             } else {
                 LibraryTopBar(
                     viewType = ui.viewType,
-                    sort = ui.sort,
-                    sortableFields = state.sortableFields,
-                    wide = wide,
+                    gridZoom = gridZoom,
                     extras = {
                         LibraryViewsMenuButton(
                             reviewMode = reviewMode,
-                            reviewBadge = state.reviewCount,
                             savedViews = state.savedViews,
                             actions = actions,
                             onSaveCurrentView = { onDialog(LibraryDialog.SaveView) },
@@ -379,8 +396,8 @@ private fun LibraryContent(
                         )
                     },
                     onOpenFilter = { onDialog(LibraryDialog.Filter) },
-                    onSetSort = actions::setSort,
                     onSetView = actions::setViewType,
+                    onSelectAll = { actions.selectAll(allDocIds) }.takeIf { allDocIds.isNotEmpty() },
                     onRefresh = actions::refresh,
                 )
             }
@@ -425,36 +442,8 @@ private fun LibraryContent(
                 focusRequester = searchFocus,
                 onFocusChange = { searchFocused = it },
             )
-            // A visible way into the review queue, as a selectable filter affordance rather than a
-            // plain counter. It sits below the search field, in the same band as ActiveFilters (which
-            // already grows and shrinks), so appearing/disappearing never shifts the search box. It
-            // only appears when there is something to review, so a cleared inbox does not leave a
-            // permanent "0" in the way. The chip's selected state mirrors whether the INBOX_WORKFLOW
-            // preset (unreviewedOrUntagged) is the active filter, so it reads as a filter, not a count.
             if (reviewMode.reviewMarkerIsAuthoritative && !ui.selectionMode && state.reviewCount > 0) {
-                val reviewFilterActive = ui.filter.unreviewedOrUntagged
-                FilterChip(
-                    selected = reviewFilterActive,
-                    // Re-tapping drops only this facet, the normal behaviour of a selected filter
-                    // chip. Not clearFilter(): that also wipes the search box and every other
-                    // facet the user narrowed the queue with after applying the preset.
-                    onClick = {
-                        if (reviewFilterActive) {
-                            actions.setFilter(ui.filter.copy(unreviewedOrUntagged = false))
-                        } else {
-                            actions.applyReviewPreset()
-                        }
-                    },
-                    label = { Text(stringResource(Res.string.ux_review_count, state.reviewCount)) },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Filled.CheckCircle,
-                            contentDescription = null,
-                            modifier = Modifier.size(FilterChipDefaults.IconSize),
-                        )
-                    },
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
+                ReviewChip(count = state.reviewCount, filter = ui.filter, actions = actions)
             }
             ActiveFilters(
                 filter = ui.filter,
@@ -466,20 +455,32 @@ private fun LibraryContent(
                 banners = state.banners,
                 dismissed = ui.scanIssuesDismissed(state.banners.lastScan),
                 onDismiss = actions::dismissBanner,
-                onGoToTrash = onOpenTrash,
+                onGoToTrash = exits.trash,
                 onShowDocuments = { docIds -> actions.setFilter(LibraryFilter(docIds = docIds)) },
-                onOpenQueue = onOpenQueue,
+                onOpenQueue = exits.queue,
             )
+            if (gettingStarted != null && !ui.selectionMode) {
+                GettingStartedCard(
+                    steps = gettingStarted,
+                    // The first document shown: tags are added on a document.
+                    onAddTag = { allDocIds.firstOrNull()?.let(onOpenDoc) },
+                    onTrySearch = searchFocus::requestFocus,
+                    onOpenSettings = exits.settings,
+                    onDismiss = actions::dismissGettingStarted,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+            }
 
             // A concise "N documents · sorted by …" line sits just above the results, in the fixed
-            // band so it never scrolls away. Only shown once the first result set has arrived and
-            // is non-empty (the empty states carry their own copy).
+            // band so it never scrolls away; it is the sort control too. Only shown once the first
+            // result set has arrived and is non-empty (the empty states carry their own copy).
             results?.items?.takeIf { it.isNotEmpty() }?.let { items ->
-                ResultsSummary(
+                SortSummary(
                     count = items.size,
                     sort = ui.sort,
                     sortableFields = state.sortableFields,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    onSetSort = actions::setSort,
+                    modifier = Modifier.padding(horizontal = 4.dp),
                 )
             }
 
@@ -527,6 +528,7 @@ private fun LibraryContent(
                                 selected = ui.selected,
                                 columnWidth = state.gridColumnWidth,
                                 onColumnWidthChange = actions::setGridColumnWidth,
+                                zoom = gridZoom,
                             )
                         }
 
@@ -546,6 +548,45 @@ private fun LibraryContent(
     }
 }
 
+/**
+ * A visible way into the Inbox, as a selectable filter affordance rather than a plain counter. It
+ * sits below the search field, in the same band as ActiveFilters (which already grows and shrinks),
+ * so appearing/disappearing never shifts the search box. The caller shows it only when there is
+ * something to review, so a cleared inbox does not leave a permanent "0" in the way. Its selected
+ * state mirrors whether the INBOX_WORKFLOW preset (unreviewedOrUntagged) is the active [filter], so
+ * it reads as a filter, not a count.
+ */
+@Composable
+private fun ReviewChip(
+    count: Int,
+    filter: LibraryFilter,
+    actions: LibraryActions,
+) {
+    val reviewFilterActive = filter.unreviewedOrUntagged
+    FilterChip(
+        selected = reviewFilterActive,
+        // Re-tapping drops only this facet, the normal behaviour of a selected filter chip. Not
+        // clearFilter(): that also wipes the search box and every other facet the user narrowed the
+        // queue with after applying the preset.
+        onClick = {
+            if (reviewFilterActive) {
+                actions.setFilter(filter.copy(unreviewedOrUntagged = false))
+            } else {
+                actions.applyReviewPreset()
+            }
+        },
+        label = { Text(stringResource(Res.string.ux_review_count, count)) },
+        leadingIcon = {
+            Icon(
+                Icons.Filled.CheckCircle,
+                contentDescription = null,
+                modifier = Modifier.size(FilterChipDefaults.IconSize),
+            )
+        },
+        modifier = Modifier.padding(horizontal = 16.dp),
+    )
+}
+
 @Composable
 private fun LibraryFab(
     scanAvailable: Boolean,
@@ -556,7 +597,7 @@ private fun LibraryFab(
         ExtendedFloatingActionButton(
             onClick = onImport,
             icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-            text = { Text(stringResource(Res.string.library_import)) },
+            text = { Text(stringResource(Res.string.library_import_pdf)) },
         )
         return
     }

@@ -56,6 +56,12 @@ data class SettingsSnapshot(
     val updateCheckEnabled: Boolean = true,
     /** A release version the user dismissed the update notice for; it is not offered again. */
     val dismissedUpdateVersion: String? = null,
+    /** The user closed the library's "Getting started" card; it stays away on this device. */
+    val gettingStartedDismissed: Boolean = false,
+    /** The user has searched the library on this device: the card ticks it off and the search tip stays away. */
+    val searchTried: Boolean = false,
+    /** The tip to search a word of a page just read was shown once on this device. */
+    val searchTipShown: Boolean = false,
 )
 
 /**
@@ -256,6 +262,10 @@ object SettingsCodec {
                 aiOcrAuto = reader.boolean(SettingsKeys.AI_OCR_AUTO) ?: DEFAULTS.aiOcrAuto,
                 updateCheckEnabled = reader.boolean(SettingsKeys.UPDATE_CHECK_ENABLED) ?: DEFAULTS.updateCheckEnabled,
                 dismissedUpdateVersion = reader.string(SettingsKeys.DISMISSED_UPDATE_VERSION),
+                gettingStartedDismissed =
+                    reader.flag(SettingsKeys.GETTING_STARTED_DISMISSED, DEFAULTS.gettingStartedDismissed),
+                searchTried = reader.flag(SettingsKeys.SEARCH_TRIED, DEFAULTS.searchTried),
+                searchTipShown = reader.flag(SettingsKeys.SEARCH_TIP_SHOWN, DEFAULTS.searchTipShown),
             ),
         )
 
@@ -295,6 +305,9 @@ object SettingsCodec {
         writer.putBoolean(SettingsKeys.AI_OCR_AUTO, s.aiOcrAuto)
         writer.putBoolean(SettingsKeys.UPDATE_CHECK_ENABLED, s.updateCheckEnabled)
         writer.putOptional(SettingsKeys.DISMISSED_UPDATE_VERSION, s.dismissedUpdateVersion)
+        writer.putBoolean(SettingsKeys.GETTING_STARTED_DISMISSED, s.gettingStartedDismissed)
+        writer.putBoolean(SettingsKeys.SEARCH_TRIED, s.searchTried)
+        writer.putBoolean(SettingsKeys.SEARCH_TIP_SHOWN, s.searchTipShown)
     }
 
     /**
@@ -317,6 +330,12 @@ object SettingsCodec {
      */
     private fun legacyOcrLanguage(reader: Reader): String? =
         reader.string(SettingsKeys.LEGACY_OCR_LANGUAGE)?.takeUnless { it == OcrLanguages.ENGLISH }
+
+    /** A stored flag, or [default] when absent. */
+    private fun Reader.flag(
+        key: String,
+        default: Boolean,
+    ): Boolean = boolean(key) ?: default
 
     private fun Writer.putOptional(
         key: String,
@@ -382,6 +401,9 @@ internal object SettingsKeys {
     const val AI_OCR_AUTO = "aiOcrAuto"
     const val UPDATE_CHECK_ENABLED = "updateCheckEnabled"
     const val DISMISSED_UPDATE_VERSION = "dismissedUpdateVersion"
+    const val GETTING_STARTED_DISMISSED = "gettingStartedDismissed"
+    const val SEARCH_TRIED = "searchTried"
+    const val SEARCH_TIP_SHOWN = "searchTipShown"
 }
 
 /** Bounds for the user-adjustable grid cell width (dp). */

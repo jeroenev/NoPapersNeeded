@@ -44,6 +44,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isMetaPressed
+import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
@@ -81,22 +82,34 @@ import org.jetbrains.compose.resources.stringResource
 import kotlin.math.roundToInt
 
 /**
- * Desktop convenience: Ctrl/Cmd+click toggles the document's selection instead of opening it.
+ * Desktop convenience: Ctrl/Cmd+click toggles the document's selection instead of opening it, and
+ * Shift+click selects the range from the document last clicked into the selection to this one.
  * The press is consumed on the [PointerEventPass.Initial] pass so [combinedClickable]'s tap
- * detector never sees it; all other gestures pass straight through. Toggling happens on press
- * (the consumed down makes an up/cancel wait return immediately, so there is nothing to await).
+ * detector never sees it; all other gestures pass straight through. Both happen on press (the
+ * consumed down makes an up/cancel wait return immediately, so there is nothing to await).
  */
 @Composable
-private fun Modifier.ctrlClickToggle(onToggleSelect: () -> Unit): Modifier {
-    val current by rememberUpdatedState(onToggleSelect)
+private fun Modifier.modifierClicks(
+    onToggleSelect: () -> Unit,
+    onSelectRange: () -> Unit,
+): Modifier {
+    val toggle by rememberUpdatedState(onToggleSelect)
+    val range by rememberUpdatedState(onSelectRange)
     return pointerInput(Unit) {
         awaitPointerEventScope {
             while (true) {
                 val event = awaitPointerEvent(PointerEventPass.Initial)
                 val press = event.changes.firstOrNull { it.pressed && !it.previousPressed } ?: continue
-                if (event.keyboardModifiers.isCtrlPressed || event.keyboardModifiers.isMetaPressed) {
+                val keys = event.keyboardModifiers
+                val action =
+                    when {
+                        keys.isShiftPressed -> range
+                        keys.isCtrlPressed || keys.isMetaPressed -> toggle
+                        else -> null
+                    }
+                if (action != null) {
                     press.consume()
-                    current()
+                    action()
                 }
             }
         }
@@ -123,6 +136,8 @@ internal class DocItemWiring(
     val previewOnClick: Boolean,
     val onOpen: (String) -> Unit,
     val onToggleSelect: (String) -> Unit,
+    /** Shift+click: select from the document last clicked into the selection to this one. */
+    val onSelectRange: (String) -> Unit,
     val onStartSelection: (String) -> Unit,
     val onAddTag: (String) -> Unit,
     val onRemoveTag: (String) -> Unit,
@@ -188,7 +203,7 @@ private fun HoverSelectCheckbox(
 }
 
 /**
- * The one wiring of a document item, in list or grid form: hover tracking, ctrl-click toggle, the
+ * The one wiring of a document item, in list or grid form: hover tracking, ctrl- and shift-click, the
  * secondary-click context menu, and click/long-click, all from [wiring], so the two item shapes
  * cannot drift apart. [itemContent] receives the modifier carrying those gestures and must apply it
  * to its own root, plus the current hover state for the select checkbox.
@@ -213,8 +228,10 @@ private fun SelectableDocItem(
             Modifier
                 .fillMaxWidth()
                 .hoverable(hoverInteraction)
-                .ctrlClickToggle { wiring.onToggleSelect(docId) }
-                .onSecondaryClick { menuAt = it }
+                .modifierClicks(
+                    onToggleSelect = { wiring.onToggleSelect(docId) },
+                    onSelectRange = { wiring.onSelectRange(docId) },
+                ).onSecondaryClick { menuAt = it }
                 .semantics { this.selected = selected }
                 .combinedClickable(
                     onClickLabel = if (selectionMode) selectionLabel else openLabel,

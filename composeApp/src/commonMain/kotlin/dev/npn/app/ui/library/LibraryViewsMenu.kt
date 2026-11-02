@@ -3,15 +3,14 @@ package dev.npn.app.ui.library
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.LabelOff
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.outlined.Bookmarks
-import androidx.compose.material3.Badge
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -37,7 +36,6 @@ import no_papers_needed.composeapp.generated.resources.library_all_documents
 import no_papers_needed.composeapp.generated.resources.library_pin
 import no_papers_needed.composeapp.generated.resources.library_pinned
 import no_papers_needed.composeapp.generated.resources.library_rename
-import no_papers_needed.composeapp.generated.resources.library_review_queue
 import no_papers_needed.composeapp.generated.resources.library_save_current_view_ellipsis
 import no_papers_needed.composeapp.generated.resources.library_saved_views
 import no_papers_needed.composeapp.generated.resources.library_unpin
@@ -47,14 +45,14 @@ import no_papers_needed.composeapp.generated.resources.library_views
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * Top-bar entry point for view presets: all documents, the review queue (with a badge while it
- * needs clearing), and saved views with their manage actions. Lives in the library top bar so it
- * is equally reachable with rail and bottom-bar navigation.
+ * Top-bar entry point for view presets: all documents, the untagged ones, and saved views with
+ * their manage actions. Lives in the library top bar so it is equally reachable with rail and
+ * bottom-bar navigation. With the Inbox on, its "Needs review" chip above the results is the way
+ * into it, so the menu does not offer it a second time.
  */
 @Composable
 internal fun LibraryViewsMenuButton(
     reviewMode: ReviewMode,
-    reviewBadge: Int,
     savedViews: List<SavedView>,
     actions: LibraryActions,
     onSaveCurrentView: () -> Unit,
@@ -67,14 +65,6 @@ internal fun LibraryViewsMenuButton(
             icon = Icons.Outlined.Bookmarks,
             label = stringResource(Res.string.library_views),
             onClick = { open = true },
-            badge = {
-                if (inbox && reviewBadge > 0) {
-                    Badge(
-                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                    ) { Text(reviewBadge.toString()) }
-                }
-            },
         )
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             fun dismissThen(action: () -> Unit) {
@@ -91,25 +81,13 @@ internal fun LibraryViewsMenuButton(
                 ),
                 onDismiss = { open = false },
             )
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        stringResource(
-                            if (inbox) Res.string.library_review_queue else Res.string.library_untagged_documents,
-                        ),
-                    )
-                },
-                leadingIcon = { Icon(Icons.Filled.Inbox, contentDescription = null) },
-                trailingIcon = {
-                    if (inbox && reviewBadge > 0) {
-                        Badge(
-                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                        ) { Text(reviewBadge.toString()) }
-                    }
-                },
-                onClick = { dismissThen(actions::applyReviewPreset) },
-            )
+            if (!inbox) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(Res.string.library_untagged_documents)) },
+                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.LabelOff, contentDescription = null) },
+                    onClick = { dismissThen(actions::applyReviewPreset) },
+                )
+            }
             HorizontalDivider(Modifier.padding(vertical = 4.dp))
             Text(
                 stringResource(Res.string.library_saved_views),

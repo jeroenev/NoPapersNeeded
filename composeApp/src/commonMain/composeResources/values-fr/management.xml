@@ -128,5 +128,5 @@
         <item quantity="one">Les documents de la corbeille sont définitivement supprimés après %1$d jour.</item>
         <item quantity="other">Les documents de la corbeille sont définitivement supprimés après %1$d jours.</item>
     </plurals>
-    <string name="common_trash_retention_help_immediate">Les documents de la corbeille sont définitivement supprimés lors du prochain nettoyage.</string>
+    <string name="common_trash_retention_help_immediate">Les documents de la corbeille sont définitivement supprimés lors du prochain nettoyage, qui a lieu à l’ouverture de la bibliothèque ou quand son dossier change.</string>
 </resources>

@@ -243,6 +243,7 @@ private fun MainNavHost(
                         null
                     },
                 filterHandoff = library.libraryFilter,
+                onOpenSettings = { id -> nav.from(entry) { navigate(Route.Settings(id.routeKey)) } },
                 documents = library.documents,
             )
         }

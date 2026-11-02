@@ -32,12 +32,17 @@ import dev.npn.app.App
 import dev.npn.app.di.createAppEnvironment
 import dev.npn.app.ui.common.AlreadyRunningNotice
 import dev.npn.app.ui.common.DesktopBridge
+import dev.npn.app.ui.common.ImportImage
+import dev.npn.app.ui.common.ImportRequest
 import dev.npn.core.app.DesktopLog
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.settings.PlatformDirs
 import dev.npn.core.settings.SettingsRepositoryImpl
 import dev.npn.core.util.info
+import dev.npn.core.util.runCatchingCancellable
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_app_name
 import org.jetbrains.compose.resources.stringResource
@@ -49,8 +54,15 @@ import java.nio.file.Path
 import kotlin.time.Duration.Companion.seconds
 
 private const val EXT_PDF = ".pdf"
+
+/**
+ * The images a drop accepts, made into one PDF together as a share of photos is on Android: what the
+ * desktop PDF engine reads (JPEG, and PNG through ImageIO). WebP, which Android also takes, it cannot.
+ */
+private val IMAGE_EXTENSIONS = listOf(".png", ".jpg", ".jpeg")
 private const val FILE_URI_PREFIX = "file:"
 private const val FALLBACK_DROPPED_PDF = "dropped.pdf"
+private const val FALLBACK_DROPPED_IMAGE = "dropped.png"
 private const val WINDOW_ICON = "icon.png"
 
 /** How long closing the window waits for the library session to shut down before exiting anyway. */
@@ -137,7 +149,7 @@ private fun runApp() =
                 onDispose(monitorMoveWorkaround::close)
             }
 
-            val dropTarget = remember { pdfDropTarget() }
+            val dropTarget = remember { importDropTarget() }
 
             Box(
                 Modifier.fillMaxSize().dragAndDropTarget(
@@ -152,26 +164,56 @@ private fun runApp() =
     }
 
 /**
- * Drop target for PDF files. The shared UI imports them into the open library and says what became
- * of them, so a drop is reported like any other import.
+ * Drop target for PDF files and images. The shared UI imports them into the open library and says
+ * what became of them, so a drop is reported like any other import; while files are dragged over the
+ * window, it shows the window as the drop target ([DesktopBridge.dragging]).
  */
 @OptIn(ExperimentalComposeUiApi::class)
-private fun pdfDropTarget(): DragAndDropTarget =
+private fun importDropTarget(): DragAndDropTarget =
     object : DragAndDropTarget {
+        override fun onEntered(event: DragAndDropEvent) {
+            DesktopBridge.dragging.value = true
+        }
+
+        override fun onExited(event: DragAndDropEvent) {
+            DesktopBridge.dragging.value = false
+        }
+
+        override fun onEnded(event: DragAndDropEvent) {
+            DesktopBridge.dragging.value = false
+        }
+
         override fun onDrop(event: DragAndDropEvent): Boolean {
+            DesktopBridge.dragging.value = false
             val data = event.dragData()
             if (data !is DragData.FilesList) return false
-            val files =
-                data
-                    .readFiles()
-                    .mapNotNull { toPath(it) }
-                    .filter { it.toString().endsWith(EXT_PDF, ignoreCase = true) && Files.isRegularFile(it) }
-                    .map { ExternalSource(it) to (it.fileName?.toString() ?: FALLBACK_DROPPED_PDF) }
-            if (files.isEmpty()) return false
-            DesktopBridge.droppedFiles.trySend(files)
+            val request = importRequest(data.readFiles().mapNotNull { toPath(it) }.filter { Files.isRegularFile(it) })
+            if (request.pdfs.isEmpty() && request.images.isEmpty()) return false
+            DesktopBridge.droppedFiles.trySend(request)
             return true
         }
     }
+
+/** What a drop of [files] imports: each PDF on its own, the images as one PDF; anything else is left out. */
+private fun importRequest(files: List<Path>): ImportRequest {
+    fun Path.name(fallback: String) = fileName?.toString() ?: fallback
+
+    fun Path.hasExtension(extensions: List<String>) = extensions.any { toString().endsWith(it, ignoreCase = true) }
+    return ImportRequest(
+        pdfs =
+            files.filter { it.hasExtension(listOf(EXT_PDF)) }.map {
+                ExternalSource(it) to
+                    it.name(FALLBACK_DROPPED_PDF)
+            },
+        images =
+            files.filter { it.hasExtension(IMAGE_EXTENSIONS) }.map { path ->
+                ImportImage(path.name(FALLBACK_DROPPED_IMAGE)) {
+                    // An image that cannot be read counts as failed in the import's message.
+                    withContext(Dispatchers.IO) { runCatchingCancellable { Files.readAllBytes(path) }.getOrNull() }
+                }
+            },
+    )
+}
 
 /** Convert a dropped file reference (a `file:` URI or a plain path) to a [Path]. */
 private fun toPath(fileRef: String): Path? =

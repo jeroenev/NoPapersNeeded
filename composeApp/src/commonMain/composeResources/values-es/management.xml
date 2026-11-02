@@ -128,5 +128,5 @@
         <item quantity="one">Los documentos de la papelera se eliminan definitivamente tras %1$d día.</item>
         <item quantity="other">Los documentos de la papelera se eliminan definitivamente tras %1$d días.</item>
     </plurals>
-    <string name="common_trash_retention_help_immediate">Los documentos de la papelera se eliminan definitivamente en la próxima limpieza.</string>
+    <string name="common_trash_retention_help_immediate">Los documentos de la papelera se eliminan definitivamente en la próxima limpieza, que se hace al abrir la biblioteca o cuando cambia su carpeta.</string>
 </resources>

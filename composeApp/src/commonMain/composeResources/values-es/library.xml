@@ -7,8 +7,6 @@
     <string name="library_rebuild_failed">No se pudo reconstruir el índice: %1$s</string>
     <string name="library_rebuild_not_completed">No se pudo reconstruir el índice. La biblioteca no ha cambiado.</string>
     <string name="library_filters">Filtros</string>
-    <string name="library_switch_to_list">Cambiar a vista de lista</string>
-    <string name="library_switch_to_grid">Cambiar a vista de cuadrícula</string>
     <string name="library_sort">Ordenar</string>
     <string name="library_sort_name">Nombre</string>
     <string name="library_sort_created">Creado</string>
@@ -17,10 +15,10 @@
     <string name="library_sort_descending">Descendente</string>
 
     <string name="library_no_documents_title">Aún no hay documentos</string>
-    <string name="library_no_documents_subtitle">Arrastra PDFs a esta ventana, deja que una carpeta vigilada los recoja o impórtalos.</string>
+    <string name="library_no_documents_subtitle">Arrastra PDFs o imágenes a esta ventana, deja que una carpeta vigilada los recoja o impórtalos.</string>
     <string name="library_no_matches_title">Sin coincidencias</string>
     <string name="library_no_matches_subtitle">Prueba a ajustar la búsqueda o los filtros.</string>
-    <string name="library_import_pdf">Importar PDF</string>
+    <string name="library_import_pdf">Importar PDFs</string>
     <string name="library_clear_filters">Borrar filtros</string>
 
     <string name="library_review">Revisar</string>
@@ -84,14 +82,12 @@
         <item quantity="other">OCR pendiente: %1$d (en curso)</item>
     </plurals>
 
-    <string name="library_import">Importar</string>
     <string name="library_add">Añadir</string>
     <string name="library_remove">Quitar</string>
     <string name="library_remove_tag">Quitar etiqueta</string>
     <string name="library_scan_document">Escanear documento</string>
 
     <string name="library_all_documents">Todos los documentos</string>
-    <string name="library_review_queue">Cola de revisión</string>
     <string name="library_untagged_documents">Documentos sin etiquetas</string>
     <string name="library_tags">Etiquetas</string>
     <string name="library_saved_views">Vistas guardadas</string>
@@ -158,4 +154,28 @@
     <string name="library_delete_view_failed">No se pudo eliminar la vista: %1$s</string>
     <string name="library_no_documents_subtitle_scan">Escanea con la cámara, comparte un PDF con la app o importa uno.</string>
     <string name="library_view_deleted">Vista guardada «%1$s» eliminada.</string>
+    <string name="library_view">Vista</string>
+    <string name="library_view_list">Lista</string>
+    <string name="library_view_grid">Cuadrícula</string>
+    <string name="library_show">Mostrar</string>
+    <string name="library_inbox">Bandeja de entrada</string>
+    <string name="library_import_reading_text">%1$s · leyendo el texto…</string>
+    <string name="library_drop_title">Suelta para importar</string>
+    <string name="library_drop_subtitle">Cada PDF se convierte en un documento, y las imágenes que sueltes juntas, en un solo PDF.</string>
+    <string name="library_getting_started">Primeros pasos</string>
+    <string name="library_getting_started_progress">%1$d de %2$d hechos</string>
+    <string name="library_getting_started_close">Cerrar primeros pasos</string>
+    <string name="library_getting_started_tag">Añade una etiqueta a un documento</string>
+    <string name="library_getting_started_search">Busca una palabra en tus documentos</string>
+    <string name="library_getting_started_device">Usa tu biblioteca en otro dispositivo</string>
+    <string name="library_getting_started_inbox">Deja que los documentos nuevos esperen en una bandeja de entrada</string>
+    <string name="library_getting_started_assistant">Conecta un asistente (opcional)</string>
+    <string name="library_getting_started_assistant_note">El asistente envía lo que lee de tus documentos al servicio de IA que elijas, que puede cobrar por ello.</string>
+    <string name="library_getting_started_done">Hecho</string>
+    <string name="library_getting_started_to_do">Pendiente</string>
+    <string name="library_trash_retention_zero_help">Con 0, la papelera se vacía en la próxima limpieza, que se hace al abrir la biblioteca o cuando cambia su carpeta.</string>
+    <plurals name="library_search_tip">
+        <item quantity="one">El texto de %1$d documento nuevo está listo. Prueba a buscar una palabra de una de sus páginas.</item>
+        <item quantity="other">El texto de %1$d documentos nuevos está listo. Prueba a buscar una palabra de una de sus páginas.</item>
+    </plurals>
 </resources>

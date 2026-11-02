@@ -7,8 +7,6 @@
     <string name="library_rebuild_failed">Kan de index niet opnieuw opbouwen: %1$s</string>
     <string name="library_rebuild_not_completed">De index kon niet opnieuw worden opgebouwd. De bibliotheek is ongewijzigd gebleven.</string>
     <string name="library_filters">Filters</string>
-    <string name="library_switch_to_list">Overschakelen naar lijstweergave</string>
-    <string name="library_switch_to_grid">Overschakelen naar rasterweergave</string>
     <string name="library_sort">Sorteren</string>
     <string name="library_sort_name">Naam</string>
     <string name="library_sort_created">Aangemaakt</string>
@@ -17,10 +15,10 @@
     <string name="library_sort_descending">Aflopend</string>
 
     <string name="library_no_documents_title">Nog geen documenten</string>
-    <string name="library_no_documents_subtitle">Sleep pdf's in dit venster, laat een bewaakte map ze oppikken of importeer ze.</string>
+    <string name="library_no_documents_subtitle">Sleep pdf's of afbeeldingen in dit venster, laat een bewaakte map ze oppikken of importeer ze.</string>
     <string name="library_no_matches_title">Geen resultaten</string>
     <string name="library_no_matches_subtitle">Pas je zoekopdracht of filters aan.</string>
-    <string name="library_import_pdf">Pdf importeren</string>
+    <string name="library_import_pdf">Pdf's importeren</string>
     <string name="library_clear_filters">Filters wissen</string>
 
     <string name="library_review">Beoordelen</string>
@@ -84,14 +82,12 @@
         <item quantity="other">OCR in wachtrij: %1$d (bezig)</item>
     </plurals>
 
-    <string name="library_import">Importeren</string>
     <string name="library_add">Toevoegen</string>
     <string name="library_remove">Verwijderen</string>
     <string name="library_remove_tag">Tag verwijderen</string>
     <string name="library_scan_document">Document scannen</string>
 
     <string name="library_all_documents">Alle documenten</string>
-    <string name="library_review_queue">Beoordelingswachtrij</string>
     <string name="library_untagged_documents">Documenten zonder tags</string>
     <string name="library_tags">Tags</string>
     <string name="library_saved_views">Opgeslagen weergaven</string>
@@ -158,4 +154,28 @@
     <string name="library_delete_view_failed">De weergave kon niet worden verwijderd: %1$s</string>
     <string name="library_no_documents_subtitle_scan">Scan met de camera, deel een pdf met de app of importeer er een.</string>
     <string name="library_view_deleted">Opgeslagen weergave '%1$s' verwijderd.</string>
+    <string name="library_view">Weergave</string>
+    <string name="library_view_list">Lijst</string>
+    <string name="library_view_grid">Raster</string>
+    <string name="library_show">Tonen</string>
+    <string name="library_inbox">Inbox</string>
+    <string name="library_import_reading_text">%1$s · tekst wordt gelezen…</string>
+    <string name="library_drop_title">Loslaten om te importeren</string>
+    <string name="library_drop_subtitle">Elke pdf wordt een document, en afbeeldingen die je samen loslaat worden één pdf.</string>
+    <string name="library_getting_started">Aan de slag</string>
+    <string name="library_getting_started_progress">%1$d van %2$d gedaan</string>
+    <string name="library_getting_started_close">Aan de slag sluiten</string>
+    <string name="library_getting_started_tag">Geef een document een tag</string>
+    <string name="library_getting_started_search">Zoek naar een woord in je documenten</string>
+    <string name="library_getting_started_device">Gebruik je bibliotheek op een ander apparaat</string>
+    <string name="library_getting_started_inbox">Laat nieuwe documenten in een inbox wachten</string>
+    <string name="library_getting_started_assistant">Koppel een assistent (optioneel)</string>
+    <string name="library_getting_started_assistant_note">De assistent stuurt wat hij uit je documenten leest naar de AI-dienst die je kiest, die daarvoor kosten kan rekenen.</string>
+    <string name="library_getting_started_done">Gedaan</string>
+    <string name="library_getting_started_to_do">Te doen</string>
+    <string name="library_trash_retention_zero_help">Bij 0 wordt de prullenbak bij de volgende opruiming geleegd. Die gebeurt als de bibliotheek wordt geopend of de map verandert.</string>
+    <plurals name="library_search_tip">
+        <item quantity="one">De tekst van %1$d nieuw document is klaar. Zoek eens op een woord van een van de pagina's.</item>
+        <item quantity="other">De tekst van %1$d nieuwe documenten is klaar. Zoek eens op een woord van een van hun pagina's.</item>
+    </plurals>
 </resources>

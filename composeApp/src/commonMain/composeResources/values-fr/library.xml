@@ -7,8 +7,6 @@
     <string name="library_rebuild_failed">Impossible de reconstruire l’index : %1$s</string>
     <string name="library_rebuild_not_completed">Impossible de reconstruire l’index. La bibliothèque est restée inchangée.</string>
     <string name="library_filters">Filtres</string>
-    <string name="library_switch_to_list">Passer à la vue liste</string>
-    <string name="library_switch_to_grid">Passer à la vue grille</string>
     <string name="library_sort">Trier</string>
     <string name="library_sort_name">Nom</string>
     <string name="library_sort_created">Date de création</string>
@@ -17,10 +15,10 @@
     <string name="library_sort_descending">Décroissant</string>
 
     <string name="library_no_documents_title">Aucun document pour l’instant</string>
-    <string name="library_no_documents_subtitle">Déposez des PDF dans cette fenêtre, laissez un dossier surveillé les récupérer ou importez-les.</string>
+    <string name="library_no_documents_subtitle">Déposez des PDF ou des images dans cette fenêtre, laissez un dossier surveillé les récupérer ou importez-les.</string>
     <string name="library_no_matches_title">Aucun résultat</string>
     <string name="library_no_matches_subtitle">Essayez de modifier votre recherche ou vos filtres.</string>
-    <string name="library_import_pdf">Importer un PDF</string>
+    <string name="library_import_pdf">Importer des PDF</string>
     <string name="library_clear_filters">Effacer les filtres</string>
 
     <string name="library_review">Examiner</string>
@@ -84,14 +82,12 @@
         <item quantity="other">OCR en attente : %1$d (en cours)</item>
     </plurals>
 
-    <string name="library_import">Importer</string>
     <string name="library_add">Ajouter</string>
     <string name="library_remove">Retirer</string>
     <string name="library_remove_tag">Retirer l’étiquette</string>
     <string name="library_scan_document">Numériser un document</string>
 
     <string name="library_all_documents">Tous les documents</string>
-    <string name="library_review_queue">À vérifier</string>
     <string name="library_untagged_documents">Documents sans étiquette</string>
     <string name="library_tags">Étiquettes</string>
     <string name="library_saved_views">Vues enregistrées</string>
@@ -158,4 +154,28 @@
     <string name="library_delete_view_failed">Impossible de supprimer la vue : %1$s</string>
     <string name="library_no_documents_subtitle_scan">Scannez avec l’appareil photo, partagez un PDF avec l’app ou importez-en un.</string>
     <string name="library_view_deleted">Vue enregistrée « %1$s » supprimée.</string>
+    <string name="library_view">Affichage</string>
+    <string name="library_view_list">Liste</string>
+    <string name="library_view_grid">Grille</string>
+    <string name="library_show">Afficher</string>
+    <string name="library_inbox">Boîte de réception</string>
+    <string name="library_import_reading_text">%1$s · lecture du texte…</string>
+    <string name="library_drop_title">Déposez pour importer</string>
+    <string name="library_drop_subtitle">Chaque PDF devient un document, et des images déposées ensemble forment un seul PDF.</string>
+    <string name="library_getting_started">Premiers pas</string>
+    <string name="library_getting_started_progress">%1$d sur %2$d faits</string>
+    <string name="library_getting_started_close">Fermer les premiers pas</string>
+    <string name="library_getting_started_tag">Ajoutez une étiquette à un document</string>
+    <string name="library_getting_started_search">Recherchez un mot dans vos documents</string>
+    <string name="library_getting_started_device">Utilisez votre bibliothèque sur un autre appareil</string>
+    <string name="library_getting_started_inbox">Laissez les nouveaux documents attendre dans une boîte de réception</string>
+    <string name="library_getting_started_assistant">Connectez un assistant (facultatif)</string>
+    <string name="library_getting_started_assistant_note">L’assistant envoie ce qu’il lit de vos documents au service d’IA de votre choix, qui peut le facturer.</string>
+    <string name="library_getting_started_done">Fait</string>
+    <string name="library_getting_started_to_do">À faire</string>
+    <string name="library_trash_retention_zero_help">À 0, la corbeille est vidée lors du prochain nettoyage, qui a lieu à l’ouverture de la bibliothèque ou quand son dossier change.</string>
+    <plurals name="library_search_tip">
+        <item quantity="one">Le texte de %1$d nouveau document est prêt. Essayez de rechercher un mot de l’une de ses pages.</item>
+        <item quantity="other">Le texte de %1$d nouveaux documents est prêt. Essayez de rechercher un mot de l’une de leurs pages.</item>
+    </plurals>
 </resources>

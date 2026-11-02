@@ -128,5 +128,5 @@
         <item quantity="one">Dokumente im Papierkorb werden nach %1$d Tag endgültig gelöscht.</item>
         <item quantity="other">Dokumente im Papierkorb werden nach %1$d Tagen endgültig gelöscht.</item>
     </plurals>
-    <string name="common_trash_retention_help_immediate">Dokumente im Papierkorb werden bei der nächsten Bereinigung endgültig gelöscht.</string>
+    <string name="common_trash_retention_help_immediate">Dokumente im Papierkorb werden bei der nächsten Bereinigung endgültig gelöscht. Sie läuft, wenn die Bibliothek geöffnet wird oder sich ihr Ordner ändert.</string>
 </resources>

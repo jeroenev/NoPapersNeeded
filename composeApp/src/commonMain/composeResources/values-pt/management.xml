@@ -128,5 +128,5 @@
         <item quantity="one">Os documentos na lixeira são excluídos definitivamente após %1$d dia.</item>
         <item quantity="other">Os documentos na lixeira são excluídos definitivamente após %1$d dias.</item>
     </plurals>
-    <string name="common_trash_retention_help_immediate">Os documentos na lixeira são excluídos definitivamente na próxima limpeza.</string>
+    <string name="common_trash_retention_help_immediate">Os documentos na lixeira são excluídos definitivamente na próxima limpeza, que acontece quando a biblioteca é aberta ou a pasta dela muda.</string>
 </resources>

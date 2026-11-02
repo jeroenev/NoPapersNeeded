@@ -7,9 +7,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.ImageComposeScene
 import dev.npn.app.EnglishLocaleTest
-import dev.npn.app.ui.click
 import dev.npn.app.ui.closing
-import dev.npn.app.ui.contentDescription
 import dev.npn.app.ui.onUiThread
 import dev.npn.app.ui.themedScene
 import dev.npn.core.app.LibraryFilter
@@ -33,6 +31,7 @@ class DocGridZoomTest : EnglishLocaleTest() {
         onUiThread {
             var persisted by mutableIntStateOf(GridSizing.DEFAULT_COLUMN_WIDTH)
             val committed = CopyOnWriteArrayList<Int>()
+            val zoom = GridZoom()
             themedScene(WIDTH, HEIGHT) {
                 DocGrid(
                     results = DocumentResults(LibraryQuery(LibraryFilter(), LibrarySort()), emptyList()),
@@ -41,14 +40,15 @@ class DocGridZoomTest : EnglishLocaleTest() {
                     selected = emptySet(),
                     columnWidth = persisted,
                     onColumnWidthChange = { committed += it },
+                    zoom = zoom,
                 )
             }.closing {
                 render()
-                zoomIn()
+                zoomIn(zoom)
                 awaitCommits(committed, 1)
                 val first = committed.single()
 
-                zoomIn()
+                zoomIn(zoom)
                 // The first write lands only now, after the second zoom step.
                 persisted = first
                 render()
@@ -69,14 +69,17 @@ class DocGridZoomTest : EnglishLocaleTest() {
             previewOnClick = false,
             onOpen = {},
             onToggleSelect = {},
+            onSelectRange = {},
             onStartSelection = {},
             onAddTag = {},
             onRemoveTag = {},
             onTrash = {},
         )
 
-    private fun ImageComposeScene.zoomIn() {
-        click { it.contentDescription() == "Larger grid items" }
+    /** The view menu's "Larger grid items", which steps the grid through [zoom]. */
+    private fun ImageComposeScene.zoomIn(zoom: GridZoom) {
+        zoom.canZoomIn shouldBe true
+        zoom.zoomIn()
         render()
     }
 

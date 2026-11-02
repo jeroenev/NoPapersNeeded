@@ -128,5 +128,5 @@
         <item quantity="one">Documenten in de prullenbak worden na %1$d dag definitief verwijderd.</item>
         <item quantity="other">Documenten in de prullenbak worden na %1$d dagen definitief verwijderd.</item>
     </plurals>
-    <string name="common_trash_retention_help_immediate">Documenten in de prullenbak worden bij de volgende opruiming definitief verwijderd.</string>
+    <string name="common_trash_retention_help_immediate">Documenten in de prullenbak worden bij de volgende opruiming definitief verwijderd. Die gebeurt als de bibliotheek wordt geopend of de map verandert.</string>
 </resources>

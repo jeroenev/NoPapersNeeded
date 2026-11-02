@@ -7,8 +7,6 @@
     <string name="library_rebuild_failed">Não foi possível reconstruir o índice: %1$s</string>
     <string name="library_rebuild_not_completed">Não foi possível reconstruir o índice. A biblioteca não foi alterada.</string>
     <string name="library_filters">Filtros</string>
-    <string name="library_switch_to_list">Alternar para lista</string>
-    <string name="library_switch_to_grid">Alternar para grade</string>
     <string name="library_sort">Ordenar</string>
     <string name="library_sort_name">Nome</string>
     <string name="library_sort_created">Criado</string>
@@ -17,10 +15,10 @@
     <string name="library_sort_descending">Decrescente</string>
 
     <string name="library_no_documents_title">Nenhum documento ainda</string>
-    <string name="library_no_documents_subtitle">Arraste PDFs para esta janela, use uma pasta monitorada ou importe-os.</string>
+    <string name="library_no_documents_subtitle">Arraste PDFs ou imagens para esta janela, use uma pasta monitorada ou importe-os.</string>
     <string name="library_no_matches_title">Nenhum resultado</string>
     <string name="library_no_matches_subtitle">Tente ajustar a busca ou os filtros.</string>
-    <string name="library_import_pdf">Importar PDF</string>
+    <string name="library_import_pdf">Importar PDFs</string>
     <string name="library_clear_filters">Limpar filtros</string>
 
     <string name="library_review">Revisar</string>
@@ -84,14 +82,12 @@
         <item quantity="other">OCR pendente: %1$d (em execução)</item>
     </plurals>
 
-    <string name="library_import">Importar</string>
     <string name="library_add">Adicionar</string>
     <string name="library_remove">Remover</string>
     <string name="library_remove_tag">Remover etiqueta</string>
     <string name="library_scan_document">Digitalizar documento</string>
 
     <string name="library_all_documents">Todos os documentos</string>
-    <string name="library_review_queue">Fila de revisão</string>
     <string name="library_untagged_documents">Documentos sem etiqueta</string>
     <string name="library_tags">Etiquetas</string>
     <string name="library_saved_views">Filtros salvos</string>
@@ -158,4 +154,28 @@
     <string name="library_delete_view_failed">Não foi possível excluir o filtro: %1$s</string>
     <string name="library_no_documents_subtitle_scan">Digitalize com a câmera, compartilhe um PDF com o app ou importe um.</string>
     <string name="library_view_deleted">Filtro salvo “%1$s” excluído.</string>
+    <string name="library_view">Exibição</string>
+    <string name="library_view_list">Lista</string>
+    <string name="library_view_grid">Grade</string>
+    <string name="library_show">Mostrar</string>
+    <string name="library_inbox">Caixa de entrada</string>
+    <string name="library_import_reading_text">%1$s · lendo o texto…</string>
+    <string name="library_drop_title">Solte para importar</string>
+    <string name="library_drop_subtitle">Cada PDF vira um documento, e imagens soltas juntas viram um único PDF.</string>
+    <string name="library_getting_started">Primeiros passos</string>
+    <string name="library_getting_started_progress">%1$d de %2$d concluídos</string>
+    <string name="library_getting_started_close">Fechar primeiros passos</string>
+    <string name="library_getting_started_tag">Adicione uma etiqueta a um documento</string>
+    <string name="library_getting_started_search">Pesquise uma palavra nos seus documentos</string>
+    <string name="library_getting_started_device">Use sua biblioteca em outro dispositivo</string>
+    <string name="library_getting_started_inbox">Deixe novos documentos esperarem em uma caixa de entrada</string>
+    <string name="library_getting_started_assistant">Conecte um assistente (opcional)</string>
+    <string name="library_getting_started_assistant_note">O assistente envia o que lê dos seus documentos ao serviço de IA que você escolher, que pode cobrar por isso.</string>
+    <string name="library_getting_started_done">Concluído</string>
+    <string name="library_getting_started_to_do">Pendente</string>
+    <string name="library_trash_retention_zero_help">Com 0, a lixeira é esvaziada na próxima limpeza, que acontece quando a biblioteca é aberta ou a pasta dela muda.</string>
+    <plurals name="library_search_tip">
+        <item quantity="one">O texto de %1$d documento novo está pronto. Experimente pesquisar uma palavra de uma das páginas dele.</item>
+        <item quantity="other">O texto de %1$d documentos novos está pronto. Experimente pesquisar uma palavra de uma das páginas deles.</item>
+    </plurals>
 </resources>
