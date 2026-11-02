@@ -7,7 +7,9 @@ import dev.npn.core.index.WriteBlock
 import dev.npn.core.journal.EventDecoderRegistry
 import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.JournalOp
+import dev.npn.core.sync.SyncOutcome
 import dev.npn.core.util.NpnLog
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.test.TestCoroutineScheduler
 import java.io.File
 import kotlin.random.Random
@@ -30,6 +32,11 @@ data class SyncConfig(
      * library on it at once.
      */
     val joinsAt: List<Int> = List(replicas) { 0 },
+    /**
+     * When set, the replicas sync through one cloud remote, each session running the app's own
+     * cloud sync ([SimRemote]), and no folder sync tool runs.
+     */
+    val cloud: CloudOptions? = null,
 ) {
     companion object {
         fun forSeed(config: SimConfig): SyncConfig {
@@ -52,26 +59,43 @@ data class SyncConfig(
                     tool = random.pick(SyncTool.entries),
                     duplicatePercent = DUPLICATE_PERCENT,
                 )
+            // In the order these were always drawn, so a seed's replicas are what they were.
+            val mtimes =
+                profiles.mapIndexed { i, p ->
+                    if (i == 0) config.mtimes else !(p == StorageProfile.SAF && random.nextBoolean())
+                }
+            val watched = List(count) { random.chance(50) }
+            val deleteAfterImport = List(count) { random.nextBoolean() }
+            val joinsAt =
+                List(count) { i ->
+                    if (i > 0 &&
+                        random.chance(LATE_JOIN_PERCENT)
+                    ) {
+                        1 + random.nextInt(maxOf(1, config.steps / 2))
+                    } else {
+                        0
+                    }
+                }
+            // Drawn last, so every draw above stays what it was for a seed.
+            val cloud =
+                if (random.chance(CLOUD_PERCENT)) {
+                    CloudOptions(
+                        caseInsensitive = random.chance(CASE_INSENSITIVE_PERCENT),
+                        reportsHashes = random.nextBoolean(),
+                        failPercent = if (random.nextBoolean()) CLOUD_FAIL_PERCENT else 0,
+                    )
+                } else {
+                    null
+                }
             return SyncConfig(
                 replicas = count,
                 profiles = profiles,
-                mtimes =
-                    profiles.mapIndexed { i, p ->
-                        if (i == 0) config.mtimes else !(p == StorageProfile.SAF && random.nextBoolean())
-                    },
-                watched = List(count) { random.chance(50) },
-                deleteAfterImport = List(count) { random.nextBoolean() },
+                mtimes = mtimes,
+                watched = watched,
+                deleteAfterImport = deleteAfterImport,
                 options = options,
-                joinsAt =
-                    List(count) { i ->
-                        if (i > 0 &&
-                            random.chance(LATE_JOIN_PERCENT)
-                        ) {
-                            1 + random.nextInt(maxOf(1, config.steps / 2))
-                        } else {
-                            0
-                        }
-                    },
+                joinsAt = joinsAt,
+                cloud = cloud,
             )
         }
 
@@ -80,6 +104,9 @@ data class SyncConfig(
         private const val MAX_REPLICAS = 4
         private const val DUPLICATE_PERCENT = 10
         private const val LATE_JOIN_PERCENT = 25
+        private const val CLOUD_PERCENT = 30
+        private const val CASE_INSENSITIVE_PERCENT = 30
+        private const val CLOUD_FAIL_PERCENT = 3
     }
 }
 
@@ -139,6 +166,21 @@ internal class SyncSimulation(
 ) {
     val world = SimWorld(scheduler)
     private val random = Random(config.seed xor ORCHESTRA_SALT)
+
+    /** The cloud remote the replicas sync through, where the seed has one instead of a sync tool. */
+    val remote: SimRemote? = sync.cloud?.let { SimRemote(world.clock, Random(config.seed xor CLOUD_SALT), it) }
+
+    /** A cloud pass started and not yet seen to its end: whose, and in which of its processes. */
+    private class CloudPass(
+        val member: SyncSimulation.Member,
+        val life: SimLife,
+        val pass: Deferred<SyncOutcome>,
+    ) {
+        /** A hard crash killed the process it ran in: it never runs again, nor ends. */
+        val killed: Boolean get() = member.replica.life !== life && !pass.isCompleted
+    }
+
+    private val cloudPasses = ArrayList<CloudPass>()
 
     /** Every step and what it came to, as a trace file holds it. */
     val trace = ArrayList<String>()
@@ -202,8 +244,13 @@ internal class SyncSimulation(
 
         init {
             watched?.let { folder -> fs.externalSources = folder::bytesFor }
-            // A copy in another replica's folder keeps the library's: the last copy is the library's last.
-            fs.heldElsewhere = { hash, path -> members.any { it !== this && it.fs.holdsCopy(hash, except = path) } }
+            replica.cloud = remote
+            if (remote != null) fs.isDelivery = { it.startsWith(replica.cloudStaging) }
+            // A copy in another replica's folder, or on the cloud remote, keeps the library's: the
+            // last copy is the library's last.
+            fs.heldElsewhere = { hash, path ->
+                members.any { it !== this && it.fs.holdsCopy(hash, except = path) } || remote?.holds(hash) == true
+            }
         }
 
         private fun salted(n: Int) = config.seed * SALT + index * REPLICA_SALT + n
@@ -297,6 +344,16 @@ internal class SyncSimulation(
     private fun open(member: Member) {
         member.sim.open()
         member.joined = true
+        // A device connects to the library's cloud folder as a user sets one up: a first pass, before
+        // anything is added on it, joins it to the library there (or makes the empty folder its own).
+        remote?.let { cloud ->
+            cloud.faultsOn = false
+            try {
+                trace += "   cloud: ${member.name} joins the library in the cloud: ${runPass(member)}"
+            } finally {
+                cloud.faultsOn = true
+            }
+        }
     }
 
     /** [member] is given the folder, empty, at [step], and opens the library on it while the tool fills it. */
@@ -304,7 +361,7 @@ internal class SyncSimulation(
         member: Member,
         step: Int,
     ) {
-        tool.join(member.index)
+        if (remote == null) tool.join(member.index)
         trace += "#$step t=${world.scheduler.currentTime} ${member.name} joins with an empty folder " +
             "(${tool.pendingDeliveries} delivering)"
         open(member)
@@ -313,6 +370,7 @@ internal class SyncSimulation(
     // ---- the sync tool's steps ------------------------------------------------------------------
 
     private fun syncStep(step: Int) {
+        if (remote != null) return cloudStep(step)
         val roll = random.nextInt(100)
         val text =
             when {
@@ -335,6 +393,142 @@ internal class SyncSimulation(
             }
         trace += "#$step t=${world.scheduler.currentTime} $text (${tool.pendingDeliveries} delivering)"
         present.forEach { it.sim.checkCheap() }
+    }
+
+    // ---- cloud sync -----------------------------------------------------------------------------
+
+    /**
+     * A step of the cloud: one replica's pass run to its end, or started to run beside whatever
+     * comes next (another replica's pass, its own session's work), or time for passes under way.
+     */
+    private fun cloudStep(step: Int) {
+        val roll = random.nextInt(100)
+        val text =
+            when {
+                roll < 60 -> {
+                    val member = random.pick(present)
+                    "cloud: ${member.name} passes: ${runPass(member)}"
+                }
+
+                roll < 85 -> {
+                    val member = random.pick(present)
+                    startPass(member)
+                    "cloud: ${member.name} starts a pass in the background"
+                }
+
+                else -> {
+                    val millis = random.nextLong(500, LAND_MILLIS)
+                    world.advance(millis)
+                    "cloud: let passes run for ${millis}ms"
+                }
+            }
+        cloudPasses.removeAll { running ->
+            when {
+                running.pass.isCompleted -> {
+                    trace += "   cloud: ${running.member.name}'s background pass ${outcomeText(running.pass)}"
+                    true
+                }
+
+                running.killed -> {
+                    trace += "   cloud: ${running.member.name}'s background pass died with its process"
+                    true
+                }
+
+                else -> {
+                    false
+                }
+            }
+        }
+        trace += "#$step t=${world.scheduler.currentTime} $text (${cloudPasses.size} passes running)"
+        present.forEach { it.sim.checkCheap() }
+    }
+
+    private fun startPass(member: Member): Deferred<SyncOutcome>? {
+        val session = member.replica.session ?: return null
+        return member.replica
+            .launch { session.sync.syncNow() }
+            .also { cloudPasses += CloudPass(member, member.replica.life, it) }
+    }
+
+    private fun runPass(member: Member): String {
+        val pass = startPass(member) ?: return "no session open"
+        world.drive(pass, "cloud pass of ${member.name}")
+        cloudPasses.removeAll { it.pass === pass }
+        return outcomeText(pass)
+    }
+
+    /** Let every pass under way end; one a hard crash killed never does. */
+    private fun finishCloudPasses() {
+        cloudPasses.toList().forEach { running ->
+            if (running.killed) {
+                trace += "   cloud: ${running.member.name}'s background pass died with its process"
+            } else {
+                world.drive(running.pass, "cloud pass of ${running.member.name}")
+                trace += "   cloud: ${running.member.name}'s background pass ${outcomeText(running.pass)}"
+            }
+        }
+        cloudPasses.clear()
+    }
+
+    /** One pass on every replica in turn; whether none of them changed anything. */
+    private fun cloudRound(round: Int): Boolean {
+        var quiet = true
+        present.forEach { member ->
+            val pass = startPass(member) ?: return@forEach
+            world.drive(pass, "cloud pass of ${member.name}")
+            cloudPasses.clear()
+            trace += "   == cloud round $round, ${member.name}: ${outcomeText(pass)}"
+            @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+            val outcome = pass.getCompletionExceptionOrNull()?.let { null } ?: pass.getCompleted()
+            if (outcome !is SyncOutcome.Completed || outcome.report.changedAnything) quiet = false
+        }
+        return quiet
+    }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    private fun outcomeText(pass: Deferred<SyncOutcome>): String {
+        pass.getCompletionExceptionOrNull()?.let { return "ended by ${it::class.simpleName}: ${it.message}" }
+        return when (val outcome = pass.getCompleted()) {
+            is SyncOutcome.Completed -> {
+                val report = outcome.report
+                "down ${report.downloadedDocuments}+${report.downloadedObjects}, " +
+                    "up ${report.uploadedDocuments}+${report.uploadedObjects}, moved ${report.movedRemote}, " +
+                    "deleted ${report.deletedRemote}, applied ${report.appliedLocally}" +
+                    report.conflicts.joinToString(
+                        "",
+                    ) { "\n      conflict ${it.kind} ${it.remotePath} ${it.otherPath.orEmpty()}" } +
+                    report.errors.joinToString("") { "\n      error ${it.path}: ${it.message}" }
+            }
+
+            is SyncOutcome.Failed -> {
+                "failed: ${outcome.reason} ${outcome.detail.orEmpty()}"
+            }
+
+            else -> {
+                outcome.toString()
+            }
+        }
+    }
+
+    /**
+     * A full sync through the cloud: every replica passes in turn and settles, round after round,
+     * until a round in which no pass changed anything. A remote that fails no call then (faults are
+     * off while the simulation comes to rest) leaves nothing to keep them apart.
+     */
+    private fun cloudFlush() {
+        var rounds = 0
+        while (true) {
+            val quiet = cloudRound(rounds + 1)
+            present.forEach { it.sim.settle() }
+            if (quiet) break
+            if (++rounds >= CLOUD_SYNC_ROUNDS) {
+                fail(
+                    members[0],
+                    "the replicas do not converge through the cloud: after $rounds rounds, a pass still " +
+                        "changes something (the trace has each round's passes)",
+                )
+            }
+        }
     }
 
     // ---- invariants across replicas -------------------------------------------------------------
@@ -423,6 +617,19 @@ internal class SyncSimulation(
      */
     private fun quiesce(full: Boolean) {
         trace += "   == quiescence at t=${world.scheduler.currentTime}${if (full) ", full sync" else ""}"
+        val cloud = remote
+        if (cloud != null) {
+            finishCloudPasses()
+            cloud.faultsOn = false
+            try {
+                passRestoreWindow()
+                if (full) cloudFlush() else present.forEach { it.sim.settle() }
+                checkAtRest(full)
+            } finally {
+                cloud.faultsOn = true
+            }
+            return
+        }
         tool.finishInFlight()
         passRestoreWindow()
         if (full) {
@@ -448,6 +655,10 @@ internal class SyncSimulation(
         } else {
             present.forEach { it.sim.settle() }
         }
+        checkAtRest(full)
+    }
+
+    private fun checkAtRest(full: Boolean) {
         present.forEach { member ->
             member.replica.session?.writeBlock?.value?.let {
                 fail(member, "${member.name} still blocks writes at rest ($it; the log says why)")
@@ -475,8 +686,12 @@ internal class SyncSimulation(
         // The sync tool runs through the day as well: what each device changed reaches the others
         // before the window passes. Frozen for the day, it would leave another device's trash
         // unannounced, and the file still at its path would pass the window as one come back.
-        present.forEach { tool.scan(it.index) }
-        tool.finishInFlight()
+        if (remote != null) {
+            cloudRound(0)
+        } else {
+            present.forEach { tool.scan(it.index) }
+            tool.finishInFlight()
+        }
         world.advance(JournalCoordinator.RESTORE_SETTLE_MS)
         trace += "   == past the restore settle window at t=${world.scheduler.currentTime}"
     }
@@ -597,8 +812,24 @@ internal class SyncSimulation(
                             .toSet()
                     }
                 }
+            val pathsOnly = remote != null && KnownIssues.CLOUD_NAMES_MAY_DIFFER
+            if (pathsOnly) {
+                diff(a, b, hiddenOnlyLive = { _, _ -> true }, bothHold = ::holds)
+                    .filter { it.endsWith(" differs:") || " differs:\n" in it }
+                    .takeIf { it.isNotEmpty() }
+                    ?.let {
+                        trace +=
+                            "   == cloud: names differ between ${first.name} and ${member.name} (known):\n  " +
+                            it.joinToString("\n  ")
+                    }
+            }
             val differences =
-                diff(a, b, hiddenOnlyLive = { _, _ -> true }, bothHold = ::holds).filterNot { line ->
+                diff(
+                    a.withoutPaths(pathsOnly),
+                    b.withoutPaths(pathsOnly),
+                    hiddenOnlyLive = { _, _ -> true },
+                    bothHold = ::holds,
+                ).filterNot { line ->
                     "hidden state differs: live null," in line ||
                         ("is live only in" in line && line.removePrefix("doc ").take(ID) in returned)
                 }
@@ -630,6 +861,10 @@ internal class SyncSimulation(
                         if (member.joinsAt > 0) ", joined at step ${member.joinsAt}" else "",
                 )
             }
+            remote?.let { cloud ->
+                appendLine("Cloud: ${cloud.options}, ${cloudPasses.size} passes under way, holding:")
+                cloud.describe().takeLast(SUMMARY_LINES * 3).forEach { appendLine("  $it") }
+            }
             appendLine("Sync: ${tool.pendingDeliveries} deliveries under way, ${tool.conflicts.size} conflict copies")
             tool.conflicts.takeLast(SUMMARY_LINES).forEach { appendLine("  $it") }
             if (tool.undeliverable.isNotEmpty()) {
@@ -643,6 +878,8 @@ internal class SyncSimulation(
         const val SYNC_PERCENT = 22
         const val FULL_SYNC_PERCENT = 50
         const val FULL_SYNC_ROUNDS = 6
+        const val CLOUD_SYNC_ROUNDS = 8
+        const val CLOUD_SALT = 0xC10D_5L
         const val LAND_MILLIS = 30_000L
         const val LABEL_STRIDE = 4_000
         const val SALT = 31L

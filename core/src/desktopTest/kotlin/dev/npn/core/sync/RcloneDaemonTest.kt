@@ -80,17 +80,41 @@ class RcloneDaemonTest {
         }
 
     @Test
-    fun closeThenALaterCallStartsAFreshDaemon() =
+    fun closeIsFinalSoNoLaterCallStartsAnEngineNobodyStops() =
         runBlocking {
             if (!requireRclone()) return@runBlocking
             val daemon = RcloneDaemon(RcloneLaunch(binary))
-            val first = daemon.call("core/pid")["pid"]?.jsonPrimitive?.contentOrNull
-            first.shouldNotBeNull()
-            // Idempotent: the second close must not throw, and a later call must still start up.
+            daemon
+                .call("core/pid")["pid"]
+                ?.jsonPrimitive
+                ?.contentOrNull
+                .shouldNotBeNull()
+            // Idempotent: the second close must not throw.
             daemon.close()
             daemon.close()
-            val second = daemon.call("core/pid")["pid"]?.jsonPrimitive?.contentOrNull
-            second.shouldNotBeNull()
-            daemon.close()
+            assertFailsWith<RcloneException> { daemon.call("core/pid") }.engine shouldBe EngineProblem.CLOSED
+        }
+
+    @Test
+    fun theCredentialsAreNotOnTheCommandLine() =
+        runBlocking {
+            if (!requireRclone()) return@runBlocking
+            RcloneDaemon(RcloneLaunch(binary)).use { daemon ->
+                val pid =
+                    daemon
+                        .call("core/pid")["pid"]
+                        ?.jsonPrimitive
+                        ?.contentOrNull
+                        .shouldNotBeNull()
+                val commandLine =
+                    ProcessHandle
+                        .of(pid.toLong())
+                        .flatMap { it.info().arguments() }
+                        .map { it.joinToString(" ") }
+                        .orElse("")
+                commandLine.contains("--rc-user") shouldBe false
+                commandLine.contains("--rc-pass") shouldBe false
+            }
+            Unit
         }
 }

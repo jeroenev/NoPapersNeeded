@@ -11,8 +11,9 @@ import kotlinx.coroutines.withContext
  * trash/delete decisions onto this replica's files, as a folder syncer would deliver another
  * device's moves; the rescan that follows projects them. Every step re-verifies the file's SHA-256
  * against the document it is supposed to be before moving or removing it, so a file that took the
- * same name meanwhile is left alone and reported rather than acted on, and a delete is decided
- * again under the journal's lock ([SyncHooks.deleteDeletedCopy]).
+ * same name meanwhile is left alone and reported rather than acted on. Each trash, restore and
+ * delete is decided again under the journal's writer lock ([SyncHooks.serialized]), so a restore or
+ * an import the user makes after the pass planned is not undone by it.
  */
 class LocalApplier(
     private val fs: LibraryFileSystem,
@@ -20,6 +21,8 @@ class LocalApplier(
     private val store: RemoteStore,
     private val downloads: MutableMap<String, String>,
     private val hooks: SyncHooks,
+    private val manifest: SyncManifest,
+    private val nowMillis: Long,
 ) {
     private val trashOps = TrashOps(fs)
 
@@ -48,6 +51,8 @@ class LocalApplier(
             is SyncAction.PublishDocument -> action.remotePath
             is SyncAction.RestoreLocalTrash -> action.trashEntry
             is SyncAction.MoveLocalToTrash -> action.relPath
+            is SyncAction.MoveLocal -> action.from
+            is SyncAction.RecordLocalPath -> action.localPath
             is SyncAction.DeleteLocalFile -> action.relPath
             is SyncAction.DownloadTrash -> action.entry.path
         }
@@ -57,11 +62,34 @@ class LocalApplier(
         report: SyncReportBuilder,
     ): Boolean =
         when (action) {
-            is SyncAction.PublishDocument -> publish(action, report)
-            is SyncAction.RestoreLocalTrash -> restore(action, report)
-            is SyncAction.MoveLocalToTrash -> moveToTrash(action, report)
-            is SyncAction.DeleteLocalFile -> deleteFile(action, report)
-            is SyncAction.DownloadTrash -> downloadTrash(action)
+            is SyncAction.PublishDocument -> {
+                publish(action, report)
+            }
+
+            is SyncAction.RestoreLocalTrash -> {
+                restore(action, report)
+            }
+
+            is SyncAction.MoveLocalToTrash -> {
+                moveToTrash(action, report)
+            }
+
+            is SyncAction.MoveLocal -> {
+                moveLocal(action, report)
+            }
+
+            is SyncAction.RecordLocalPath -> {
+                manifest.recordLocalPath(action.remotePath, action.localPath, nowMillis)
+                false
+            }
+
+            is SyncAction.DeleteLocalFile -> {
+                deleteFile(action, report)
+            }
+
+            is SyncAction.DownloadTrash -> {
+                downloadTrash(action)
+            }
         }
 
     private suspend fun publish(
@@ -72,16 +100,18 @@ class LocalApplier(
         val scratch = downloads.remove(action.remotePath) ?: staging.newPath(".pdf")
         try {
             if (!staging.exists(scratch)) store.download(action.remotePath, scratch)
-            check(
-                staging.sha256(scratch) == action.docId,
-            ) { "Remote document changed while syncing: ${action.remotePath}" }
+            if (staging.sha256(scratch) != action.docId) {
+                throw RemoteRaceException("Remote document changed while syncing: ${action.remotePath}")
+            }
+            if (fs.exists(action.targetRelPath)) removeSupersededAt(action.targetRelPath, action.docId)
             val target = uniquifyPath(action.targetRelPath, startIndex = 2, suffix = { " ($it)" }, exists = fs::exists)
             if (target != action.targetRelPath) {
                 report.conflicts +=
-                    SyncConflict(action.docId, action.remotePath, "Local path was taken; installed as $target")
+                    SyncConflict(action.docId, action.remotePath, ConflictKind.INSTALLED_AS_COPY, otherPath = target)
             }
             fs.importExternal(staging.externalSource(scratch), target)
-            check(fs.sha256(target) == action.docId) { "Installed document hash mismatch: $target" }
+            if (fs.sha256(target) != action.docId) throw RemoteRaceException("Installed file changed at once: $target")
+            manifest.recordLocalPath(action.remotePath, target, nowMillis)
             report.downloadedDocuments++
             return true
         } finally {
@@ -89,31 +119,85 @@ class LocalApplier(
         }
     }
 
+    /**
+     * The file at [relPath], where a document's successor is to be installed, may hold bytes a relink
+     * superseded (the original of a bake another device made): those are the successor's old
+     * version, which the bake removed there, so they make way here too rather than push the
+     * successor to a uniquified name. Anything else at [relPath] stays.
+     */
+    private suspend fun removeSupersededAt(
+        relPath: String,
+        successor: String,
+    ) {
+        hooks.serialized { journal ->
+            val held = fs.sha256(relPath)
+            if (held != successor && journal.successorOf(held) == successor) fs.delete(relPath)
+        }
+    }
+
     private suspend fun restore(
         action: SyncAction.RestoreLocalTrash,
         report: SyncReportBuilder,
+    ): Boolean =
+        hooks.serialized { journal ->
+            if (!journal.isCurrent(action.docId) || !verified(action.trashEntry, action.docId, report)) {
+                return@serialized false
+            }
+            fs.move(action.trashEntry, trashOps.restoreTarget(action.targetRelPath, fs::exists))
+            true
+        }
+
+    /**
+     * Give the document's library file the remote's name: only while the library shows it, the file
+     * still holds it, and the new name is free here; anything else waits for the next pass.
+     */
+    private suspend fun moveLocal(
+        action: SyncAction.MoveLocal,
+        report: SyncReportBuilder,
     ): Boolean {
-        if (!verified(action.trashEntry, action.docId, report)) return false
-        fs.move(action.trashEntry, trashOps.restoreTarget(action.targetRelPath, fs::exists))
-        return true
+        val moved =
+            hooks.serialized { journal ->
+                if (!journal.isCurrent(action.docId) || !verified(action.from, action.docId, report)) {
+                    return@serialized false
+                }
+                if (fs.exists(action.to)) {
+                    report.conflicts += SyncConflict(action.docId, action.to, ConflictKind.TARGET_OCCUPIED)
+                    return@serialized false
+                }
+                fs.move(action.from, action.to)
+                true
+            }
+        if (moved) manifest.recordLocalPath(action.remotePath, action.to, nowMillis)
+        return moved
     }
 
     private suspend fun moveToTrash(
         action: SyncAction.MoveLocalToTrash,
         report: SyncReportBuilder,
-    ): Boolean {
-        if (!verified(action.relPath, action.docId, report)) return false
-        fs.move(action.relPath, trashOps.trashTarget(action.relPath, action.docId, action.episodeMillis))
-        return true
-    }
+    ): Boolean =
+        hooks.serialized { journal ->
+            if (!journal.isTrashed(action.docId) || !verified(action.relPath, action.docId, report)) {
+                return@serialized false
+            }
+            fs.move(action.relPath, trashOps.trashTarget(action.relPath, action.docId, action.episodeMillis))
+            true
+        }
 
+    /**
+     * Delete a copy of a deleted document, only while the journal still has it deleted and the file
+     * still holds its bytes: an import that brought the bytes back since the pass planned keeps them.
+     */
     private suspend fun deleteFile(
         action: SyncAction.DeleteLocalFile,
         report: SyncReportBuilder,
-    ): Boolean {
-        if (!verified(action.relPath, action.docId, report)) return false
-        return hooks.deleteDeletedCopy(action.docId, action.relPath)
-    }
+    ): Boolean =
+        hooks.serialized { journal ->
+            if (!journal.isDeleted(action.docId) || !verified(action.relPath, action.docId, report)) {
+                return@serialized false
+            }
+            fs.delete(action.relPath)
+            true
+        }
 
     private suspend fun downloadTrash(action: SyncAction.DownloadTrash): Boolean {
         val path = action.entry.path
@@ -122,9 +206,9 @@ class LocalApplier(
         try {
             store.download(path, scratch)
             val size = staging.size(scratch)
-            check(
-                size == action.entry.size,
-            ) { "Downloaded ${size ?: "unknown"} bytes, listing said ${action.entry.size}" }
+            if (size != action.entry.size) {
+                throw RemoteRaceException("Downloaded ${size ?: "unknown"} bytes, listing said ${action.entry.size}")
+            }
             if (fs.exists(path)) return false
             fs.importExternal(staging.externalSource(scratch), path)
             return true
@@ -141,7 +225,7 @@ class LocalApplier(
     ): Boolean {
         if (!fs.exists(relPath)) return false
         if (fs.sha256(relPath) == docId) return true
-        report.conflicts += SyncConflict(docId, relPath, "Local file no longer holds this document; left in place")
+        report.conflicts += SyncConflict(docId, relPath, ConflictKind.LOCAL_CHANGED)
         return false
     }
 }

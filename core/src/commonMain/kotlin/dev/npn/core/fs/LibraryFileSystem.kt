@@ -125,6 +125,18 @@ interface LibraryFileSystem {
 
     suspend fun readBytes(relPath: String): ByteArray
 
+    /**
+     * Hand [relPath]'s bytes to [sink] in chunks (the buffer and how much of it is filled), for a copy
+     * that must not hold a large PDF in memory. Platforms stream; the default reads the whole file.
+     */
+    suspend fun readChunked(
+        relPath: String,
+        sink: (ByteArray, Int) -> Unit,
+    ) {
+        val bytes = readBytes(relPath)
+        sink(bytes, bytes.size)
+    }
+
     /** Up to the last [maxBytes] bytes of [relPath], seeking rather than reading the whole file. */
     suspend fun readTail(
         relPath: String,

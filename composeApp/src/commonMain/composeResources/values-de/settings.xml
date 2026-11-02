@@ -165,12 +165,12 @@
     <string name="common_settings_cloud_engine_checking">Synchronisierungsdienst wird geprüft…</string>
     <string name="common_settings_cloud_engine_available">Synchronisierungsdienst %1$s ist bereit.</string>
     <string name="common_settings_cloud_engine_missing">Der Synchronisierungsdienst wurde nicht gefunden (gesucht: %1$s).</string>
-    <string name="common_settings_cloud_engine_failed">Der Synchronisierungsdienst hat nicht geantwortet: %1$s</string>
+    <string name="common_settings_cloud_engine_failed">Der Synchronisierungsdienst hat mit einem Fehler geantwortet: %1$s</string>
     <string name="common_settings_cloud_engine_check">Erneut prüfen</string>
-    <string name="common_settings_cloud_remote">Remote</string>
-    <string name="common_settings_cloud_failure_unknown">keine Details aufgezeichnet</string>
+    <string name="common_settings_cloud_remote">Cloud-Ordner</string>
+    <string name="common_settings_cloud_failure_unknown">Etwas ist schiefgelaufen: %1$s</string>
     <string name="common_settings_cloud_schedule">Zeitplan</string>
-    <string name="common_settings_cloud_interval">Synchronisierungsintervall: %1$s</string>
+    <string name="common_settings_cloud_interval">Synchronisierungsintervall</string>
     <string name="common_settings_cloud_auto">Automatisch synchronisieren</string>
     <string name="common_settings_cloud_auto_help">Synchronisiert im gewählten Intervall und kurz nach Änderungen auf diesem Gerät. „Jetzt synchronisieren“ funktioniert in jedem Fall.</string>
     <plurals name="common_settings_cloud_interval_minutes">
@@ -193,7 +193,7 @@
     <string name="common_settings_cloud_phase_indexing">Indizierung</string>
     <string name="common_settings_cloud_never">Noch nicht synchronisiert.</string>
     <string name="common_settings_cloud_last_summary">Letzte Synchronisierung %1$s: %2$d heruntergeladen, %3$d hochgeladen, %4$d verschoben und %5$d im Remote entfernt.</string>
-    <string name="common_settings_cloud_last_failed">Letzte Synchronisierung %1$s fehlgeschlagen: %2$s</string>
+    <string name="common_settings_cloud_last_failed">Letzte Synchronisierung %1$s fehlgeschlagen.</string>
     <plurals name="common_settings_cloud_conflict_count">
         <item quantity="one">%1$d Konflikt bleibt für dich zu lösen:</item>
         <item quantity="other">%1$d Konflikte bleiben für dich zu lösen:</item>
@@ -204,8 +204,7 @@
     </plurals>
     <string name="common_settings_cloud_problem_line">%1$s: %2$s</string>
     <string name="common_settings_cloud_outcome_completed">Synchronisierung abgeschlossen.</string>
-    <string name="common_settings_cloud_outcome_failed">Synchronisierung fehlgeschlagen: %1$s</string>
-    <string name="common_settings_cloud_outcome_not_configured">Gib zuerst ein Remote ein.</string>
+    <string name="common_settings_cloud_outcome_not_configured">Verbinde zuerst einen Cloud-Speicher.</string>
     <string name="common_settings_cloud_outcome_unavailable">Cloud-Synchronisierung ist auf diesem Gerät nicht verfügbar.</string>
     <string name="common_settings_cloud_outcome_running">Es läuft bereits eine Synchronisierung.</string>
 
@@ -234,9 +233,40 @@
     <string name="common_settings_cloud_folder_new">Name des neuen Ordners</string>
     <string name="common_settings_cloud_folder_create">Ordner anlegen</string>
     <string name="common_settings_cloud_folder_use">Diesen Ordner verwenden</string>
-    <string name="common_settings_cloud_setup_failed">Die Einrichtung konnte nicht fortgesetzt werden</string>
+    <string name="common_settings_cloud_setup_failed">Die Einrichtung konnte nicht fortgesetzt werden: %1$s</string>
     <string name="common_settings_cloud_retry">Erneut versuchen</string>
     <string name="common_settings_cloud_cancel">Abbrechen</string>
     <string name="common_settings_cloud_change_folder">Ordner ändern</string>
     <string name="common_settings_cloud_disconnect">Trennen</string>
+    <string name="common_settings_cloud_engine_none">Dieses Gerät hat keinen Synchronisierungsdienst.</string>
+    <string name="common_settings_cloud_engine_start_failed">Der Synchronisierungsdienst konnte nicht gestartet werden: %1$s</string>
+    <string name="common_settings_cloud_engine_exited">Der Synchronisierungsdienst wurde direkt nach dem Start beendet: %1$s</string>
+    <string name="common_settings_cloud_engine_not_ready">Der Synchronisierungsdienst ist nicht rechtzeitig gestartet: %1$s</string>
+    <string name="common_settings_cloud_engine_unreachable">Der Synchronisierungsdienst antwortet nicht mehr: %1$s</string>
+    <string name="common_settings_cloud_engine_closed">Der Synchronisierungsdienst wurde mit der Bibliothek beendet. Öffne die Bibliothek erneut, um ihn zu verwenden.</string>
+    <string name="common_settings_cloud_failure_unreachable">Die Cloud war nicht erreichbar. Prüfe die Verbindung; die nächste Synchronisierung versucht es erneut.</string>
+    <string name="common_settings_cloud_failure_sign_in">Die Cloud akzeptiert die Anmeldung nicht mehr. Trenne die Verbindung und verbinde dich dann neu.</string>
+    <string name="common_settings_cloud_failure_full">Der Cloud-Speicher ist voll.</string>
+    <string name="common_settings_cloud_failure_not_library">Der Cloud-Ordner enthält andere Dateien und keine Bibliothek, daher wurde nichts übertragen. Wähle einen leeren Ordner oder den eigenen Ordner dieser Bibliothek.</string>
+    <string name="common_settings_cloud_failure_other_library">Der Cloud-Ordner enthält eine andere Bibliothek, daher wurde nichts übertragen. Wähle den eigenen Ordner dieser Bibliothek oder einen leeren Ordner.</string>
+    <string name="common_settings_cloud_failure_journal_blocked">Diese Bibliothek kann gerade keine Änderungen speichern, daher wurde nichts synchronisiert.</string>
+    <string name="common_settings_cloud_conflict_target_occupied">%1$s: Am Ziel dieses Dokuments liegt schon eine andere Datei, daher bleibt es, wo es ist.</string>
+    <string name="common_settings_cloud_conflict_uploaded_as_copy">%1$s: Dort lag schon eine andere Datei, daher wurde das Dokument als %2$s hochgeladen.</string>
+    <string name="common_settings_cloud_conflict_installed_as_copy">%1$s: Die Bibliothek hatte dort schon eine Datei, daher wurde das Dokument als %2$s gespeichert.</string>
+    <string name="common_settings_cloud_conflict_unidentified">%1$s: Die Datei dort konnte noch nicht geprüft werden, daher wurde nichts darüber hochgeladen.</string>
+    <string name="common_settings_cloud_conflict_remote_changed">%1$s: Die Datei hat sich während der Synchronisierung in der Cloud geändert; die nächste Synchronisierung macht dort weiter.</string>
+    <string name="common_settings_cloud_conflict_local_changed">%1$s: Die Datei in der Bibliothek hat sich während der Synchronisierung geändert und wurde nicht angetastet.</string>
+    <string name="common_settings_cloud_conflict_kept_on_device">%1$s: Dieses Dokument wurde auf einem anderen Gerät gelöscht und hier zurückgeholt, daher bleibt es nur auf diesem Gerät.</string>
+    <string name="common_settings_cloud_disconnect_title">Cloud-Speicher trennen?</string>
+    <string name="common_settings_cloud_disconnect_message">Diese Bibliothek wird nicht mehr synchronisiert, und dieses Gerät vergisst die Anmeldung. Nichts wird gelöscht, weder hier noch in der Cloud.</string>
+    <string name="common_settings_cloud_disconnect_failed">Der Cloud-Speicher konnte nicht getrennt werden: %1$s</string>
+    <string name="common_settings_cloud_setup_interrupted">Die Einrichtung wurde unterbrochen. Beginne von vorn.</string>
+    <string name="common_settings_cloud_setup_unexpected">Der Synchronisierungsdienst hat auf eine Weise geantwortet, die diese App-Version nicht versteht.</string>
+    <string name="common_settings_cloud_folder_root_help">Öffne oder erstelle einen Ordner für diese Bibliothek: Die oberste Ebene deines Cloud-Speichers kann sie nicht aufnehmen.</string>
+    <string name="common_settings_cloud_folder_list_failed">Die Ordner konnten nicht aufgelistet werden: %1$s</string>
+    <string name="common_settings_cloud_folder_create_failed">Der Ordner konnte nicht erstellt werden: %1$s</string>
+    <string name="common_settings_cloud_folder_check_failed">Der Ordner konnte nicht geprüft werden: %1$s</string>
+    <string name="common_settings_cloud_folder_other_files">Dieser Ordner enthält schon andere Dateien. Wähle einen leeren Ordner oder einen, mit dem diese Bibliothek schon synchronisiert.</string>
+    <string name="common_cloud_banner_failed">Die Cloud-Synchronisierung ist fehlgeschlagen. Öffne ihre Einstellungen, um den Grund zu sehen.</string>
+    <string name="common_cloud_banner_open">Einstellungen öffnen</string>
 </resources>

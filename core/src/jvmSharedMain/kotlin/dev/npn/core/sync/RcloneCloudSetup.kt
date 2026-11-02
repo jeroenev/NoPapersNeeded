@@ -1,5 +1,6 @@
 package dev.npn.core.sync
 
+import dev.npn.core.util.reason
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
@@ -32,7 +33,12 @@ class RcloneCloudSetup(
         type: String,
         params: Map<String, String>,
     ): SetupStep {
-        val session = Session(type = type, parameters = params)
+        // A sign-in the user walked away from keeps rclone's loopback server listening; the next
+        // one could not start beside it.
+        stopOauth()
+        // The app opens the sign-in page itself, on every platform: rclone opening it too would show
+        // the user two tabs on a desktop.
+        val session = Session(type = type, parameters = params + (NO_BROWSER to "true"))
         sessions[name] = session
         return create(name, session, state = null, result = null)
     }
@@ -44,7 +50,7 @@ class RcloneCloudSetup(
     ): SetupStep {
         val session =
             sessions[name]
-                ?: return SetupStep.Failed("No remote setup is in progress for '$name'.")
+                ?: return SetupStep.Failed(SetupFailure.NOT_IN_PROGRESS)
         return create(name, session, state = state, result = result)
     }
 
@@ -95,6 +101,26 @@ class RcloneCloudSetup(
         )
     }
 
+    override suspend fun folderContents(
+        remote: String,
+        path: String,
+    ): FolderContents {
+        val input =
+            buildJsonObject {
+                put("fs", remote)
+                put("remote", path)
+                putJsonObject("opt") {
+                    put("noModTime", true)
+                    put("noMimeType", true)
+                }
+            }
+        return RcloneSetupWire.parseFolderContents(rpc().call("operations/list", input))
+    }
+
+    override suspend fun deleteRemote(name: String) {
+        rpc().call("config/delete", buildJsonObject { put("name", name) })
+    }
+
     private suspend fun create(
         name: String,
         session: Session,
@@ -107,8 +133,13 @@ class RcloneCloudSetup(
             if (step is SetupStep.Done) sessions.remove(name)
             step
         } catch (failure: RcloneException) {
-            SetupStep.Failed(failure.message ?: "rclone could not create the remote.")
+            SetupStep.Failed(SetupFailure.ENGINE, failure.reason())
         }
+    }
+
+    private companion object {
+        /** rclone's `config.ConfigAuthNoBrowser`: answer a browser sign-in without opening one. */
+        const val NO_BROWSER = "config_auth_no_browser"
     }
 
     /** The type and accumulated parameters needed to reproduce a follow-up `config/create`. */

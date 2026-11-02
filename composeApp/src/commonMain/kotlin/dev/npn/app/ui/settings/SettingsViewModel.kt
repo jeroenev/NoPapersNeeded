@@ -22,9 +22,13 @@ import dev.npn.core.pathrules.StoragePathTemplate
 import dev.npn.core.settings.SettingsRepository
 import dev.npn.core.settings.SettingsSnapshot
 import dev.npn.core.settings.toAiConfig
+import dev.npn.core.sync.CloudSyncConfig
+import dev.npn.core.sync.EngineProblem
+import dev.npn.core.sync.SyncFailure
 import dev.npn.core.sync.SyncOutcome
 import dev.npn.core.sync.SyncStatus
 import dev.npn.core.sync.TransportAvailability
+import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.watch.liesInLibrary
 import kotlinx.coroutines.Job
@@ -45,12 +49,14 @@ import no_papers_needed.composeapp.generated.resources.common_folder_not_on_devi
 import no_papers_needed.composeapp.generated.resources.common_save_field_failed
 import no_papers_needed.composeapp.generated.resources.common_save_setting_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_clear_thumbnails_failed
+import no_papers_needed.composeapp.generated.resources.common_settings_cloud_disconnect_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_move_field_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_remove_field_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_review_workflow_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_rule_stays_off
 import no_papers_needed.composeapp.generated.resources.common_settings_thumbnail_cache_empty
 import no_papers_needed.composeapp.generated.resources.common_settings_thumbnails_cleared
+import kotlin.uuid.Uuid
 
 /**
  * Settings screen view model. Device settings go through the one [SettingsRepository.edit]
@@ -75,6 +81,11 @@ class SettingsViewModel(
     private val inLibrary: suspend (folder: String, library: String) -> Boolean = ::liesInLibrary,
     /** What the screen's back-stack entry saves for a restored process; a new one opens it afresh. */
     saved: SavedStateHandle = SavedStateHandle(),
+    /**
+     * The name the cloud setup wizard gives a remote it creates for a provider type: unique per setup,
+     * so connecting a second account (or a second library) never overwrites the first one's sign-in.
+     */
+    newRemoteName: (type: String) -> String = { type -> "$type-${Uuid.random().toHexString().take(REMOTE_SUFFIX)}" },
 ) : MessagesViewModel(),
     SettingsActions {
     private val content = session.content
@@ -192,16 +203,41 @@ class SettingsViewModel(
         CloudSetupController(
             scope = viewModelScope,
             setup = { sync.setup },
-            readRemote = { settings.settings.first().cloudRemote },
-            persistRemote = { remote -> edit { it.copy(cloudRemote = remote) } },
-            clearRemote = { edit { it.copy(cloudRemote = null, cloudSyncEnabled = false) } },
+            readRemote = { sync.config.first().remote },
+            persistRemote = { remote -> configureCloud { it.copy(remote = remote) } },
+            disconnectRemote = ::disconnectCloud,
+            newRemoteName = newRemoteName,
         )
 
     override val cloudSetup: CloudSetupActions get() = cloud
 
     private val cloudState: Flow<CloudSyncState> =
-        combine(syncStatus, transport, syncOutcome, cloud.state) { status, engine, outcome, setup ->
-            CloudSyncState(status, engine, outcome, setup, cloud.available)
+        combine(
+            combine(sync.config, syncStatus, ::Pair),
+            transport,
+            syncOutcome,
+            cloud.state,
+        ) { (config, status), engine, outcome, setup ->
+            CloudSyncState(config, status, engine, outcome, setup, cloud.available)
+        }
+
+    private fun configureCloud(change: (CloudSyncConfig) -> CloudSyncConfig) =
+        launchReporting(Res.string.common_save_setting_failed) { sync.configure(change) }
+
+    override fun setCloudAutomatic(on: Boolean) = configureCloud { it.copy(enabled = on) }
+
+    override fun setCloudInterval(minutes: Int) = configureCloud { it.copy(intervalMinutes = minutes) }
+
+    /**
+     * Stop syncing this library and forget the remote's sign-in on this device: the remote the wizard
+     * created for it goes from the engine's configuration, tokens and all. A connection string has
+     * no stored remote to forget.
+     */
+    private fun disconnectCloud(remote: String) =
+        launchReporting(Res.string.common_settings_cloud_disconnect_failed) {
+            sync.configure { it.copy(remote = null, enabled = false) }
+            val colon = remote.indexOf(':')
+            if (colon > 0) sync.setup?.deleteRemote(remote.substring(0, colon))
         }
 
     /** Everything a settings pane shows, as one value. */
@@ -349,7 +385,7 @@ class SettingsViewModel(
             viewModelScope.launch {
                 transport.value =
                     runCatchingCancellable { sync.transportAvailability() }.getOrElse { failure ->
-                        TransportAvailability.Failed(failure.message ?: failure::class.simpleName ?: "error")
+                        TransportAvailability.Failed(EngineProblem.ERROR, failure.reason())
                     }
             }
     }
@@ -360,7 +396,7 @@ class SettingsViewModel(
             syncOutcome.value = null
             syncOutcome.value =
                 runCatchingCancellable { sync.syncNow() }.getOrElse { failure ->
-                    SyncOutcome.Failed(failure.message ?: failure::class.simpleName ?: "error")
+                    SyncOutcome.Failed(SyncFailure.UNKNOWN, failure.reason())
                 }
         }
     }
@@ -430,3 +466,6 @@ class SettingsViewModel(
 /** This snapshot with each typed value of [drafts] in place of the saved one. */
 private fun SettingsSnapshot.withTyped(drafts: List<Pair<TextSetting, String?>>): SettingsSnapshot =
     drafts.fold(this) { snapshot, (setting, typed) -> typed?.let { setting.with(snapshot, it) } ?: snapshot }
+
+/** Hex digits after the provider type in a remote the setup wizard names, e.g. `drive-3fa9c1`. */
+private const val REMOTE_SUFFIX = 6

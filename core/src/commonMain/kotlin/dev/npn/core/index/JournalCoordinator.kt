@@ -8,6 +8,7 @@ import dev.npn.core.journal.JournalEvent
 import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.PublishedTransaction
+import dev.npn.core.sync.JournalDocView
 import dev.npn.core.util.EpochClock
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.SystemEpochClock
@@ -473,12 +474,22 @@ internal class JournalCoordinator(
     suspend fun <T> serialized(block: suspend (LockedJournal) -> T): T = locked { block(lockedJournal) }
 
     /**
-     * Where each of [docIds]' files is meant to be ([FoldedState.intendedPath]), read from the live
-     * fold under the lock. For the cloud sync, which moves a document's remote copy to where the
-     * journal wants it: the index row only caches where the file is.
+     * What the live fold says of each of [docIds], read under the lock, for the cloud sync: where
+     * its file is meant to be ([FoldedState.intendedPath]), its lifecycle, and what a relink made of
+     * it. The sync mirrors the journal's decisions, which the index rows only cache.
      */
-    suspend fun intendedPaths(docIds: Collection<String>): Map<String, String?> =
-        locked { foldedState().let { state -> docIds.associateWith(state::intendedPath) } }
+    suspend fun syncView(docIds: Collection<String>): Map<String, JournalDocView> =
+        locked {
+            val state = foldedState()
+            docIds.associateWith { doc ->
+                JournalDocView(
+                    intendedPath = state.intendedPath(doc),
+                    deleted = state.isDeleted(doc),
+                    trashed = state.isTrashed(doc),
+                    supersededBy = state.resolveDocId(doc).takeIf { it != doc },
+                )
+            }
+        }
 
     /**
      * Deleted documents an import brought back in this session without a record of it, as no
@@ -495,6 +506,10 @@ internal class JournalCoordinator(
 
             override suspend fun isDeleted(docId: String): Boolean =
                 docId !in returnedUnrecorded && foldedState().isDeleted(docId)
+
+            override suspend fun isTrashed(docId: String): Boolean = foldedState().isTrashed(docId)
+
+            override suspend fun isCurrent(docId: String): Boolean = foldedState().isCurrent(docId)
 
             override suspend fun restoreReturned(
                 docId: String,

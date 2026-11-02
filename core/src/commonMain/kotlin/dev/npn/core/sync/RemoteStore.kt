@@ -59,29 +59,57 @@ sealed interface TransportAvailability {
         val version: String,
     ) : TransportAvailability
 
-    /** The rclone executable could not be found where this platform looks for it. */
+    /** The rclone executable could not be found (or started) where this platform looks for it. */
     data class NotInstalled(
         val lookedFor: String,
     ) : TransportAvailability
 
-    /** An executable was found but did not answer as rclone would. */
+    /**
+     * The executable is there but the engine is not usable: [problem] says how, for the message the
+     * UI shows; [detail] is rclone's own diagnostic text, untranslated, for the curious.
+     */
     data class Failed(
-        val message: String,
+        val problem: EngineProblem,
+        val detail: String? = null,
     ) : TransportAvailability
 }
 
+/** Why the transfer engine could not be used, beyond not being installed. */
+enum class EngineProblem {
+    /** The executable could not be started: it is missing, or not executable. */
+    START_FAILED,
+
+    /** The process started and exited before it answered. */
+    EXITED,
+
+    /** The process runs but did not answer in time. */
+    NOT_READY,
+
+    /** It answered before and stopped answering, a restart included. */
+    UNREACHABLE,
+
+    /** The engine was closed with its session; nothing more runs on it. */
+    CLOSED,
+
+    /** It answered, with an error of its own. */
+    ERROR,
+}
+
 /**
- * The device's transfer engine: answers whether it is usable, which remotes its configuration
- * names, and opens a [RemoteStore] over one of them. The production implementation shells out to
+ * The device's transfer engine: answers whether it is usable and opens a [RemoteStore] over a
+ * remote. The production implementation shells out to
  * the rclone executable; tests substitute a directory-backed store.
  */
 interface SyncTransport {
     suspend fun availability(): TransportAvailability
 
-    /** Names of the remotes configured in rclone's config file, without the trailing colon. */
-    suspend fun listRemotes(): List<String>
-
     fun open(remote: String): RemoteStore
+
+    /**
+     * What [failure], thrown by one of this engine's stores, means for the user: the reason the UI
+     * names. An engine that cannot tell says [SyncFailure.UNKNOWN] and the failure's text is shown.
+     */
+    fun failureOf(failure: Throwable): SyncFailure = SyncFailure.UNKNOWN
 
     /**
      * Release any long-lived resources the engine holds (a spawned process). Defaults to nothing so
@@ -113,6 +141,15 @@ interface LocalStaging {
     suspend fun write(
         path: String,
         bytes: ByteArray,
+    )
+
+    /**
+     * Create the scratch file at [path] from the chunks [fill] hands its sink, without holding the
+     * whole file in memory: how a document is copied out of the library for an upload.
+     */
+    suspend fun writeStreaming(
+        path: String,
+        fill: suspend (sink: (ByteArray, Int) -> Unit) -> Unit,
     )
 
     /** The scratch file as the platform's [ExternalSource], for importing it into the library. */

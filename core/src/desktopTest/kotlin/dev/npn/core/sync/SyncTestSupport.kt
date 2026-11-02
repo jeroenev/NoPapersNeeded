@@ -174,8 +174,6 @@ class DirectoryTransport(
 ) : SyncTransport {
     override suspend fun availability(): TransportAvailability = TransportAvailability.Available("test")
 
-    override suspend fun listRemotes(): List<String> = listOf("test")
-
     override fun open(remote: String): RemoteStore = store
 }
 
@@ -198,7 +196,7 @@ internal class SyncPair private constructor(
         ): SyncPair {
             val remote = DirectoryRemoteStore(Files.createTempDirectory("npn-sync-remote"), reportsHashes)
             val transport = DirectoryTransport(remote)
-            val config: suspend () -> CloudSyncConfig = { CloudSyncConfig(enabled = false, remote = "test:library") }
+            val config = CloudSyncConfig(enabled = false, remote = "test:library")
             val a =
                 AppSessionRig.create(
                     scope,

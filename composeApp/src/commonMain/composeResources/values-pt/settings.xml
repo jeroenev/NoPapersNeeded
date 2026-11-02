@@ -165,12 +165,12 @@
     <string name="common_settings_cloud_engine_checking">Verificando o mecanismo de sincronização…</string>
     <string name="common_settings_cloud_engine_available">O mecanismo de sincronização %1$s está pronto.</string>
     <string name="common_settings_cloud_engine_missing">O mecanismo de sincronização não foi encontrado (procurado em %1$s).</string>
-    <string name="common_settings_cloud_engine_failed">O mecanismo de sincronização não respondeu: %1$s</string>
+    <string name="common_settings_cloud_engine_failed">O mecanismo de sincronização respondeu com um erro: %1$s</string>
     <string name="common_settings_cloud_engine_check">Verificar novamente</string>
-    <string name="common_settings_cloud_remote">Remoto</string>
-    <string name="common_settings_cloud_failure_unknown">nenhum detalhe registrado</string>
+    <string name="common_settings_cloud_remote">Pasta na nuvem</string>
+    <string name="common_settings_cloud_failure_unknown">Algo deu errado: %1$s</string>
     <string name="common_settings_cloud_schedule">Agendamento</string>
-    <string name="common_settings_cloud_interval">Intervalo de sincronização: %1$s</string>
+    <string name="common_settings_cloud_interval">Intervalo de sincronização</string>
     <string name="common_settings_cloud_auto">Sincronizar automaticamente</string>
     <string name="common_settings_cloud_auto_help">Sincroniza no intervalo escolhido e logo após alterações neste dispositivo. “Sincronizar agora” funciona de qualquer forma.</string>
     <plurals name="common_settings_cloud_interval_minutes">
@@ -193,7 +193,7 @@
     <string name="common_settings_cloud_phase_indexing">Indexando</string>
     <string name="common_settings_cloud_never">Ainda não sincronizado.</string>
     <string name="common_settings_cloud_last_summary">Última sincronização %1$s: %2$d baixados, %3$d enviados, %4$d movidos e %5$d removidos no remoto.</string>
-    <string name="common_settings_cloud_last_failed">A última sincronização %1$s falhou: %2$s</string>
+    <string name="common_settings_cloud_last_failed">A última sincronização %1$s falhou.</string>
     <plurals name="common_settings_cloud_conflict_count">
         <item quantity="one">%1$d conflito ficou para você resolver:</item>
         <item quantity="other">%1$d conflitos ficaram para você resolver:</item>
@@ -204,8 +204,7 @@
     </plurals>
     <string name="common_settings_cloud_problem_line">%1$s: %2$s</string>
     <string name="common_settings_cloud_outcome_completed">Sincronização concluída.</string>
-    <string name="common_settings_cloud_outcome_failed">A sincronização falhou: %1$s</string>
-    <string name="common_settings_cloud_outcome_not_configured">Informe um remoto primeiro.</string>
+    <string name="common_settings_cloud_outcome_not_configured">Conecte primeiro um armazenamento em nuvem.</string>
     <string name="common_settings_cloud_outcome_unavailable">A sincronização na nuvem não está disponível neste dispositivo.</string>
     <string name="common_settings_cloud_outcome_running">Uma sincronização já está em andamento.</string>
 
@@ -234,9 +233,40 @@
     <string name="common_settings_cloud_folder_new">Nome da nova pasta</string>
     <string name="common_settings_cloud_folder_create">Criar pasta</string>
     <string name="common_settings_cloud_folder_use">Usar esta pasta</string>
-    <string name="common_settings_cloud_setup_failed">A configuração não pôde continuar</string>
+    <string name="common_settings_cloud_setup_failed">A configuração não pôde continuar: %1$s</string>
     <string name="common_settings_cloud_retry">Tentar novamente</string>
     <string name="common_settings_cloud_cancel">Cancelar</string>
     <string name="common_settings_cloud_change_folder">Trocar de pasta</string>
     <string name="common_settings_cloud_disconnect">Desconectar</string>
+    <string name="common_settings_cloud_engine_none">Este dispositivo não tem mecanismo de sincronização.</string>
+    <string name="common_settings_cloud_engine_start_failed">Não foi possível iniciar o mecanismo de sincronização: %1$s</string>
+    <string name="common_settings_cloud_engine_exited">O mecanismo de sincronização parou logo após iniciar: %1$s</string>
+    <string name="common_settings_cloud_engine_not_ready">O mecanismo de sincronização não iniciou a tempo: %1$s</string>
+    <string name="common_settings_cloud_engine_unreachable">O mecanismo de sincronização parou de responder: %1$s</string>
+    <string name="common_settings_cloud_engine_closed">O mecanismo de sincronização parou junto com a biblioteca. Abra a biblioteca de novo para usá-lo.</string>
+    <string name="common_settings_cloud_failure_unreachable">Não foi possível acessar a nuvem. Verifique a conexão; a próxima sincronização tentará de novo.</string>
+    <string name="common_settings_cloud_failure_sign_in">A nuvem não aceita mais o login. Desconecte e conecte de novo.</string>
+    <string name="common_settings_cloud_failure_full">O armazenamento em nuvem está cheio.</string>
+    <string name="common_settings_cloud_failure_not_library">A pasta na nuvem contém outros arquivos e nenhuma biblioteca, então nada foi transferido. Escolha uma pasta vazia ou a própria pasta desta biblioteca.</string>
+    <string name="common_settings_cloud_failure_other_library">A pasta na nuvem contém outra biblioteca, então nada foi transferido. Escolha a própria pasta desta biblioteca ou uma vazia.</string>
+    <string name="common_settings_cloud_failure_journal_blocked">Esta biblioteca não pode salvar alterações agora, então nada foi sincronizado.</string>
+    <string name="common_settings_cloud_conflict_target_occupied">%1$s: já existe outro arquivo onde este documento deveria ficar, então ele continua onde está.</string>
+    <string name="common_settings_cloud_conflict_uploaded_as_copy">%1$s: já havia outro arquivo ali, então o documento foi enviado como %2$s.</string>
+    <string name="common_settings_cloud_conflict_installed_as_copy">%1$s: a biblioteca já tinha um arquivo ali, então o documento foi salvo como %2$s.</string>
+    <string name="common_settings_cloud_conflict_unidentified">%1$s: ainda não foi possível verificar o arquivo ali, então nada foi enviado por cima dele.</string>
+    <string name="common_settings_cloud_conflict_remote_changed">%1$s: o arquivo mudou na nuvem durante a sincronização; a próxima sincronização continua a partir daí.</string>
+    <string name="common_settings_cloud_conflict_local_changed">%1$s: o arquivo da biblioteca mudou durante a sincronização e não foi alterado.</string>
+    <string name="common_settings_cloud_conflict_kept_on_device">%1$s: este documento foi excluído em outro dispositivo e recuperado aqui, então fica apenas neste dispositivo.</string>
+    <string name="common_settings_cloud_disconnect_title">Desconectar o armazenamento em nuvem?</string>
+    <string name="common_settings_cloud_disconnect_message">Esta biblioteca deixa de ser sincronizada e este dispositivo esquece o login. Nada é excluído, nem aqui nem na nuvem.</string>
+    <string name="common_settings_cloud_disconnect_failed">Não foi possível desconectar o armazenamento em nuvem: %1$s</string>
+    <string name="common_settings_cloud_setup_interrupted">A configuração foi interrompida. Comece de novo.</string>
+    <string name="common_settings_cloud_setup_unexpected">O mecanismo de sincronização respondeu de um jeito que esta versão do app não entende.</string>
+    <string name="common_settings_cloud_folder_root_help">Abra ou crie uma pasta para esta biblioteca: o nível superior do seu armazenamento em nuvem não pode contê-la.</string>
+    <string name="common_settings_cloud_folder_list_failed">Não foi possível listar as pastas: %1$s</string>
+    <string name="common_settings_cloud_folder_create_failed">Não foi possível criar a pasta: %1$s</string>
+    <string name="common_settings_cloud_folder_check_failed">Não foi possível verificar a pasta: %1$s</string>
+    <string name="common_settings_cloud_folder_other_files">Esta pasta já contém outros arquivos. Escolha uma pasta vazia ou uma com a qual esta biblioteca já sincroniza.</string>
+    <string name="common_cloud_banner_failed">A sincronização com a nuvem falhou. Abra as configurações dela para ver o motivo.</string>
+    <string name="common_cloud_banner_open">Abrir configurações</string>
 </resources>

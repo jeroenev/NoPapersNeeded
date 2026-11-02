@@ -4,29 +4,36 @@ import dev.npn.core.app.SyncFacade
 import dev.npn.core.db.KeyValueDao
 import dev.npn.core.util.EpochClock
 import dev.npn.core.util.NpnJson
+import dev.npn.core.util.NpnLog
+import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
-import kotlinx.coroutines.CancellationException
+import dev.npn.core.util.warn
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
- * The session's [SyncFacade]: owns the single-flight gate, the live [SyncStatus], the persisted
- * last-run summary, and the schedule. A pass a caller asks for is awaited by that caller (a manual
- * "sync now" awaits its result; Android's job holds its wakelock across one) but runs as work the
- * session [owned]s, so closing the library cancels and awaits it; the automatic ones run on the
- * session scope this service is [start]ed on.
+ * The session's [SyncFacade]: owns the library's cloud sync settings, the single-flight gate, the
+ * live [SyncStatus], the persisted last-run summary, and the schedule. A pass a caller asks for is
+ * awaited by that caller (a manual "sync now" awaits its result; Android's job holds its wakelock
+ * across one) but runs as work the session [owned]s, so closing the library cancels and awaits it;
+ * the automatic ones run on the session scope this service is [start]ed on.
+ *
+ * The settings ([CloudSyncConfig]) live in the library's own `device.db`, beside the manifest the
+ * passes keep: a remote belongs to one library on this device, never to the device as a whole.
  */
 class SyncService(
     private val transport: SyncTransport,
-    private val config: suspend () -> CloudSyncConfig,
     private val engine: SyncEngine,
     private val kv: KeyValueDao,
     private val clock: EpochClock,
@@ -35,69 +42,80 @@ class SyncService(
     private val owned: suspend (suspend () -> SyncOutcome) -> SyncOutcome = { it() },
     private val checkIntervalMillis: Long = DEFAULT_CHECK_INTERVAL_MS,
     private val soonDelayMillis: Long = DEFAULT_SOON_DELAY_MS,
+    /** Where a pass that ended early is logged. */
+    private val log: NpnLog = NpnLog.None,
 ) : SyncFacade {
     private val gate = Mutex()
     private val _status = MutableStateFlow(SyncStatus())
-    override val status: Flow<SyncStatus> = _status.asStateFlow()
+    override val status: Flow<SyncStatus> =
+        flow {
+            runCatchingCancellable { loadLastRun() }
+            emitAll(_status)
+        }
 
-    private var scope: CoroutineScope? = null
-    private var soonJob: Job? = null
-    private var loaded = false
+    private val _config = MutableStateFlow(CloudSyncConfig.DISABLED)
+    override val config: Flow<CloudSyncConfig> =
+        flow {
+            loadConfig()
+            emitAll(_config)
+        }
 
-    /** A change arrived while a pass ran; one more pass is owed once it finishes. */
-    private var changedDuringPass = false
+    /** Guards loading and changing the stored settings and last run. */
+    private val store = Mutex()
+    private var configLoaded = false
+    private var lastRunLoaded = false
 
-    /** Start the automatic schedule: a cheap due-check every [checkIntervalMillis]. */
-    fun start(scope: CoroutineScope): Job {
-        this.scope = scope
-        return scope.launch {
+    /**
+     * "Something changed" requests, collapsed: one waiting is as good as many, and the pass that
+     * answers it reads whatever changed meanwhile. Consumed by the loop [start] launches, so a
+     * request from any thread is safe.
+     */
+    private val soon = Channel<Unit>(Channel.CONFLATED)
+
+    /**
+     * Start the automatic schedule: a cheap due-check every [checkIntervalMillis], and the passes
+     * [requestSoon] asks for.
+     */
+    fun start(scope: CoroutineScope): Job =
+        scope.launch {
+            launch { answerSoonRequests() }
             loadLastRun()
             while (isActive) {
                 delay(checkIntervalMillis)
                 runCatchingCancellable { syncScheduled() }
             }
         }
-    }
 
     /**
      * Something changed locally: run a pass soon (debounced), if automatic sync is on. A burst of
-     * edits collapses into one pass. Requests made just after a pass finished are dropped: the
-     * watcher reports the files the pass itself published, and reacting to those would chain a
-     * needless pass onto every pass that transferred anything. A request made *while* a pass runs
-     * is remembered instead, because it may be a real edit the running pass planned before it saw
-     * it; one follow-up pass is scheduled when the running one ends.
+     * changes collapses into one pass, run [soonDelayMillis] after the first. A request that arrives
+     * while a pass runs is kept for one more pass once it ends, because it may be a real edit the
+     * running pass planned before it saw it. The files a pass itself published make the watcher ask
+     * once more, which costs one pass that finds nothing to do.
      */
     fun requestSoon() {
-        val scope = scope ?: return
-        val status = _status.value
-        if (status.running) {
-            changedDuringPass = true
-            return
-        }
-        val justFinished = status.lastRun?.let { clock.nowMillis() - it.finishedAt < soonDelayMillis } == true
-        if (justFinished) return
-        scheduleSoon(scope)
+        soon.trySend(Unit)
     }
 
-    private fun scheduleSoon(scope: CoroutineScope) {
-        soonJob?.cancel()
-        soonJob =
-            scope.launch {
-                delay(soonDelayMillis)
-                if (config().enabled) runCatchingCancellable { run() }
-            }
+    private suspend fun answerSoonRequests() {
+        while (soon.receiveCatching().isSuccess) {
+            delay(soonDelayMillis)
+            if (!loadConfig().enabled) continue
+            val outcome = runCatchingCancellable { owned { run() } }.getOrNull()
+            // A pass someone else started holds the gate; the change still needs one after it.
+            if (outcome == SyncOutcome.AlreadyRunning) soon.trySend(Unit)
+        }
     }
 
     fun close() {
-        soonJob?.cancel()
-        soonJob = null
+        soon.close()
     }
 
     override suspend fun syncNow(): SyncOutcome = owned { run() }
 
     override suspend fun syncScheduled(): SyncOutcome =
         owned {
-            val cfg = config()
+            val cfg = loadConfig()
             if (!cfg.enabled) return@owned SyncOutcome.NotConfigured
             loadLastRun()
             val last = _status.value.lastRun
@@ -107,74 +125,125 @@ class SyncService(
 
     override suspend fun transportAvailability(): TransportAvailability = transport.availability()
 
-    override suspend fun listRemotes(): List<String> = transport.listRemotes()
+    override suspend fun configure(change: (CloudSyncConfig) -> CloudSyncConfig) {
+        store.withLock {
+            val before = loadConfigLocked()
+            val after =
+                change(before).let { next ->
+                    next.copy(
+                        remote = next.remote?.trim()?.takeIf { it.isNotEmpty() },
+                        intervalMinutes = next.intervalMinutes.coerceIn(CloudSyncConfig.INTERVAL_RANGE),
+                        // Automatic passes need somewhere to go.
+                        enabled = next.enabled && !next.remote.isNullOrBlank(),
+                    )
+                }
+            if (after == before) return
+            kv.put(KEY_CONFIG, NpnJson.Persisted.encodeToString(CloudSyncConfig.serializer(), after))
+            _config.value = after
+            if (after.remote != before.remote) {
+                // The last pass's result was another folder's; it says nothing about this one.
+                kv.delete(SyncManifest.KEY_LAST_RUN)
+                lastRunLoaded = true
+                _status.update { it.copy(lastRun = null) }
+            }
+        }
+    }
 
     /**
      * One pass, single-flight. Never throws (except for cancellation): a failure anywhere — reading
      * the settings, probing the transport, the pass itself — comes back as [SyncOutcome.Failed],
      * so a caller on a UI scope cannot be crashed by it.
      */
-    @Suppress("TooGenericExceptionCaught")
     private suspend fun run(): SyncOutcome {
         if (!gate.tryLock()) return SyncOutcome.AlreadyRunning
-        val startedAt = clock.nowMillis()
-        var started = false
         try {
-            val remote = config().remote?.trim()?.takeIf { it.isNotEmpty() } ?: return SyncOutcome.NotConfigured
-            val availability = transport.availability()
-            if (availability !is TransportAvailability.Available) return SyncOutcome.Unavailable(availability)
-            loadLastRun()
-            started = true
-            changedDuringPass = false
-            _status.update { it.copy(running = true, progress = SyncProgress(SyncPhase.LISTING)) }
+            return runLocked()
+        } finally {
+            _status.update { it.copy(running = false, progress = null) }
+            gate.unlock()
+        }
+    }
+
+    private suspend fun runLocked(): SyncOutcome {
+        val cfg = runCatchingCancellable { loadConfig() }.getOrElse { return failed(it) }
+        val remote = cfg.remote ?: return SyncOutcome.NotConfigured
+        val availability =
+            runCatchingCancellable { transport.availability() }.getOrElse { return failed(it) }
+        if (availability !is TransportAvailability.Available) return SyncOutcome.Unavailable(availability)
+        runCatchingCancellable { loadLastRun() }
+        val startedAt = clock.nowMillis()
+        _status.update { it.copy(running = true, progress = SyncProgress(SyncPhase.LISTING)) }
+        return runCatchingCancellable {
             val report =
                 engine.run(
                     transport.open(remote),
                     remote,
                 ) { progress -> _status.update { it.copy(progress = progress) } }
             finish(SyncRunSummary(startedAt, clock.nowMillis(), report = report))
-            return SyncOutcome.Completed(report)
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (failure: Exception) {
-            val message = failure.message ?: failure::class.simpleName ?: "sync failed"
-            if (started) {
-                runCatchingCancellable {
-                    finish(
-                        SyncRunSummary(startedAt, clock.nowMillis(), failure = message),
-                    )
-                }
+            SyncOutcome.Completed(report)
+        }.getOrElse { failure ->
+            log.warn("Cloud sync pass failed", failure)
+            val outcome = failed(failure)
+            runCatchingCancellable {
+                finish(
+                    SyncRunSummary(
+                        startedAt,
+                        clock.nowMillis(),
+                        failure = outcome.reason,
+                        failureDetail = outcome.detail,
+                    ),
+                )
             }
-            return SyncOutcome.Failed(message)
-        } finally {
-            _status.update { it.copy(running = false, progress = null) }
-            gate.unlock()
-            if (started && changedDuringPass) {
-                changedDuringPass = false
-                scope?.let(::scheduleSoon)
-            }
+            outcome
         }
     }
+
+    private fun failed(failure: Throwable): SyncOutcome.Failed =
+        if (failure is SyncRefusedException) {
+            SyncOutcome.Failed(failure.reason)
+        } else {
+            SyncOutcome.Failed(transport.failureOf(failure), failure.reason())
+        }
 
     private suspend fun finish(summary: SyncRunSummary) {
         _status.update { it.copy(lastRun = summary) }
         kv.put(SyncManifest.KEY_LAST_RUN, NpnJson.Persisted.encodeToString(SyncRunSummary.serializer(), summary))
     }
 
+    private suspend fun loadConfig(): CloudSyncConfig = store.withLock { loadConfigLocked() }
+
+    private suspend fun loadConfigLocked(): CloudSyncConfig {
+        if (!configLoaded) {
+            _config.value =
+                kv.get(KEY_CONFIG)?.let { stored ->
+                    runCatchingCancellable {
+                        NpnJson.Persisted.decodeFromString(CloudSyncConfig.serializer(), stored)
+                    }.getOrNull()
+                } ?: CloudSyncConfig.DISABLED
+            configLoaded = true
+        }
+        return _config.value
+    }
+
     private suspend fun loadLastRun() {
-        if (loaded) return
-        val stored = kv.get(SyncManifest.KEY_LAST_RUN)
-        loaded = true
-        if (stored == null) return
-        val summary =
-            runCatching { NpnJson.Persisted.decodeFromString(SyncRunSummary.serializer(), stored) }.getOrNull()
-                ?: return
-        _status.update { it.copy(lastRun = it.lastRun ?: summary) }
+        store.withLock {
+            if (lastRunLoaded) return
+            lastRunLoaded = true
+            val stored = kv.get(SyncManifest.KEY_LAST_RUN) ?: return
+            val summary =
+                runCatchingCancellable {
+                    NpnJson.Persisted.decodeFromString(SyncRunSummary.serializer(), stored)
+                }.getOrNull() ?: return
+            _status.update { it.copy(lastRun = it.lastRun ?: summary) }
+        }
     }
 
     companion object {
         const val DEFAULT_CHECK_INTERVAL_MS = 60L * 1000L
         const val DEFAULT_SOON_DELAY_MS = 30L * 1000L
         private const val MILLIS_PER_MINUTE = 60L * 1000L
+
+        /** The library's [CloudSyncConfig] on this device, in its `device.db`. */
+        const val KEY_CONFIG = "sync.config"
     }
 }

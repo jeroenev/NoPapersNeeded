@@ -5,7 +5,6 @@ import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.app.aiedit.AiAutoEnricher
 import dev.npn.core.app.aiedit.AiEditQueue
 import dev.npn.core.fs.TrashOps
-import dev.npn.core.fs.holds
 import dev.npn.core.index.DuplicateResolver
 import dev.npn.core.index.ImportService
 import dev.npn.core.index.Indexer
@@ -20,8 +19,10 @@ import dev.npn.core.pathrules.StoragePathRuleApplicator
 import dev.npn.core.pdf.RenderGate
 import dev.npn.core.pdf.ThumbnailService
 import dev.npn.core.rules.RuleApplier
+import dev.npn.core.sync.JournalDocView
 import dev.npn.core.sync.SyncEngine
 import dev.npn.core.sync.SyncHooks
+import dev.npn.core.sync.SyncJournal
 import dev.npn.core.sync.SyncService
 import dev.npn.core.work.EndpointHealth
 import dev.npn.core.work.QueueDrainer
@@ -331,7 +332,6 @@ internal class SessionGraph(
             deps.syncStaging?.let { staging ->
                 SyncService(
                     transport = transport,
-                    config = deps.settings.cloudSync,
                     engine =
                         SyncEngine(
                             deps.fs,
@@ -342,19 +342,23 @@ internal class SessionGraph(
                             SessionSyncHooks(),
                             deps.clock,
                             deps.ids,
+                            log,
                         ),
                     kv = deps.deviceDb.keyValueDao(),
                     clock = deps.clock,
                     setup = deps.syncSetup,
                     owned = { pass -> lifetime.owned(pass) },
+                    log = log,
                 )
             }
         }
 
     /** What a sync pass asks of the session: the journal's answers, a fold, a rescan. */
     private inner class SessionSyncHooks : SyncHooks {
-        override suspend fun intendedPaths(docIds: Collection<String>): Map<String, String?> =
-            coordinator.intendedPaths(docIds)
+        override suspend fun journalReady(): Boolean = coordinator.canWrite()
+
+        override suspend fun journalView(docIds: Collection<String>): Map<String, JournalDocView> =
+            coordinator.syncView(docIds)
 
         override suspend fun metadataArrived() {
             coordinator.reconcileMetadata()
@@ -367,14 +371,21 @@ internal class SessionGraph(
 
         override suspend fun trashRetentionDays(): Int? = trashRetention.current()
 
-        override suspend fun deleteDeletedCopy(
-            docId: String,
-            relPath: String,
-        ): Boolean =
+        override suspend fun trashTimes(): Map<String, Long?> = trashPurge.trashTimes()
+
+        override suspend fun <T> serialized(block: suspend (SyncJournal) -> T): T =
             coordinator.serialized { journal ->
-                val delete = journal.isDeleted(docId) && deps.fs.holds(relPath, docId)
-                if (delete) deps.fs.delete(relPath)
-                delete
+                block(
+                    object : SyncJournal {
+                        override suspend fun isDeleted(docId: String): Boolean = journal.isDeleted(docId)
+
+                        override suspend fun isTrashed(docId: String): Boolean = journal.isTrashed(docId)
+
+                        override suspend fun isCurrent(docId: String): Boolean = journal.isCurrent(docId)
+
+                        override suspend fun successorOf(docId: String): String = journal.successorOf(docId)
+                    },
+                )
             }
     }
 

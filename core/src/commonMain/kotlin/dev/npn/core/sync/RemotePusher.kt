@@ -1,7 +1,7 @@
 package dev.npn.core.sync
 
 import dev.npn.core.fs.LibraryFileSystem
-import dev.npn.core.fs.readDocument
+import dev.npn.core.fs.holds
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 
@@ -55,12 +55,25 @@ class RemotePusher(
         report: SyncReportBuilder,
     ) {
         if (store.stat(action.remotePath) != null) {
-            report.conflicts += SyncConflict(action.docId, action.remotePath, "Remote path appeared before upload")
+            report.conflicts += SyncConflict(action.docId, action.remotePath, ConflictKind.REMOTE_CHANGED)
             return
         }
-        val entry = uploadVerified(action.relPath, action.remotePath, action.docId, report) ?: return
+        // Planned under a new name: the move may have found the name taken this pass, by a file that
+        // is not this document. Read whichever name holds it (rare, so the hash is affordable).
+        val source =
+            action.formerRelPath
+                ?.takeIf { !fs.holds(action.relPath, action.docId) && fs.holds(it, action.docId) }
+                ?: action.relPath
+        val entry = uploadVerified(source, action.remotePath, action.docId, report) ?: return
         manifest.record(
-            ManifestEntry(action.remotePath, ManifestKind.DOCUMENT, entry.size, entry.mtimeMillis, action.docId),
+            ManifestEntry(
+                action.remotePath,
+                ManifestKind.DOCUMENT,
+                entry.size,
+                entry.mtimeMillis,
+                action.docId,
+                localPath = source,
+            ),
             nowMillis,
         )
         report.uploadedDocuments++
@@ -80,9 +93,12 @@ class RemotePusher(
     }
 
     /**
-     * Read the library file, confirm it still is [docId] when one is expected, and upload it through
-     * staging. Returns the remote's own view of the uploaded file (the size/mtime to guard by), or
-     * null — with a conflict reported — when the local file no longer holds the document.
+     * Copy the library file out to staging chunk by chunk (a large scan never sits in memory whole),
+     * confirm the copy still is [docId] when one is expected, and upload it. Returns the remote's own
+     * view of the uploaded file (the size/mtime to guard by), or null — with a conflict reported —
+     * when the local file no longer holds the document. A remote file of another size than the copy
+     * is an upload cut short on a backend that writes in place: it is removed, never left for
+     * another replica to take for a new document.
      */
     private suspend fun uploadVerified(
         relPath: String,
@@ -90,17 +106,22 @@ class RemotePusher(
         docId: String?,
         report: SyncReportBuilder,
     ): RemoteEntry? {
-        val bytes = if (docId != null) fs.readDocument(relPath, docId) else fs.readBytes(relPath)
-        if (bytes == null) {
-            report.conflicts +=
-                SyncConflict(docId, remotePath, "Local file no longer holds this document; not uploaded")
-            return null
-        }
         val scratch = staging.newPath(".pdf")
         try {
-            staging.write(scratch, bytes)
+            staging.writeStreaming(scratch) { sink -> fs.readChunked(relPath, sink) }
+            if (docId != null && staging.sha256(scratch) != docId) {
+                report.conflicts += SyncConflict(docId, remotePath, ConflictKind.LOCAL_CHANGED)
+                return null
+            }
+            val size = staging.size(scratch)
             store.upload(scratch, remotePath)
-            return store.stat(remotePath) ?: error("Uploaded file not found on remote: $remotePath")
+            val uploaded =
+                store.stat(remotePath) ?: throw RemoteRaceException("Uploaded file not found on remote: $remotePath")
+            if (uploaded.size != size) {
+                store.delete(remotePath)
+                throw RemoteRaceException("Upload cut short: $remotePath has ${uploaded.size} of $size bytes")
+            }
+            return uploaded
         } finally {
             withContext(NonCancellable) { staging.delete(scratch) }
         }
@@ -111,15 +132,17 @@ class RemotePusher(
         report: SyncReportBuilder,
     ) {
         if (!stillExpected(action.from, action.expected)) {
-            report.conflicts += SyncConflict(action.docId, action.from, "Remote file changed since listing; not moved")
+            report.conflicts += SyncConflict(action.docId, action.from, ConflictKind.REMOTE_CHANGED)
             return
         }
-        if (store.stat(action.to) != null) {
-            report.conflicts += SyncConflict(action.docId, action.to, "Remote destination is occupied; not moved")
+        // A case-only rename on a backend that folds case finds the file itself at the destination;
+        // rclone renames it in place.
+        if (!action.from.equals(action.to, ignoreCase = true) && store.stat(action.to) != null) {
+            report.conflicts += SyncConflict(action.docId, action.to, ConflictKind.TARGET_OCCUPIED)
             return
         }
         store.move(action.from, action.to)
-        val moved = store.stat(action.to) ?: error("Moved file not found on remote: ${action.to}")
+        val moved = store.stat(action.to) ?: throw RemoteRaceException("Moved file not found on remote: ${action.to}")
         val kind =
             if (SyncPaths.classify(action.to) ==
                 SyncPathClass.Trash
@@ -129,7 +152,10 @@ class RemotePusher(
                 ManifestKind.DOCUMENT
             }
         manifest.remove(action.from)
-        manifest.record(ManifestEntry(action.to, kind, moved.size, moved.mtimeMillis, action.docId), nowMillis)
+        manifest.record(
+            ManifestEntry(action.to, kind, moved.size, moved.mtimeMillis, action.docId, action.localPath),
+            nowMillis,
+        )
         report.movedRemote++
     }
 
@@ -138,8 +164,7 @@ class RemotePusher(
         report: SyncReportBuilder,
     ) {
         if (!stillExpected(action.path, action.expected)) {
-            report.conflicts +=
-                SyncConflict(action.docId, action.path, "Remote file changed since listing; not deleted")
+            report.conflicts += SyncConflict(action.docId, action.path, ConflictKind.REMOTE_CHANGED)
             return
         }
         store.delete(action.path)

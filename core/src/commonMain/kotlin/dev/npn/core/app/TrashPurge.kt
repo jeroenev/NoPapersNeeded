@@ -54,6 +54,16 @@ internal class TrashPurge(
     }
 
     /**
+     * When each document the journal or the index knows left the library for the trash or for good,
+     * null while it is in neither, with a lagging row keeping an entry longer as [purge] does: what
+     * the cloud sync purges the remote's trash by, so the two trashes go by one rule.
+     */
+    suspend fun trashTimes(): Map<String, Long?> =
+        coordinator.serialized { journal ->
+            keptLonger(journal.trashTimes(), db.documentDao().trashTimes().associate { it.docId to it.trashedAt })
+        }
+
+    /**
      * The [journal]'s trash times and the [rows]' as one, for a document both know the one that keeps
      * its entries longer: null when either has it out of the trash, else the later time. A row that
      * lags the journal (a projection that failed) then keeps an entry rather than delete it.

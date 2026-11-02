@@ -74,7 +74,9 @@ class MetadataTransfer(
         scratch: String,
         hash: String,
     ): Boolean {
-        check(staging.sha256(scratch) == hash) { "Downloaded object does not hash to its name: $canonical" }
+        if (staging.sha256(scratch) != hash) {
+            throw RemoteRaceException("Downloaded object does not hash to its name: $canonical")
+        }
         val snapshot = (SyncPaths.classify(canonical) as? SyncPathClass.JournalObject)?.snapshot == true
         val stagingRel = JournalPaths.stagingPath(hash, installationId, ids.next(), snapshot)
         // The same object may arrive by another route meanwhile (a folder syncer beside the cloud):
@@ -90,7 +92,9 @@ class MetadataTransfer(
         scratch: String,
     ): Boolean {
         val size = staging.size(scratch)
-        check(size == entry.size) { "Downloaded file size ${size ?: "unknown"} differs from listing ${entry.size}" }
+        if (size != entry.size) {
+            throw RemoteRaceException("Downloaded file size ${size ?: "unknown"} differs from listing ${entry.size}")
+        }
         // Two devices never write the same sidecar or segment name (the writer id is in the name),
         // so a target that appeared meanwhile is this same file arriving by another route.
         if (fs.exists(entry.path)) return false

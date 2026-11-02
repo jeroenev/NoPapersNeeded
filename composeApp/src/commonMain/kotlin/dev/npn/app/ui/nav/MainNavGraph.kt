@@ -4,6 +4,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavDestination
@@ -38,6 +39,7 @@ import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.index.WriteBlock
 import dev.npn.core.settings.SettingsRepository
+import dev.npn.core.sync.SyncStatus
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_app_name
 import no_papers_needed.composeapp.generated.resources.common_rules_title
@@ -69,30 +71,36 @@ internal fun MainNav(
     val ai = destination.aiDestination()
 
     PublishWindowTitle(windowTitle(destination, topLevel, ai))
+    val syncStatus by remember(session) { session.sync.status }.collectAsStateWithLifecycle(SyncStatus())
     WithUpdateBanner(settings, snackbar) {
         WithWriteBlockBanner(writeBlock, writeBlockActions) {
-            WithDraftResumeBanner(onOpen = { docId -> nav.resumeDraft(docId, library.browse) }) {
-                // The rail carries AI edit on a wide window, so the chat's top bar offers it only on a
-                // compact one.
-                val aiEditInSidebar = LocalWindowWidthClass.current.isWide
-                NavigationShell(
-                    current = topLevel,
-                    aiCurrent = ai,
-                    aiConfigured = aiConfigured,
-                    queue = queue,
-                    onNavigate = { dest -> nav.navigateTopLevel(dest) },
-                    onAiChat = { nav.navigateAi(Route.AiChat, restoreState = true) },
-                    onAiEdit = { nav.openAiEdit(library) },
-                ) {
-                    LibraryViewModelHost(library) {
-                        MainNavHost(
-                            settings = settings,
-                            session = session,
-                            library = library,
-                            aiConfigured = aiConfigured,
-                            showAiEditTopBar = !aiEditInSidebar,
-                            onOpenLibrary = onOpenLibrary,
-                        )
+            WithCloudSyncBanner(
+                status = syncStatus,
+                onOpenSettings = { nav.navigate(Route.Settings(SettingsCategoryId.CLOUD_SYNC.routeKey)) },
+            ) {
+                WithDraftResumeBanner(onOpen = { docId -> nav.resumeDraft(docId, library.browse) }) {
+                    // The rail carries AI edit on a wide window, so the chat's top bar offers it only on a
+                    // compact one.
+                    val aiEditInSidebar = LocalWindowWidthClass.current.isWide
+                    NavigationShell(
+                        current = topLevel,
+                        aiCurrent = ai,
+                        aiConfigured = aiConfigured,
+                        queue = queue,
+                        onNavigate = { dest -> nav.navigateTopLevel(dest) },
+                        onAiChat = { nav.navigateAi(Route.AiChat, restoreState = true) },
+                        onAiEdit = { nav.openAiEdit(library) },
+                    ) {
+                        LibraryViewModelHost(library) {
+                            MainNavHost(
+                                settings = settings,
+                                session = session,
+                                library = library,
+                                aiConfigured = aiConfigured,
+                                showAiEditTopBar = !aiEditInSidebar,
+                                onOpenLibrary = onOpenLibrary,
+                            )
+                        }
                     }
                 }
             }

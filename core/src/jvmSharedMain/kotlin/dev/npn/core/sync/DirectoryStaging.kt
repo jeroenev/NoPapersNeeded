@@ -58,6 +58,20 @@ class DirectoryStaging(
         withContext(io) { Files.write(Paths.get(path), bytes, StandardOpenOption.CREATE_NEW) }
     }
 
+    override suspend fun writeStreaming(
+        path: String,
+        fill: suspend (sink: (ByteArray, Int) -> Unit) -> Unit,
+    ) {
+        val out = withContext(io) { Files.newOutputStream(Paths.get(path), StandardOpenOption.CREATE_NEW) }
+        try {
+            fill { chunk, length -> out.write(chunk, 0, length) }
+        } finally {
+            // A short blocking call, made in place: switching dispatchers here could be skipped by a
+            // cancelled pass, leaving the file open.
+            out.close()
+        }
+    }
+
     override fun externalSource(path: String): ExternalSource = externalSourceOfPath(Paths.get(path))
 
     override suspend fun clear() {

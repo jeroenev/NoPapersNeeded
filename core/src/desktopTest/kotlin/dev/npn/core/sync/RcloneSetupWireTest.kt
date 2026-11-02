@@ -118,8 +118,7 @@ class RcloneSetupWireTest {
         RcloneSetupWire
             .parseCreateResult("gdrive", response)
             .shouldBeInstanceOf<SetupStep.Failed>()
-            .message
-            .isEmpty() shouldBe false
+            .reason shouldBe SetupFailure.UNEXPECTED_ANSWER
     }
 
     @Test

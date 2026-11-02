@@ -49,12 +49,16 @@ class RcloneCloudSetupTest {
             question.remoteName shouldBe "gdrive"
             question.state shouldBe "state-1"
             question.option.name shouldBe "client_id"
-            rpc.calls.single().method shouldBe "config/create"
-            rpc.calls.single().input shouldBe
+            // A sign-in left behind by an earlier attempt is stopped first; rclone opens no browser.
+            rpc.calls.map { it.method } shouldContainExactly listOf("config/oauthstop", "config/create")
+            rpc.calls.last().input shouldBe
                 buildJsonObject {
                     put("name", "gdrive")
                     put("type", "drive")
-                    putJsonObject("parameters") { put("client_id", "abc") }
+                    putJsonObject("parameters") {
+                        put("client_id", "abc")
+                        put("config_auth_no_browser", "true")
+                    }
                     putJsonObject("opt") {
                         put("nonInteractive", true)
                         put("obscure", true)
@@ -79,12 +83,15 @@ class RcloneCloudSetupTest {
 
             setup.answer("gdrive", "state-1", "the-answer") shouldBe SetupStep.Done("gdrive")
 
-            rpc.calls[1].method shouldBe "config/create"
-            rpc.calls[1].input shouldBe
+            rpc.calls.last().method shouldBe "config/create"
+            rpc.calls.last().input shouldBe
                 buildJsonObject {
                     put("name", "gdrive")
                     put("type", "drive")
-                    putJsonObject("parameters") { put("client_id", "abc") }
+                    putJsonObject("parameters") {
+                        put("client_id", "abc")
+                        put("config_auth_no_browser", "true")
+                    }
                     putJsonObject("opt") {
                         put("nonInteractive", true)
                         put("obscure", true)
@@ -119,10 +126,16 @@ class RcloneCloudSetupTest {
         runTest {
             val (setup, _) = cloudSetup { throw RcloneException("engine unreachable", status = null) }
 
-            setup
-                .begin("gdrive", "drive", emptyMap())
-                .shouldBeInstanceOf<SetupStep.Failed>()
-                .message shouldBe "engine unreachable"
+            setup.begin("gdrive", "drive", emptyMap()) shouldBe
+                SetupStep.Failed(SetupFailure.ENGINE, "engine unreachable")
+        }
+
+    @Test
+    fun anAnswerWithoutABegunSessionSaysSo() =
+        runTest {
+            val (setup, _) = cloudSetup()
+
+            setup.answer("gdrive", "state-1", "x") shouldBe SetupStep.Failed(SetupFailure.NOT_IN_PROGRESS)
         }
 
     @Test
@@ -177,6 +190,33 @@ class RcloneCloudSetupTest {
                         put("noMimeType", true)
                     }
                 }
+        }
+
+    @Test
+    fun folderContentsTellsALibraryFromOtherFilesAndAnEmptyFolder() =
+        runTest {
+            var listing: JsonObject = buildJsonObject { putJsonArray("list") {} }
+            val (setup, rpc) = cloudSetup { listing }
+
+            setup.folderContents("gdrive:", "lib") shouldBe FolderContents.EMPTY
+            rpc.calls.single().method shouldBe "operations/list"
+
+            listing = buildJsonObject { putJsonArray("list") { add(entry("lib/.npn", dir = true)) } }
+            setup.folderContents("gdrive:", "lib") shouldBe FolderContents.LIBRARY
+
+            listing = folderListingResponse()
+            setup.folderContents("gdrive:", "lib") shouldBe FolderContents.OTHER_FILES
+        }
+
+    @Test
+    fun deleteRemoteForgetsItsConfiguration() =
+        runTest {
+            val (setup, rpc) = cloudSetup()
+
+            setup.deleteRemote("drive-3fa9c1")
+
+            rpc.calls.single().method shouldBe "config/delete"
+            rpc.calls.single().input shouldBe buildJsonObject { put("name", "drive-3fa9c1") }
         }
 
     @Test

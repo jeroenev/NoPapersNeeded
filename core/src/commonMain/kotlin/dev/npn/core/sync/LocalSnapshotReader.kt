@@ -11,29 +11,42 @@ class LocalSnapshotReader(
     private val documentDao: DocumentDao,
     private val hooks: SyncHooks,
 ) {
-    suspend fun read(nowMillis: Long): LocalSnapshot {
+    /**
+     * The snapshot to plan from. [remoteDocIds] are the documents the remote holds, which the journal
+     * is asked about too: one this device has no row for may still be one the journal hides.
+     */
+    suspend fun read(
+        nowMillis: Long,
+        remoteDocIds: Collection<String>,
+    ): LocalSnapshot {
         val rows = documentDao.getAllRows()
-        val intents = hooks.intendedPaths(rows.map { it.docId })
+        val journal = hooks.journalView((rows.map { it.docId } + remoteDocIds).distinct())
         val trashFiles = trashFiles()
         return LocalSnapshot(
-            documents = rows.map { row -> localDocument(row, intents[row.docId], trashFiles) },
+            documents = rows.map { row -> localDocument(row, journal[row.docId]?.intendedPath, trashFiles) },
             metadataFiles = metadataFiles(),
             trashFiles = trashFiles,
             nowMillis = nowMillis,
             trashRetentionMillis = hooks.trashRetentionDays()?.let { it * MILLIS_PER_DAY },
+            journal = journal,
+            trashTimes = hooks.trashTimes(),
+            relocates = fs.supportsDocumentRelocation,
         )
     }
 
-    /** Canonical journal objects, snapshots and write-once internals present locally. */
-    suspend fun metadataFiles(): Set<String> {
-        val out = LinkedHashSet<String>()
+    /** Canonical journal objects, snapshots and write-once internals present locally: path to size. */
+    suspend fun metadataFiles(): Map<String, Long> {
+        val out = LinkedHashMap<String, Long>()
         for (dir in listOf(NpnPaths.JOURNAL_DIR, NpnPaths.OCR_DIR, NpnPaths.DEVICES_DIR)) {
             for (meta in fs.listAllUnder(dir)) {
-                if (!meta.isDirectory && SyncPaths.classify(meta.relPath).isMetadata) out += meta.relPath
+                if (!meta.isDirectory && SyncPaths.classify(meta.relPath).isMetadata) out[meta.relPath] = meta.size
             }
         }
         return out
     }
+
+    /** The local trash entries' paths. */
+    suspend fun trashPaths(): Set<String> = trashFiles().keys
 
     private suspend fun trashFiles(): Map<String, TrashFile> =
         fs

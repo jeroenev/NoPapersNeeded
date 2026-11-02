@@ -2,37 +2,44 @@ package dev.npn.app
 
 import dev.npn.app.ui.settings.CloudSetupState
 import dev.npn.app.ui.settings.CloudSyncState
+import dev.npn.app.ui.settings.FolderProblem
 import dev.npn.app.ui.settings.SettingsViewModel
+import dev.npn.core.sync.CloudSyncConfig
+import dev.npn.core.sync.FolderContents
 import dev.npn.core.sync.OAuthStatus
 import dev.npn.core.sync.RcloneOption
 import dev.npn.core.sync.RcloneProvider
+import dev.npn.core.sync.SetupFailure
 import dev.npn.core.sync.SetupStep
+import dev.npn.core.sync.SyncFailure
 import dev.npn.core.sync.SyncOutcome
 import dev.npn.core.sync.SyncReport
 import dev.npn.core.sync.SyncStatus
 import dev.npn.core.sync.TransportAvailability
+import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_save_setting_failed
 import kotlin.test.Test
 
 /**
- * The cloud sync corner of [SettingsViewModel]: probing the transfer engine, listing remotes and
- * asking for a pass, all against [FakeSyncFacade]. Split from [SettingsViewModelTest] to keep
- * either class within bounds.
+ * The cloud sync corner of [SettingsViewModel]: probing the transfer engine, the library's own
+ * remote and schedule, the setup wizard and asking for a pass, all against [FakeSyncFacade]. Split
+ * from [SettingsViewModelTest] to keep either class within bounds.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelCloudSyncTest : MainDispatcherTest() {
     /** A viewmodel over [session] whose pane state is collected, as the screen collects it. */
-    private fun TestScope.vm(
-        session: FakeLibrarySession,
-        settings: FakeSettingsRepository = FakeSettingsRepository(),
-    ): SettingsViewModel = settingsVm(settings = settings, session = session).also { collecting(it.paneState) }
+    private fun TestScope.vm(session: FakeLibrarySession): SettingsViewModel =
+        settingsVm(session = session).also { collecting(it.paneState) }
 
     private val SettingsViewModel.cloudState: CloudSyncState get() = paneState.value.cloud
 
@@ -75,7 +82,7 @@ class SettingsViewModelCloudSyncTest : MainDispatcherTest() {
             model.syncNow()
             advanceUntilIdle()
 
-            model.cloudState.outcome shouldBe SyncOutcome.Failed("engine exploded")
+            model.cloudState.outcome shouldBe SyncOutcome.Failed(SyncFailure.UNKNOWN, "engine exploded")
             session.sync.manualSyncs shouldBe 1
         }
 
@@ -119,9 +126,10 @@ class SettingsViewModelCloudSyncTest : MainDispatcherTest() {
             model.cloud.submit()
             advanceUntilIdle()
 
+            // Every setup names its remote afresh, so it never overwrites another one's sign-in.
             setup.begins.single() shouldBe
                 FakeCloudSetup.BeginCall(
-                    name = "drive",
+                    name = "drive-1",
                     type = "drive",
                     params = mapOf("client_id" to "default-id", "client_secret" to "sekret"),
                 )
@@ -182,7 +190,7 @@ class SettingsViewModelCloudSyncTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             // No form is ever shown: the wizard starts the conversation with no parameters...
-            setup.begins.single() shouldBe FakeCloudSetup.BeginCall("drive", "drive", emptyMap())
+            setup.begins.single() shouldBe FakeCloudSetup.BeginCall("drive-1", "drive", emptyMap())
             // ...answers Drive's shared-client warning itself, then the browser prompt too.
             setup.answers shouldBe
                 listOf(
@@ -217,16 +225,15 @@ class SettingsViewModelCloudSyncTest : MainDispatcherTest() {
         }
 
     @Test
-    fun choosingAFolderPersistsItAsTheRemote() =
+    fun choosingAFolderPersistsItAsTheLibrarysRemote() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val setup = FakeCloudSetup()
             session.sync.setup = setup
-            val settings = FakeSettingsRepository()
             val chosen = provider(options = emptyList())
             setup.beginResult = { SetupStep.Done("drive") }
             setup.foldersResult = { listOf("NoPapersNeeded", "Archive") }
-            val model = vm(session, settings)
+            val model = vm(session)
 
             model.cloud.start()
             advanceUntilIdle()
@@ -247,12 +254,140 @@ class SettingsViewModelCloudSyncTest : MainDispatcherTest() {
             model.cloud.useFolder()
             advanceUntilIdle()
 
-            settings.settingsFlow.value.cloudRemote shouldBe "drive:NoPapersNeeded"
+            // The library's own setting on this device, not the device's: another library keeps its own.
+            session.sync.configFlow.value.remote shouldBe "drive:NoPapersNeeded"
+            model.cloudState.config.remote shouldBe "drive:NoPapersNeeded"
             model.cloudState.setup.shouldBeNull()
         }
 
     @Test
-    fun creatingAFolderRefreshesTheListing() =
+    fun theTopLevelAndAFolderOfOtherFilesAreNeverTheLibrarysFolder() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val setup = FakeCloudSetup()
+            session.sync.setup = setup
+            setup.beginResult = { SetupStep.Done("drive") }
+            setup.foldersResult = { listOf("Documents") }
+            setup.contentsResult = { FolderContents.OTHER_FILES }
+            val model = vm(session)
+            model.cloud.start()
+            advanceUntilIdle()
+            model.cloud.chooseProvider(provider(options = emptyList()))
+            model.cloud.submit()
+            advanceUntilIdle()
+
+            // The drive's top level: everything the user stores, so not offered at all.
+            (model.cloudState.setup as CloudSetupState.Folders).usable shouldBe false
+            model.cloud.useFolder()
+            advanceUntilIdle()
+            session.sync.configFlow.value.remote
+                .shouldBeNull()
+
+            // A folder of the user's other files: refused, and said why.
+            model.cloud.openFolder("Documents")
+            advanceUntilIdle()
+            model.cloud.useFolder()
+            advanceUntilIdle()
+            (model.cloudState.setup as CloudSetupState.Folders).problem shouldBe FolderProblem.OTHER_FILES
+            session.sync.configFlow.value.remote
+                .shouldBeNull()
+
+            // An empty folder, or a library's, is taken.
+            setup.contentsResult = { FolderContents.LIBRARY }
+            model.cloud.useFolder()
+            advanceUntilIdle()
+            session.sync.configFlow.value.remote shouldBe "drive:Documents"
+        }
+
+    @Test
+    fun aFolderThatCannotBeCreatedSaysWhy() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val setup = FakeCloudSetup()
+            session.sync.setup = setup
+            setup.beginResult = { SetupStep.Done("drive") }
+            setup.makeFolderFailure = IllegalStateException("quota exceeded")
+            val model = vm(session)
+            model.cloud.start()
+            advanceUntilIdle()
+            model.cloud.chooseProvider(provider(options = emptyList()))
+            model.cloud.submit()
+            advanceUntilIdle()
+
+            model.cloud.createFolder("NoPapersNeeded")
+            advanceUntilIdle()
+
+            val folders = model.cloudState.setup as CloudSetupState.Folders
+            folders.problem shouldBe FolderProblem.CREATE_FAILED
+            folders.detail shouldBe "quota exceeded"
+            folders.path shouldBe ""
+        }
+
+    @Test
+    fun changingTheFolderBrowsesTheConfiguredRemote() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val setup = FakeCloudSetup()
+            session.sync.setup = setup
+            session.sync.configFlow.value = CloudSyncConfig(remote = "drive-1:Lib/Sub")
+            val model = vm(session)
+
+            model.cloud.changeFolder()
+            advanceUntilIdle()
+            setup.folderLists.last() shouldBe FakeCloudSetup.FolderCall("drive-1:", "Lib/Sub")
+
+            // A connection string has no folder part: its whole text is the remote.
+            session.sync.configFlow.value = CloudSyncConfig(remote = ":s3,provider=AWS:")
+            model.cloud.changeFolder()
+            advanceUntilIdle()
+            setup.folderLists.last() shouldBe FakeCloudSetup.FolderCall(":s3,provider=AWS:", "")
+        }
+
+    @Test
+    fun startingAgainMidSignInStopsTheSignInFirst() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val setup = FakeCloudSetup()
+            session.sync.setup = setup
+            setup.answerGate = CompletableDeferred()
+            setup.beginResult = { question("config_is_local", "oauth-state") }
+            val model = vm(session)
+            model.cloud.start()
+            advanceUntilIdle()
+            model.cloud.chooseProvider(provider(options = emptyList()))
+            model.cloud.submit()
+            runCurrent()
+            (model.cloudState.setup is CloudSetupState.SigningIn) shouldBe true
+
+            model.cloud.start()
+            advanceUntilIdle()
+
+            setup.stopOauthCalls shouldBe 1
+            model.cloudState.setup shouldBe CloudSetupState.Providers(emptyList())
+        }
+
+    @Test
+    fun theScheduleIsTheLibrarysOwnAndAFailedWriteIsReported() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            session.sync.configFlow.value = CloudSyncConfig(remote = "drive-1:Lib")
+            val model = vm(session)
+            val messages = collecting(model.messages.map { it.text })
+
+            model.setCloudAutomatic(true)
+            model.setCloudInterval(60)
+            advanceUntilIdle()
+            model.cloudState.config shouldBe
+                CloudSyncConfig(enabled = true, remote = "drive-1:Lib", intervalMinutes = 60)
+
+            session.sync.configureFailure = IllegalStateException("disk full")
+            model.setCloudInterval(30)
+            advanceUntilIdle()
+            messages shouldContainExactly listOf(failure(Res.string.common_save_setting_failed, "disk full"))
+        }
+
+    @Test
+    fun creatingAFolderOpensIt() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val setup = FakeCloudSetup()
@@ -272,7 +407,9 @@ class SettingsViewModelCloudSyncTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             setup.madeFolders.single() shouldBe FakeCloudSetup.FolderCall("drive:", "NoPapersNeeded")
-            setup.folderLists.last() shouldBe FakeCloudSetup.FolderCall("drive:", "")
+            // "Use this folder" then means the folder just made, not the top level beside it.
+            setup.folderLists.last() shouldBe FakeCloudSetup.FolderCall("drive:", "NoPapersNeeded")
+            (model.cloudState.setup as CloudSetupState.Folders).usable shouldBe true
         }
 
     @Test
@@ -311,7 +448,7 @@ class SettingsViewModelCloudSyncTest : MainDispatcherTest() {
 
             model.cloud.start()
             advanceUntilIdle()
-            (model.cloudState.setup as CloudSetupState.Failed).message shouldBe "engine down"
+            model.cloudState.setup shouldBe CloudSetupState.Failed(SetupFailure.ENGINE, "engine down")
 
             setup.providersFailure = null
             val chosen = provider()
@@ -334,19 +471,21 @@ class SettingsViewModelCloudSyncTest : MainDispatcherTest() {
         }
 
     @Test
-    fun disconnectClearsTheRemoteAndTheAutomaticToggle() =
+    fun disconnectForgetsTheRemoteItsSignInAndTheAutomaticToggle() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
-            val settings = FakeSettingsRepository()
-            settings.updateSettings { it.copy(cloudRemote = "drive:NoPapersNeeded", cloudSyncEnabled = true) }
-            val model = vm(session, settings)
+            val setup = FakeCloudSetup()
+            session.sync.setup = setup
+            session.sync.configFlow.value = CloudSyncConfig(enabled = true, remote = "drive-1:NoPapersNeeded")
+            val model = vm(session)
 
             model.cloud.disconnect()
             advanceUntilIdle()
 
-            settings.settingsFlow.value.cloudRemote
-                .shouldBeNull()
-            settings.settingsFlow.value.cloudSyncEnabled shouldBe false
+            session.sync.configFlow.value shouldBe CloudSyncConfig(enabled = false, remote = null)
+            // The remote the wizard made for this library goes from the engine's configuration,
+            // and with it the sign-in token.
+            setup.deletedRemotes shouldContainExactly listOf("drive-1")
             model.cloudState.setup.shouldBeNull()
         }
 

@@ -15,7 +15,7 @@ finish-args:
   - --socket=x11
   - --share=ipc
   - --device=dri
-  # AI endpoints.
+  # AI endpoints, and the cloud sync the bundled rclone runs.
   - --share=network
   # The library is a user-chosen folder that the app reads and writes directly, by path, across
   # restarts, so it has to live under ~/Documents. A folder picked elsewhere comes back through the

@@ -3,6 +3,7 @@ package dev.npn.core.sync
 import dev.npn.core.db.KeyValueDao
 import dev.npn.core.db.SyncRemoteDao
 import dev.npn.core.db.SyncRemoteEntryEntity
+import dev.npn.core.util.reason
 import kotlinx.coroutines.CancellationException
 
 /**
@@ -12,10 +13,13 @@ import kotlinx.coroutines.CancellationException
  */
 interface SyncHooks {
     /**
-     * Where the journal wants each document's file ([dev.npn.core.journal.FoldedState.intendedPath]):
-     * null for a document with no storage path, and for one the library does not show.
+     * Whether the journal takes writes and folds whole. While it does not, the index rows are not
+     * the journal's answer, so a pass moves no document on either side.
      */
-    suspend fun intendedPaths(docIds: Collection<String>): Map<String, String?>
+    suspend fun journalReady(): Boolean
+
+    /** What the journal says of each of [docIds] ([JournalDocView]), read from the live fold. */
+    suspend fun journalView(docIds: Collection<String>): Map<String, JournalDocView>
 
     /** Journal objects or sidecars were published locally: fold them in and re-select sidecars. */
     suspend fun metadataArrived()
@@ -30,15 +34,44 @@ interface SyncHooks {
     suspend fun trashRetentionDays(): Int?
 
     /**
-     * Delete [relPath], a copy of the deleted document [docId], under the journal's writer lock and
-     * only while the journal still has [docId] deleted and the file still holds its bytes: an import
-     * that brought the bytes back since the pass planned keeps them. Returns whether it deleted.
+     * When each document the journal or the index knows left the library for the trash or for good,
+     * null while it is in neither: what the local trash purge decides by
+     * ([dev.npn.core.fs.TrashOps.purgeOlderThan]), and so the remote's too.
      */
-    suspend fun deleteDeletedCopy(
-        docId: String,
-        relPath: String,
-    ): Boolean
+    suspend fun trashTimes(): Map<String, Long?>
+
+    /**
+     * Run [block] under the journal's writer lock, so what it checks of the journal ([SyncJournal])
+     * still holds when it moves or removes a file: a restore, an import or a delete the user makes
+     * meanwhile waits for it, and is not undone by it.
+     */
+    suspend fun <T> serialized(block: suspend (SyncJournal) -> T): T
 }
+
+/** The journal's lifecycle answers, for a step that holds the writer lock ([SyncHooks.serialized]). */
+interface SyncJournal {
+    /** Deleted, unless an import brought it back in this session unrecorded. */
+    suspend fun isDeleted(docId: String): Boolean
+
+    suspend fun isTrashed(docId: String): Boolean
+
+    /** Shown by the library: neither hidden nor superseded by a relink. */
+    suspend fun isCurrent(docId: String): Boolean
+
+    /** The document [docId]'s bytes became, its relink chain followed; [docId] when none superseded it. */
+    suspend fun successorOf(docId: String): String
+}
+
+/** One document as the journal's fold has it, for planning. */
+data class JournalDocView(
+    /** Where its file is meant to be; null for no storage path, and for a document not shown. */
+    val intendedPath: String?,
+    /** The fold has it deleted, whatever an unrecorded import made of it on this device. */
+    val deleted: Boolean,
+    val trashed: Boolean,
+    /** The document a relink made of it (a bake's result), its chain followed; null when none did. */
+    val supersededBy: String? = null,
+)
 
 /**
  * The persisted remote manifest ([SyncRemoteEntryEntity]) with an in-memory mirror for the pass.
@@ -67,7 +100,21 @@ class SyncManifest(
         for (row in dao.all()) cache[row.remotePath] = row.toEntry()
     }
 
-    /** Forget entries the listing no longer shows. A missing file is unknown, never "deleted locally". */
+    /** Whether a pass already found [remoteId] to be this library's own ([bind]). */
+    suspend fun isBound(remoteId: String): Boolean = kv.get(KEY_BOUND) == remoteId
+
+    /**
+     * Remember that [remoteId] holds this library, once a pass found it so: later passes trust it,
+     * so a library that gains documents before its first pass completes is not refused its own remote.
+     */
+    suspend fun bind(remoteId: String) {
+        if (!isBound(remoteId)) kv.put(KEY_BOUND, remoteId)
+    }
+
+    /**
+     * Forget entries none of [listedPaths] names (the listing, and what the caller keeps known). A
+     * missing file is unknown, never "deleted locally".
+     */
     suspend fun prune(listedPaths: Set<String>) {
         val stale = cache.keys.filter { it !in listedPaths }
         if (stale.isEmpty()) return
@@ -83,6 +130,16 @@ class SyncManifest(
         dao.upsertAll(listOf(entry.toEntity(nowMillis)))
     }
 
+    /** Remember that the copy at [remotePath] now mirrors the library file at [localPath]. */
+    suspend fun recordLocalPath(
+        remotePath: String,
+        localPath: String,
+        nowMillis: Long,
+    ) {
+        val entry = cache[remotePath] ?: return
+        if (entry.localPath != localPath) record(entry.copy(localPath = localPath), nowMillis)
+    }
+
     suspend fun remove(remotePath: String) {
         if (cache.remove(remotePath) != null) dao.deleteByPaths(listOf(remotePath))
     }
@@ -94,6 +151,7 @@ class SyncManifest(
             size = size,
             mtimeMillis = mtime,
             docId = docId,
+            localPath = localPath,
         )
 
     private fun ManifestEntry.toEntity(nowMillis: Long): SyncRemoteEntryEntity =
@@ -104,11 +162,15 @@ class SyncManifest(
             mtime = mtimeMillis,
             docId = docId,
             syncedAt = nowMillis,
+            localPath = localPath,
         )
 
     companion object {
         const val KEY_REMOTE = "sync.remote"
         const val KEY_LAST_RUN = "sync.lastRun"
+
+        /** The remote a pass last found to hold this library ([bind]). */
+        const val KEY_BOUND = "sync.bound"
         private const val KIND_DOCUMENT = "document"
         private const val KIND_TRASH = "trash"
     }
@@ -117,6 +179,8 @@ class SyncManifest(
 /** Mutable accumulator for one pass's [SyncReport]. */
 class SyncReportBuilder(
     private val startedAt: Long,
+    /** Told of every item failure as it is recorded: the session's log. */
+    private val onError: (path: String, cause: Throwable) -> Unit = { _, _ -> },
 ) {
     var downloadedDocuments = 0
     var uploadedDocuments = 0
@@ -132,7 +196,8 @@ class SyncReportBuilder(
         path: String,
         cause: Throwable,
     ) {
-        errors += SyncError(path, cause.message ?: cause::class.simpleName ?: "failed")
+        errors += SyncError(path, cause.reason())
+        onError(path, cause)
     }
 
     fun build(nowMillis: Long): SyncReport =

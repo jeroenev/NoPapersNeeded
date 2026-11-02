@@ -138,6 +138,9 @@ class RemoteIndex(
         this.objectHashes = hashes
     }
 
+    /** Every listed path, whatever its kind. */
+    val paths: Set<String> get() = all.keys
+
     fun has(path: String): Boolean = path in all
 
     operator fun get(path: String): RemoteEntry? = all[path]

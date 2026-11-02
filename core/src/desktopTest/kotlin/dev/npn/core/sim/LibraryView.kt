@@ -235,3 +235,14 @@ private fun liveDifferences(
     }
     return out
 }
+
+/** This view with every document's path left out, when [blank]: what [diff] then compares. */
+internal fun LibraryView.withoutPaths(blank: Boolean): LibraryView =
+    if (!blank) {
+        this
+    } else {
+        copy(
+            live = live.mapValues { (_, doc) -> doc.copy(relPath = "") },
+            trashed = trashed.mapValues { (_, doc) -> doc.copy(relPath = "") },
+        )
+    }

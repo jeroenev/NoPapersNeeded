@@ -59,7 +59,7 @@ object RcloneSetupWire {
         if (state.isNullOrEmpty()) return SetupStep.Done(remoteName)
         val option =
             response["Option"] as? JsonObject
-                ?: return SetupStep.Failed("rclone asked a question without an option")
+                ?: return SetupStep.Failed(SetupFailure.UNEXPECTED_ANSWER)
         return SetupStep.Question(
             remoteName = remoteName,
             state = state,
@@ -132,6 +132,21 @@ object RcloneSetupWire {
             .map { nameUnder(it, path) }
             .filter { it.isNotEmpty() }
             .sorted()
+
+    /**
+     * What a folder's non-recursive `operations/list` response holds: a library's `.npn` folder, no
+     * entries at all, or other files and folders.
+     */
+    fun parseFolderContents(response: JsonObject): FolderContents {
+        val entries = (response["list"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
+        return when {
+            entries.any { it.flag("IsDir") && it.text("Name") == NPN_DIR } -> FolderContents.LIBRARY
+            entries.isEmpty() -> FolderContents.EMPTY
+            else -> FolderContents.OTHER_FILES
+        }
+    }
+
+    private const val NPN_DIR = ".npn"
 
     private fun parseOptions(raw: JsonArray?): List<RcloneOption> =
         raw

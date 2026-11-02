@@ -15,7 +15,7 @@ import dev.npn.core.pdf.renderParallelism
 import dev.npn.core.settings.LibraryLocations
 import dev.npn.core.settings.SessionSettings
 import dev.npn.core.sync.DirectoryStaging
-import dev.npn.core.sync.RcloneDefaults
+import dev.npn.core.sync.RcloneLaunch
 import dev.npn.core.sync.RcloneTransport
 import dev.npn.core.util.AndroidLog
 import dev.npn.core.util.NpnLog
@@ -46,7 +46,7 @@ fun androidSessionDeps(
     val key = LibraryLocations.key(location)
     // DirThumbnailStore creates the directory with its first thumbnail.
     val thumbsDir = File(context.cacheDir, "thumbs/$key")
-    val syncTransport = RcloneTransport(settings.cloudSync, androidRclone(context))
+    val syncTransport = RcloneTransport(androidRclone(context))
     return SessionDeps(
         fs = libraryFileSystem(context, location),
         db = npnDatabase(context, "npn-index-$key.db"),
@@ -68,13 +68,14 @@ fun androidSessionDeps(
 }
 
 /**
- * The bundled rclone, with its config file in the app's private files (it holds the remotes' tokens)
- * and its cache in the app's cache, both made up front so rclone never has to make them.
+ * The bundled rclone, with its config file in the app's private no-backup files (it holds the
+ * remotes' sign-in tokens, which Auto Backup must not copy to the cloud or to another phone) and its
+ * cache in the app's cache, both made up front so rclone never has to make them.
  */
-private fun androidRclone(context: Context): RcloneDefaults =
-    RcloneDefaults(
+private fun androidRclone(context: Context): RcloneLaunch =
+    RcloneLaunch(
         binary = bundledRclone(context) ?: "rclone",
-        configPath = File(context.filesDir, "rclone/rclone.conf").apply { parentFile?.mkdirs() }.path,
+        configPath = File(context.noBackupFilesDir, "rclone/rclone.conf").apply { parentFile?.mkdirs() }.path,
         cacheDir = File(context.cacheDir, "rclone").apply { mkdirs() }.path,
     )
 

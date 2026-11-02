@@ -1,9 +1,12 @@
 package dev.npn.app.ui.settings
 
 import dev.npn.core.sync.CloudSetup
+import dev.npn.core.sync.FolderContents
 import dev.npn.core.sync.RcloneProvider
+import dev.npn.core.sync.SetupFailure
 import dev.npn.core.sync.SetupStep
-import kotlinx.coroutines.CancellationException
+import dev.npn.core.util.reason
+import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
@@ -65,19 +68,42 @@ sealed interface CloudSetupState {
         val authUrl: String? = null,
     ) : CloudSetupState
 
-    /** Browsing [remote] at [path] for the folder this library should mirror to. */
+    /**
+     * Browsing [remote] at [path] for the folder this library should mirror to. [problem] is why the
+     * last step on this screen did not go through, with the engine's own [detail] where it gave one.
+     */
     data class Folders(
         val remote: String,
         val path: String,
         val folders: List<String> = emptyList(),
         val busy: Boolean = false,
-        val error: String? = null,
-    ) : CloudSetupState
+        val problem: FolderProblem? = null,
+        val detail: String? = null,
+    ) : CloudSetupState {
+        /** The top level of a remote is never a library's folder: it is everything the user stores. */
+        val usable: Boolean get() = path.isNotEmpty() && !busy
+    }
 
-    /** The wizard could not continue; the pane shows [message] with a Retry. */
+    /** The wizard could not continue; the pane says why ([reason], [detail]) with a Retry. */
     data class Failed(
-        val message: String,
+        val reason: SetupFailure,
+        val detail: String? = null,
     ) : CloudSetupState
+}
+
+/** Why a step of the folder picker did not go through. */
+enum class FolderProblem {
+    /** The folders here could not be listed. */
+    LIST_FAILED,
+
+    /** The new folder could not be created. */
+    CREATE_FAILED,
+
+    /** What the chosen folder holds could not be checked. */
+    CHECK_FAILED,
+
+    /** The chosen folder holds other files and no library; sync would take them all in. */
+    OTHER_FILES,
 }
 
 /**
@@ -109,16 +135,22 @@ interface CloudSetupActions {
     /** Go up one level; a no-op at the remote root. */
     fun openFolderUp()
 
-    /** Create [name] under the browsed folder, then refresh the listing. */
+    /** Create [name] under the browsed folder and open it. */
     fun createFolder(name: String)
 
-    /** Keep the browsed folder as this library's remote and close the wizard. */
+    /**
+     * Keep the browsed folder as this library's remote and close the wizard, once it proves empty or
+     * a library's: a folder of other files is refused.
+     */
     fun useFolder()
 
     /** Re-open folder picking for the configured remote, without creating a new one. */
     fun changeFolder()
 
-    /** Forget the remote and turn automatic sync off, so a cleared remote cannot leave it stuck on. */
+    /**
+     * Stop syncing this library: forget the remote and its sign-in on this device, and turn automatic
+     * sync off. Nothing is deleted, here or in the cloud.
+     */
     fun disconnect()
 }
 
@@ -133,7 +165,10 @@ internal class CloudSetupController(
     private val setup: () -> CloudSetup?,
     private val readRemote: suspend () -> String?,
     private val persistRemote: (String) -> Unit,
-    private val clearRemote: () -> Unit,
+    /** Forget the library's remote (the configured one, passed in) and its sign-in. */
+    private val disconnectRemote: (String) -> Unit,
+    /** A fresh, unique name for a remote of a provider type, so no setup overwrites another's. */
+    private val newRemoteName: (type: String) -> String,
 ) : CloudSetupActions {
     private val _state = MutableStateFlow<CloudSetupState?>(null)
 
@@ -151,18 +186,16 @@ internal class CloudSetupController(
 
     override fun start() {
         val client = setup() ?: return
+        val wasSigningIn = _state.value is CloudSetupState.SigningIn
         wizardJob?.cancel()
+        folderJob?.cancel()
         wizardJob =
             scope.launch {
                 _state.value = CloudSetupState.Loading
+                if (wasSigningIn) runCatchingCancellable { client.stopOauth() }
                 _state.value =
-                    try {
-                        CloudSetupState.Providers(client.providers())
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        CloudSetupState.Failed(e.message ?: e::class.simpleName ?: "error")
-                    }
+                    runCatchingCancellable { CloudSetupState.Providers(client.providers()) }
+                        .getOrElse { CloudSetupState.Failed(SetupFailure.ENGINE, it.reason()) }
             }
     }
 
@@ -196,10 +229,10 @@ internal class CloudSetupController(
                 _state.value = form.copy(busy = true, error = null)
                 val question = form.question
                 val step =
-                    try {
+                    stepOrFailure {
                         if (question == null) {
                             client.begin(
-                                name = form.provider.type,
+                                name = newRemoteName(form.provider.type),
                                 type = form.provider.type,
                                 params = form.values.filterValues { it.isNotBlank() },
                             )
@@ -210,10 +243,6 @@ internal class CloudSetupController(
                                 result = form.values[question.option.name].orEmpty(),
                             )
                         }
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        SetupStep.Failed(e.message ?: e::class.simpleName ?: "error")
                     }
                 handleStep(step)
             }
@@ -229,16 +258,12 @@ internal class CloudSetupController(
         wizardJob =
             scope.launch {
                 val step =
-                    try {
+                    stepOrFailure {
                         client.begin(
-                            name = provider.type,
+                            name = newRemoteName(provider.type),
                             type = provider.type,
                             params = values.filterValues { it.isNotBlank() },
                         )
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        SetupStep.Failed(e.message ?: e::class.simpleName ?: "error")
                     }
                 handleStep(step)
             }
@@ -252,15 +277,8 @@ internal class CloudSetupController(
         val wasSigningIn = _state.value is CloudSetupState.SigningIn
         _state.value = null
         if (wasSigningIn) {
-            scope.launch {
-                try {
-                    setup()?.stopOauth()
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (_: Exception) {
-                    // Backing out is best-effort: the engine may already have finished sign-in.
-                }
-            }
+            // Backing out is best-effort: the engine may already have finished sign-in.
+            scope.launch { runCatchingCancellable { setup()?.stopOauth() } }
         }
     }
 
@@ -285,28 +303,40 @@ internal class CloudSetupController(
         folderJob?.cancel()
         folderJob =
             scope.launch {
-                _state.value = folders.copy(busy = true, error = null)
-                val failure =
-                    try {
-                        client.makeFolder(folders.remote, path)
-                        null
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        e
-                    }
-                if (failure == null) {
-                    refreshFolders(folders.remote, folders.path)
-                } else {
-                    _state.value = folders.copy(error = failure.message ?: failure::class.simpleName ?: "error")
-                }
+                _state.value = folders.copy(busy = true, problem = null, detail = null)
+                runCatchingCancellable { client.makeFolder(folders.remote, path) }.fold(
+                    // Opened at once: "Use this folder" then means the folder just made.
+                    onSuccess = { refreshFolders(folders.remote, path) },
+                    onFailure = {
+                        _state.value =
+                            folders.copy(problem = FolderProblem.CREATE_FAILED, detail = it.reason())
+                    },
+                )
             }
     }
 
     override fun useFolder() {
         val folders = _state.value as? CloudSetupState.Folders ?: return
-        persistRemote(folders.remote + folders.path)
-        _state.value = null
+        val client = setup() ?: return
+        if (!folders.usable) return
+        folderJob?.cancel()
+        folderJob =
+            scope.launch {
+                _state.value = folders.copy(busy = true, problem = null, detail = null)
+                runCatchingCancellable { client.folderContents(folders.remote, folders.path) }.fold(
+                    onSuccess = { contents ->
+                        if (contents == FolderContents.OTHER_FILES) {
+                            _state.value = folders.copy(problem = FolderProblem.OTHER_FILES)
+                        } else {
+                            persistRemote(folders.remote + folders.path)
+                            _state.value = null
+                        }
+                    },
+                    onFailure = {
+                        _state.value = folders.copy(problem = FolderProblem.CHECK_FAILED, detail = it.reason())
+                    },
+                )
+            }
     }
 
     override fun changeFolder() {
@@ -325,8 +355,13 @@ internal class CloudSetupController(
     }
 
     override fun disconnect() {
-        clearRemote()
-        _state.value = null
+        folderJob?.cancel()
+        folderJob =
+            scope.launch {
+                _state.value = null
+                val configured = readRemote() ?: return@launch
+                disconnectRemote(configured)
+            }
     }
 
     /** Route one rclone step: browser sign-in, a question to render, the folder picker, or a failure. */
@@ -356,7 +391,7 @@ internal class CloudSetupController(
             }
 
             is SetupStep.Failed -> {
-                _state.value = CloudSetupState.Failed(step.message)
+                _state.value = CloudSetupState.Failed(step.reason, step.detail)
             }
         }
     }
@@ -367,21 +402,13 @@ internal class CloudSetupController(
         result: String,
     ) {
         val client = setup() ?: return
-        val step =
-            try {
-                client.answer(question.remoteName, question.state, result)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                SetupStep.Failed(e.message ?: e::class.simpleName ?: "error")
-            }
-        handleStep(step)
+        handleStep(stepOrFailure { client.answer(question.remoteName, question.state, result) })
     }
 
     private fun showQuestion(question: SetupStep.Question) {
         val provider = activeProvider
         if (provider == null) {
-            _state.value = CloudSetupState.Failed(question.error ?: "no provider is being configured")
+            _state.value = CloudSetupState.Failed(SetupFailure.NOT_IN_PROGRESS, question.error)
             return
         }
         val values = (_state.value as? CloudSetupState.Form)?.values.orEmpty().toMutableMap()
@@ -407,15 +434,8 @@ internal class CloudSetupController(
             val poll =
                 launch {
                     while (isActive) {
-                        val status =
-                            try {
-                                client.oauthStatus()
-                            } catch (e: CancellationException) {
-                                throw e
-                            } catch (_: Exception) {
-                                // A poll the engine cannot answer yet is not fatal; try again next tick.
-                                null
-                            }
+                        // A poll the engine cannot answer yet is not fatal; try again next tick.
+                        val status = runCatchingCancellable { client.oauthStatus() }.getOrNull()
                         val url = status?.authUrl
                         if (url != null) {
                             _state.value = CloudSetupState.SigningIn(providerName = providerName, authUrl = url)
@@ -423,14 +443,7 @@ internal class CloudSetupController(
                         delay(OAUTH_POLL_MS)
                     }
                 }
-            val step =
-                try {
-                    client.answer(question.remoteName, question.state, OAUTH_USE_BROWSER)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    SetupStep.Failed(e.message ?: e::class.simpleName ?: "error")
-                }
+            val step = stepOrFailure { client.answer(question.remoteName, question.state, OAUTH_USE_BROWSER) }
             poll.cancel()
             handleStep(step)
         }
@@ -455,18 +468,21 @@ internal class CloudSetupController(
         val previous = (_state.value as? CloudSetupState.Folders)?.folders.orEmpty()
         _state.value = CloudSetupState.Folders(remote = remote, path = path, folders = previous, busy = true)
         _state.value =
-            try {
+            runCatchingCancellable {
                 CloudSetupState.Folders(remote = remote, path = path, folders = client.folders(remote, path))
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
+            }.getOrElse {
                 CloudSetupState.Folders(
                     remote = remote,
                     path = path,
-                    error = e.message ?: e::class.simpleName ?: "error",
+                    problem = FolderProblem.LIST_FAILED,
+                    detail = it.reason(),
                 )
             }
     }
+
+    /** The step [call] returns, or the engine's failure as one. */
+    private suspend fun stepOrFailure(call: suspend () -> SetupStep): SetupStep =
+        runCatchingCancellable { call() }.getOrElse { SetupStep.Failed(SetupFailure.ENGINE, it.reason()) }
 }
 
 /**

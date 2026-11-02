@@ -165,12 +165,12 @@
     <string name="common_settings_cloud_engine_checking">Synchronisatie-engine wordt gecontroleerd…</string>
     <string name="common_settings_cloud_engine_available">Synchronisatie-engine %1$s is klaar voor gebruik.</string>
     <string name="common_settings_cloud_engine_missing">De synchronisatie-engine is niet gevonden (gezocht naar %1$s).</string>
-    <string name="common_settings_cloud_engine_failed">De synchronisatie-engine antwoordde niet: %1$s</string>
+    <string name="common_settings_cloud_engine_failed">De synchronisatie-engine antwoordde met een fout: %1$s</string>
     <string name="common_settings_cloud_engine_check">Opnieuw controleren</string>
-    <string name="common_settings_cloud_remote">Remote</string>
-    <string name="common_settings_cloud_failure_unknown">geen details opgeslagen</string>
+    <string name="common_settings_cloud_remote">Map in de cloud</string>
+    <string name="common_settings_cloud_failure_unknown">Er ging iets mis: %1$s</string>
     <string name="common_settings_cloud_schedule">Planning</string>
-    <string name="common_settings_cloud_interval">Synchronisatie-interval: %1$s</string>
+    <string name="common_settings_cloud_interval">Synchronisatie-interval</string>
     <string name="common_settings_cloud_auto">Automatisch synchroniseren</string>
     <string name="common_settings_cloud_auto_help">Voert op het gekozen interval en kort na wijzigingen op dit apparaat een synchronisatie uit. “Nu synchroniseren” werkt altijd.</string>
     <plurals name="common_settings_cloud_interval_minutes">
@@ -193,7 +193,7 @@
     <string name="common_settings_cloud_phase_indexing">Indexeren</string>
     <string name="common_settings_cloud_never">Nog niet gesynchroniseerd.</string>
     <string name="common_settings_cloud_last_summary">Laatste synchronisatie %1$s: %2$d gedownload, %3$d geüpload, %4$d verplaatst en %5$d verwijderd op de remote.</string>
-    <string name="common_settings_cloud_last_failed">Laatste synchronisatie %1$s mislukt: %2$s</string>
+    <string name="common_settings_cloud_last_failed">Laatste synchronisatie %1$s mislukt.</string>
     <plurals name="common_settings_cloud_conflict_count">
         <item quantity="one">%1$d conflict wacht op jouw beslissing:</item>
         <item quantity="other">%1$d conflicten wachten op jouw beslissing:</item>
@@ -204,8 +204,7 @@
     </plurals>
     <string name="common_settings_cloud_problem_line">%1$s: %2$s</string>
     <string name="common_settings_cloud_outcome_completed">Synchronisatie voltooid.</string>
-    <string name="common_settings_cloud_outcome_failed">Synchronisatie mislukt: %1$s</string>
-    <string name="common_settings_cloud_outcome_not_configured">Vul eerst een remote in.</string>
+    <string name="common_settings_cloud_outcome_not_configured">Koppel eerst cloudopslag.</string>
     <string name="common_settings_cloud_outcome_unavailable">Cloudsynchronisatie is niet beschikbaar op dit apparaat.</string>
     <string name="common_settings_cloud_outcome_running">Er loopt al een synchronisatie.</string>
 
@@ -234,9 +233,40 @@
     <string name="common_settings_cloud_folder_new">Naam nieuwe map</string>
     <string name="common_settings_cloud_folder_create">Map aanmaken</string>
     <string name="common_settings_cloud_folder_use">Deze map gebruiken</string>
-    <string name="common_settings_cloud_setup_failed">De installatie kon niet worden voortgezet</string>
+    <string name="common_settings_cloud_setup_failed">De installatie kon niet worden voortgezet: %1$s</string>
     <string name="common_settings_cloud_retry">Opnieuw proberen</string>
     <string name="common_settings_cloud_cancel">Annuleren</string>
     <string name="common_settings_cloud_change_folder">Map wijzigen</string>
     <string name="common_settings_cloud_disconnect">Loskoppelen</string>
+    <string name="common_settings_cloud_engine_none">Dit apparaat heeft geen synchronisatie-engine.</string>
+    <string name="common_settings_cloud_engine_start_failed">De synchronisatie-engine kon niet starten: %1$s</string>
+    <string name="common_settings_cloud_engine_exited">De synchronisatie-engine stopte meteen na het starten: %1$s</string>
+    <string name="common_settings_cloud_engine_not_ready">De synchronisatie-engine startte niet op tijd: %1$s</string>
+    <string name="common_settings_cloud_engine_unreachable">De synchronisatie-engine antwoordt niet meer: %1$s</string>
+    <string name="common_settings_cloud_engine_closed">De synchronisatie-engine is met de bibliotheek gestopt. Open de bibliotheek opnieuw om hem te gebruiken.</string>
+    <string name="common_settings_cloud_failure_unreachable">De cloud was niet bereikbaar. Controleer de verbinding; de volgende synchronisatie probeert het opnieuw.</string>
+    <string name="common_settings_cloud_failure_sign_in">De cloud aanvaardt de aanmelding niet meer. Koppel los en koppel daarna opnieuw.</string>
+    <string name="common_settings_cloud_failure_full">De cloudopslag is vol.</string>
+    <string name="common_settings_cloud_failure_not_library">De map in de cloud bevat andere bestanden en geen bibliotheek, dus er is niets overgezet. Kies een lege map of de eigen map van deze bibliotheek.</string>
+    <string name="common_settings_cloud_failure_other_library">De map in de cloud bevat een andere bibliotheek, dus er is niets overgezet. Kies de eigen map van deze bibliotheek of een lege map.</string>
+    <string name="common_settings_cloud_failure_journal_blocked">Deze bibliotheek kan nu geen wijzigingen opslaan, dus er is niets gesynchroniseerd.</string>
+    <string name="common_settings_cloud_conflict_target_occupied">%1$s: er staat al een ander bestand waar dit document naartoe moet, dus het blijft waar het is.</string>
+    <string name="common_settings_cloud_conflict_uploaded_as_copy">%1$s: daar stond al een ander bestand, dus het document is geüpload als %2$s.</string>
+    <string name="common_settings_cloud_conflict_installed_as_copy">%1$s: de bibliotheek had daar al een bestand, dus het document is bewaard als %2$s.</string>
+    <string name="common_settings_cloud_conflict_unidentified">%1$s: het bestand daar kon nog niet worden gecontroleerd, dus er is niets overheen geüpload.</string>
+    <string name="common_settings_cloud_conflict_remote_changed">%1$s: het bestand veranderde in de cloud tijdens de synchronisatie; de volgende synchronisatie gaat daarvan uit.</string>
+    <string name="common_settings_cloud_conflict_local_changed">%1$s: het bestand in de bibliotheek veranderde tijdens de synchronisatie en is met rust gelaten.</string>
+    <string name="common_settings_cloud_conflict_kept_on_device">%1$s: dit document is op een ander apparaat verwijderd en hier teruggezet, dus het blijft alleen op dit apparaat.</string>
+    <string name="common_settings_cloud_disconnect_title">Cloudopslag loskoppelen?</string>
+    <string name="common_settings_cloud_disconnect_message">Deze bibliotheek stopt met synchroniseren en dit apparaat vergeet de aanmelding. Er wordt niets verwijderd, hier noch in de cloud.</string>
+    <string name="common_settings_cloud_disconnect_failed">Kon de cloudopslag niet loskoppelen: %1$s</string>
+    <string name="common_settings_cloud_setup_interrupted">De installatie is onderbroken. Begin opnieuw.</string>
+    <string name="common_settings_cloud_setup_unexpected">De synchronisatie-engine antwoordde op een manier die deze versie van de app niet begrijpt.</string>
+    <string name="common_settings_cloud_folder_root_help">Open of maak een map voor deze bibliotheek: het hoogste niveau van je cloudopslag kan haar niet bevatten.</string>
+    <string name="common_settings_cloud_folder_list_failed">De mappen konden niet worden opgehaald: %1$s</string>
+    <string name="common_settings_cloud_folder_create_failed">De map kon niet worden gemaakt: %1$s</string>
+    <string name="common_settings_cloud_folder_check_failed">De map kon niet worden gecontroleerd: %1$s</string>
+    <string name="common_settings_cloud_folder_other_files">Deze map bevat al andere bestanden. Kies een lege map, of een map waarmee deze bibliotheek al synchroniseert.</string>
+    <string name="common_cloud_banner_failed">Cloudsynchronisatie mislukt. Open de instellingen ervan om te zien waarom.</string>
+    <string name="common_cloud_banner_open">Instellingen openen</string>
 </resources>

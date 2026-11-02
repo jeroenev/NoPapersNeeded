@@ -235,6 +235,10 @@ internal val unserialized: suspend (suspend (LockedJournal) -> Unit) -> Unit = {
 
             override suspend fun isDeleted(docId: String): Boolean = false
 
+            override suspend fun isTrashed(docId: String): Boolean = false
+
+            override suspend fun isCurrent(docId: String): Boolean = true
+
             override suspend fun restoreReturned(
                 docId: String,
                 relPath: String,

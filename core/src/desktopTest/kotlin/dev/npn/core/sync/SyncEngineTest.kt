@@ -250,19 +250,23 @@ internal class SyncEngineTest : SyncEngineTestBase() {
     @Test
     fun aDocumentAlreadyHeldLocallyIsNotDuplicatedWhenTheRemoteHasItElsewhere() =
         withPair { pair ->
+            pair.a.session.syncCompleted()
             val docId = pair.importOnA("same.pdf", "eight")
             pair.remote.put("elsewhere/copy.pdf", pdf("eight"))
             val report = pair.a.session.syncCompleted()
             report.downloadedDocuments shouldBe 0
-            // No intent was ever journaled, so the remote's own name is left alone and nothing is
-            // uploaded twice.
+            // Nothing goes up twice: the two were never reconciled, so the library file takes the
+            // name the remote already has for the document.
             report.uploadedDocuments shouldBe 0
+            report.movedRemote shouldBe 0
             pair.remote.paths().filter { it.endsWith(".pdf") && !it.startsWith(".npn/") } shouldContainExactly
                 listOf("elsewhere/copy.pdf")
+            pair.a.session.ingest
+                .rescan()
             pair.a.db
                 .documentDao()
                 .getByDocId(docId)!!
-                .relPath shouldBe "inbox/same.pdf"
+                .relPath shouldBe "elsewhere/copy.pdf"
             pair.a.fs
                 .listAllIndexable()
                 .count { !it.isDirectory } shouldBe 1

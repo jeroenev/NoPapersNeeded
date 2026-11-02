@@ -28,6 +28,7 @@ internal fun settingsVm(
     session,
     inLibrary = { folder, library -> folder == library || folder.startsWith("$library/") },
     saved = saved,
+    newRemoteName = { type -> "$type-1" },
 )
 
 /** What a settings pane shows for [snapshot], with no AI models, self-test or fields loaded. */
@@ -71,6 +72,10 @@ internal open class NoSettingsPaneActions : SettingsPaneActions {
     override fun probeTransport() = Unit
 
     override fun syncNow() = Unit
+
+    override fun setCloudAutomatic(on: Boolean) = Unit
+
+    override fun setCloudInterval(minutes: Int) = Unit
 
     override val cloudSetup: CloudSetupActions = NoCloudSetupActions
 

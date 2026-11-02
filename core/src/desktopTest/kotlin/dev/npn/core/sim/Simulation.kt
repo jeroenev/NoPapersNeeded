@@ -70,6 +70,17 @@ object KnownIssues {
      */
     const val DELETED_RETURNS_UNRECORDED = !JournalOp.DocUndelete.WRITTEN
 
+    /**
+     * Cloud sync settles each document's name per pass, one rename at a time, and a rename waits
+     * while its name is taken here: two documents that swapped names, or a chain of renames whose
+     * last name another document holds, stay apart, so replicas syncing through the cloud can end
+     * with the same documents under other file names (never other documents, metadata or
+     * lifecycle). A full-sync convergence check of cloud seeds then compares the libraries without
+     * the documents' paths, and only traces the paths that differ. Off once renames are settled with
+     * a temporary name (or by the journal naming every path).
+     */
+    const val CLOUD_NAMES_MAY_DIFFER = true
+
     /** Each finding by the phrases its failure message holds, all of them. */
     val knownFailures: Map<List<String>, String> = emptyMap()
 

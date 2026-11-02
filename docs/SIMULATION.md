@@ -117,6 +117,16 @@ kept 5 days. ci.yml keeps running only the CI-sized test above, as part of `:cor
   a quarter of the replicas after the first, at a step in the first half of the run) starts with an
   empty folder, which the tool fills with the latest version of every path over the same delays,
   while the app opens on it at once, as a second device set up later is.
+- A seed may sync its replicas through a cloud remote instead (`SyncConfig.cloud`, about three
+  seeds in ten): one in-memory remote (`SimRemote`) behind each session's own cloud sync, the
+  app's real `SyncEngine` and `SyncService`, as rclone is in production, and no sync tool. The seed
+  decides whether the remote folds case and reports SHA-256, and whether some of its calls fail.
+  Each call waits a seeded stretch of virtual time. A replica connects as a user sets one up, with
+  a first pass before anything is added on it; a step is then a replica's pass run to its end, or
+  one started beside whatever comes next (other passes, its own session's work, a crash), or time
+  for passes under way. A full sync is rounds of a pass on every replica and settling, until a round
+  changes nothing; the remote's faults are off at rest. What a pass installs from the remote counts
+  as delivered, not as the app's own write, and a copy on the remote keeps a document's last copy.
 - A full sync (`SimSync.flush`) lets every delivery under way land, scans every device and delivers at
   once, and brings each device every version another holds that its own does not descend from, until
   a round changes nothing. Two devices recording different bytes under one version vector would be
@@ -272,6 +282,12 @@ means turning its switch off (or removing its `knownFailures` entry) and making 
   imported them, for that session, and in the scan that finds the file, and nowhere else, so devices
   disagree, and a device disagrees with a rebuild of its own index. Off by itself once the op is
   written.
+
+- **Cloud replicas may name a document differently**, `KnownIssues.CLOUD_NAMES_MAY_DIFFER`: cloud
+  sync settles a document's name one rename at a time, each waiting while its name is taken here,
+  so two documents that swapped names (or a chain of renames) stay apart. A cloud seed's
+  convergence check compares the libraries without document paths, and traces the paths that
+  differ. Off once renames are settled with a temporary name.
 
 ## Adding an operation
 

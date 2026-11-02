@@ -11,8 +11,8 @@ import java.io.File
  * 2. the app resources of a packaged build (`compose.application.resources.dir`), where every
  *    package carries `rclone/rclone` (`rclone.exe` on Windows; `stageAppResources` in
  *    `desktopApp/build.gradle.kts`);
- * 3. a source checkout's `desktopApp/build/rclone/rclone`, so `mise hot` / `mise desktop` find the
- *    engine without a packaged build.
+ * 3. only when not packaged: a source checkout's `desktopApp/build/rclone/rclone`, so `mise hot` /
+ *    `mise desktop` find the engine without a packaged build.
  *
  * The Android side is different: it execs the `librclone.so` the APK ships in its native library
  * directory, which only Android may execute, so that host resolves its own path.
@@ -24,7 +24,14 @@ private object BundledRclone {
 
     fun resolve(): File? = resolved
 
-    private fun resolveUncached(): File? = override() ?: inAppResources() ?: fromSourceCheckout()
+    private fun resolveUncached(): File? = override() ?: if (packaged()) inAppResources() else fromSourceCheckout()
+
+    /**
+     * Whether this is a packaged build: Compose then names its app resources directory. A packaged
+     * app never looks in a source checkout, whose search starts from the working directory a user may
+     * launch it from (`/tmp`, a shared folder) and would run whatever `build/rclone/rclone` sits there.
+     */
+    private fun packaged(): Boolean = !System.getProperty(RESOURCES_DIR).isNullOrBlank()
 
     /** An explicit executable from a flag or the environment; blank and non-executables are ignored. */
     private fun override(): File? {
@@ -37,14 +44,14 @@ private object BundledRclone {
 
     /** `rclone/rclone` in the app resources Compose copies into a packaged app image, on every OS alike. */
     private fun inAppResources(): File? {
-        val resources = System.getProperty("compose.application.resources.dir")?.takeIf { it.isNotBlank() }
+        val resources = System.getProperty(RESOURCES_DIR)?.takeIf { it.isNotBlank() }
         return resources?.let { executable(File(it, "rclone/${executableName()}")) }
     }
 
     /**
      * The engine a source checkout downloaded into `desktopApp/build/rclone/`, found by walking up a
      * few levels from the working directory so `mise hot` (project dir) and `mise desktop` both
-     * resolve it. A packaged app never has these paths, so this cannot shadow the bundled binary.
+     * resolve it. Only an unpackaged run (no app resources) looks here.
      */
     private fun fromSourceCheckout(): File? {
         val executable = executableName()
@@ -67,4 +74,6 @@ private object BundledRclone {
 
     /** How many parent directories [fromSourceCheckout] checks before giving up. */
     private const val SEARCH_DEPTH = 3
+
+    private const val RESOURCES_DIR = "compose.application.resources.dir"
 }

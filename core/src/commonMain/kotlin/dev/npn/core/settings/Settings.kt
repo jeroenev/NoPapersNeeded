@@ -8,7 +8,6 @@ import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.SortField
 import dev.npn.core.app.ViewType
 import dev.npn.core.ocr.OcrLanguages
-import dev.npn.core.sync.CloudSyncConfig
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -57,26 +56,7 @@ data class SettingsSnapshot(
     val updateCheckEnabled: Boolean = true,
     /** A release version the user dismissed the update notice for; it is not offered again. */
     val dismissedUpdateVersion: String? = null,
-    /** Run cloud sync passes on a schedule and shortly after local changes. */
-    val cloudSyncEnabled: Boolean = false,
-    /** rclone remote path or connection string the library mirrors to; null = not configured. */
-    val cloudRemote: String? = null,
-    val cloudSyncIntervalMinutes: Int = CloudSyncConfig.DEFAULT_INTERVAL_MINUTES,
-    /** Explicit rclone executable; null = the platform default. */
-    val rclonePath: String? = null,
-    /** Explicit rclone config file; null = rclone's default location. */
-    val rcloneConfigPath: String? = null,
 )
-
-/** Project the cloud sync settings into the [CloudSyncConfig] the sync service reads live. */
-fun SettingsSnapshot.toCloudSyncConfig(): CloudSyncConfig =
-    CloudSyncConfig(
-        enabled = cloudSyncEnabled,
-        remote = cloudRemote,
-        intervalMinutes = cloudSyncIntervalMinutes,
-        rcloneBinary = rclonePath,
-        rcloneConfig = rcloneConfigPath,
-    )
 
 /**
  * Project the AI-related settings into the domain [AiConfig] the facade consumes.
@@ -225,13 +205,6 @@ object SettingsCodec {
                 snapshot.gridColumnWidth.coerceIn(GridSizing.MIN_COLUMN_WIDTH, GridSizing.MAX_COLUMN_WIDTH),
             aiMaxTagsPerDoc = snapshot.aiMaxTagsPerDoc.coerceIn(AiTagging.RANGE),
             aiMaxNewTagsPerDoc = snapshot.aiMaxNewTagsPerDoc.coerceIn(AiTagging.NEW_TAGS_RANGE),
-            // Blank-to-null only, no trimming: these are typed into a field one keystroke at a
-            // time, and trimming here would eat the space a remote path such as `drive:My Docs`
-            // needs mid-word. Consumers trim at the point of use.
-            cloudRemote = snapshot.cloudRemote?.ifBlank { null },
-            cloudSyncIntervalMinutes = snapshot.cloudSyncIntervalMinutes.coerceIn(CloudSyncConfig.INTERVAL_RANGE),
-            rclonePath = snapshot.rclonePath?.ifBlank { null },
-            rcloneConfigPath = snapshot.rcloneConfigPath?.ifBlank { null },
         )
 
     /**
@@ -283,18 +256,7 @@ object SettingsCodec {
                 aiOcrAuto = reader.boolean(SettingsKeys.AI_OCR_AUTO) ?: DEFAULTS.aiOcrAuto,
                 updateCheckEnabled = reader.boolean(SettingsKeys.UPDATE_CHECK_ENABLED) ?: DEFAULTS.updateCheckEnabled,
                 dismissedUpdateVersion = reader.string(SettingsKeys.DISMISSED_UPDATE_VERSION),
-            ).withCloudSync(reader),
-        )
-
-    /** The cloud sync group, read separately so [load] stays one flat constructor call. */
-    private fun SettingsSnapshot.withCloudSync(reader: Reader): SettingsSnapshot =
-        copy(
-            cloudSyncEnabled = reader.boolean(SettingsKeys.CLOUD_SYNC_ENABLED) ?: DEFAULTS.cloudSyncEnabled,
-            cloudRemote = reader.string(SettingsKeys.CLOUD_REMOTE),
-            cloudSyncIntervalMinutes =
-                reader.int(SettingsKeys.CLOUD_SYNC_INTERVAL_MINUTES) ?: DEFAULTS.cloudSyncIntervalMinutes,
-            rclonePath = reader.string(SettingsKeys.RCLONE_PATH),
-            rcloneConfigPath = reader.string(SettingsKeys.RCLONE_CONFIG_PATH),
+            ),
         )
 
     /**
@@ -333,11 +295,6 @@ object SettingsCodec {
         writer.putBoolean(SettingsKeys.AI_OCR_AUTO, s.aiOcrAuto)
         writer.putBoolean(SettingsKeys.UPDATE_CHECK_ENABLED, s.updateCheckEnabled)
         writer.putOptional(SettingsKeys.DISMISSED_UPDATE_VERSION, s.dismissedUpdateVersion)
-        writer.putBoolean(SettingsKeys.CLOUD_SYNC_ENABLED, s.cloudSyncEnabled)
-        writer.putOptional(SettingsKeys.CLOUD_REMOTE, s.cloudRemote)
-        writer.putInt(SettingsKeys.CLOUD_SYNC_INTERVAL_MINUTES, s.cloudSyncIntervalMinutes)
-        writer.putOptional(SettingsKeys.RCLONE_PATH, s.rclonePath)
-        writer.putOptional(SettingsKeys.RCLONE_CONFIG_PATH, s.rcloneConfigPath)
     }
 
     /**
@@ -425,11 +382,6 @@ internal object SettingsKeys {
     const val AI_OCR_AUTO = "aiOcrAuto"
     const val UPDATE_CHECK_ENABLED = "updateCheckEnabled"
     const val DISMISSED_UPDATE_VERSION = "dismissedUpdateVersion"
-    const val CLOUD_SYNC_ENABLED = "cloudSyncEnabled"
-    const val CLOUD_REMOTE = "cloudRemote"
-    const val CLOUD_SYNC_INTERVAL_MINUTES = "cloudSyncIntervalMinutes"
-    const val RCLONE_PATH = "rclonePath"
-    const val RCLONE_CONFIG_PATH = "rcloneConfigPath"
 }
 
 /** Bounds for the user-adjustable grid cell width (dp). */

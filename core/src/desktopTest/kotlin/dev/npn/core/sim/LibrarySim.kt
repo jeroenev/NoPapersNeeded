@@ -12,6 +12,7 @@ import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.journal.JournalOp
 import dev.npn.core.settings.SessionSettings
+import dev.npn.core.sync.DirectoryStaging
 import dev.npn.core.util.EpochClock
 import dev.npn.core.util.IdSource
 import dev.npn.core.util.NpnLog
@@ -71,6 +72,15 @@ internal class SimReplica(
     /** Run with every session opened, in its scope: what a host starts beside a session (a watched folder). */
     var onOpen: ((LibrarySessionImpl, CoroutineScope) -> Unit)? = null
 
+    /**
+     * The cloud remote its sessions sync the library through, or null where the seed syncs folders
+     * with a sync tool instead. Its transfers pass through [cloudStaging], a real scratch directory.
+     */
+    var cloud: SimRemote? = null
+
+    /** Where its cloud transfers pass through; what is imported from here is another device's file. */
+    val cloudStaging: Path by lazy { Files.createTempDirectory("npn-sim-staging-") }
+
     private var crashDir: File? = null
     private var hardCrashes = 0
 
@@ -98,8 +108,18 @@ internal class SimReplica(
                 computation = world.dispatcher,
                 timeSource = world.scheduler.timeSource,
                 ids = ids,
+                syncTransport = cloud,
+                syncStaging = cloud?.let { DirectoryStaging(cloudStaging, world.dispatcher) },
             )
-        val opened = world.run("open $installationId") { openSession(deps, JournalOp.DocUndelete.WRITTEN) }
+        val remote = cloud
+        val opened =
+            world.run("open $installationId") {
+                openSession(deps, JournalOp.DocUndelete.WRITTEN).also { opened ->
+                    // Kept in device.db, as the user's choice is: set once, and every open after
+                    // finds it there already.
+                    if (remote != null) opened.sync.configure { it.copy(remote = CLOUD_REMOTE) }
+                }
+            }
         val result =
             opened.getOrElse { failure ->
                 job.cancel()
@@ -196,9 +216,13 @@ internal class SimReplica(
         indexDb.close()
         deviceDb.close()
         crashDir?.deleteRecursively()
+        if (cloud != null) cloudStaging.toFile().deleteRecursively()
     }
 
-    private companion object {
+    companion object {
+        /** The remote name a cloud replica's library mirrors to; the simulated transport takes any. */
+        const val CLOUD_REMOTE = "sim:library"
+
         const val UNWIND_MILLIS = 5_000L
         const val PROBE_MILLIS = 2_000L
     }

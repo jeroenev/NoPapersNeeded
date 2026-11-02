@@ -53,6 +53,33 @@ interface CloudSetup {
         remote: String,
         path: String,
     )
+
+    /**
+     * What the folder [path] on [remote] holds, so the wizard can refuse to mirror a library into a
+     * folder of other files (a drive's root, someone's Documents): sync would take every PDF in it in.
+     */
+    suspend fun folderContents(
+        remote: String,
+        path: String,
+    ): FolderContents
+
+    /**
+     * Forget the remote [name] and its sign-in tokens from the engine's configuration, as the
+     * user's "disconnect" means. A remote that is not there is already forgotten.
+     */
+    suspend fun deleteRemote(name: String)
+}
+
+/** What a candidate library folder on a remote holds. */
+enum class FolderContents {
+    /** Nothing at all: a fresh folder this library can fill. */
+    EMPTY,
+
+    /** A library's `.npn` folder: this library's own, or one the first pass checks belongs to it. */
+    LIBRARY,
+
+    /** Files that are no library's: mirroring would take them in, so the wizard refuses. */
+    OTHER_FILES,
 }
 
 /** A remote this build's setup can create, paired with the metadata for its form. */
@@ -117,9 +144,23 @@ sealed interface SetupStep {
         val remoteName: String,
     ) : SetupStep
 
+    /** Setup cannot go on: [reason] for the message the UI shows, [detail] rclone's own text. */
     data class Failed(
-        val message: String,
+        val reason: SetupFailure,
+        val detail: String? = null,
     ) : SetupStep
+}
+
+/** Why the setup conversation stopped. */
+enum class SetupFailure {
+    /** The engine could not be reached, or refused the request; its own text is the detail. */
+    ENGINE,
+
+    /** An answer arrived for a remote whose setup is not (or no longer) in progress. */
+    NOT_IN_PROGRESS,
+
+    /** rclone answered in a shape this build does not understand. */
+    UNEXPECTED_ANSWER,
 }
 
 /** The loopback OAuth server rclone runs while a browser sign-in is in progress. */

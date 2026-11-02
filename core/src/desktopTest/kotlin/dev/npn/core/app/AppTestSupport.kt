@@ -139,10 +139,11 @@ internal class AppSessionRig private constructor(
             writeUndelete: Boolean = JournalOp.DocUndelete.WRITTEN,
             /**
              * Null (the default) wires no cloud sync, so ordinary tests never spawn rclone; a sync
-             * test passes its directory-backed transport and a [cloudSync] naming the remote.
+             * test passes its directory-backed transport and a [cloudSync] naming the remote, which
+             * the library then keeps on this device as a user's choice would be.
              */
             syncTransport: SyncTransport? = null,
-            cloudSync: suspend () -> CloudSyncConfig = { CloudSyncConfig.DISABLED },
+            cloudSync: CloudSyncConfig? = null,
             installationId: String = "test-installation",
             /** The PDF engine the session uses, over the real one. */
             pdfEngine: (PdfEngine) -> PdfEngine = { it },
@@ -165,10 +166,10 @@ internal class AppSessionRig private constructor(
                     legacyLibrarySettings = legacyLibrarySettings,
                     deviceTrashRetentionDays = deviceTrashRetentionDays,
                     syncTransport = syncTransport,
-                    cloudSync = cloudSync,
                 )
             val session =
                 openSession(base.copy(fs = files(base.fs), pdfEngine = pdfEngine(base.pdfEngine)), writeUndelete)
+            cloudSync?.let { config -> session.sync.configure { config } }
             storagePath?.let {
                 session.storagePath.setStoragePathTemplate(it.template)
                 session.storagePath.setStoragePathEnabled(it.enabled)
@@ -346,7 +347,6 @@ internal fun testSessionDeps(
     legacyLibrarySettings: suspend () -> LegacyLibrarySettings = { LegacyLibrarySettings() },
     deviceTrashRetentionDays: Int? = null,
     syncTransport: SyncTransport? = null,
-    cloudSync: suspend () -> CloudSyncConfig = { CloudSyncConfig.DISABLED },
 ): SessionDeps =
     jvmSessionDeps(
         libraryRoot = library,
@@ -359,7 +359,6 @@ internal fun testSessionDeps(
                     legacyLibrarySettings().copy(trashRetentionDays = deviceTrashRetentionDays)
                 },
                 aiConfig = aiConfig,
-                cloudSync = cloudSync,
             ),
         clock = clock,
         installationId = installationId,

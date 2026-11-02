@@ -67,7 +67,10 @@ conventions and invariants, [AGENTS.md](AGENTS.md). The user-facing overview is 
   which needs Go 1.26+ on `PATH` and Android NDK 29 (`sdkmanager --install "ndk;29.0.14206865"`);
   `-Pnpn.rclone.skip=true` builds without the engine for fast iteration, never for a release.
   Desktop packaging downloads the pinned rclone release (`:desktopApp:downloadRclone`) into the
-  app image.
+  app image. The uber-jar carries no app resources, so it looks for `rclone` on `PATH`.
+  The APK carries the engine for `arm64-v8a` only (the phones the app targets); an x86_64 emulator
+  needs `-Pnpn.rclone.abis=x86_64` (or a list), and `useLegacyPackaging` keeps it extractable, as
+  Android runs it from the installed native library directory.
 
 ## Building
 

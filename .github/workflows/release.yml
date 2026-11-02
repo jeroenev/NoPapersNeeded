@@ -131,9 +131,21 @@ jobs:
             :androidApp:assembleRelease -x :androidApp:buildRcloneAndroid
 
       # Skipped above, the engine build could have left nothing to package, and the APK would still
-      # build: without the engine, cloud sync would be "not installed" on every phone.
-      - name: Check the APK carries rclone
-        run: unzip -l androidApp/build/outputs/apk/release/androidApp-release.apk | grep -q 'lib/arm64-v8a/librclone.so'
+      # build: without the engine, cloud sync would be "not installed" on every phone. Android runs
+      # the engine from the installed native library directory, which holds it only when the
+      # installer extracts it; an APK that stores it uncompressed (`useLegacyPackaging` off) keeps
+      # it inside the APK, so the engine must be there and compressed.
+      - name: Check the APK carries an extractable rclone
+        run: |
+          entry="$(unzip -v androidApp/build/outputs/apk/release/androidApp-release.apk | grep 'lib/arm64-v8a/librclone.so' || true)"
+          if [ -z "$entry" ]; then
+            echo "::error::The APK carries no lib/arm64-v8a/librclone.so"
+            exit 1
+          fi
+          if echo "$entry" | grep -q ' Stored '; then
+            echo "::error::librclone.so is stored uncompressed, so Android will not extract it to run"
+            exit 1
+          fi
 
       - name: Install rpmbuild and flatpak-builder
         run: |

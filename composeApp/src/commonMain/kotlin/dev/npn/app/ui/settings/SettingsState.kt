@@ -9,6 +9,7 @@ import dev.npn.core.app.TrashSettings
 import dev.npn.core.model.FieldDef
 import dev.npn.core.settings.SettingsSnapshot
 import dev.npn.core.settings.toAiConfig
+import dev.npn.core.sync.CloudSyncConfig
 import dev.npn.core.sync.SyncOutcome
 import dev.npn.core.sync.SyncStatus
 import dev.npn.core.sync.TransportAvailability
@@ -28,18 +29,17 @@ data class SettingsUiState(
 ) {
     /** Whether the endpoint is complete enough to call — what gates the self-test button. */
     val aiConfigured: Boolean get() = snapshot.toAiConfig().configured
-
-    /** A remote is named, so a pass can be asked for — what gates "sync now" and the automatic toggle. */
-    val cloudConfigured: Boolean get() = !snapshot.cloudRemote.isNullOrBlank()
 }
 
 /**
- * What the cloud sync pane shows beside the settings: the live pass ([status]), whether the transfer
- * engine answers ([transport], null until the pane asked), how the last manual "sync now" ended
- * ([outcome], cleared when any new pass starts), and the setup wizard's step ([setup], null while it
- * is closed) on a device that wired one ([setupAvailable]).
+ * What the cloud sync pane shows: this library's remote and schedule on this device ([config]), the
+ * live pass ([status]), whether the transfer engine answers ([transport], null until the pane
+ * asked), how the last manual "sync now" ended ([outcome], cleared when any new pass starts), and
+ * the setup wizard's step ([setup], null while it is closed) on a device that wired one
+ * ([setupAvailable]).
  */
 data class CloudSyncState(
+    val config: CloudSyncConfig = CloudSyncConfig.DISABLED,
     val status: SyncStatus = SyncStatus(),
     val transport: TransportAvailability? = null,
     val outcome: SyncOutcome? = null,
@@ -158,14 +158,17 @@ interface SettingsActions {
     /** Drop all cached thumbnails so they regenerate at the current render quality, and say so. */
     fun clearThumbnailCache()
 
-    /**
-     * Ask the transfer engine whether it is usable; the pane asks when it opens, and again when the
-     * stored executable or config path changes. Only the latest probe answers.
-     */
+    /** Ask the transfer engine whether it is usable; the pane asks when it opens. Only the latest probe answers. */
     fun probeTransport()
 
     /** Run a cloud sync pass now and keep its outcome for the pane; progress streams through the status. */
     fun syncNow()
+
+    /** Turn this library's automatic passes on or off. */
+    fun setCloudAutomatic(on: Boolean)
+
+    /** How often automatic passes run for this library, in minutes. */
+    fun setCloudInterval(minutes: Int)
 
     /** The in-app cloud setup wizard: provider, sign-in, folder. */
     val cloudSetup: CloudSetupActions

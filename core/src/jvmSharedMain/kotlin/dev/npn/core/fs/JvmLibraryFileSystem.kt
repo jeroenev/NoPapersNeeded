@@ -177,6 +177,13 @@ internal class JvmLibraryFileSystem(
             Files.readAllBytes(resolve(relPath))
         }
 
+    override suspend fun readChunked(
+        relPath: String,
+        sink: (ByteArray, Int) -> Unit,
+    ) = withContext(io) {
+        Files.newInputStream(resolve(relPath)).use { input -> input.pipeTo(sink) }
+    }
+
     override suspend fun readTail(
         relPath: String,
         maxBytes: Int,

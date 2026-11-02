@@ -1,6 +1,7 @@
 package dev.npn.core.app
 
 import dev.npn.core.sync.CloudSetup
+import dev.npn.core.sync.CloudSyncConfig
 import dev.npn.core.sync.SyncOutcome
 import dev.npn.core.sync.SyncStatus
 import dev.npn.core.sync.TransportAvailability
@@ -9,11 +10,20 @@ import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
  * Cloud synchronization of this library through the device's transfer engine (rclone). One pass at
- * a time per library; the remote and the schedule come from the device settings, the algorithm
- * from `core.sync`.
+ * a time per library; the remote and the schedule are this library's own on this device ([config]),
+ * the algorithm comes from `core.sync`.
  */
 interface SyncFacade {
     val status: Flow<SyncStatus>
+
+    /** This library's remote and schedule on this device. */
+    val config: Flow<CloudSyncConfig>
+
+    /**
+     * Change this library's remote or schedule. Clearing the remote also turns automatic sync off,
+     * and a new remote forgets the last pass's result, which was another folder's.
+     */
+    suspend fun configure(change: (CloudSyncConfig) -> CloudSyncConfig)
 
     /** Run a pass now, whatever the automatic toggle says. Needs a configured remote. */
     suspend fun syncNow(): SyncOutcome
@@ -27,9 +37,6 @@ interface SyncFacade {
 
     suspend fun transportAvailability(): TransportAvailability
 
-    /** Remote names from the transfer engine's configuration, for the settings picker. */
-    suspend fun listRemotes(): List<String>
-
     /**
      * In-app remote setup (provider catalog, sign-in, folder picker), or null on a host that wired
      * no configurable engine. The wizard in settings is the only consumer.
@@ -41,15 +48,18 @@ interface SyncFacade {
 object NoSyncFacade : SyncFacade {
     override val status: Flow<SyncStatus> = MutableStateFlow(SyncStatus())
 
+    override val config: Flow<CloudSyncConfig> = MutableStateFlow(CloudSyncConfig.DISABLED)
+
+    override suspend fun configure(change: (CloudSyncConfig) -> CloudSyncConfig) = Unit
+
     override suspend fun syncNow(): SyncOutcome = SyncOutcome.Unavailable(UNAVAILABLE)
 
     override suspend fun syncScheduled(): SyncOutcome = SyncOutcome.NotConfigured
 
     override suspend fun transportAvailability(): TransportAvailability = UNAVAILABLE
 
-    override suspend fun listRemotes(): List<String> = emptyList()
-
     override val setup: CloudSetup? = null
 
-    private val UNAVAILABLE = TransportAvailability.NotInstalled("no transfer engine wired for this host")
+    /** No engine was ever looked for: an empty path, which the UI shows as no engine at all. */
+    private val UNAVAILABLE = TransportAvailability.NotInstalled("")
 }

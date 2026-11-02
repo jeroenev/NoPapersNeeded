@@ -1,7 +1,6 @@
 package dev.npn.core.sync
 
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import dev.npn.core.util.reason
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -19,80 +18,96 @@ import java.nio.file.Paths
 import java.time.OffsetDateTime
 
 /**
- * The rclone-backed [SyncTransport]. It owns one long-lived engine per launch configuration
- * ([RcloneDaemon] by default) so every transfer and every setup call shares the same process: a
- * remote is small-talk, and a persistent engine is what makes the interactive OAuth sign-in
- * possible and keeps a pass from spawning a process per file.
- *
- * The launch parameters are read from the live [config] on every call, so a path typed into
- * settings takes effect without reopening the library; [defaults] is what the host supplies when
- * the settings name nothing (the bundled executable, the app-private config file). A change to
- * either closes the old engine and starts a fresh one on the next call.
+ * The rclone-backed [SyncTransport]. It owns one long-lived engine ([RcloneDaemon] by default) so
+ * every transfer and every setup call shares the same process: a remote is small-talk, and a
+ * persistent engine is what makes the interactive OAuth sign-in possible and keeps a pass from
+ * spawning a process per file. The engine starts with the first call; [close] (the session's) is
+ * final, so a caller that outlives the session gets [EngineProblem.CLOSED] rather than starting an
+ * engine nothing would stop.
  */
 class RcloneTransport(
-    private val config: suspend () -> CloudSyncConfig,
-    private val defaults: RcloneDefaults = RcloneDefaults(),
+    private val launch: RcloneLaunch,
     private val engineFactory: (RcloneLaunch) -> RcloneRpc = { RcloneDaemon(it) },
 ) : SyncTransport {
-    private val gate = Mutex()
+    private val lock = Any()
     private var engine: RcloneRpc? = null
-    private var launched: RcloneLaunch? = null
+    private var closed = false
 
     /** In-app provider setup, over the same engine the transfers use. */
-    val setup: CloudSetup = RcloneCloudSetup(::rpc)
+    val setup: CloudSetup = RcloneCloudSetup { rpc() }
 
-    override suspend fun availability(): TransportAvailability {
-        val spec = launch()
-        return try {
+    override suspend fun availability(): TransportAvailability =
+        try {
             val version = rpc().call("core/version")["version"]?.jsonPrimitive?.contentOrNull ?: "unknown"
             TransportAvailability.Available(version)
         } catch (failure: RcloneException) {
-            if (failure.status == null) {
-                TransportAvailability.NotInstalled(spec.binary)
-            } else {
-                TransportAvailability.Failed(failure.message ?: "rclone did not answer")
+            when (val problem = failure.engine) {
+                EngineProblem.START_FAILED -> TransportAvailability.NotInstalled(launch.binary)
+                null -> TransportAvailability.Failed(EngineProblem.ERROR, failure.reason())
+                else -> TransportAvailability.Failed(problem, failure.reason())
             }
+        }
+
+    override fun open(remote: String): RemoteStore = RcloneRemoteStore(remote) { rpc() }
+
+    /**
+     * rclone reports a backend's failure as that backend's text, so the reason is read from it: the
+     * markers below are the phrases rclone's backends and Go's network stack use. Whatever matches
+     * none is [SyncFailure.UNKNOWN], and the UI shows the text itself.
+     */
+    override fun failureOf(failure: Throwable): SyncFailure {
+        val text =
+            generateSequence(failure) { it.cause }
+                .mapNotNull { it.message }
+                .joinToString(" ")
+                .lowercase()
+        return when {
+            SIGN_IN_MARKERS.any(text::contains) -> SyncFailure.SIGN_IN_EXPIRED
+            FULL_MARKERS.any(text::contains) -> SyncFailure.REMOTE_FULL
+            NETWORK_MARKERS.any(text::contains) -> SyncFailure.REMOTE_UNREACHABLE
+            else -> SyncFailure.UNKNOWN
         }
     }
 
-    override suspend fun listRemotes(): List<String> =
-        rpc()
-            .call("config/listremotes")["remotes"]
-            ?.takeIf { it !is JsonNull }
-            ?.jsonArray
-            ?.mapNotNull { it.jsonPrimitive.contentOrNull }
-            .orEmpty()
-
-    override fun open(remote: String): RemoteStore = RcloneRemoteStore(remote, ::rpc)
-
     override fun close() {
-        val current = engine
-        engine = null
-        launched = null
+        val current =
+            synchronized(lock) {
+                closed = true
+                engine.also { engine = null }
+            }
         current?.close()
     }
 
-    private suspend fun launch(): RcloneLaunch {
-        val cfg = config()
-        return RcloneLaunch(
-            binary = cfg.rcloneBinary?.trim()?.takeIf { it.isNotEmpty() } ?: defaults.binary,
-            configPath = cfg.rcloneConfig?.trim()?.takeIf { it.isNotEmpty() } ?: defaults.configPath,
-            cacheDir = defaults.cacheDir,
-        )
-    }
-
-    /** The current engine, starting a fresh one when the launch parameters changed. */
-    private suspend fun rpc(): RcloneRpc {
-        val spec = launch()
-        return gate.withLock {
-            val current = engine
-            if (current != null && launched == spec) return@withLock current
-            current?.close()
-            engineFactory(spec).also {
-                engine = it
-                launched = spec
-            }
+    private fun rpc(): RcloneRpc =
+        synchronized(lock) {
+            if (closed) throw RcloneException("rclone was closed", status = null, engine = EngineProblem.CLOSED)
+            engine ?: engineFactory(launch).also { engine = it }
         }
+
+    private companion object {
+        val SIGN_IN_MARKERS =
+            listOf(
+                "invalid_grant",
+                "token expired",
+                "failed to refresh token",
+                "couldn't fetch token",
+                "cannot fetch token",
+                "unauthorized",
+                "401",
+            )
+        val FULL_MARKERS = listOf("quota", "insufficient storage", "insufficientstorage", "no space left", "507")
+        val NETWORK_MARKERS =
+            listOf(
+                "no such host",
+                "dial tcp",
+                "connection refused",
+                "connection reset",
+                "network is unreachable",
+                "i/o timeout",
+                "tls handshake timeout",
+                "context deadline exceeded",
+                "temporary failure in name resolution",
+            )
     }
 }
 

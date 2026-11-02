@@ -101,7 +101,7 @@ One line per package. The rules each package enforces are in section 6.
 | `core.work` | `QueueDrainer`, `drainedQueue`, `QueueRetryPolicy`, `EndpointHealth`. |
 | `core.ai` | The AI layer: `AiChat.kt`, `AiSuggest.kt`, `AiConfig.kt`, `UnattendedAiPolicy.kt`; `AiFacadeImpl`, `KoogChatAgent`, `LibraryAiTools`, `ChatHistoryWindow`, `AiRuntime`, `AiRuntimeCache`, `AiSelfTest`, `AiModelCatalog`, `ProviderClientFactory`. |
 | `core.settings` | This device's own settings and directories, never per library: `Settings.kt` (`SettingsRepository`, `SettingsSnapshot`, `SettingsCodec`, `SettingsKeys`, `LegacyLibrarySettings`, `GridSizing`), `SessionSettings`, `AppDirs`, `LibraryLocations`, `PlatformDirs`. |
-| `core.sync` | Cloud sync of the library folder through a bundled rclone (section 5.6). `SyncTransport`/`RemoteStore` are the transfer seam; `RcloneTransport` (`jvmSharedMain`) owns one long-lived `rclone rcd` engine per launch configuration (`RcloneDaemon`: loopback RC, random credentials, app-private config; `RcloneCli` is the stateless `rc --loopback` fallback), so a pass never spawns a process per file and the browser sign-in can span calls. It also exposes `CloudSetup`, the in-app provider wizard: a curated catalog (`RcloneCatalog`) rendered from `config/providers` metadata, driven through rclone's non-interactive `config/create` state machine with `config/oauthstatus` for the sign-in, and `operations/list`/`operations/mkdir` for the folder picker, with no per-provider Kotlin. `SyncEngine` runs one pass: `DocumentResolver`, `SyncPlanner` (pure), `LocalApplier`, `RemotePusher`, `MetadataTransfer`. `SyncService` is the session's `SyncFacade`; `SyncHooks` is what a pass asks of the session. `CloudSyncConfig` is device-local; credentials stay in the app-private rclone config. Android ships the engine as `jniLibs/<abi>/librclone.so` (cross-compiled with Go and the NDK), desktop packages in their app resources, `rclone/` (`bundledRcloneBinary`). |
+| `core.sync` | Cloud sync of the library folder through a bundled rclone (section 5.6). `SyncTransport`/`RemoteStore` are the transfer seam; `RcloneTransport` (`jvmSharedMain`) owns one long-lived `rclone rcd` engine per launch configuration (`RcloneDaemon`: loopback RC, random credentials passed in its environment (never its command line), app-private config, a cancelled call closing its connection, final `close` plus a JVM shutdown hook; `RcloneCli` is the stateless `rc --loopback` fallback), so a pass never spawns a process per file and the browser sign-in can span calls. It also exposes `CloudSetup`, the in-app provider wizard: a curated catalog (`RcloneCatalog`) rendered from `config/providers` metadata, driven through rclone's non-interactive `config/create` state machine with `config/oauthstatus` for the sign-in, and `operations/list`/`operations/mkdir` for the folder picker, with no per-provider Kotlin. `SyncEngine` runs one pass: `DocumentResolver`, `SyncPlanner` (pure), `LocalApplier`, `RemotePusher`, `MetadataTransfer`. `SyncService` is the session's `SyncFacade`, and keeps the library's own `CloudSyncConfig` (remote, schedule) in its `device.db`, so each library on a device has a remote of its own; `SyncHooks` is what a pass asks of the session. Credentials stay in the app-private rclone config (Android: no-backup files), and every setup names its remote afresh (`<type>-<hex>`), which disconnecting deletes. Expected failures are typed (`SyncFailure`, `ConflictKind`, `EngineProblem`, `SetupFailure`) and mapped to strings in `composeApp`; rclone's own text travels only as a detail. Android ships the engine as `jniLibs/<abi>/librclone.so` (cross-compiled with Go and the NDK), desktop packages in their app resources, `rclone/` (`bundledRcloneBinary`). |
 | `core.update` | The update check: `AppVersions`, `LatestReleaseSource`, `GitHubLatestRelease`. |
 | `core.util` | `runCatchingCancellable`, `Throwable.reason()`, `EpochClock`, `NpnLog` and `runLogged`, `NpnJson`. |
 
@@ -307,31 +307,59 @@ leaves out.
 ### 5.6 Cloud sync
 
 `core.sync` treats an rclone remote as one more replica of the library folder, never of the index.
-One pass (`SyncEngine`) lists the remote (a failed listing fails the pass), pulls the metadata the
-library lacks and folds it, identifies every remote PDF by its SHA-256, plans (`SyncPlanner`, pure),
-applies the local half, pushes documents, and pushes metadata last, so a replica that sees this
-device's journal event finds the remote files that go with it already in place.
+One pass (`SyncEngine`) lists the remote (a failed listing fails the pass), checks the folder is
+this library's, pulls the metadata the library lacks and folds it, identifies every remote PDF by
+its SHA-256, plans (`SyncPlanner`, pure), applies the local half, pushes documents, and pushes
+metadata last, so a replica that sees this device's journal event finds the remote files that go
+with it already in place. The remote and schedule are the library's own on this device
+(`CloudSyncConfig` in its `device.db`, through `SyncFacade.configure`), never device-wide.
 
+- Before anything transfers, a library with documents of its own refuses a folder holding no
+  library but other files (`NOT_A_LIBRARY`: a drive's root, someone's Documents) or another library,
+  whose journal shares no object with this one's (`OTHER_LIBRARY`): the two would merge for good.
+  A library with no documents yet joins either (a new device). A folder a pass once found to be the
+  library's is bound to it (`SyncManifest.bind`) and not checked again. The setup wizard refuses a
+  remote's top level and a folder of other files already when it is picked.
+- A journal that does not take writes ends the pass (`JOURNAL_BLOCKED`); one whose metadata pull or
+  fold failed in part moves no document that pass (it still pushes its own metadata). No rescan runs
+  between the fold and the mirror: it would see a file another device trashed still at its path.
 - Journal objects, snapshots, OCR sidecars and device markers are a set union: immutable,
   hash- or size-verified, staged then published. Nothing deletes a journal object, so the union only
-  grows.
+  grows. A remote copy of another size than the local one is an upload cut short, and goes up again.
 - A remote PDF is identified by the manifest (`sync_remote_entries` in `DeviceDatabase`, keyed by
-  remote path with the size and mtime it had when identified), else by the backend's own SHA-256,
-  else by a download. The manifest lives beside the device's own state because rebuilding the index
-  must not mean downloading the whole remote again.
-- A document's remote path follows the journal's `storagePath` intent
-  (`FoldedState.intendedPath`), as its local path does; without one, its remote name stands.
-- Trash and delete for good are the journal's decisions. The pass mirrors them onto the remote, and
-  a replica applies the same move to its own file, as a folder syncer would deliver it, only once the
-  remote holds no live copy under any path; the rescan that follows projects it. A delete is decided
-  again under the writer lock (`SyncHooks.deleteDeletedCopy`), so bytes an import brought back since
-  the plan stay. Trash entries carry their trash episode in their name (section 6.3),
-  and the remote's trash is purged by it, never by mtime.
+  remote path with the size and mtime it had when identified, and the library path it mirrored when
+  last reconciled), else by the backend's own SHA-256, else by a download, kept for installing only
+  when the library has no such document. The manifest lives beside the device's own state because
+  rebuilding the index must not mean downloading the whole remote again. Uploads stream through
+  staging; no PDF is read into memory whole.
+- A document's remote name follows the library's: where the indexer put the file (its journaled
+  `storagePath`, or the name it gave a document whose intent another holds). A library that cannot
+  move documents itself (`supportsDocumentRelocation` false) takes the remote's name instead. Without
+  an intent, the side that renamed it since the last pass wins (`ManifestEntry.localPath`), and a name
+  made unique on the remote is the library's name too. Paths collide case-insensitively.
+- Trash and delete for good are the journal's decisions, read from the fold (`JournalDocView`),
+  not from index rows that may lag it. The pass mirrors them onto the remote, and a replica applies
+  the same move to its own file, as a folder syncer would deliver it, only once the remote holds no
+  live copy under any path; the rescan that follows projects it. Each local trash, restore, rename
+  and delete is decided again under the writer lock (`SyncHooks.serialized`), so a restore or an
+  import the user made since the plan stands. A document the journal hides is never installed from
+  the remote; one an import brought back unrecorded (no `doc-undelete` written yet) stays on that
+  device only (`KEPT_ON_THIS_DEVICE`).
+- Bytes a relink superseded (a bake's original) leave the remote before their successor goes up,
+  and a replica holding them at the successor's path makes way for it.
+- The remote's trash is purged by the local trash's rule (`TrashOps.purgeOlderThan`, section 6.3):
+  an entry goes once every document its name could stand for left the library longer ago than the
+  retention by the journal's trash times, and it was identified as one of them; never by mtime, and
+  never one no document accounts for.
 - A missing remote file is unknown, never a deletion; a remote PDF that could not be identified is
   left alone on both sides until it can be. Nothing is deleted or replaced to settle a conflict:
-  occupied targets are reported and uniquified. Every remote move and delete is guarded by a fresh
-  `stat` against the size and mtime the plan was made from, every local move and delete by the
-  file's hash, and a failed guard is a reported conflict, not an action.
+  occupied targets are reported (`ConflictKind`) and uniquified. Every remote move and delete is
+  guarded by a fresh `stat` against the size and mtime the plan was made from, every local move and
+  delete by the file's hash, and a failed guard is a reported conflict, not an action.
+- Known limit: renames are settled one at a time, each waiting while its name is taken, so two
+  documents that swapped names (or a chain of renames) can stay apart: replicas then show the same
+  documents under other file names. The library simulation compares cloud replicas without paths
+  for now (`KnownIssues.CLOUD_NAMES_MAY_DIFFER`).
 
 ## 6. Rules by concept
 

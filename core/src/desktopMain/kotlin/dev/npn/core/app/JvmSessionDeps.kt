@@ -14,7 +14,7 @@ import dev.npn.core.settings.PlatformDirs
 import dev.npn.core.settings.SessionSettings
 import dev.npn.core.sync.CloudSetup
 import dev.npn.core.sync.DirectoryStaging
-import dev.npn.core.sync.RcloneDefaults
+import dev.npn.core.sync.RcloneLaunch
 import dev.npn.core.sync.RcloneTransport
 import dev.npn.core.sync.SyncTransport
 import dev.npn.core.util.EpochClock
@@ -50,10 +50,9 @@ fun jvmSessionDeps(
     log: NpnLog = JvmLog(),
     /**
      * The bundled rclone by default, with an app-private config file and cache, so the user's own
-     * `~/.config/rclone/rclone.conf` is never touched; the settings' explicit executable and config
-     * paths still override these per call.
+     * `~/.config/rclone/rclone.conf` is never touched.
      */
-    syncTransport: SyncTransport? = RcloneTransport(settings.cloudSync, desktopRclone()),
+    syncTransport: SyncTransport? = RcloneTransport(desktopRclone()),
     /** Derived from [syncTransport] unless a host wires a setup engine of its own. */
     syncSetup: CloudSetup? = (syncTransport as? RcloneTransport)?.setup,
 ): SessionDeps =
@@ -81,9 +80,9 @@ fun jvmSessionDeps(
  * cache in the app's data directory. Both directories are made up front, so rclone never has to
  * make them and never falls back to the user's own.
  */
-private fun desktopRclone(): RcloneDefaults {
+private fun desktopRclone(): RcloneLaunch {
     val home = File(PlatformDirs.appDataDir()).apply { mkdirs() }
-    return RcloneDefaults(
+    return RcloneLaunch(
         binary = bundledRcloneBinary() ?: "rclone",
         configPath = File(home, "rclone.conf").path,
         cacheDir = File(home, "rclone-cache").apply { mkdirs() }.path,

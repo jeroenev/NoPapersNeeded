@@ -229,4 +229,10 @@ data class SyncRemoteEntryEntity(
     val mtime: Long,
     val docId: String?,
     val syncedAt: Long,
+    /**
+     * Where the document's file was in the library when this entry was last reconciled with it: how
+     * a pass tells a document renamed here (the remote follows) from one renamed on the remote (this
+     * library follows) when the journal names no path for it.
+     */
+    val localPath: String? = null,
 )

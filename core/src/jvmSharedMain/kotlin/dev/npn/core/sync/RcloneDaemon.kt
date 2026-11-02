@@ -2,11 +2,14 @@ package dev.npn.core.sync
 
 import dev.npn.core.util.NpnJson
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.runInterruptible
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -31,10 +34,15 @@ import kotlin.uuid.Uuid
  * [RcloneRpc]; [RcloneCli] is the stateless one-process-per-call variant.
  *
  * The process starts lazily on the first call, and concurrent first calls wait on the same start. It
- * carries per-instance random Basic-auth credentials so no other local process can drive it; those
- * credentials are never logged or echoed in an error. A daemon that dies mid-session is restarted
- * once before the failure is surfaced. [close] stops the process and resets the state, so a later
- * call starts a fresh one.
+ * carries per-instance random Basic-auth credentials so no other local process can drive it; they
+ * reach rclone through its environment (`RCLONE_RC_USER`/`RCLONE_RC_PASS`), never its command line,
+ * which every local user can read, and are never logged or echoed in an error. A daemon that dies
+ * mid-session is restarted once before the failure is surfaced.
+ *
+ * A cancelled call ends at once: a socket read ignores thread interrupts, so the request's connection
+ * is closed instead, and rclone cancels the operation whose request went away. [close] is final: it
+ * stops the process, and every later call fails with [EngineProblem.CLOSED] instead of starting a new
+ * one nothing would stop. A JVM that exits without closing still stops the process (a shutdown hook).
  */
 class RcloneDaemon(
     private val launch: RcloneLaunch,
@@ -46,9 +54,9 @@ class RcloneDaemon(
     @Volatile
     private var running: Running? = null
 
-    /** Bumped by [close] so a start straddling a close cannot publish an orphan process. */
+    /** Set by [close], under [lock]: a start straddling it stops its process instead of publishing it. */
     @Volatile
-    private var generation = 0L
+    private var closed = false
 
     private val user = "npn-${Uuid.random().toHexString()}"
     private val password = Uuid.random().toHexString()
@@ -73,7 +81,7 @@ class RcloneDaemon(
     override fun close() {
         val session =
             synchronized(lock) {
-                generation++
+                closed = true
                 running.also { running = null }
             }
         session?.stop()
@@ -89,31 +97,33 @@ class RcloneDaemon(
 
     /**
      * Starts a fresh process, replacing [stale], and publishes it as the live session. Runs under
-     * [lifecycle], so concurrent calls share a single start. If [close] overtook the start, the new
-     * process is stopped instead of published.
+     * [lifecycle], so concurrent calls share a single start. If [close] came first, nothing starts;
+     * if it overtook the start, the new process is stopped instead of published.
      */
     private suspend fun startSession(stale: Running?): Running {
-        val startedAt = generation
+        if (closed) throw closedFailure()
         stale?.stop()
         val session = launchProcess()
         val published =
             synchronized(lock) {
-                if (generation != startedAt) return@synchronized false
+                if (closed) return@synchronized false
                 running = session
                 true
             }
         if (!published) {
             session.stop()
-            throw RcloneException("rclone daemon was closed while starting", status = null)
+            throw closedFailure()
         }
         return session
     }
+
+    private fun closedFailure() = RcloneException("rclone was closed", status = null, engine = EngineProblem.CLOSED)
 
     private suspend fun restart(stale: Running): Running =
         lifecycle.withLock {
             val current = running
             if (current !== stale) {
-                return current ?: throw RcloneException("rclone daemon is no longer running", status = null)
+                return current ?: throw closedFailure()
             }
             startSession(stale)
         }
@@ -133,6 +143,7 @@ class RcloneDaemon(
                 "rclone is not reachable after a restart: ${retry.message}",
                 status = null,
                 cause = retry,
+                engine = EngineProblem.UNREACHABLE,
             )
         }
     }
@@ -142,12 +153,18 @@ class RcloneDaemon(
         val process =
             withContext(io) {
                 try {
-                    ProcessBuilder(command(port)).redirectErrorStream(false).start()
+                    ProcessBuilder(command(port))
+                        .redirectErrorStream(false)
+                        .apply {
+                            environment()["RCLONE_RC_USER"] = user
+                            environment()["RCLONE_RC_PASS"] = password
+                        }.start()
                 } catch (failure: IOException) {
                     throw RcloneException(
                         "Could not start rclone at '${launch.binary}': ${failure.message}",
                         status = null,
                         cause = failure,
+                        engine = EngineProblem.START_FAILED,
                     )
                 }
             }
@@ -158,7 +175,14 @@ class RcloneDaemon(
                 stderr = StreamDrain(process.errorStream, DIAGNOSTICS_LIMIT),
                 stdout = StreamDrain(process.inputStream, NO_CAPTURE),
             )
-        awaitReady(session)
+        // A process that never became ready (or whose wait was cancelled) is stopped, not orphaned.
+        var ready = false
+        try {
+            awaitReady(session)
+            ready = true
+        } finally {
+            if (!ready) session.stop()
+        }
         return session
     }
 
@@ -167,8 +191,6 @@ class RcloneDaemon(
             add(launch.binary)
             add("rcd")
             add("--rc-addr=127.0.0.1:$port")
-            add("--rc-user=$user")
-            add("--rc-pass=$password")
             add("--log-level=ERROR")
             launch.configPath?.let {
                 add("--config")
@@ -186,13 +208,18 @@ class RcloneDaemon(
         while (true) {
             currentCoroutineContext().ensureActive()
             if (!session.process.isAlive) {
-                throw RcloneException("rclone exited before it was ready: ${session.diagnostics()}", status = null)
+                throw RcloneException(
+                    "rclone exited before it was ready: ${session.diagnostics()}",
+                    status = null,
+                    engine = EngineProblem.EXITED,
+                )
             }
             if (probe(session.port)) return
             if (System.nanoTime() >= deadline) {
                 throw RcloneException(
                     "rclone was not ready within $READY_TIMEOUT_MS ms: ${session.diagnostics()}",
                     status = null,
+                    engine = EngineProblem.NOT_READY,
                 )
             }
             delay(READY_POLL_MS)
@@ -208,6 +235,11 @@ class RcloneDaemon(
             false
         }
 
+    /**
+     * One request. Cancelling the caller closes the connection from [io], which is what unblocks a
+     * read waiting on a long transfer: interrupting the thread would not, and the call would hold the
+     * session's close until rclone finished on its own.
+     */
     private suspend fun post(
         port: Int,
         method: String,
@@ -215,20 +247,29 @@ class RcloneDaemon(
         connectTimeoutMillis: Int = CONNECT_TIMEOUT_MS,
         readTimeoutMillis: Int = READ_TIMEOUT_MS,
     ): JsonObject =
-        withContext(io) {
-            runInterruptible {
-                postBlocking(port, method, input, connectTimeoutMillis, readTimeoutMillis)
+        coroutineScope {
+            val connection = URL("http://127.0.0.1:$port/$method").openConnection() as HttpURLConnection
+            val abort =
+                launch(io, start = CoroutineStart.UNDISPATCHED) {
+                    try {
+                        awaitCancellation()
+                    } finally {
+                        connection.disconnect()
+                    }
+                }
+            try {
+                withContext(io) { exchange(connection, input, connectTimeoutMillis, readTimeoutMillis) }
+            } finally {
+                abort.cancel()
             }
         }
 
-    private fun postBlocking(
-        port: Int,
-        method: String,
+    private fun exchange(
+        connection: HttpURLConnection,
         input: JsonObject,
         connectTimeoutMillis: Int,
         readTimeoutMillis: Int,
     ): JsonObject {
-        val connection = URL("http://127.0.0.1:$port/$method").openConnection() as HttpURLConnection
         try {
             connection.requestMethod = "POST"
             connection.doOutput = true
@@ -271,17 +312,29 @@ class RcloneDaemon(
         return runCatching { NpnJson.Lenient.parseToJsonElement(trimmed).jsonObject }.getOrNull()
     }
 
-    /** One live `rclone rcd` process and the drains that keep its pipes from filling. */
+    /**
+     * One live `rclone rcd` process and the drains that keep its pipes from filling. A shutdown hook
+     * stops it should the JVM exit without closing the daemon (a session close that timed out, a
+     * quit from the window manager), so no engine outlives the app holding the signed-in remotes.
+     */
     private class Running(
         val process: Process,
         val port: Int,
         private val stderr: StreamDrain,
         private val stdout: StreamDrain,
     ) {
+        private val shutdownHook =
+            Thread { process.destroyForcibly() }.also { hook ->
+                hook.name = "rclone-rcd-shutdown"
+                Runtime.getRuntime().addShutdownHook(hook)
+            }
+
         fun diagnostics(): String = stderr.text()
 
         /** Stops the process, escalating to SIGKILL if it lingers, then joins its drains. */
         fun stop() {
+            // Throws while the JVM is already shutting down, when the hook is about to run anyway.
+            runCatching { Runtime.getRuntime().removeShutdownHook(shutdownHook) }
             process.destroy()
             if (!process.waitFor(SHUTDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
                 process.destroyForcibly()
@@ -347,7 +400,7 @@ class RcloneDaemon(
         const val READY_READ_TIMEOUT_MS = 1_000
         const val CONNECT_TIMEOUT_MS = 2_000
 
-        /** No read timeout: a real transfer may legitimately take minutes; cancellation interrupts. */
+        /** No read timeout: a real transfer may legitimately take minutes; cancellation disconnects. */
         const val READ_TIMEOUT_MS = 0
         const val SHUTDOWN_TIMEOUT_MS = 2_000L
         const val JOIN_TIMEOUT_MS = 1_000L

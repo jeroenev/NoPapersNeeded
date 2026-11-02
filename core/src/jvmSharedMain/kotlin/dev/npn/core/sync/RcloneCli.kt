@@ -16,7 +16,8 @@ import java.io.InputStream
 /**
  * Drives the rclone executable through its remote-control API in loopback mode: one process per
  * call, `rclone rc --loopback <method> --json <input>`, JSON in and JSON out. This is the stateless
- * [RcloneRpc]; [RcloneDaemon] is the long-lived variant the app normally uses. Following the
+ * [RcloneRpc] the live tests probe rclone with; the app uses [RcloneDaemon]. The input travels on
+ * the command line, which every local user can read, so this must never carry a secret. Following the
  * existing Tesseract precedent, no native binding is involved and a missing binary degrades to
  * "unavailable".
  */
@@ -44,6 +45,7 @@ class RcloneCli(
                         "Could not start rclone at '$binary': ${failure.message}",
                         status = null,
                         cause = failure,
+                        engine = EngineProblem.START_FAILED,
                     )
                 }
             try {

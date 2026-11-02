@@ -165,12 +165,12 @@
     <string name="common_settings_cloud_engine_checking">Vérification du moteur de synchronisation…</string>
     <string name="common_settings_cloud_engine_available">Le moteur de synchronisation %1$s est prêt.</string>
     <string name="common_settings_cloud_engine_missing">Le moteur de synchronisation est introuvable (recherché : %1$s).</string>
-    <string name="common_settings_cloud_engine_failed">Le moteur de synchronisation n’a pas répondu : %1$s</string>
+    <string name="common_settings_cloud_engine_failed">Le moteur de synchronisation a répondu par une erreur : %1$s</string>
     <string name="common_settings_cloud_engine_check">Vérifier à nouveau</string>
-    <string name="common_settings_cloud_remote">Remote</string>
-    <string name="common_settings_cloud_failure_unknown">aucun détail enregistré</string>
+    <string name="common_settings_cloud_remote">Dossier dans le cloud</string>
+    <string name="common_settings_cloud_failure_unknown">Un problème est survenu : %1$s</string>
     <string name="common_settings_cloud_schedule">Planification</string>
-    <string name="common_settings_cloud_interval">Intervalle de synchronisation : %1$s</string>
+    <string name="common_settings_cloud_interval">Intervalle de synchronisation</string>
     <string name="common_settings_cloud_auto">Synchroniser automatiquement</string>
     <string name="common_settings_cloud_auto_help">Synchronise à l’intervalle choisi et peu après chaque modification sur cet appareil. « Synchroniser maintenant » fonctionne dans tous les cas.</string>
     <plurals name="common_settings_cloud_interval_minutes">
@@ -193,7 +193,7 @@
     <string name="common_settings_cloud_phase_indexing">Indexation</string>
     <string name="common_settings_cloud_never">Pas encore synchronisé.</string>
     <string name="common_settings_cloud_last_summary">Dernière synchronisation %1$s : %2$d téléchargés, %3$d envoyés, %4$d déplacés et %5$d supprimés sur le remote.</string>
-    <string name="common_settings_cloud_last_failed">La dernière synchronisation %1$s a échoué : %2$s</string>
+    <string name="common_settings_cloud_last_failed">La dernière synchronisation %1$s a échoué.</string>
     <plurals name="common_settings_cloud_conflict_count">
         <item quantity="one">%1$d conflit reste à résoudre :</item>
         <item quantity="other">%1$d conflits restent à résoudre :</item>
@@ -204,8 +204,7 @@
     </plurals>
     <string name="common_settings_cloud_problem_line">%1$s : %2$s</string>
     <string name="common_settings_cloud_outcome_completed">Synchronisation terminée.</string>
-    <string name="common_settings_cloud_outcome_failed">La synchronisation a échoué : %1$s</string>
-    <string name="common_settings_cloud_outcome_not_configured">Saisissez d’abord un remote.</string>
+    <string name="common_settings_cloud_outcome_not_configured">Connectez d’abord un stockage cloud.</string>
     <string name="common_settings_cloud_outcome_unavailable">La synchronisation cloud n’est pas disponible sur cet appareil.</string>
     <string name="common_settings_cloud_outcome_running">Une synchronisation est déjà en cours.</string>
 
@@ -234,9 +233,40 @@
     <string name="common_settings_cloud_folder_new">Nom du nouveau dossier</string>
     <string name="common_settings_cloud_folder_create">Créer le dossier</string>
     <string name="common_settings_cloud_folder_use">Utiliser ce dossier</string>
-    <string name="common_settings_cloud_setup_failed">La configuration n’a pas pu continuer</string>
+    <string name="common_settings_cloud_setup_failed">La configuration n’a pas pu continuer : %1$s</string>
     <string name="common_settings_cloud_retry">Réessayer</string>
     <string name="common_settings_cloud_cancel">Annuler</string>
     <string name="common_settings_cloud_change_folder">Changer de dossier</string>
     <string name="common_settings_cloud_disconnect">Déconnecter</string>
+    <string name="common_settings_cloud_engine_none">Cet appareil n’a pas de moteur de synchronisation.</string>
+    <string name="common_settings_cloud_engine_start_failed">Le moteur de synchronisation n’a pas pu démarrer : %1$s</string>
+    <string name="common_settings_cloud_engine_exited">Le moteur de synchronisation s’est arrêté juste après son démarrage : %1$s</string>
+    <string name="common_settings_cloud_engine_not_ready">Le moteur de synchronisation n’a pas démarré à temps : %1$s</string>
+    <string name="common_settings_cloud_engine_unreachable">Le moteur de synchronisation ne répond plus : %1$s</string>
+    <string name="common_settings_cloud_engine_closed">Le moteur de synchronisation s’est arrêté avec la bibliothèque. Rouvrez la bibliothèque pour l’utiliser.</string>
+    <string name="common_settings_cloud_failure_unreachable">Le cloud est injoignable. Vérifiez la connexion ; la prochaine synchronisation réessaiera.</string>
+    <string name="common_settings_cloud_failure_sign_in">Le cloud n’accepte plus la connexion. Déconnectez-vous, puis reconnectez-vous.</string>
+    <string name="common_settings_cloud_failure_full">Le stockage cloud est plein.</string>
+    <string name="common_settings_cloud_failure_not_library">Le dossier dans le cloud contient d’autres fichiers et aucune bibliothèque : rien n’a été transféré. Choisissez un dossier vide ou celui de cette bibliothèque.</string>
+    <string name="common_settings_cloud_failure_other_library">Le dossier dans le cloud contient une autre bibliothèque : rien n’a été transféré. Choisissez le dossier de cette bibliothèque ou un dossier vide.</string>
+    <string name="common_settings_cloud_failure_journal_blocked">Cette bibliothèque ne peut pas enregistrer de modifications pour le moment : rien n’a été synchronisé.</string>
+    <string name="common_settings_cloud_conflict_target_occupied">%1$s : un autre fichier occupe déjà l’emplacement prévu pour ce document, il reste donc où il est.</string>
+    <string name="common_settings_cloud_conflict_uploaded_as_copy">%1$s : un autre fichier s’y trouvait déjà, le document a donc été envoyé sous le nom %2$s.</string>
+    <string name="common_settings_cloud_conflict_installed_as_copy">%1$s : la bibliothèque avait déjà un fichier à cet endroit, le document a donc été enregistré sous %2$s.</string>
+    <string name="common_settings_cloud_conflict_unidentified">%1$s : le fichier à cet endroit n’a pas encore pu être vérifié, rien n’a donc été envoyé par-dessus.</string>
+    <string name="common_settings_cloud_conflict_remote_changed">%1$s : le fichier a changé dans le cloud pendant la synchronisation ; la prochaine synchronisation en tiendra compte.</string>
+    <string name="common_settings_cloud_conflict_local_changed">%1$s : le fichier de la bibliothèque a changé pendant la synchronisation et n’a pas été touché.</string>
+    <string name="common_settings_cloud_conflict_kept_on_device">%1$s : ce document a été supprimé sur un autre appareil et récupéré ici, il reste donc uniquement sur cet appareil.</string>
+    <string name="common_settings_cloud_disconnect_title">Déconnecter le stockage cloud ?</string>
+    <string name="common_settings_cloud_disconnect_message">Cette bibliothèque cesse d’être synchronisée et cet appareil oublie la connexion. Rien n’est supprimé, ni ici ni dans le cloud.</string>
+    <string name="common_settings_cloud_disconnect_failed">Impossible de déconnecter le stockage cloud : %1$s</string>
+    <string name="common_settings_cloud_setup_interrupted">La configuration a été interrompue. Recommencez.</string>
+    <string name="common_settings_cloud_setup_unexpected">Le moteur de synchronisation a répondu d’une manière que cette version de l’application ne comprend pas.</string>
+    <string name="common_settings_cloud_folder_root_help">Ouvrez ou créez un dossier pour cette bibliothèque : le niveau supérieur de votre stockage cloud ne peut pas l’accueillir.</string>
+    <string name="common_settings_cloud_folder_list_failed">Impossible de lister les dossiers : %1$s</string>
+    <string name="common_settings_cloud_folder_create_failed">Impossible de créer le dossier : %1$s</string>
+    <string name="common_settings_cloud_folder_check_failed">Impossible de vérifier le dossier : %1$s</string>
+    <string name="common_settings_cloud_folder_other_files">Ce dossier contient déjà d’autres fichiers. Choisissez un dossier vide ou un dossier avec lequel cette bibliothèque se synchronise déjà.</string>
+    <string name="common_cloud_banner_failed">La synchronisation cloud a échoué. Ouvrez ses paramètres pour en voir la raison.</string>
+    <string name="common_cloud_banner_open">Ouvrir les paramètres</string>
 </resources>

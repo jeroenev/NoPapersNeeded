@@ -28,8 +28,11 @@ import dev.npn.core.index.ScanReport
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.ocr.OcrEngineRef
 import dev.npn.core.sync.CloudSetup
+import dev.npn.core.sync.CloudSyncConfig
+import dev.npn.core.sync.FolderContents
 import dev.npn.core.sync.OAuthStatus
 import dev.npn.core.sync.RcloneProvider
+import dev.npn.core.sync.SetupFailure
 import dev.npn.core.sync.SetupStep
 import dev.npn.core.sync.SyncOutcome
 import dev.npn.core.sync.SyncStatus
@@ -320,18 +323,27 @@ class FakeSyncFacade : SyncFacade {
     val statusFlow = MutableStateFlow(SyncStatus())
     override val status: Flow<SyncStatus> get() = statusFlow
 
+    /** This library's settings on the device; [configure] writes them as the service does, normalised. */
+    val configFlow = MutableStateFlow(CloudSyncConfig.DISABLED)
+    override val config: Flow<CloudSyncConfig> get() = configFlow
+
+    /** Thrown by [configure] when set. */
+    var configureFailure: Throwable? = null
+
+    override suspend fun configure(change: (CloudSyncConfig) -> CloudSyncConfig) {
+        configureFailure?.let { throw it }
+        val next = change(configFlow.value)
+        configFlow.value = next.copy(enabled = next.enabled && !next.remote.isNullOrBlank())
+    }
+
     var manualSyncs = 0
     var scheduledSyncs = 0
     var probes = 0
     var outcome: SyncOutcome = SyncOutcome.NotConfigured
     var availability: TransportAvailability = TransportAvailability.NotInstalled("rclone")
-    var remotes: List<String> = emptyList()
 
     /** When set, [transportAvailability] waits here before answering with the [availability] of that moment. */
     var availabilityGate: CompletableDeferred<Unit>? = null
-
-    /** Thrown by [listRemotes] when set. */
-    var listRemotesFailure: Throwable? = null
 
     /** Thrown by [syncNow] when set: the facade is not supposed to throw, which a test wants to see survive. */
     var syncNowFailure: Throwable? = null
@@ -351,11 +363,6 @@ class FakeSyncFacade : SyncFacade {
         probes++
         availabilityGate?.await()
         return availability
-    }
-
-    override suspend fun listRemotes(): List<String> {
-        listRemotesFailure?.let { throw it }
-        return remotes
     }
 
     /** In-app setup, when a test wires one. */
@@ -395,10 +402,10 @@ class FakeCloudSetup : CloudSetup {
     val madeFolders = mutableListOf<FolderCall>()
 
     /** What [begin] answers; the default is a failure so a test cannot silently pass through. */
-    var beginResult: (BeginCall) -> SetupStep = { SetupStep.Failed("no begin scripted") }
+    var beginResult: (BeginCall) -> SetupStep = { SetupStep.Failed(SetupFailure.ENGINE, "no begin scripted") }
 
     /** What [answer] answers. */
-    var answerResult: (AnswerCall) -> SetupStep = { SetupStep.Failed("no answer scripted") }
+    var answerResult: (AnswerCall) -> SetupStep = { SetupStep.Failed(SetupFailure.ENGINE, "no answer scripted") }
 
     /** When set, [answer] waits here before returning, simulating the blocking sign-in. */
     var answerGate: CompletableDeferred<Unit>? = null
@@ -410,6 +417,10 @@ class FakeCloudSetup : CloudSetup {
     var foldersResult: (FolderCall) -> List<String> = { emptyList() }
     var foldersFailure: Throwable? = null
     var makeFolderFailure: Throwable? = null
+
+    /** What [folderContents] answers for a folder. */
+    var contentsResult: (FolderCall) -> FolderContents = { FolderContents.EMPTY }
+    val deletedRemotes = mutableListOf<String>()
 
     override suspend fun providers(): List<RcloneProvider> {
         providersCalls++
@@ -463,6 +474,15 @@ class FakeCloudSetup : CloudSetup {
     ) {
         madeFolders += FolderCall(remote, path)
         makeFolderFailure?.let { throw it }
+    }
+
+    override suspend fun folderContents(
+        remote: String,
+        path: String,
+    ): FolderContents = contentsResult(FolderCall(remote, path))
+
+    override suspend fun deleteRemote(name: String) {
+        deletedRemotes += name
     }
 }
 

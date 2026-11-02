@@ -11,8 +11,10 @@ import kotlinx.coroutines.withContext
  *
  * Identity is SHA-256, so a remote entry is identified by, in order of cost: the manifest (same
  * path, same size and mtime as when it was last identified), the backend's own SHA-256 when the
- * listing carries one, and finally a download. A downloaded file is kept in staging for the
- * planner's [SyncAction.PublishDocument] to install, so a new document is transferred once.
+ * listing carries one, and finally a download. A downloaded file the library has no row for is kept
+ * in staging for the planner's [SyncAction.PublishDocument] to install, so a new document is
+ * transferred once; one the library already holds is dropped at once, so identifying a remote full
+ * of known documents (a second device's first pass) never fills the disk with copies of them.
  *
  * Trash entries are identified without downloading: by manifest, by backend hash, or by the hash
  * prefix in their name ([NpnPaths.trashHashPrefix]) when exactly one local row of that size has it.
@@ -33,11 +35,12 @@ class DocumentResolver(
         onProgress: (Int, Int) -> Unit,
     ) {
         val documents = remote.documents.values.toList()
+        val known = localRows.mapTo(HashSet()) { it.docId }
         for ((index, entry) in documents.withIndex()) {
             onProgress(index, documents.size)
             if (manifest[entry.path].identifies(entry, ManifestKind.DOCUMENT)) continue
             report.attempt(entry.path) {
-                val docId = entry.sha256 ?: downloadAndHash(entry)
+                val docId = entry.sha256 ?: downloadAndHash(entry, known)
                 manifest.record(
                     ManifestEntry(entry.path, ManifestKind.DOCUMENT, entry.size, entry.mtimeMillis, docId),
                     nowMillis,
@@ -66,16 +69,23 @@ class DocumentResolver(
         return docId != null && matches(entry)
     }
 
-    private suspend fun downloadAndHash(entry: RemoteEntry): String {
+    private suspend fun downloadAndHash(
+        entry: RemoteEntry,
+        known: Set<String>,
+    ): String {
         val scratch = staging.newPath(".pdf")
         var kept = false
         try {
             store.download(entry.path, scratch)
             val size = staging.size(scratch)
-            check(size == entry.size) { "Downloaded ${size ?: "unknown"} bytes, listing said ${entry.size}" }
+            if (size != entry.size) {
+                throw RemoteRaceException("Downloaded ${size ?: "unknown"} bytes, listing said ${entry.size}")
+            }
             val hash = staging.sha256(scratch)
-            downloads[entry.path] = scratch
-            kept = true
+            if (hash !in known) {
+                downloads[entry.path] = scratch
+                kept = true
+            }
             return hash
         } finally {
             if (!kept) withContext(NonCancellable) { staging.delete(scratch) }

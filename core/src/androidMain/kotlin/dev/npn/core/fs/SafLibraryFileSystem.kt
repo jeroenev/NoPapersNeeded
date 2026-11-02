@@ -255,6 +255,15 @@ internal class SafLibraryFileSystem(
                 ?: throw IOException("Cannot open for read: $relPath")
         }
 
+    override suspend fun readChunked(
+        relPath: String,
+        sink: (ByteArray, Int) -> Unit,
+    ) = withContext(io) {
+        val entry = requireEntry(relPath)
+        resolver.openInputStream(docUri(entry.docId))?.use { input -> input.pipeTo(sink) }
+            ?: throw IOException("Cannot open for read: $relPath")
+    }
+
     override suspend fun readTail(
         relPath: String,
         maxBytes: Int,

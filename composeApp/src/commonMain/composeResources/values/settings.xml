@@ -172,12 +172,12 @@
     <string name="common_settings_cloud_engine_checking">Checking the sync engine…</string>
     <string name="common_settings_cloud_engine_available">Sync engine %1$s is ready.</string>
     <string name="common_settings_cloud_engine_missing">The sync engine was not found (looked for %1$s).</string>
-    <string name="common_settings_cloud_engine_failed">The sync engine did not answer: %1$s</string>
+    <string name="common_settings_cloud_engine_failed">The sync engine answered with an error: %1$s</string>
     <string name="common_settings_cloud_engine_check">Check again</string>
-    <string name="common_settings_cloud_remote">Remote</string>
-    <string name="common_settings_cloud_failure_unknown">no details recorded</string>
+    <string name="common_settings_cloud_remote">Cloud folder</string>
+    <string name="common_settings_cloud_failure_unknown">Something went wrong: %1$s</string>
     <string name="common_settings_cloud_schedule">Schedule</string>
-    <string name="common_settings_cloud_interval">Sync interval: %1$s</string>
+    <string name="common_settings_cloud_interval">Sync interval</string>
     <string name="common_settings_cloud_auto">Sync automatically</string>
     <string name="common_settings_cloud_auto_help">Runs a pass at the chosen interval and shortly after changes on this device. “Sync now” works either way.</string>
     <plurals name="common_settings_cloud_interval_minutes">
@@ -200,7 +200,7 @@
     <string name="common_settings_cloud_phase_indexing">Indexing</string>
     <string name="common_settings_cloud_never">Not synced yet.</string>
     <string name="common_settings_cloud_last_summary">Last sync %1$s: %2$d downloaded, %3$d uploaded, %4$d moved and %5$d removed on the remote.</string>
-    <string name="common_settings_cloud_last_failed">Last sync %1$s failed: %2$s</string>
+    <string name="common_settings_cloud_last_failed">Last sync %1$s failed.</string>
     <plurals name="common_settings_cloud_conflict_count">
         <item quantity="one">%1$d conflict was left for you to resolve:</item>
         <item quantity="other">%1$d conflicts were left for you to resolve:</item>
@@ -211,8 +211,7 @@
     </plurals>
     <string name="common_settings_cloud_problem_line">%1$s: %2$s</string>
     <string name="common_settings_cloud_outcome_completed">Sync finished.</string>
-    <string name="common_settings_cloud_outcome_failed">Sync failed: %1$s</string>
-    <string name="common_settings_cloud_outcome_not_configured">Enter a remote first.</string>
+    <string name="common_settings_cloud_outcome_not_configured">Connect cloud storage first.</string>
     <string name="common_settings_cloud_outcome_unavailable">Cloud sync is not available on this device.</string>
     <string name="common_settings_cloud_outcome_running">A sync is already running.</string>
 
@@ -241,9 +240,40 @@
     <string name="common_settings_cloud_folder_new">New folder name</string>
     <string name="common_settings_cloud_folder_create">Create folder</string>
     <string name="common_settings_cloud_folder_use">Use this folder</string>
-    <string name="common_settings_cloud_setup_failed">Setup could not continue</string>
+    <string name="common_settings_cloud_setup_failed">Setup could not continue: %1$s</string>
     <string name="common_settings_cloud_retry">Try again</string>
     <string name="common_settings_cloud_cancel">Cancel</string>
     <string name="common_settings_cloud_change_folder">Change folder</string>
     <string name="common_settings_cloud_disconnect">Disconnect</string>
+    <string name="common_settings_cloud_engine_none">This device has no sync engine.</string>
+    <string name="common_settings_cloud_engine_start_failed">The sync engine could not be started: %1$s</string>
+    <string name="common_settings_cloud_engine_exited">The sync engine stopped right after it started: %1$s</string>
+    <string name="common_settings_cloud_engine_not_ready">The sync engine did not start in time: %1$s</string>
+    <string name="common_settings_cloud_engine_unreachable">The sync engine stopped answering: %1$s</string>
+    <string name="common_settings_cloud_engine_closed">The sync engine was stopped with the library. Open the library again to use it.</string>
+    <string name="common_settings_cloud_failure_unreachable">The cloud could not be reached. Check the connection; the next sync tries again.</string>
+    <string name="common_settings_cloud_failure_sign_in">The cloud no longer accepts the sign-in. Disconnect, then connect again.</string>
+    <string name="common_settings_cloud_failure_full">The cloud storage is full.</string>
+    <string name="common_settings_cloud_failure_not_library">The cloud folder holds other files and no library, so nothing was transferred. Change to an empty folder or this library’s own.</string>
+    <string name="common_settings_cloud_failure_other_library">The cloud folder holds a different library, so nothing was transferred. Change to this library’s own folder or an empty one.</string>
+    <string name="common_settings_cloud_failure_journal_blocked">This library cannot save changes right now, so nothing was synced.</string>
+    <string name="common_settings_cloud_conflict_target_occupied">%1$s: another file is already where this document should move to, so it stays where it is.</string>
+    <string name="common_settings_cloud_conflict_uploaded_as_copy">%1$s: another file was already there, so the document was uploaded as %2$s.</string>
+    <string name="common_settings_cloud_conflict_installed_as_copy">%1$s: the library already had a file there, so the document was saved as %2$s.</string>
+    <string name="common_settings_cloud_conflict_unidentified">%1$s: the file there could not be checked yet, so nothing was uploaded over it.</string>
+    <string name="common_settings_cloud_conflict_remote_changed">%1$s: the file changed in the cloud during the sync; the next sync picks it up from there.</string>
+    <string name="common_settings_cloud_conflict_local_changed">%1$s: the file in the library changed during the sync and was left alone.</string>
+    <string name="common_settings_cloud_conflict_kept_on_device">%1$s: this document was deleted on another device and brought back here, so it stays on this device only.</string>
+    <string name="common_settings_cloud_disconnect_title">Disconnect cloud storage?</string>
+    <string name="common_settings_cloud_disconnect_message">This library stops syncing and this device forgets the sign-in. Nothing is deleted, here or in the cloud.</string>
+    <string name="common_settings_cloud_disconnect_failed">Could not disconnect cloud storage: %1$s</string>
+    <string name="common_settings_cloud_setup_interrupted">The setup was interrupted. Start again.</string>
+    <string name="common_settings_cloud_setup_unexpected">The sync engine answered in a way this version of the app does not understand.</string>
+    <string name="common_settings_cloud_folder_root_help">Open or create a folder for this library: the top level of your cloud storage cannot hold it.</string>
+    <string name="common_settings_cloud_folder_list_failed">The folders could not be listed: %1$s</string>
+    <string name="common_settings_cloud_folder_create_failed">The folder could not be created: %1$s</string>
+    <string name="common_settings_cloud_folder_check_failed">The folder could not be checked: %1$s</string>
+    <string name="common_settings_cloud_folder_other_files">This folder already holds other files. Choose an empty folder, or a folder this library already syncs to.</string>
+    <string name="common_cloud_banner_failed">Cloud sync failed. Open its settings to see why.</string>
+    <string name="common_cloud_banner_open">Open settings</string>
 </resources>

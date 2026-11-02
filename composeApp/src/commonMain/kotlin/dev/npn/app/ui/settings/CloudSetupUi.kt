@@ -31,16 +31,22 @@ import dev.npn.app.ui.common.Dropdown
 import dev.npn.app.ui.common.HelpText
 import dev.npn.core.sync.RcloneOption
 import dev.npn.core.sync.RcloneProvider
+import dev.npn.core.sync.SetupFailure
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_cancel
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_choose
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_connect
+import no_papers_needed.composeapp.generated.resources.common_settings_cloud_folder_check_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_folder_create
+import no_papers_needed.composeapp.generated.resources.common_settings_cloud_folder_create_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_folder_current
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_folder_empty
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_folder_help
+import no_papers_needed.composeapp.generated.resources.common_settings_cloud_folder_list_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_folder_new
+import no_papers_needed.composeapp.generated.resources.common_settings_cloud_folder_other_files
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_folder_root
+import no_papers_needed.composeapp.generated.resources.common_settings_cloud_folder_root_help
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_folder_up
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_folder_use
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_form_help
@@ -51,8 +57,10 @@ import no_papers_needed.composeapp.generated.resources.common_settings_cloud_pro
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_retry
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_setup_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_setup_help
+import no_papers_needed.composeapp.generated.resources.common_settings_cloud_setup_interrupted
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_setup_loading
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_setup_no_providers
+import no_papers_needed.composeapp.generated.resources.common_settings_cloud_setup_unexpected
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_sign_in_cancel
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_sign_in_help
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_sign_in_open
@@ -108,8 +116,7 @@ internal fun CloudSetupWizard(
             }
 
             is CloudSetupState.Failed -> {
-                HelpText(stringResource(Res.string.common_settings_cloud_setup_failed))
-                HelpText(state.message)
+                HelpText(setupFailureText(state.reason, state.detail))
                 SettingsActionRow(
                     label = stringResource(Res.string.common_settings_cloud_retry),
                     onClick = setup::start,
@@ -302,7 +309,10 @@ private fun FolderPicker(
             for (folder in state.folders) FolderButton(folder, onOpen = { setup.openFolder(folder) })
             if (state.folders.isEmpty()) HelpText(stringResource(Res.string.common_settings_cloud_folder_empty))
         }
-        state.error?.let { HelpText(it) }
+        when {
+            state.problem != null -> HelpText(folderProblemText(state.problem, state.detail))
+            state.path.isEmpty() -> HelpText(stringResource(Res.string.common_settings_cloud_folder_root_help))
+        }
         OutlinedTextField(
             value = newFolder,
             onValueChange = { newFolder = it },
@@ -317,7 +327,7 @@ private fun FolderPicker(
             ) {
                 Text(text = stringResource(Res.string.common_settings_cloud_folder_create))
             }
-            Button(onClick = setup::useFolder, enabled = !state.busy) {
+            Button(onClick = setup::useFolder, enabled = state.usable) {
                 Text(text = stringResource(Res.string.common_settings_cloud_folder_use))
             }
         }
@@ -337,3 +347,47 @@ private fun FolderButton(
         }
     }
 }
+
+/** Why setup stopped, as a whole sentence; the engine's own text where it gave one. */
+@Composable
+private fun setupFailureText(
+    reason: SetupFailure,
+    detail: String?,
+): String =
+    when (reason) {
+        SetupFailure.ENGINE -> stringResource(Res.string.common_settings_cloud_setup_failed, detail.orEmpty())
+        SetupFailure.NOT_IN_PROGRESS -> stringResource(Res.string.common_settings_cloud_setup_interrupted)
+        SetupFailure.UNEXPECTED_ANSWER -> stringResource(Res.string.common_settings_cloud_setup_unexpected)
+    }
+
+@Composable
+private fun folderProblemText(
+    problem: FolderProblem,
+    detail: String?,
+): String =
+    when (problem) {
+        FolderProblem.LIST_FAILED -> {
+            stringResource(
+                Res.string.common_settings_cloud_folder_list_failed,
+                detail.orEmpty(),
+            )
+        }
+
+        FolderProblem.CREATE_FAILED -> {
+            stringResource(
+                Res.string.common_settings_cloud_folder_create_failed,
+                detail.orEmpty(),
+            )
+        }
+
+        FolderProblem.CHECK_FAILED -> {
+            stringResource(
+                Res.string.common_settings_cloud_folder_check_failed,
+                detail.orEmpty(),
+            )
+        }
+
+        FolderProblem.OTHER_FILES -> {
+            stringResource(Res.string.common_settings_cloud_folder_other_files)
+        }
+    }

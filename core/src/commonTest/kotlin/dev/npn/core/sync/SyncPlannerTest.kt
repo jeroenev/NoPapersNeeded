@@ -46,7 +46,19 @@ class SyncPlannerTest {
         metadataFiles: Set<String> = emptySet(),
         trashFiles: Map<String, TrashFile> = emptyMap(),
         retention: Long? = 30 * day,
-    ) = LocalSnapshot(docs.toList(), metadataFiles, trashFiles, now, retention)
+        journal: Map<String, JournalDocView> = emptyMap(),
+        trashTimes: Map<String, Long?> = emptyMap(),
+        relocates: Boolean = true,
+    ) = LocalSnapshot(
+        docs.toList(),
+        metadataFiles.associateWith { 10L },
+        trashFiles,
+        now,
+        retention,
+        journal,
+        trashTimes,
+        relocates,
+    )
 
     private fun remote(vararg entries: RemoteEntry) = RemoteIndex(entries.toList())
 
@@ -98,10 +110,11 @@ class SyncPlannerTest {
     }
 
     @Test
-    fun uploadsAtTheJournaledIntentAndReportsAnOccupiedTarget() {
+    fun uploadsAtTheLibrarysNameAndReportsAnOccupiedTarget() {
+        // The library's indexer put the file at its journaled path; the remote follows that name.
         val remote = remote(entry("2026/a.pdf"))
         val result =
-            plan(local(doc(docA, "inbox/a.pdf", intent = "2026/a.pdf")), remote, listOf(known("2026/a.pdf", docB)))
+            plan(local(doc(docA, "2026/a.pdf", intent = "2026/a.pdf")), remote, listOf(known("2026/a.pdf", docB)))
         result.remote
             .filterIsInstance<SyncAction.UploadDocument>()
             .single()
@@ -112,21 +125,172 @@ class SyncPlannerTest {
     }
 
     @Test
-    fun movesTheRemoteCopyTowardTheIntentOnlyWhenOneIsJournaled() {
+    fun movesTheRemoteCopyTowardTheIntent() {
+        // The two last agreed on old/a.pdf; the library's indexer has since moved the file to its
+        // journaled path, so the remote follows.
         val remote = remote(entry("old/a.pdf"))
-        val manifest = listOf(known("old/a.pdf", docA))
-
-        plan(local(doc(docA, "new/a.pdf")), remote, manifest).remote.shouldBeEmpty()
+        val manifest = listOf(known("old/a.pdf", docA).copy(localPath = "old/a.pdf"))
 
         val moved = plan(local(doc(docA, "new/a.pdf", intent = "new/a.pdf")), remote, manifest)
         moved.remote shouldContainExactly
-            listOf(SyncAction.MoveRemote(docA, "old/a.pdf", "new/a.pdf", entry("old/a.pdf")))
+            listOf(SyncAction.MoveRemote(docA, "old/a.pdf", "new/a.pdf", entry("old/a.pdf"), localPath = "new/a.pdf"))
+        moved.local.shouldBeEmpty()
+    }
+
+    @Test
+    fun withoutAnIntentTheSideThatRenamedTheDocumentWins() {
+        val remote = remote(entry("old/a.pdf"))
+
+        // Renamed here since the two last agreed: the remote follows.
+        val here =
+            plan(local(doc(docA, "new/a.pdf")), remote, listOf(known("old/a.pdf", docA).copy(localPath = "x/a.pdf")))
+        here.remote shouldContainExactly
+            listOf(SyncAction.MoveRemote(docA, "old/a.pdf", "new/a.pdf", entry("old/a.pdf"), localPath = "new/a.pdf"))
+        here.local.shouldBeEmpty()
+
+        // Never agreed on: the remote's name is another device's choice, and the library takes it.
+        plan(local(doc(docA, "new/a.pdf")), remote, listOf(known("old/a.pdf", docA))).local shouldContainExactly
+            listOf(SyncAction.MoveLocal(docA, "new/a.pdf", "old/a.pdf", "old/a.pdf"))
+
+        // Still where it was when they last agreed: the remote renamed it, and the library follows.
+        val there =
+            plan(
+                local(doc(docA, "new/a.pdf")),
+                remote,
+                listOf(known("old/a.pdf", docA).copy(localPath = "new/a.pdf")),
+            )
+        there.local shouldContainExactly listOf(SyncAction.MoveLocal(docA, "new/a.pdf", "old/a.pdf", "old/a.pdf"))
+        there.remote.shouldBeEmpty()
+    }
+
+    @Test
+    fun aLibraryThatCannotMoveDocumentsTakesTheRemotesName() {
+        // Another replica moved the document to its journaled path; this storage-access library
+        // cannot move it itself, so it takes the move as a folder syncer would deliver it.
+        val remote = remote(entry("2026/a.pdf"))
+        val manifest = listOf(known("2026/a.pdf", docA))
+        val stuck = local(doc(docA, "inbox/a.pdf", intent = "2026/a.pdf"), relocates = false)
+        plan(stuck, remote, manifest).local shouldContainExactly
+            listOf(SyncAction.MoveLocal(docA, "inbox/a.pdf", "2026/a.pdf", "2026/a.pdf"))
+
+        // One whose indexer places documents itself keeps its own name and moves nothing: it only
+        // remembers the two names as agreed, so neither side undoes the other later.
+        val moving = plan(local(doc(docA, "inbox/a.pdf", intent = "2026/a.pdf")), remote, manifest)
+        moving.remote.shouldBeEmpty()
+        moving.local shouldContainExactly listOf(SyncAction.RecordLocalPath(docA, "2026/a.pdf", "inbox/a.pdf"))
+
+        // Once agreed, the remote moves only when this library's file does.
+        val agreed = listOf(known("2026/a.pdf", docA).copy(localPath = "inbox/a.pdf"))
+        plan(local(doc(docA, "inbox/a.pdf", intent = "2026/a.pdf")), remote, agreed).isEmpty shouldBe true
+        plan(local(doc(docA, "2026/b.pdf", intent = "2026/b.pdf")), remote, agreed).remote shouldContainExactly
+            listOf(
+                SyncAction.MoveRemote(docA, "2026/a.pdf", "2026/b.pdf", entry("2026/a.pdf"), localPath = "2026/b.pdf"),
+            )
+    }
+
+    @Test
+    fun aNameMadeUniqueOnTheRemoteIsTheLibrarysNameToo() {
+        // Two devices imported other documents as a.pdf: the second one's copy goes up as
+        // `a (2).pdf`, and its library file takes that name before the first one's is installed.
+        val remote = remote(entry("a.pdf"))
+        val result = plan(local(doc(docB, "a.pdf")), remote, listOf(known("a.pdf", docA)))
+        result.local shouldContainExactly
+            listOf(
+                SyncAction.MoveLocal(docB, "a.pdf", "a (2).pdf", "a (2).pdf"),
+                SyncAction.PublishDocument(docA, "a.pdf", "a.pdf"),
+            )
+        result.remote shouldContainExactly
+            listOf(SyncAction.UploadDocument(docB, "a (2).pdf", "a (2).pdf", formerRelPath = "a.pdf"))
+        result.conflicts.single().kind shouldBe ConflictKind.UPLOADED_AS_COPY
+    }
+
+    @Test
+    fun pathsCollideIgnoringCase() {
+        val remote = remote(entry("Inbox/A.pdf"))
+        val result =
+            plan(local(doc(docB, "inbox/a.pdf", intent = "inbox/a.pdf")), remote, listOf(known("Inbox/A.pdf", docA)))
+        result.remote shouldContainExactly listOf(SyncAction.UploadDocument(docB, "inbox/a.pdf", "inbox/a (2).pdf"))
+
+        // A rename that only changes case is a move of the document onto its own name.
+        val agreed = known("Inbox/A.pdf", docA).copy(localPath = "Inbox/A.pdf")
+        val renamed = plan(local(doc(docA, "inbox/a.pdf", intent = "inbox/a.pdf")), remote, listOf(agreed))
+        renamed.remote shouldContainExactly
+            listOf(
+                SyncAction.MoveRemote(
+                    docA,
+                    "Inbox/A.pdf",
+                    "inbox/a.pdf",
+                    entry("Inbox/A.pdf"),
+                    localPath = "inbox/a.pdf",
+                ),
+            )
+    }
+
+    @Test
+    fun aDocumentTheJournalHidesIsNeverInstalledFromTheRemote() {
+        val remote = remote(entry("a.pdf"), entry("b.pdf"))
+        val manifest = listOf(known("a.pdf", docA), known("b.pdf", docB))
+        val journal =
+            mapOf(
+                docA to JournalDocView(intendedPath = null, deleted = true, trashed = false),
+                docB to JournalDocView(intendedPath = null, deleted = false, trashed = true),
+            )
+        val result = plan(local(journal = journal), remote, manifest)
+        result.local.shouldBeEmpty()
+    }
+
+    @Test
+    fun bytesARelinkSupersededLeaveTheRemoteAndFreeTheNameForTheirSuccessor() {
+        val remote = remote(entry("x.pdf"))
+        val manifest = listOf(known("x.pdf", docA))
+        val journal =
+            mapOf(
+                docA to JournalDocView(intendedPath = null, deleted = false, trashed = false, supersededBy = docB),
+                docB to JournalDocView(intendedPath = null, deleted = false, trashed = false),
+            )
+        val result = plan(local(doc(docB, "x.pdf"), journal = journal), remote, manifest)
+        // The original goes first, so the baked document's upload finds its name free.
+        result.remote shouldContainExactly
+            listOf(
+                SyncAction.DeleteRemote(docA, "x.pdf", entry("x.pdf")),
+                SyncAction.UploadDocument(docB, "x.pdf", "x.pdf"),
+            )
+        result.local.shouldBeEmpty()
+        result.conflicts.shouldBeEmpty()
+    }
+
+    @Test
+    fun aDeletedDocumentAnImportBroughtBackUnrecordedStaysOnThisDevice() {
+        val journal = mapOf(docA to JournalDocView(intendedPath = null, deleted = true, trashed = false))
+        val result = plan(local(doc(docA, "a.pdf"), journal = journal), remote())
+        result.remote.shouldBeEmpty()
+        result.conflicts.single().kind shouldBe ConflictKind.KEPT_ON_THIS_DEVICE
+    }
+
+    @Test
+    fun aRowThatLagsTheJournalMovesNothingOnTheRemote() {
+        val remote = remote(entry("a.pdf"))
+        val manifest = listOf(known("a.pdf", docA))
+        val live = mapOf(docA to JournalDocView(intendedPath = null, deleted = false, trashed = false))
+        plan(local(doc(docA, "a.pdf", deleted = true, fileAtRelPath = false), journal = live), remote, manifest)
+            .remote
+            .shouldBeEmpty()
+        plan(local(doc(docA, "a.pdf", trashed = true), journal = live), remote, manifest)
+            .remote
+            .shouldBeEmpty()
+    }
+
+    @Test
+    fun metadataOfAnotherSizeOnTheRemoteIsUploadedAgain() {
+        val truncated = RemoteEntry(objectPath, size = 3, mtimeMillis = now)
+        plan(local(metadataFiles = setOf(objectPath)), remote(truncated)).pushMetadata shouldContainExactly
+            listOf(SyncAction.UploadObject(objectPath))
     }
 
     @Test
     fun anOccupiedIntentIsAConflictNotAMove() {
         val remote = remote(entry("old/a.pdf"), entry("new/a.pdf"))
-        val manifest = listOf(known("old/a.pdf", docA), known("new/a.pdf", docB))
+        val manifest = listOf(known("old/a.pdf", docA).copy(localPath = "old/a.pdf"), known("new/a.pdf", docB))
         val result = plan(local(doc(docA, "new/a.pdf", intent = "new/a.pdf")), remote, manifest)
         result.remote.filterIsInstance<SyncAction.MoveRemote>().shouldBeEmpty()
         result.conflicts.single().docId shouldBe docA
@@ -187,7 +351,8 @@ class SyncPlannerTest {
         val reversedTrash =
             listOf(known(secondTrash, docA, ManifestKind.TRASH), known(trashA, docA, ManifestKind.TRASH))
         val restored = plan(local(doc(docA, "a.pdf", intent = "a.pdf")), trashRemote, reversedTrash)
-        restored.remote shouldContainExactly listOf(SyncAction.MoveRemote(docA, trashA, "a.pdf", entry(trashA)))
+        restored.remote shouldContainExactly
+            listOf(SyncAction.MoveRemote(docA, trashA, "a.pdf", entry(trashA), localPath = "a.pdf"))
     }
 
     @Test
@@ -198,7 +363,7 @@ class SyncPlannerTest {
         result.remote.shouldBeEmpty()
         result.local.shouldBeEmpty()
         result.conflicts shouldContainExactly
-            listOf(SyncConflict(docA, "inbox/a.pdf", "Remote file at this path was not identified; not uploaded"))
+            listOf(SyncConflict(docA, "inbox/a.pdf", ConflictKind.UNIDENTIFIED))
 
         // Without any manifest row at all the outcome is the same: nothing uniquified beside it.
         val bare = plan(local(doc(docA, "inbox/a.pdf")), remote)
@@ -208,17 +373,18 @@ class SyncPlannerTest {
 
     @Test
     fun uniquifiesExtensionLessNamesDottedDirectoriesAndRepeatedCollisions() {
-        // Two documents heading for the same occupied path in one pass get (2) and (3).
+        // Two documents heading for the same occupied path in one pass (names that differ only in
+        // case, which the remote folds) get (2) and (3).
         val docC = "c".repeat(64)
         val occupied = remote(entry("a.pdf"))
         val twice =
             plan(
-                local(doc(docA, "a.pdf"), doc(docB, "b.pdf", intent = "a.pdf")),
+                local(doc(docA, "a.pdf", intent = "a.pdf"), doc(docB, "A.pdf", intent = "A.pdf")),
                 occupied,
                 listOf(known("a.pdf", docC)),
             )
         twice.remote.filterIsInstance<SyncAction.UploadDocument>().map { it.remotePath } shouldContainExactly
-            listOf("a (2).pdf", "a (3).pdf")
+            listOf("a (2).pdf", "A (3).pdf")
         twice.conflicts shouldHaveSize 2
 
         // An extension-less name whose trash entry is taken: the next episode, at the very end.
@@ -237,7 +403,7 @@ class SyncPlannerTest {
         // Occupied upload target.
         val remote = remote(entry("2026/a.pdf"))
         val upload =
-            plan(local(doc(docA, "inbox/a.pdf", intent = "2026/a.pdf")), remote, listOf(known("2026/a.pdf", docB)))
+            plan(local(doc(docA, "2026/a.pdf", intent = "2026/a.pdf")), remote, listOf(known("2026/a.pdf", docB)))
         upload.conflicts shouldHaveSize 1
         upload.remote.none { it.touches("2026/a.pdf") } shouldBe true
 
@@ -247,7 +413,7 @@ class SyncPlannerTest {
             plan(
                 local(doc(docA, "new/a.pdf", intent = "new/a.pdf")),
                 both,
-                listOf(known("old/a.pdf", docA), known("new/a.pdf", docB)),
+                listOf(known("old/a.pdf", docA).copy(localPath = "old/a.pdf"), known("new/a.pdf", docB)),
             )
         move.conflicts shouldHaveSize 1
         move.remote.none { it.touches("new/a.pdf") } shouldBe true
@@ -266,7 +432,8 @@ class SyncPlannerTest {
         val remote = remote(entry(trashA))
         val result =
             plan(local(doc(docA, "a.pdf", intent = "a.pdf")), remote, listOf(known(trashA, docA, ManifestKind.TRASH)))
-        result.remote shouldContainExactly listOf(SyncAction.MoveRemote(docA, trashA, "a.pdf", entry(trashA)))
+        result.remote shouldContainExactly
+            listOf(SyncAction.MoveRemote(docA, trashA, "a.pdf", entry(trashA), localPath = "a.pdf"))
     }
 
     // ---- trash ------------------------------------------------------------------------------
@@ -357,7 +524,7 @@ class SyncPlannerTest {
 
     @Test
     fun localTrashOlderThanRetentionIsNotUploaded() {
-        val stale = ".npn/trash/d__dddddddd.pdf"
+        val stale = ".npn/trash/d__dddddddd-${now - 60 * day}.pdf"
         val result = plan(local(trashFiles = mapOf(stale to TrashFile(now - 60 * day, 10))), remote())
         result.remote.shouldBeEmpty()
 
@@ -368,12 +535,13 @@ class SyncPlannerTest {
     }
 
     @Test
-    fun theRetentionPurgeSkipsEntriesWithoutAnMtime() {
+    fun aTrashEntryOfUnknownAgeIsKeptAndTransferred() {
+        // An older build's name carries no episode, and its mtime is the PDF's own: nothing says
+        // it is old, so it is neither purged nor withheld.
         val unknownAge = entry(".npn/trash/z__abcdef01.pdf", mtime = 0)
         val result = plan(local(), remote(unknownAge))
         result.remote.filterIsInstance<SyncAction.DeleteRemote>().shouldBeEmpty()
-        // Nor is an entry of unknown age fetched: it cannot be shown to be within retention.
-        result.local.filterIsInstance<SyncAction.DownloadTrash>().shouldBeEmpty()
+        result.local shouldContainExactly listOf(SyncAction.DownloadTrash(unknownAge))
     }
 
     @Test
@@ -404,11 +572,13 @@ class SyncPlannerTest {
                     ),
             )
         val result = plan(snapshot, remote)
+        // The stale entry belongs to a deleted document: not fetched. Without an episode in their
+        // names, neither local entry is known to be old, so both go up; nothing is purged by mtime.
         result.local shouldContainExactly listOf(SyncAction.DownloadTrash(freshEntry))
         result.remote shouldContainExactlyInAnyOrder
             listOf(
                 SyncAction.UploadTrash(".npn/trash/c__cccccccc.pdf", null),
-                SyncAction.DeleteRemote(null, stale, staleEntry),
+                SyncAction.UploadTrash(".npn/trash/d__dddddddd.pdf", null),
             )
 
         val liveWithFile = plan(local(doc(docA, "a.pdf")), remote(freshEntry))
@@ -471,14 +641,43 @@ class SyncPlannerTest {
     }
 
     @Test
-    fun theRetentionPurgeGoesByTheTrashEpisodeNotTheMtime() {
+    fun theRetentionPurgeGoesByTheJournalsTrashTimesNotTheMtime() {
         // A move into trash keeps the PDF's own mtime: a document imported long ago and trashed
         // yesterday must not be purged, nor one trashed long ago kept for a recent mtime.
         val trashedYesterday = entry(trashA, mtime = now - 400 * day)
         val trashedLongAgo = entry(".npn/trash/b__bbbbbbbb-${now - 40 * day}.pdf", mtime = now - day)
-        val result = plan(local(), remote(trashedYesterday, trashedLongAgo))
-        result.remote shouldContainExactly listOf(SyncAction.DeleteRemote(null, trashedLongAgo.path, trashedLongAgo))
+        val manifest = listOf(known(trashedLongAgo.path, docB, ManifestKind.TRASH, mtime = now - day))
+        val result =
+            plan(
+                local(trashTimes = mapOf(docA to now - day, docB to now - 40 * day)),
+                remote(trashedYesterday, trashedLongAgo),
+                manifest,
+            )
+        result.remote shouldContainExactly listOf(SyncAction.DeleteRemote(docB, trashedLongAgo.path, trashedLongAgo))
         result.local shouldContainExactly listOf(SyncAction.DownloadTrash(trashedYesterday))
+    }
+
+    @Test
+    fun anOldRemoteTrashEntryStaysUnlessEveryDocumentItCouldBeLeftLongAgo() {
+        val old = entry(".npn/trash/b__bbbbbbbb-${now - 40 * day}.pdf", mtime = now - day)
+        val identified = listOf(known(old.path, docB, ManifestKind.TRASH, mtime = now - day))
+
+        fun purges(
+            trashTimes: Map<String, Long?>,
+            manifest: List<ManifestEntry> = identified,
+        ) = plan(local(trashTimes = trashTimes), remote(old), manifest)
+            .remote
+            .filterIsInstance<SyncAction.DeleteRemote>()
+            .isNotEmpty()
+
+        purges(mapOf(docB to now - 40 * day)) shouldBe true
+        // No document this device knows: kept, however old the name says it is.
+        purges(emptyMap()) shouldBe false
+        // Its document is live again (restored), or another document shares the prefix and is live.
+        purges(mapOf(docB to null)) shouldBe false
+        purges(mapOf(docB to now - 40 * day, "bbbbbbbb" + "c".repeat(56) to null)) shouldBe false
+        // Not identified as one of them: kept.
+        purges(mapOf(docB to now - 40 * day), manifest = emptyList()) shouldBe false
     }
 
     @Test
@@ -494,7 +693,11 @@ class SyncPlannerTest {
     fun aNoOpLibraryPlansNothing() {
         val remote = remote(entry("a.pdf"), entry(objectPath))
         val result =
-            plan(local(doc(docA, "a.pdf"), metadataFiles = setOf(objectPath)), remote, listOf(known("a.pdf", docA)))
+            plan(
+                local(doc(docA, "a.pdf"), metadataFiles = setOf(objectPath)),
+                remote,
+                listOf(known("a.pdf", docA).copy(localPath = "a.pdf")),
+            )
         result.isEmpty shouldBe true
         result.conflicts.shouldBeEmpty()
     }

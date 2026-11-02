@@ -38,7 +38,7 @@ internal class SyncEngineGuardTest : SyncEngineTestBase() {
             val report = pair.b.session.syncCompleted()
             report.movedRemote shouldBe 0
             report.errors.shouldBeEmpty()
-            report.conflicts.map { it.message } shouldContain "Remote file changed since listing; not moved"
+            report.conflicts.map { it.kind } shouldContain ConflictKind.REMOTE_CHANGED
             pair.remote.exists("inbox/final.pdf").shouldBeFalse()
             pair.remote.bytes("inbox/draft.pdf") shouldBe foreign
         }
@@ -56,7 +56,7 @@ internal class SyncEngineGuardTest : SyncEngineTestBase() {
             pair.remote.onceBeforeStat("inbox/draft.pdf") { pair.remote.put("inbox/final.pdf", foreign) }
             val report = pair.b.session.syncCompleted()
             report.movedRemote shouldBe 0
-            report.conflicts.map { it.message } shouldContain "Remote destination is occupied; not moved"
+            report.conflicts.map { it.kind } shouldContain ConflictKind.TARGET_OCCUPIED
             pair.remote.bytes("inbox/final.pdf") shouldBe foreign
             pair.remote.fileBytesEqual("inbox/draft.pdf", pdf("guard-dest")).shouldBeTrue()
         }
@@ -76,7 +76,7 @@ internal class SyncEngineGuardTest : SyncEngineTestBase() {
             pair.remote.onceBeforeStat("inbox/gone.pdf") { pair.remote.put("inbox/gone.pdf", foreign) }
             val report = pair.a.session.syncCompleted()
             report.deletedRemote shouldBe 0
-            report.conflicts.map { it.message } shouldContain "Remote file changed since listing; not deleted"
+            report.conflicts.map { it.kind } shouldContain ConflictKind.REMOTE_CHANGED
             pair.remote.bytes("inbox/gone.pdf") shouldBe foreign
         }
 
@@ -88,7 +88,7 @@ internal class SyncEngineGuardTest : SyncEngineTestBase() {
             pair.remote.onceBeforeStat("inbox/x.pdf") { pair.remote.put("inbox/x.pdf", foreign) }
             val report = pair.a.session.syncCompleted()
             report.uploadedDocuments shouldBe 0
-            report.conflicts.map { it.message } shouldContain "Remote path appeared before upload"
+            report.conflicts.map { it.kind } shouldContain ConflictKind.REMOTE_CHANGED
             pair.remote.bytes("inbox/x.pdf") shouldBe foreign
             // Only metadata went up; the lone PDF is the foreign one, untouched.
             pair.remote.paths().filter { it.endsWith(".pdf") } shouldContainExactly listOf("inbox/x.pdf")
@@ -117,7 +117,7 @@ internal class SyncEngineGuardTest : SyncEngineTestBase() {
             report.appliedLocally shouldBe 0
             report.errors.shouldBeEmpty()
             report.conflicts.filter {
-                it.message == "Local file no longer holds this document; left in place"
+                it.kind == ConflictKind.LOCAL_CHANGED
             } shouldHaveSize
                 2
             Files.readAllBytes(pair.b.libRoot.resolve("inbox/keep.pdf")) shouldBe keep
@@ -190,6 +190,7 @@ internal class SyncEngineGuardTest : SyncEngineTestBase() {
     @Test
     fun aLocalInstallNeverReplacesAnOccupiedPath() =
         withPair { pair ->
+            pair.b.session.syncCompleted()
             val mine = pdf("B's own unsynced document")
             val theirs = pdf("a different document under the same name")
             (pair.b.session.importPdfBytes(mine, "x.pdf") as ImportOutcome.Imported).docId
@@ -197,19 +198,26 @@ internal class SyncEngineGuardTest : SyncEngineTestBase() {
 
             val report = pair.b.session.syncCompleted()
             report.errors.shouldBeEmpty()
-            Files.readAllBytes(pair.b.libRoot.resolve("inbox/x.pdf")) shouldBe mine
-            Files.readAllBytes(pair.b.libRoot.resolve("inbox/x (2).pdf")) shouldBe theirs
+            // Neither file replaced the other: B's document went up under a free name and took that
+            // name here too, so the remote's file installed at its own name, as on every replica.
+            Files.readAllBytes(pair.b.libRoot.resolve("inbox/x.pdf")) shouldBe theirs
+            Files.readAllBytes(pair.b.libRoot.resolve("inbox/x (2).pdf")) shouldBe mine
             report.conflicts.filter {
-                it.message == "Local path was taken; installed as inbox/x (2).pdf"
+                it.kind == ConflictKind.UPLOADED_AS_COPY && it.otherPath == "inbox/x (2).pdf"
             } shouldHaveSize
                 1
-            // The remote's own file is untouched too; B's document went beside it under a free name.
             pair.remote.bytes("inbox/x.pdf") shouldBe theirs
             pair.remote.bytes("inbox/x (2).pdf") shouldBe mine
+            pair.b.session.ingest
+                .rescan()
             pair.b.db
                 .documentDao()
                 .getByRelPath("inbox/x (2).pdf")
                 .shouldNotBeNull()
+            pair.b.session
+                .syncCompleted()
+                .changedAnything
+                .shouldBeFalse()
         }
 
     @Test
@@ -247,24 +255,28 @@ internal class SyncEngineGuardTest : SyncEngineTestBase() {
         }
 
     @Test
-    fun theRetentionPurgeDeletesOnlyRemoteTrashOlderThanRetention() =
+    fun theRetentionPurgeDeletesOnlyRemoteTrashItsDocumentLeftLongAgo() =
         withPair { pair ->
             val now = System.currentTimeMillis()
-            pair.a.clock.now = now
             val day = 24L * 60 * 60 * 1000
-            val old = "${NpnPaths.TRASH_DIR}/old__0badf00d.pdf"
-            val fresh = "${NpnPaths.TRASH_DIR}/new__0badf00e.pdf"
-            pair.remote.put(old, pdf("old trash"))
-            pair.remote.setMtime(old, now - 40 * day)
-            pair.remote.put(fresh, pdf("fresh trash"))
+            pair.a.clock.now = now - 40 * day
+            val docId = pair.importOnA("old.pdf", "trashed forty days ago")
+            pair.a.session.syncCompleted()
+            pair.a.session.docLifecycle
+                .trashDoc(docId)
+            pair.a.session.syncCompleted()
+            val entry = pair.remote.paths().single { it.startsWith("${NpnPaths.TRASH_DIR}/") }
+            // A stray entry no document accounts for, with an old mtime: nothing says whose it is.
+            val stray = "${NpnPaths.TRASH_DIR}/stray__0badf00d.pdf"
+            pair.remote.put(stray, pdf("stray trash"))
+            pair.remote.setMtime(stray, now - 400 * day)
 
+            pair.a.clock.now = now
             val report = pair.a.session.syncCompleted()
             report.errors.shouldBeEmpty()
             report.deletedRemote shouldBe 1
-            pair.remote.exists(old).shouldBeFalse()
-            pair.remote.exists(fresh).shouldBeTrue()
-            pair.a.exists(fresh).shouldBeTrue()
-            pair.a.exists(old).shouldBeFalse()
+            pair.remote.exists(entry).shouldBeFalse()
+            pair.remote.exists(stray).shouldBeTrue()
         }
 
     @Test
@@ -319,7 +331,7 @@ internal class SyncEngineGuardTest : SyncEngineTestBase() {
             val report = pair.a.session.syncCompleted()
             report.uploadedDocuments shouldBe 0
             report.errors.shouldBeEmpty()
-            report.conflicts.map { it.message } shouldContain "Local file no longer holds this document; not uploaded"
+            report.conflicts.map { it.kind } shouldContain ConflictKind.LOCAL_CHANGED
             pair.remote.exists("inbox/edit.pdf").shouldBeFalse()
             pair.remote.uploads shouldBe pair.remote.paths().size // only metadata went up
         }

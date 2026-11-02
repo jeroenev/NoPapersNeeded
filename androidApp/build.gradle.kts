@@ -73,6 +73,13 @@ abstract class BuildRcloneAndroidTask
         @get:Input
         abstract val sdkDir: Property<String>
 
+        /**
+         * The Go toolchain on PATH (`go env GOVERSION`), so a Go upgrade rebuilds the engine instead
+         * of reusing one an older compiler produced.
+         */
+        @get:Input
+        abstract val goVersion: Property<String>
+
         /** The module the go tool downloads rclone into; keeps the checkout per project. */
         @get:Internal
         abstract val moduleDir: DirectoryProperty
@@ -201,6 +208,12 @@ val buildRcloneAndroid =
         abis.set(rcloneAbis)
         // Read when the task runs, so a build that never compiles the engine needs no SDK lookup here.
         sdkDir.set(providers.provider { androidSdkDirectory().absolutePath })
+        goVersion.set(
+            providers
+                .exec { commandLine("go", "env", "GOVERSION") }
+                .standardOutput.asText
+                .map { it.trim() },
+        )
         moduleDir.set(layout.buildDirectory.dir("rclone/module"))
         outputDir.set(rcloneJniLibsDir)
     }
@@ -229,8 +242,12 @@ android {
             }
         }
     }
-    sourceSets.getByName("main") {
-        jniLibs.directories.add(rcloneJniLibsDir.get().asFile.absolutePath)
+    // A skipped engine build leaves the directory an earlier build filled; packaging it anyway would
+    // ship a stale engine, and with the ABI filter lifted, for some ABIs only.
+    if (!rcloneSkip) {
+        sourceSets.getByName("main") {
+            jniLibs.directories.add(rcloneJniLibsDir.get().asFile.absolutePath)
+        }
     }
     // `lintDebug` also lints core and composeApp (checkDependencies), so one report covers the
     // Android code of the whole app. Errors fail the build; the configuration is npn.toolchain's.
@@ -248,6 +265,13 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+        // The bundled rclone is executed from nativeLibraryDir, which only holds a library when the
+        // installer extracts it: with minSdk 30 AGP otherwise keeps every `.so` stored inside the APK
+        // (`extractNativeLibs="false"`), and the engine would be missing on every phone. Extracted
+        // libraries are also stored compressed, which keeps the ~90 MB engine from bloating the APK.
+        jniLibs {
+            useLegacyPackaging = true
         }
     }
     signingConfigs {

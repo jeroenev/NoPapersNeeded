@@ -1,21 +1,23 @@
 package dev.npn.core.sync
 
+import kotlinx.serialization.Serializable
+
 /**
- * Device-local cloud sync settings, projected from the app settings snapshot.
+ * One library's cloud sync settings on this device, kept in the library's `device.db` beside the
+ * manifest ([SyncService]), so each library has a remote of its own and switching library never
+ * points one library at another's folder.
  *
- * [remote] is an rclone remote path (`gdrive:NoPapersNeeded`) or connection string
- * (`:webdav,url=https://host/dav,user=me,pass=<obscured>:NoPapersNeeded`). Credentials live in
- * rclone's own config file (or in the connection string), never in the journal: another device has
- * its own rclone setup, so nothing here is library-wide.
+ * [remote] is an rclone remote path (`drive-3fa9c1:NoPapersNeeded`), or a connection string
+ * (`:webdav,url=https://host/dav,user=me,pass=<obscured>:NoPapersNeeded`) for a remote set up
+ * outside the wizard. Credentials live in the app's rclone config file (or in the connection
+ * string), never in the journal: another device has its own rclone setup, so nothing here is
+ * library-wide.
  */
+@Serializable
 data class CloudSyncConfig(
     val enabled: Boolean = false,
     val remote: String? = null,
     val intervalMinutes: Int = DEFAULT_INTERVAL_MINUTES,
-    /** Explicit rclone executable; null means the platform default (PATH, or the bundled binary). */
-    val rcloneBinary: String? = null,
-    /** Explicit `rclone.conf`; null means rclone's default location. */
-    val rcloneConfig: String? = null,
 ) {
     /** A remote is configured when the user named one, whatever the automatic toggle says. */
     val configured: Boolean get() = !remote.isNullOrBlank()

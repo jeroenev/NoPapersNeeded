@@ -17,3 +17,13 @@ internal fun InputStream.sha256Hex(): String {
     }
     return digest.digest().toHexLower()
 }
+
+/** Hand the rest of this stream to [sink] chunk by chunk. The caller closes the stream. */
+internal fun InputStream.pipeTo(sink: (ByteArray, Int) -> Unit) {
+    val buffer = ByteArray(STREAM_BUFFER_SIZE)
+    var read = read(buffer)
+    while (read >= 0) {
+        if (read > 0) sink(buffer, read)
+        read = read(buffer)
+    }
+}

@@ -25,10 +25,10 @@ import java.nio.file.Path
 import kotlin.test.Test
 
 /**
- * The service around the engine: the single-flight gate, the persisted last run, the schedule and
- * the debounced "soon" pass. A real [SyncEngine] over an empty library and an empty directory
- * remote keeps a pass cheap; the transport is scripted so it can stall, fail or report itself
- * absent. The service's own clock is a hand-cranked [MutableClock]; `delay`s run on virtual time.
+ * The service around the engine: the library's own settings, the single-flight gate, the persisted
+ * last run, the schedule and the debounced "soon" pass. A real [SyncEngine] over an empty library
+ * and an empty directory remote keeps a pass cheap; the transport is scripted so it can stall, fail
+ * or report itself absent. The service's own clock is a hand-cranked [MutableClock]; `delay`s run on virtual time.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SyncServiceTest {
@@ -46,6 +46,11 @@ class SyncServiceTest {
         /** When set, `list()` throws it, failing the pass as a broken transport would. */
         var listFailure: Throwable? = null
 
+        /** What [failureOf] reads any failure as. */
+        var reason: SyncFailure = SyncFailure.UNKNOWN
+
+        override fun failureOf(failure: Throwable): SyncFailure = reason
+
         /** Number of listings started so far, i.e. of passes that reached the engine. */
         val listCalls = MutableStateFlow(0)
 
@@ -53,8 +58,6 @@ class SyncServiceTest {
             availabilityCalls++
             return availability
         }
-
-        override suspend fun listRemotes(): List<String> = listOf("test")
 
         override fun open(remote: String): RemoteStore {
             opens++
@@ -72,8 +75,9 @@ class SyncServiceTest {
     }
 
     private object NoHooks : SyncHooks {
-        override suspend fun intendedPaths(docIds: Collection<String>): Map<String, String?> =
-            docIds.associateWith { null }
+        override suspend fun journalReady(): Boolean = true
+
+        override suspend fun journalView(docIds: Collection<String>): Map<String, JournalDocView> = emptyMap()
 
         override suspend fun metadataArrived() = Unit
 
@@ -81,10 +85,20 @@ class SyncServiceTest {
 
         override suspend fun trashRetentionDays(): Int = 30
 
-        override suspend fun deleteDeletedCopy(
-            docId: String,
-            relPath: String,
-        ): Boolean = false
+        override suspend fun trashTimes(): Map<String, Long?> = emptyMap()
+
+        override suspend fun <T> serialized(block: suspend (SyncJournal) -> T): T =
+            block(
+                object : SyncJournal {
+                    override suspend fun isDeleted(docId: String): Boolean = false
+
+                    override suspend fun isTrashed(docId: String): Boolean = false
+
+                    override suspend fun isCurrent(docId: String): Boolean = true
+
+                    override suspend fun successorOf(docId: String): String = docId
+                },
+            )
     }
 
     private class Harness(
@@ -94,8 +108,6 @@ class SyncServiceTest {
     ) {
         val transport = ScriptedTransport(DirectoryRemoteStore(remoteRoot))
         val clock = MutableClock(1_000_000L)
-        var config = CloudSyncConfig(enabled = false, remote = "test:library", intervalMinutes = 5)
-        var configFailure: Throwable? = null
         private val engine =
             SyncEngine(rig.fs, rig.db, rig.deviceDb, DirectoryStaging(stagingRoot), "install-test", NoHooks, clock)
 
@@ -104,10 +116,6 @@ class SyncServiceTest {
             soonDelayMillis: Long = SOON_DELAY,
         ) = SyncService(
             transport = transport,
-            config = {
-                configFailure?.let { throw it }
-                config
-            },
             engine = engine,
             kv = rig.deviceDb.keyValueDao(),
             clock = clock,
@@ -143,18 +151,26 @@ class SyncServiceTest {
 
     private suspend fun SyncService.current(): SyncStatus = status.first()
 
+    /** A service whose library already names the test remote, with [enabled] and a 5-minute interval. */
+    private suspend fun Harness.configured(
+        enabled: Boolean = false,
+        checkIntervalMillis: Long = NEVER,
+    ): SyncService =
+        service(checkIntervalMillis).also { service ->
+            service.configure { CloudSyncConfig(enabled = enabled, remote = "test:library", intervalMinutes = 5) }
+        }
+
     @Test
     fun aMissingRemoteOrTransportNeverReachesTheEngine() =
         withHarness { h ->
             val service = h.service()
 
-            h.config = h.config.copy(remote = null)
             service.syncNow() shouldBe SyncOutcome.NotConfigured
-            h.config = h.config.copy(remote = "   ")
+            service.configure { it.copy(remote = "   ") }
             service.syncNow() shouldBe SyncOutcome.NotConfigured
             h.transport.availabilityCalls shouldBe 0
 
-            h.config = h.config.copy(remote = "test:library")
+            service.configure { it.copy(remote = "test:library") }
             val absent = TransportAvailability.NotInstalled("/nowhere/rclone")
             h.transport.availability = absent
             service.syncNow() shouldBe SyncOutcome.Unavailable(absent)
@@ -167,9 +183,54 @@ class SyncServiceTest {
         }
 
     @Test
-    fun aSecondPassWhileOneRunsIsRefused() =
+    fun theSettingsAreTheLibrarysOwnAndNormalised() =
         withHarness { h ->
             val service = h.service()
+            service.config.first() shouldBe CloudSyncConfig.DISABLED
+
+            service.configure { CloudSyncConfig(enabled = true, remote = "  drive-1:Lib  ", intervalMinutes = 1) }
+            service.config.first() shouldBe
+                CloudSyncConfig(
+                    enabled = true,
+                    remote = "drive-1:Lib",
+                    intervalMinutes = CloudSyncConfig.MIN_INTERVAL_MINUTES,
+                )
+
+            // Kept in the library's device.db: a relaunch (a new service over it) reads them back.
+            h
+                .service()
+                .config
+                .first()
+                .remote shouldBe "drive-1:Lib"
+
+            // Clearing the remote turns automatic sync off with it: nothing would be left to sync to.
+            service.configure { it.copy(remote = " ") }
+            service.config.first() shouldBe
+                CloudSyncConfig(enabled = false, remote = null, intervalMinutes = CloudSyncConfig.MIN_INTERVAL_MINUTES)
+        }
+
+    @Test
+    fun anotherRemoteForgetsTheLastPassOfTheOldOne() =
+        withHarness { h ->
+            val service = h.configured()
+            service.syncNow().shouldBeInstanceOf<SyncOutcome.Completed>()
+            service.current().lastRun.shouldNotBeNull()
+
+            service.configure { it.copy(intervalMinutes = 30) }
+            service.current().lastRun.shouldNotBeNull()
+
+            service.configure { it.copy(remote = "test:other") }
+            service.current().lastRun.shouldBeNull()
+            h.rig.deviceDb
+                .keyValueDao()
+                .get(SyncManifest.KEY_LAST_RUN)
+                .shouldBeNull()
+        }
+
+    @Test
+    fun aSecondPassWhileOneRunsIsRefused() =
+        withHarness { h ->
+            val service = h.configured()
             val gate = CompletableDeferred<Unit>()
             h.transport.listGate = gate
 
@@ -191,14 +252,16 @@ class SyncServiceTest {
     @Test
     fun aFailedListingIsReportedAndPersistedForTheNextService() =
         withHarness { h ->
-            val service = h.service()
+            val service = h.configured()
             h.transport.listFailure = IOException("listing exploded")
 
-            service.syncNow() shouldBe SyncOutcome.Failed("listing exploded")
+            service.syncNow() shouldBe SyncOutcome.Failed(SyncFailure.UNKNOWN, "listing exploded")
             val status = service.current()
             status.running.shouldBeFalse()
             status.progress.shouldBeNull()
-            status.lastRun.shouldNotBeNull().failure shouldBe "listing exploded"
+            val lastRun = status.lastRun.shouldNotBeNull()
+            lastRun.failure shouldBe SyncFailure.UNKNOWN
+            lastRun.failureDetail shouldBe "listing exploded"
 
             val stored =
                 h.rig.deviceDb
@@ -206,54 +269,40 @@ class SyncServiceTest {
                     .get(SyncManifest.KEY_LAST_RUN)
                     .shouldNotBeNull()
             val persisted = lenient.decodeFromString(SyncRunSummary.serializer(), stored)
-            persisted.failure shouldBe "listing exploded"
+            persisted.failure shouldBe SyncFailure.UNKNOWN
             persisted.ok.shouldBeFalse()
 
-            // A fresh service (a relaunch) shows the stored summary as soon as it looks at the schedule,
-            // and the failed pass counts as the last run: nothing is due yet.
-            h.config = h.config.copy(enabled = true)
+            // A fresh service (a relaunch) shows the stored summary, and the failed pass counts as
+            // the last run: nothing is due yet.
             val relaunched = h.service()
-            relaunched.current().lastRun.shouldBeNull()
+            relaunched.configure { it.copy(enabled = true) }
             relaunched.syncScheduled() shouldBe SyncOutcome.NotConfigured
             relaunched
                 .current()
                 .lastRun
                 .shouldNotBeNull()
-                .failure shouldBe "listing exploded"
+                .failureDetail shouldBe "listing exploded"
             h.transport.listCalls.value shouldBe 1
         }
 
     @Test
-    fun aThrowingConfigBecomesAFailureAndReleasesTheGate() =
+    fun aFailureIsNamedByTheTransportsReading() =
         withHarness { h ->
-            val service = h.service()
-            h.configFailure = IllegalStateException("settings unreadable")
+            val service = h.configured()
+            h.transport.listFailure = IOException("couldn't fetch token")
+            h.transport.reason = SyncFailure.SIGN_IN_EXPIRED
 
-            service.syncNow() shouldBe SyncOutcome.Failed("settings unreadable")
-            service.current().running.shouldBeFalse()
-            // The pass never started, so there is no run to record.
-            service.current().lastRun.shouldBeNull()
-
-            h.configFailure = null
-            service.syncNow().shouldBeInstanceOf<SyncOutcome.Completed>()
-            service
-                .current()
-                .lastRun
-                .shouldNotBeNull()
-                .ok
-                .shouldBeTrue()
+            service.syncNow() shouldBe SyncOutcome.Failed(SyncFailure.SIGN_IN_EXPIRED, "couldn't fetch token")
         }
 
     @Test
     fun theScheduleRunsOnlyWhenEnabledAndDue() =
         withHarness { h ->
-            val service = h.service()
-
-            h.config = h.config.copy(enabled = false)
+            val service = h.configured(enabled = false)
             service.syncScheduled() shouldBe SyncOutcome.NotConfigured
             h.transport.listCalls.value shouldBe 0
 
-            h.config = h.config.copy(enabled = true, intervalMinutes = 5)
+            service.configure { it.copy(enabled = true, intervalMinutes = 5) }
             service.syncScheduled().shouldBeInstanceOf<SyncOutcome.Completed>()
             h.transport.listCalls.value shouldBe 1
 
@@ -269,8 +318,7 @@ class SyncServiceTest {
     @Test
     fun aBurstOfChangesCollapsesIntoOnePassAfterTheDelay() =
         withHarness { h ->
-            h.config = h.config.copy(enabled = true)
-            val service = h.service()
+            val service = h.configured(enabled = true)
             service.start(backgroundScope)
             runCurrent()
 
@@ -291,27 +339,21 @@ class SyncServiceTest {
         }
 
     @Test
-    fun aChangeRightAfterAPassIsDroppedUntilTheDelayHasElapsed() =
+    fun aChangeRightAfterAPassStillGetsItsPass() =
         withHarness { h ->
-            h.config = h.config.copy(enabled = true)
-            val service = h.service()
+            val service = h.configured(enabled = true)
             service.start(backgroundScope)
             runCurrent()
 
             service.syncNow().shouldBeInstanceOf<SyncOutcome.Completed>()
             h.transport.listCalls.value shouldBe 1
 
-            // The watcher reporting the files that pass just published: not a reason for another one.
-            service.requestSoon()
-            advanceUntilIdle()
-            h.transport.listCalls.value shouldBe 1
-
-            // Once the debounce window has passed by the wall clock, a change is a change again.
-            h.clock.advance(SOON_DELAY)
+            // An edit the moment a pass ended is not lost to the interval: it waits the usual delay.
             service.requestSoon()
             advanceTimeBy(SOON_DELAY)
             h.transport.listCalls.first { it >= 2 }
             service.status.first { !it.running }
+            advanceUntilIdle()
             h.transport.listCalls.value shouldBe 2
             service.close()
         }
@@ -319,8 +361,7 @@ class SyncServiceTest {
     @Test
     fun aChangeDuringAPassOwesExactlyOneFollowUp() =
         withHarness { h ->
-            h.config = h.config.copy(enabled = true)
-            val service = h.service()
+            val service = h.configured(enabled = true)
             service.start(backgroundScope)
             runCurrent()
 
@@ -331,7 +372,7 @@ class SyncServiceTest {
             // The pass has reached its listing, where the gate parks it, before the edits arrive.
             h.transport.listCalls.first { it >= 1 }
 
-            // Two edits while the pass is in flight: remembered, not scheduled, and not refused.
+            // Two edits while the pass is in flight: kept as one, and not refused.
             service.requestSoon()
             service.requestSoon()
             runCurrent()
@@ -342,7 +383,7 @@ class SyncServiceTest {
             running.await().shouldBeInstanceOf<SyncOutcome.Completed>()
 
             // The follow-up is one pass, after the usual delay.
-            advanceTimeBy(SOON_DELAY)
+            advanceTimeBy(SOON_DELAY * 2)
             h.transport.listCalls.first { it >= 2 }
             service.status.first { !it.running }
             advanceUntilIdle()
@@ -354,8 +395,7 @@ class SyncServiceTest {
     @Test
     fun aSoonPassDoesNotRunWhileAutomaticSyncIsOff() =
         withHarness { h ->
-            h.config = h.config.copy(enabled = false)
-            val service = h.service()
+            val service = h.configured(enabled = false)
             service.start(backgroundScope)
             runCurrent()
 

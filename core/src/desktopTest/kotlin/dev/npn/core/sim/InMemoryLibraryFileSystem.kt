@@ -306,8 +306,19 @@ class InMemoryLibraryFileSystem(
     ) {
         val norm = NpnPaths.normalize(toRelPath)
         val bytes = externalSources?.invoke(source.path) ?: Files.readAllBytes(source.path)
-        io(FsMethod.IMPORT_EXTERNAL, norm) { create(norm, bytes) }
+        io(FsMethod.IMPORT_EXTERNAL, norm) {
+            create(norm, bytes)
+            if (isDelivery(source.path)) delivered += norm
+        }
     }
+
+    /**
+     * Whether an import from this source carries another device's file into the folder (the cloud
+     * sync's transfers): what it installs is that device's, not one the app here published.
+     */
+    var isDelivery: (java.nio.file.Path) -> Boolean = { false }
+
+    private val delivered = HashSet<String>()
 
     override fun watch(): Flow<FsEvent> = if (options.profile.saf) emptyFlow() else events.asSharedFlow()
 
@@ -484,8 +495,11 @@ class InMemoryLibraryFileSystem(
 
     fun mtimeAt(relPath: String): Long? = files[relPath]?.mtime
 
-    /** Every write-once file the app published here (not one that arrived from outside). */
-    val appPublished: Set<String> get() = writeOnce.keys
+    /**
+     * Every write-once file the app published here (not one that arrived from outside, by the sync
+     * tool or the app's cloud sync delivering it).
+     */
+    val appPublished: Set<String> get() = writeOnce.keys - delivered
 
     /** The stat of the file at [relPath] as a listing reports it now, with no latency or fault; null without one. */
     fun statAt(relPath: String): FileMeta? = if (files.containsKey(relPath)) metaOf(relPath) else null

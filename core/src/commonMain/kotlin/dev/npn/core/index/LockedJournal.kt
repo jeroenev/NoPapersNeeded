@@ -20,6 +20,12 @@ internal interface LockedJournal {
      */
     suspend fun isDeleted(docId: String): Boolean
 
+    /** Whether the journal has [docId] in the trash (and not deleted). */
+    suspend fun isTrashed(docId: String): Boolean
+
+    /** Whether the library shows [docId]: neither trashed, deleted, nor superseded by a relink. */
+    suspend fun isCurrent(docId: String): Boolean
+
     /**
      * Record that [docId]'s bytes are in the library again, at [relPath], when the journal still has
      * it deleted or trashed. Writes nothing, and needs no write access, for a document nothing hides,
