@@ -57,6 +57,8 @@ import no_papers_needed.composeapp.generated.resources.library_rebuild_failed
 import no_papers_needed.composeapp.generated.resources.library_rebuild_not_completed
 import no_papers_needed.composeapp.generated.resources.library_refresh_failed
 import no_papers_needed.composeapp.generated.resources.library_show
+import no_papers_needed.composeapp.generated.resources.onboarding_landed_reading
+import no_papers_needed.composeapp.generated.resources.onboarding_landed_search
 
 /** A library that did not open, as the user is told: a localized [reason], with [details] for support. */
 data class OpenFailure(
@@ -302,8 +304,21 @@ class AppViewModel(
     }
 
     /** Create (or reuse) the platform's recommended library folder at [location], then open it. */
-    fun useRecommended(location: String) =
-        createLibrary(location.substringBeforeLast('/'), location.substringAfterLast('/'))
+    fun useRecommended(location: String) {
+        // A Windows path separates its folders with backslashes.
+        val folder = location.trimEnd('/', '\\')
+        val split = folder.lastIndexOfAny(charArrayOf('/', '\\'))
+        createLibrary(folder.substring(0, split.coerceAtLeast(0)), folder.substring(split + 1))
+    }
+
+    /**
+     * First run left the user on the first document they added: say how to find it again, a word
+     * from its page in the library's search, once its text is read ([textRead]).
+     */
+    fun firstDocumentLanded(textRead: Boolean) =
+        message(
+            uiText(if (textRead) Res.string.onboarding_landed_search else Res.string.onboarding_landed_reading),
+        )
 
     /**
      * Open a library kept in the cloud folder [remote] (`name:path`, as the wizard chose it): make its

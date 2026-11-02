@@ -70,11 +70,13 @@ class BaselineProfileGenerator {
     }
 
     /**
-     * First launch only: grant all-files access and accept the proposed library folder. The grant
-     * goes through the system settings switch, as a user would flip it, because some OEM builds
-     * (OxygenOS) refuse `appops set` from the shell.
+     * First launch only: get started, grant all-files access, accept the proposed library folder
+     * and go past the first document (the demo library has its own). The grant goes through the
+     * system settings switch, as a user would flip it, because some OEM builds (OxygenOS) refuse
+     * `appops set` from the shell.
      */
     private fun MacrobenchmarkScope.passOnboarding() {
+        device.wait(Until.findObject(By.res(GET_STARTED)), SHORT_WAIT_MS)?.click()
         device.wait(Until.findObject(By.res(STORAGE_ACCESS_GRANT)), SHORT_WAIT_MS)?.let { allow ->
             allow.click()
             device.wait(Until.findObject(By.checkable(true)), LONG_WAIT_MS)?.click()
@@ -82,7 +84,10 @@ class BaselineProfileGenerator {
             device.waitForIdle()
             device.pressBack()
         }
-        device.wait(Until.findObject(By.res(USE_RECOMMENDED_FOLDER)), SHORT_WAIT_MS)?.click()
+        device.wait(Until.findObject(By.res(USE_RECOMMENDED_FOLDER)), SHORT_WAIT_MS)?.let { use ->
+            use.click()
+            device.wait(Until.findObject(By.res(FIRST_RUN_SKIP)), LONG_WAIT_MS)?.click()
+        }
     }
 
     private fun MacrobenchmarkScope.awaitLibrary() =
@@ -113,8 +118,10 @@ class BaselineProfileGenerator {
 
         // Test tags from composeApp's TestTags, which the app exposes as resource ids, so the
         // generator works in any device language.
+        const val GET_STARTED = "get_started"
         const val STORAGE_ACCESS_GRANT = "storage_access_grant"
         const val USE_RECOMMENDED_FOLDER = "use_recommended_folder"
+        const val FIRST_RUN_SKIP = "first_run_skip"
         const val PREVIEW_TAB = "panel_tab_preview"
     }
 }

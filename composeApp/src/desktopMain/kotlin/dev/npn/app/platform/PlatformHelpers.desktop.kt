@@ -44,7 +44,41 @@ actual fun supportsSafStorage(): Boolean = false
 
 actual fun ocrHasLanguageSetting(): Boolean = true
 
-actual fun defaultLibraryLocation(): String? = null
+/**
+ * `NoPapersNeeded` in the user's documents folder (XDG's, on Linux): where file managers and sync
+ * tools look, and the one place the Flatpak may keep a library (`--filesystem=xdg-documents`).
+ */
+actual fun defaultLibraryLocation(): String? = File(documentsDir(), DEFAULT_LIBRARY_DIR).path
+
+/** The library folder [defaultLibraryLocation] proposes, in the user's documents folder. */
+private const val DEFAULT_LIBRARY_DIR = "NoPapersNeeded"
+
+/**
+ * The user's documents folder: XDG's `XDG_DOCUMENTS_DIR` where `user-dirs.dirs` names one, else
+ * `Documents` in the home folder (Windows too).
+ */
+private fun documentsDir(): File {
+    val home = System.getProperty("user.home")
+    val configHome = System.getenv("XDG_CONFIG_HOME")?.ifEmpty { null } ?: "$home/.config"
+    // The Flatpak's XDG_CONFIG_HOME is its own, so the host's user-dirs.dirs is looked for as well.
+    val named =
+        listOf(File(configHome, USER_DIRS), File(home, ".config/$USER_DIRS"))
+            .firstNotNullOfOrNull { file ->
+                runCatching { file.takeIf(File::isFile)?.readLines() }
+                    .getOrNull()
+                    ?.firstNotNullOfOrNull { line -> XDG_DOCUMENTS.matchEntire(line.trim())?.groupValues?.get(1) }
+            }?.replace(HOME_VARIABLE, home)
+    // An entry naming the home folder itself means the user has no documents folder of its own.
+    return named?.takeIf { File(it) != File(home) }?.let(::File) ?: File(home, "Documents")
+}
+
+private const val USER_DIRS = "user-dirs.dirs"
+
+/** How `user-dirs.dirs` writes the home folder. */
+private const val HOME_VARIABLE = "\$HOME"
+
+/** `XDG_DOCUMENTS_DIR="$HOME/Documents"`, as `xdg-user-dirs-update` writes it. */
+private val XDG_DOCUMENTS = Regex("""XDG_DOCUMENTS_DIR="(.*)"""")
 
 actual fun cloudLibrariesDir(): String = File(PlatformDirs.appDataDir(), CLOUD_LIBRARIES_DIR).path
 
@@ -55,6 +89,9 @@ actual fun isAppPrivateLocation(location: String): Boolean = false
 private const val CLOUD_LIBRARIES_DIR = "cloud-libraries"
 
 actual fun supportsSharing(): Boolean = false
+
+/** The window takes files dropped on it ([dev.npn.app.ui.common.DesktopBridge.droppedFiles]). */
+actual fun acceptsFileDrops(): Boolean = true
 
 /** Flatpak sets FLATPAK_ID inside the sandbox; Flathub ships the updates there. */
 actual fun checksForUpdates(): Boolean = System.getenv("FLATPAK_ID").isNullOrBlank()

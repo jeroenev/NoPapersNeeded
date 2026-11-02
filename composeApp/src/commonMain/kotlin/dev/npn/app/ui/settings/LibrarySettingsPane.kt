@@ -88,6 +88,7 @@ internal fun LibrarySettingsPane(
             label = stringResource(Res.string.common_settings_change_library),
             onClick = actions::changeLibrary,
         )
+        AddDeviceAction(state)
     }
 
     SettingsSection(title = stringResource(Res.string.common_settings_storage)) {

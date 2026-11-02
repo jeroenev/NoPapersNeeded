@@ -11,6 +11,14 @@ object TestTags {
     const val STORAGE_ACCESS_GRANT = "storage_access_grant"
     const val USE_RECOMMENDED_FOLDER = "use_recommended_folder"
     const val USE_CLOUD_DRIVE = "use_cloud_drive"
+    const val GET_STARTED = "get_started"
+    const val ALREADY_USE = "already_use"
+
+    /** The button that goes on from a first-run step once its library is open. */
+    const val FIRST_RUN_CONTINUE = "first_run_continue"
+
+    /** First run's "Skip": on to the library without adding a document. */
+    const val FIRST_RUN_SKIP = "first_run_skip"
 
     /** One per metadata panel tab: `panel_tab_preview`, `panel_tab_details`, ... */
     fun panelTab(name: String): String = "panel_tab_${name.lowercase()}"

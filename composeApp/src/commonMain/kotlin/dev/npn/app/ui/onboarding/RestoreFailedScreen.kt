@@ -46,8 +46,8 @@ fun RestoreFailedScreen(
             onUseSafChange = onUseSafChange,
             onPick = onOpen,
             requireStorageAccess = failure.reason == OpenFailureReason.NO_STORAGE_ACCESS,
-        ) { pickLibrary, _ ->
-            OutlinedButton(onClick = pickLibrary) {
+        ) { pickers ->
+            OutlinedButton(onClick = pickers.pickLibrary) {
                 Text(stringResource(Res.string.common_pick_folder_again))
             }
         }

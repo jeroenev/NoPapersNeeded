@@ -108,6 +108,9 @@ expect fun isAppPrivateLocation(location: String): Boolean
  */
 expect fun supportsSharing(): Boolean
 
+/** Whether files dropped on the window are imported (desktop), so the UI may show a drop zone. */
+expect fun acceptsFileDrops(): Boolean
+
 /**
  * Whether the app should look for a newer release itself. False where a package manager already
  * keeps it up to date (the desktop app inside Flatpak).

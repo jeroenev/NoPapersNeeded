@@ -159,8 +159,7 @@
     <string name="common_settings_review_workflow_failed">Der Prüf-Workflow konnte nicht geändert werden: %1$s</string>
 
     <string name="common_settings_category_cloud">Cloud-Synchronisierung</string>
-    <string name="common_settings_cloud_help">Spiegelt diese Bibliothek in deinen eigenen Cloud-Speicher: PDFs, Metadaten und Papierkorb reisen als gewöhnliche Dateien, sodass jedes Gerät mit demselben Remote dieselbe Bibliothek sieht. Die App entscheidet, was bewegt wird, prüft jede Datei, bevor sie in die Bibliothek kommt, und ersetzt oder löscht nie etwas, um einen Konflikt zu lösen.</string>
-    <string name="common_settings_cloud_engine_checking">Synchronisierungsdienst wird geprüft…</string>
+    <string name="common_settings_cloud_help">Hält diese Bibliothek in einem Ordner deines eigenen Cloud-Speichers: PDFs, Details und Papierkorb reisen als gewöhnliche Dateien, sodass jedes Gerät mit demselben Cloud-Ordner dieselbe Bibliothek sieht. Die App entscheidet, was bewegt wird, prüft jede Datei, bevor sie in die Bibliothek kommt, und ersetzt oder löscht nie etwas, um einen Konflikt zu lösen.</string>
     <string name="common_settings_cloud_engine_available">Synchronisierungsdienst %1$s ist bereit.</string>
     <string name="common_settings_cloud_engine_missing">Der Synchronisierungsdienst wurde nicht gefunden (gesucht: %1$s).</string>
     <string name="common_settings_cloud_engine_failed">Der Synchronisierungsdienst hat mit einem Fehler geantwortet: %1$s</string>
@@ -182,15 +181,15 @@
     <string name="common_settings_cloud_status">Status</string>
     <string name="common_settings_cloud_sync_now">Jetzt synchronisieren</string>
     <string name="common_settings_cloud_progress">%1$s (%2$d von %3$d)</string>
-    <string name="common_settings_cloud_phase_listing">Remote wird aufgelistet</string>
+    <string name="common_settings_cloud_phase_listing">Cloud-Ordner wird durchgesehen</string>
     <string name="common_settings_cloud_phase_pull_metadata">Metadaten werden heruntergeladen</string>
-    <string name="common_settings_cloud_phase_resolve">Dokumente im Remote werden erkannt</string>
+    <string name="common_settings_cloud_phase_resolve">Dokumente im Cloud-Ordner werden erkannt</string>
     <string name="common_settings_cloud_phase_apply_local">Diese Bibliothek wird aktualisiert</string>
     <string name="common_settings_cloud_phase_push_documents">Dokumente werden hochgeladen</string>
     <string name="common_settings_cloud_phase_push_metadata">Metadaten werden hochgeladen</string>
     <string name="common_settings_cloud_phase_indexing">Indizierung</string>
     <string name="common_settings_cloud_never">Noch nicht synchronisiert.</string>
-    <string name="common_settings_cloud_last_summary">Letzte Synchronisierung %1$s: %2$d heruntergeladen, %3$d hochgeladen, %4$d verschoben und %5$d im Remote entfernt.</string>
+    <string name="common_settings_cloud_last_summary">Letzte Synchronisierung %1$s: %2$d heruntergeladen, %3$d hochgeladen, %4$d verschoben und %5$d im Cloud-Ordner entfernt.</string>
     <string name="common_settings_cloud_last_failed">Letzte Synchronisierung %1$s fehlgeschlagen.</string>
     <plurals name="common_settings_cloud_conflict_count">
         <item quantity="one">%1$d Konflikt bleibt für dich zu lösen:</item>
@@ -207,7 +206,7 @@
     <string name="common_settings_cloud_outcome_running">Es läuft bereits eine Synchronisierung.</string>
 
     <string name="common_settings_cloud_setup_title">Cloud-Speicher verbinden</string>
-    <string name="common_settings_cloud_setup_help">Wähle einen Anbieter, melde dich an und wähle den Ordner, in den diese Bibliothek gespiegelt wird. Du musst rclone nicht selbst einrichten.</string>
+    <string name="common_settings_cloud_setup_help">Wähle einen Anbieter, melde dich an und wähle den Cloud-Ordner, in dem diese Bibliothek liegen soll. Sonst musst du nichts installieren.</string>
     <string name="common_settings_cloud_connect">Verbinden…</string>
     <string name="common_settings_cloud_setup_loading">Anbieter werden geladen…</string>
     <string name="common_settings_cloud_setup_no_providers">Keine Anbieter verfügbar. Prüfe, ob der Synchronisierungsdienst installiert ist, und versuche es erneut.</string>

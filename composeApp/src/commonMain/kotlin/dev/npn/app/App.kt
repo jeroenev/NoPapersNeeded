@@ -9,6 +9,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -20,10 +21,12 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -49,15 +52,23 @@ import dev.npn.app.ui.detail.DocumentDraftHost
 import dev.npn.app.ui.detail.DocumentDrafts
 import dev.npn.app.ui.library.DropOverlay
 import dev.npn.app.ui.nav.MainNav
+import dev.npn.app.ui.nav.Route
 import dev.npn.app.ui.nav.TopLevelDestination
 import dev.npn.app.ui.nav.WriteBlockActions
 import dev.npn.app.ui.nav.navigateTopLevel
+import dev.npn.app.ui.onboarding.FirstRunExit
+import dev.npn.app.ui.onboarding.FirstRunHost
+import dev.npn.app.ui.onboarding.FirstRunPath
+import dev.npn.app.ui.onboarding.FirstRunScreen
 import dev.npn.app.ui.onboarding.OnboardingScreen
 import dev.npn.app.ui.onboarding.OpenFailureMessage
 import dev.npn.app.ui.onboarding.RestoreFailedScreen
+import dev.npn.app.ui.onboarding.rememberFirstRunHost
+import dev.npn.app.ui.settings.SettingsCategoryId
 import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.fs.ExternalSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.receiveAsFlow
 import no_papers_needed.composeapp.generated.resources.Res
@@ -224,15 +235,26 @@ private fun AppRoot(
     val state by vm.state.collectAsStateWithLifecycle()
     val useSaf by vm.useSafStorage.collectAsStateWithLifecycle()
     val language by vm.appLanguage.collectAsStateWithLifecycle()
+    // Above the language switch, which rebuilds everything below it.
+    val firstRun = rememberFirstRunHost()
+    // Who takes files dropped on the window instead of the open library's import: first run, while
+    // it asks for the first document.
+    var dropTarget by remember { mutableStateOf<((List<Pair<ExternalSource, String>>) -> Unit)?>(null) }
     LocalizedApp(language, (state as? AppState.Open)?.session, env.appScope) { library ->
         AppSurface {
             val snackbar = rememberSnackbarMessages(vm.messages)
             // Files dropped on the desktop window import into whichever library is open, from any screen;
-            // the message's Show opens the library on the new documents.
+            // the message's Show opens the library on the new documents. While first run asks for the
+            // first document, dropped PDFs go to it instead.
             val currentLibrary by rememberUpdatedState(library)
             LaunchedEffect(vm) {
                 DesktopBridge.droppedFiles.receiveAsFlow().collect { request ->
-                    vm.importFiles(request) { docIds -> currentLibrary?.showDocuments(docIds) }
+                    val firstRun = dropTarget
+                    if (firstRun != null && request.images.isEmpty()) {
+                        firstRun(request.pdfs)
+                    } else {
+                        vm.importFiles(request) { docIds -> currentLibrary?.showDocuments(docIds) }
+                    }
                 }
             }
             // Without a library there are no screens to title the window; the app's name, in its language.
@@ -255,6 +277,7 @@ private fun AppRoot(
                             onUseRecommendedFolder = vm::useRecommended,
                             cloudState = cloudState,
                             cloudSetup = vm.cloudSetup.takeIf { vm.cloudAvailable },
+                            onBegin = firstRun::begin,
                         )
                     }
 
@@ -285,18 +308,37 @@ private fun AppRoot(
                         // another's when the session changes with no screen in between.
                         if (library != null) {
                             key(library) {
-                                DocumentDraftHost(library.drafts) {
-                                    MainNav(
-                                        settings = env.settings,
-                                        session = current.session,
-                                        library = library,
-                                        aiConfigured = aiConfigured,
-                                        queue = queue,
-                                        writeBlock = writeBlock,
-                                        snackbar = snackbar,
-                                        onOpenLibrary = vm::open,
-                                        writeBlockActions = writeBlockActions,
-                                    )
+                                val path = firstRun.path
+                                if (path != null) {
+                                    FirstRun(
+                                        env,
+                                        current.session,
+                                        library,
+                                        firstRun,
+                                        path,
+                                        snackbar,
+                                    ) { dropTarget = it }
+                                } else {
+                                    DocumentDraftHost(library.drafts) {
+                                        MainNav(
+                                            settings = env.settings,
+                                            session = current.session,
+                                            library = library,
+                                            aiConfigured = aiConfigured,
+                                            queue = queue,
+                                            writeBlock = writeBlock,
+                                            snackbar = snackbar,
+                                            onOpenLibrary = vm::open,
+                                            writeBlockActions = writeBlockActions,
+                                        )
+                                    }
+                                    firstRun.landing?.let { exit ->
+                                        LaunchedEffect(exit) {
+                                            library.landOn(exit)
+                                            if (exit is FirstRunExit.Document) vm.firstDocumentLanded(exit.textRead)
+                                            firstRun.landing = null
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -310,6 +352,53 @@ private fun AppRoot(
                 SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
             }
         }
+    }
+}
+
+/**
+ * First run's steps once its library is open ([FirstRunScreen]), with their viewmodel kept in the
+ * library's store, so a recreated window finds them where they were. Files dropped on the window go
+ * where [onDropTarget] says while a step takes them.
+ */
+@Composable
+private fun FirstRun(
+    env: AppEnvironment,
+    session: LibrarySession,
+    library: LibraryUi,
+    host: FirstRunHost,
+    path: FirstRunPath,
+    snackbar: SnackbarHostState,
+    onDropTarget: (((List<Pair<ExternalSource, String>>) -> Unit)?) -> Unit,
+) {
+    LibraryViewModelHost(library) {
+        FirstRunScreen(
+            session = session,
+            settings = env.settings,
+            readOcrModels = env::ocrModels,
+            path = path,
+            step = host.step,
+            onStep = { host.step = it },
+            onFinish = host::finish,
+            snackbar = snackbar,
+            onDropTarget = onDropTarget,
+        )
+    }
+}
+
+/** Take the user where first run left them ([exit]), once the library's screens show. */
+private fun LibraryUi.landOn(exit: FirstRunExit) {
+    when (exit) {
+        is FirstRunExit.Document -> {
+            browse.setOrder(listOf(exit.docId))
+            nav.navigate(Route.DocDetail(exit.docId))
+        }
+
+        FirstRunExit.WatchFolder -> {
+            nav.navigate(Route.Settings(SettingsCategoryId.IMPORT.routeKey))
+        }
+
+        // The library is where the shell starts.
+        FirstRunExit.Library -> {}
     }
 }
 

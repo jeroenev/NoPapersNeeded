@@ -142,6 +142,9 @@ actual fun isAppPrivateLocation(location: String): Boolean {
 
 actual fun supportsSharing(): Boolean = true
 
+/** Files come in by share, scan and picker instead. */
+actual fun acceptsFileDrops(): Boolean = false
+
 /** The APK is sideloaded from the GitHub release, so nothing else updates it. */
 actual fun checksForUpdates(): Boolean = true
 

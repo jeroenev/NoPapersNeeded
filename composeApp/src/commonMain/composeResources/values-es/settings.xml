@@ -159,8 +159,7 @@
     <string name="common_settings_review_workflow_failed">No se pudo cambiar el flujo de revisión: %1$s</string>
 
     <string name="common_settings_category_cloud">Sincronización en la nube</string>
-    <string name="common_settings_cloud_help">Refleja esta biblioteca en tu propio almacenamiento en la nube: los PDF, los metadatos y la papelera viajan como archivos normales, así que cualquier dispositivo con el mismo remoto ve la misma biblioteca. La app decide qué se mueve, verifica cada archivo antes de que entre en la biblioteca y nunca reemplaza ni elimina nada para resolver un conflicto.</string>
-    <string name="common_settings_cloud_engine_checking">Comprobando el motor de sincronización…</string>
+    <string name="common_settings_cloud_help">Guarda esta biblioteca en una carpeta de tu propio almacenamiento en la nube: los PDF, los detalles y la papelera viajan como archivos normales, así que cualquier dispositivo conectado a la misma carpeta en la nube ve la misma biblioteca. La app decide qué se mueve, verifica cada archivo antes de que entre en la biblioteca y nunca reemplaza ni elimina nada para resolver un conflicto.</string>
     <string name="common_settings_cloud_engine_available">El motor de sincronización %1$s está listo.</string>
     <string name="common_settings_cloud_engine_missing">No se encontró el motor de sincronización (se buscó %1$s).</string>
     <string name="common_settings_cloud_engine_failed">El motor de sincronización respondió con un error: %1$s</string>
@@ -182,15 +181,15 @@
     <string name="common_settings_cloud_status">Estado</string>
     <string name="common_settings_cloud_sync_now">Sincronizar ahora</string>
     <string name="common_settings_cloud_progress">%1$s (%2$d de %3$d)</string>
-    <string name="common_settings_cloud_phase_listing">Listando el remoto</string>
+    <string name="common_settings_cloud_phase_listing">Revisando la carpeta en la nube</string>
     <string name="common_settings_cloud_phase_pull_metadata">Descargando metadatos</string>
-    <string name="common_settings_cloud_phase_resolve">Identificando documentos remotos</string>
+    <string name="common_settings_cloud_phase_resolve">Identificando los documentos de la carpeta en la nube</string>
     <string name="common_settings_cloud_phase_apply_local">Actualizando esta biblioteca</string>
     <string name="common_settings_cloud_phase_push_documents">Subiendo documentos</string>
     <string name="common_settings_cloud_phase_push_metadata">Subiendo metadatos</string>
     <string name="common_settings_cloud_phase_indexing">Indexando</string>
     <string name="common_settings_cloud_never">Aún no se ha sincronizado.</string>
-    <string name="common_settings_cloud_last_summary">Última sincronización %1$s: %2$d descargados, %3$d subidos, %4$d movidos y %5$d eliminados en el remoto.</string>
+    <string name="common_settings_cloud_last_summary">Última sincronización %1$s: %2$d descargados, %3$d subidos, %4$d movidos y %5$d eliminados en la carpeta en la nube.</string>
     <string name="common_settings_cloud_last_failed">La última sincronización %1$s falló.</string>
     <plurals name="common_settings_cloud_conflict_count">
         <item quantity="one">Queda %1$d conflicto por resolver:</item>
@@ -207,7 +206,7 @@
     <string name="common_settings_cloud_outcome_running">Ya hay una sincronización en curso.</string>
 
     <string name="common_settings_cloud_setup_title">Conectar almacenamiento en la nube</string>
-    <string name="common_settings_cloud_setup_help">Elige un proveedor, inicia sesión y elige la carpeta en la que se reflejará esta biblioteca. No tienes que configurar rclone tú mismo.</string>
+    <string name="common_settings_cloud_setup_help">Elige un proveedor, inicia sesión y elige la carpeta en la nube donde guardar esta biblioteca. No hay que instalar nada más.</string>
     <string name="common_settings_cloud_connect">Conectar…</string>
     <string name="common_settings_cloud_setup_loading">Cargando proveedores…</string>
     <string name="common_settings_cloud_setup_no_providers">No hay proveedores disponibles. Comprueba que el motor de sincronización esté instalado y vuelve a intentarlo.</string>

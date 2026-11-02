@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Welcome -->
+    <string name="onboarding_welcome_title">Every paper you keep, found in seconds.</string>
+    <string name="onboarding_value_search">Find anything: every word on every page is searchable.</string>
+    <string name="onboarding_value_own">Plain PDFs you own, in a folder you choose.</string>
+    <string name="onboarding_value_offline">Works offline, with no account.</string>
+    <string name="onboarding_get_started">Get started</string>
+    <string name="onboarding_already_use">I already use No Papers Needed on another device</string>
+
+    <!-- Where the library lives -->
+    <string name="onboarding_location_title">Where should your library live?</string>
+    <string name="onboarding_device_title">On this device</string>
+    <string name="onboarding_device_help">A plain folder you can open in any file manager. You can sync it to other devices later.</string>
+    <string name="onboarding_device_path">Your library: %1$s</string>
+    <string name="onboarding_use_this_folder">Use this folder</string>
+    <string name="onboarding_change_folder">Change</string>
+    <string name="onboarding_choose_folder">Choose a folder</string>
+    <string name="onboarding_cloud_title">In my cloud drive</string>
+    <string name="onboarding_cloud_help">Google Drive, OneDrive, Dropbox, Box, pCloud or Nextcloud. Sign in and pick a folder; this device keeps a copy, so it works offline too.</string>
+    <string name="onboarding_choose_cloud">Choose a cloud drive</string>
+    <string name="onboarding_cloud_more_providers_later">More providers are in Settings under Cloud sync, once your library is open.</string>
+
+    <!-- Connect to a library another device uses -->
+    <string name="onboarding_connect_title">Connect to your library</string>
+    <string name="onboarding_connect_help">Your library is a folder. Choose how this device reaches it; nothing in it changes until it opens.</string>
+    <string name="onboarding_connect_cloud_title">From my cloud drive</string>
+    <string name="onboarding_connect_cloud_help">Sign in to the cloud drive your other device syncs to, and pick the library’s folder there.</string>
+    <string name="onboarding_connect_synced_title">A folder a sync app keeps up to date</string>
+    <string name="onboarding_connect_synced_help">Syncthing, the Nextcloud app or a similar tool: let it bring the library folder to this device first, then choose that folder.</string>
+    <string name="onboarding_connect_synced_button">Choose the synced folder</string>
+    <string name="onboarding_connect_here_title">A folder already on this device</string>
+    <string name="onboarding_connect_here_help">A library on this device’s storage, a USB drive or a memory card.</string>
+    <string name="onboarding_connect_here_button">Choose the library folder</string>
+    <string name="onboarding_connect_progress_note">This device then reads every file once to find your documents; you will see how far it has got.</string>
+
+    <!-- Document languages (desktop) -->
+    <string name="onboarding_languages_title">Which languages are your documents in?</string>
+    <string name="onboarding_languages_help">Text recognition reads scanned pages in these languages. Each one more makes it a little slower; you can change them later in Settings under Import &amp; OCR.</string>
+    <string name="onboarding_languages_checking">Checking which languages this computer can read…</string>
+    <string name="onboarding_languages_bundled">Everything needed for these languages is included with the app.</string>
+    <string name="onboarding_languages_missing">Not installed yet: %1$s.</string>
+    <string name="onboarding_languages_no_tesseract">Text recognition needs Tesseract, which is not installed yet.</string>
+    <string name="onboarding_languages_install_with">Install it with:</string>
+    <string name="onboarding_languages_missing_manual">Install Tesseract’s language data for %1$s with your system’s package manager.</string>
+    <string name="onboarding_languages_check_again">Check again</string>
+    <string name="onboarding_continue">Continue</string>
+
+    <!-- First document -->
+    <string name="onboarding_first_document_title">Add your first document</string>
+    <string name="onboarding_first_document_help">A bill, a letter, a receipt: anything you want to find again. It goes into your library as a plain PDF.</string>
+    <plurals name="onboarding_first_document_existing">
+        <item quantity="one">Your library already holds %1$d document.</item>
+        <item quantity="other">Your library already holds %1$d documents.</item>
+    </plurals>
+    <string name="onboarding_first_document_scan">Scan a document</string>
+    <string name="onboarding_first_document_choose">Choose files</string>
+    <string name="onboarding_first_document_drop">Or drop PDF files anywhere on this window</string>
+    <string name="onboarding_first_document_adding">Adding…</string>
+    <string name="onboarding_first_document_reading">Reading text…</string>
+    <string name="onboarding_first_document_reading_help">This takes a few seconds a page. You can open the document meanwhile.</string>
+    <string name="onboarding_first_document_read">Its text is read: you can search for any word on its pages.</string>
+    <string name="onboarding_first_document_already">That document was already in your library.</string>
+    <string name="onboarding_first_document_open">Open it</string>
+    <string name="onboarding_watch_folder">Watch a folder instead</string>
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_go_to_library">Go to my library</string>
+    <string name="onboarding_landed_search">Here is your first document. To find it again, search the library for a word from its page.</string>
+    <string name="onboarding_landed_reading">Here is your first document. Once its text is read, search the library for a word from its page to find it again.</string>
+
+    <!-- A library another device uses, coming in -->
+    <string name="onboarding_connecting_title">Bringing in your library</string>
+    <string name="onboarding_connecting_cloud">From %1$s</string>
+    <string name="onboarding_connecting_waiting">Getting ready to sync…</string>
+    <plurals name="onboarding_connecting_count">
+        <item quantity="one">%1$d document so far</item>
+        <item quantity="other">%1$d documents so far</item>
+    </plurals>
+    <plurals name="onboarding_connecting_done">
+        <item quantity="one">All here: %1$d document.</item>
+        <item quantity="other">All here: %1$d documents.</item>
+    </plurals>
+    <string name="onboarding_connecting_empty">No documents yet. If a sync app is still copying the folder, they appear as they arrive.</string>
+    <string name="onboarding_connecting_background">You can start now: this carries on in the background.</string>
+
+    <!-- Cloud setup in the app's own words -->
+    <string name="onboarding_webdav_help">Connect to your own Nextcloud, ownCloud or another WebDAV server.</string>
+    <string name="onboarding_webdav_kind">Server</string>
+    <string name="onboarding_webdav_nextcloud">Nextcloud</string>
+    <string name="onboarding_webdav_owncloud">ownCloud</string>
+    <string name="onboarding_webdav_other">Another WebDAV server</string>
+    <string name="onboarding_webdav_address">Server address</string>
+    <string name="onboarding_webdav_address_help">The address you open in your browser, such as cloud.example.com</string>
+    <string name="onboarding_webdav_user">User name</string>
+    <string name="onboarding_webdav_password">Password</string>
+    <string name="onboarding_webdav_password_help">With two-step sign-in, create an app password in your server’s security settings and use that.</string>
+
+    <!-- Add another device -->
+    <string name="onboarding_add_device">Add another device</string>
+    <string name="onboarding_add_device_help">Use this library on a phone, a laptop or both: how to get it there.</string>
+    <string name="onboarding_add_device_intro">Your library is a folder. Another device can use it as soon as that folder reaches it; each device then builds its own index from the files.</string>
+    <string name="onboarding_add_device_cloud">Through your cloud folder</string>
+    <string name="onboarding_add_device_cloud_connected">On the other device, install No Papers Needed and choose “I already use No Papers Needed on another device”, then “From my cloud drive”. Sign in there and pick %1$s.</string>
+    <string name="onboarding_add_device_cloud_first">Connect this library to a cloud drive under Cloud sync first. Then, on the other device, choose “I already use No Papers Needed on another device” and pick the same cloud folder.</string>
+    <string name="onboarding_add_device_syncthing">With Syncthing</string>
+    <string name="onboarding_add_device_syncthing_steps">Share %1$s with the other device in Syncthing. Once it has arrived there, choose “I already use No Papers Needed on another device”, then the synced folder.</string>
+    <string name="onboarding_add_device_nextcloud">With the Nextcloud app</string>
+    <string name="onboarding_add_device_nextcloud_steps">Keep %1$s in a folder the Nextcloud desktop app syncs, and let it sync to the other computer too; then choose that folder there. On a phone, connect to Nextcloud as a cloud drive instead.</string>
+    <string name="onboarding_add_device_private">This library’s files are kept in the app’s own storage, which sync apps cannot reach: add devices through its cloud folder.</string>
+    <string name="onboarding_add_device_sees">What the other device shows</string>
+    <string name="onboarding_add_device_sees_steps">It reads every file once to find your documents and shows how far it has got, such as “Reading files (12 of 340)…”. Documents appear as they are read, with their tags and details.</string>
+    <string name="onboarding_add_device_no_credentials">No sign-in travels from this device: each device signs in on its own.</string>
+</resources>

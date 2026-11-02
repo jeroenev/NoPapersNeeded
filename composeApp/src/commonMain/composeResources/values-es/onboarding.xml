@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Welcome -->
+    <string name="onboarding_welcome_title">Cada papel que guardas, encontrado en segundos.</string>
+    <string name="onboarding_value_search">Encuentra lo que sea: cada palabra de cada página se puede buscar.</string>
+    <string name="onboarding_value_own">PDF normales que son tuyos, en una carpeta que tú eliges.</string>
+    <string name="onboarding_value_offline">Funciona sin conexión y sin cuenta.</string>
+    <string name="onboarding_get_started">Empezar</string>
+    <string name="onboarding_already_use">Ya uso No Papers Needed en otro dispositivo</string>
+
+    <!-- Where the library lives -->
+    <string name="onboarding_location_title">¿Dónde quieres guardar tu biblioteca?</string>
+    <string name="onboarding_device_title">En este dispositivo</string>
+    <string name="onboarding_device_help">Una carpeta normal que puedes abrir con cualquier gestor de archivos. Puedes sincronizarla con otros dispositivos más adelante.</string>
+    <string name="onboarding_device_path">Tu biblioteca: %1$s</string>
+    <string name="onboarding_use_this_folder">Usar esta carpeta</string>
+    <string name="onboarding_change_folder">Cambiar</string>
+    <string name="onboarding_choose_folder">Elegir una carpeta</string>
+    <string name="onboarding_cloud_title">En mi nube</string>
+    <string name="onboarding_cloud_help">Google Drive, OneDrive, Dropbox, Box, pCloud o Nextcloud. Inicia sesión y elige una carpeta; este dispositivo guarda una copia para que también funcione sin conexión.</string>
+    <string name="onboarding_choose_cloud">Elegir un servicio en la nube</string>
+    <string name="onboarding_cloud_more_providers_later">Hay más proveedores en Ajustes, en Sincronización en la nube, cuando tu biblioteca esté abierta.</string>
+
+    <!-- Connect to a library another device uses -->
+    <string name="onboarding_connect_title">Conectar con tu biblioteca</string>
+    <string name="onboarding_connect_help">Tu biblioteca es una carpeta. Elige cómo llega a ella este dispositivo; no se cambia nada en ella hasta que se abre.</string>
+    <string name="onboarding_connect_cloud_title">Desde mi nube</string>
+    <string name="onboarding_connect_cloud_help">Inicia sesión en la nube con la que sincroniza tu otro dispositivo y elige allí la carpeta de la biblioteca.</string>
+    <string name="onboarding_connect_synced_title">Una carpeta que una app de sincronización mantiene al día</string>
+    <string name="onboarding_connect_synced_help">Syncthing, la app de Nextcloud o una herramienta parecida: deja que traiga primero la carpeta de la biblioteca a este dispositivo y luego elige esa carpeta.</string>
+    <string name="onboarding_connect_synced_button">Elegir la carpeta sincronizada</string>
+    <string name="onboarding_connect_here_title">Una carpeta que ya está en este dispositivo</string>
+    <string name="onboarding_connect_here_help">Una biblioteca en el almacenamiento de este dispositivo, en una memoria USB o en una tarjeta de memoria.</string>
+    <string name="onboarding_connect_here_button">Elegir la carpeta de la biblioteca</string>
+    <string name="onboarding_connect_progress_note">Después, este dispositivo lee cada archivo una vez para encontrar tus documentos; verás cuánto le falta.</string>
+
+    <!-- Document languages (desktop) -->
+    <string name="onboarding_languages_title">¿En qué idiomas están tus documentos?</string>
+    <string name="onboarding_languages_help">El reconocimiento de texto lee las páginas escaneadas en estos idiomas. Cada idioma de más lo hace un poco más lento; puedes cambiarlos más adelante en Ajustes, en Importación y OCR.</string>
+    <string name="onboarding_languages_checking">Comprobando qué idiomas puede leer este ordenador…</string>
+    <string name="onboarding_languages_bundled">Todo lo que necesitan estos idiomas viene incluido con la app.</string>
+    <string name="onboarding_languages_missing">Aún sin instalar: %1$s.</string>
+    <string name="onboarding_languages_no_tesseract">El reconocimiento de texto necesita Tesseract, que aún no está instalado.</string>
+    <string name="onboarding_languages_install_with">Instálalo con:</string>
+    <string name="onboarding_languages_missing_manual">Instala los datos de idioma de Tesseract para %1$s con el gestor de paquetes de tu sistema.</string>
+    <string name="onboarding_languages_check_again">Volver a comprobar</string>
+    <string name="onboarding_continue">Continuar</string>
+
+    <!-- First document -->
+    <string name="onboarding_first_document_title">Añade tu primer documento</string>
+    <string name="onboarding_first_document_help">Una factura, una carta, un tique: lo que quieras volver a encontrar. Entra en tu biblioteca como un PDF normal.</string>
+    <plurals name="onboarding_first_document_existing">
+        <item quantity="one">Tu biblioteca ya tiene %1$d documento.</item>
+        <item quantity="other">Tu biblioteca ya tiene %1$d documentos.</item>
+    </plurals>
+    <string name="onboarding_first_document_scan">Escanear un documento</string>
+    <string name="onboarding_first_document_choose">Elegir archivos</string>
+    <string name="onboarding_first_document_drop">O suelta archivos PDF en cualquier parte de esta ventana</string>
+    <string name="onboarding_first_document_adding">Añadiendo…</string>
+    <string name="onboarding_first_document_reading">Leyendo el texto…</string>
+    <string name="onboarding_first_document_reading_help">Tarda unos segundos por página. Mientras tanto puedes abrir el documento.</string>
+    <string name="onboarding_first_document_read">Su texto ya está leído: puedes buscar cualquier palabra de sus páginas.</string>
+    <string name="onboarding_first_document_already">Ese documento ya estaba en tu biblioteca.</string>
+    <string name="onboarding_first_document_open">Abrirlo</string>
+    <string name="onboarding_watch_folder">Vigilar una carpeta en su lugar</string>
+    <string name="onboarding_skip">Omitir</string>
+    <string name="onboarding_go_to_library">Ir a mi biblioteca</string>
+    <string name="onboarding_landed_search">Aquí está tu primer documento. Para volver a encontrarlo, busca en la biblioteca una palabra de su página.</string>
+    <string name="onboarding_landed_reading">Aquí está tu primer documento. Cuando su texto esté leído, búscalo en la biblioteca con una palabra de su página.</string>
+
+    <!-- A library another device uses, coming in -->
+    <string name="onboarding_connecting_title">Trayendo tu biblioteca</string>
+    <string name="onboarding_connecting_cloud">Desde %1$s</string>
+    <string name="onboarding_connecting_waiting">Preparando la sincronización…</string>
+    <plurals name="onboarding_connecting_count">
+        <item quantity="one">%1$d documento hasta ahora</item>
+        <item quantity="other">%1$d documentos hasta ahora</item>
+    </plurals>
+    <plurals name="onboarding_connecting_done">
+        <item quantity="one">Todo listo: %1$d documento.</item>
+        <item quantity="other">Todo listo: %1$d documentos.</item>
+    </plurals>
+    <string name="onboarding_connecting_empty">Aún no hay documentos. Si una app de sincronización sigue copiando la carpeta, aparecerán a medida que lleguen.</string>
+    <string name="onboarding_connecting_background">Ya puedes empezar: esto sigue en segundo plano.</string>
+
+    <!-- Cloud setup in the app's own words -->
+    <string name="onboarding_webdav_help">Conéctate a tu propio Nextcloud, ownCloud u otro servidor WebDAV.</string>
+    <string name="onboarding_webdav_kind">Servidor</string>
+    <string name="onboarding_webdav_nextcloud">Nextcloud</string>
+    <string name="onboarding_webdav_owncloud">ownCloud</string>
+    <string name="onboarding_webdav_other">Otro servidor WebDAV</string>
+    <string name="onboarding_webdav_address">Dirección del servidor</string>
+    <string name="onboarding_webdav_address_help">La dirección que abres en el navegador, como cloud.example.com</string>
+    <string name="onboarding_webdav_user">Nombre de usuario</string>
+    <string name="onboarding_webdav_password">Contraseña</string>
+    <string name="onboarding_webdav_password_help">Con la verificación en dos pasos, crea una contraseña de aplicación en los ajustes de seguridad de tu servidor y usa esa.</string>
+
+    <!-- Add another device -->
+    <string name="onboarding_add_device">Añadir otro dispositivo</string>
+    <string name="onboarding_add_device_help">Usa esta biblioteca en un móvil, un portátil o en ambos: cómo llevarla hasta allí.</string>
+    <string name="onboarding_add_device_intro">Tu biblioteca es una carpeta. Otro dispositivo puede usarla en cuanto esa carpeta le llega; cada dispositivo crea entonces su propio índice a partir de los archivos.</string>
+    <string name="onboarding_add_device_cloud">A través de tu carpeta en la nube</string>
+    <string name="onboarding_add_device_cloud_connected">En el otro dispositivo, instala No Papers Needed y elige «Ya uso No Papers Needed en otro dispositivo» y luego «Desde mi nube». Inicia sesión allí y elige %1$s.</string>
+    <string name="onboarding_add_device_cloud_first">Primero conecta esta biblioteca a una nube en Sincronización en la nube. Después, en el otro dispositivo, elige «Ya uso No Papers Needed en otro dispositivo» y la misma carpeta en la nube.</string>
+    <string name="onboarding_add_device_syncthing">Con Syncthing</string>
+    <string name="onboarding_add_device_syncthing_steps">Comparte %1$s con el otro dispositivo en Syncthing. Cuando haya llegado, elige «Ya uso No Papers Needed en otro dispositivo» y luego la carpeta sincronizada.</string>
+    <string name="onboarding_add_device_nextcloud">Con la app de Nextcloud</string>
+    <string name="onboarding_add_device_nextcloud_steps">Guarda %1$s en una carpeta que sincronice la app de escritorio de Nextcloud y deja que se sincronice también con el otro ordenador; luego elige allí esa carpeta. En un móvil, conéctate a Nextcloud como nube.</string>
+    <string name="onboarding_add_device_private">Los archivos de esta biblioteca están en el almacenamiento propio de la app, al que las apps de sincronización no llegan: añade dispositivos a través de su carpeta en la nube.</string>
+    <string name="onboarding_add_device_sees">Qué muestra el otro dispositivo</string>
+    <string name="onboarding_add_device_sees_steps">Lee cada archivo una vez para encontrar tus documentos y muestra cuánto le falta, por ejemplo «Leyendo archivos (12 de 340)…». Los documentos aparecen a medida que se leen, con sus etiquetas y detalles.</string>
+    <string name="onboarding_add_device_no_credentials">Ningún inicio de sesión sale de este dispositivo: cada dispositivo inicia sesión por su cuenta.</string>
+</resources>

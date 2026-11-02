@@ -66,6 +66,17 @@ import no_papers_needed.composeapp.generated.resources.common_settings_cloud_sig
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_sign_in_open
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_sign_in_waiting
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_sign_in_with
+import no_papers_needed.composeapp.generated.resources.onboarding_cloud_more_providers_later
+import no_papers_needed.composeapp.generated.resources.onboarding_webdav_address
+import no_papers_needed.composeapp.generated.resources.onboarding_webdav_address_help
+import no_papers_needed.composeapp.generated.resources.onboarding_webdav_help
+import no_papers_needed.composeapp.generated.resources.onboarding_webdav_kind
+import no_papers_needed.composeapp.generated.resources.onboarding_webdav_nextcloud
+import no_papers_needed.composeapp.generated.resources.onboarding_webdav_other
+import no_papers_needed.composeapp.generated.resources.onboarding_webdav_owncloud
+import no_papers_needed.composeapp.generated.resources.onboarding_webdav_password
+import no_papers_needed.composeapp.generated.resources.onboarding_webdav_password_help
+import no_papers_needed.composeapp.generated.resources.onboarding_webdav_user
 import org.jetbrains.compose.resources.stringResource
 
 /** The folder offered by default when browsing a remote's root. */
@@ -77,12 +88,18 @@ private val StepSpacing = 8.dp
 /**
  * The in-app cloud setup: pick a provider, sign in, choose the folder. It renders whichever step
  * [state] holds and only reports the user's intent back; the protocol itself lives in
- * [CloudSetupController], so a provider whose form differs never needs a change here.
+ * [CloudSetupController], so a provider whose form differs never needs a change here, apart from
+ * WebDAV, which gets a form in the app's own words.
+ *
+ * The providers set up in the user's own terms ([plainSetup]) come first. The others name rclone's
+ * options, so they wait behind "more providers" where [moreProviders] allows them (settings), and
+ * are left out on first run, which says where to find them instead.
  */
 @Composable
 internal fun CloudSetupWizard(
     state: CloudSetupState?,
     setup: CloudSetupActions,
+    moreProviders: Boolean = true,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(StepSpacing)) {
         when (state) {
@@ -100,11 +117,15 @@ internal fun CloudSetupWizard(
             }
 
             is CloudSetupState.Providers -> {
-                ProviderPicker(state.providers, setup)
+                ProviderPicker(state.providers, setup, moreProviders)
             }
 
             is CloudSetupState.Form -> {
-                SetupForm(state, setup)
+                if (state.provider.type == WEBDAV_TYPE && state.question == null) {
+                    WebDavForm(state, setup)
+                } else {
+                    SetupForm(state, setup)
+                }
             }
 
             is CloudSetupState.SigningIn -> {
@@ -134,15 +155,18 @@ internal fun CloudSetupWizard(
 private fun ProviderPicker(
     providers: List<RcloneProvider>,
     setup: CloudSetupActions,
+    moreProviders: Boolean,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(StepSpacing)) {
         if (providers.isEmpty()) {
             HelpText(stringResource(Res.string.common_settings_cloud_setup_no_providers))
         } else {
             HelpText(stringResource(Res.string.common_settings_cloud_providers))
-            val (leading, advanced) = providers.partition { !it.advanced }
+            val (leading, advanced) = providers.partition { it.plainSetup }
             for (provider in leading) ProviderButton(provider, setup)
-            if (advanced.isNotEmpty()) {
+            if (advanced.isNotEmpty() && !moreProviders) {
+                HelpText(stringResource(Res.string.onboarding_cloud_more_providers_later))
+            } else if (advanced.isNotEmpty()) {
                 var expanded by remember { mutableStateOf(false) }
                 TextButton(onClick = { expanded = !expanded }) {
                     val label =
@@ -213,6 +237,70 @@ private fun SetupForm(
         }
     }
 }
+
+/**
+ * The WebDAV form in the app's own words: the kind of server, the address its user opens in a
+ * browser, and the sign-in. [WebDav.params] makes the address rclone's on submit; any question rclone
+ * asks after that is the generic [SetupForm]'s.
+ */
+@Composable
+private fun WebDavForm(
+    state: CloudSetupState.Form,
+    setup: CloudSetupActions,
+) {
+    val values = state.values
+    Column(verticalArrangement = Arrangement.spacedBy(StepSpacing)) {
+        HelpText(stringResource(Res.string.onboarding_webdav_help))
+        Dropdown(
+            selected = webDavVendorLabel(values[WebDav.VENDOR].orEmpty()),
+            options = WebDav.VENDORS,
+            optionLabel = { webDavVendorLabel(it) },
+            onSelect = { setup.setValue(WebDav.VENDOR, it) },
+            label = stringResource(Res.string.onboarding_webdav_kind),
+        )
+        OutlinedTextField(
+            value = values[WebDav.URL].orEmpty(),
+            onValueChange = { setup.setValue(WebDav.URL, it) },
+            label = { Text(text = stringResource(Res.string.onboarding_webdav_address)) },
+            supportingText = { Text(text = stringResource(Res.string.onboarding_webdav_address_help)) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = values[WebDav.USER].orEmpty(),
+            onValueChange = { setup.setValue(WebDav.USER, it) },
+            label = { Text(text = stringResource(Res.string.onboarding_webdav_user)) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = values[WebDav.PASS].orEmpty(),
+            onValueChange = { setup.setValue(WebDav.PASS, it) },
+            label = { Text(text = stringResource(Res.string.onboarding_webdav_password)) },
+            supportingText = { Text(text = stringResource(Res.string.onboarding_webdav_password_help)) },
+            visualTransformation = PasswordVisualTransformation(),
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        state.error?.let { HelpText(it) }
+        Row(horizontalArrangement = Arrangement.spacedBy(StepSpacing)) {
+            Button(onClick = setup::submit, enabled = !state.busy && !values[WebDav.URL].isNullOrBlank()) {
+                Text(text = stringResource(Res.string.common_settings_cloud_form_submit))
+            }
+            OutlinedButton(onClick = setup::cancel) {
+                Text(text = stringResource(Res.string.common_settings_cloud_cancel))
+            }
+        }
+    }
+}
+
+@Composable
+private fun webDavVendorLabel(vendor: String): String =
+    when (vendor) {
+        WebDav.NEXTCLOUD -> stringResource(Res.string.onboarding_webdav_nextcloud)
+        WebDav.OWNCLOUD -> stringResource(Res.string.onboarding_webdav_owncloud)
+        else -> stringResource(Res.string.onboarding_webdav_other)
+    }
 
 /** One option of a provider form or question: a hidden field, a picker, or a plain text field. */
 @Composable

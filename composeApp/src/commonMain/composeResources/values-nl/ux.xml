@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="ux_sync_help">Op meerdere apparaten gebruiken</string>
     <string name="ux_library_name">Mijn documenten</string>
     <string name="ux_match_all">Alle geselecteerde tags</string>
     <string name="ux_match_any">Een van de geselecteerde tags</string>

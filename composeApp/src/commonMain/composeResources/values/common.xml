@@ -40,9 +40,6 @@
     <string name="common_open_failed_unreadable">The library could not be read. The technical details say why.</string>
     <string name="common_pick_folder_again">Pick folder again</string>
 
-    <string name="common_onboarding_intro">Keep your PDFs, tags and details together in a folder you own. Choose where to store your library to get started.</string>
-    <string name="common_onboarding_sync">Use a sync tool such as Syncthing to sync the entire library folder, then open that folder on each device. Sync is managed by your chosen tool.</string>
-    <string name="common_choose_library_folder">Open an existing library</string>
 
     <string name="common_no_ai_tag_suggestions">No suggestions - document may not be OCRed yet</string>
     <string name="common_no_ai_metadata_suggestions">No suggestions - document may not be OCRed yet</string>
@@ -101,12 +98,7 @@
     <string name="common_new_library_folder_name">New folder name</string>
 
     <!-- Library storage: direct device-storage folders, the Android all-files grant, and the SAF escape hatch -->
-    <string name="common_onboarding_use_recommended">Use the recommended folder</string>
-    <string name="common_onboarding_recommended_help">Your library will be stored in %1$s, where file managers and sync tools such as Syncthing can reach it.</string>
-    <string name="common_onboarding_use_cloud">Keep it in your cloud drive</string>
-    <string name="common_onboarding_cloud_help">Google Drive, OneDrive, Dropbox and more. Sign in and pick a folder: your library stays the same on every device, with a copy on this one for offline use.</string>
     <string name="common_onboarding_cloud_title">Choose your cloud drive</string>
-    <string name="common_onboarding_local_heading">Or keep it in a folder on this device</string>
     <string name="common_onboarding_cloud_connect_failed">Your library is ready on this device, but it could not be connected to your cloud drive: %1$s. Connect it in Settings under Cloud sync.</string>
     <string name="common_storage_access_title">Allow access to device storage</string>
     <string name="common_storage_access_help">No Papers Needed keeps your library as a plain folder on this device. To read and write it, including files added by other apps such as Syncthing, allow access to all files.</string>

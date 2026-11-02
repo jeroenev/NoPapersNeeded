@@ -89,6 +89,7 @@ import no_papers_needed.composeapp.generated.resources.common_settings_use_saf
 import no_papers_needed.composeapp.generated.resources.common_settings_views
 import no_papers_needed.composeapp.generated.resources.common_settings_watched_folder
 import no_papers_needed.composeapp.generated.resources.detail_add_field
+import no_papers_needed.composeapp.generated.resources.onboarding_add_device
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -186,6 +187,7 @@ internal val SettingsCategories: List<SettingsCategory> =
             keywords =
                 listOfNotNull(
                     Res.string.common_settings_change_library,
+                    Res.string.onboarding_add_device,
                     Res.string.common_settings_storage,
                     Res.string.common_settings_storage_organize_paths,
                     Res.string.common_settings_storage_path_template,
@@ -257,6 +259,7 @@ internal val SettingsCategories: List<SettingsCategory> =
             keywords =
                 listOf(
                     Res.string.common_settings_cloud_engine_check,
+                    Res.string.onboarding_add_device,
                     Res.string.common_settings_cloud_setup_title,
                     Res.string.common_settings_cloud_connect,
                     Res.string.common_settings_cloud_remote,

@@ -159,8 +159,7 @@
     <string name="common_settings_review_workflow_failed">Não foi possível alterar o fluxo de revisão: %1$s</string>
 
     <string name="common_settings_category_cloud">Sincronização na nuvem</string>
-    <string name="common_settings_cloud_help">Espelha esta biblioteca no seu próprio armazenamento em nuvem: PDFs, metadados e lixeira viajam como arquivos comuns, para que qualquer dispositivo com o mesmo remoto veja a mesma biblioteca. O app decide o que se move, verifica cada arquivo antes de ele entrar na biblioteca e nunca substitui nem exclui nada para resolver um conflito.</string>
-    <string name="common_settings_cloud_engine_checking">Verificando o mecanismo de sincronização…</string>
+    <string name="common_settings_cloud_help">Guarda esta biblioteca em uma pasta do seu próprio armazenamento em nuvem: PDFs, detalhes e lixeira viajam como arquivos comuns, para que qualquer dispositivo conectado à mesma pasta na nuvem veja a mesma biblioteca. O app decide o que se move, verifica cada arquivo antes de ele entrar na biblioteca e nunca substitui nem exclui nada para resolver um conflito.</string>
     <string name="common_settings_cloud_engine_available">O mecanismo de sincronização %1$s está pronto.</string>
     <string name="common_settings_cloud_engine_missing">O mecanismo de sincronização não foi encontrado (procurado em %1$s).</string>
     <string name="common_settings_cloud_engine_failed">O mecanismo de sincronização respondeu com um erro: %1$s</string>
@@ -182,15 +181,15 @@
     <string name="common_settings_cloud_status">Status</string>
     <string name="common_settings_cloud_sync_now">Sincronizar agora</string>
     <string name="common_settings_cloud_progress">%1$s (%2$d de %3$d)</string>
-    <string name="common_settings_cloud_phase_listing">Listando o remoto</string>
+    <string name="common_settings_cloud_phase_listing">Percorrendo a pasta na nuvem</string>
     <string name="common_settings_cloud_phase_pull_metadata">Baixando metadados</string>
-    <string name="common_settings_cloud_phase_resolve">Identificando documentos remotos</string>
+    <string name="common_settings_cloud_phase_resolve">Identificando os documentos da pasta na nuvem</string>
     <string name="common_settings_cloud_phase_apply_local">Atualizando esta biblioteca</string>
     <string name="common_settings_cloud_phase_push_documents">Enviando documentos</string>
     <string name="common_settings_cloud_phase_push_metadata">Enviando metadados</string>
     <string name="common_settings_cloud_phase_indexing">Indexando</string>
     <string name="common_settings_cloud_never">Ainda não sincronizado.</string>
-    <string name="common_settings_cloud_last_summary">Última sincronização %1$s: %2$d baixados, %3$d enviados, %4$d movidos e %5$d removidos no remoto.</string>
+    <string name="common_settings_cloud_last_summary">Última sincronização %1$s: %2$d baixados, %3$d enviados, %4$d movidos e %5$d removidos na pasta na nuvem.</string>
     <string name="common_settings_cloud_last_failed">A última sincronização %1$s falhou.</string>
     <plurals name="common_settings_cloud_conflict_count">
         <item quantity="one">%1$d conflito ficou para você resolver:</item>
@@ -207,7 +206,7 @@
     <string name="common_settings_cloud_outcome_running">Uma sincronização já está em andamento.</string>
 
     <string name="common_settings_cloud_setup_title">Conectar armazenamento em nuvem</string>
-    <string name="common_settings_cloud_setup_help">Escolha um provedor, entre na sua conta e escolha a pasta em que esta biblioteca será espelhada. Você não precisa configurar o rclone.</string>
+    <string name="common_settings_cloud_setup_help">Escolha um provedor, entre na sua conta e escolha a pasta na nuvem onde guardar esta biblioteca. Não é preciso instalar mais nada.</string>
     <string name="common_settings_cloud_connect">Conectar…</string>
     <string name="common_settings_cloud_setup_loading">Carregando provedores…</string>
     <string name="common_settings_cloud_setup_no_providers">Nenhum provedor disponível. Verifique se o mecanismo de sincronização está instalado e tente novamente.</string>

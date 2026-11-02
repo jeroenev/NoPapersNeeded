@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="ux_sync_help">Úsalo en varios dispositivos</string>
     <string name="ux_library_name">Mis documentos</string>
     <string name="ux_match_all">Coincidir con todas</string>
     <string name="ux_match_any">Coincidir con alguna</string>

@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="ux_sync_help">Auf mehreren Geräten nutzen</string>
     <string name="ux_library_name">Meine Dokumente</string>
     <string name="ux_match_all">Alle</string>
     <string name="ux_match_any">Eines davon</string>

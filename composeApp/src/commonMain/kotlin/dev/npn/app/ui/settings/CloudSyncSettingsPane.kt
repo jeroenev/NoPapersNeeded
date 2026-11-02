@@ -14,6 +14,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -23,6 +24,7 @@ import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.SettingsSection
 import dev.npn.app.ui.common.SwitchRow
 import dev.npn.app.ui.common.formatEpochDateTime
+import dev.npn.app.ui.onboarding.AddDeviceGuideDialog
 import dev.npn.core.sync.ConflictKind
 import dev.npn.core.sync.EngineProblem
 import dev.npn.core.sync.SyncConflict
@@ -49,7 +51,6 @@ import no_papers_needed.composeapp.generated.resources.common_settings_cloud_dis
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_disconnect_title
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_engine_available
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_engine_check
-import no_papers_needed.composeapp.generated.resources.common_settings_cloud_engine_checking
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_engine_closed
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_engine_exited
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_engine_failed
@@ -92,6 +93,8 @@ import no_papers_needed.composeapp.generated.resources.common_settings_cloud_set
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_setup_unavailable
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_status
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_sync_now
+import no_papers_needed.composeapp.generated.resources.onboarding_add_device
+import no_papers_needed.composeapp.generated.resources.onboarding_add_device_help
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -138,6 +141,7 @@ internal fun CloudSyncSettingsPane(
     SettingsSection(title = null) {
         HelpText(stringResource(Res.string.common_settings_cloud_help))
         EngineStatus(cloud.transport, onCheck = actions::probeTransport)
+        AddDeviceAction(state)
     }
 
     // The wizard also takes over when it is open for an already-configured remote (the "change
@@ -178,8 +182,30 @@ internal fun CloudSyncSettingsPane(
 }
 
 /**
- * The remote the library mirrors to, with the two ways to change it. The raw `name:path` is shown
- * read-only: it is an rclone address the wizard produced, not something a user should type.
+ * "Add another device", and the guide it opens ([AddDeviceGuideDialog]): where the library's
+ * settings mention using it on more than one device.
+ */
+@Composable
+internal fun AddDeviceAction(state: SettingsPaneState) {
+    var showGuide by rememberSaveable { mutableStateOf(false) }
+    SettingsActionRow(
+        label = stringResource(Res.string.onboarding_add_device),
+        onClick = { showGuide = true },
+        help = stringResource(Res.string.onboarding_add_device_help),
+    )
+    if (showGuide) {
+        val config = state.cloud.config
+        AddDeviceGuideDialog(
+            cloudFolder = config.remote?.takeIf { config.configured }?.let(::cloudFolderLabel),
+            libraryLocation = state.settings.snapshot.libraryLocation,
+            onDismiss = { showGuide = false },
+        )
+    }
+}
+
+/**
+ * The cloud folder the library mirrors to, as the user knows it ([cloudFolderLabel]: provider and
+ * folders, not the rclone address the wizard stored), with the two ways to change it.
  * Disconnecting asks first, as it forgets the sign-in.
  */
 @Composable
@@ -191,7 +217,7 @@ private fun ConnectedRemote(
 ) {
     var confirmDisconnect by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(ItemSpacing)) {
-        Text(text = remote, style = MaterialTheme.typography.bodyMedium)
+        Text(text = cloudFolderLabel(remote), style = MaterialTheme.typography.bodyMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(ItemSpacing)) {
             OutlinedButton(onClick = setup::changeFolder, enabled = available && editable) {
                 Text(text = stringResource(Res.string.common_settings_cloud_change_folder))
@@ -216,24 +242,24 @@ private fun ConnectedRemote(
     }
 }
 
+/**
+ * The sync engine's state, only once it is missing or failed: while it works (or is still being
+ * asked), its version and path are nothing the user needs, and the status below says how syncing
+ * goes.
+ */
 @Composable
 private fun EngineStatus(
     transport: TransportAvailability?,
     onCheck: () -> Unit,
 ) {
+    if (transport == null || transport is TransportAvailability.Available) return
     Text(text = engineText(transport), style = MaterialTheme.typography.bodyMedium)
-    if (transport !is TransportAvailability.Available) {
-        SettingsActionRow(label = stringResource(Res.string.common_settings_cloud_engine_check), onClick = onCheck)
-    }
+    SettingsActionRow(label = stringResource(Res.string.common_settings_cloud_engine_check), onClick = onCheck)
 }
 
 @Composable
-private fun engineText(transport: TransportAvailability?): String =
+private fun engineText(transport: TransportAvailability): String =
     when (transport) {
-        null -> {
-            stringResource(Res.string.common_settings_cloud_engine_checking)
-        }
-
         is TransportAvailability.Available -> {
             stringResource(Res.string.common_settings_cloud_engine_available, transport.version)
         }
@@ -435,7 +461,7 @@ private fun intervalLabel(minutes: Int): String =
     }
 
 @Composable
-private fun progressLabel(progress: SyncProgress): String {
+internal fun progressLabel(progress: SyncProgress): String {
     val phase =
         when (progress.phase) {
             SyncPhase.LISTING -> stringResource(Res.string.common_settings_cloud_phase_listing)

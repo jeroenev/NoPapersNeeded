@@ -39,9 +39,6 @@
     <string name="common_open_failed_unreadable">Die Bibliothek konnte nicht gelesen werden. Die technischen Details nennen den Grund.</string>
     <string name="common_pick_folder_again">Ordner erneut wählen</string>
 
-    <string name="common_onboarding_intro">Bewahre deine PDFs, Tags und Details gemeinsam in einem Ordner auf, der dir gehört. Wähle zum Start den Speicherort deiner Bibliothek.</string>
-    <string name="common_onboarding_sync">Synchronisiere den gesamten Bibliotheksordner mit einem Tool wie Syncthing und öffne diesen Ordner auf jedem Gerät. Die Synchronisierung übernimmt das gewählte Tool.</string>
-    <string name="common_choose_library_folder">Bestehende Bibliothek öffnen</string>
 
     <string name="common_no_ai_tag_suggestions">Keine Vorschläge – das Dokument hat vielleicht noch keine OCR</string>
     <string name="common_no_ai_metadata_suggestions">Keine Vorschläge – das Dokument hat vielleicht noch keine OCR</string>
@@ -99,12 +96,7 @@
     <string name="common_create_new_library">Bibliothek erstellen</string>
     <string name="common_new_library_folder_name">Name des neuen Ordners</string>
 
-    <string name="common_onboarding_use_recommended">Empfohlenen Ordner verwenden</string>
-    <string name="common_onboarding_recommended_help">Deine Bibliothek wird in %1$s gespeichert, wo Dateimanager und Sync-Tools wie Syncthing darauf zugreifen können.</string>
-    <string name="common_onboarding_use_cloud">In deinem Cloud-Speicher ablegen</string>
-    <string name="common_onboarding_cloud_help">Google Drive, OneDrive, Dropbox und mehr. Melde dich an und wähle einen Ordner: Deine Bibliothek ist auf jedem Gerät dieselbe, mit einer Kopie auf diesem Gerät für die Offline-Nutzung.</string>
     <string name="common_onboarding_cloud_title">Wähle deinen Cloud-Speicher</string>
-    <string name="common_onboarding_local_heading">Oder lege sie in einem Ordner auf diesem Gerät ab</string>
     <string name="common_onboarding_cloud_connect_failed">Deine Bibliothek ist auf diesem Gerät bereit, konnte aber nicht mit deinem Cloud-Speicher verbunden werden: %1$s. Verbinde sie in den Einstellungen unter Cloud-Synchronisierung.</string>
     <string name="common_storage_access_title">Zugriff auf den Gerätespeicher erlauben</string>
     <string name="common_storage_access_help">No Papers Needed speichert deine Bibliothek als normalen Ordner auf diesem Gerät. Um sie zu lesen und zu schreiben, auch Dateien anderer Apps wie Syncthing, erlaube den Zugriff auf alle Dateien.</string>

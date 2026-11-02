@@ -39,9 +39,6 @@
     <string name="common_open_failed_unreadable">La bibliothèque n’a pas pu être lue. Les détails techniques en donnent la raison.</string>
     <string name="common_pick_folder_again">Rechoisir le dossier</string>
 
-    <string name="common_onboarding_intro">Gardez vos PDF, étiquettes et informations ensemble dans un dossier qui vous appartient. Choisissez où stocker votre bibliothèque pour commencer.</string>
-    <string name="common_onboarding_sync">Utilisez un outil comme Syncthing pour synchroniser le dossier entier de la bibliothèque, puis ouvrez-le sur chaque appareil. La synchronisation est assurée par l’outil de votre choix.</string>
-    <string name="common_choose_library_folder">Ouvrir une bibliothèque</string>
 
     <string name="common_no_ai_tag_suggestions">Aucune suggestion : le document n’a peut-être pas encore été traité par OCR</string>
     <string name="common_no_ai_metadata_suggestions">Aucune suggestion : le document n’a peut-être pas encore été traité par OCR</string>
@@ -100,12 +97,7 @@
     <string name="common_new_library_folder_name">Nom du nouveau dossier</string>
 
     <!-- Library storage: direct device-storage folders, the Android all-files grant, and the SAF escape hatch -->
-    <string name="common_onboarding_use_recommended">Utiliser le dossier recommandé</string>
-    <string name="common_onboarding_recommended_help">Votre bibliothèque sera stockée dans %1$s, où les gestionnaires de fichiers et les outils de synchronisation comme Syncthing peuvent y accéder.</string>
-    <string name="common_onboarding_use_cloud">La garder dans votre cloud</string>
-    <string name="common_onboarding_cloud_help">Google Drive, OneDrive, Dropbox et d’autres. Connectez-vous et choisissez un dossier : votre bibliothèque est la même sur chaque appareil, avec une copie sur celui-ci pour l’utiliser hors ligne.</string>
     <string name="common_onboarding_cloud_title">Choisissez votre cloud</string>
-    <string name="common_onboarding_local_heading">Ou gardez-la dans un dossier de cet appareil</string>
     <string name="common_onboarding_cloud_connect_failed">Votre bibliothèque est prête sur cet appareil, mais elle n’a pas pu être connectée à votre cloud : %1$s. Connectez-la dans les Paramètres, sous Synchronisation cloud.</string>
     <string name="common_storage_access_title">Autoriser l’accès au stockage de l’appareil</string>
     <string name="common_storage_access_help">No Papers Needed conserve votre bibliothèque sous forme de simple dossier sur cet appareil. Pour la lire et y écrire, y compris les fichiers ajoutés par d’autres applications comme Syncthing, autorisez l’accès à tous les fichiers.</string>

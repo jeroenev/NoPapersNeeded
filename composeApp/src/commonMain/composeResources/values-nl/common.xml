@@ -39,9 +39,6 @@
     <string name="common_open_failed_unreadable">De bibliotheek kon niet worden gelezen. De technische details vermelden waarom.</string>
     <string name="common_pick_folder_again">Map opnieuw kiezen</string>
 
-    <string name="common_onboarding_intro">Bewaar je pdf-bestanden, tags en details samen in je eigen map. Kies waar je bibliotheek komt te staan.</string>
-    <string name="common_onboarding_sync">Synchroniseer de volledige bibliotheekmap met een programma zoals Syncthing en open die map op elk apparaat. Je gekozen programma beheert de synchronisatie.</string>
-    <string name="common_choose_library_folder">Bestaande bibliotheek openen</string>
 
     <string name="common_no_ai_tag_suggestions">Geen suggesties - het document is mogelijk nog niet met OCR verwerkt.</string>
     <string name="common_no_ai_metadata_suggestions">Geen suggesties - het document is mogelijk nog niet met OCR verwerkt.</string>
@@ -100,12 +97,7 @@
     <string name="common_new_library_folder_name">Naam van nieuwe map</string>
 
     <!-- Library storage: direct device-storage folders, the Android all-files grant, and the SAF escape hatch -->
-    <string name="common_onboarding_use_recommended">Aanbevolen map gebruiken</string>
-    <string name="common_onboarding_recommended_help">Je bibliotheek wordt opgeslagen in %1$s, waar bestandsbeheerders en synchronisatieprogramma's zoals Syncthing erbij kunnen.</string>
-    <string name="common_onboarding_use_cloud">Bewaar ze in je cloudopslag</string>
-    <string name="common_onboarding_cloud_help">Google Drive, OneDrive, Dropbox en meer. Meld je aan en kies een map: je bibliotheek is op elk apparaat dezelfde, met een kopie op dit apparaat om offline te gebruiken.</string>
     <string name="common_onboarding_cloud_title">Kies je cloudopslag</string>
-    <string name="common_onboarding_local_heading">Of bewaar ze in een map op dit apparaat</string>
     <string name="common_onboarding_cloud_connect_failed">Je bibliotheek staat klaar op dit apparaat, maar kon niet met je cloudopslag verbonden worden: %1$s. Verbind ze in Instellingen onder Cloudsynchronisatie.</string>
     <string name="common_storage_access_title">Toegang tot de opslag van dit apparaat toestaan</string>
     <string name="common_storage_access_help">No Papers Needed bewaart je bibliotheek als een gewone map op dit apparaat. Om die te lezen en te schrijven, inclusief bestanden die andere apps zoals Syncthing toevoegen, is toegang tot alle bestanden nodig.</string>

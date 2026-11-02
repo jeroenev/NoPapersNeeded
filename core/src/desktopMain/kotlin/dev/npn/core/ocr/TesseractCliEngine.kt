@@ -37,6 +37,12 @@ class TesseractCliEngine(
     override suspend fun languagesFor(lang: String): String = withContext(io) { usableLanguages(lang) }
 
     /**
+     * The language models this Tesseract has, asked afresh (one may have been installed since); null
+     * when there is no Tesseract to ask. Empty when it cannot list them.
+     */
+    suspend fun installedLanguages(): Set<String>? = withContext(io) { if (detected) probeLanguages() else null }
+
+    /**
      * [lang] without the codes that have no installed model: Tesseract refuses the whole run when
      * one is missing, and the automatic setting asks for the app language's model, which a Linux
      * install with only English would lack. Unchanged when nothing requested is installed, or the

@@ -1,5 +1,6 @@
 package dev.npn.app.di
 
+import dev.npn.app.platform.OcrModels
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.settings.SettingsRepository
 import dev.npn.core.sync.CloudSetup
@@ -55,6 +56,12 @@ interface AppEnvironment {
      * that opens next; the caller closes it before that library's engine starts.
      */
     fun newCloudSetup(): CloudSetupEngine? = null
+
+    /**
+     * Which text recognition models this device has, asked afresh, for first run's language step;
+     * null where the platform takes no language setting (Android) or cannot say.
+     */
+    suspend fun ocrModels(): OcrModels? = null
 }
 
 /** A [setup] engine that runs until [close]; see [AppEnvironment.newCloudSetup]. */

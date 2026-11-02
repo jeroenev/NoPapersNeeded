@@ -32,6 +32,8 @@ import no_papers_needed.composeapp.generated.resources.common_writes_journal_inc
 import no_papers_needed.composeapp.generated.resources.library_rebuild_failed
 import no_papers_needed.composeapp.generated.resources.library_rebuild_not_completed
 import no_papers_needed.composeapp.generated.resources.library_refresh_failed
+import no_papers_needed.composeapp.generated.resources.onboarding_landed_reading
+import no_papers_needed.composeapp.generated.resources.onboarding_landed_search
 import kotlin.coroutines.ContinuationInterceptor
 import kotlin.test.Test
 
@@ -545,6 +547,37 @@ class AppViewModelTest : MainDispatcherTest() {
 
             created.map { it.first to it.second } shouldContainExactly
                 listOf("/storage/emulated/0/Documents" to "NoPapersNeeded")
+        }
+
+    /** Desktop proposes a folder in the documents folder, which on Windows has backslashes. */
+    @Test
+    fun aWindowsRecommendedFolderIsCreatedInItsParent() =
+        runTest(dispatcher) {
+            val vm = model(env())
+
+            vm.useRecommended("C:\\Users\\me\\Documents\\NoPapersNeeded")
+            runCurrent()
+
+            created.map { it.first to it.second } shouldContainExactly
+                listOf("C:\\Users\\me\\Documents" to "NoPapersNeeded")
+        }
+
+    /**
+     * Landing on the first document says how to find it again: right away once its text is read,
+     * once it is otherwise.
+     */
+    @Test
+    fun landingOnTheFirstDocumentSaysHowToFindItAgain() =
+        runTest(dispatcher) {
+            val vm = model(env(savedLocation = "/lib"))
+            val messages = collecting(vm.messages.map { it.text })
+
+            vm.firstDocumentLanded(textRead = true)
+            vm.firstDocumentLanded(textRead = false)
+            runCurrent()
+
+            messages shouldContainExactly
+                listOf(uiText(Res.string.onboarding_landed_search), uiText(Res.string.onboarding_landed_reading))
         }
 
     @Test

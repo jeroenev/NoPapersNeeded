@@ -191,6 +191,21 @@ class TesseractCliEngineTest {
             }
         }
 
+    /** First run's language step asks which models are there, and learns when there is no Tesseract. */
+    @Test
+    fun theInstalledModelsAreListedAndNoneWithoutTesseract() =
+        runTest {
+            assumeTrue(hasPosixShell())
+            TesseractCliEngine(binary = "tesseract-does-not-exist-xyz").installedLanguages() shouldBe null
+            val dir = Files.createTempDirectory("npn-tess")
+            try {
+                val engine = TesseractCliEngine(binary = fakeTesseract(dir, "exit 0").absolutePath)
+                engine.installedLanguages() shouldBe setOf("eng")
+            } finally {
+                dir.toFile().deleteRecursively()
+            }
+        }
+
     @Test
     fun nameIsTesseract() {
         TesseractCliEngine().name shouldBe "tesseract"

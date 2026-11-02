@@ -166,8 +166,7 @@
     <string name="common_settings_review_workflow_failed">Could not change the review workflow: %1$s</string>
 
     <string name="common_settings_category_cloud">Cloud sync</string>
-    <string name="common_settings_cloud_help">Mirrors this library to your own cloud storage: PDFs, metadata and trash travel as plain files, so any device with the same remote sees the same library. The app decides what moves, verifies every file before it enters the library, and never replaces or deletes anything to settle a conflict.</string>
-    <string name="common_settings_cloud_engine_checking">Checking the sync engine…</string>
+    <string name="common_settings_cloud_help">Keeps this library in a folder of your own cloud storage: PDFs, details and trash travel as plain files, so every device connected to the same cloud folder sees the same library. The app decides what moves, checks every file before it enters the library, and never replaces or deletes anything to settle a conflict.</string>
     <string name="common_settings_cloud_engine_available">Sync engine %1$s is ready.</string>
     <string name="common_settings_cloud_engine_missing">The sync engine was not found (looked for %1$s).</string>
     <string name="common_settings_cloud_engine_failed">The sync engine answered with an error: %1$s</string>
@@ -189,15 +188,15 @@
     <string name="common_settings_cloud_status">Status</string>
     <string name="common_settings_cloud_sync_now">Sync now</string>
     <string name="common_settings_cloud_progress">%1$s (%2$d of %3$d)</string>
-    <string name="common_settings_cloud_phase_listing">Listing the remote</string>
+    <string name="common_settings_cloud_phase_listing">Looking through the cloud folder</string>
     <string name="common_settings_cloud_phase_pull_metadata">Downloading metadata</string>
-    <string name="common_settings_cloud_phase_resolve">Identifying remote documents</string>
+    <string name="common_settings_cloud_phase_resolve">Identifying the documents in the cloud folder</string>
     <string name="common_settings_cloud_phase_apply_local">Updating this library</string>
     <string name="common_settings_cloud_phase_push_documents">Uploading documents</string>
     <string name="common_settings_cloud_phase_push_metadata">Uploading metadata</string>
     <string name="common_settings_cloud_phase_indexing">Indexing</string>
     <string name="common_settings_cloud_never">Not synced yet.</string>
-    <string name="common_settings_cloud_last_summary">Last sync %1$s: %2$d downloaded, %3$d uploaded, %4$d moved and %5$d removed on the remote.</string>
+    <string name="common_settings_cloud_last_summary">Last sync %1$s: %2$d downloaded, %3$d uploaded, %4$d moved and %5$d removed in the cloud folder.</string>
     <string name="common_settings_cloud_last_failed">Last sync %1$s failed.</string>
     <plurals name="common_settings_cloud_conflict_count">
         <item quantity="one">%1$d conflict was left for you to resolve:</item>
@@ -214,7 +213,7 @@
     <string name="common_settings_cloud_outcome_running">A sync is already running.</string>
 
     <string name="common_settings_cloud_setup_title">Connect cloud storage</string>
-    <string name="common_settings_cloud_setup_help">Pick a provider, sign in, and choose the folder this library should mirror to. You do not need to set up rclone yourself.</string>
+    <string name="common_settings_cloud_setup_help">Pick a provider, sign in, and choose the cloud folder to keep this library in. There is nothing else to install.</string>
     <string name="common_settings_cloud_connect">Connect…</string>
     <string name="common_settings_cloud_setup_loading">Loading providers…</string>
     <string name="common_settings_cloud_setup_no_providers">No providers are available. Check that the sync engine is installed, then try again.</string>

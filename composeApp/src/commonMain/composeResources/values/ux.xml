@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="ux_sync_help">Use on multiple devices</string>
     <string name="ux_library_name">My documents</string>
     <string name="ux_match_all">Match all</string>
     <string name="ux_match_any">Match any</string>

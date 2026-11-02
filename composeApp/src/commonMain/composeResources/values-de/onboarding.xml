@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Welcome -->
+    <string name="onboarding_welcome_title">Jedes Papier, das du aufhebst, in Sekunden gefunden.</string>
+    <string name="onboarding_value_search">Finde alles: Jedes Wort auf jeder Seite ist durchsuchbar.</string>
+    <string name="onboarding_value_own">Normale PDFs, die dir gehören, in einem Ordner deiner Wahl.</string>
+    <string name="onboarding_value_offline">Funktioniert offline und ohne Konto.</string>
+    <string name="onboarding_get_started">Los geht’s</string>
+    <string name="onboarding_already_use">Ich nutze No Papers Needed schon auf einem anderen Gerät</string>
+
+    <!-- Where the library lives -->
+    <string name="onboarding_location_title">Wo soll deine Bibliothek liegen?</string>
+    <string name="onboarding_device_title">Auf diesem Gerät</string>
+    <string name="onboarding_device_help">Ein normaler Ordner, den du in jedem Dateimanager öffnen kannst. Mit anderen Geräten synchronisieren kannst du ihn später.</string>
+    <string name="onboarding_device_path">Deine Bibliothek: %1$s</string>
+    <string name="onboarding_use_this_folder">Diesen Ordner verwenden</string>
+    <string name="onboarding_change_folder">Ändern</string>
+    <string name="onboarding_choose_folder">Ordner wählen</string>
+    <string name="onboarding_cloud_title">In meinem Cloud-Speicher</string>
+    <string name="onboarding_cloud_help">Google Drive, OneDrive, Dropbox, Box, pCloud oder Nextcloud. Melde dich an und wähle einen Ordner; dieses Gerät behält eine Kopie, damit es auch offline funktioniert.</string>
+    <string name="onboarding_choose_cloud">Cloud-Speicher wählen</string>
+    <string name="onboarding_cloud_more_providers_later">Weitere Anbieter findest du in den Einstellungen unter Cloud-Synchronisierung, sobald deine Bibliothek offen ist.</string>
+
+    <!-- Connect to a library another device uses -->
+    <string name="onboarding_connect_title">Mit deiner Bibliothek verbinden</string>
+    <string name="onboarding_connect_help">Deine Bibliothek ist ein Ordner. Wähle, wie dieses Gerät ihn erreicht; darin ändert sich nichts, bis er geöffnet ist.</string>
+    <string name="onboarding_connect_cloud_title">Aus meinem Cloud-Speicher</string>
+    <string name="onboarding_connect_cloud_help">Melde dich bei dem Cloud-Speicher an, mit dem dein anderes Gerät synchronisiert, und wähle dort den Ordner der Bibliothek.</string>
+    <string name="onboarding_connect_synced_title">Ein Ordner, den eine Sync-App aktuell hält</string>
+    <string name="onboarding_connect_synced_help">Syncthing, die Nextcloud-App oder ein ähnliches Werkzeug: Lass es den Bibliotheksordner zuerst auf dieses Gerät bringen, dann wähle diesen Ordner.</string>
+    <string name="onboarding_connect_synced_button">Synchronisierten Ordner wählen</string>
+    <string name="onboarding_connect_here_title">Ein Ordner, der schon auf diesem Gerät ist</string>
+    <string name="onboarding_connect_here_help">Eine Bibliothek im Speicher dieses Geräts, auf einem USB-Stick oder einer Speicherkarte.</string>
+    <string name="onboarding_connect_here_button">Bibliotheksordner wählen</string>
+    <string name="onboarding_connect_progress_note">Dieses Gerät liest dann jede Datei einmal, um deine Dokumente zu finden; du siehst, wie weit es ist.</string>
+
+    <!-- Document languages (desktop) -->
+    <string name="onboarding_languages_title">In welchen Sprachen sind deine Dokumente?</string>
+    <string name="onboarding_languages_help">Die Texterkennung liest gescannte Seiten in diesen Sprachen. Jede weitere macht sie etwas langsamer; ändern kannst du sie später in den Einstellungen unter Import &amp; OCR.</string>
+    <string name="onboarding_languages_checking">Es wird geprüft, welche Sprachen dieser Computer lesen kann…</string>
+    <string name="onboarding_languages_bundled">Alles, was diese Sprachen brauchen, ist in der App enthalten.</string>
+    <string name="onboarding_languages_missing">Noch nicht installiert: %1$s.</string>
+    <string name="onboarding_languages_no_tesseract">Die Texterkennung braucht Tesseract, das noch nicht installiert ist.</string>
+    <string name="onboarding_languages_install_with">Installiere es mit:</string>
+    <string name="onboarding_languages_missing_manual">Installiere die Tesseract-Sprachdaten für %1$s mit der Paketverwaltung deines Systems.</string>
+    <string name="onboarding_languages_check_again">Erneut prüfen</string>
+    <string name="onboarding_continue">Weiter</string>
+
+    <!-- First document -->
+    <string name="onboarding_first_document_title">Füge dein erstes Dokument hinzu</string>
+    <string name="onboarding_first_document_help">Eine Rechnung, ein Brief, ein Kassenbon: alles, was du wiederfinden willst. Es kommt als normales PDF in deine Bibliothek.</string>
+    <plurals name="onboarding_first_document_existing">
+        <item quantity="one">Deine Bibliothek enthält schon %1$d Dokument.</item>
+        <item quantity="other">Deine Bibliothek enthält schon %1$d Dokumente.</item>
+    </plurals>
+    <string name="onboarding_first_document_scan">Dokument scannen</string>
+    <string name="onboarding_first_document_choose">Dateien wählen</string>
+    <string name="onboarding_first_document_drop">Oder zieh PDF-Dateien irgendwo auf dieses Fenster</string>
+    <string name="onboarding_first_document_adding">Wird hinzugefügt…</string>
+    <string name="onboarding_first_document_reading">Text wird gelesen…</string>
+    <string name="onboarding_first_document_reading_help">Das dauert ein paar Sekunden pro Seite. Du kannst das Dokument währenddessen öffnen.</string>
+    <string name="onboarding_first_document_read">Sein Text ist gelesen: Du kannst nach jedem Wort auf seinen Seiten suchen.</string>
+    <string name="onboarding_first_document_already">Dieses Dokument war schon in deiner Bibliothek.</string>
+    <string name="onboarding_first_document_open">Öffnen</string>
+    <string name="onboarding_watch_folder">Stattdessen einen Ordner überwachen</string>
+    <string name="onboarding_skip">Überspringen</string>
+    <string name="onboarding_go_to_library">Zu meiner Bibliothek</string>
+    <string name="onboarding_landed_search">Hier ist dein erstes Dokument. Um es wiederzufinden, suche in der Bibliothek nach einem Wort von seiner Seite.</string>
+    <string name="onboarding_landed_reading">Hier ist dein erstes Dokument. Sobald sein Text gelesen ist, findest du es wieder, indem du in der Bibliothek nach einem Wort von seiner Seite suchst.</string>
+
+    <!-- A library another device uses, coming in -->
+    <string name="onboarding_connecting_title">Deine Bibliothek wird geholt</string>
+    <string name="onboarding_connecting_cloud">Aus %1$s</string>
+    <string name="onboarding_connecting_waiting">Synchronisierung wird vorbereitet…</string>
+    <plurals name="onboarding_connecting_count">
+        <item quantity="one">Bisher %1$d Dokument</item>
+        <item quantity="other">Bisher %1$d Dokumente</item>
+    </plurals>
+    <plurals name="onboarding_connecting_done">
+        <item quantity="one">Alles da: %1$d Dokument.</item>
+        <item quantity="other">Alles da: %1$d Dokumente.</item>
+    </plurals>
+    <string name="onboarding_connecting_empty">Noch keine Dokumente. Wenn eine Sync-App den Ordner noch kopiert, erscheinen sie, sobald sie ankommen.</string>
+    <string name="onboarding_connecting_background">Du kannst schon loslegen: Das läuft im Hintergrund weiter.</string>
+
+    <!-- Cloud setup in the app's own words -->
+    <string name="onboarding_webdav_help">Verbinde dich mit deinem eigenen Nextcloud, ownCloud oder einem anderen WebDAV-Server.</string>
+    <string name="onboarding_webdav_kind">Server</string>
+    <string name="onboarding_webdav_nextcloud">Nextcloud</string>
+    <string name="onboarding_webdav_owncloud">ownCloud</string>
+    <string name="onboarding_webdav_other">Ein anderer WebDAV-Server</string>
+    <string name="onboarding_webdav_address">Serveradresse</string>
+    <string name="onboarding_webdav_address_help">Die Adresse, die du im Browser öffnest, etwa cloud.example.com</string>
+    <string name="onboarding_webdav_user">Benutzername</string>
+    <string name="onboarding_webdav_password">Passwort</string>
+    <string name="onboarding_webdav_password_help">Mit Zwei-Faktor-Anmeldung erstellst du in den Sicherheitseinstellungen deines Servers ein App-Passwort und verwendest dieses.</string>
+
+    <!-- Add another device -->
+    <string name="onboarding_add_device">Weiteres Gerät hinzufügen</string>
+    <string name="onboarding_add_device_help">Nutze diese Bibliothek auf einem Handy, einem Laptop oder beiden: So kommt sie dorthin.</string>
+    <string name="onboarding_add_device_intro">Deine Bibliothek ist ein Ordner. Ein anderes Gerät kann sie nutzen, sobald dieser Ordner es erreicht; jedes Gerät baut dann aus den Dateien seinen eigenen Index.</string>
+    <string name="onboarding_add_device_cloud">Über deinen Cloud-Ordner</string>
+    <string name="onboarding_add_device_cloud_connected">Installiere No Papers Needed auf dem anderen Gerät und wähle „Ich nutze No Papers Needed schon auf einem anderen Gerät“, dann „Aus meinem Cloud-Speicher“. Melde dich dort an und wähle %1$s.</string>
+    <string name="onboarding_add_device_cloud_first">Verbinde diese Bibliothek zuerst unter Cloud-Synchronisierung mit einem Cloud-Speicher. Wähle dann auf dem anderen Gerät „Ich nutze No Papers Needed schon auf einem anderen Gerät“ und denselben Cloud-Ordner.</string>
+    <string name="onboarding_add_device_syncthing">Mit Syncthing</string>
+    <string name="onboarding_add_device_syncthing_steps">Teile %1$s in Syncthing mit dem anderen Gerät. Sobald er dort angekommen ist, wähle „Ich nutze No Papers Needed schon auf einem anderen Gerät“ und dann den synchronisierten Ordner.</string>
+    <string name="onboarding_add_device_nextcloud">Mit der Nextcloud-App</string>
+    <string name="onboarding_add_device_nextcloud_steps">Leg %1$s in einen Ordner, den die Nextcloud-Desktop-App synchronisiert, und lass ihn auch auf den anderen Computer synchronisieren; wähle dort dann diesen Ordner. Auf einem Handy verbindest du dich stattdessen mit Nextcloud als Cloud-Speicher.</string>
+    <string name="onboarding_add_device_private">Die Dateien dieser Bibliothek liegen im eigenen Speicher der App, den Sync-Apps nicht erreichen: Füge Geräte über ihren Cloud-Ordner hinzu.</string>
+    <string name="onboarding_add_device_sees">Was das andere Gerät zeigt</string>
+    <string name="onboarding_add_device_sees_steps">Es liest jede Datei einmal, um deine Dokumente zu finden, und zeigt, wie weit es ist, etwa „Dateien werden gelesen (12 von 340)…“. Dokumente erscheinen, sobald sie gelesen sind, mit ihren Tags und Details.</string>
+    <string name="onboarding_add_device_no_credentials">Keine Anmeldung verlässt dieses Gerät: Jedes Gerät meldet sich selbst an.</string>
+</resources>

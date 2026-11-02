@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Welcome -->
+    <string name="onboarding_welcome_title">Elk papier dat je bewaart, in seconden teruggevonden.</string>
+    <string name="onboarding_value_search">Vind alles terug: elk woord op elke pagina is doorzoekbaar.</string>
+    <string name="onboarding_value_own">Gewone pdf&apos;s die van jou zijn, in een map die je zelf kiest.</string>
+    <string name="onboarding_value_offline">Werkt offline, zonder account.</string>
+    <string name="onboarding_get_started">Aan de slag</string>
+    <string name="onboarding_already_use">Ik gebruik No Papers Needed al op een ander apparaat</string>
+
+    <!-- Where the library lives -->
+    <string name="onboarding_location_title">Waar moet je bibliotheek komen?</string>
+    <string name="onboarding_device_title">Op dit apparaat</string>
+    <string name="onboarding_device_help">Een gewone map die je in elke bestandsbeheerder kunt openen. Synchroniseren met andere apparaten kan later.</string>
+    <string name="onboarding_device_path">Je bibliotheek: %1$s</string>
+    <string name="onboarding_use_this_folder">Deze map gebruiken</string>
+    <string name="onboarding_change_folder">Wijzigen</string>
+    <string name="onboarding_choose_folder">Map kiezen</string>
+    <string name="onboarding_cloud_title">In mijn cloudopslag</string>
+    <string name="onboarding_cloud_help">Google Drive, OneDrive, Dropbox, Box, pCloud of Nextcloud. Meld je aan en kies een map; dit apparaat houdt een kopie bij, zodat het ook offline werkt.</string>
+    <string name="onboarding_choose_cloud">Cloudopslag kiezen</string>
+    <string name="onboarding_cloud_more_providers_later">Meer providers vind je in Instellingen onder Cloudsynchronisatie, zodra je bibliotheek open is.</string>
+
+    <!-- Connect to a library another device uses -->
+    <string name="onboarding_connect_title">Verbinden met je bibliotheek</string>
+    <string name="onboarding_connect_help">Je bibliotheek is een map. Kies hoe dit apparaat die bereikt; er verandert niets in tot ze open is.</string>
+    <string name="onboarding_connect_cloud_title">Uit mijn cloudopslag</string>
+    <string name="onboarding_connect_cloud_help">Meld je aan bij de cloudopslag waarmee je andere apparaat synchroniseert, en kies daar de map van de bibliotheek.</string>
+    <string name="onboarding_connect_synced_title">Een map die een synchronisatie-app bijhoudt</string>
+    <string name="onboarding_connect_synced_help">Syncthing, de Nextcloud-app of iets vergelijkbaars: laat die eerst de bibliotheekmap naar dit apparaat brengen en kies dan die map.</string>
+    <string name="onboarding_connect_synced_button">Gesynchroniseerde map kiezen</string>
+    <string name="onboarding_connect_here_title">Een map die al op dit apparaat staat</string>
+    <string name="onboarding_connect_here_help">Een bibliotheek in de opslag van dit apparaat, op een usb-stick of een geheugenkaart.</string>
+    <string name="onboarding_connect_here_button">Bibliotheekmap kiezen</string>
+    <string name="onboarding_connect_progress_note">Dit apparaat leest daarna elk bestand één keer om je documenten te vinden; je ziet hoe ver het is.</string>
+
+    <!-- Document languages (desktop) -->
+    <string name="onboarding_languages_title">In welke talen zijn je documenten?</string>
+    <string name="onboarding_languages_help">Tekstherkenning leest gescande pagina&apos;s in deze talen. Elke taal extra maakt ze iets trager; je kunt ze later wijzigen in Instellingen onder Importeren &amp; OCR.</string>
+    <string name="onboarding_languages_checking">Nagaan welke talen deze computer kan lezen…</string>
+    <string name="onboarding_languages_bundled">Alles wat deze talen nodig hebben, zit bij de app.</string>
+    <string name="onboarding_languages_missing">Nog niet geïnstalleerd: %1$s.</string>
+    <string name="onboarding_languages_no_tesseract">Tekstherkenning heeft Tesseract nodig, en dat is nog niet geïnstalleerd.</string>
+    <string name="onboarding_languages_install_with">Installeer het met:</string>
+    <string name="onboarding_languages_missing_manual">Installeer de taalgegevens van Tesseract voor %1$s met het pakketbeheer van je systeem.</string>
+    <string name="onboarding_languages_check_again">Opnieuw controleren</string>
+    <string name="onboarding_continue">Doorgaan</string>
+
+    <!-- First document -->
+    <string name="onboarding_first_document_title">Voeg je eerste document toe</string>
+    <string name="onboarding_first_document_help">Een factuur, een brief, een kassabon: alles wat je wilt terugvinden. Het komt als gewone pdf in je bibliotheek.</string>
+    <plurals name="onboarding_first_document_existing">
+        <item quantity="one">Je bibliotheek bevat al %1$d document.</item>
+        <item quantity="other">Je bibliotheek bevat al %1$d documenten.</item>
+    </plurals>
+    <string name="onboarding_first_document_scan">Document scannen</string>
+    <string name="onboarding_first_document_choose">Bestanden kiezen</string>
+    <string name="onboarding_first_document_drop">Of sleep pdf-bestanden ergens op dit venster</string>
+    <string name="onboarding_first_document_adding">Toevoegen…</string>
+    <string name="onboarding_first_document_reading">Tekst lezen…</string>
+    <string name="onboarding_first_document_reading_help">Dit duurt een paar seconden per pagina. Je kunt het document intussen openen.</string>
+    <string name="onboarding_first_document_read">De tekst is gelezen: je kunt zoeken op elk woord op de pagina&apos;s.</string>
+    <string name="onboarding_first_document_already">Dat document zat al in je bibliotheek.</string>
+    <string name="onboarding_first_document_open">Openen</string>
+    <string name="onboarding_watch_folder">Liever een map in de gaten houden</string>
+    <string name="onboarding_skip">Overslaan</string>
+    <string name="onboarding_go_to_library">Naar mijn bibliotheek</string>
+    <string name="onboarding_landed_search">Hier is je eerste document. Om het terug te vinden, zoek je in de bibliotheek op een woord van de pagina.</string>
+    <string name="onboarding_landed_reading">Hier is je eerste document. Zodra de tekst gelezen is, vind je het terug door in de bibliotheek op een woord van de pagina te zoeken.</string>
+
+    <!-- A library another device uses, coming in -->
+    <string name="onboarding_connecting_title">Je bibliotheek wordt binnengehaald</string>
+    <string name="onboarding_connecting_cloud">Uit %1$s</string>
+    <string name="onboarding_connecting_waiting">Synchronisatie voorbereiden…</string>
+    <plurals name="onboarding_connecting_count">
+        <item quantity="one">%1$d document tot nu toe</item>
+        <item quantity="other">%1$d documenten tot nu toe</item>
+    </plurals>
+    <plurals name="onboarding_connecting_done">
+        <item quantity="one">Alles is er: %1$d document.</item>
+        <item quantity="other">Alles is er: %1$d documenten.</item>
+    </plurals>
+    <string name="onboarding_connecting_empty">Nog geen documenten. Als een synchronisatie-app de map nog kopieert, verschijnen ze zodra ze aankomen.</string>
+    <string name="onboarding_connecting_background">Je kunt al beginnen: dit gaat op de achtergrond verder.</string>
+
+    <!-- Cloud setup in the app's own words -->
+    <string name="onboarding_webdav_help">Verbind met je eigen Nextcloud, ownCloud of een andere WebDAV-server.</string>
+    <string name="onboarding_webdav_kind">Server</string>
+    <string name="onboarding_webdav_nextcloud">Nextcloud</string>
+    <string name="onboarding_webdav_owncloud">ownCloud</string>
+    <string name="onboarding_webdav_other">Een andere WebDAV-server</string>
+    <string name="onboarding_webdav_address">Serveradres</string>
+    <string name="onboarding_webdav_address_help">Het adres dat je in je browser opent, zoals cloud.example.com</string>
+    <string name="onboarding_webdav_user">Gebruikersnaam</string>
+    <string name="onboarding_webdav_password">Wachtwoord</string>
+    <string name="onboarding_webdav_password_help">Met aanmelden in twee stappen maak je een app-wachtwoord aan in de beveiligingsinstellingen van je server en gebruik je dat.</string>
+
+    <!-- Add another device -->
+    <string name="onboarding_add_device">Ander apparaat toevoegen</string>
+    <string name="onboarding_add_device_help">Gebruik deze bibliotheek op een telefoon, een laptop of allebei: zo krijg je ze daar.</string>
+    <string name="onboarding_add_device_intro">Je bibliotheek is een map. Een ander apparaat kan ze gebruiken zodra die map het bereikt; elk apparaat bouwt dan uit de bestanden zijn eigen index.</string>
+    <string name="onboarding_add_device_cloud">Via je cloudmap</string>
+    <string name="onboarding_add_device_cloud_connected">Installeer No Papers Needed op het andere apparaat en kies “Ik gebruik No Papers Needed al op een ander apparaat”, dan “Uit mijn cloudopslag”. Meld je daar aan en kies %1$s.</string>
+    <string name="onboarding_add_device_cloud_first">Verbind deze bibliotheek eerst onder Cloudsynchronisatie met cloudopslag. Kies dan op het andere apparaat “Ik gebruik No Papers Needed al op een ander apparaat” en dezelfde cloudmap.</string>
+    <string name="onboarding_add_device_syncthing">Met Syncthing</string>
+    <string name="onboarding_add_device_syncthing_steps">Deel %1$s in Syncthing met het andere apparaat. Zodra de map daar is aangekomen, kies je “Ik gebruik No Papers Needed al op een ander apparaat” en dan de gesynchroniseerde map.</string>
+    <string name="onboarding_add_device_nextcloud">Met de Nextcloud-app</string>
+    <string name="onboarding_add_device_nextcloud_steps">Zet %1$s in een map die de Nextcloud-desktopapp synchroniseert, en laat die ook naar de andere computer synchroniseren; kies daar dan die map. Op een telefoon verbind je in plaats daarvan met Nextcloud als cloudopslag.</string>
+    <string name="onboarding_add_device_private">De bestanden van deze bibliotheek staan in de eigen opslag van de app, waar synchronisatie-apps niet bij kunnen: voeg apparaten toe via de cloudmap.</string>
+    <string name="onboarding_add_device_sees">Wat het andere apparaat toont</string>
+    <string name="onboarding_add_device_sees_steps">Het leest elk bestand één keer om je documenten te vinden en toont hoe ver het is, bijvoorbeeld “Bestanden lezen (12 van 340)…”. Documenten verschijnen zodra ze gelezen zijn, met hun tags en details.</string>
+    <string name="onboarding_add_device_no_credentials">Er gaat geen aanmelding van dit apparaat mee: elk apparaat meldt zich zelf aan.</string>
+</resources>

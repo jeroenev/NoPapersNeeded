@@ -159,8 +159,7 @@
     <string name="common_settings_review_workflow_failed">De beoordelingsworkflow kon niet worden gewijzigd: %1$s</string>
 
     <string name="common_settings_category_cloud">Cloudsynchronisatie</string>
-    <string name="common_settings_cloud_help">Spiegelt deze bibliotheek naar je eigen cloudopslag: pdf&apos;s, metadata en prullenbak reizen als gewone bestanden, zodat elk apparaat met dezelfde remote dezelfde bibliotheek ziet. De app bepaalt wat er verplaatst wordt, controleert elk bestand voordat het de bibliotheek binnenkomt en vervangt of verwijdert nooit iets om een conflict op te lossen.</string>
-    <string name="common_settings_cloud_engine_checking">Synchronisatie-engine wordt gecontroleerd…</string>
+    <string name="common_settings_cloud_help">Bewaart deze bibliotheek in een map van je eigen cloudopslag: pdf&apos;s, details en prullenbak reizen als gewone bestanden, zodat elk apparaat met dezelfde cloudmap dezelfde bibliotheek ziet. De app bepaalt wat er verplaatst wordt, controleert elk bestand voordat het de bibliotheek binnenkomt en vervangt of verwijdert nooit iets om een conflict op te lossen.</string>
     <string name="common_settings_cloud_engine_available">Synchronisatie-engine %1$s is klaar voor gebruik.</string>
     <string name="common_settings_cloud_engine_missing">De synchronisatie-engine is niet gevonden (gezocht naar %1$s).</string>
     <string name="common_settings_cloud_engine_failed">De synchronisatie-engine antwoordde met een fout: %1$s</string>
@@ -182,15 +181,15 @@
     <string name="common_settings_cloud_status">Status</string>
     <string name="common_settings_cloud_sync_now">Nu synchroniseren</string>
     <string name="common_settings_cloud_progress">%1$s (%2$d van %3$d)</string>
-    <string name="common_settings_cloud_phase_listing">Remote wordt uitgelezen</string>
+    <string name="common_settings_cloud_phase_listing">Cloudmap wordt doorgenomen</string>
     <string name="common_settings_cloud_phase_pull_metadata">Metadata downloaden</string>
-    <string name="common_settings_cloud_phase_resolve">Documenten op de remote identificeren</string>
+    <string name="common_settings_cloud_phase_resolve">Documenten in de cloudmap identificeren</string>
     <string name="common_settings_cloud_phase_apply_local">Deze bibliotheek bijwerken</string>
     <string name="common_settings_cloud_phase_push_documents">Documenten uploaden</string>
     <string name="common_settings_cloud_phase_push_metadata">Metadata uploaden</string>
     <string name="common_settings_cloud_phase_indexing">Indexeren</string>
     <string name="common_settings_cloud_never">Nog niet gesynchroniseerd.</string>
-    <string name="common_settings_cloud_last_summary">Laatste synchronisatie %1$s: %2$d gedownload, %3$d geüpload, %4$d verplaatst en %5$d verwijderd op de remote.</string>
+    <string name="common_settings_cloud_last_summary">Laatste synchronisatie %1$s: %2$d gedownload, %3$d geüpload, %4$d verplaatst en %5$d verwijderd in de cloudmap.</string>
     <string name="common_settings_cloud_last_failed">Laatste synchronisatie %1$s mislukt.</string>
     <plurals name="common_settings_cloud_conflict_count">
         <item quantity="one">%1$d conflict wacht op jouw beslissing:</item>
@@ -207,7 +206,7 @@
     <string name="common_settings_cloud_outcome_running">Er loopt al een synchronisatie.</string>
 
     <string name="common_settings_cloud_setup_title">Cloudopslag verbinden</string>
-    <string name="common_settings_cloud_setup_help">Kies een provider, meld je aan en kies de map waarnaar deze bibliotheek wordt gespiegeld. Je hoeft rclone niet zelf in te stellen.</string>
+    <string name="common_settings_cloud_setup_help">Kies een provider, meld je aan en kies de cloudmap waarin deze bibliotheek komt. Verder hoef je niets te installeren.</string>
     <string name="common_settings_cloud_connect">Verbinden…</string>
     <string name="common_settings_cloud_setup_loading">Providers laden…</string>
     <string name="common_settings_cloud_setup_no_providers">Er zijn geen providers beschikbaar. Controleer of de synchronisatie-engine is geïnstalleerd en probeer het opnieuw.</string>

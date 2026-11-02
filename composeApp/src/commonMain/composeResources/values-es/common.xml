@@ -39,9 +39,6 @@
     <string name="common_open_failed_unreadable">No se pudo leer la biblioteca. Los detalles técnicos indican el motivo.</string>
     <string name="common_pick_folder_again">Elegir la carpeta de nuevo</string>
 
-    <string name="common_onboarding_intro">Mantén tus PDF, etiquetas y detalles juntos en una carpeta que es tuya. Elige dónde guardar tu biblioteca para empezar.</string>
-    <string name="common_onboarding_sync">Usa una herramienta de sincronización como Syncthing para sincronizar toda la carpeta de la biblioteca y luego abre esa carpeta en cada dispositivo. La sincronización la gestiona la herramienta que elijas.</string>
-    <string name="common_choose_library_folder">Abrir una biblioteca existente</string>
 
     <string name="common_no_ai_tag_suggestions">Sin sugerencias: puede que el documento aún no tenga OCR</string>
     <string name="common_no_ai_metadata_suggestions">Sin sugerencias: puede que el documento aún no tenga OCR</string>
@@ -99,12 +96,7 @@
     <string name="common_create_new_library">Crear una biblioteca</string>
     <string name="common_new_library_folder_name">Nombre de la carpeta nueva</string>
 
-    <string name="common_onboarding_use_recommended">Usar la carpeta recomendada</string>
-    <string name="common_onboarding_recommended_help">Tu biblioteca se guardará en %1$s, donde los administradores de archivos y las herramientas de sincronización como Syncthing pueden acceder a ella.</string>
-    <string name="common_onboarding_use_cloud">Guardarla en tu nube</string>
-    <string name="common_onboarding_cloud_help">Google Drive, OneDrive, Dropbox y más. Inicia sesión y elige una carpeta: tu biblioteca será la misma en todos tus dispositivos, con una copia en este para usarla sin conexión.</string>
     <string name="common_onboarding_cloud_title">Elige tu nube</string>
-    <string name="common_onboarding_local_heading">O guárdala en una carpeta de este dispositivo</string>
     <string name="common_onboarding_cloud_connect_failed">Tu biblioteca está lista en este dispositivo, pero no se pudo conectar a tu nube: %1$s. Conéctala en Ajustes, en Sincronización en la nube.</string>
     <string name="common_storage_access_title">Permitir el acceso al almacenamiento del dispositivo</string>
     <string name="common_storage_access_help">No Papers Needed mantiene tu biblioteca como una carpeta normal en este dispositivo. Para leerla y escribir en ella, incluidos los archivos añadidos por otras aplicaciones como Syncthing, permite el acceso a todos los archivos.</string>

@@ -43,6 +43,59 @@ private const val OAUTH_USE_BROWSER = "true"
 private val AUTOMATIC_ANSWERS = mapOf("config_shared_client_id" to "true")
 
 /**
+ * rclone's WebDAV backend, Nextcloud's way in. It is the one provider the wizard asks for in its
+ * own words ([WebDav]) rather than with rclone's option names, as a Nextcloud user knows their
+ * server's address and sign-in, not its WebDAV path.
+ */
+internal const val WEBDAV_TYPE = "webdav"
+
+/**
+ * Whether the provider is set up in the user's own terms: a sign-in on its website, or the wizard's
+ * own WebDAV form. Every other provider's form shows rclone's option names, so it waits behind
+ * "more providers" in settings and is not offered on first run at all.
+ */
+internal val RcloneProvider.plainSetup: Boolean get() = (browserSignIn && !advanced) || type == WEBDAV_TYPE
+
+/** The WebDAV backend's options the wizard's own form fills in, and the servers it names. */
+internal object WebDav {
+    const val URL = "url"
+    const val VENDOR = "vendor"
+    const val USER = "user"
+    const val PASS = "pass"
+
+    const val NEXTCLOUD = "nextcloud"
+    const val OWNCLOUD = "owncloud"
+    const val OTHER = "other"
+
+    /** The server kinds the form offers, Nextcloud first. */
+    val VENDORS = listOf(NEXTCLOUD, OWNCLOUD, OTHER)
+
+    /** Where a Nextcloud or ownCloud server serves its files over WebDAV; part of every such address. */
+    private const val DAV_ROOT = "/remote.php/"
+
+    /**
+     * The form's [values] as rclone takes them: the address a Nextcloud or ownCloud user opens in a
+     * browser becomes the server's WebDAV address for that user, and an address without a scheme
+     * gets `https://`. An address that already names the WebDAV path, or any other server's, is
+     * kept as typed.
+     */
+    fun params(values: Map<String, String>): Map<String, String> {
+        val typed = values[URL]?.trim().orEmpty()
+        if (typed.isEmpty()) return values
+        val server = if ("://" in typed) typed else "https://$typed"
+        val user = values[USER]?.trim().orEmpty()
+        val url =
+            when {
+                DAV_ROOT in server -> server
+                values[VENDOR] == NEXTCLOUD && user.isNotEmpty() -> "${server.trimEnd('/')}${DAV_ROOT}dav/files/$user"
+                values[VENDOR] == OWNCLOUD -> "${server.trimEnd('/')}${DAV_ROOT}webdav"
+                else -> server
+            }
+        return values + (URL to url)
+    }
+}
+
+/**
  * Where the in-app cloud setup is. Null is idle (the pane shows its Connect prompt); every other
  * branch is the one screen the wizard renders. Values travel in the states rather than in the
  * controller so a recomposition cannot show a stale step, and every provider is handled by the same
@@ -220,7 +273,14 @@ internal class CloudSetupController(
 
     override fun chooseProvider(provider: RcloneProvider) {
         activeProvider = provider
-        val values = provider.options.associate { it.name to it.defaultValue.orEmpty() }
+        val defaults = provider.options.associate { it.name to it.defaultValue.orEmpty() }
+        // The wizard's own WebDAV form starts on the server most people have.
+        val values =
+            if (provider.type == WEBDAV_TYPE && defaults[WebDav.VENDOR].isNullOrBlank()) {
+                defaults + (WebDav.VENDOR to WebDav.NEXTCLOUD)
+            } else {
+                defaults
+            }
         if (provider.browserSignIn) {
             // Nothing to fill in: rclone only has to hear "use the browser", so go straight to the
             // sign-in screen instead of a form that would only hold OAuth-app credentials.
@@ -250,10 +310,11 @@ internal class CloudSetupController(
                 val step =
                     stepOrFailure {
                         if (question == null) {
+                            val filled = form.values.filterValues { it.isNotBlank() }
                             client.begin(
                                 name = newRemoteName(form.provider.type),
                                 type = form.provider.type,
-                                params = form.values.filterValues { it.isNotBlank() },
+                                params = if (form.provider.type == WEBDAV_TYPE) WebDav.params(filled) else filled,
                             )
                         } else {
                             client.answer(

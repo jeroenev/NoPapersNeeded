@@ -1,5 +1,6 @@
 package dev.npn.app.di
 
+import dev.npn.app.platform.OcrModels
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.SessionDeps
 import dev.npn.core.app.openSession
@@ -42,6 +43,7 @@ import kotlinx.coroutines.withContext
  *  [LibraryUnavailableException] when it can tell why the library cannot open. The environment
  *  drives them into [openSession] and closes their databases on a swap.
  * @param cloudSetup starts a setup-only engine for [newCloudSetup], when the platform has one.
+ * @param readOcrModels answers [ocrModels], where the platform can say.
  */
 class DefaultAppEnvironment(
     override val settings: SettingsRepository,
@@ -50,6 +52,7 @@ class DefaultAppEnvironment(
     /** Where [appScope]'s coroutines run. */
     appDispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val cloudSetup: (() -> CloudSetupEngine)? = null,
+    private val readOcrModels: (suspend () -> OcrModels)? = null,
     private val factory: suspend (location: String, scope: CoroutineScope) -> SessionDeps,
 ) : AppEnvironment {
     override val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + appDispatcher)
@@ -133,6 +136,8 @@ class DefaultAppEnvironment(
     )
 
     override fun newCloudSetup(): CloudSetupEngine? = cloudSetup?.invoke()
+
+    override suspend fun ocrModels(): OcrModels? = readOcrModels?.invoke()
 
     override suspend fun scanWatchedFolder(): Int {
         val location = settings.settings.first().watchedFolder ?: return 0

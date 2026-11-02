@@ -3,15 +3,27 @@ package dev.npn.app.ui.onboarding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Cloud
+import androidx.compose.material.icons.outlined.CloudOff
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.PictureAsPdf
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -21,50 +33,74 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
 import dev.npn.app.OpenFailure
 import dev.npn.app.platform.defaultLibraryLocation
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.TestTags
 import dev.npn.app.ui.common.TextInputDialog
-import dev.npn.app.ui.common.disclosure
 import dev.npn.app.ui.settings.CloudSetupActions
 import dev.npn.app.ui.settings.CloudSetupState
 import dev.npn.app.ui.settings.CloudSetupWizard
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_app_name
-import no_papers_needed.composeapp.generated.resources.common_choose_library_folder
+import no_papers_needed.composeapp.generated.resources.common_back
 import no_papers_needed.composeapp.generated.resources.common_could_not_open_library
 import no_papers_needed.composeapp.generated.resources.common_create
 import no_papers_needed.composeapp.generated.resources.common_create_new_library
 import no_papers_needed.composeapp.generated.resources.common_new_library_folder_name
-import no_papers_needed.composeapp.generated.resources.common_onboarding_cloud_help
 import no_papers_needed.composeapp.generated.resources.common_onboarding_cloud_title
-import no_papers_needed.composeapp.generated.resources.common_onboarding_intro
-import no_papers_needed.composeapp.generated.resources.common_onboarding_local_heading
-import no_papers_needed.composeapp.generated.resources.common_onboarding_recommended_help
-import no_papers_needed.composeapp.generated.resources.common_onboarding_sync
-import no_papers_needed.composeapp.generated.resources.common_onboarding_use_cloud
-import no_papers_needed.composeapp.generated.resources.common_onboarding_use_recommended
+import no_papers_needed.composeapp.generated.resources.onboarding_already_use
+import no_papers_needed.composeapp.generated.resources.onboarding_change_folder
+import no_papers_needed.composeapp.generated.resources.onboarding_choose_cloud
+import no_papers_needed.composeapp.generated.resources.onboarding_choose_folder
+import no_papers_needed.composeapp.generated.resources.onboarding_cloud_help
+import no_papers_needed.composeapp.generated.resources.onboarding_cloud_title
+import no_papers_needed.composeapp.generated.resources.onboarding_connect_cloud_help
+import no_papers_needed.composeapp.generated.resources.onboarding_connect_cloud_title
+import no_papers_needed.composeapp.generated.resources.onboarding_connect_help
+import no_papers_needed.composeapp.generated.resources.onboarding_connect_here_button
+import no_papers_needed.composeapp.generated.resources.onboarding_connect_here_help
+import no_papers_needed.composeapp.generated.resources.onboarding_connect_here_title
+import no_papers_needed.composeapp.generated.resources.onboarding_connect_progress_note
+import no_papers_needed.composeapp.generated.resources.onboarding_connect_synced_button
+import no_papers_needed.composeapp.generated.resources.onboarding_connect_synced_help
+import no_papers_needed.composeapp.generated.resources.onboarding_connect_synced_title
+import no_papers_needed.composeapp.generated.resources.onboarding_connect_title
+import no_papers_needed.composeapp.generated.resources.onboarding_device_help
+import no_papers_needed.composeapp.generated.resources.onboarding_device_path
+import no_papers_needed.composeapp.generated.resources.onboarding_device_title
+import no_papers_needed.composeapp.generated.resources.onboarding_get_started
+import no_papers_needed.composeapp.generated.resources.onboarding_location_title
+import no_papers_needed.composeapp.generated.resources.onboarding_use_this_folder
+import no_papers_needed.composeapp.generated.resources.onboarding_value_offline
+import no_papers_needed.composeapp.generated.resources.onboarding_value_own
+import no_papers_needed.composeapp.generated.resources.onboarding_value_search
+import no_papers_needed.composeapp.generated.resources.onboarding_welcome_title
 import no_papers_needed.composeapp.generated.resources.ux_library_name
-import no_papers_needed.composeapp.generated.resources.ux_sync_help
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * First-run screen: where the library lives. Where the platform can set up cloud sync
- * ([cloudSetup] non-null), the first choice is a cloud drive: the user picks a provider, signs in
- * and picks the cloud folder, in the same wizard settings uses ([cloudState] is its step, null
- * while it is closed), and the app keeps the library's working copy in a folder of its own.
+ * First run, up to an open library: a welcome with the two ways in, then where a new library lives
+ * (by intent: on this device, the default, or in a cloud drive) or how to reach one another device
+ * already uses (its cloud folder, a folder a sync app keeps up to date, or one already here). The
+ * step is saved, so a rotation or a restored process comes back to it; [onBegin] says which way the
+ * user went as they make a choice that opens a library, so first run can go on from there.
  *
- * The other choices keep the library in a folder the user picks. In direct mode (the default
- * everywhere) the folder is a plain path; Android first needs the all-files grant and proposes
- * `Documents/NoPapersNeeded`. The advanced Storage Access Framework switch is Android's escape hatch
- * for folders that have no path (cloud document providers) and is the only way to reach the SAF
- * library implementation.
+ * A folder on this device is a plain path. Android first needs the all-files grant, which the
+ * "on this device" choice asks for in place, and proposes `Documents/NoPapersNeeded` (desktop the
+ * documents folder's `NoPapersNeeded`). The advanced Storage Access Framework switch is Android's
+ * escape hatch for folders that have no path (cloud document providers).
  *
- * [failure] says why the last attempt from here did not open; the choices below it are the retry.
+ * The cloud drive choice runs the setup wizard settings uses ([cloudState] is its step, null while
+ * it is closed; [cloudSetup] null where the platform has none), offering only the providers set up
+ * in the user's own terms. [failure] says why the last attempt did not open; the choices are the retry.
  */
 @Composable
 fun OnboardingScreen(
@@ -76,77 +112,75 @@ fun OnboardingScreen(
     onUseRecommendedFolder: (location: String) -> Unit,
     cloudState: CloudSetupState?,
     cloudSetup: CloudSetupActions?,
+    onBegin: (FirstRunPath) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var showSyncHelp by rememberSaveable { mutableStateOf(false) }
+    var step by rememberSaveable(stateSaver = enumSaver()) { mutableStateOf(OnboardingStep.WELCOME) }
     // The create flow picks the PARENT folder first, then asks for the new folder's name.
     var createParent by rememberSaveable { mutableStateOf<String?>(null) }
-    val recommended = if (useSaf) null else defaultLibraryLocation()
+    NavigationBackHandler(
+        state = rememberNavigationEventState(NavigationEventInfo.None),
+        isBackEnabled = step != OnboardingStep.WELCOME && cloudState == null,
+        onBackCompleted = { step = OnboardingStep.WELCOME },
+    )
 
     CenteredPane(modifier) {
-        Text(
-            text = stringResource(Res.string.common_app_name),
-            style = MaterialTheme.typography.headlineMedium,
-            textAlign = TextAlign.Center,
-        )
         if (cloudSetup != null && cloudState != null) {
-            Text(
-                text = stringResource(Res.string.common_onboarding_cloud_title),
-                style = MaterialTheme.typography.titleMedium,
-                textAlign = TextAlign.Center,
-            )
-            CloudSetupWizard(cloudState, cloudSetup)
+            StepTitle(stringResource(Res.string.common_onboarding_cloud_title))
+            CloudSetupWizard(cloudState, cloudSetup, moreProviders = false)
             return@CenteredPane
         }
-        Text(
-            text = stringResource(Res.string.common_onboarding_intro),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        if (failure != null) {
-            Text(
-                text = stringResource(Res.string.common_could_not_open_library),
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.error,
-                textAlign = TextAlign.Center,
-            )
-            OpenFailureMessage(failure, color = MaterialTheme.colorScheme.error)
-        }
-        if (cloudSetup != null) {
-            CloudChoice(onStart = cloudSetup::start)
-            Text(
-                text = stringResource(Res.string.common_onboarding_local_heading),
-                style = MaterialTheme.typography.titleSmall,
-                textAlign = TextAlign.Center,
-            )
-        }
-        val toggleSyncHelp = { showSyncHelp = !showSyncHelp }
-        TextButton(onClick = toggleSyncHelp, modifier = Modifier.disclosure(showSyncHelp, toggleSyncHelp)) {
-            Text(stringResource(Res.string.ux_sync_help))
-        }
-        if (showSyncHelp) {
-            Text(
-                text = stringResource(Res.string.common_onboarding_sync),
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center,
-            )
-        }
-        LibraryLocationChooser(
-            useSaf = useSaf,
-            onUseSafChange = onUseSafChange,
-            onPick = onOpen,
-            onPickParent = { createParent = it },
-        ) { pickLibrary, pickParent ->
-            LibraryChoices(
-                recommended = recommended,
-                useSaf = useSaf,
-                onPickLibrary = pickLibrary,
-                onPickParent = pickParent,
-                onUseRecommendedFolder = onUseRecommendedFolder,
-                // With the cloud drive offered first, no folder choice is the filled button.
-                primary = cloudSetup == null,
-            )
+        if (failure != null) FailureNote(failure)
+        when (step) {
+            OnboardingStep.WELCOME -> {
+                WelcomeStep(
+                    onGetStarted = { step = OnboardingStep.LOCATION },
+                    onAlreadyUse = { step = OnboardingStep.CONNECT },
+                )
+            }
+
+            OnboardingStep.LOCATION -> {
+                LocationStep(
+                    useSaf = useSaf,
+                    onUseSafChange = onUseSafChange,
+                    onPickLibrary = { location ->
+                        onBegin(FirstRunPath.NEW)
+                        onOpen(location)
+                    },
+                    onPickParent = { createParent = it },
+                    onUseRecommendedFolder = { location ->
+                        onBegin(FirstRunPath.NEW)
+                        onUseRecommendedFolder(location)
+                    },
+                    onUseCloud =
+                        cloudSetup?.let { setup ->
+                            {
+                                onBegin(FirstRunPath.NEW)
+                                setup.start()
+                            }
+                        },
+                    onBack = { step = OnboardingStep.WELCOME },
+                )
+            }
+
+            OnboardingStep.CONNECT -> {
+                ConnectStep(
+                    useSaf = useSaf,
+                    onUseSafChange = onUseSafChange,
+                    onPickLibrary = { location ->
+                        onBegin(FirstRunPath.CONNECT)
+                        onOpen(location)
+                    },
+                    onUseCloud =
+                        cloudSetup?.let { setup ->
+                            {
+                                onBegin(FirstRunPath.CONNECT)
+                                setup.start()
+                            }
+                        },
+                    onBack = { step = OnboardingStep.WELCOME },
+                )
+            }
         }
     }
 
@@ -158,6 +192,7 @@ fun OnboardingScreen(
             confirmLabel = stringResource(Res.string.common_create),
             onConfirm = { name ->
                 createParent = null
+                onBegin(FirstRunPath.NEW)
                 onCreate(parent, name)
             },
             onDismiss = { createParent = null },
@@ -165,92 +200,216 @@ fun OnboardingScreen(
     }
 }
 
-/** The cloud drive choice: the filled button that starts the setup wizard, and what it means. */
+/** What the app is for, in three lines, and the two ways in. */
 @Composable
-private fun CloudChoice(
-    onStart: () -> Unit,
-    modifier: Modifier = Modifier,
+private fun ColumnScope.WelcomeStep(
+    onGetStarted: () -> Unit,
+    onAlreadyUse: () -> Unit,
 ) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Button(onClick = onStart, modifier = Modifier.testTag(TestTags.USE_CLOUD_DRIVE)) {
-            Text(stringResource(Res.string.common_onboarding_use_cloud))
-        }
-        HelpText(
-            text = stringResource(Res.string.common_onboarding_cloud_help),
-            textAlign = TextAlign.Center,
-        )
+    Text(
+        text = stringResource(Res.string.common_app_name),
+        style = MaterialTheme.typography.headlineMedium,
+        textAlign = TextAlign.Center,
+    )
+    Text(
+        text = stringResource(Res.string.onboarding_welcome_title),
+        style = MaterialTheme.typography.titleMedium,
+        textAlign = TextAlign.Center,
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        ValueLine(Icons.Outlined.Search, stringResource(Res.string.onboarding_value_search))
+        ValueLine(Icons.Outlined.PictureAsPdf, stringResource(Res.string.onboarding_value_own))
+        ValueLine(Icons.Outlined.CloudOff, stringResource(Res.string.onboarding_value_offline))
+    }
+    Button(onClick = onGetStarted, modifier = Modifier.testTag(TestTags.GET_STARTED)) {
+        Text(stringResource(Res.string.onboarding_get_started))
+    }
+    TextButton(onClick = onAlreadyUse, modifier = Modifier.testTag(TestTags.ALREADY_USE)) {
+        Text(stringResource(Res.string.onboarding_already_use), textAlign = TextAlign.Center)
+    }
+}
+
+@Composable
+private fun ValueLine(
+    icon: ImageVector,
+    text: String,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+        Text(text, style = MaterialTheme.typography.bodyLarge)
     }
 }
 
 /**
- * The ways to a library in a folder: the platform's recommended folder when it has one, a new
- * folder, or an existing one. When [primary], the first choice on offer is the filled button.
+ * Where a new library lives, by intent: on this device (the default, one tap, with the folder shown
+ * and a way to change it, and Android's all-files grant asked for right there), or in a cloud drive
+ * ([onUseCloud], null where the platform has no cloud setup).
  */
 @Composable
-private fun LibraryChoices(
-    recommended: String?,
+private fun ColumnScope.LocationStep(
     useSaf: Boolean,
-    onPickLibrary: () -> Unit,
-    onPickParent: () -> Unit,
+    onUseSafChange: (Boolean) -> Unit,
+    onPickLibrary: (location: String) -> Unit,
+    onPickParent: (location: String) -> Unit,
     onUseRecommendedFolder: (location: String) -> Unit,
-    primary: Boolean,
-    modifier: Modifier = Modifier,
+    onUseCloud: (() -> Unit)?,
+    onBack: () -> Unit,
 ) {
-    // Both platforms create a folder inside a direct parent; a SAF parent cannot take one.
-    val canCreate = !useSaf
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        if (recommended != null) {
-            ChoiceButton(
-                filled = primary,
-                onClick = { onUseRecommendedFolder(recommended) },
-                modifier = Modifier.testTag(TestTags.USE_RECOMMENDED_FOLDER),
+    // A SAF folder has no path to propose, and cannot have a folder made in it.
+    val recommended = if (useSaf) null else defaultLibraryLocation()
+    StepTitle(stringResource(Res.string.onboarding_location_title))
+    LibraryLocationChooser(
+        useSaf = useSaf,
+        onUseSafChange = onUseSafChange,
+        onPick = onPickLibrary,
+        onPickParent = onPickParent,
+        grantInChoices = true,
+    ) { pickers ->
+        ChoiceCard(
+            icon = Icons.Outlined.Folder,
+            title = stringResource(Res.string.onboarding_device_title),
+            help = stringResource(Res.string.onboarding_device_help),
+        ) {
+            when {
+                recommended == null -> {
+                    Button(onClick = pickers.pickLibrary) { Text(stringResource(Res.string.onboarding_choose_folder)) }
+                }
+
+                !pickers.storage.usable -> {
+                    StorageAccessStep(pickers.storage, showTitle = false)
+                }
+
+                else -> {
+                    HelpText(stringResource(Res.string.onboarding_device_path, recommended))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Button(
+                            onClick = { onUseRecommendedFolder(recommended) },
+                            modifier = Modifier.testTag(TestTags.USE_RECOMMENDED_FOLDER),
+                        ) {
+                            Text(stringResource(Res.string.onboarding_use_this_folder))
+                        }
+                        TextButton(onClick = pickers.pickParent) {
+                            Text(stringResource(Res.string.onboarding_change_folder))
+                        }
+                    }
+                }
+            }
+        }
+        if (onUseCloud != null) {
+            ChoiceCard(
+                icon = Icons.Outlined.Cloud,
+                title = stringResource(Res.string.onboarding_cloud_title),
+                help = stringResource(Res.string.onboarding_cloud_help),
             ) {
-                Text(stringResource(Res.string.common_onboarding_use_recommended))
+                OutlinedButton(onClick = onUseCloud, modifier = Modifier.testTag(TestTags.USE_CLOUD_DRIVE)) {
+                    Text(stringResource(Res.string.onboarding_choose_cloud))
+                }
             }
-            HelpText(
-                text = stringResource(Res.string.common_onboarding_recommended_help, recommended),
-                textAlign = TextAlign.Center,
+        }
+    }
+    TextButton(onClick = onBack) { Text(stringResource(Res.string.common_back)) }
+}
+
+/**
+ * Reach a library another device already uses: through its cloud folder ([onUseCloud], null where
+ * the platform has no cloud setup), a folder a sync app keeps up to date, or a folder already here.
+ * Both folder choices pick the library's folder; they differ in what the user has to do first.
+ */
+@Composable
+private fun ColumnScope.ConnectStep(
+    useSaf: Boolean,
+    onUseSafChange: (Boolean) -> Unit,
+    onPickLibrary: (location: String) -> Unit,
+    onUseCloud: (() -> Unit)?,
+    onBack: () -> Unit,
+) {
+    StepTitle(stringResource(Res.string.onboarding_connect_title))
+    HelpText(stringResource(Res.string.onboarding_connect_help), textAlign = TextAlign.Center)
+    if (onUseCloud != null) {
+        ChoiceCard(
+            icon = Icons.Outlined.Cloud,
+            title = stringResource(Res.string.onboarding_connect_cloud_title),
+            help = stringResource(Res.string.onboarding_connect_cloud_help),
+        ) {
+            OutlinedButton(onClick = onUseCloud) { Text(stringResource(Res.string.onboarding_choose_cloud)) }
+        }
+    }
+    LibraryLocationChooser(useSaf = useSaf, onUseSafChange = onUseSafChange, onPick = onPickLibrary) { pickers ->
+        ChoiceCard(
+            icon = Icons.Outlined.Sync,
+            title = stringResource(Res.string.onboarding_connect_synced_title),
+            help = stringResource(Res.string.onboarding_connect_synced_help),
+        ) {
+            OutlinedButton(onClick = pickers.pickLibrary) {
+                Text(stringResource(Res.string.onboarding_connect_synced_button))
+            }
+        }
+        ChoiceCard(
+            icon = Icons.Outlined.FolderOpen,
+            title = stringResource(Res.string.onboarding_connect_here_title),
+            help = stringResource(Res.string.onboarding_connect_here_help),
+        ) {
+            OutlinedButton(onClick = pickers.pickLibrary) {
+                Text(stringResource(Res.string.onboarding_connect_here_button))
+            }
+        }
+    }
+    HelpText(stringResource(Res.string.onboarding_connect_progress_note), textAlign = TextAlign.Center)
+    TextButton(onClick = onBack) { Text(stringResource(Res.string.common_back)) }
+}
+
+/** Why the last choice did not open a library, above the choices that retry it. */
+@Composable
+private fun ColumnScope.FailureNote(failure: OpenFailure) {
+    Text(
+        text = stringResource(Res.string.common_could_not_open_library),
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.error,
+        textAlign = TextAlign.Center,
+    )
+    OpenFailureMessage(failure, color = MaterialTheme.colorScheme.error)
+}
+
+/** The title of an onboarding or first-run step. */
+@Composable
+internal fun StepTitle(text: String) {
+    Text(text = text, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
+}
+
+/** One of a step's choices: what it is ([title], [help]), and its [actions]. */
+@Composable
+internal fun ChoiceCard(
+    icon: ImageVector,
+    title: String,
+    help: String,
+    modifier: Modifier = Modifier,
+    actions: @Composable ColumnScope.() -> Unit,
+) {
+    OutlinedCard(modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth().padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                modifier = Modifier.size(ChoiceIconSize),
+                tint = MaterialTheme.colorScheme.primary,
             )
-        }
-        if (canCreate && recommended == null) {
-            ChoiceButton(filled = primary, onClick = onPickParent) {
-                Text(stringResource(Res.string.common_create_new_library))
-            }
-        }
-        val firstChoice = recommended == null && !canCreate
-        ChoiceButton(filled = primary && firstChoice, onClick = onPickLibrary) {
-            Text(stringResource(Res.string.common_choose_library_folder))
-        }
-        if (canCreate && recommended != null) {
-            TextButton(onClick = onPickParent) {
-                Text(stringResource(Res.string.common_create_new_library))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                HelpText(help)
+                actions()
             }
         }
     }
 }
 
-/** A filled button for the screen's first choice, an outlined one for the others. */
-@Composable
-private fun ChoiceButton(
-    filled: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    content: @Composable RowScope.() -> Unit,
-) {
-    if (filled) {
-        Button(onClick = onClick, modifier = modifier, content = content)
-    } else {
-        OutlinedButton(onClick = onClick, modifier = modifier, content = content)
-    }
-}
+private val ChoiceIconSize = 28.dp
 
 /**
  * The library-location screens' frame: their content centred in a column of readable width, the

@@ -9,6 +9,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,13 +46,15 @@ import org.jetbrains.compose.resources.stringResource
  * Access Framework switch, and why a picked folder was not taken: it is not on the device, or
  * Android would not let the app keep its access to it.
  *
- * [choices] lays out the screen's own buttons, given the two pickers to launch: an existing library
- * folder, in the mode the switch selects ([onPick]), and the folder to create a new library in,
- * always on device storage ([onPickParent]).
+ * [choices] lays out the screen's own buttons, given the pickers to launch ([LibraryPickers]): an
+ * existing library folder, in the mode the switch selects ([onPick]), and the folder to create a new
+ * library in, always on device storage ([onPickParent]).
  *
  * In direct mode the grant step stands in for [choices] until the grant is in place: picking a
  * folder the app then cannot read would only fail again. [requireStorageAccess] asks for the grant
- * in either mode, for a saved library on device storage that lost it.
+ * in either mode, for a saved library on device storage that lost it. With [grantInChoices] the
+ * choices are always shown and ask for the grant themselves, beside the choice that needs it
+ * ([LibraryPickers.storage]).
  */
 @Composable
 internal fun LibraryLocationChooser(
@@ -61,7 +64,8 @@ internal fun LibraryLocationChooser(
     modifier: Modifier = Modifier,
     onPickParent: (location: String) -> Unit = {},
     requireStorageAccess: Boolean = false,
-    choices: @Composable (pickLibrary: () -> Unit, pickParent: () -> Unit) -> Unit,
+    grantInChoices: Boolean = false,
+    choices: @Composable (LibraryPickers) -> Unit,
 ) {
     val storage = rememberStorageAccess()
     // Why the last folder picked was not taken, until another one is.
@@ -92,12 +96,13 @@ internal fun LibraryLocationChooser(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        if (!storage.usable && (!useSaf || requireStorageAccess)) {
+        val needsGrant = !storage.usable && (!useSaf || requireStorageAccess)
+        if (needsGrant && !grantInChoices) {
             StorageAccessStep(storage)
         }
         // A folder picked through the Storage Access Framework needs no grant.
-        if (storage.usable || useSaf) {
-            choices(pickLibrary, pickParent)
+        if (storage.usable || useSaf || grantInChoices) {
+            choices(LibraryPickers(pickLibrary, pickParent, storage))
         }
         refusal?.let { reason ->
             Text(
@@ -124,22 +129,40 @@ internal fun LibraryLocationChooser(
     }
 }
 
-/** Android's all-files grant, which the direct mode cannot do without (see [StorageAccessState]). */
+/**
+ * What a [LibraryLocationChooser]'s choices launch: the picker of an existing library folder
+ * ([pickLibrary]), the picker of the folder to make a new one in ([pickParent]), and Android's
+ * all-files grant ([storage]), for choices that ask for it themselves.
+ */
+@Stable
+internal class LibraryPickers(
+    val pickLibrary: () -> Unit,
+    val pickParent: () -> Unit,
+    val storage: StorageAccessState,
+)
+
+/**
+ * Android's all-files grant, which the direct mode cannot do without (see [StorageAccessState]),
+ * under its own title unless [showTitle] is off (a choice that asks for it under its own).
+ */
 @Composable
-private fun StorageAccessStep(
+internal fun StorageAccessStep(
     storage: StorageAccessState,
     modifier: Modifier = Modifier,
+    showTitle: Boolean = true,
 ) {
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text(
-            text = stringResource(Res.string.common_storage_access_title),
-            style = MaterialTheme.typography.titleMedium,
-            textAlign = TextAlign.Center,
-        )
+        if (showTitle) {
+            Text(
+                text = stringResource(Res.string.common_storage_access_title),
+                style = MaterialTheme.typography.titleMedium,
+                textAlign = TextAlign.Center,
+            )
+        }
         Text(
             text = stringResource(Res.string.common_storage_access_help),
             style = MaterialTheme.typography.bodyMedium,
