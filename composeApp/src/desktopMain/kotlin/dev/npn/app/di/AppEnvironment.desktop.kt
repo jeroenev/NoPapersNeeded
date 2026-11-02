@@ -1,11 +1,13 @@
 package dev.npn.app.di
 
 import dev.npn.core.app.DesktopLog
+import dev.npn.core.app.desktopRclone
 import dev.npn.core.app.jvmSessionDeps
 import dev.npn.core.ocr.TesseractCliEngine
 import dev.npn.core.settings.AppDirs
 import dev.npn.core.settings.SessionSettings
 import dev.npn.core.settings.SettingsRepositoryImpl
+import dev.npn.core.sync.RcloneTransport
 import dev.npn.core.watch.JvmWatchedFolder
 import kotlinx.coroutines.flow.first
 import java.io.File
@@ -24,6 +26,7 @@ fun createAppEnvironment(): AppEnvironment {
         settings,
         watchedFolder = { location -> JvmWatchedFolder(Path.of(location)) },
         log = DesktopLog,
+        cloudSetup = { RcloneTransport(desktopRclone()).let { CloudSetupEngine(it.setup, it::close) } },
     ) { location, scope ->
         val root = Path.of(location)
         if (!Files.isDirectory(root)) throw LibraryUnavailableException.folderMissing(location)

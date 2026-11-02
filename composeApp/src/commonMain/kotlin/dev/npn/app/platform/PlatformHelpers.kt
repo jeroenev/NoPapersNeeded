@@ -88,6 +88,20 @@ expect fun ocrHasLanguageSetting(): Boolean
 expect fun defaultLibraryLocation(): String?
 
 /**
+ * Where the app keeps the local working copy of a library the user keeps in a cloud drive: a
+ * folder of the app's own that the user never has to choose, needs no storage grant, and is left
+ * out of the platform's backups (the cloud holds the library). Android: the app's no-backup files;
+ * desktop: the app's data directory.
+ */
+expect fun cloudLibrariesDir(): String
+
+/**
+ * Whether [location] is in the app's own storage ([cloudLibrariesDir]), where no storage grant
+ * applies.
+ */
+expect fun isAppPrivateLocation(location: String): Boolean
+
+/**
  * Whether the platform offers a native share sheet. Platforms that do (Android) show a Share
  * action that hands the file to the OS share menu; platforms that don't (desktop) show an
  * Export action that saves the file via a file dialog instead.

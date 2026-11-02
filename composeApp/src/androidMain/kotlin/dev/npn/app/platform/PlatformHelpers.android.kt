@@ -26,6 +26,9 @@ import kotlin.time.Duration.Companion.days
 /** Folder name of the recommended library under shared storage's `Documents/`. */
 private const val DEFAULT_LIBRARY_DIR = "NoPapersNeeded"
 
+/** The folder under the app's no-backup files that holds the cloud libraries' working copies. */
+private const val CLOUD_LIBRARIES_DIR = "cloud-libraries"
+
 /** The release build's applicationId; other builds append a suffix (see androidApp/build.gradle.kts). */
 private const val RELEASE_PACKAGE = "dev.npn"
 
@@ -119,6 +122,22 @@ actual fun defaultLibraryLocation(): String? {
             .removePrefix(".")
     val name = if (suffix.isEmpty()) DEFAULT_LIBRARY_DIR else "$DEFAULT_LIBRARY_DIR-$suffix"
     return File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), name).absolutePath
+}
+
+actual fun cloudLibrariesDir(): String = File(FileKit.context.noBackupFilesDir, CLOUD_LIBRARIES_DIR).absolutePath
+
+actual fun isAppPrivateLocation(location: String): Boolean {
+    if (LibraryLocations.isContentUri(location)) return false
+    val own =
+        FileKit.context.noBackupFilesDir
+            .toPath()
+            .toAbsolutePath()
+            .normalize()
+    return File(location)
+        .toPath()
+        .toAbsolutePath()
+        .normalize()
+        .startsWith(own)
 }
 
 actual fun supportsSharing(): Boolean = true

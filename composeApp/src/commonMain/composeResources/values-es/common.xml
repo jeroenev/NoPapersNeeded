@@ -101,6 +101,11 @@
 
     <string name="common_onboarding_use_recommended">Usar la carpeta recomendada</string>
     <string name="common_onboarding_recommended_help">Tu biblioteca se guardará en %1$s, donde los administradores de archivos y las herramientas de sincronización como Syncthing pueden acceder a ella.</string>
+    <string name="common_onboarding_use_cloud">Guardarla en tu nube</string>
+    <string name="common_onboarding_cloud_help">Google Drive, OneDrive, Dropbox y más. Inicia sesión y elige una carpeta: tu biblioteca será la misma en todos tus dispositivos, con una copia en este para usarla sin conexión.</string>
+    <string name="common_onboarding_cloud_title">Elige tu nube</string>
+    <string name="common_onboarding_local_heading">O guárdala en una carpeta de este dispositivo</string>
+    <string name="common_onboarding_cloud_connect_failed">Tu biblioteca está lista en este dispositivo, pero no se pudo conectar a tu nube: %1$s. Conéctala en Ajustes, en Sincronización en la nube.</string>
     <string name="common_storage_access_title">Permitir el acceso al almacenamiento del dispositivo</string>
     <string name="common_storage_access_help">No Papers Needed mantiene tu biblioteca como una carpeta normal en este dispositivo. Para leerla y escribir en ella, incluidos los archivos añadidos por otras aplicaciones como Syncthing, permite el acceso a todos los archivos.</string>
     <string name="common_storage_access_grant">Permitir acceso</string>

@@ -229,6 +229,7 @@ private fun AppRoot(
                     }
 
                     is AppState.NoLibrary -> {
+                        val cloudState by vm.cloudSetupState.collectAsStateWithLifecycle()
                         OnboardingScreen(
                             failure = current.failure,
                             useSaf = useSaf,
@@ -236,6 +237,8 @@ private fun AppRoot(
                             onOpen = vm::open,
                             onCreate = vm::createLibrary,
                             onUseRecommendedFolder = vm::useRecommended,
+                            cloudState = cloudState,
+                            cloudSetup = vm.cloudSetup.takeIf { vm.cloudAvailable },
                         )
                     }
 

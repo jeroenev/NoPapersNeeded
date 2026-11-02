@@ -102,6 +102,11 @@
     <!-- Library storage: direct device-storage folders, the Android all-files grant, and the SAF escape hatch -->
     <string name="common_onboarding_use_recommended">Aanbevolen map gebruiken</string>
     <string name="common_onboarding_recommended_help">Je bibliotheek wordt opgeslagen in %1$s, waar bestandsbeheerders en synchronisatieprogramma's zoals Syncthing erbij kunnen.</string>
+    <string name="common_onboarding_use_cloud">Bewaar ze in je cloudopslag</string>
+    <string name="common_onboarding_cloud_help">Google Drive, OneDrive, Dropbox en meer. Meld je aan en kies een map: je bibliotheek is op elk apparaat dezelfde, met een kopie op dit apparaat om offline te gebruiken.</string>
+    <string name="common_onboarding_cloud_title">Kies je cloudopslag</string>
+    <string name="common_onboarding_local_heading">Of bewaar ze in een map op dit apparaat</string>
+    <string name="common_onboarding_cloud_connect_failed">Je bibliotheek staat klaar op dit apparaat, maar kon niet met je cloudopslag verbonden worden: %1$s. Verbind ze in Instellingen onder Cloudsynchronisatie.</string>
     <string name="common_storage_access_title">Toegang tot de opslag van dit apparaat toestaan</string>
     <string name="common_storage_access_help">No Papers Needed bewaart je bibliotheek als een gewone map op dit apparaat. Om die te lezen en te schrijven, inclusief bestanden die andere apps zoals Syncthing toevoegen, is toegang tot alle bestanden nodig.</string>
     <string name="common_storage_access_grant">Toegang toestaan</string>

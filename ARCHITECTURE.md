@@ -314,6 +314,13 @@ metadata last, so a replica that sees this device's journal event finds the remo
 with it already in place. The remote and schedule are the library's own on this device
 (`CloudSyncConfig` in its `device.db`, through `SyncFacade.configure`), never device-wide.
 
+A library can also start in the cloud: onboarding runs the same setup wizard on a setup-only engine
+(`AppEnvironment.newCloudSetup`, sharing the device's rclone config), then `AppViewModel` makes the
+library's local working copy in a folder of the app's own (`cloudLibrariesDir`: Android's no-backup
+files, which need no storage grant; desktop's app data directory), named after the remote, opens it,
+connects it with automatic sync on, and runs the first pass. The folder is still the source of
+truth; the user just never picks it.
+
 - Before anything transfers, a library with documents of its own refuses a folder holding no
   library but other files (`NOT_A_LIBRARY`: a drive's root, someone's Documents) or another library,
   whose journal shares no object with this one's (`OTHER_LIBRARY`): the two would merge for good.

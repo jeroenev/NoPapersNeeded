@@ -2,6 +2,7 @@ package dev.npn.app.di
 
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.settings.SettingsRepository
+import dev.npn.core.sync.CloudSetup
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.StateFlow
 
@@ -46,4 +47,20 @@ interface AppEnvironment {
      * Returns the number of newly imported documents.
      */
     suspend fun scanWatchedFolder(): Int
+
+    /**
+     * A cloud setup engine of its own, for choosing a cloud library before any library is open
+     * (onboarding), or null where the platform wired none. It shares the device's rclone
+     * configuration with every session's engine, so the remote it creates is there for the library
+     * that opens next; the caller closes it before that library's engine starts.
+     */
+    fun newCloudSetup(): CloudSetupEngine? = null
+}
+
+/** A [setup] engine that runs until [close]; see [AppEnvironment.newCloudSetup]. */
+class CloudSetupEngine(
+    val setup: CloudSetup,
+    private val onClose: () -> Unit,
+) : AutoCloseable {
+    override fun close() = onClose()
 }

@@ -70,9 +70,10 @@ fun androidSessionDeps(
 /**
  * The bundled rclone, with its config file in the app's private no-backup files (it holds the
  * remotes' sign-in tokens, which Auto Backup must not copy to the cloud or to another phone) and its
- * cache in the app's cache, both made up front so rclone never has to make them.
+ * cache in the app's cache, both made up front so rclone never has to make them. Every library's
+ * engine and the onboarding's setup engine share it.
  */
-private fun androidRclone(context: Context): RcloneLaunch =
+fun androidRclone(context: Context): RcloneLaunch =
     RcloneLaunch(
         binary = bundledRclone(context) ?: "rclone",
         configPath = File(context.noBackupFilesDir, "rclone/rclone.conf").apply { parentFile?.mkdirs() }.path,

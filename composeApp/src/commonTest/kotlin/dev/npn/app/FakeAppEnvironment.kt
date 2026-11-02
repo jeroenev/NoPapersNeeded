@@ -1,6 +1,7 @@
 package dev.npn.app
 
 import dev.npn.app.di.AppEnvironment
+import dev.npn.app.di.CloudSetupEngine
 import dev.npn.core.app.LibrarySession
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -16,6 +17,8 @@ import kotlinx.coroutines.flow.first
 class FakeAppEnvironment(
     override val appScope: CoroutineScope,
     savedLocation: String? = null,
+    /** What [newCloudSetup] hands out; null is a platform without one. */
+    private val cloudSetup: FakeCloudSetup? = null,
 ) : AppEnvironment {
     override val settings = FakeSettingsRepository()
     override val session = MutableStateFlow<LibrarySession?>(null)
@@ -65,4 +68,14 @@ class FakeAppEnvironment(
     }
 
     override suspend fun scanWatchedFolder(): Int = 0
+
+    /** How many setup engines were handed out, and how many of them were closed. */
+    var cloudEnginesStarted = 0
+    var cloudEnginesClosed = 0
+
+    override fun newCloudSetup(): CloudSetupEngine? =
+        cloudSetup?.let { setup ->
+            cloudEnginesStarted++
+            CloudSetupEngine(setup) { cloudEnginesClosed++ }
+        }
 }

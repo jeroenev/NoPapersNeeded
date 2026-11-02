@@ -2,8 +2,10 @@ package dev.npn.app
 
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.di.AppEnvironment
+import dev.npn.app.di.CloudSetupEngine
 import dev.npn.app.di.LibraryUnavailableException
 import dev.npn.app.di.OpenFailureReason
+import dev.npn.app.platform.cloudLibrariesDir
 import dev.npn.app.platform.createLibraryFolder
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.WhileSubscribedTimeout
@@ -12,6 +14,10 @@ import dev.npn.app.ui.common.clearThumbCache
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.nav.QueueStatus
 import dev.npn.app.ui.nav.queueStatus
+import dev.npn.app.ui.settings.CloudSetupActions
+import dev.npn.app.ui.settings.CloudSetupController
+import dev.npn.app.ui.settings.CloudSetupState
+import dev.npn.app.ui.settings.newCloudRemoteName
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.RebuildOutcome
 import dev.npn.core.app.importAll
@@ -20,6 +26,7 @@ import dev.npn.core.fs.VerifiedPublicationUnavailableException
 import dev.npn.core.index.MetadataWriteBlocked
 import dev.npn.core.index.WriteBlock
 import dev.npn.core.settings.aiConfigured
+import dev.npn.core.sync.CloudSetup
 import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.CoroutineDispatcher
@@ -39,6 +46,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_onboarding_cloud_connect_failed
 import no_papers_needed.composeapp.generated.resources.common_save_setting_failed
 import no_papers_needed.composeapp.generated.resources.library_drop_needs_library
 import no_papers_needed.composeapp.generated.resources.library_import_failed
@@ -84,12 +92,19 @@ sealed interface AppState {
  *
  * Folder work for a new library runs on [io]; [createFolder] is the platform's
  * [createLibraryFolder].
+ *
+ * A library kept in a cloud drive is chosen through the same setup wizard as cloud sync in settings
+ * ([cloudSetup]), run on a setup engine of its own since no library is open yet. Its local working
+ * copy is a folder the app makes under [cloudLibraries], named after the remote, so the user never
+ * picks one.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppViewModel(
     private val env: AppEnvironment,
     private val io: CoroutineDispatcher = Dispatchers.IO,
     private val createFolder: suspend (parent: String, name: String) -> String? = ::createLibraryFolder,
+    private val cloudLibraries: () -> String = ::cloudLibrariesDir,
+    newRemoteName: (type: String) -> String = ::newCloudRemoteName,
 ) : MessagesViewModel() {
     /** Where the shell stands, apart from what [env] says about the session. */
     private sealed interface Phase {
@@ -165,6 +180,39 @@ class AppViewModel(
                     ?.writeBlock
                     ?.value,
             )
+
+    /** The onboarding's setup engine, started on first use and closed once a cloud library opens. */
+    private var cloudEngine: CloudSetupEngine? = null
+
+    private fun cloudEngine(): CloudSetup? = (cloudEngine ?: env.newCloudSetup()?.also { cloudEngine = it })?.setup
+
+    private fun closeCloudEngine() {
+        cloudEngine?.close()
+        cloudEngine = null
+    }
+
+    /**
+     * The onboarding's cloud setup: the provider, its sign-in and the cloud folder. Choosing the
+     * folder opens the library ([openCloudLibrary]).
+     */
+    private val cloud =
+        CloudSetupController(
+            scope = viewModelScope,
+            setup = ::cloudEngine,
+            readRemote = { null },
+            persistRemote = ::openCloudLibrary,
+            // Nothing is connected before the library opens, so there is nothing to disconnect.
+            disconnectRemote = {},
+            newRemoteName = newRemoteName,
+        )
+
+    /** Whether this platform can set up a cloud library at all. */
+    val cloudAvailable: Boolean get() = cloud.available
+
+    /** The onboarding's cloud setup step, null while it is closed. */
+    val cloudSetupState: StateFlow<CloudSetupState?> get() = cloud.state
+
+    val cloudSetup: CloudSetupActions get() = cloud
 
     init {
         restore()
@@ -252,6 +300,51 @@ class AppViewModel(
     /** Create (or reuse) the platform's recommended library folder at [location], then open it. */
     fun useRecommended(location: String) =
         createLibrary(location.substringBeforeLast('/'), location.substringAfterLast('/'))
+
+    /**
+     * Open a library kept in the cloud folder [remote] (`name:path`, as the wizard chose it): make its
+     * working copy on this device, open that, and connect it to [remote] with automatic sync on,
+     * starting the first pass at once, which brings in what the cloud folder already holds. A library
+     * that does not open forgets the remote's sign-in, as backing out of the wizard does.
+     */
+    private fun openCloudLibrary(remote: String) {
+        val remoteName = remote.substringBefore(':')
+        viewModelScope.launch {
+            val created = runCatchingCancellable { withContext(io) { createFolder(cloudLibraries(), remoteName) } }
+            val location = created.getOrNull()
+            if (location == null) {
+                forgetCloudRemote(remoteName)
+                phase.value =
+                    Phase.Ready(OpenFailure(OpenFailureReason.FOLDER_NOT_CREATED, created.exceptionOrNull()?.reason()))
+                return@launch
+            }
+            val opened = runCatchingCancellable { env.openLibrary(location) }
+            opened.exceptionOrNull()?.let { failure ->
+                forgetCloudRemote(remoteName)
+                phase.value = Phase.Ready(failure.toOpenFailure())
+                return@launch
+            }
+            // The library's own engine takes over from here, over the same configuration.
+            closeCloudEngine()
+            phase.value = Phase.Ready()
+            val session = env.session.value ?: return@launch
+            val connected =
+                reporting(Res.string.common_onboarding_cloud_connect_failed) {
+                    session.sync.configure { it.copy(remote = remote, enabled = true) }
+                }
+            // How the pass went shows where every pass's does: the status and the failure banner.
+            if (connected) runCatchingCancellable { session.sync.syncNow() }
+        }
+    }
+
+    private suspend fun forgetCloudRemote(name: String) {
+        runCatchingCancellable { cloudEngine()?.deleteRemote(name) }
+    }
+
+    override fun onCleared() {
+        closeCloudEngine()
+        super.onCleared()
+    }
 
     fun setUseSafStorage(enabled: Boolean) =
         launchReporting(Res.string.common_save_setting_failed) {

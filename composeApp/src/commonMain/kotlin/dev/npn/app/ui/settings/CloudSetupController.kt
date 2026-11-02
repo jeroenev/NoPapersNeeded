@@ -16,6 +16,16 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlin.uuid.Uuid
+
+/** Hex digits after the provider type in a remote the setup wizard names, e.g. `drive-3fa9c1`. */
+private const val REMOTE_SUFFIX = 6
+
+/**
+ * The name the setup wizard gives a remote it creates for a provider [type]: unique per setup, so
+ * connecting a second account (or a second library) never overwrites the first one's sign-in.
+ */
+internal fun newCloudRemoteName(type: String): String = "$type-${Uuid.random().toHexString().take(REMOTE_SUFFIX)}"
 
 /** How long the sign-in status is polled while the (blocking) answer is in flight. */
 private const val OAUTH_POLL_MS = 1_000L
@@ -126,7 +136,10 @@ interface CloudSetupActions {
     /** Submit the open form, or answer the question rclone last asked. */
     fun submit()
 
-    /** Back out of the wizard, abandoning any browser sign-in it had started. */
+    /**
+     * Back out of the wizard, abandoning any browser sign-in it had started, and forgetting a remote
+     * it signed in to whose folder was never chosen.
+     */
     fun cancel()
 
     /** Descend into [name] beneath the folder being browsed. */
@@ -180,6 +193,12 @@ internal class CloudSetupController(
 
     /** The provider the conversation is with; rclone tracks its own state, the pane needs the row. */
     private var activeProvider: RcloneProvider? = null
+
+    /**
+     * The remote this run of the wizard created, until its folder is chosen: backing out before
+     * then forgets it, so its sign-in does not linger in the engine's configuration.
+     */
+    private var createdRemote: String? = null
 
     private var wizardJob: Job? = null
     private var folderJob: Job? = null
@@ -275,10 +294,16 @@ internal class CloudSetupController(
         folderJob?.cancel()
         folderJob = null
         val wasSigningIn = _state.value is CloudSetupState.SigningIn
+        val abandoned = createdRemote
+        createdRemote = null
         _state.value = null
-        if (wasSigningIn) {
+        if (wasSigningIn || abandoned != null) {
             // Backing out is best-effort: the engine may already have finished sign-in.
-            scope.launch { runCatchingCancellable { setup()?.stopOauth() } }
+            scope.launch {
+                val client = setup() ?: return@launch
+                if (wasSigningIn) runCatchingCancellable { client.stopOauth() }
+                if (abandoned != null) runCatchingCancellable { client.deleteRemote(abandoned) }
+            }
         }
     }
 
@@ -328,6 +353,7 @@ internal class CloudSetupController(
                         if (contents == FolderContents.OTHER_FILES) {
                             _state.value = folders.copy(problem = FolderProblem.OTHER_FILES)
                         } else {
+                            createdRemote = null
                             persistRemote(folders.remote + folders.path)
                             _state.value = null
                         }
@@ -387,6 +413,7 @@ internal class CloudSetupController(
             }
 
             is SetupStep.Done -> {
+                createdRemote = step.remoteName
                 openRoot(step.remoteName)
             }
 

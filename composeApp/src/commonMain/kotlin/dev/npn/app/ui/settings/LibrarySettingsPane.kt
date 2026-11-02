@@ -5,6 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import dev.npn.app.platform.isAppPrivateLocation
 import dev.npn.app.platform.supportsSafStorage
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.SettingsSection
@@ -56,6 +57,9 @@ internal fun LibrarySettingsPane(
 ) {
     val location = state.settings.snapshot.libraryLocation
     val safLibrary = location != null && LibraryLocations.isContentUri(location)
+    // A direct library on shared storage, which Android's all-files grant governs; a cloud
+    // library's working copy is in the app's own storage, which no grant governs.
+    val needsGrant = location != null && !safLibrary && !isAppPrivateLocation(location)
     val storage = rememberStorageAccess()
     SettingsSection(title = null) {
         Text(
@@ -68,7 +72,7 @@ internal fun LibrarySettingsPane(
         }
         // A direct library whose grant was revoked still opens what the app itself wrote, but not
         // what Syncthing wrote next to it: say so where the user looks for the library.
-        if (location != null && !safLibrary && !storage.usable) {
+        if (needsGrant && !storage.usable) {
             HelpText(stringResource(Res.string.common_settings_storage_access_missing))
             SettingsActionRow(
                 label = stringResource(Res.string.common_storage_access_grant),

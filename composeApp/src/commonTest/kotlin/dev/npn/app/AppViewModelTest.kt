@@ -2,8 +2,10 @@ package dev.npn.app
 
 import dev.npn.app.di.LibraryUnavailableException
 import dev.npn.app.di.OpenFailureReason
+import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.nav.QueueStatus
+import dev.npn.app.ui.settings.CloudSetupState
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.app.QueuedWork
 import dev.npn.core.app.RebuildOutcome
@@ -11,6 +13,9 @@ import dev.npn.core.app.WorkStage
 import dev.npn.core.app.WorkState
 import dev.npn.core.index.MetadataWriteBlocked
 import dev.npn.core.index.WriteBlock
+import dev.npn.core.sync.CloudSyncConfig
+import dev.npn.core.sync.RcloneProvider
+import dev.npn.core.sync.SetupStep
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
@@ -22,6 +27,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_onboarding_cloud_connect_failed
 import no_papers_needed.composeapp.generated.resources.common_writes_journal_incomplete
 import no_papers_needed.composeapp.generated.resources.library_rebuild_failed
 import no_papers_needed.composeapp.generated.resources.library_rebuild_not_completed
@@ -40,16 +46,163 @@ class AppViewModelTest : MainDispatcherTest() {
 
     private fun TestScope.model(env: FakeAppEnvironment): AppViewModel {
         val vm =
-            AppViewModel(env, io) { parent, name ->
-                created += Triple(parent, name, currentCoroutineContext()[ContinuationInterceptor])
-                createdLocation(parent, name)
-            }
+            AppViewModel(
+                env,
+                io,
+                createFolder = { parent, name ->
+                    created += Triple(parent, name, currentCoroutineContext()[ContinuationInterceptor])
+                    createdLocation(parent, name)
+                },
+                cloudLibraries = { CLOUD_LIBRARIES },
+                newRemoteName = { type -> "$type-1" },
+            )
         collecting(vm.state)
         runCurrent()
         return vm
     }
 
-    private fun TestScope.env(savedLocation: String? = null) = FakeAppEnvironment(backgroundScope, savedLocation)
+    private fun TestScope.env(
+        savedLocation: String? = null,
+        cloudSetup: FakeCloudSetup? = null,
+    ) = FakeAppEnvironment(backgroundScope, savedLocation, cloudSetup)
+
+    /** A cloud setup whose provider needs no form and whose sign-in finishes at once. */
+    private fun signedInSetup() =
+        FakeCloudSetup().apply {
+            providersResult =
+                listOf(RcloneProvider(type = "drive", name = "Google Drive", description = "", options = emptyList()))
+            beginResult = { SetupStep.Done(it.name) }
+        }
+
+    /** Run the onboarding's cloud wizard up to the folder picker, signed in to `drive-1`. */
+    private fun TestScope.signIn(vm: AppViewModel) {
+        vm.cloudSetup.start()
+        runCurrent()
+        val providers = vm.cloudSetupState.value.shouldBeInstanceOf<CloudSetupState.Providers>()
+        vm.cloudSetup.chooseProvider(providers.providers.single())
+        vm.cloudSetup.submit()
+        runCurrent()
+    }
+
+    /**
+     * Choosing a cloud folder in the onboarding is all the user does: the app makes the working copy
+     * in its own folder, opens it, connects it to that cloud folder with automatic sync on, and
+     * starts the first pass, which brings in what the folder already holds. The onboarding's own
+     * engine is closed once the library's takes over.
+     */
+    @Test
+    fun choosingACloudFolderOpensAWorkingCopyConnectedToIt() =
+        runTest(dispatcher) {
+            val setup = signedInSetup()
+            val env = env(cloudSetup = setup)
+            val vm = model(env)
+            vm.cloudAvailable shouldBe true
+
+            signIn(vm)
+            vm.cloudSetup.createFolder("NoPapersNeeded")
+            runCurrent()
+            vm.cloudSetup.useFolder()
+            runCurrent()
+
+            created.map { (parent, name) -> parent to name } shouldContainExactly listOf(CLOUD_LIBRARIES to "drive-1")
+            env.opened shouldContainExactly listOf("$CLOUD_LIBRARIES/drive-1")
+            vm.state.value
+                .shouldBeInstanceOf<AppState.Open>()
+                .failure shouldBe null
+            val sync = env.sessions.getValue("$CLOUD_LIBRARIES/drive-1").sync
+            sync.configFlow.value shouldBe CloudSyncConfig(enabled = true, remote = "drive-1:NoPapersNeeded")
+            sync.manualSyncs shouldBe 1
+            vm.cloudSetupState.value shouldBe null
+            env.cloudEnginesClosed shouldBe env.cloudEnginesStarted
+            setup.deletedRemotes shouldBe emptyList()
+        }
+
+    /** A cloud library that does not open says why and forgets the sign-in it no longer needs. */
+    @Test
+    fun aCloudLibraryThatDoesNotOpenForgetsItsRemote() =
+        runTest(dispatcher) {
+            val setup = signedInSetup()
+            val env = env(cloudSetup = setup)
+            env.failures["$CLOUD_LIBRARIES/drive-1"] =
+                LibraryUnavailableException(OpenFailureReason.FOLDER_MISSING, "gone")
+            val vm = model(env)
+
+            signIn(vm)
+            vm.cloudSetup.createFolder("NoPapersNeeded")
+            runCurrent()
+            vm.cloudSetup.useFolder()
+            runCurrent()
+
+            vm.state.value shouldBe AppState.NoLibrary(OpenFailure(OpenFailureReason.FOLDER_MISSING, "gone"))
+            setup.deletedRemotes shouldContainExactly listOf("drive-1")
+        }
+
+    /** A working copy that cannot be made says so, and forgets the sign-in too. */
+    @Test
+    fun aCloudLibraryWhoseWorkingCopyCannotBeMadeForgetsItsRemote() =
+        runTest(dispatcher) {
+            val setup = signedInSetup()
+            val env = env(cloudSetup = setup)
+            createdLocation = { _, _ -> null }
+            val vm = model(env)
+
+            signIn(vm)
+            vm.cloudSetup.createFolder("NoPapersNeeded")
+            runCurrent()
+            vm.cloudSetup.useFolder()
+            runCurrent()
+
+            vm.state.value shouldBe AppState.NoLibrary(OpenFailure(OpenFailureReason.FOLDER_NOT_CREATED))
+            env.opened shouldBe emptyList()
+            setup.deletedRemotes shouldContainExactly listOf("drive-1")
+        }
+
+    /** Backing out after signing in, before a folder is chosen, leaves no sign-in behind. */
+    @Test
+    fun backingOutOfTheCloudWizardAfterSignInForgetsTheRemote() =
+        runTest(dispatcher) {
+            val setup = signedInSetup()
+            val vm = model(env(cloudSetup = setup))
+
+            signIn(vm)
+            vm.cloudSetupState.value.shouldBeInstanceOf<CloudSetupState.Folders>()
+            vm.cloudSetup.cancel()
+            runCurrent()
+
+            vm.cloudSetupState.value shouldBe null
+            setup.deletedRemotes shouldContainExactly listOf("drive-1")
+        }
+
+    /** A library connected to the cloud whose connection cannot be saved still opens, and says so. */
+    @Test
+    fun aCloudLibraryWhoseConnectionCannotBeSavedSaysSo() =
+        runTest(dispatcher) {
+            val env = env(cloudSetup = signedInSetup())
+            val session = FakeLibrarySession()
+            session.sync.configureFailure = IllegalStateException("disk full")
+            env.sessions["$CLOUD_LIBRARIES/drive-1"] = session
+            val vm = model(env)
+            val messages = collecting(vm.messages.map { it.text })
+
+            signIn(vm)
+            vm.cloudSetup.createFolder("NoPapersNeeded")
+            runCurrent()
+            vm.cloudSetup.useFolder()
+            runCurrent()
+
+            vm.state.value.shouldBeInstanceOf<AppState.Open>()
+            messages shouldContainExactly
+                listOf(uiText(Res.string.common_onboarding_cloud_connect_failed, UiText.Raw("disk full")))
+            session.sync.manualSyncs shouldBe 0
+        }
+
+    /** Without a setup engine on this platform, onboarding offers folders only. */
+    @Test
+    fun withoutASetupEngineNoCloudLibraryIsOffered() =
+        runTest(dispatcher) {
+            val vm = model(env())
+            vm.cloudAvailable shouldBe false
+        }
 
     /** The shell's queue badge follows the open library's queues, and clears with no library open. */
     @Test
@@ -452,3 +605,6 @@ class AppViewModelTest : MainDispatcherTest() {
             vm.aiConfigured.value shouldBe true
         }
 }
+
+/** Where the tests' cloud libraries keep their working copies. */
+private const val CLOUD_LIBRARIES = "/app/cloud-libraries"

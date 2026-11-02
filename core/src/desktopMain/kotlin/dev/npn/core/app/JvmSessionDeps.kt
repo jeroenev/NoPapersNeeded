@@ -78,9 +78,10 @@ fun jvmSessionDeps(
 /**
  * The bundled rclone (or `rclone` on PATH when this build ships none), with its config file and
  * cache in the app's data directory. Both directories are made up front, so rclone never has to
- * make them and never falls back to the user's own.
+ * make them and never falls back to the user's own. Every library's engine and the onboarding's
+ * setup engine share it, so a remote set up before a library is open is there once one opens.
  */
-private fun desktopRclone(): RcloneLaunch {
+fun desktopRclone(): RcloneLaunch {
     val home = File(PlatformDirs.appDataDir()).apply { mkdirs() }
     return RcloneLaunch(
         binary = bundledRcloneBinary() ?: "rclone",

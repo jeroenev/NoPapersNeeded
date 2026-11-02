@@ -4,6 +4,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.LocalLibraryFolders
+import dev.npn.core.settings.PlatformDirs
 import io.github.vinceglb.filekit.PlatformFile
 import io.github.vinceglb.filekit.absolutePath
 import kotlinx.coroutines.CoroutineDispatcher
@@ -44,6 +45,14 @@ actual fun supportsSafStorage(): Boolean = false
 actual fun ocrHasLanguageSetting(): Boolean = true
 
 actual fun defaultLibraryLocation(): String? = null
+
+actual fun cloudLibrariesDir(): String = File(PlatformDirs.appDataDir(), CLOUD_LIBRARIES_DIR).path
+
+/** Desktop asks for no storage grant, so nothing is exempt from one. */
+actual fun isAppPrivateLocation(location: String): Boolean = false
+
+/** The folder under the app's data directory that holds the cloud libraries' working copies. */
+private const val CLOUD_LIBRARIES_DIR = "cloud-libraries"
 
 actual fun supportsSharing(): Boolean = false
 

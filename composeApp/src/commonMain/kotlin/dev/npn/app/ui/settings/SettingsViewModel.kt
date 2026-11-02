@@ -56,7 +56,6 @@ import no_papers_needed.composeapp.generated.resources.common_settings_review_wo
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_rule_stays_off
 import no_papers_needed.composeapp.generated.resources.common_settings_thumbnail_cache_empty
 import no_papers_needed.composeapp.generated.resources.common_settings_thumbnails_cleared
-import kotlin.uuid.Uuid
 
 /**
  * Settings screen view model. Device settings go through the one [SettingsRepository.edit]
@@ -85,7 +84,7 @@ class SettingsViewModel(
      * The name the cloud setup wizard gives a remote it creates for a provider type: unique per setup,
      * so connecting a second account (or a second library) never overwrites the first one's sign-in.
      */
-    newRemoteName: (type: String) -> String = { type -> "$type-${Uuid.random().toHexString().take(REMOTE_SUFFIX)}" },
+    newRemoteName: (type: String) -> String = ::newCloudRemoteName,
 ) : MessagesViewModel(),
     SettingsActions {
     private val content = session.content
@@ -466,6 +465,3 @@ class SettingsViewModel(
 /** This snapshot with each typed value of [drafts] in place of the saved one. */
 private fun SettingsSnapshot.withTyped(drafts: List<Pair<TextSetting, String?>>): SettingsSnapshot =
     drafts.fold(this) { snapshot, (setting, typed) -> typed?.let { setting.with(snapshot, it) } ?: snapshot }
-
-/** Hex digits after the provider type in a remote the setup wizard names, e.g. `drive-3fa9c1`. */
-private const val REMOTE_SUFFIX = 6

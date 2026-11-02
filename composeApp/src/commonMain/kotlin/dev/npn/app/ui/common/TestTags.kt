@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 object TestTags {
     const val STORAGE_ACCESS_GRANT = "storage_access_grant"
     const val USE_RECOMMENDED_FOLDER = "use_recommended_folder"
+    const val USE_CLOUD_DRIVE = "use_cloud_drive"
 
     /** One per metadata panel tab: `panel_tab_preview`, `panel_tab_details`, ... */
     fun panelTab(name: String): String = "panel_tab_${name.lowercase()}"

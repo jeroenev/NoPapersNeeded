@@ -102,6 +102,11 @@
     <!-- Library storage: direct device-storage folders, the Android all-files grant, and the SAF escape hatch -->
     <string name="common_onboarding_use_recommended">Usar a pasta recomendada</string>
     <string name="common_onboarding_recommended_help">Sua biblioteca será guardada em %1$s, onde gerenciadores de arquivos e ferramentas de sincronização, como o Syncthing, conseguem acessá-la.</string>
+    <string name="common_onboarding_use_cloud">Guardar na sua nuvem</string>
+    <string name="common_onboarding_cloud_help">Google Drive, OneDrive, Dropbox e mais. Entre na sua conta e escolha uma pasta: sua biblioteca fica igual em todos os dispositivos, com uma cópia neste para usar offline.</string>
+    <string name="common_onboarding_cloud_title">Escolha sua nuvem</string>
+    <string name="common_onboarding_local_heading">Ou guarde-a em uma pasta deste dispositivo</string>
+    <string name="common_onboarding_cloud_connect_failed">Sua biblioteca está pronta neste dispositivo, mas não foi possível conectá-la à sua nuvem: %1$s. Conecte-a em Configurações, em Sincronização na nuvem.</string>
     <string name="common_storage_access_title">Permitir acesso ao armazenamento do dispositivo</string>
     <string name="common_storage_access_help">O No Papers Needed mantém sua biblioteca como uma pasta comum neste dispositivo. Para ler e gravar nela, inclusive arquivos adicionados por outros apps, como o Syncthing, permita o acesso a todos os arquivos.</string>
     <string name="common_storage_access_grant">Permitir acesso</string>

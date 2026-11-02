@@ -41,6 +41,7 @@ import kotlinx.coroutines.withContext
  * @param factory builds the per-library pieces (fs, databases, engines) for a location, throwing
  *  [LibraryUnavailableException] when it can tell why the library cannot open. The environment
  *  drives them into [openSession] and closes their databases on a swap.
+ * @param cloudSetup starts a setup-only engine for [newCloudSetup], when the platform has one.
  */
 class DefaultAppEnvironment(
     override val settings: SettingsRepository,
@@ -48,6 +49,7 @@ class DefaultAppEnvironment(
     private val log: NpnLog = NpnLog.None,
     /** Where [appScope]'s coroutines run. */
     appDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    private val cloudSetup: (() -> CloudSetupEngine)? = null,
     private val factory: suspend (location: String, scope: CoroutineScope) -> SessionDeps,
 ) : AppEnvironment {
     override val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + appDispatcher)
@@ -129,6 +131,8 @@ class DefaultAppEnvironment(
                 ?.let { liesInLibrary(location, it) } == true
         },
     )
+
+    override fun newCloudSetup(): CloudSetupEngine? = cloudSetup?.invoke()
 
     override suspend fun scanWatchedFolder(): Int {
         val location = settings.settings.first().watchedFolder ?: return 0
