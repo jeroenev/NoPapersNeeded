@@ -89,6 +89,7 @@ import no_papers_needed.composeapp.generated.resources.onboarding_first_document
 import no_papers_needed.composeapp.generated.resources.onboarding_first_document_reading_help
 import no_papers_needed.composeapp.generated.resources.onboarding_first_document_scan
 import no_papers_needed.composeapp.generated.resources.onboarding_first_document_title
+import no_papers_needed.composeapp.generated.resources.onboarding_first_document_unreadable
 import no_papers_needed.composeapp.generated.resources.onboarding_go_to_library
 import no_papers_needed.composeapp.generated.resources.onboarding_languages_bundled
 import no_papers_needed.composeapp.generated.resources.onboarding_languages_check_again
@@ -371,14 +372,18 @@ private fun ColumnScope.AddedDocument(
             HelpText(stringResource(Res.string.onboarding_first_document_already), textAlign = TextAlign.Center)
         }
 
-        document.readingText -> {
+        document.text == FirstDocumentText.READING -> {
             Text(stringResource(Res.string.onboarding_first_document_reading))
             LinearProgressIndicator(Modifier.fillMaxWidth())
             HelpText(stringResource(Res.string.onboarding_first_document_reading_help), textAlign = TextAlign.Center)
         }
 
-        else -> {
+        document.text == FirstDocumentText.READ -> {
             Text(stringResource(Res.string.onboarding_first_document_read), textAlign = TextAlign.Center)
+        }
+
+        else -> {
+            HelpText(stringResource(Res.string.onboarding_first_document_unreadable), textAlign = TextAlign.Center)
         }
     }
     Button(onClick = onOpen, modifier = Modifier.testTag(TestTags.FIRST_RUN_CONTINUE)) {

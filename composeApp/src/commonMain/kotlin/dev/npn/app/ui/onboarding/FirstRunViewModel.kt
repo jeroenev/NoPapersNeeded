@@ -68,14 +68,36 @@ sealed interface FirstRunExit {
     /** The library. */
     data object Library : FirstRunExit
 
-    /** The document just added, [textRead] once text recognition is through with it. */
+    /** The document just added, and how far text recognition is with it ([text]). */
     data class Document(
         val docId: String,
-        val textRead: Boolean,
+        val text: FirstDocumentText,
     ) : FirstRunExit
 
     /** Settings, where a folder is set up to be watched. */
     data object WatchFolder : FirstRunExit
+}
+
+/** Where text recognition is with the first document. */
+enum class FirstDocumentText {
+    /** Still queued: its pages are not searchable yet. */
+    READING,
+
+    /** Its text is in the index: a word from its pages finds it. */
+    READ,
+
+    /** No text came of it (recognition failed, or never ran): a search will not find it by its words. */
+    UNREADABLE,
+    ;
+
+    companion object {
+        fun of(state: OcrState): FirstDocumentText =
+            when (state) {
+                OcrState.PENDING -> READING
+                OcrState.DONE, OcrState.ADOPTED -> READ
+                OcrState.FAILED, OcrState.NONE -> UNREADABLE
+            }
+    }
 }
 
 /** The first document, as it goes into the library. */
@@ -85,13 +107,13 @@ sealed interface FirstDocument {
     data object Adding : FirstDocument
 
     /**
-     * [docId] is in the library, called [title]. [readingText] while text recognition still has it
-     * queued; [alreadyThere] when the library held it before.
+     * [docId] is in the library, called [title], with its [text] as far as text recognition got;
+     * [alreadyThere] when the library held it before.
      */
     data class Added(
         val docId: String,
         val title: String,
-        val readingText: Boolean,
+        val text: FirstDocumentText,
         val alreadyThere: Boolean = false,
     ) : FirstDocument
 }
@@ -161,7 +183,7 @@ class FirstRunViewModel(
                     } else {
                         added.copy(
                             title = item.doc.displayTitle,
-                            readingText = item.doc.ocrState == OcrState.PENDING,
+                            text = FirstDocumentText.of(item.doc.ocrState),
                         )
                     }
                 }
@@ -304,7 +326,7 @@ class FirstRunViewModel(
         return if (added == null) {
             FirstRunExit.Library
         } else {
-            FirstRunExit.Document(added.docId, textRead = !added.readingText)
+            FirstRunExit.Document(added.docId, added.text)
         }
     }
 }
@@ -312,7 +334,20 @@ class FirstRunViewModel(
 /** The first document an import made, or null when it made none. */
 private fun ImportOutcome.asFirstDocument(name: String): FirstDocument.Added? =
     when (this) {
-        is ImportOutcome.Imported -> FirstDocument.Added(docId, name, readingText = true)
-        is ImportOutcome.Duplicate -> FirstDocument.Added(existingDocId, name, readingText = false, alreadyThere = true)
-        is ImportOutcome.Failed -> null
+        is ImportOutcome.Imported -> {
+            FirstDocument.Added(docId, name, FirstDocumentText.READING)
+        }
+
+        is ImportOutcome.Duplicate -> {
+            FirstDocument.Added(
+                existingDocId,
+                name,
+                FirstDocumentText.READ,
+                alreadyThere = true,
+            )
+        }
+
+        is ImportOutcome.Failed -> {
+            null
+        }
     }

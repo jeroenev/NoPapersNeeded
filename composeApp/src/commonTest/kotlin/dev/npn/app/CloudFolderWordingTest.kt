@@ -43,8 +43,9 @@ class CloudFolderWordingTest : MainDispatcherTest() {
     @Test
     fun aServerAddressBecomesItsWebDavAddress() {
         fun url(values: Map<String, String>) = WebDav.params(values)[WebDav.URL]
-        url(mapOf("url" to "cloud.example.com/", "vendor" to "nextcloud", "user" to "me")) shouldBe
-            "https://cloud.example.com/remote.php/dav/files/me"
+        // An email login is not the user id a remote.php/dav/files/ address needs.
+        url(mapOf("url" to "cloud.example.com/", "vendor" to "nextcloud", "user" to "me@example.com")) shouldBe
+            "https://cloud.example.com/remote.php/webdav"
         url(mapOf("url" to "https://oc.example.com", "vendor" to "owncloud")) shouldBe
             "https://oc.example.com/remote.php/webdav"
         url(
@@ -105,7 +106,7 @@ class CloudFolderWordingTest : MainDispatcherTest() {
 
             setup.begins.single().params shouldBe
                 mapOf(
-                    "url" to "https://cloud.example.com/remote.php/dav/files/me",
+                    "url" to "https://cloud.example.com/remote.php/webdav",
                     "vendor" to "nextcloud",
                     "user" to "me",
                     "pass" to "secret",

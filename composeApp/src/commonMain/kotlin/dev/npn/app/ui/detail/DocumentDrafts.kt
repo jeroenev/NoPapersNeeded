@@ -202,11 +202,34 @@ internal class DocumentDrafts(
         val reverted = HashSet<String>()
     }
 
-    /** A [commit] asked for while a write to the document ran, made once that write lands. */
+    /**
+     * A [commit] asked for while a write to the document ran, made once that write lands. A later
+     * request replaces [persisted] and [title] but keeps an earlier one's [reviewed] marker and
+     * [onSaved] ([after]), so a click on "Mark reviewed" during a save is not lost.
+     */
     private class CommitRequest(
         val persisted: Map<String, String>,
         val title: String,
-    )
+        val reviewed: Boolean? = null,
+        val onSaved: () -> Unit = {},
+    ) {
+        fun after(earlier: CommitRequest?): CommitRequest =
+            if (earlier == null) {
+                this
+            } else {
+                CommitRequest(persisted, title, reviewed ?: earlier.reviewed) {
+                    earlier.onSaved()
+                    onSaved()
+                }
+            }
+    }
+
+    private fun queue(
+        docId: String,
+        request: CommitRequest,
+    ) {
+        pending[docId] = request.after(pending[docId])
+    }
 
     private val pending = HashMap<String, CommitRequest>()
 
@@ -241,8 +264,10 @@ internal class DocumentDrafts(
             edit(docId) { it.copy(saving = false) }
             commitPending(docId, accepting?.writes.orEmpty())
         } else {
+            // The suggestion did not land, so the library holds what it held: a save asked for
+            // meanwhile still goes ahead.
             edit(docId) { unlanded(docId, it) }
-            pending.remove(docId)
+            commitPending(docId, emptyMap())
         }
     }
 
@@ -416,7 +441,7 @@ internal class DocumentDrafts(
     ) {
         val draft = state[docId] ?: DocumentDraft()
         if (draft.saving) {
-            if (reviewed == null) pending[docId] = CommitRequest(persisted, title)
+            queue(docId, CommitRequest(persisted, title, reviewed, onSaved))
             return
         }
         if (!draft.writable || (!draft.dirty && reviewed == null)) return
@@ -436,7 +461,7 @@ internal class DocumentDrafts(
         if (docId in onScreen) return
         val draft = state[docId] ?: return
         when {
-            draft.saving -> pending[docId] = CommitRequest(persisted, title)
+            draft.saving -> queue(docId, CommitRequest(persisted, title))
             draft.dirty && draft.writable -> commit(docId, persisted, title)
             else -> draft.undo?.let { changes -> announceAway(docId, changes) }
         }
@@ -507,7 +532,7 @@ internal class DocumentDrafts(
             val stored = value.normalized()
             if (stored == null) persisted.remove(key) else persisted[key] = stored
         }
-        commit(docId, persisted, request.title)
+        commit(docId, persisted, request.title, request.reviewed, request.onSaved)
     }
 
     /**

@@ -60,6 +60,7 @@
     <string name="onboarding_first_document_reading">Text wird gelesen…</string>
     <string name="onboarding_first_document_reading_help">Das dauert ein paar Sekunden pro Seite. Du kannst das Dokument währenddessen öffnen.</string>
     <string name="onboarding_first_document_read">Sein Text ist gelesen: Du kannst nach jedem Wort auf seinen Seiten suchen.</string>
+    <string name="onboarding_first_document_unreadable">Sein Text konnte nicht gelesen werden, daher findet die Suche ihn nicht über ein Wort von seinen Seiten.</string>
     <string name="onboarding_first_document_already">Dieses Dokument war schon in deiner Bibliothek.</string>
     <string name="onboarding_first_document_open">Öffnen</string>
     <string name="onboarding_watch_folder">Stattdessen einen Ordner überwachen</string>

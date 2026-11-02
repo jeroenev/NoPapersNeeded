@@ -18,6 +18,7 @@ import dev.npn.app.ui.common.offerSearchTip
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.nav.QueueStatus
 import dev.npn.app.ui.nav.queueStatus
+import dev.npn.app.ui.onboarding.FirstDocumentText
 import dev.npn.app.ui.settings.CloudSetupActions
 import dev.npn.app.ui.settings.CloudSetupController
 import dev.npn.app.ui.settings.CloudSetupState
@@ -313,12 +314,18 @@ class AppViewModel(
 
     /**
      * First run left the user on the first document they added: say how to find it again, a word
-     * from its page in the library's search, once its text is read ([textRead]).
+     * from its page in the library's search, once its text is read. A document no text came of has
+     * no word to search for, so nothing is said.
      */
-    fun firstDocumentLanded(textRead: Boolean) =
-        message(
-            uiText(if (textRead) Res.string.onboarding_landed_search else Res.string.onboarding_landed_reading),
-        )
+    fun firstDocumentLanded(text: FirstDocumentText) {
+        val hint =
+            when (text) {
+                FirstDocumentText.READ -> Res.string.onboarding_landed_search
+                FirstDocumentText.READING -> Res.string.onboarding_landed_reading
+                FirstDocumentText.UNREADABLE -> return
+            }
+        message(uiText(hint))
+    }
 
     /**
      * Open a library kept in the cloud folder [remote] (`name:path`, as the wizard chose it): make its

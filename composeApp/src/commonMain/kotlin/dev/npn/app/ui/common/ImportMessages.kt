@@ -12,6 +12,7 @@ import dev.npn.core.ocr.OcrState
 import dev.npn.core.settings.SettingsRepository
 import dev.npn.core.settings.SettingsSnapshot
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_duplicate_count
 import no_papers_needed.composeapp.generated.resources.common_failed_count
@@ -23,6 +24,7 @@ import no_papers_needed.composeapp.generated.resources.common_imported_count
 import no_papers_needed.composeapp.generated.resources.common_join_items
 import no_papers_needed.composeapp.generated.resources.library_import_reading_text
 import no_papers_needed.composeapp.generated.resources.library_search_tip
+import kotlin.time.Duration.Companion.minutes
 
 /**
  * An import batch's tally as the snackbar reports it: "3 imported, 1 duplicate", leaving out what is
@@ -98,6 +100,9 @@ private fun imagesPdfName(firstImage: String): String = firstImage.substringBefo
 fun ImportBatch.asUiText(): UiText =
     if (imported.isEmpty()) tally.asUiText() else uiText(Res.string.library_import_reading_text, tally.asUiText())
 
+/** How long [offerSearchTip] waits for an import's text to be read. */
+private val SearchTipWait = 30.minutes
+
 /** Where a document's text recognition is over, one way or the other. */
 private val TextSettled = setOf(OcrState.DONE, OcrState.ADOPTED, OcrState.FAILED)
 
@@ -107,7 +112,9 @@ private val HasText = setOf(OcrState.DONE, OcrState.ADOPTED)
 /**
  * Once the text of [docIds], just imported, has been read, tip the user to search a word from their
  * pages, through [show]: once per device, and never for a user who has searched already. Waits as
- * long as text recognition takes; a document that leaves the library meanwhile no longer counts.
+ * long as text recognition takes, up to [SearchTipWait] (where it never finishes, say with no engine
+ * installed, the wait would otherwise keep its query live all session; a later import tries again);
+ * a document that leaves the library meanwhile no longer counts.
  */
 suspend fun offerSearchTip(
     settings: SettingsRepository,
@@ -117,10 +124,12 @@ suspend fun offerSearchTip(
 ) {
     if (docIds.isEmpty() || settings.settings.value.searchTipDone) return
     val withText =
-        documents
-            .observeDocuments(LibraryFilter(docIds = docIds), LibrarySort())
-            .first { items -> items.all { it.doc.ocrState in TextSettled } }
-            .count { it.doc.ocrState in HasText }
+        withTimeoutOrNull(SearchTipWait) {
+            documents
+                .observeDocuments(LibraryFilter(docIds = docIds), LibrarySort())
+                .first { items -> items.all { it.doc.ocrState in TextSettled } }
+                .count { it.doc.ocrState in HasText }
+        } ?: return
     if (withText == 0) return
     var first = false
     settings.edit {

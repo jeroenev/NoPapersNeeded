@@ -5,6 +5,7 @@ import dev.npn.app.platform.ScannedPdf
 import dev.npn.app.ui.common.text
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.onboarding.FirstDocument
+import dev.npn.app.ui.onboarding.FirstDocumentText
 import dev.npn.app.ui.onboarding.FirstRunExit
 import dev.npn.app.ui.onboarding.FirstRunViewModel
 import dev.npn.core.app.ImportFailure
@@ -58,15 +59,30 @@ class FirstRunImportTest : MainDispatcherTest() {
             vm.import(listOf(file("bill.pdf")))
             runCurrent()
 
-            vm.state.value.firstDocument shouldBe FirstDocument.Added("d1", "Electricity bill", readingText = true)
-            vm.firstDocumentExit() shouldBe FirstRunExit.Document("d1", textRead = false)
+            vm.state.value.firstDocument shouldBe
+                FirstDocument.Added("d1", "Electricity bill", FirstDocumentText.READING)
+            vm.firstDocumentExit() shouldBe FirstRunExit.Document("d1", FirstDocumentText.READING)
 
             session.documents.singleDoc.value =
                 listItem(doc("d1", title = "Electricity bill", ocrState = OcrState.DONE))
             runCurrent()
 
-            vm.firstDocumentExit() shouldBe FirstRunExit.Document("d1", textRead = true)
+            vm.firstDocumentExit() shouldBe FirstRunExit.Document("d1", FirstDocumentText.READ)
             messages shouldBe emptyList()
+        }
+
+    /** A first document whose text recognition failed is not promised to search. */
+    @Test
+    fun aFirstDocumentWhoseTextFailedIsNotSaidToBeSearchable() =
+        runTest(dispatcher) {
+            val vm = model()
+            session.ingest.importOutcomes = listOf(ImportOutcome.Imported("d1", "scan.pdf"))
+            session.documents.singleDoc.value = listItem(doc("d1", title = "Scan", ocrState = OcrState.FAILED))
+
+            vm.import(listOf(file("scan.pdf")))
+            runCurrent()
+
+            vm.firstDocumentExit() shouldBe FirstRunExit.Document("d1", FirstDocumentText.UNREADABLE)
         }
 
     /** A file the library had already is the one to open, said as such. */
@@ -80,7 +96,7 @@ class FirstRunImportTest : MainDispatcherTest() {
             runCurrent()
 
             vm.state.value.firstDocument shouldBe
-                FirstDocument.Added("d0", "old.pdf", readingText = false, alreadyThere = true)
+                FirstDocument.Added("d0", "old.pdf", FirstDocumentText.READ, alreadyThere = true)
         }
 
     /** Several files are counted as the library counts them; the first that went in is followed. */

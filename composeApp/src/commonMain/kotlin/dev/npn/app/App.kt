@@ -336,7 +336,7 @@ private fun AppRoot(
                                     firstRun.landing?.let { exit ->
                                         DisposableEffect(exit) {
                                             library.landOn(exit)
-                                            if (exit is FirstRunExit.Document) vm.firstDocumentLanded(exit.textRead)
+                                            if (exit is FirstRunExit.Document) vm.firstDocumentLanded(exit.text)
                                             firstRun.landing = null
                                             onDispose {}
                                         }

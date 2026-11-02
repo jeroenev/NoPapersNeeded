@@ -9,7 +9,7 @@ import dev.npn.app.ui.settings.SettingsActionRow
 import dev.npn.app.ui.settings.SettingsCategoryId
 import dev.npn.app.ui.settings.SettingsPaneActions
 import dev.npn.app.ui.settings.SettingsPaneState
-import dev.npn.core.model.ReviewMode
+import dev.npn.core.model.reviewMarkerIsAuthoritative
 import dev.npn.core.rules.AutoMatchRule
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.automation_ai_help
@@ -83,7 +83,7 @@ internal fun AutomationSettingsPane(
         HelpText(stringResource(Res.string.automation_inbox_help))
         StateLine(
             stringResource(
-                if (state.reviewMode == ReviewMode.INBOX_WORKFLOW) {
+                if (state.reviewMode.reviewMarkerIsAuthoritative) {
                     Res.string.automation_inbox_state_on
                 } else {
                     Res.string.automation_inbox_state_off

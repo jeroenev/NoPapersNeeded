@@ -156,11 +156,11 @@ abstract class ReviewViewModel(
     }
 
     /**
-     * The documents [docs] would write to, as they are before the Apply, for the field values an
-     * Undo puts back. When they cannot be read, the values the Review was projected against stand in.
+     * The documents [docs] would write to, as they are before the Apply, for the field values and
+     * tags an Undo puts back. When they cannot be read, what the Review was projected against stands in.
      */
     private suspend fun snapshot(docs: List<ReviewDoc>): Map<String, DocListItem> {
-        val ids = docs.filter { it.selectedFieldCount > 0 }.map { it.docId }
+        val ids = docs.filter { it.selectedCount > 0 }.map { it.docId }
         if (ids.isEmpty()) return emptyMap()
         return log
             .runLogged("Reading the documents before applying suggestions") {

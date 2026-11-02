@@ -123,6 +123,30 @@ class AiEditUndoTest : MainDispatcherTest() {
             session.meta.removedTags.shouldBeEmpty()
         }
 
+    /**
+     * A tag the document carried just before the Apply (added elsewhere since the Review was
+     * projected) was not the Apply's to add, so the Undo leaves it on; one it no longer carried is
+     * not put back.
+     */
+    @Test
+    fun theUndoLeavesTagsTheApplyDidNotChange() =
+        runTest(dispatcher) {
+            session.documents.documents.value = listOf(listItem(doc("a"), tags = listOf("Invoice")))
+            val model =
+                reviewing(
+                    reviewDoc("a", tags = listOf("invoice"), removals = listOf("utility")),
+                    outcomes = listOf(ApplyOutcome.Done(ApplyResult(2, 1, moreRemain = false))),
+                )
+            val messages = collecting(model.messages)
+            model.setAllSelection(true)
+            model.apply()
+            advanceUntilIdle()
+
+            messages.none { it.action != null } shouldBe true
+            session.meta.removedTags.shouldBeEmpty()
+            session.meta.addedTags.shouldBeEmpty()
+        }
+
     /** A batch that took a Retry to land is undone whole: what the first attempt wrote goes back too. */
     @Test
     fun anUndoAfterARetryPutsBackEveryAttempt() =

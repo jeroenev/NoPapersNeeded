@@ -75,20 +75,22 @@ internal object WebDav {
 
     /**
      * The form's [values] as rclone takes them: the address a Nextcloud or ownCloud user opens in a
-     * browser becomes the server's WebDAV address for that user, and an address without a scheme
-     * gets `https://`. An address that already names the WebDAV path, or any other server's, is
-     * kept as typed.
+     * browser becomes the server's WebDAV address for the signed-in user, and an address without a
+     * scheme gets `https://`. An address that already names the WebDAV path, or any other server's,
+     * is kept as typed.
+     *
+     * Both servers get `remote.php/webdav`, which serves the files of whoever signs in. Nextcloud's
+     * newer `remote.php/dav/files/<user id>` would need the user id, which is not the login a user
+     * types when they sign in with their email address.
      */
     fun params(values: Map<String, String>): Map<String, String> {
         val typed = values[URL]?.trim().orEmpty()
         if (typed.isEmpty()) return values
         val server = if ("://" in typed) typed else "https://$typed"
-        val user = values[USER]?.trim().orEmpty()
         val url =
             when {
                 DAV_ROOT in server -> server
-                values[VENDOR] == NEXTCLOUD && user.isNotEmpty() -> "${server.trimEnd('/')}${DAV_ROOT}dav/files/$user"
-                values[VENDOR] == OWNCLOUD -> "${server.trimEnd('/')}${DAV_ROOT}webdav"
+                values[VENDOR] == NEXTCLOUD || values[VENDOR] == OWNCLOUD -> "${server.trimEnd('/')}${DAV_ROOT}webdav"
                 else -> server
             }
         return values + (URL to url)

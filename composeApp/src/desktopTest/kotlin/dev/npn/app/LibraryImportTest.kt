@@ -12,6 +12,7 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Path
 import kotlin.test.Test
@@ -95,12 +96,12 @@ class LibraryImportTest : MainDispatcherTest() {
             val messages = collecting(model.messages.map { it.english() })
 
             model.import(sources)
-            advanceUntilIdle()
+            runCurrent()
             messages shouldContainExactly listOf("3 imported · reading text…")
 
             session.documents.documents.value =
                 listOf(reading("a", OcrState.DONE), reading("b", OcrState.FAILED), reading("c", OcrState.ADOPTED))
-            advanceUntilIdle()
+            runCurrent()
 
             messages shouldContainExactly
                 listOf(
@@ -113,6 +114,25 @@ class LibraryImportTest : MainDispatcherTest() {
             model.import(sources)
             advanceUntilIdle()
             messages.size shouldBe 3
+        }
+
+    /** Text that is never read (no engine installed, say) is not waited for all session. */
+    @Test
+    fun theTipStopsWaitingForTextThatIsNeverRead() =
+        runTest(dispatcher) {
+            val session = importing("a", "b", "c")
+            session.documents.documents.value = listOf("a", "b", "c").map { reading(it, OcrState.PENDING) }
+            val settings = FakeSettingsRepository()
+            val model = LibraryViewModel(session, settings)
+            val messages = collecting(model.messages.map { it.english() })
+
+            model.import(sources)
+            advanceUntilIdle()
+            session.documents.documents.value = listOf("a", "b", "c").map { reading(it, OcrState.DONE) }
+            advanceUntilIdle()
+
+            messages shouldContainExactly listOf("3 imported · reading text…")
+            settings.settings.value.searchTipShown shouldBe false
         }
 
     /** A user who has searched already needs no tip, nor does an import whose text could not be read. */

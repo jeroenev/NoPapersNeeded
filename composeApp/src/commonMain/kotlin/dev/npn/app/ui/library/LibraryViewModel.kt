@@ -497,7 +497,15 @@ class LibraryViewModel(
             session.sync.config
                 .map { it.configured }
                 .distinctUntilChanged(),
-            combine(reviewMode, documents.map { it?.items?.isNotEmpty() == true }, ::Pair),
+            // A search or filter that finds nothing says nothing about the library: only the
+            // unfiltered list being empty hides the card.
+            combine(
+                reviewMode,
+                documents.map { results ->
+                    results != null && (results.items.isNotEmpty() || results.query.filter != LibraryFilter())
+                },
+                ::Pair,
+            ),
         ) { device, assistant, tagged, synced, (mode, hasDocuments) ->
             GettingStarted(
                 tagged = tagged,

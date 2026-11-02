@@ -194,4 +194,58 @@ class DocumentDraftsCommitTest : MainDispatcherTest() {
                 .undo
                 ?.prior shouldBe mapOf(FieldKeys.NOTES to null, FieldKeys.TITLE to "Old")
         }
+
+    /**
+     * "Mark reviewed & next" clicked while the field's own save runs (its focus left first) is not
+     * dropped: the marker is written and the editor moves on once that save lands.
+     */
+    @Test
+    fun markingReviewedDuringASaveFollowsIt() =
+        runTest(dispatcher) {
+            val fake = FakeMetadataWriter()
+            val finish = CompletableDeferred<Unit>()
+            val writer =
+                object : MetadataWriter by fake {
+                    override suspend fun applyEdits(
+                        docIds: List<String>,
+                        addTags: List<String>,
+                        fields: Map<String, String?>,
+                        fillOnly: Boolean,
+                    ) {
+                        finish.await()
+                        fake.applyEdits(docIds, addTags, fields, fillOnly)
+                    }
+                }
+            val store = DocumentDrafts(writer, this)
+            store.registerEditing("one")
+            store.field("one", FieldKeys.TITLE, "New", persisted = "Old")
+            store.commit("one", stored, "New")
+            runCurrent()
+
+            var movedOn = 0
+            store.commit("one", stored, "New", reviewed = true, onSaved = { movedOn++ })
+            finish.complete(Unit)
+            runCurrent()
+
+            fake.batchedEdits.map { it.fields } shouldContainExactly listOf(mapOf(FieldKeys.TITLE to "New"))
+            fake.reviewedSets shouldContainExactly listOf(listOf("one") to true)
+            movedOn shouldBe 1
+        }
+
+    /** A suggestion that fails to land does not take a save asked for meanwhile with it. */
+    @Test
+    fun aSaveAskedForDuringAFailedSuggestionStillHappens() =
+        runTest(dispatcher) {
+            val writer = FakeMetadataWriter()
+            val store = DocumentDrafts(writer, this)
+            store.registerEditing("one")
+            store.beginAcceptance("one", FieldKeys.CORRESPONDENT, "Acme") shouldBe true
+            store.field("one", FieldKeys.TITLE, "New", persisted = "Old")
+            store.commit("one", stored, "New")
+
+            store.finishAcceptance("one", accepted = false)
+            runCurrent()
+
+            writer.batchedEdits.map { it.fields } shouldContainExactly listOf(mapOf(FieldKeys.TITLE to "New"))
+        }
 }

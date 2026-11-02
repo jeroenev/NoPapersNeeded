@@ -60,6 +60,7 @@
     <string name="onboarding_first_document_reading">Tekst lezen…</string>
     <string name="onboarding_first_document_reading_help">Dit duurt een paar seconden per pagina. Je kunt het document intussen openen.</string>
     <string name="onboarding_first_document_read">De tekst is gelezen: je kunt zoeken op elk woord op de pagina&apos;s.</string>
+    <string name="onboarding_first_document_unreadable">De tekst kon niet worden gelezen, dus zoeken op een woord van de pagina&apos;s vindt het niet.</string>
     <string name="onboarding_first_document_already">Dat document zat al in je bibliotheek.</string>
     <string name="onboarding_first_document_open">Openen</string>
     <string name="onboarding_watch_folder">Liever een map in de gaten houden</string>

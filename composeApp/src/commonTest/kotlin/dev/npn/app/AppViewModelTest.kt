@@ -5,6 +5,7 @@ import dev.npn.app.di.OpenFailureReason
 import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.nav.QueueStatus
+import dev.npn.app.ui.onboarding.FirstDocumentText
 import dev.npn.app.ui.settings.CloudSetupState
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.app.QueuedWork
@@ -572,8 +573,10 @@ class AppViewModelTest : MainDispatcherTest() {
             val vm = model(env(savedLocation = "/lib"))
             val messages = collecting(vm.messages.map { it.text })
 
-            vm.firstDocumentLanded(textRead = true)
-            vm.firstDocumentLanded(textRead = false)
+            vm.firstDocumentLanded(FirstDocumentText.READ)
+            vm.firstDocumentLanded(FirstDocumentText.READING)
+            // A document no text came of has nothing to search for: nothing is said.
+            vm.firstDocumentLanded(FirstDocumentText.UNREADABLE)
             runCurrent()
 
             messages shouldContainExactly

@@ -66,11 +66,18 @@ data class ApplyUndo(
             val fields = mutableMapOf<String, MutableMap<String, String?>>()
             for (doc in attempted) {
                 val still = owed[doc.docId]
+                // A tag the document already carried just before is no addition of the Apply's, and
+                // one it no longer carried no removal: Undo must not take off or put back either.
+                val carried = before[doc.docId]?.tags
+
+                fun carries(tag: String) = carried?.any { it.equals(tag, ignoreCase = true) }
                 doc.chips
                     .filter { it.selected && still?.chips?.any { c -> c.selected && c.tag == it.tag } != true }
+                    .filter { carries(it.tag) != true }
                     .forEach { added.getOrPut(it.tag) { mutableSetOf() } += doc.docId }
                 doc.removals
                     .filter { it.selected && still?.removals?.any { c -> c.selected && c.tag == it.tag } != true }
+                    .filter { carries(it.tag) != false }
                     .forEach { removed.getOrPut(it.tag) { mutableSetOf() } += doc.docId }
                 val stored = before[doc.docId]?.doc?.fields
                 doc.fields
