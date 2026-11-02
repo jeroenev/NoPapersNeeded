@@ -40,6 +40,7 @@ import dev.npn.core.settings.PlatformDirs
 import dev.npn.core.settings.SettingsRepositoryImpl
 import dev.npn.core.util.info
 import dev.npn.core.util.runCatchingCancellable
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -195,7 +196,10 @@ private fun importDropTarget(): DragAndDropTarget =
     }
 
 /** What a drop of [files] imports: each PDF on its own, the images as one PDF; anything else is left out. */
-private fun importRequest(files: List<Path>): ImportRequest {
+private fun importRequest(
+    files: List<Path>,
+    io: CoroutineDispatcher = Dispatchers.IO,
+): ImportRequest {
     fun Path.name(fallback: String) = fileName?.toString() ?: fallback
 
     fun Path.hasExtension(extensions: List<String>) = extensions.any { toString().endsWith(it, ignoreCase = true) }
@@ -209,7 +213,7 @@ private fun importRequest(files: List<Path>): ImportRequest {
             files.filter { it.hasExtension(IMAGE_EXTENSIONS) }.map { path ->
                 ImportImage(path.name(FALLBACK_DROPPED_IMAGE)) {
                     // An image that cannot be read counts as failed in the import's message.
-                    withContext(Dispatchers.IO) { runCatchingCancellable { Files.readAllBytes(path) }.getOrNull() }
+                    withContext(io) { runCatchingCancellable { Files.readAllBytes(path) }.getOrNull() }
                 }
             },
     )

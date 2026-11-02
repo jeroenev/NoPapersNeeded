@@ -170,8 +170,7 @@ fun SettingsScreen(
         paneState = paneState,
         paneActions = paneActions,
         revealAdvanced = revealAdvanced,
-        query = query,
-        onQueryChange = vm::searchCategories,
+        search = CategorySearch(query, vm::searchCategories),
         onSelect = select,
         onBack = { if (closePicked) vm.pick(null) else onBack() },
     )
@@ -198,12 +197,12 @@ private fun SettingsScaffold(
     paneActions: SettingsPaneActions,
     /** Whether the route asked for the open pane's Advanced disclosure expanded. */
     revealAdvanced: Boolean,
-    /** What is typed into the table of contents' search. */
-    query: String,
-    onQueryChange: (String) -> Unit,
+    search: CategorySearch,
     onSelect: (SettingsCategoryId, revealAdvanced: Boolean) -> Unit,
     onBack: () -> Unit,
 ) {
+    val query = search.query
+    val onQueryChange = search.onQueryChange
     val openCategory = selected?.let(::settingsCategory)
     val labels = settingsCategoryLabels()
     // The pane beside the list reads the search as it is typed; a drilled-down one, what its route says.
@@ -365,6 +364,12 @@ private fun SettingsCategoryRow(
         modifier = Modifier.padding(horizontal = 12.dp),
     )
 }
+
+/** The table of contents' search: what is typed into it ([query]), and where an edit goes. */
+private class CategorySearch(
+    val query: String,
+    val onQueryChange: (String) -> Unit,
+)
 
 /** What [SettingsPane] is shown with, as one value its movable content takes. */
 private class SettingsPaneArgs(

@@ -13,15 +13,10 @@
     <string name="ux_review_finish">Marcar revisado e concluir</string>
     <string name="ux_expand_document">Expandir área do documento</string>
     <string name="ux_resize_panes">Redimensionar documento e detalhes</string>
-    <string name="ux_save_changes">Salvar alterações</string>
     <string name="ux_save_failed_summary">Não foi possível salvar as alterações. Verifique o acesso à biblioteca e tente de novo.</string>
-    <string name="ux_drafts_count">Documentos não salvos: %1$d</string>
     <string name="ux_resume_draft">Continuar editando</string>
-    <string name="ux_draft_hint">Seu rascunho é mantido quando você troca de documento. Salve para aplicar as alterações.</string>
     <string name="ux_discard">Descartar alterações</string>
     <string name="ux_discard_prompt">Descartar as alterações não salvas deste documento?</string>
-    <string name="ux_tags_saved">As etiquetas e as sugestões aceitas do assistente são salvas imediatamente.</string>
-    <string name="ux_field_invalid">Um valor não corresponde ao tipo do campo.</string>
     <string name="ux_show_suggestions">Mostrar sugestões</string>
     <string name="ux_discard_short">Descartar</string>
     <string name="ux_library_draft_warning">Salve ou descarte os rascunhos dos documentos antes de abrir outra biblioteca.</string>

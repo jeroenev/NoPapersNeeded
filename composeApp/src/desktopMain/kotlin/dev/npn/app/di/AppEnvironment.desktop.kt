@@ -11,6 +11,7 @@ import dev.npn.core.settings.SessionSettings
 import dev.npn.core.settings.SettingsRepositoryImpl
 import dev.npn.core.sync.RcloneTransport
 import dev.npn.core.watch.JvmWatchedFolder
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -31,7 +32,7 @@ fun createAppEnvironment(): AppEnvironment {
         watchedFolder = { location -> JvmWatchedFolder(Path.of(location)) },
         log = DesktopLog,
         cloudSetup = { RcloneTransport(desktopRclone()).let { CloudSetupEngine(it.setup, it::close) } },
-        readOcrModels = ::desktopOcrModels,
+        readOcrModels = { desktopOcrModels() },
     ) { location, scope ->
         val root = Path.of(location)
         if (!Files.isDirectory(root)) throw LibraryUnavailableException.folderMissing(location)
@@ -51,8 +52,8 @@ fun createAppEnvironment(): AppEnvironment {
  * The models the Tesseract this app runs has, and where a missing one comes from: the app's own
  * package where it ships them (a Windows build, the Flatpak), else the system's package manager.
  */
-private suspend fun desktopOcrModels(): OcrModels =
-    withContext(Dispatchers.IO) {
+private suspend fun desktopOcrModels(io: CoroutineDispatcher = Dispatchers.IO): OcrModels =
+    withContext(io) {
         val bundled = bundledTesseract()
         val installed = (bundled ?: TesseractCliEngine()).installedLanguages()
         val flatpak = !System.getenv("FLATPAK_ID").isNullOrBlank()

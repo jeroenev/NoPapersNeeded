@@ -118,7 +118,7 @@
     <string name="common_import_failure_images">impossible de créer un PDF à partir des images</string>
     <string name="common_import_failure_copy">le fichier n’a pas pu être copié dans la bibliothèque</string>
     <string name="common_import_failure_superseded">le fichier est une version antérieure d’un document de la bibliothèque</string>
-    <string name="common_rerun_ocr_failed">Impossible de relancer l’OCR : %1$s</string>
+    <string name="common_rerun_ocr_failed">Impossible de reconnaître à nouveau le texte : %1$s</string>
     <string name="common_save_field_failed">Impossible d’enregistrer le champ : %1$s</string>
     <string name="common_save_setting_failed">Impossible d’enregistrer le paramètre : %1$s</string>
     <plurals name="common_restore_documents_failed">

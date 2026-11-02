@@ -13,15 +13,10 @@
     <string name="ux_review_finish">Vérifié et terminer</string>
     <string name="ux_expand_document">Agrandir l’espace du document</string>
     <string name="ux_resize_panes">Redimensionner le document et les détails</string>
-    <string name="ux_save_changes">Enregistrer les modifications</string>
     <string name="ux_save_failed_summary">Impossible d’enregistrer les modifications. Vérifiez l’accès à la bibliothèque et réessayez.</string>
-    <string name="ux_drafts_count">Documents non enregistrés : %1$d</string>
     <string name="ux_resume_draft">Continuer la modification</string>
-    <string name="ux_draft_hint">Votre brouillon est conservé quand vous changez de document. Enregistrez pour appliquer vos modifications.</string>
     <string name="ux_discard">Abandonner les modifications</string>
     <string name="ux_discard_prompt">Abandonner les modifications non enregistrées de ce document ?</string>
-    <string name="ux_tags_saved">Les étiquettes et les suggestions acceptées de l’assistant sont enregistrées immédiatement.</string>
-    <string name="ux_field_invalid">La valeur d’un champ ne correspond pas à son type.</string>
     <string name="ux_show_suggestions">Afficher les suggestions</string>
     <string name="ux_discard_short">Abandonner</string>
     <string name="ux_library_draft_warning">Enregistrez ou abandonnez vos brouillons de documents avant d’ouvrir une autre bibliothèque.</string>

@@ -91,7 +91,7 @@
     <string name="common_trash_signal_similar_name">Ähnlicher Name</string>
     <string name="common_trash_signal_same_size">Gleiche Größe</string>
     <string name="common_trash_signal_same_folder">Gleicher Ordner</string>
-    <string name="common_trash_relink">Neu verknüpfen</string>
+    <string name="common_trash_relink">Diese Datei verwenden</string>
     <string name="common_tags_rename_failed">Der Tag konnte nicht umbenannt werden: %1$s</string>
     <string name="common_tags_merge_failed">Die Tags konnten nicht zusammengeführt werden: %1$s</string>
     <plurals name="common_tags_merge_some_failed">
@@ -120,7 +120,7 @@
         <item quantity="other">%1$d Dokumente wurden gelöscht, aber ihre Dateien konnten nicht aus dem Bibliotheksordner entfernt werden</item>
     </plurals>
     <string name="common_trash_remove_duplicate_failed">Das Duplikat konnte nicht entfernt werden: %1$s</string>
-    <string name="common_trash_relink_failed">Das Dokument konnte nicht neu verknüpft werden: %1$s</string>
+    <string name="common_trash_relink_failed">Das Dokument konnte nicht mit dieser Datei verknüpft werden: %1$s</string>
     <string name="common_rules_save_failed">Die Regel konnte nicht gespeichert werden: %1$s</string>
     <string name="common_rules_delete_failed">Die Regel konnte nicht gelöscht werden: %1$s</string>
     <string name="common_rules_update_failed">Die Regel konnte nicht aktualisiert werden: %1$s</string>

@@ -36,7 +36,7 @@
 
     <!-- Document languages (desktop) -->
     <string name="onboarding_languages_title">Which languages are your documents in?</string>
-    <string name="onboarding_languages_help">Text recognition reads scanned pages in these languages. Each one more makes it a little slower; you can change them later in Settings under Import &amp; OCR.</string>
+    <string name="onboarding_languages_help">Text recognition reads scanned pages in these languages. Each one more makes it a little slower; you can change them later in Settings under Import &amp; text recognition.</string>
     <string name="onboarding_languages_checking">Checking which languages this computer can read…</string>
     <string name="onboarding_languages_bundled">Everything needed for these languages is included with the app.</string>
     <string name="onboarding_languages_missing">Not installed yet: %1$s.</string>

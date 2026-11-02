@@ -36,7 +36,7 @@
 
     <!-- Document languages (desktop) -->
     <string name="onboarding_languages_title">In welke talen zijn je documenten?</string>
-    <string name="onboarding_languages_help">Tekstherkenning leest gescande pagina&apos;s in deze talen. Elke taal extra maakt ze iets trager; je kunt ze later wijzigen in Instellingen onder Importeren &amp; OCR.</string>
+    <string name="onboarding_languages_help">Tekstherkenning leest gescande pagina&apos;s in deze talen. Elke taal extra maakt ze iets trager; je kunt ze later wijzigen in Instellingen onder Importeren &amp; tekstherkenning.</string>
     <string name="onboarding_languages_checking">Nagaan welke talen deze computer kan lezen…</string>
     <string name="onboarding_languages_bundled">Alles wat deze talen nodig hebben, zit bij de app.</string>
     <string name="onboarding_languages_missing">Nog niet geïnstalleerd: %1$s.</string>

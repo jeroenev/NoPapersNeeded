@@ -21,7 +21,6 @@
     <string name="library_import_pdf">Pdf's importeren</string>
     <string name="library_clear_filters">Filters wissen</string>
 
-    <string name="library_review">Beoordelen</string>
     <string name="library_mark_reviewed">Markeren als beoordeeld</string>
     <string name="library_mark_needs_review">Markeren als te beoordelen</string>
     <string name="library_trash">Prullenbak</string>
@@ -73,14 +72,6 @@
         <item quantity="other">%1$d duplicaten.</item>
     </plurals>
     <string name="library_dismiss">Negeren</string>
-    <plurals name="library_ocr_pending">
-        <item quantity="one">OCR in wachtrij: %1$d</item>
-        <item quantity="other">OCR in wachtrij: %1$d</item>
-    </plurals>
-    <plurals name="library_ocr_pending_running">
-        <item quantity="one">OCR in wachtrij: %1$d (bezig)</item>
-        <item quantity="other">OCR in wachtrij: %1$d (bezig)</item>
-    </plurals>
 
     <string name="library_add">Toevoegen</string>
     <string name="library_remove">Verwijderen</string>
@@ -93,8 +84,6 @@
     <string name="library_saved_views">Opgeslagen weergaven</string>
     <string name="library_save_current_view_ellipsis">Huidige weergave opslaan...</string>
     <string name="library_settings">Instellingen</string>
-    <string name="library_ai_assistant">AI-assistent</string>
-    <string name="library_ai_edit">AI bewerken</string>
     <string name="library_pinned">Vastgezet</string>
     <string name="library_view_actions">Weergaveacties</string>
     <string name="library_pin">Vastzetten</string>

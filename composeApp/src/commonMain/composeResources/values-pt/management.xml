@@ -84,14 +84,14 @@
     <string name="common_trash_remove_extra">Remover cópia</string>
     <string name="common_trash_no_missing_files">Nenhum arquivo ausente</string>
     <string name="common_trash_missing_from">Ausente em: %1$s</string>
-    <string name="common_trash_no_relink_candidates">Nenhum candidato para revincular. Faça uma nova verificação quando o arquivo voltar.</string>
+    <string name="common_trash_no_relink_candidates">Nenhum arquivo correspondente encontrado. Faça uma nova verificação quando o arquivo voltar.</string>
     <string name="common_trash_possible_match">Possível correspondência</string>
     <string name="common_trash_signal_replaced_in_place">Mesmo local</string>
     <string name="common_trash_signal_same_name">Mesmo nome</string>
     <string name="common_trash_signal_similar_name">Nome parecido</string>
     <string name="common_trash_signal_same_size">Mesmo tamanho</string>
     <string name="common_trash_signal_same_folder">Mesma pasta</string>
-    <string name="common_trash_relink">Revincular</string>
+    <string name="common_trash_relink">Usar este arquivo</string>
     <string name="common_tags_rename_failed">Não foi possível renomear a etiqueta: %1$s</string>
     <string name="common_tags_merge_failed">Não foi possível mesclar as etiquetas: %1$s</string>
     <plurals name="common_tags_merge_some_failed">
@@ -120,7 +120,7 @@
         <item quantity="other">%1$d documentos foram excluídos, mas não foi possível remover os arquivos da pasta da biblioteca</item>
     </plurals>
     <string name="common_trash_remove_duplicate_failed">Não foi possível remover o duplicado: %1$s</string>
-    <string name="common_trash_relink_failed">Não foi possível revincular o documento: %1$s</string>
+    <string name="common_trash_relink_failed">Não foi possível vincular o documento a este arquivo: %1$s</string>
     <string name="common_rules_save_failed">Não foi possível salvar a regra: %1$s</string>
     <string name="common_rules_delete_failed">Não foi possível excluir a regra: %1$s</string>
     <string name="common_rules_update_failed">Não foi possível atualizar a regra: %1$s</string>

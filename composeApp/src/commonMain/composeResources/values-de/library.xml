@@ -21,7 +21,6 @@
     <string name="library_import_pdf">PDFs importieren</string>
     <string name="library_clear_filters">Filter zurücksetzen</string>
 
-    <string name="library_review">Prüfen</string>
     <string name="library_mark_reviewed">Als geprüft markieren</string>
     <string name="library_mark_needs_review">Als zu prüfen markieren</string>
     <string name="library_trash">Papierkorb</string>
@@ -73,14 +72,6 @@
         <item quantity="other">%1$d Duplikate.</item>
     </plurals>
     <string name="library_dismiss">Ausblenden</string>
-    <plurals name="library_ocr_pending">
-        <item quantity="one">OCR ausstehend: %1$d</item>
-        <item quantity="other">OCR ausstehend: %1$d</item>
-    </plurals>
-    <plurals name="library_ocr_pending_running">
-        <item quantity="one">OCR ausstehend: %1$d (läuft)</item>
-        <item quantity="other">OCR ausstehend: %1$d (läuft)</item>
-    </plurals>
 
     <string name="library_add">Hinzufügen</string>
     <string name="library_remove">Entfernen</string>
@@ -93,8 +84,6 @@
     <string name="library_saved_views">Gespeicherte Ansichten</string>
     <string name="library_save_current_view_ellipsis">Aktuelle Ansicht speichern...</string>
     <string name="library_settings">Einstellungen</string>
-    <string name="library_ai_assistant">KI-Assistent</string>
-    <string name="library_ai_edit">KI-Bearbeitung</string>
     <string name="library_pinned">Angeheftet</string>
     <string name="library_view_actions">Aktionen für die Ansicht</string>
     <string name="library_pin">Anheften</string>

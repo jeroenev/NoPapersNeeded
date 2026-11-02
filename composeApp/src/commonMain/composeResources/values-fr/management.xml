@@ -91,7 +91,7 @@
     <string name="common_trash_signal_similar_name">Nom similaire</string>
     <string name="common_trash_signal_same_size">Même taille</string>
     <string name="common_trash_signal_same_folder">Même dossier</string>
-    <string name="common_trash_relink">Relier</string>
+    <string name="common_trash_relink">Utiliser ce fichier</string>
     <string name="common_tags_rename_failed">Impossible de renommer l’étiquette : %1$s</string>
     <string name="common_tags_merge_failed">Impossible de fusionner les étiquettes : %1$s</string>
     <plurals name="common_tags_merge_some_failed">
@@ -120,7 +120,7 @@
         <item quantity="other">%1$d documents ont été supprimés, mais leurs fichiers n’ont pas pu être retirés du dossier de la bibliothèque</item>
     </plurals>
     <string name="common_trash_remove_duplicate_failed">Impossible de retirer le doublon : %1$s</string>
-    <string name="common_trash_relink_failed">Impossible de relier le document : %1$s</string>
+    <string name="common_trash_relink_failed">Impossible de relier le document à ce fichier : %1$s</string>
     <string name="common_rules_save_failed">Impossible d’enregistrer la règle : %1$s</string>
     <string name="common_rules_delete_failed">Impossible de supprimer la règle : %1$s</string>
     <string name="common_rules_update_failed">Impossible de mettre à jour la règle : %1$s</string>

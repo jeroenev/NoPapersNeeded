@@ -207,7 +207,7 @@ private fun DateField(
     value: String,
     hint: String?,
     onCommit: (String) -> Unit,
-    onPicked: () -> Unit,
+    onPick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showPicker by remember { mutableStateOf(false) }
@@ -238,7 +238,7 @@ private fun DateField(
             onSelect = { iso ->
                 showPicker = false
                 onCommit(iso.orEmpty())
-                onPicked()
+                onPick()
             },
             onDismiss = { showPicker = false },
         )

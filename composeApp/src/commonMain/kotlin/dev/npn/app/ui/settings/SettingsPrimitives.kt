@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.mutableStateOf
@@ -47,6 +47,9 @@ internal val LocalRevealAdvanced = compositionLocalOf { false }
 @Composable
 internal fun rememberAdvancedExpanded(reveal: Boolean = LocalRevealAdvanced.current): MutableState<Boolean> {
     val expanded = rememberSaveable { mutableStateOf(reveal) }
-    LaunchedEffect(reveal) { if (reveal) expanded.value = true }
+    DisposableEffect(reveal) {
+        if (reveal) expanded.value = true
+        onDispose {}
+    }
     return expanded
 }

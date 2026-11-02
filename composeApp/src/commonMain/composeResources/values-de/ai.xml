@@ -38,7 +38,7 @@
     <string name="ai_edit_scope">Dokumente</string>
     <string name="ai_edit_scope_selection">Ausgewählte Dokumente (%1$d)</string>
     <string name="ai_edit_untagged_documents">Dokumente ohne Tags</string>
-    <string name="ai_edit_review_queue">Eingang</string>
+    <string name="ai_edit_review_queue">Posteingang</string>
     <string name="ai_edit_scope_missing_fields">Mindestens ein gewähltes Feld fehlt</string>
     <string name="ai_edit_scope_saved_view">Gespeicherte Ansicht</string>
     <string name="ai_edit_saved_view_choose">Ansicht wählen</string>

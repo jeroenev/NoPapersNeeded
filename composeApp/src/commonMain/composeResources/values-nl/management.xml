@@ -84,14 +84,14 @@
     <string name="common_trash_remove_extra">Extra kopie verwijderen</string>
     <string name="common_trash_no_missing_files">Geen ontbrekende bestanden</string>
     <string name="common_trash_missing_from">Ontbreekt in: %1$s</string>
-    <string name="common_trash_no_relink_candidates">Geen kandidaten gevonden om opnieuw te koppelen. Scan opnieuw nadat het bestand is teruggezet.</string>
+    <string name="common_trash_no_relink_candidates">Geen overeenkomend bestand gevonden. Scan opnieuw nadat het bestand is teruggezet.</string>
     <string name="common_trash_possible_match">Mogelijke overeenkomst</string>
     <string name="common_trash_signal_replaced_in_place">Zelfde locatie</string>
     <string name="common_trash_signal_same_name">Zelfde naam</string>
     <string name="common_trash_signal_similar_name">Vergelijkbare naam</string>
     <string name="common_trash_signal_same_size">Zelfde grootte</string>
     <string name="common_trash_signal_same_folder">Zelfde map</string>
-    <string name="common_trash_relink">Opnieuw koppelen</string>
+    <string name="common_trash_relink">Dit bestand gebruiken</string>
     <string name="common_tags_rename_failed">De tag kon niet worden hernoemd: %1$s</string>
     <string name="common_tags_merge_failed">De tags konden niet worden samengevoegd: %1$s</string>
     <plurals name="common_tags_merge_some_failed">
@@ -120,7 +120,7 @@
         <item quantity="other">%1$d documenten zijn verwijderd, maar hun bestanden konden niet uit de bibliotheekmap worden verwijderd</item>
     </plurals>
     <string name="common_trash_remove_duplicate_failed">Het duplicaat kon niet worden verwijderd: %1$s</string>
-    <string name="common_trash_relink_failed">Het document kon niet opnieuw worden gekoppeld: %1$s</string>
+    <string name="common_trash_relink_failed">Het document kon niet aan dit bestand worden gekoppeld: %1$s</string>
     <string name="common_rules_save_failed">De regel kon niet worden opgeslagen: %1$s</string>
     <string name="common_rules_delete_failed">De regel kon niet worden verwijderd: %1$s</string>
     <string name="common_rules_update_failed">De regel kon niet worden bijgewerkt: %1$s</string>

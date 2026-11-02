@@ -21,7 +21,6 @@
     <string name="library_import_pdf">Importer des PDF</string>
     <string name="library_clear_filters">Effacer les filtres</string>
 
-    <string name="library_review">Examiner</string>
     <string name="library_mark_reviewed">Marquer comme vérifié</string>
     <string name="library_mark_needs_review">Marquer comme à vérifier</string>
     <string name="library_trash">Corbeille</string>
@@ -73,14 +72,6 @@
         <item quantity="other">%1$d doublons.</item>
     </plurals>
     <string name="library_dismiss">Ignorer</string>
-    <plurals name="library_ocr_pending">
-        <item quantity="one">OCR en attente : %1$d</item>
-        <item quantity="other">OCR en attente : %1$d</item>
-    </plurals>
-    <plurals name="library_ocr_pending_running">
-        <item quantity="one">OCR en attente : %1$d (en cours)</item>
-        <item quantity="other">OCR en attente : %1$d (en cours)</item>
-    </plurals>
 
     <string name="library_add">Ajouter</string>
     <string name="library_remove">Retirer</string>
@@ -93,8 +84,6 @@
     <string name="library_saved_views">Vues enregistrées</string>
     <string name="library_save_current_view_ellipsis">Enregistrer la vue actuelle…</string>
     <string name="library_settings">Paramètres</string>
-    <string name="library_ai_assistant">Assistant IA</string>
-    <string name="library_ai_edit">Modification IA</string>
     <string name="library_pinned">Épinglées</string>
     <string name="library_view_actions">Actions de la vue</string>
     <string name="library_pin">Épingler</string>

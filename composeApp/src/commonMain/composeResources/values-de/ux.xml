@@ -13,15 +13,10 @@
     <string name="ux_review_finish">Geprüft &amp; fertig</string>
     <string name="ux_expand_document">Dokumentbereich erweitern</string>
     <string name="ux_resize_panes">Größe von Dokument und Details ändern</string>
-    <string name="ux_save_changes">Änderungen speichern</string>
     <string name="ux_save_failed_summary">Änderungen konnten nicht gespeichert werden. Prüfe den Zugriff auf die Bibliothek und versuche es erneut.</string>
-    <string name="ux_drafts_count">Ungespeicherte Dokumente: %1$d</string>
     <string name="ux_resume_draft">Weiter bearbeiten</string>
-    <string name="ux_draft_hint">Dein Entwurf bleibt erhalten, wenn du das Dokument wechselst. Speichere, um deine Änderungen zu übernehmen.</string>
     <string name="ux_discard">Änderungen verwerfen</string>
     <string name="ux_discard_prompt">Die nicht gespeicherten Änderungen an diesem Dokument verwerfen?</string>
-    <string name="ux_tags_saved">Tags und übernommene Vorschläge des Assistenten werden sofort gespeichert.</string>
-    <string name="ux_field_invalid">Ein Feldwert passt nicht zu seinem Typ.</string>
     <string name="ux_show_suggestions">Vorschläge anzeigen</string>
     <string name="ux_discard_short">Verwerfen</string>
     <string name="ux_library_draft_warning">Speichere oder verwirf deine Entwürfe, bevor du eine andere Bibliothek öffnest.</string>

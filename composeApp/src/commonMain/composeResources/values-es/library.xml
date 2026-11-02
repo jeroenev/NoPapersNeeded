@@ -21,7 +21,6 @@
     <string name="library_import_pdf">Importar PDFs</string>
     <string name="library_clear_filters">Borrar filtros</string>
 
-    <string name="library_review">Revisar</string>
     <string name="library_mark_reviewed">Marcar como revisado</string>
     <string name="library_mark_needs_review">Marcar para revisar</string>
     <string name="library_trash">Papelera</string>
@@ -73,14 +72,6 @@
         <item quantity="other">%1$d duplicados.</item>
     </plurals>
     <string name="library_dismiss">Cerrar</string>
-    <plurals name="library_ocr_pending">
-        <item quantity="one">OCR pendiente: %1$d</item>
-        <item quantity="other">OCR pendiente: %1$d</item>
-    </plurals>
-    <plurals name="library_ocr_pending_running">
-        <item quantity="one">OCR pendiente: %1$d (en curso)</item>
-        <item quantity="other">OCR pendiente: %1$d (en curso)</item>
-    </plurals>
 
     <string name="library_add">Añadir</string>
     <string name="library_remove">Quitar</string>
@@ -93,8 +84,6 @@
     <string name="library_saved_views">Vistas guardadas</string>
     <string name="library_save_current_view_ellipsis">Guardar vista actual...</string>
     <string name="library_settings">Ajustes</string>
-    <string name="library_ai_assistant">Asistente de IA</string>
-    <string name="library_ai_edit">Edición con IA</string>
     <string name="library_pinned">Fijadas</string>
     <string name="library_view_actions">Acciones de la vista</string>
     <string name="library_pin">Fijar</string>

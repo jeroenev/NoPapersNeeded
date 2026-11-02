@@ -214,8 +214,12 @@ Compose:
     # document scanner the platform entry point provides, and the library's one store of unsaved
     # document drafts, which the editors, the resume banner and Settings all read. LocalLocaleTag is
     # desktop's stand-in for the locale Android's LocalConfiguration carries (LocalAppLocale).
+    # LocalRevealAdvanced says a settings search hit sits behind the open pane's Advanced
+    # disclosure; every category's content shares one signature, so a parameter would have to
+    # pass through all of them to reach the two panes that have one.
     allowedCompositionLocals:
       - LocalWindowWidthClass
       - LocalDocumentScanner
       - LocalDocumentDrafts
       - LocalLocaleTag
+      - LocalRevealAdvanced

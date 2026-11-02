@@ -134,7 +134,7 @@ fun OnboardingScreen(
         when (step) {
             OnboardingStep.WELCOME -> {
                 WelcomeStep(
-                    onGetStarted = { step = OnboardingStep.LOCATION },
+                    onStart = { step = OnboardingStep.LOCATION },
                     onAlreadyUse = { step = OnboardingStep.CONNECT },
                 )
             }
@@ -203,7 +203,7 @@ fun OnboardingScreen(
 /** What the app is for, in three lines, and the two ways in. */
 @Composable
 private fun ColumnScope.WelcomeStep(
-    onGetStarted: () -> Unit,
+    onStart: () -> Unit,
     onAlreadyUse: () -> Unit,
 ) {
     Text(
@@ -221,7 +221,7 @@ private fun ColumnScope.WelcomeStep(
         ValueLine(Icons.Outlined.PictureAsPdf, stringResource(Res.string.onboarding_value_own))
         ValueLine(Icons.Outlined.CloudOff, stringResource(Res.string.onboarding_value_offline))
     }
-    Button(onClick = onGetStarted, modifier = Modifier.testTag(TestTags.GET_STARTED)) {
+    Button(onClick = onStart, modifier = Modifier.testTag(TestTags.GET_STARTED)) {
         Text(stringResource(Res.string.onboarding_get_started))
     }
     TextButton(onClick = onAlreadyUse, modifier = Modifier.testTag(TestTags.ALREADY_USE)) {

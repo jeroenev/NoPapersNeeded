@@ -85,14 +85,14 @@
     <string name="common_trash_remove_extra">Remove extra</string>
     <string name="common_trash_no_missing_files">No missing files</string>
     <string name="common_trash_missing_from">Missing from: %1$s</string>
-    <string name="common_trash_no_relink_candidates">No relink candidates found. Rescan after the file returns.</string>
+    <string name="common_trash_no_relink_candidates">No matching file found. Rescan after the file is back.</string>
     <string name="common_trash_possible_match">Possible match</string>
     <string name="common_trash_signal_replaced_in_place">Same location</string>
     <string name="common_trash_signal_same_name">Same name</string>
     <string name="common_trash_signal_similar_name">Similar name</string>
     <string name="common_trash_signal_same_size">Same size</string>
     <string name="common_trash_signal_same_folder">Same folder</string>
-    <string name="common_trash_relink">Relink</string>
+    <string name="common_trash_relink">Use this file</string>
     <string name="common_tags_rename_failed">Could not rename the tag: %1$s</string>
     <string name="common_tags_merge_failed">Could not merge the tags: %1$s</string>
     <plurals name="common_tags_merge_some_failed">
@@ -121,7 +121,7 @@
         <item quantity="other">%1$d documents were deleted, but their files could not be removed from the library folder</item>
     </plurals>
     <string name="common_trash_remove_duplicate_failed">Could not remove the duplicate: %1$s</string>
-    <string name="common_trash_relink_failed">Could not relink the document: %1$s</string>
+    <string name="common_trash_relink_failed">Could not link the document to this file: %1$s</string>
     <string name="common_rules_save_failed">Could not save the rule: %1$s</string>
     <string name="common_rules_delete_failed">Could not delete the rule: %1$s</string>
     <string name="common_rules_update_failed">Could not update the rule: %1$s</string>
