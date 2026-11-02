@@ -11,7 +11,7 @@
     <string name="library_switch_to_grid">Zur Rasteransicht wechseln</string>
     <string name="library_sort">Sortieren</string>
     <string name="library_sort_name">Name</string>
-    <string name="library_sort_added">Hinzugefügt</string>
+    <string name="library_sort_created">Erstellt</string>
     <string name="library_sort_size">Größe</string>
     <string name="library_sort_ascending">Aufsteigend</string>
     <string name="library_sort_descending">Absteigend</string>

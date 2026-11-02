@@ -215,12 +215,9 @@ internal object RescanDecision {
     /**
      * Decide one hashed file ([facts]): whether the row at its path gives the path up, and what the
      * file is to the document of its bytes: superseded, a duplicate, moved, refreshed, unchanged or
-     * a new document added [now].
+     * a new document.
      */
-    fun file(
-        facts: FileFacts,
-        now: Long,
-    ): FileDecision {
+    fun file(facts: FileFacts): FileDecision {
         val meta = facts.meta
         val displaced =
             facts.holder?.let {
@@ -230,7 +227,7 @@ internal object RescanDecision {
         val outcome =
             when {
                 facts.superseded -> FileOutcome.Superseded
-                known == null -> added(facts, now)
+                known == null -> added(facts)
                 facts.knownStillOnDisk -> FileOutcome.Duplicate(DuplicateReport(known.docId, meta.relPath))
                 known.relPath != meta.relPath -> FileOutcome.Moved(known.at(meta))
                 known.missing || !known.statOf(meta) -> FileOutcome.Refreshed(known.at(meta))
@@ -242,10 +239,7 @@ internal object RescanDecision {
     /** Whether this row stores [meta]'s size and mtime, whatever they prove. */
     private fun DocumentEntity.statOf(meta: FileMeta): Boolean = size == meta.size && mtime == meta.mtimeMillis
 
-    private fun added(
-        facts: FileFacts,
-        now: Long,
-    ): FileOutcome.Added {
+    private fun added(facts: FileFacts): FileOutcome.Added {
         val meta = facts.meta
         val row =
             DocumentEntity(
@@ -254,7 +248,6 @@ internal object RescanDecision {
                 fileName = meta.name,
                 size = meta.size,
                 mtime = meta.mtimeMillis,
-                addedAt = now,
                 // reviewed defaults to false (new doc = needs review).
             )
         // External edit: the new bytes may be an edit of the document that was here.
@@ -303,12 +296,11 @@ internal object RescanDecision {
         tombstones: List<DocumentEntity>,
         diskPaths: Set<String>,
         journal: RescanJournal,
-        now: Long,
     ): RescanPlan {
         val pass = PlanPass(rows, tombstones)
         for (meta in hashed) {
             val hash = hashes[meta.relPath] ?: continue
-            pass.take(meta, file(pass.facts(meta, hash, diskPaths, hashes, journal), now))
+            pass.take(meta, file(pass.facts(meta, hash, diskPaths, hashes, journal)))
         }
         // Every row the pass changed is current in byId, so this reads the rows as the pass left them.
         val missing =

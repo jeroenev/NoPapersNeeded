@@ -48,7 +48,7 @@
     <string name="detail_tags">Tags</string>
     <string name="detail_file">Bestand</string>
     <string name="detail_location">Locatie</string>
-    <string name="detail_added">Toegevoegd</string>
+    <string name="detail_created">Aangemaakt</string>
     <string name="detail_pages">Pagina's</string>
     <string name="detail_ocr">OCR</string>
     <string name="detail_ocr_details_failed">Kan de OCR-gegevens van dit document niet laden: %1$s</string>

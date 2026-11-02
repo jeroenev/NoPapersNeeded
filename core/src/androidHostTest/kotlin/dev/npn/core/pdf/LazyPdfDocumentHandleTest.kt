@@ -17,6 +17,8 @@ class LazyPdfDocumentHandleTest {
         object : PdfTextBackend {
             override val pageCount = PAGES
 
+            override val creationDate: Long? = null
+
             override fun extractText(pageIndex: Int) = "text of $pageIndex"
 
             override fun close() {

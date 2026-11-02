@@ -48,7 +48,7 @@
     <string name="detail_tags">Étiquettes</string>
     <string name="detail_file">Fichier</string>
     <string name="detail_location">Emplacement</string>
-    <string name="detail_added">Ajouté le</string>
+    <string name="detail_created">Créé le</string>
     <string name="detail_pages">Pages</string>
     <string name="detail_ocr">OCR</string>
     <string name="detail_ocr_details_failed">Impossible de charger les informations OCR de ce document : %1$s</string>

@@ -56,7 +56,6 @@ class SplitServiceTest {
                 "contract.pdf",
                 size = bytes.size.toLong(),
                 mtime = 1,
-                addedAt = 1,
             )
         rig.db.documentDao().upsert(row)
         return row

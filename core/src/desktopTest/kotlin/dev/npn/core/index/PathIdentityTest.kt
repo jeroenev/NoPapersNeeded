@@ -291,7 +291,6 @@ class PathIdentityTest {
             fileName = NpnPaths.fileName(relPath),
             size = 1,
             mtime = 1,
-            addedAt = 1,
         )
 
     /** A file copied in from outside onto a deleted document's old path is a new document there. */

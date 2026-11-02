@@ -47,7 +47,7 @@ class NpnDatabaseTest {
                     sql =
                         "SELECT d.* FROM documents d " +
                             "JOIN document_tags t ON d.docId = t.docId " +
-                            "WHERE d.reviewed = ? AND t.tag = ? ORDER BY d.addedAt DESC",
+                            "WHERE d.reviewed = ? AND t.tag = ? ORDER BY d.createdAt DESC",
                     onBindStatement = {
                         it.bindLong(1, 0L)
                         it.bindText(2, "invoice")

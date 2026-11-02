@@ -105,6 +105,8 @@ private class PdfBoxDocumentHandle(
 ) : PdfDocumentHandle {
     override val pageCount: Int get() = doc.numberOfPages
 
+    override val creationDate: Long? get() = doc.documentInformation.creationDate?.timeInMillis
+
     private val renderer: PDFRenderer by lazy { PDFRenderer(doc) }
 
     override fun extractText(pageIndex: Int): String {

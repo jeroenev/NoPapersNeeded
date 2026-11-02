@@ -242,8 +242,9 @@ after six rounds do not converge, which fails the run. Then:
   with the path each was trashed from and the same metadata, the deleted state of documents both
   indexes have, field definitions, the styles of the tags in use, review mode, storage path rule,
   trash retention, saved views and auto-match rules. Device-local data is left out on purpose:
-  device id, queues, enrichment marks, thumbnails, OCR state and page counts, `addedAt`, a row's
-  stat, rows hidden as missing or deleted that only the live index remembers, and which of several
+  device id, queues, enrichment marks, thumbnails, OCR state and page counts, the creation date
+  each document's PDF gives (`createdAt`, read from the file again), a row's stat, rows hidden as
+  missing or deleted that only the live index remembers, and which of several
   identical files is a document's path. A replica that is behind (the sync tool has not brought it
   everything yet) is judged on what it has: its index must show what its own folder holds. The
   rebuild publishes nothing but its device marker, and its own OCR sidecar of a document the folder

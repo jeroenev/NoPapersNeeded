@@ -49,7 +49,7 @@
     <string name="detail_tags">Tags</string>
     <string name="detail_file">File</string>
     <string name="detail_location">Location</string>
-    <string name="detail_added">Added</string>
+    <string name="detail_created">Created</string>
     <string name="detail_pages">Pages</string>
     <string name="detail_ocr">OCR</string>
     <string name="detail_ocr_details_failed">Could not load this document’s OCR details: %1$s</string>

@@ -22,6 +22,8 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import java.nio.file.Files
+import java.nio.file.attribute.FileTime
 import kotlin.test.Test
 
 class DocumentFilterTest {
@@ -320,13 +322,13 @@ class DocumentFilterTest {
         }
 
     @Test
-    fun sortByNameAscAndAddedDesc() =
+    fun sortByNameAscAndCreatedDesc() =
         appSessionTest { rig ->
-            rig.writePdf("charlie.pdf", PdfFixtures.embeddedTextPdf("c"))
-            rig.session.rescan()
-            rig.writePdf("alpha.pdf", PdfFixtures.embeddedTextPdf("a"))
-            rig.session.rescan()
-            rig.writePdf("bravo.pdf", PdfFixtures.embeddedTextPdf("b"))
+            rig.clock.now = 400 * DAY
+            listOf("charlie.pdf", "alpha.pdf", "bravo.pdf").forEachIndexed { i, name ->
+                rig.writePdf(name, PdfFixtures.embeddedTextPdf(name))
+                Files.setLastModifiedTime(rig.libRoot.resolve(name), FileTime.fromMillis((i + 1) * DAY))
+            }
             rig.session.rescan()
 
             val repo = DocumentRepositoryImpl(rig.db)
@@ -339,16 +341,48 @@ class DocumentFilterTest {
                     .map { it.doc.fileName }
             byName shouldContainExactly listOf("alpha.pdf", "bravo.pdf", "charlie.pdf")
 
-            val byAddedDesc =
+            // No creation date read yet: each sorts by its file's mtime, newest first.
+            val byCreatedDesc =
                 repo
                     .observeDocuments(
                         LibraryFilter(),
-                        LibrarySort(SortField.Added, ascending = false),
+                        LibrarySort(SortField.Created, ascending = false),
                     ).first()
                     .map { it.doc.fileName }
-            // charlie added first, bravo last -> desc = bravo, alpha, charlie
-            byAddedDesc.first() shouldBe "bravo.pdf"
-            byAddedDesc.last() shouldBe "charlie.pdf"
+            byCreatedDesc shouldContainExactly listOf("bravo.pdf", "alpha.pdf", "charlie.pdf")
+        }
+
+    /**
+     * A creation date read from the PDF outranks the file's mtime, a row without one sorts by its
+     * mtime meanwhile, and ties fall to the name; so flipping the direction reverses the whole list,
+     * the documents one scan found together included.
+     */
+    @Test
+    fun theCreationDateOrdersTheListAndTheOrderReversesWithTheDirection() =
+        appSessionTest { rig ->
+            rig.clock.now = 400 * DAY
+            val names = listOf("delta.pdf", "alpha.pdf", "charlie.pdf", "bravo.pdf", "echo.pdf")
+            names.forEach { name ->
+                rig.writePdf(name, PdfFixtures.embeddedTextPdf(name))
+                Files.setLastModifiedTime(rig.libRoot.resolve(name), FileTime.fromMillis(300 * DAY))
+            }
+            rig.session.rescan()
+            val dao = rig.db.documentDao()
+            // delta waits at its mtime; echo and bravo share a creation date, so the name decides.
+            mapOf("alpha.pdf" to 10 * DAY, "charlie.pdf" to 20 * DAY, "bravo.pdf" to 30 * DAY, "echo.pdf" to 30 * DAY)
+                .forEach { (name, created) -> dao.fillCreatedAt(rig.fs.sha256(name), created) }
+
+            val repo = DocumentRepositoryImpl(rig.db)
+
+            suspend fun byCreated(ascending: Boolean) =
+                repo
+                    .observeDocuments(LibraryFilter(), LibrarySort(SortField.Created, ascending))
+                    .first()
+                    .map { it.doc.fileName }
+
+            val asc = byCreated(ascending = true)
+            asc shouldContainExactly listOf("alpha.pdf", "charlie.pdf", "bravo.pdf", "echo.pdf", "delta.pdf")
+            byCreated(ascending = false) shouldContainExactly asc.reversed()
         }
 
     @Test
@@ -457,6 +491,8 @@ class DocumentFilterTest {
     private companion object {
         /** The bundled SQLite's bind-variable limit on desktop and Android. */
         const val SQLITE_MAX_VARIABLE_NUMBER = 32_766
+
+        const val DAY = 24L * 60L * 60L * 1000L
 
         /** A query plan line that reads the library query's `documents d`. */
         val readsDocuments = Regex("""^(SCAN|SEARCH) d\b""")

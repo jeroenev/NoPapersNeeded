@@ -299,7 +299,7 @@ private fun DocListRowDetails(
             if (reviewMode.reviewMarkerIsAuthoritative) {
                 ReviewedBadge(item.effectiveReviewed(reviewMode))
             }
-            HelpText(item.doc.docDate ?: formatEpochDate(item.doc.addedAt))
+            HelpText(item.doc.docDate ?: formatEpochDate(item.doc.createdAt))
             HelpText(formatSize(item.doc.size))
         }
         item.snippet?.let { snip ->

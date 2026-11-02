@@ -10,6 +10,9 @@ import kotlin.math.sqrt
 interface PdfDocumentHandle : AutoCloseable {
     val pageCount: Int
 
+    /** The document-info `CreationDate`, in epoch millis; null when the PDF names none or a bad one. */
+    val creationDate: Long?
+
     /** Embedded text layer for [pageIndex] (0-based); "" when the page has no text layer. */
     fun extractText(pageIndex: Int): String
 

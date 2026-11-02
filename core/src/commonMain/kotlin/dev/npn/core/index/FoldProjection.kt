@@ -224,7 +224,6 @@ internal class FoldProjection(
                     ?: "${doc.take(TRASHED_NAME_ID_CHARS)}.pdf",
             size = 0,
             mtime = 0,
-            addedAt = state.trashedAtMillis(doc) ?: 0,
         )
     }
 

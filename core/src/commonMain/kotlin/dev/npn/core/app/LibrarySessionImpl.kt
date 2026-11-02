@@ -58,6 +58,7 @@ internal class LibrarySessionImpl(
 
     /** The drains' gate, opened here by the first rescan that succeeds ([SessionGraph.rescanned]). */
     private val drainsReady = graph.rescanned
+    private val creationDates = graph.creationDates
 
     /** Completed once the initial rescan [start] launched has ended, however it ended. */
     private val initialRescanEnded = CompletableDeferred<Unit>()
@@ -239,6 +240,12 @@ internal class LibrarySessionImpl(
         scope
             .launch { log.runLogged("Initial rescan") { backgroundRescan() } }
             .invokeOnCompletion { initialRescanEnded.complete(Unit) }
+
+        // The documents' creation dates, read from their PDFs once the initial rescan has listed them.
+        scope.launch {
+            drainsReady.await()
+            log.runLogged("Reading the documents' creation dates") { creationDates.follow() }
+        }
 
         // Another device's rule list arrives as a journal setting; the rules table only caches it.
         scope.launch {

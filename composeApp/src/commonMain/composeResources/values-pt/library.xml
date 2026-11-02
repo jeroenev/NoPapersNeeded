@@ -11,7 +11,7 @@
     <string name="library_switch_to_grid">Alternar para grade</string>
     <string name="library_sort">Ordenar</string>
     <string name="library_sort_name">Nome</string>
-    <string name="library_sort_added">Adicionado</string>
+    <string name="library_sort_created">Criado</string>
     <string name="library_sort_size">Tamanho</string>
     <string name="library_sort_ascending">Crescente</string>
     <string name="library_sort_descending">Decrescente</string>

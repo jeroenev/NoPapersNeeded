@@ -64,12 +64,7 @@ class IndexerResurrectionTest {
                     .shouldNotBeNull()
                     .docId
             rig.db.documentDao().updateOcrState(docId, OcrState.DONE.column, pageCount = 3, engine = "tesseract")
-            val addedAt =
-                rig.db
-                    .documentDao()
-                    .getByDocId(docId)
-                    .shouldNotBeNull()
-                    .addedAt
+            rig.db.documentDao().fillCreatedAt(docId, 123L)
 
             // Deleted for good with its file gone; then a sync tool puts the very bytes back.
             val writer = rig.writer("dev-main")
@@ -90,7 +85,7 @@ class IndexerResurrectionTest {
                     .shouldNotBeNull()
             returned.deleted.shouldBeFalse()
             returned.missing.shouldBeFalse()
-            returned.addedAt shouldBe addedAt
+            returned.createdAt shouldBe 123L
             returned.ocrState shouldBe OcrState.DONE.column
             returned.pageCount shouldBe 3
         }

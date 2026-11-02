@@ -297,7 +297,7 @@ internal class ImportService(
     ): Placement {
         val meta = placed ?: fs.stat(target) ?: error("Imported file vanished: $target")
         val now = clock.nowMillis()
-        val imported = ImportDecision.row(hash, target, existing, meta, now)
+        val imported = ImportDecision.row(hash, target, existing, meta)
         // No live row names the target ([uniqueTargetPath]); a hidden row naming it gives it up.
         documentDao.upsert(imported.row)
         val enqueued = if (imported.queueOcr) ocrQueueDao.enqueueForImport(hash, now) else null

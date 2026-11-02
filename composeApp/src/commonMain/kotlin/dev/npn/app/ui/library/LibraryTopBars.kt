@@ -57,8 +57,8 @@ import no_papers_needed.composeapp.generated.resources.library_remove_tag
 import no_papers_needed.composeapp.generated.resources.library_results_summary_ascending
 import no_papers_needed.composeapp.generated.resources.library_results_summary_descending
 import no_papers_needed.composeapp.generated.resources.library_sort
-import no_papers_needed.composeapp.generated.resources.library_sort_added
 import no_papers_needed.composeapp.generated.resources.library_sort_ascending
+import no_papers_needed.composeapp.generated.resources.library_sort_created
 import no_papers_needed.composeapp.generated.resources.library_sort_descending
 import no_papers_needed.composeapp.generated.resources.library_sort_name
 import no_papers_needed.composeapp.generated.resources.library_sort_size
@@ -120,7 +120,7 @@ private fun SortMenuButton(
     var expanded by remember { mutableStateOf(false) }
     // Document columns first, then every sortable registry field in registry order.
     val options =
-        listOf(SortField.Name, SortField.Added, SortField.Size) + sortableFields.map { SortField.Field(it.key) }
+        listOf(SortField.Name, SortField.Created, SortField.Size) + sortableFields.map { SortField.Field(it.key) }
     Box {
         TooltipIconButton(Icons.AutoMirrored.Filled.Sort, stringResource(Res.string.library_sort), { expanded = true })
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -257,7 +257,7 @@ private fun sortLabel(
 ): String =
     when (field) {
         SortField.Name -> stringResource(Res.string.library_sort_name)
-        SortField.Added -> stringResource(Res.string.library_sort_added)
+        SortField.Created -> stringResource(Res.string.library_sort_created)
         SortField.Size -> stringResource(Res.string.library_sort_size)
         is SortField.Field -> sortableFields.labelFor(field.key)
     }

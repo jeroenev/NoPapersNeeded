@@ -55,7 +55,7 @@ class IndexerTest {
                 rig.db
                     .documentDao()
                     .requireByDocId(pm.docId)
-                    .addedAt shouldBe 1_000L
+                    .createdAt shouldBe null
             }
         }
 

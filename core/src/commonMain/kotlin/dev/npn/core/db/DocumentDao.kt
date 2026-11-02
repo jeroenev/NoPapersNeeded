@@ -15,6 +15,9 @@ import kotlinx.coroutines.flow.Flow
  */
 internal const val LIVE_DOCUMENT = "d.trashed = 0 AND d.deleted = 0 AND d.missing = 0"
 
+/** Newest first by creation date, the way the library's default sort orders a list. */
+private const val NEWEST_FIRST = "COALESCE(d.createdAt, d.mtime) DESC, d.fileName COLLATE NOCASE, d.docId"
+
 /**
  * Where a row waits while its document holds no path in the library: its file was replaced in
  * place, or another document took the path. Under `.npn/`, so never indexed, and one per document,
@@ -94,7 +97,7 @@ interface DocumentDao {
     @Query(
         "SELECT d.* FROM documents d INNER JOIN document_tags t ON d.docId = t.docId " +
             "WHERE t.tag = :tag AND $LIVE_DOCUMENT " +
-            "ORDER BY d.addedAt DESC LIMIT :limit",
+            "ORDER BY $NEWEST_FIRST LIMIT :limit",
     )
     suspend fun getLiveWithTag(
         tag: String,
@@ -134,6 +137,24 @@ interface DocumentDao {
         pageCount: Int,
     )
 
+    /** The live rows whose creation date is not read yet, for [dev.npn.core.pdf.CreationDates]. */
+    @Query("SELECT * FROM documents d WHERE $LIVE_DOCUMENT AND d.createdAt IS NULL")
+    suspend fun liveWithoutCreatedAt(): List<DocumentEntity>
+
+    /** How many live rows wait for their creation date; [dev.npn.core.pdf.CreationDates] follows it. */
+    @Query("SELECT COUNT(*) FROM documents d WHERE $LIVE_DOCUMENT AND d.createdAt IS NULL")
+    fun observeWithoutCreatedAt(): Flow<Int>
+
+    /**
+     * Fill in a creation date the row does not have yet. A partial UPDATE, for the reason
+     * [fillPageCount] gives; a date already there is left alone.
+     */
+    @Query("UPDATE documents SET createdAt = :createdAt WHERE docId = :docId AND createdAt IS NULL")
+    suspend fun fillCreatedAt(
+        docId: String,
+        createdAt: Long,
+    )
+
     /**
      * Point a document at the place its bytes were just moved to. A partial UPDATE, not a row
      * upsert, so columns another writer set since the fold read the row survive the move.
@@ -168,17 +189,17 @@ interface DocumentDao {
     )
     fun observeLibraryRaw(query: RoomRawQuery): Flow<List<DocumentEntity>>
 
-    @Query("SELECT * FROM documents d WHERE $LIVE_DOCUMENT ORDER BY addedAt DESC")
+    @Query("SELECT * FROM documents d WHERE $LIVE_DOCUMENT ORDER BY $NEWEST_FIRST")
     suspend fun getAllLive(): List<DocumentEntity>
 
     /** Every row, whatever its lifecycle, for passes that must mirror trash and delete state. */
     @Query("SELECT * FROM documents")
     suspend fun getAllRows(): List<DocumentEntity>
 
-    @Query("SELECT * FROM documents WHERE trashed = 1 AND deleted = 0 ORDER BY addedAt DESC")
+    @Query("SELECT * FROM documents d WHERE trashed = 1 AND deleted = 0 ORDER BY trashedAt DESC, $NEWEST_FIRST")
     fun observeTrashed(): Flow<List<DocumentEntity>>
 
-    @Query("SELECT * FROM documents WHERE missing = 1 AND deleted = 0 ORDER BY addedAt DESC")
+    @Query("SELECT * FROM documents d WHERE missing = 1 AND deleted = 0 ORDER BY $NEWEST_FIRST")
     fun observeMissing(): Flow<List<DocumentEntity>>
 
     // --- Counts ---

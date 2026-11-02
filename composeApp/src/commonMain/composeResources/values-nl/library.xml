@@ -11,7 +11,7 @@
     <string name="library_switch_to_grid">Overschakelen naar rasterweergave</string>
     <string name="library_sort">Sorteren</string>
     <string name="library_sort_name">Naam</string>
-    <string name="library_sort_added">Toegevoegd</string>
+    <string name="library_sort_created">Aangemaakt</string>
     <string name="library_sort_size">Grootte</string>
     <string name="library_sort_ascending">Oplopend</string>
     <string name="library_sort_descending">Aflopend</string>

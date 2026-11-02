@@ -16,6 +16,7 @@ import dev.npn.core.model.SystemProperty
 import dev.npn.core.ocr.OcrEngineSelector
 import dev.npn.core.ocr.OcrPipeline
 import dev.npn.core.pathrules.StoragePathRuleApplicator
+import dev.npn.core.pdf.CreationDates
 import dev.npn.core.pdf.RenderGate
 import dev.npn.core.pdf.ThumbnailService
 import dev.npn.core.rules.RuleApplier
@@ -212,6 +213,16 @@ internal class SessionGraph(
     // Single shared gate so thumbnail + page rendering share one bounded concurrency budget and a
     // first-load burst (e.g. 200 PDFs) cannot flood the dispatchers.
     private val renderGate = RenderGate(deps.renderParallelism, deps.computation)
+
+    val creationDates =
+        CreationDates(
+            deps.pdfEngine,
+            deps.fs,
+            db.documentDao(),
+            renderGate,
+            log,
+            onStaleFile = { staleFiles.trySend(Unit) },
+        )
 
     val content =
         DocContentFacadeImpl(

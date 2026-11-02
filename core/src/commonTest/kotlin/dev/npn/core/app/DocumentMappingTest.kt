@@ -27,7 +27,7 @@ class DocumentMappingTest {
         size = 1234L,
         mtime = 99L,
         pageCount = 3,
-        addedAt = 42L,
+        createdAt = 42L,
         reviewed = true,
         correspondent = "Bank",
         docType = "statement",
@@ -56,7 +56,7 @@ class DocumentMappingTest {
                 displayTitle = "July statement",
                 size = 1234L,
                 pageCount = 3,
-                addedAt = 42L,
+                createdAt = 42L,
                 reviewed = true,
                 fields =
                     mapOf(

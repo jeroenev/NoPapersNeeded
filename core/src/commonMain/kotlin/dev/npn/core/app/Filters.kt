@@ -42,8 +42,6 @@ data class LibraryFilter(
     val fieldEquals: Map<String, String> = emptyMap(),
     /** Field key -> inclusive range on the canonical value (dates lexicographic, numbers numeric). AND-ed. */
     val fieldRanges: Map<String, FieldRange> = emptyMap(),
-    val addedFrom: Long? = null, // epoch millis, inclusive
-    val addedTo: Long? = null,
     val folder: String? = null, // relPath prefix
     val untaggedOnly: Boolean = false,
     val unreviewedOrUntagged: Boolean = false, // INBOX_WORKFLOW review preset: !reviewed OR no tags
@@ -161,8 +159,6 @@ fun LibraryFilter.rebased(
         reviewed = part { reviewed },
         fieldEquals = rebasedByKey(fieldEquals, from.fieldEquals, to.fieldEquals),
         fieldRanges = rebasedByKey(fieldRanges, from.fieldRanges, to.fieldRanges),
-        addedFrom = part { addedFrom },
-        addedTo = part { addedTo },
         folder = part { folder },
         untaggedOnly = part { untaggedOnly },
         unreviewedOrUntagged = part { unreviewedOrUntagged },
@@ -187,9 +183,13 @@ sealed class SortField {
     @SerialName("name")
     data object Name : SortField()
 
+    /**
+     * By [Doc.createdAt]. Still `added` on the wire, the name of the sort it replaced: a saved view
+     * keeps its sort, and an older build reading one sorted this way still knows the name.
+     */
     @Serializable
     @SerialName("added")
-    data object Added : SortField()
+    data object Created : SortField()
 
     @Serializable
     @SerialName("size")
@@ -207,7 +207,7 @@ sealed class SortField {
         get() =
             when (this) {
                 Name -> "name"
-                Added -> "added"
+                Created -> "added"
                 Size -> "size"
                 is Field -> "field:$key"
             }
@@ -218,7 +218,7 @@ sealed class SortField {
             when (value) {
                 null -> null
                 "name", "NAME" -> Name
-                "added", "ADDED" -> Added
+                "added", "ADDED" -> Created
                 "size", "SIZE" -> Size
                 "DOC_DATE" -> Field("docDate")
                 else -> value.removePrefix("field:").takeIf { it != value && it.isNotBlank() }?.let(::Field)
@@ -228,7 +228,7 @@ sealed class SortField {
 
 @Serializable
 data class LibrarySort(
-    val field: SortField = SortField.Added,
+    val field: SortField = SortField.Created,
     val ascending: Boolean = false,
 )
 

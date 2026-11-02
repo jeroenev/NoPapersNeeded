@@ -32,7 +32,7 @@ class ImportDecisionTest {
                             fileName = "a.pdf",
                             size = 10,
                             mtime = 1_000,
-                            addedAt = 1,
+                            createdAt = 1,
                             title = "Kept",
                             trashed = lifecycle == 1,
                             trashedOrigPath = "inbox/a.pdf".takeIf { lifecycle == 1 },
@@ -47,13 +47,13 @@ class ImportDecisionTest {
 
     /**
      * The row an import writes is live at its target with the stat of the bytes it placed, keeps a
-     * returning document's metadata and date added, and queues for OCR only text not indexed yet.
+     * returning document's metadata and creation date, and queues for OCR only text not indexed yet.
      */
     @Test
     fun thePlacedDocumentIsLiveAtItsTargetWithThePlacedStatAndKeepsWhatItHad() =
         propTest {
             checkAll(Exhaustive.collection(existings)) { existing ->
-                val imported = ImportDecision.row(hash, target, existing, stat, now = 9_000)
+                val imported = ImportDecision.row(hash, target, existing, stat)
                 val row = imported.row
                 check(row.isLive) { "$existing comes back hidden: $row" }
                 check(row.trashedOrigPath == null && row.trashedAt == null) { "$existing keeps its trash: $row" }
@@ -62,7 +62,7 @@ class ImportDecisionTest {
                 row.fileName shouldBe "new name.pdf"
                 row.size shouldBe 10
                 row.mtime shouldBe 5_000
-                row.addedAt shouldBe (existing?.addedAt ?: 9_000)
+                row.createdAt shouldBe existing?.createdAt
                 row.title shouldBe existing?.title
                 val indexed =
                     existing != null &&
@@ -79,7 +79,7 @@ class ImportDecisionTest {
         propTest {
             checkAll(Exhaustive.collection(existings.filterNotNull())) { existing ->
                 val sameName = existing.copy(fileName = stat.name)
-                ImportDecision.row(hash, target, sameName, stat, now = 9_000).reindexName shouldBe false
+                ImportDecision.row(hash, target, sameName, stat).reindexName shouldBe false
             }
         }
 }

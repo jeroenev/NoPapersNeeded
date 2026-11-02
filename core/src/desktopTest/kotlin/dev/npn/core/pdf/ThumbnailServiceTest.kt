@@ -37,7 +37,7 @@ class ThumbnailServiceTest {
             fs.writeBytesOnce("doc.pdf", bytes)
             val docId = fs.sha256("doc.pdf")
             db.documentDao().upsert(
-                documentEntity(docId, "doc.pdf", size = bytes.size.toLong(), mtime = 1, addedAt = 1),
+                documentEntity(docId, "doc.pdf", size = bytes.size.toLong(), mtime = 1),
             )
             val store = RecordingThumbnailStore()
             val service =
@@ -65,7 +65,7 @@ class ThumbnailServiceTest {
             val docId = fs.sha256("doc.pdf")
             val dao = db.documentDao()
             dao.upsert(
-                documentEntity(docId, "doc.pdf", size = bytes.size.toLong(), mtime = 1, addedAt = 1),
+                documentEntity(docId, "doc.pdf", size = bytes.size.toLong(), mtime = 1),
             )
             // A fold moves the document just before the backfill writes, whichever way it writes.
             val racingDao =
@@ -109,7 +109,7 @@ class ThumbnailServiceTest {
     fun aKnownPageCountIsNeverOverwritten() =
         runTest {
             db.documentDao().upsert(
-                documentEntity("d", "d.pdf", size = 1, mtime = 1, addedAt = 1, pageCount = 3),
+                documentEntity("d", "d.pdf", size = 1, mtime = 1, pageCount = 3),
             )
             db.documentDao().fillPageCount("d", 5)
             db
@@ -126,7 +126,7 @@ class ThumbnailServiceTest {
             fs.writeBytesOnce("doc.pdf", bytes)
             val docId = fs.sha256("doc.pdf")
             db.documentDao().upsert(
-                documentEntity(docId, "doc.pdf", size = bytes.size.toLong(), mtime = 1, addedAt = 1),
+                documentEntity(docId, "doc.pdf", size = bytes.size.toLong(), mtime = 1),
             )
             val store = RecordingThumbnailStore()
             val service =
@@ -146,7 +146,7 @@ class ThumbnailServiceTest {
             fs.writeBytesOnce("doc.pdf", bytes)
             val docId = fs.sha256("doc.pdf")
             db.documentDao().upsert(
-                documentEntity(docId, "doc.pdf", size = bytes.size.toLong(), mtime = 1, addedAt = 1),
+                documentEntity(docId, "doc.pdf", size = bytes.size.toLong(), mtime = 1),
             )
             val dir = Files.createTempDirectory("npn-thumbs")
             val service =
@@ -172,7 +172,7 @@ class ThumbnailServiceTest {
             fs.writeBytesOnce("doc.pdf", bytes)
             val docId = fs.sha256("doc.pdf")
             db.documentDao().upsert(
-                documentEntity(docId, "doc.pdf", size = bytes.size.toLong(), mtime = 1, addedAt = 1),
+                documentEntity(docId, "doc.pdf", size = bytes.size.toLong(), mtime = 1),
             )
             fs.delete("doc.pdf")
             fs.writeBytesOnce("doc.pdf", PdfFixtures.embeddedTextPdf("another document"))
@@ -202,7 +202,7 @@ class ThumbnailServiceTest {
             fs.writeBytesOnce("doc.pdf", bytes)
             val docId = fs.sha256("doc.pdf")
             db.documentDao().upsert(
-                documentEntity(docId, "doc.pdf", size = bytes.size.toLong(), mtime = 1, addedAt = 1),
+                documentEntity(docId, "doc.pdf", size = bytes.size.toLong(), mtime = 1),
             )
             val store = RecordingThumbnailStore()
             val service =

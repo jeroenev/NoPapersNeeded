@@ -40,7 +40,7 @@ import dev.npn.core.app.DocListItem
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.model.reviewMarkerIsAuthoritative
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.detail_added
+import no_papers_needed.composeapp.generated.resources.detail_created
 import no_papers_needed.composeapp.generated.resources.detail_document_unavailable
 import no_papers_needed.composeapp.generated.resources.detail_document_unavailable_hint
 import no_papers_needed.composeapp.generated.resources.detail_file
@@ -242,7 +242,7 @@ private fun DetailsTab(
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             FactRow(stringResource(Res.string.detail_file), doc.fileName)
             FactRow(stringResource(Res.string.detail_location), doc.relPath)
-            FactRow(stringResource(Res.string.detail_added), formatEpochDate(doc.addedAt))
+            FactRow(stringResource(Res.string.detail_created), formatEpochDate(doc.createdAt))
             doc.pageCount?.let { FactRow(stringResource(Res.string.detail_pages), it.toString()) }
             FactRow(stringResource(Res.string.detail_ocr), ocrLabel(doc.ocrState))
             OcrEngineRow(

@@ -24,7 +24,7 @@ enum class Hidden { TRASHED, DELETED, MISSING }
  * What a library is, as a replica's index and session show it, in the terms the rebuild oracle
  * compares. Device-local state is left out on purpose: the device id, the OCR, enrichment and edit
  * queues, enrichment marks, thumbnails, OCR state and page counts (this device's work, rebuilt by
- * running it again), when a document was first seen (`addedAt`) and its stat.
+ * running it again), the creation date each document's PDF gives (`createdAt`, read from the file again) and its stat.
  */
 internal data class LibraryView(
     /** Live documents by id. */

@@ -52,7 +52,9 @@ import kotlinx.coroutines.Dispatchers
     // v25: adds field_defs.perDocument.
     // v26: drops thumbnails; the thumbnail store answers from its files alone.
     // v27: drops metadata_superseded; a gone journal source is judged by who holds its events.
-    version = 27,
+    // v28: documents.addedAt (when this index first saw the file) gives way to documents.createdAt
+    //      (the PDF's own creation date), which CreationDates fills in from the files.
+    version = 28,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 3, to = 4),
@@ -77,6 +79,7 @@ import kotlinx.coroutines.Dispatchers
         AutoMigration(from = 24, to = 25),
         AutoMigration(from = 25, to = 26, spec = NpnDatabase.DropThumbnails::class),
         AutoMigration(from = 26, to = 27, spec = NpnDatabase.DropSuperseded::class),
+        AutoMigration(from = 27, to = 28, spec = NpnDatabase.DropAddedAt::class),
     ],
     entities = [
         DocumentEntity::class,
@@ -141,6 +144,14 @@ abstract class NpnDatabase : RoomDatabase() {
      */
     @DeleteTable(tableName = "metadata_superseded")
     class DropSuperseded : AutoMigrationSpec
+
+    /**
+     * v27 -> v28: drop `documents.addedAt`. It held when this index first saw each file, which a scan
+     * stamped on a whole library at once; the new `createdAt` starts empty, for CreationDates to
+     * fill from the files, rather than inheriting those scan times.
+     */
+    @DeleteColumn(tableName = "documents", columnName = "addedAt")
+    class DropAddedAt : AutoMigrationSpec
 
     /**
      * v14 -> v15: the per-property FTS columns give way to one `fields` column. The index is

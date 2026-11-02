@@ -15,7 +15,7 @@ class RelinkPairingTest {
         id: String,
         relPath: String,
         size: Long,
-    ) = documentEntity(id, relPath, size = size, mtime = 1, addedAt = 1, missing = true)
+    ) = documentEntity(id, relPath, size = size, mtime = 1, missing = true)
 
     private fun found(
         relPath: String,

@@ -41,7 +41,7 @@ fun doc(
         displayTitle = title?.takeIf { it.isNotBlank() } ?: fileName,
         size = 0L,
         pageCount = null,
-        addedAt = 0L,
+        createdAt = 0L,
         reviewed = reviewed,
         fields =
             buildMap {

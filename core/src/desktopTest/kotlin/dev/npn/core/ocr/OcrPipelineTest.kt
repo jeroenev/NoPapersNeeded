@@ -209,7 +209,7 @@ class OcrPipelineTest {
             fs.writeBytesOnce("broken.pdf", "not a pdf".encodeToByteArray())
             val docId = fs.sha256("broken.pdf")
             db.documentDao().upsert(
-                documentEntity(docId, "broken.pdf", size = 10, mtime = 1, addedAt = 1),
+                documentEntity(docId, "broken.pdf", size = 10, mtime = 1),
             )
             rig.deviceDb.ocrQueueDao().upsert(OcrQueueEntity(docId, "pending", updatedAt = 1))
 

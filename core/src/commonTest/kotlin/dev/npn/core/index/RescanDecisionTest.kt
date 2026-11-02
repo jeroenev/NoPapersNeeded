@@ -26,7 +26,6 @@ import kotlin.test.Test
  * file; and small random libraries for a whole pass.
  */
 class RescanDecisionTest {
-    private val now = 9_000L
     private val hash = "h-file"
     private val path = "inbox/a.pdf"
     private val meta = FileMeta(path, "a.pdf", size = 10, mtimeMillis = 1_000, isDirectory = false)
@@ -45,7 +44,6 @@ class RescanDecisionTest {
         fileName = relPath.substringAfterLast('/'),
         size = size,
         mtime = mtime,
-        addedAt = 1,
         trashed = trashed,
         deleted = deleted,
         missing = missing,
@@ -104,7 +102,7 @@ class RescanDecisionTest {
     fun theRowAtAPathOfOtherBytesGivesItUpAndGoesMissingOnlyWhenItWasShown() =
         propTest {
             checkAll(Exhaustive.collection(allFacts)) { facts ->
-                val displaced = RescanDecision.file(facts, now).displaced
+                val displaced = RescanDecision.file(facts).displaced
                 val holder = facts.holder
                 if (holder == null) {
                     displaced shouldBe null
@@ -123,7 +121,7 @@ class RescanDecisionTest {
     fun bytesARelinkSupersededGetNoRowOfTheirOwn() =
         propTest {
             checkAll(Exhaustive.collection(allFacts.filter { it.superseded })) { facts ->
-                RescanDecision.file(facts, now).outcome shouldBe FileOutcome.Superseded
+                RescanDecision.file(facts).outcome shouldBe FileOutcome.Superseded
             }
         }
 
@@ -145,7 +143,7 @@ class RescanDecisionTest {
                         mtime = 1_000,
                         missing = false,
                     )
-                when (val outcome = RescanDecision.file(facts, now).outcome) {
+                when (val outcome = RescanDecision.file(facts).outcome) {
                     is FileOutcome.Duplicate -> {
                         facts.knownStillOnDisk shouldBe true
                         outcome.report shouldBe DuplicateReport(hash, path)
@@ -170,7 +168,7 @@ class RescanDecisionTest {
                     }
                 }
                 if (facts.knownStillOnDisk) {
-                    RescanDecision.file(facts, now).outcome shouldBe
+                    RescanDecision.file(facts).outcome shouldBe
                         FileOutcome.Duplicate(DuplicateReport(hash, path))
                 }
             }
@@ -181,10 +179,10 @@ class RescanDecisionTest {
     fun bytesNoRowHoldsAreANewDocumentAndAnEditOnlyOfAShownOne() =
         propTest {
             checkAll(Exhaustive.collection(allFacts.filter { !it.superseded && it.known == null })) { facts ->
-                val outcome = RescanDecision.file(facts, now).outcome
+                val outcome = RescanDecision.file(facts).outcome
                 outcome shouldBe
                     FileOutcome.Added(
-                        DocumentEntity(hash, path, "a.pdf", size = 10, mtime = 1_000, addedAt = now),
+                        DocumentEntity(hash, path, "a.pdf", size = 10, mtime = 1_000),
                         facts.holder?.takeUnless { facts.holderHidden }?.let {
                             RelinkCandidate(
                                 it.docId,
@@ -317,7 +315,6 @@ class RescanDecisionTest {
                         fileName = relPath.substringAfterLast('/'),
                         size = docId.length.toLong(),
                         mtime = 100L * random.nextInt(1, 3),
-                        addedAt = 1,
                         trashed = flag == 1,
                         deleted = flag == 2,
                         missing = flag == 3,
@@ -374,7 +371,6 @@ class RescanDecisionTest {
                 tombstones = tombstones,
                 diskPaths = listing.map { it.relPath }.toSet(),
                 journal = journal,
-                now = 7,
             )
         }
 

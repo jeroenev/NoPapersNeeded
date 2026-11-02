@@ -109,6 +109,8 @@ class SimPdfEngine(
         return object : PdfDocumentHandle {
             override val pageCount: Int = SimPdf.pagesOf(bytes)
 
+            override val creationDate: Long? = null
+
             override fun extractText(pageIndex: Int): String = SimPdf.textOf(bytes)
 
             override fun renderPagePng(

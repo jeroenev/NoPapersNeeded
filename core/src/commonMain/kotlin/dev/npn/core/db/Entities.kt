@@ -24,7 +24,6 @@ import dev.npn.core.ocr.OcrState
         Index(value = ["correspondent"]),
         Index(value = ["docType"]),
         Index(value = ["docDate"]),
-        Index(value = ["addedAt"]),
         Index(value = ["trashed"]),
         Index(value = ["deleted"]),
         Index(value = ["missing"]),
@@ -38,8 +37,13 @@ data class DocumentEntity(
     val size: Long,
     val mtime: Long,
     val pageCount: Int? = null,
-    /** First-seen epoch millis. */
-    val addedAt: Long,
+    /**
+     * When the PDF says it was created (its document-info `CreationDate`), in epoch millis, or the
+     * file's [mtime] when the PDF names none. Null until [dev.npn.core.pdf.CreationDates] has read
+     * the file; a reader sorts such a row by its [mtime] meanwhile. Read from the bytes, so it is the
+     * same on every device and survives copies, sync and an index rebuild.
+     */
+    val createdAt: Long? = null,
     /**
      * Manual "reviewed" marker used by the INBOX_WORKFLOW review mode. In UNTAGGED_ONLY mode this
      * is ignored (reviewed is derived as "has any tag").

@@ -43,7 +43,6 @@ class FoldLifecycleTest {
                     fileName = relPath.substringAfterLast('/'),
                     size = 1,
                     mtime = 1,
-                    addedAt = 1,
                     trashed = bits and 1 != 0,
                     deleted = bits and 2 != 0,
                     missing = bits and 4 != 0,

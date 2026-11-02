@@ -23,7 +23,11 @@ data class Doc(
     val displayTitle: String,
     val size: Long,
     val pageCount: Int?,
-    val addedAt: Long,
+    /**
+     * When the PDF says it was created, in epoch millis; the file's modification time when it names
+     * none, or until the PDF has been read.
+     */
+    val createdAt: Long,
     val reviewed: Boolean,
     /**
      * Every field value on this document, keyed by registry key ([dev.npn.core.model.FieldKeys]

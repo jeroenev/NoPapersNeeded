@@ -96,14 +96,6 @@ internal object LibraryQuerySql {
             bindLong(if (it) 1L else 0L)
         }
         addFieldPredicates(filter, where, ::bindText)
-        filter.addedFrom?.let {
-            where.add("d.addedAt >= ?")
-            bindLong(it)
-        }
-        filter.addedTo?.let {
-            where.add("d.addedAt <= ?")
-            bindLong(it)
-        }
         filter.folder?.takeIf { it.isNotBlank() }?.let { folder ->
             val prefix = folder.trimEnd('/') + "/"
             where.add("d.relPath LIKE ? ESCAPE '\\'")
@@ -176,20 +168,33 @@ internal object LibraryQuerySql {
             " LEFT JOIN document_fields sf ON sf.docId = d.docId AND sf.fieldKey = ?"
         }
 
+    /**
+     * Every sort ends in tiebreakers that run the same direction, down to the unique docId, so the
+     * order is total and flipping the direction reverses the tied rows too. Without them SQLite
+     * leaves tied rows in its scan order whichever way the list is sorted. A field sort keeps its
+     * empty values last either way.
+     */
     private fun orderBySql(sort: LibrarySort): String {
         val dir = if (sort.ascending) "ASC" else "DESC"
-        return when (sort.field) {
-            SortField.Name -> "d.fileName COLLATE NOCASE $dir"
+        val primary =
+            when (sort.field) {
+                SortField.Name -> "d.fileName COLLATE NOCASE $dir"
 
-            SortField.Added -> "d.addedAt $dir"
+                // A row whose PDF is not read yet sorts by its file's mtime meanwhile, as Doc shows it.
+                SortField.Created -> "$CREATED_AT $dir"
 
-            SortField.Size -> "d.size $dir"
+                SortField.Size -> "d.size $dir"
 
-            // Nulls last; numeric shadow decides for NUMBER/DECIMAL fields, the canonical string
-            // (chronological for dates) for everything else.
-            is SortField.Field -> "sf.fieldValue IS NULL, sf.numValue $dir, sf.fieldValue COLLATE NOCASE $dir"
-        }
+                // Nulls last; numeric shadow decides for NUMBER/DECIMAL fields, the canonical string
+                // (chronological for dates) for everything else.
+                is SortField.Field -> "sf.fieldValue IS NULL, sf.numValue $dir, sf.fieldValue COLLATE NOCASE $dir"
+            }
+        val byName = if (sort.field == SortField.Name) "" else ", d.fileName COLLATE NOCASE $dir"
+        return "$primary$byName, d.docId $dir"
     }
+
+    /** The creation date a row sorts and shows by: [Doc.createdAt]. */
+    private const val CREATED_AT = "COALESCE(d.createdAt, d.mtime)"
 
     /** [s] with LIKE's wildcards and its escape character escaped, for a `LIKE ? ESCAPE '\\'` pattern. */
     fun escapeLike(s: String): String = s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")

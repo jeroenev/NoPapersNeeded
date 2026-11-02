@@ -32,7 +32,6 @@ class LifecyclePlanTest {
                             fileName = "a.pdf",
                             size = 10,
                             mtime = 1_000,
-                            addedAt = 1,
                             title = "Kept",
                             trashed = lifecycle == 1,
                             trashedOrigPath = origPath.takeIf { lifecycle == 1 },

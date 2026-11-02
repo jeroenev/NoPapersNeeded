@@ -140,6 +140,8 @@ private class PdfBoxTextBackend(
 ) : PdfTextBackend {
     override val pageCount: Int get() = document.numberOfPages
 
+    override val creationDate: Long? get() = document.documentInformation.creationDate?.timeInMillis
+
     override fun extractText(pageIndex: Int): String {
         val stripper = PDFTextStripper()
         stripper.startPage = pageIndex + 1

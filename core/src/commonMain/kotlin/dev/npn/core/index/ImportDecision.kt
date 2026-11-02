@@ -24,7 +24,7 @@ internal object ImportDecision {
 
     /**
      * The row of the document of [hash] whose file an import put at [target], [stat] being that
-     * file's: [existing] brought back as live there, or a new document added [now]. A document whose
+     * file's: [existing] brought back as live there, or a new document. A document whose
      * text is not indexed yet is queued for OCR.
      */
     fun row(
@@ -32,9 +32,8 @@ internal object ImportDecision {
         target: String,
         existing: DocumentEntity?,
         stat: FileMeta,
-        now: Long,
     ): ImportedRow {
-        val row = existing?.backAt(target, stat) ?: newDocument(hash, target, stat, now)
+        val row = existing?.backAt(target, stat) ?: newDocument(hash, target, stat)
         // A returning document whose text is indexed already has nothing for OCR to redo.
         val queueOcr = OcrState.fromColumn(row.ocrState) !in INDEXED
         return ImportedRow(
@@ -48,14 +47,12 @@ internal object ImportDecision {
         hash: String,
         target: String,
         stat: FileMeta,
-        now: Long,
     ) = DocumentEntity(
         docId = hash,
         relPath = target,
         fileName = NpnPaths.fileName(target),
         size = stat.size,
         mtime = stat.mtimeMillis,
-        addedAt = now,
         ocrState = OcrState.PENDING.column,
     )
 

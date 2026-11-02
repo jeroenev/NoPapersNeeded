@@ -4,6 +4,8 @@ package dev.npn.core.pdf
 internal interface PdfTextBackend : AutoCloseable {
     val pageCount: Int
 
+    val creationDate: Long?
+
     fun extractText(pageIndex: Int): String
 }
 
@@ -32,6 +34,8 @@ internal class LazyPdfDocumentHandle(
     private var closed = false
 
     override val pageCount: Int get() = pages?.pageCount ?: text().pageCount
+
+    override val creationDate: Long? get() = text().creationDate
 
     override fun extractText(pageIndex: Int): String = text().extractText(pageIndex)
 

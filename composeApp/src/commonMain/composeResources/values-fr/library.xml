@@ -11,7 +11,7 @@
     <string name="library_switch_to_grid">Passer à la vue grille</string>
     <string name="library_sort">Trier</string>
     <string name="library_sort_name">Nom</string>
-    <string name="library_sort_added">Date d’ajout</string>
+    <string name="library_sort_created">Date de création</string>
     <string name="library_sort_size">Taille</string>
     <string name="library_sort_ascending">Croissant</string>
     <string name="library_sort_descending">Décroissant</string>

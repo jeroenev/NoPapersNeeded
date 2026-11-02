@@ -27,8 +27,6 @@ class LibraryFilterShapeTest {
                 "reviewed",
                 "fieldEquals",
                 "fieldRanges",
-                "addedFrom",
-                "addedTo",
                 "folder",
                 "untaggedOnly",
                 "unreviewedOrUntagged",

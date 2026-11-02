@@ -367,7 +367,6 @@ internal class Indexer(
                 tombstones = tombstones,
                 diskPaths = diskPaths,
                 journal = state.rescanJournal(),
-                now = clock.nowMillis(),
             )
         if (plan.writes.isNotEmpty()) documentDao.upsertAll(plan.writes)
         if (plan.nowMissing.isNotEmpty()) documentDao.upsertAll(plan.nowMissing)
