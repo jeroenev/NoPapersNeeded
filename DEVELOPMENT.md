@@ -220,14 +220,14 @@ single command:
 
 ```
 mise pair      # one time: follow the prompts, uses the phone's Wireless debugging screen
-mise deploy    # every time: build + install over adb + launch dev.npn.debug/dev.npn.MainActivity
+mise deploy    # every time: build + install over adb + launch the debug build
 ```
 
 `mise deploy` runs the Android Gradle Plugin `installDebug` task (build + adb
-install) and then `adb shell am start -n dev.npn.debug/dev.npn.MainActivity`.
+install) and then `adb shell am start -n io.github.jeroenev.NoPapersNeeded.debug/dev.npn.MainActivity`.
 
-The debug build is its own package, `dev.npn.debug`, so it installs next to the release
-build (`dev.npn`) rather than replacing it. It shows up as "NPN debug" with an amber
+The debug build is its own package, `io.github.jeroenev.NoPapersNeeded.debug`, so it installs next to the release
+build (`io.github.jeroenev.NoPapersNeeded`) rather than replacing it. It shows up as "NPN debug" with an amber
 icon and proposes `Documents/NoPapersNeeded-debug` as its library, so it only writes to
 your real library if you point it there; it then acts as a second device on that
 library. `mise deploy --release` installs the release build instead, which needs the
@@ -260,7 +260,7 @@ generates it by driving the app on a connected device:
 mise baseline-profile   # Android 13+ device; takes about 10 minutes; leave the phone alone
 ```
 
-It installs `dev.npn.benchmark` (debug-signed, next to any other build), which proposes its own
+It installs `io.github.jeroenev.NoPapersNeeded.benchmark` (debug-signed, next to any other build), which proposes its own
 library folder, `Documents/NoPapersNeeded-benchmark`. The generator seeds demo PDFs there,
 grants all-files access through the system settings switch, and records cold start
 (`startup-prof.txt`, which also orders the DEX) and browsing (`baseline-prof.txt`). It finds the

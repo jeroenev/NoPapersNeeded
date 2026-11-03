@@ -5,8 +5,8 @@
 [env]
 # Android package ids used by the deploy/uninstall tasks. The debug build has its own package so
 # it installs next to the release build.
-ANDROID_APP_ID = "dev.npn"
-ANDROID_APP_ID_DEBUG = "dev.npn.debug"
+ANDROID_APP_ID = "io.github.jeroenev.NoPapersNeeded"
+ANDROID_APP_ID_DEBUG = "io.github.jeroenev.NoPapersNeeded.debug"
 ANDROID_ACTIVITY = "dev.npn.MainActivity"
 
 # Only needed by `mise icons`, which re-renders the committed desktop icons from

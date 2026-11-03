@@ -30,7 +30,7 @@ private const val DEFAULT_LIBRARY_DIR = "NoPapersNeeded"
 private const val CLOUD_LIBRARIES_DIR = "cloud-libraries"
 
 /** The release build's applicationId; other builds append a suffix (see androidApp/build.gradle.kts). */
-private const val RELEASE_PACKAGE = "dev.npn"
+private const val RELEASE_PACKAGE = "io.github.jeroenev.NoPapersNeeded"
 
 actual suspend fun loadImageBitmap(
     path: String,

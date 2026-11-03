@@ -220,6 +220,9 @@ val buildRcloneAndroid =
 
 val npnVersion = NpnVersion.of(project)
 
+// Play's package name (dev.npn was taken there). The namespace and Kotlin packages stay dev.npn.
+val npnApplicationId = "io.github.jeroenev.NoPapersNeeded"
+
 // Release signing comes from the environment so the key never touches the repo: the release
 // workflow decodes it from secrets, and a local release build can export the same variables.
 // Without them assembleRelease still works but produces androidApp-release-unsigned.apk.
@@ -230,7 +233,7 @@ android {
 
     // compileSdk, minSdk, targetSdk and the test runner come from npn.toolchain.
     defaultConfig {
-        applicationId = "dev.npn"
+        applicationId = npnApplicationId
         versionCode = npnVersion.code
         versionName = npnVersion.name
 
@@ -294,7 +297,7 @@ android {
     buildTypes {
         getByName("debug") {
             signingConfig = signingConfigs.getByName("debug")
-            // Its own package (dev.npn.debug), so a debug build installs next to the release build
+            // Its own package (io.github.jeroenev.NoPapersNeeded.debug), so a debug build installs next to the release build
             // instead of colliding with it: different signing keys can't update each other's
             // package. src/debug/res gives it its own name and icon colour.
             applicationIdSuffix = ".debug"
@@ -328,6 +331,6 @@ baselineProfile {
 // their own package, like debug, so they install next to the release build instead of colliding
 // with its signature, and propose their own library folder.
 androidComponents {
-    onVariants(selector().withBuildType("nonMinifiedRelease")) { it.applicationId.set("dev.npn.benchmark") }
-    onVariants(selector().withBuildType("benchmarkRelease")) { it.applicationId.set("dev.npn.benchmark") }
+    onVariants(selector().withBuildType("nonMinifiedRelease")) { it.applicationId.set("$npnApplicationId.benchmark") }
+    onVariants(selector().withBuildType("benchmarkRelease")) { it.applicationId.set("$npnApplicationId.benchmark") }
 }

@@ -864,7 +864,7 @@ placeholder. `SettingsSearchCoverageTest` fails on a visible settings label sear
 import, reported as soon as it is done; the activity imports its launch intent once, and again only
 when a process death cut that import short, see `LaunchImports`); `NpnWork` (WorkManager: the
 periodic watched-folder sweep, rescan and queue drains, and the one-time drain of what a share import
-queued). The debug build is a separate package, `dev.npn.debug`.
+queued). The debug build is a separate package, `io.github.jeroenev.NoPapersNeeded.debug`.
 
 **`desktopApp`** runs one instance per user: `SingleInstance` holds a lock file in the app data
 directory, and a second launch only says so and exits. Closing the window closes the session,

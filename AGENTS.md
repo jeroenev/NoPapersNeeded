@@ -14,12 +14,14 @@ design, build/packaging/release details, and the library folder layout.
   goes here rather than into either module's tests.
 - `composeApp` — shared Compose UI + viewmodels (`dev.npn.app.ui.*`, `di`, and `platform` for the
   `expect` hooks each platform answers).
-- `androidApp` — Android entrypoint (`dev.npn`, launcher `dev.npn/.MainActivity`). The debug
-  build is a separate package, `dev.npn.debug`, so it installs next to the release build.
+- `androidApp` — Android entrypoint (Kotlin package and namespace `dev.npn`, launcher
+  `io.github.jeroenev.NoPapersNeeded/dev.npn.MainActivity`). Its applicationId is
+  `io.github.jeroenev.NoPapersNeeded`, Play's package name, as `dev.npn` was taken there. The debug
+  build is a separate package, `<applicationId>.debug`, so it installs next to the release build.
 - `desktopApp` — desktop entrypoint + packaging (deb/rpm/AppImage/uber-jar; Flatpak manifest
   in `desktopApp/flatpak/`, built by `mise package-flatpak`; `mise flathub-manifest` derives the
   Flathub one). The Flatpak app ID is `io.github.jeroenev.NoPapersNeeded`, which Flathub ties
-  to the GitHub repo `jeroenev/NoPapersNeeded`; the Android package stays `dev.npn`.
+  to the GitHub repo `jeroenev/NoPapersNeeded`; the Android applicationId is the same.
 - Java: one JDK, 25 (`jdk` in `libs.versions.toml`), runs Gradle, compiles everything and is the
   desktop runtime. `.java-version` (what the workflows install) and the daemon criteria in
   `gradle/gradle-daemon-jvm.properties` repeat it; `:buildSrc:test` fails when they disagree.
