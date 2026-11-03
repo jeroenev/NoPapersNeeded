@@ -214,6 +214,7 @@
     <string name="common_settings_cloud_providers">Elige un proveedor</string>
     <string name="common_settings_cloud_providers_more">Más proveedores…</string>
     <string name="common_settings_cloud_providers_fewer">Menos proveedores</string>
+    <string name="common_settings_cloud_provider_browser">Inicia sesión desde tu navegador</string>
     <string name="common_settings_cloud_form_help">Inicia sesión en %1$s. Deja un campo vacío para aceptar el valor predeterminado.</string>
     <string name="common_settings_cloud_form_submit">Continuar</string>
     <string name="common_settings_cloud_choose">Elegir…</string>

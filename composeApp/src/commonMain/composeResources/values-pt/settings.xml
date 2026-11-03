@@ -214,6 +214,7 @@
     <string name="common_settings_cloud_providers">Escolha um provedor</string>
     <string name="common_settings_cloud_providers_more">Mais provedores…</string>
     <string name="common_settings_cloud_providers_fewer">Menos provedores</string>
+    <string name="common_settings_cloud_provider_browser">Entre pelo seu navegador</string>
     <string name="common_settings_cloud_form_help">Entre no %1$s. Deixe um campo em branco para aceitar o padrão.</string>
     <string name="common_settings_cloud_form_submit">Continuar</string>
     <string name="common_settings_cloud_choose">Escolher…</string>

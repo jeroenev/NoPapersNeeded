@@ -221,6 +221,7 @@
     <string name="common_settings_cloud_providers">Choose a provider</string>
     <string name="common_settings_cloud_providers_more">More providers…</string>
     <string name="common_settings_cloud_providers_fewer">Fewer providers</string>
+    <string name="common_settings_cloud_provider_browser">Sign in through your browser</string>
     <string name="common_settings_cloud_form_help">Sign in to %1$s. Leave a field empty to accept the default.</string>
     <string name="common_settings_cloud_form_submit">Continue</string>
     <string name="common_settings_cloud_choose">Choose…</string>

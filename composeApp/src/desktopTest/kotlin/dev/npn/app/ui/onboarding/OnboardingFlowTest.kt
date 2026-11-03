@@ -79,7 +79,8 @@ class OnboardingFlowTest {
                 )
             scene(cloudState = CloudSetupState.Providers(providers)).closing {
                 settle()
-                has(text("Sign in with Google Drive")) shouldBe true
+                has(text("Google Drive")) shouldBe true
+                has(text("Sign in through your browser")) shouldBe true
                 has(text("WebDAV / Nextcloud")) shouldBe true
                 has(text("MEGA")) shouldBe false
                 has(text("Amazon S3 / compatible")) shouldBe false

@@ -1,20 +1,28 @@
 package dev.npn.app.ui.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Cloud
+import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -23,12 +31,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.Dropdown
+import dev.npn.app.ui.common.ExpandIcon
 import dev.npn.app.ui.common.HelpText
+import dev.npn.app.ui.common.expander
 import dev.npn.core.sync.RcloneOption
 import dev.npn.core.sync.RcloneProvider
 import dev.npn.core.sync.SetupFailure
@@ -51,6 +64,7 @@ import no_papers_needed.composeapp.generated.resources.common_settings_cloud_fol
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_folder_use
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_form_help
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_form_submit
+import no_papers_needed.composeapp.generated.resources.common_settings_cloud_provider_browser
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_providers
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_providers_fewer
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_providers_more
@@ -163,48 +177,87 @@ private fun ProviderPicker(
         } else {
             HelpText(stringResource(Res.string.common_settings_cloud_providers))
             val (leading, advanced) = providers.partition { it.plainSetup }
-            for (provider in leading) ProviderButton(provider, setup)
+            var expanded by remember { mutableStateOf(false) }
+            val offerMore = advanced.isNotEmpty() && moreProviders
+            OutlinedCard(Modifier.fillMaxWidth()) {
+                leading.forEachIndexed { index, provider ->
+                    if (index > 0) HorizontalDivider()
+                    ProviderRow(provider, onChoose = { setup.chooseProvider(provider) })
+                }
+                if (offerMore) {
+                    HorizontalDivider()
+                    MoreProvidersRow(expanded, onToggle = { expanded = !expanded })
+                    if (expanded) {
+                        for (provider in advanced) {
+                            HorizontalDivider()
+                            ProviderRow(provider, onChoose = { setup.chooseProvider(provider) })
+                        }
+                    }
+                }
+            }
             if (advanced.isNotEmpty() && !moreProviders) {
                 HelpText(stringResource(Res.string.onboarding_cloud_more_providers_later))
-            } else if (advanced.isNotEmpty()) {
-                var expanded by remember { mutableStateOf(false) }
-                TextButton(onClick = { expanded = !expanded }) {
-                    val label =
-                        if (expanded) {
-                            Res.string.common_settings_cloud_providers_fewer
-                        } else {
-                            Res.string.common_settings_cloud_providers_more
-                        }
-                    Text(text = stringResource(label))
-                }
-                if (expanded) {
-                    for (provider in advanced) ProviderButton(provider, setup)
-                }
             }
         }
         SettingsActionRow(label = stringResource(Res.string.common_settings_cloud_cancel), onClick = setup::cancel)
     }
 }
 
+/** The providers that live on a server of the user's own rather than a consumer cloud. */
+private val ServerTypes = setOf(WEBDAV_TYPE, "sftp", "ftp", "smb", "seafile")
+
+/**
+ * One provider of the picker: its name, and under it how it is set up — a browser sign-in, said in
+ * the app's language — or else rclone's description, where that says more than the name does.
+ */
 @Composable
-private fun ProviderButton(
+private fun ProviderRow(
     provider: RcloneProvider,
-    setup: CloudSetupActions,
+    onChoose: () -> Unit,
 ) {
-    OutlinedButton(onClick = { setup.chooseProvider(provider) }, modifier = Modifier.fillMaxWidth()) {
-        Column {
-            Text(
-                text =
-                    if (provider.browserSignIn) {
-                        stringResource(Res.string.common_settings_cloud_sign_in_with, provider.name)
-                    } else {
-                        provider.name
-                    },
-                style = MaterialTheme.typography.bodyLarge,
-            )
-            HelpText(provider.description)
+    val detail =
+        if (provider.browserSignIn) {
+            stringResource(Res.string.common_settings_cloud_provider_browser)
+        } else {
+            provider.description.takeUnless { provider.name.contains(it.trim(), ignoreCase = true) }
         }
-    }
+    ListItem(
+        headlineContent = { Text(provider.name) },
+        supportingContent =
+            detail?.let {
+                { Text(it, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+            },
+        leadingContent = {
+            Icon(
+                if (provider.type in ServerTypes) Icons.Outlined.Dns else Icons.Outlined.Cloud,
+                contentDescription = null,
+            )
+        },
+        trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null) },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        modifier = Modifier.clickable(role = Role.Button, onClick = onChoose),
+    )
+}
+
+/** The last row of the picker, showing or hiding the providers that need rclone's own terms. */
+@Composable
+private fun MoreProvidersRow(
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    val label =
+        if (expanded) {
+            Res.string.common_settings_cloud_providers_fewer
+        } else {
+            Res.string.common_settings_cloud_providers_more
+        }
+    ListItem(
+        headlineContent = { Text(stringResource(label), color = MaterialTheme.colorScheme.primary) },
+        leadingContent = { Icon(Icons.Outlined.MoreHoriz, contentDescription = null) },
+        trailingContent = { ExpandIcon(expanded) },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        modifier = Modifier.expander(expanded, onToggle = onToggle),
+    )
 }
 
 @Composable

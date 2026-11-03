@@ -214,6 +214,7 @@
     <string name="common_settings_cloud_providers">Anbieter wählen</string>
     <string name="common_settings_cloud_providers_more">Weitere Anbieter…</string>
     <string name="common_settings_cloud_providers_fewer">Weniger Anbieter</string>
+    <string name="common_settings_cloud_provider_browser">Anmeldung über deinen Browser</string>
     <string name="common_settings_cloud_form_help">Bei %1$s anmelden. Lass ein Feld leer, um den Standardwert zu übernehmen.</string>
     <string name="common_settings_cloud_form_submit">Weiter</string>
     <string name="common_settings_cloud_choose">Auswählen…</string>

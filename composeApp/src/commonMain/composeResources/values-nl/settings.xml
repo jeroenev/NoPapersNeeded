@@ -214,6 +214,7 @@
     <string name="common_settings_cloud_providers">Kies een provider</string>
     <string name="common_settings_cloud_providers_more">Meer providers…</string>
     <string name="common_settings_cloud_providers_fewer">Minder providers</string>
+    <string name="common_settings_cloud_provider_browser">Aanmelden via je browser</string>
     <string name="common_settings_cloud_form_help">Meld je aan bij %1$s. Laat een veld leeg om de standaardwaarde te gebruiken.</string>
     <string name="common_settings_cloud_form_submit">Doorgaan</string>
     <string name="common_settings_cloud_choose">Kiezen…</string>
