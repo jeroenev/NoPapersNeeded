@@ -145,8 +145,20 @@ actual fun supportsSharing(): Boolean = true
 /** Files come in by share, scan and picker instead. */
 actual fun acceptsFileDrops(): Boolean = false
 
-/** The APK is sideloaded from the GitHub release, so nothing else updates it. */
-actual fun checksForUpdates(): Boolean = true
+/**
+ * Only a sideloaded APK (the GitHub release) looks for updates itself. Google Play updates its own
+ * installs, and its policy forbids an app pointing them at another source; an install whose
+ * source cannot be read counts as sideloaded.
+ */
+actual fun checksForUpdates(): Boolean = !installedFromPlay
+
+private const val PLAY_STORE_PACKAGE = "com.android.vending"
+
+private val installedFromPlay: Boolean by lazy {
+    val context = FileKit.context
+    runCatching { context.packageManager.getInstallSourceInfo(context.packageName).installingPackageName }
+        .getOrNull() == PLAY_STORE_PACKAGE
+}
 
 actual suspend fun createLibraryFolder(
     parentLocation: String,

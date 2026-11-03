@@ -85,6 +85,10 @@ Available in English, Dutch, German, Spanish, French and Portuguese.
 Building from source, packaging, releases and the library format are covered in
 [DEVELOPMENT.md](DEVELOPMENT.md). The code layout is in [ARCHITECTURE.md](ARCHITECTURE.md).
 
+## Privacy
+
+No account, no analytics, no tracking. The details are in [PRIVACY.md](PRIVACY.md).
+
 ## License
 
 Apache-2.0. See [LICENSE](LICENSE).

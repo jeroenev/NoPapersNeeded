@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="500" viewBox="0 0 1024 500">
+  <rect width="1024" height="500" fill="#123F43"/>
+  <svg x="70" y="90" width="320" height="320" viewBox="0 0 512 512">  <g transform="translate(256 256) scale(1.35) translate(-256 -256)">
+  <path d="M128 214a24 24 0 0 1 24-24h62l28 28h118a24 24 0 0 1 24 24v112a30 30 0 0 1-30 30H158a30 30 0 0 1-30-30Z" fill="#78AAA3"/>
+  <path d="M184 128h96l56 56v148H160V152a24 24 0 0 1 24-24Z" fill="#FFF7E8"/>
+  <path d="M280 128v40a16 16 0 0 0 16 16h40Z" fill="#BBD4CB"/>
+  <path d="M196 216h68m-68 32h104" fill="none" stroke="#123F43" stroke-width="14" stroke-linecap="round"/>
+  <path d="M128 276h82a32 32 0 0 1 23 10l17 18h134v50a30 30 0 0 1-30 30H158a30 30 0 0 1-30-30Z" fill="#FFB77E"/>
+  </g></svg>
+  <text x="430" y="225" font-family="Lato" font-weight="900" font-size="64" fill="#FFF7E8">No Papers Needed</text>
+  <text x="432" y="290" font-family="Lato" font-weight="500" font-size="32" fill="#BBD4CB">Your paperwork, organized.</text>
+  <text x="432" y="334" font-family="Lato" font-weight="500" font-size="32" fill="#FFB77E">Your files, still yours.</text>
+</svg>
