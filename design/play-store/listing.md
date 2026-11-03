@@ -59,5 +59,6 @@ Available in English, Dutch, German, Spanish, French and Portuguese. Open source
 ## Category and contact
 
 - Category: Productivity
-- Tags: Document management, Productivity
+- Tags: Business, House & home, Privacy & security, Productivity, Tools (Play has no document or file manager tag)
+- Contact email: usual-filter-even@duck.com
 - Website: https://github.com/jeroenev/NoPapersNeeded (public from the first published version)
