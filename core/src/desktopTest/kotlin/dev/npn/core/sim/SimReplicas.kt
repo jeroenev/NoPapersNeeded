@@ -89,6 +89,7 @@ data class SyncConfig(
                         caseInsensitive = random.chance(CASE_INSENSITIVE_PERCENT),
                         reportsHashes = random.nextBoolean(),
                         failPercent = if (random.nextBoolean()) CLOUD_FAIL_PERCENT else 0,
+                        reportsDropboxHash = random.nextBoolean(),
                     )
                 } else {
                     null

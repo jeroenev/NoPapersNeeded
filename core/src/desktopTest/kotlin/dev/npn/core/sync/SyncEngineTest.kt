@@ -248,6 +248,25 @@ internal class SyncEngineTest : SyncEngineTestBase() {
         }
 
     @Test
+    fun aRemoteDocumentTheLibraryHoldsIsNamedByItsDropboxHashWithoutADownload() =
+        withPair { pair ->
+            pair.a.session.syncCompleted()
+            val docId = pair.importOnA("same.pdf", "nine")
+            pair.remote.put("elsewhere/copy.pdf", pdf("nine"))
+            pair.remote.reportsDropboxHash = true
+            pair.a.session
+                .syncCompleted()
+                .downloadedDocuments shouldBe 0
+            // Dropbox's content hash matched the library file of that size: no PDF came down.
+            pair.remote.downloaded.filter { it.endsWith(".pdf") } shouldBe emptyList()
+            pair.a.deviceDb
+                .syncRemoteDao()
+                .all()
+                .first { it.remotePath == "elsewhere/copy.pdf" }
+                .docId shouldBe docId
+        }
+
+    @Test
     fun aDocumentAlreadyHeldLocallyIsNotDuplicatedWhenTheRemoteHasItElsewhere() =
         withPair { pair ->
             pair.a.session.syncCompleted()

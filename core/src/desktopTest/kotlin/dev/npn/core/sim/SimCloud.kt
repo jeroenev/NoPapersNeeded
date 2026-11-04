@@ -1,6 +1,7 @@
 package dev.npn.core.sim
 
 import dev.npn.core.fs.sha256Bytes
+import dev.npn.core.sync.DropboxContentHash
 import dev.npn.core.sync.RemoteEntry
 import dev.npn.core.sync.RemoteStore
 import dev.npn.core.sync.SyncTransport
@@ -16,14 +17,17 @@ import kotlin.random.Random
 /**
  * How a seed's cloud remote behaves, when the seed syncs its replicas through one ([SyncConfig.cloud])
  * instead of a folder sync tool: whether paths fold case (OneDrive, Dropbox, Box, SMB), whether the
- * listing reports SHA-256 (rclone's local and sftp backends do; most consumer clouds do not, so
- * every PDF is identified by a download), and how often a call fails.
+ * listing reports SHA-256 (rclone's local and sftp backends, Google Drive and pCloud do) or Dropbox's
+ * content hash (which names a PDF the library holds; any other is identified by a download), and
+ * how often a call fails. A pass makes several calls at once.
  */
 data class CloudOptions(
     val caseInsensitive: Boolean,
     val reportsHashes: Boolean,
     /** Percent of remote calls that fail before taking effect, while faults are on. */
     val failPercent: Int,
+    /** Whether the listing reports Dropbox's content hash, which names a document the library holds. */
+    val reportsDropboxHash: Boolean = false,
 )
 
 /**
@@ -126,6 +130,12 @@ internal class SimRemote(
         size = stored.bytes.size.toLong(),
         mtimeMillis = stored.mtime,
         sha256 = if (options.reportsHashes) sha256Bytes(stored.bytes) else null,
+        dropboxHash =
+            if (options.reportsDropboxHash) {
+                DropboxContentHash().apply { update(stored.bytes, stored.bytes.size) }.hex()
+            } else {
+                null
+            },
     )
 
     private companion object {

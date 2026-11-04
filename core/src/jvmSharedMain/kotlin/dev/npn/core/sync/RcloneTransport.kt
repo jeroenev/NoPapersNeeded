@@ -1,6 +1,7 @@
 package dev.npn.core.sync
 
 import dev.npn.core.util.reason
+import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -120,6 +121,10 @@ class RcloneRemoteStore(
     private val remote: String,
     private val rpc: suspend () -> RcloneRpc,
 ) : RemoteStore {
+    /** Dropbox's, measured; the setup names every remote `<type>-<hex>` (`newCloudRemoteName`). */
+    override val limits: TransferLimits =
+        if (remote.substringBefore(':').startsWith(DROPBOX_PREFIX)) TransferLimits.DROPBOX else TransferLimits.DEFAULT
+
     override suspend fun list(): List<RemoteEntry> {
         // rclone answers "directory not found" for a root that does not exist yet, which would fail
         // every pass until someone created the folder by hand. Creating it is idempotent and cheap,
@@ -140,7 +145,10 @@ class RcloneRemoteStore(
                     put("filesOnly", true)
                     put("noMimeType", true)
                     put("showHash", true)
-                    putJsonArray("hashTypes") { add(JsonPrimitive("sha256")) }
+                    putJsonArray("hashTypes") {
+                        add(JsonPrimitive("sha256"))
+                        add(JsonPrimitive(DropboxContentHash.HASH_TYPE))
+                    }
                 }
             }
         val list =
@@ -156,7 +164,10 @@ class RcloneRemoteStore(
                 put("remote", path)
                 putJsonObject("opt") {
                     put("showHash", true)
-                    putJsonArray("hashTypes") { add(JsonPrimitive("sha256")) }
+                    putJsonArray("hashTypes") {
+                        add(JsonPrimitive("sha256"))
+                        add(JsonPrimitive(DropboxContentHash.HASH_TYPE))
+                    }
                 }
             }
         val item = rpc().call("operations/stat", input)["item"]
@@ -215,21 +226,37 @@ class RcloneRemoteStore(
         )
     }
 
+    /**
+     * One file across, retried a little when Dropbox refused it for lock contention
+     * (`too_many_write_operations`): uploads committed in overlapping batches meet it now and then,
+     * and Dropbox's own guidance is to retry at once (its `Retry-After` is zero). rclone retries a
+     * whole `sync`, not one `operations/copyfile`, so without this the file would wait a pass.
+     */
     private suspend fun copyFile(
         srcFs: String,
         srcRemote: String,
         dstFs: String,
         dstRemote: String,
     ) {
-        rpc().call(
-            "operations/copyfile",
+        val input =
             buildJsonObject {
                 put("srcFs", srcFs)
                 put("srcRemote", srcRemote)
                 put("dstFs", dstFs)
                 put("dstRemote", dstRemote)
-            },
-        )
+            }
+        var attempt = 1
+        while (true) {
+            try {
+                rpc().call("operations/copyfile", input)
+                return
+            } catch (failure: RcloneException) {
+                val contention = failure.status != null && failure.message.orEmpty().contains(WRITE_CONTENTION)
+                if (!contention || attempt >= CONTENTION_ATTEMPTS) throw failure
+                delay(CONTENTION_BACKOFF_MILLIS * attempt)
+                attempt++
+            }
+        }
     }
 
     private fun JsonObject.toEntry(): RemoteEntry? {
@@ -240,15 +267,30 @@ class RcloneRemoteStore(
         val mtime =
             modTime?.let { runCatching { OffsetDateTime.parse(it).toInstant().toEpochMilli() }.getOrNull() } ?: 0L
         val hashes = this["Hashes"]?.takeIf { it !is JsonNull }?.jsonObject
-        val sha256 =
-            hashes?.get("sha256")?.jsonPrimitive?.contentOrNull?.lowercase()?.takeIf {
-                it.length ==
-                    SHA256_LENGTH
-            }
-        return RemoteEntry(path = path, size = size, mtimeMillis = mtime, sha256 = sha256)
+
+        fun hash(type: String) =
+            hashes
+                ?.get(type)
+                ?.jsonPrimitive
+                ?.contentOrNull
+                ?.lowercase()
+                ?.takeIf { it.length == SHA256_LENGTH }
+        return RemoteEntry(
+            path = path,
+            size = size,
+            mtimeMillis = mtime,
+            sha256 = hash("sha256"),
+            dropboxHash = hash(DropboxContentHash.HASH_TYPE),
+        )
     }
 
-    private companion object {
+    internal companion object {
         const val SHA256_LENGTH = 64
+
+        /** Dropbox's error for a write that met lock contention in the folder. */
+        const val WRITE_CONTENTION = "too_many_write_operations"
+        const val CONTENTION_ATTEMPTS = 3
+        const val CONTENTION_BACKOFF_MILLIS = 500L
+        const val DROPBOX_PREFIX = "dropbox-"
     }
 }

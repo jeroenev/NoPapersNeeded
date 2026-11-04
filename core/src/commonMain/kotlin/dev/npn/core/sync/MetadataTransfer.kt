@@ -13,7 +13,8 @@ import kotlinx.coroutines.withContext
  * before anything reaches a library path: a content-addressed object must hash to the name it
  * claims and is then published through [LibraryFileSystem.publishVerifiedObjectOnce]; a write-once
  * internal must match its listed size and is installed with a create-only import. Uploads are
- * written out to staging first so the transport only ever reads plain files.
+ * written out to staging first so the transport only ever reads plain files. Transfers run several
+ * at once ([transferEach]); verifying, publishing and the report take one file at a time.
  */
 class MetadataTransfer(
     private val fs: LibraryFileSystem,
@@ -22,46 +23,70 @@ class MetadataTransfer(
     private val installationId: String,
     private val ids: IdSource,
 ) {
-    /** Returns how many files were published locally. */
+    /**
+     * Returns how many files were published locally. Downloads run [TransferLimits.metadataDownloads] at
+     * a time; each is verified and published on its own, one after another.
+     */
     suspend fun pull(
         actions: List<SyncAction.DownloadObject>,
         report: SyncReportBuilder,
         onProgress: (Int, Int) -> Unit,
     ): Int {
         var published = 0
-        for ((index, action) in actions.withIndex()) {
-            onProgress(index, actions.size)
+        var done = 0
+        onProgress(0, actions.size)
+        transferEach(actions, store.limits.metadataDownloads, ::fetch) { action, fetched ->
             report.attempt(action.entry.path) {
-                if (download(action)) {
+                if (publish(action, fetched.getOrThrow())) {
                     published++
                     report.downloadedObjects++
                 }
             }
+            onProgress(++done, actions.size)
         }
         return published
     }
 
+    /** Uploads run [TransferLimits.metadataUploads] at a time. */
     suspend fun push(
         actions: List<SyncAction.UploadObject>,
         report: SyncReportBuilder,
         onProgress: (Int, Int) -> Unit,
     ) {
-        for ((index, action) in actions.withIndex()) {
-            onProgress(index, actions.size)
+        var done = 0
+        onProgress(0, actions.size)
+        transferEach(actions, store.limits.metadataUploads, { upload(it.relPath) }) { action, uploaded ->
             report.attempt(action.relPath) {
-                upload(action.relPath)
+                uploaded.getOrThrow()
                 report.uploadedObjects++
             }
+            onProgress(++done, actions.size)
+        }
+    }
+
+    /** Download [action]'s file to a scratch file, or null when the library has it already. */
+    private suspend fun fetch(action: SyncAction.DownloadObject): String? {
+        if (fs.exists(action.entry.path)) return null
+        val scratch = staging.newPath(".part")
+        var fetched = false
+        try {
+            store.download(action.entry.path, scratch)
+            fetched = true
+            return scratch
+        } finally {
+            if (!fetched) withContext(NonCancellable) { staging.delete(scratch) }
         }
     }
 
     /** True when the file was newly published; false when it turned out to be present already. */
-    private suspend fun download(action: SyncAction.DownloadObject): Boolean {
+    private suspend fun publish(
+        action: SyncAction.DownloadObject,
+        scratch: String?,
+    ): Boolean {
+        if (scratch == null) return false
         val path = action.entry.path
-        if (fs.exists(path)) return false
-        val scratch = staging.newPath(".part")
         try {
-            store.download(path, scratch)
+            if (fs.exists(path)) return false
             val hash = action.hash
             return if (hash != null) publishObject(path, scratch, hash) else publishWriteOnce(action.entry, scratch)
         } finally {

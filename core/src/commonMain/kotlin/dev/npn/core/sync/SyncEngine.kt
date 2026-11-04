@@ -81,7 +81,7 @@ class SyncEngine(
         // at its path, and take it for the document come back.
         val documentsSafe = report.errors.size == errorsBefore
 
-        val resolver = DocumentResolver(store, staging, manifest)
+        val resolver = DocumentResolver(fs, staging = staging, store = store, manifest = manifest)
         try {
             val rows = db.documentDao().getAllRows()
             resolver.resolve(remote, rows, startedAt, report) { done, total ->

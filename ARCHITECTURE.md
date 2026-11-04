@@ -335,10 +335,20 @@ truth; the user just never picks it.
   grows. A remote copy of another size than the local one is an upload cut short, and goes up again.
 - A remote PDF is identified by the manifest (`sync_remote_entries` in `DeviceDatabase`, keyed by
   remote path with the size and mtime it had when identified, and the library path it mirrored when
-  last reconciled), else by the backend's own SHA-256, else by a download, kept for installing only
-  when the library has no such document. The manifest lives beside the device's own state because
-  rebuilding the index must not mean downloading the whole remote again. Uploads stream through
-  staging; no PDF is read into memory whole.
+  last reconciled), else by the backend's own SHA-256, else by Dropbox's content hash matching a
+  library file of the same size (`DropboxContentHash`: SHA-256 over the SHA-256s of 4 MiB blocks, as
+  collision-resistant as SHA-256; the file's own SHA-256, read in the same pass, is then the remote
+  copy's), else by a download, kept for installing only when the library has no such document.
+  Weaker provider hashes (MD5, SHA-1, OneDrive's quickxor) never name a document. The manifest lives
+  beside the device's own state because rebuilding the index must not mean downloading the whole
+  remote again. Uploads stream through staging; no PDF is read into memory whole.
+- Transfers run several at once (`transferEach`), as many as the remote's `TransferLimits` allow:
+  Dropbox's were measured (metadata 16 down and 32 up, PDFs 8; past that Dropbox throttles), every
+  other provider keeps metadata 8 and PDFs 4 until measured. rclone runs with `--transfers` 32,
+  which sizes a Dropbox upload commit, and retries a copy Dropbox refused for lock contention
+  (`too_many_write_operations`) twice. Only the transfer is
+  concurrent: verifying, publishing, the manifest and the report take one file at a time. Remote
+  moves and deletes stay in plan order; a run of consecutive uploads goes at once.
 - A document's remote name follows the library's: where the indexer put the file (its journaled
   `storagePath`, or the name it gave a document whose intent another holds). A library that cannot
   move documents itself (`supportsDocumentRelocation` false) takes the remote's name instead. Without

@@ -120,7 +120,8 @@ kept 5 days. ci.yml keeps running only the CI-sized test above, as part of `:cor
 - A seed may sync its replicas through a cloud remote instead (`SyncConfig.cloud`, about three
   seeds in ten): one in-memory remote (`SimRemote`) behind each session's own cloud sync, the
   app's real `SyncEngine` and `SyncService`, as rclone is in production, and no sync tool. The seed
-  decides whether the remote folds case and reports SHA-256, and whether some of its calls fail.
+  decides whether the remote folds case and reports SHA-256 or Dropbox's content hash, and whether
+  some of its calls fail. A pass makes several of its calls at once.
   Each call waits a seeded stretch of virtual time. A replica connects as a user sets one up, with
   a first pass before anything is added on it; a step is then a replica's pass run to its end, or
   one started beside whatever comes next (other passes, its own session's work, a crash), or time
