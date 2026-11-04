@@ -28,6 +28,41 @@ data class SyncOptions(
     val duplicatePercent: Int,
 )
 
+/** What the simulation asks of the tool between the replicas' folders: [SimSync], or [SimBisync]. */
+internal interface FolderSyncTool {
+    /** Conflict copies made, for the trace and the summary. */
+    val conflicts: List<String>
+
+    /** Conflicts on names that must be written once: never expected. */
+    val violations: List<String>
+
+    /** Deliveries the tool could not make (a file where a folder must be), for the report. */
+    val undeliverable: List<String>
+
+    val pendingDeliveries: Int
+
+    /** Look at what changed on [peer] and carry it to the others: over virtual time, or at once when [immediate]. */
+    fun scan(
+        peer: Int,
+        immediate: Boolean = false,
+    ): Int
+
+    /** Share the folder with [peer], which had none, from now on. */
+    fun join(peer: Int)
+
+    /** Let everything under way land. */
+    fun finishInFlight()
+
+    /** Sync everything at once, round after round, until a round changes nothing. */
+    fun flush(): Int
+
+    /** The paths whose files differ between the devices sharing the folder. */
+    fun differences(): List<String>
+
+    /** Whether the tool itself keeps a copy of [hash]'s bytes (a remote of its own), which the library still has. */
+    fun holds(hash: String): Boolean = false
+}
+
 /** One version of one path, as the tool's index holds it: its bytes (null for a deletion), mtime and version vector. */
 internal class SyncVersion(
     val bytes: ByteArray?,
@@ -74,7 +109,7 @@ internal class SimSync(
     private val trace: MutableList<String>,
     /** Which devices share the folder from the start; the others [join] later. */
     present: List<Boolean> = peers.map { true },
-) {
+) : FolderSyncTool {
     /** What the tool last recorded at each path of each device: its local index. */
     private val known = peers.map { HashMap<String, SyncVersion>() }
 
@@ -92,16 +127,13 @@ internal class SimSync(
 
     private val inFlight = ArrayList<Pair<String, Deferred<Unit>>>()
 
-    /** Conflict copies made, for the trace and the summary. */
-    val conflicts = ArrayList<String>()
+    override val conflicts = ArrayList<String>()
 
-    /** Conflicts on names that must be written once: never expected. */
-    val violations = ArrayList<String>()
+    override val violations = ArrayList<String>()
 
-    /** Deliveries the tool could not make (a file where a folder must be), for the report. */
-    val undeliverable = ArrayList<String>()
+    override val undeliverable = ArrayList<String>()
 
-    val pendingDeliveries: Int get() = inFlight.count { !it.second.isCompleted }
+    override val pendingDeliveries: Int get() = inFlight.count { !it.second.isCompleted }
 
     // ---- scanning -------------------------------------------------------------------------------
 
@@ -110,9 +142,9 @@ internal class SimSync(
      * when [immediate] (each delivery atomic, no delay), else as seeded deliveries over virtual time.
      * Returns how many paths changed.
      */
-    fun scan(
+    override fun scan(
         peer: Int,
-        immediate: Boolean = false,
+        immediate: Boolean,
     ): Int {
         if (!present[peer]) return 0
         val fs = peers[peer].fs
@@ -371,7 +403,7 @@ internal class SimSync(
      * or the newest where none does, as a conflict would resolve), each over a seeded delay, so the
      * folder fills over virtual time while the app may already be open on it.
      */
-    fun join(peer: Int) {
+    override fun join(peer: Int) {
         check(!present[peer]) { "${peers[peer].name} shares the folder already" }
         val others = sharing
         present[peer] = true
@@ -392,7 +424,7 @@ internal class SimSync(
     // ---- quiescence -----------------------------------------------------------------------------
 
     /** Let every delivery under way land, however long it waits. */
-    fun finishInFlight() {
+    override fun finishInFlight() {
         val start = world.scheduler.currentTime
         var handled = 0
         while (inFlight.any { !it.second.isCompleted }) {
@@ -424,7 +456,7 @@ internal class SimSync(
      * Sync everything: let what is under way land, then scan every device and deliver at once, until
      * a round finds nothing changed. Returns how many paths changed over all rounds.
      */
-    fun flush(): Int {
+    override fun flush(): Int {
         var total = 0
         repeat(FLUSH_ROUNDS) {
             finishInFlight()
@@ -471,7 +503,7 @@ internal class SimSync(
      * The paths whose files differ between the devices sharing the folder (missing on some, or other
      * bytes); empty when all agree.
      */
-    fun differences(): List<String> {
+    override fun differences(): List<String> {
         val devices = sharing
         val maps = devices.map { peers[it].fs.allFiles().filterKeys(::synced) }
         val paths = maps.flatMap { it.keys }.toSortedSet()

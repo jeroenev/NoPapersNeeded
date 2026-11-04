@@ -37,6 +37,12 @@ data class SyncConfig(
      * cloud sync ([SimRemote]), and no folder sync tool runs.
      */
     val cloud: CloudOptions? = null,
+    /**
+     * When set (and [cloud] is not), the folder sync tool is rclone bisync through one remote
+     * ([SimBisync]) instead of a Syncthing-like one: the shape cloud sync would take if the app
+     * left the whole folder to bisync.
+     */
+    val bisync: BisyncOptions? = null,
 ) {
     companion object {
         fun forSeed(config: SimConfig): SyncConfig {
@@ -87,6 +93,15 @@ data class SyncConfig(
                 } else {
                     null
                 }
+            // Drawn after the cloud, so every draw above stays what it was for a seed, and only on
+            // request (-Dnpn.sim.bisync=<percent>): bisync loses documents (docs/SIMULATION.md).
+            val bisyncPercent = System.getProperty(BISYNC_PROPERTY)?.toIntOrNull() ?: 0
+            val bisync =
+                if (cloud == null && bisyncPercent > 0 && random.chance(bisyncPercent)) {
+                    BisyncOptions(interruptPercent = if (random.nextBoolean()) BISYNC_INTERRUPT_PERCENT else 0)
+                } else {
+                    null
+                }
             return SyncConfig(
                 replicas = count,
                 profiles = profiles,
@@ -96,6 +111,7 @@ data class SyncConfig(
                 options = options,
                 joinsAt = joinsAt,
                 cloud = cloud,
+                bisync = bisync,
             )
         }
 
@@ -107,6 +123,8 @@ data class SyncConfig(
         private const val CLOUD_PERCENT = 30
         private const val CASE_INSENSITIVE_PERCENT = 30
         private const val CLOUD_FAIL_PERCENT = 3
+        private const val BISYNC_PROPERTY = "npn.sim.bisync"
+        private const val BISYNC_INTERRUPT_PERCENT = 15
     }
 }
 
@@ -249,7 +267,8 @@ internal class SyncSimulation(
             // A copy in another replica's folder, or on the cloud remote, keeps the library's: the
             // last copy is the library's last.
             fs.heldElsewhere = { hash, path ->
-                members.any { it !== this && it.fs.holdsCopy(hash, except = path) } || remote?.holds(hash) == true
+                members.any { it !== this && it.fs.holdsCopy(hash, except = path) } || remote?.holds(hash) == true ||
+                    tool.holds(hash)
             }
         }
 
@@ -296,13 +315,33 @@ internal class SyncSimulation(
                 json?.let { (EventDecoderRegistry.decodeStored(it).op as? JournalOp.Relink)?.newDoc }
             }
 
-    val tool =
-        SimSync(
+    private val peers =
+        members.map { member ->
+            val short = (config.seed % SHORT_ID).toString(SHORT_RADIX).uppercase()
+            SyncPeer(member.index, member.name, "DEV${member.index}$short", member.fs)
+        }
+
+    /** rclone bisync, where the seed runs it instead of the Syncthing-like tool. */
+    private val bisync: SimBisync? =
+        sync.bisync?.let {
+            SimBisync(
+                world,
+                peers,
+                Random(config.seed xor TOOL_SALT),
+                it,
+                trace,
+                present =
+                    members.map { m ->
+                        m.joinsAt ==
+                            0
+                    },
+            )
+        }
+
+    val tool: FolderSyncTool =
+        bisync ?: SimSync(
             world,
-            members.map { member ->
-                val short = (config.seed % SHORT_ID).toString(SHORT_RADIX).uppercase()
-                SyncPeer(member.index, member.name, "DEV${member.index}$short", member.fs)
-            },
+            peers,
             Random(config.seed xor TOOL_SALT),
             sync.options,
             trace,
@@ -767,7 +806,26 @@ internal class SyncSimulation(
                         Loss.OUTSIDE, Loss.SYNC -> false
                     }
                 }
-        val lost = (known - gone - held).sorted().filter { appLosses(it).isNotEmpty() }
+        val lost =
+            (known - gone - held).sorted().filter { !tool.holds(it) && appLosses(it).isNotEmpty() }
+        // bisync's own losses (bytes it replaced or deleted that its listing did not show, or that a
+        // resync overwrote) are no change it carried for another device: the tool lost them.
+        bisync?.let { tool ->
+            val clobbered = (known - gone - held).sorted().filter { !tool.holds(it) && it in tool.clobbered.keys }
+            if (clobbered.isNotEmpty()) {
+                fail(
+                    members[0],
+                    "bisync removed the last copy of a document no journal deleted or relinked:\n  " +
+                        clobbered.joinToString("\n  ") { hash ->
+                            "${hash.take(ID)}: ${tool.clobbered[hash]}; " +
+                                members.joinToString { "${it.name} ${it.fs.losses.of(hash)}" } +
+                                members.joinToString("") { member ->
+                                    member.fs.lossesAt(hash).joinToString("") { "\n    ${member.name} $it" }
+                                }
+                        },
+                )
+            }
+        }
         if (lost.isNotEmpty()) {
             fail(
                 members[0],
