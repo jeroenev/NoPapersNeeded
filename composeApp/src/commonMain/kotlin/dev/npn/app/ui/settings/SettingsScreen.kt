@@ -27,6 +27,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.mutableStateOf
@@ -50,6 +51,7 @@ import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.SearchField
 import dev.npn.app.ui.common.rememberLibraryFolderPicker
 import dev.npn.app.ui.common.rememberSnackbarMessages
+import dev.npn.app.ui.common.rememberStorageAccess
 import dev.npn.app.ui.detail.LocalDocumentDrafts
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.settings.SettingsRepository
@@ -57,6 +59,9 @@ import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_settings_search
 import no_papers_needed.composeapp.generated.resources.common_settings_search_no_results
 import no_papers_needed.composeapp.generated.resources.common_settings_title
+import no_papers_needed.composeapp.generated.resources.common_storage_access_grant
+import no_papers_needed.composeapp.generated.resources.common_storage_access_help
+import no_papers_needed.composeapp.generated.resources.common_storage_access_title
 import no_papers_needed.composeapp.generated.resources.detail_unsaved_changes
 import no_papers_needed.composeapp.generated.resources.ux_library_draft_warning
 import no_papers_needed.composeapp.generated.resources.ux_resume_draft
@@ -114,11 +119,28 @@ fun SettingsScreen(
             onUnusable = vm::folderNotOnDevice,
             onTemporaryAccess = vm::libraryAccessNotKept,
         )
+    // A folder on device storage needs Android's all-files grant, which a cloud or SAF library never
+    // asked for: ask before the picker rather than let the folder fail to open. Once granted, the
+    // picker the user was after opens by itself.
+    val storage = rememberStorageAccess()
+    val needsGrant = !paneState.settings.snapshot.useSafStorage && !storage.usable
+    var askGrant by rememberSaveable { mutableStateOf(false) }
+    var pickWhenGranted by rememberSaveable { mutableStateOf(false) }
+    SideEffect {
+        if (pickWhenGranted && storage.usable) {
+            pickWhenGranted = false
+            pickLibrary()
+        }
+    }
     val onChangeLibrary = {
         // Resolved with the same predicate the dialog acts on, so "Continue editing" always has a
         // document to go to, even when the only unsaved work is a save still in flight.
         val pending = drafts.state.entries.firstOrNull { it.value.dirty || it.value.saving }
-        if (pending != null) draftToResume = pending.key else pickLibrary()
+        when {
+            pending != null -> draftToResume = pending.key
+            needsGrant -> askGrant = true
+            else -> pickLibrary()
+        }
     }
 
     val wide = LocalWindowWidthClass.current.isWide
@@ -184,6 +206,19 @@ fun SettingsScreen(
                 onResumeDraft(docId)
             },
             onDismiss = { draftToResume = null },
+        )
+    }
+    if (askGrant) {
+        ConfirmDialog(
+            title = stringResource(Res.string.common_storage_access_title),
+            message = stringResource(Res.string.common_storage_access_help),
+            confirmLabel = stringResource(Res.string.common_storage_access_grant),
+            onConfirm = {
+                askGrant = false
+                pickWhenGranted = true
+                storage.request()
+            },
+            onDismiss = { askGrant = false },
         )
     }
 }
