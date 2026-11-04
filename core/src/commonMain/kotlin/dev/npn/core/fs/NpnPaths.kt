@@ -40,6 +40,9 @@ object NpnPaths {
     private const val MARKER_CONFLICTED_COPY = " (conflicted copy"
     private const val MARKER_CASE_CONFLICT = " (Case Conflict"
 
+    /** rclone bisync's conflict copy: its suffix and a number after the whole name, `doc.pdf.conflict1`. */
+    private val bisyncConflictPattern = Regex("^.+\\.conflict[0-9]+$")
+
     /**
      * `.npn/trash/<baseName>__<first 8 hash chars>-<episode>.<ext>`
      *
@@ -294,7 +297,7 @@ object NpnPaths {
         // Match leniently (without the leading space) so variants are still detected.
         if (name.contains(MARKER_CONFLICTED_COPY.trimStart())) return true
         if (name.contains(MARKER_CASE_CONFLICT.trimStart())) return true
-        return false
+        return bisyncConflictPattern.matches(name)
     }
 
     /**
@@ -304,13 +307,17 @@ object NpnPaths {
      * - Syncthing: `~syncthing~<name>.tmp` and `.syncthing.<name>.tmp`
      * - Nextcloud / ownCloud desktop clients: `.<name>.~<hex>`
      * - Resilio Sync: `<name>.!sync`
+     * - rclone (cloud sync, without `--inplace`): `<name>.<8 hex digits>.partial`
      */
     fun isSyncTemp(name: String): Boolean {
         if (name.startsWith("~syncthing~")) return true
         if (name.startsWith(".syncthing.")) return true
         if (nextcloudTempPattern.matches(name)) return true
+        if (rclonePartialPattern.matches(name)) return true
         return name.endsWith(RESILIO_TEMP_SUFFIX)
     }
+
+    private val rclonePartialPattern = Regex("^.+\\.[0-9a-f]{8}\\.partial$")
 
     private val nextcloudTempPattern = Regex("^\\..+\\.~[0-9a-fA-F]+$")
     private const val RESILIO_TEMP_SUFFIX = ".!sync"

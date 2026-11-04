@@ -131,6 +131,9 @@ class NpnPathsTest {
         NpnPaths.isSyncConflict("doc (Case Conflict).pdf").shouldBeTrue()
         // Nextcloud / ownCloud
         NpnPaths.isSyncConflict("doc (conflicted copy jeroen 2026-07-15).pdf").shouldBeTrue()
+        // rclone bisync
+        NpnPaths.isSyncConflict("doc.pdf.conflict1").shouldBeTrue()
+        NpnPaths.isSyncConflict("doc.pdf.conflict").shouldBeFalse()
         // clean file
         NpnPaths.isSyncConflict("doc.pdf").shouldBeFalse()
     }
@@ -142,6 +145,9 @@ class NpnPathsTest {
         // Nextcloud and ownCloud desktop clients, and Resilio Sync.
         NpnPaths.isSyncTemp(".doc.pdf.~3fa9c2d1").shouldBeTrue()
         NpnPaths.isSyncTemp("doc.pdf.!sync").shouldBeTrue()
+        // rclone, writing beside the target unless --inplace.
+        NpnPaths.isSyncTemp("doc.pdf.0a1b2c3d.partial").shouldBeTrue()
+        NpnPaths.isSyncTemp("doc.pdf.partial").shouldBeFalse()
         NpnPaths.isSyncTemp("doc.pdf").shouldBeFalse()
         NpnPaths.isSyncTemp(".hidden.pdf").shouldBeFalse()
         NpnPaths.isSyncTemp("doc.pdf.~3fa9c2d1").shouldBeFalse()
