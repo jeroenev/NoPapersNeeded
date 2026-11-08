@@ -89,7 +89,10 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   core's and composeApp's Android code. Errors fail it; there is no baseline, and
   `config/lint/lint.xml` is the one configuration.
 - Fast UI iteration: `mise hot` (Compose Hot Reload on desktop). Android-only paths
-  (scanner, share intents, WorkManager) need a device: `mise deploy`.
+  (scanner, share intents, WorkManager) need a device: `mise deploy`. Without a phone,
+  `mise emulator --headless [avd]` boots an Android emulator and waits for it; then
+  `mise deploy`, `adb exec-out screencap -p > shot.png` to see it, `adb emu kill` to stop it.
+  The ML Kit scanner needs a real phone. Setup and caveats: DEVELOPMENT.md, "Android emulator".
 - Android builds cross-compile the bundled rclone (cloud sync) into `jniLibs`, so they need
   Go 1.26+ on `PATH` and Android NDK 29 (`sdkmanager --install "ndk;29.0.14206865"`).
   `mise rclone-android` builds just the engine; `-Pnpn.rclone.skip=true` skips it while

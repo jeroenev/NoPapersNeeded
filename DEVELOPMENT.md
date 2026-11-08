@@ -105,7 +105,8 @@ The ones that need more than their description:
 
 - `mise deploy` installs the debug build over adb and launches it (`--release` for the
   release build); `mise pair` is a one-time adb Wi-Fi pairing wizard (Android 11+), and
-  `mise connect <ip:port>` reconnects a paired device.
+  `mise connect <ip:port>` reconnects a paired device. `mise emulator` starts an Android
+  emulator in its place (see [Android emulator](#android-emulator)).
 - `mise test-device` runs the instrumentation tests on a connected device; CI only compiles them.
 - `mise baseline-profile` regenerates the baseline profile on a device on Android 13+ (see
   [Release builds: R8 and baseline profiles](#release-builds-r8-and-baseline-profiles)).
@@ -240,6 +241,44 @@ For fast UI iteration without a device, use `mise hot`: the Compose UI in
 shared composables update live on save. Android-only code paths (document
 scanner, share intents, WorkManager) are not exercised there; use `mise deploy`
 for those.
+
+### Android emulator
+
+The official Android Emulator stands in for a phone for everything but the document scanner.
+The ML Kit scanner runs inside Google Play services and reportedly refuses emulated devices, so
+test it on a phone. Setup, once per machine (Linux needs KVM: `emulator -accel-check` should
+report it usable):
+
+```
+SDK=~/Android/Sdk   # or $ANDROID_HOME
+$SDK/cmdline-tools/latest/bin/sdkmanager --install "emulator" \
+  "system-images;android-37.0;google_apis_playstore;x86_64" \
+  "system-images;android-30;google_apis_playstore;x86_64"
+$SDK/cmdline-tools/latest/bin/avdmanager create avd -n api37 -d pixel_9 \
+  -k "system-images;android-37.0;google_apis_playstore;x86_64"   # targetSdk
+$SDK/cmdline-tools/latest/bin/avdmanager create avd -n api30 -d pixel_5 \
+  -k "system-images;android-30;google_apis_playstore;x86_64"     # minSdk
+```
+
+Pick `google_apis_playstore` images, which carry Play services. In
+`~/.android/avd/<name>.avd/config.ini`, `hw.keyboard=yes` lets you type with the host keyboard.
+`hw.gpu.enabled=yes` turns on GPU rendering, and a larger `hw.ramSize` (4G) helps the newer image.
+On Ubuntu the emulator window needs `libxcb-cursor0`; without it the emulator aborts with "no Qt
+platform plugin could be initialized".
+
+Then:
+
+```
+mise emulator [avd]              # starts it (default: the first AVD) and waits for boot
+mise emulator --headless api37   # no window: agents and sessions without a display
+mise deploy                      # installs on it like on a phone
+adb emu kill                     # stops it
+```
+
+`mise emulator` prints the emulator's serial. With a phone connected too, prefix
+`mise deploy` with `ANDROID_SERIAL=<serial>`; otherwise it prefers the phone. The debug APK
+carries the cloud sync engine for `arm64-v8a` only, so cloud sync fails on an x86_64 emulator
+unless it is built with `-Pnpn.rclone.abis=x86_64` (see [Requirements](#requirements)).
 
 ### Release builds: R8 and baseline profiles
 
