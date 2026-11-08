@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+#MISE description="Start an Android emulator (AVD) and wait until it has booted"
+#USAGE arg "[avd]" help="AVD name (default: the first one `emulator -list-avds` prints)"
+#USAGE flag "--headless" help="Run without a window (agents, or a session without a display)"
+set -euo pipefail
+
+# The SDK: ANDROID_HOME, ANDROID_SDK_ROOT, or the sdk.dir Gradle reads from local.properties.
+sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+if [ -z "$sdk" ] && [ -f local.properties ]; then
+    sdk=$(sed -n 's/^sdk\.dir=//p' local.properties)
+fi
+emulator="$sdk/emulator/emulator"
+if [ ! -x "$emulator" ]; then
+    echo "No emulator in '${sdk:-<no SDK found>}'. See DEVELOPMENT.md, \"Android emulator\"." >&2
+    exit 1
+fi
+
+avd="${usage_avd:-$("$emulator" -list-avds | head -n1)}"
+if [ -z "$avd" ]; then
+    echo "No AVD exists yet. See DEVELOPMENT.md, \"Android emulator\", to create one." >&2
+    exit 1
+fi
+
+args=(-avd "$avd" -no-boot-anim)
+if [ "${usage_headless:-false}" = "true" ]; then
+    args+=(-no-window -no-audio)
+fi
+
+emulators() { adb devices | awk '$1 ~ /^emulator-/ { print $1 }' | sort; }
+before=$(emulators)
+
+log="${TMPDIR:-/tmp}/npn-emulator-$avd.log"
+echo ">> Starting $avd (log: $log)"
+nohup "$emulator" "${args[@]}" >"$log" 2>&1 &
+pid=$!
+
+# Follow this emulator's own serial, so a phone or another emulator on adb does not interfere.
+died() {
+    echo "The emulator exited during boot; the end of its log:" >&2
+    tail -n 20 "$log" >&2
+    exit 1
+}
+serial=""
+while [ -z "$serial" ]; do
+    kill -0 "$pid" 2>/dev/null || died
+    serial=$(comm -13 <(printf '%s\n' "$before") <(emulators) | head -n1)
+    sleep 1
+done
+until [ "$(adb -s "$serial" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; do
+    kill -0 "$pid" 2>/dev/null || died
+    sleep 2
+done
+echo ">> $avd booted as $serial."
+echo ">> Deploy with: ANDROID_SERIAL=$serial mise deploy   Stop with: adb -s $serial emu kill"

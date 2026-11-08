@@ -15,7 +15,7 @@ fi
 # Collect serials of online devices (state == "device"). A single wireless phone
 # can show up twice: once as an IP:port entry and once as an mDNS/TLS entry. Both
 # are the same hardware, so prefer the IP:port serial and pin adb to it via
-# ANDROID_SERIAL to avoid "more than one device" errors.
+# ANDROID_SERIAL to avoid "more than one device" errors. ANDROID_SERIAL may also be preset.
 serials=$(adb devices | awk '$2 == "device" { print $1 }')
 
 if [ -z "$serials" ]; then
@@ -25,8 +25,12 @@ if [ -z "$serials" ]; then
     exit 1
 fi
 
-# Pick an IP:port serial if present, else the first one.
-target=$(printf '%s\n' "$serials" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$' | head -n1 || true)
+# An ANDROID_SERIAL set by the caller wins (e.g. an emulator next to a phone); otherwise pick an
+# IP:port serial if present, else the first one.
+target="${ANDROID_SERIAL:-}"
+if [ -z "$target" ]; then
+    target=$(printf '%s\n' "$serials" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$' | head -n1 || true)
+fi
 if [ -z "$target" ]; then
     target=$(printf '%s\n' "$serials" | head -n1)
 fi
