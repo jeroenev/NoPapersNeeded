@@ -39,8 +39,10 @@ data class TransferLimits(
         val DEFAULT = TransferLimits(metadataDownloads = 8, metadataUploads = 8, documents = 4)
 
         /** The most of any kind: rclone runs with `--transfers` at it, which sizes a Dropbox commit. */
-        val MOST: Int = maxOf(DROPBOX.metadataUploads, DEFAULT.metadataUploads)
+        val MOST: Int = listOf(DROPBOX, DEFAULT).maxOf { it.most }
     }
+
+    private val most: Int get() = maxOf(metadataDownloads, metadataUploads, documents)
 }
 
 /**
