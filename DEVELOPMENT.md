@@ -69,7 +69,7 @@ conventions and invariants, [AGENTS.md](AGENTS.md). The user-facing overview is 
   Desktop packaging downloads the pinned rclone release (`:desktopApp:downloadRclone`) into the
   app image. The uber-jar carries no app resources, so it looks for `rclone` on `PATH`.
   The APK carries the engine for `arm64-v8a` only (the phones the app targets); an x86_64 emulator
-  needs `-Pnpn.rclone.abis=x86_64` (or a list), and `useLegacyPackaging` keeps it extractable, as
+  needs `-Pnpn.rclone.abis=x86_64` (or a list; `mise deploy` passes the device's own ABI), and `useLegacyPackaging` keeps it extractable, as
   Android runs it from the installed native library directory.
 
 ## Building
@@ -276,9 +276,11 @@ adb emu kill                     # stops it
 ```
 
 `mise emulator` prints the emulator's serial. With a phone connected too, prefix
-`mise deploy` with `ANDROID_SERIAL=<serial>`; otherwise it prefers the phone. The debug APK
-carries the cloud sync engine for `arm64-v8a` only, so cloud sync fails on an x86_64 emulator
-unless it is built with `-Pnpn.rclone.abis=x86_64` (see [Requirements](#requirements)).
+`mise deploy` with `ANDROID_SERIAL=<serial>`; otherwise it prefers the phone. The APK carries
+the cloud sync engine for `arm64-v8a` only, so `mise deploy` passes `-Pnpn.rclone.abis=<abi>`
+when the device reports another ABI, which an x86_64 emulator does (see [Requirements](#requirements)).
+A plain `./gradlew installDebug` does not, and cloud sync then fails on the emulator. Switching
+between a phone and an emulator rebuilds the engine (about 40 s) and the configuration cache.
 
 ### Release builds: R8 and baseline profiles
 

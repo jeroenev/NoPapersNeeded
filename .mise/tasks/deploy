@@ -37,12 +37,21 @@ fi
 export ANDROID_SERIAL="$target"
 echo ">> Using device $ANDROID_SERIAL"
 
+# The APK carries the cloud sync engine for arm64-v8a only by default; build it for the device's
+# own ABI instead when that differs (an x86_64 emulator), or cloud sync fails there.
+gradle_args=()
+abi=$(adb shell getprop ro.product.cpu.abi | tr -d '\r')
+if [ -n "$abi" ] && [ "$abi" != "arm64-v8a" ]; then
+    echo ">> Device ABI is $abi: building the cloud sync engine for it"
+    gradle_args+=("-Pnpn.rclone.abis=$abi")
+fi
+
 if [ "${usage_release:-false}" = "true" ]; then
     echo ">> Building + installing release..."
-    ./gradlew :androidApp:installRelease
+    ./gradlew "${gradle_args[@]}" :androidApp:installRelease
 else
     echo ">> Building + installing debug..."
-    ./gradlew :androidApp:installDebug
+    ./gradlew "${gradle_args[@]}" :androidApp:installDebug
 fi
 
 echo ">> Launching $LAUNCHER ..."
