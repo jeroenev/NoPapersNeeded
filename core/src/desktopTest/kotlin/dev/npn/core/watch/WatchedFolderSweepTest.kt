@@ -85,6 +85,8 @@ class WatchedFolderSweepTest {
             images: List<ByteArray>,
             suggestedName: String,
         ): ImportOutcome = error("not used")
+
+        override suspend fun holdsDocument(docId: String): Boolean = true
     }
 
     @Test

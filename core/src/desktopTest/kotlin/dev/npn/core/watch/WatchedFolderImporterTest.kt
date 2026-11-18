@@ -222,6 +222,32 @@ class WatchedFolderImporterTest {
         }
 
     /**
+     * The library file the import placed is deleted from outside before the cleanup ran: the source
+     * is then the document's last copy, and stays.
+     */
+    @Test
+    fun deleteAfterImportKeepsTheSourceWhenTheLibraryFileWentMeanwhile() =
+        appSessionTest { rig ->
+            val bytes = PdfFixtures.embeddedTextPdf("a scan deleted from the library at once")
+            stagePdf("scan.pdf", bytes)
+            val deleting =
+                object : IngestFacade by rig.session {
+                    override suspend fun importPdf(
+                        source: ExternalSource,
+                        suggestedName: String,
+                    ): ImportOutcome =
+                        rig.session.importPdf(source, suggestedName).also {
+                            Files.delete(rig.libRoot.resolve((it as ImportOutcome.Imported).relPath))
+                        }
+                }
+
+            val scan = WatchedFolderImporter(deleting, JvmWatchedFolder(watchDir), { true }).scanOnce()
+
+            scan.imported shouldBe 1
+            Files.readAllBytes(watchDir.resolve("scan.pdf")) shouldBe bytes
+        }
+
+    /**
      * A provider that reports no mtime (SAF's lastModified can be 0): the scanner writes its next scan
      * under the same name, of the same size, after the first was imported. Only bytes the import put
      * in the library go: that file stays, and the same importer imports it next, while a source that

@@ -88,6 +88,8 @@ class FakeIngestFacade : IngestFacade {
         images: List<ByteArray>,
         suggestedName: String,
     ): ImportOutcome = nextOutcome()
+
+    override suspend fun holdsDocument(docId: String): Boolean = true
 }
 
 /** Per-document OCR management. [ocrVersionsList] backs the version picker. */
