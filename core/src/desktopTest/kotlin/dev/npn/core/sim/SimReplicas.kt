@@ -748,7 +748,9 @@ internal class SyncSimulation(
      * taking the library's last copy is a finding whatever happened to the bytes before or after, but
      * in its trash (the trash purge, a delete for good) for a document the journals, all replicas'
      * events together, had in the trash when the loss happened (a restore since, of bytes the purge
-     * took, is not the purge's doing). The sync tool only carries out another device's change, whose
+     * took, is not the purge's doing), or had restored after a purge already took a copy of it: the
+     * user restored past the retention, and a device that had not seen the restore yet purges its
+     * copy by the retention too. The sync tool only carries out another device's change, whose
      * cause is on that device, and another process is no finding of the app's. What this finds is the
      * app deleting the last copy of a document it still shows, or would: the live index and a rebuild
      * then both hide it as missing, which neither oracle sees.
@@ -787,6 +789,30 @@ internal class SyncSimulation(
             .maxByOrNull { it.first }
             ?.second ==
             "doc-trash"
+
+        // Whether the latest of [hash]'s lifecycle events stamped no later than [atMillis] is a restore
+        // made after a purge had already taken a copy of it from the trash, while it was trashed: a
+        // purge runs only once the retention is past, so the user restored what the retention had let
+        // go, and another device's purge, which had not seen the restore yet, is the retention's doing.
+        fun restoredAfterPurge(
+            hash: String,
+            atMillis: Long,
+        ): Boolean {
+            val latest =
+                lifecycle[hash]
+                    .orEmpty()
+                    .filter {
+                        it.first.physicalMillis <= atMillis
+                    }.maxByOrNull { it.first }
+            if (latest?.second != "doc-restore") return false
+            return members.any { member ->
+                member.fs.losses.recordsOf(hash).any { purge ->
+                    purge.loss == Loss.APP_TRASH &&
+                        purge.atMillis < latest.first.physicalMillis &&
+                        trashedAt(hash, purge.atMillis)
+                }
+            }
+        }
         val held =
             members.flatMapTo(HashSet()) { member ->
                 member.fs
@@ -803,7 +829,7 @@ internal class SyncSimulation(
                 .filter { loss ->
                     when (loss.loss) {
                         Loss.APP -> true
-                        Loss.APP_TRASH -> !trashedAt(hash, loss.atMillis)
+                        Loss.APP_TRASH -> !trashedAt(hash, loss.atMillis) && !restoredAfterPurge(hash, loss.atMillis)
                         Loss.OUTSIDE, Loss.SYNC -> false
                     }
                 }
