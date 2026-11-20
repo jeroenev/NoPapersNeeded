@@ -8,6 +8,7 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.JsonObject
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
@@ -51,6 +52,59 @@ class RcloneTransportTest {
             failure.status.shouldBeNull()
             failure.message.shouldNotBeNull() shouldContain "/definitely/not/rclone"
             failure.cause.shouldNotBeNull()
+        }
+
+    /** Fails the first [failures] `operations/copyfile` calls with [message], then answers. */
+    private class FlakyCopies(
+        private val failures: Int,
+        private val message: String,
+    ) : RcloneRpc {
+        var copies = 0
+
+        override suspend fun call(
+            method: String,
+            input: JsonObject,
+        ): JsonObject {
+            if (method == "operations/copyfile" && ++copies <= failures) throw RcloneException(message, status = 500)
+            return JsonObject(emptyMap())
+        }
+
+        override fun close() = Unit
+    }
+
+    @Test
+    fun aDropboxRemoteTakesTheLimitsMeasuredForDropboxAndAnyOtherTheDefaults() {
+        val rpc = FlakyCopies(failures = 0, "")
+        RcloneRemoteStore("dropbox-1f4f92:no-papers-needed") { rpc }.limits shouldBe TransferLimits.DROPBOX
+        RcloneRemoteStore("drive-0a1b2c:no-papers-needed") { rpc }.limits shouldBe TransferLimits.DEFAULT
+        RcloneRemoteStore("onedrive-0a1b2c:library") { rpc }.limits shouldBe TransferLimits.DEFAULT
+    }
+
+    @Test
+    fun aCopyDropboxRefusedForLockContentionIsRetried() =
+        runTest {
+            val rpc =
+                FlakyCopies(
+                    failures = 2,
+                    "upload failed: batch upload failed: upload failed: too_many_write_operations",
+                )
+            RcloneRemoteStore("dropbox:library") { rpc }.upload("/tmp/staging/a.part", ".npn/ocr/a.json")
+            rpc.copies shouldBe 3
+        }
+
+    @Test
+    fun lockContentionIsRetriedAFewTimesAndOtherFailuresNever() =
+        runTest {
+            val contention = FlakyCopies(failures = 5, "upload failed: too_many_write_operations")
+            assertFailsWith<RcloneException> {
+                RcloneRemoteStore("dropbox:library") { contention }.upload("/tmp/staging/a.part", ".npn/ocr/a.json")
+            }
+            contention.copies shouldBe RcloneRemoteStore.CONTENTION_ATTEMPTS
+            val other = FlakyCopies(failures = 1, "upload failed: insufficient_space")
+            assertFailsWith<RcloneException> {
+                RcloneRemoteStore("dropbox:library") { other }.upload("/tmp/staging/a.part", ".npn/ocr/a.json")
+            }
+            other.copies shouldBe 1
         }
 
     @Test

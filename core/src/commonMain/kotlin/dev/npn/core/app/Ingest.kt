@@ -27,6 +27,12 @@ interface IngestFacade {
         images: List<ByteArray>,
         suggestedName: String,
     ): ImportOutcome
+
+    /**
+     * Whether the library shows [docId] with its file holding its bytes now: what a source may be
+     * deleted after an import on, as the library file may have gone since the import placed it.
+     */
+    suspend fun holdsDocument(docId: String): Boolean
 }
 
 sealed interface ImportOutcome {

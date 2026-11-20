@@ -192,6 +192,9 @@ class RcloneDaemon(
             add("rcd")
             add("--rc-addr=127.0.0.1:$port")
             add("--log-level=ERROR")
+            // Sizes a Dropbox upload batch (its default `sync` batch mode takes `--transfers`), so
+            // the window of uploads a pass keeps in flight commits as one.
+            add("--transfers=${TransferLimits.MOST}")
             launch.configPath?.let {
                 add("--config")
                 add(it)

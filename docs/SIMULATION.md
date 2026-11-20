@@ -120,13 +120,25 @@ kept 5 days. ci.yml keeps running only the CI-sized test above, as part of `:cor
 - A seed may sync its replicas through a cloud remote instead (`SyncConfig.cloud`, about three
   seeds in ten): one in-memory remote (`SimRemote`) behind each session's own cloud sync, the
   app's real `SyncEngine` and `SyncService`, as rclone is in production, and no sync tool. The seed
-  decides whether the remote folds case and reports SHA-256, and whether some of its calls fail.
+  decides whether the remote folds case and reports SHA-256 or Dropbox's content hash, and whether
+  some of its calls fail. A pass makes several of its calls at once.
   Each call waits a seeded stretch of virtual time. A replica connects as a user sets one up, with
   a first pass before anything is added on it; a step is then a replica's pass run to its end, or
   one started beside whatever comes next (other passes, its own session's work, a crash), or time
   for passes under way. A full sync is rounds of a pass on every replica and settling, until a round
   changes nothing; the remote's faults are off at rest. What a pass installs from the remote counts
   as delivered, not as the app's own write, and a copy on the remote keeps a document's last copy.
+- On request (`-Dnpn.sim.bisync=<percent>`, drawn for that share of the seeds without a cloud), the
+  folder sync tool is rclone bisync through one remote instead (`SimBisync`, behind the same
+  `FolderSyncTool` as `SimSync`): the shape cloud sync would take if the app left the whole folder
+  to `rclone bisync --compare size,modtime,checksum --conflict-resolve newer --conflict-loser num
+  --resilient --recover --resync-mode newer`. It follows rclone v1.75.1's `cmd/bisync`: each run
+  compares both sides with the listings the device saved after its last successful run, acts on
+  that listing without looking again, renames a conflict's loser `<name>.conflict<n>`, aborts when
+  more than half of a side's files were deleted, and is killed or fails part way in some seeds (a
+  failed run drops the listings: the next one recovers from the backup, or resyncs). Bytes it takes
+  that its listing did not show, or that a resync overwrites, are its own loss (`clobbered`), and
+  the last-copy check fails a run on them. It is off by default because it fails: see below.
 - A full sync (`SimSync.flush`) lets every delivery under way land, scans every device and delivers at
   once, and brings each device every version another holds that its own does not descend from, until
   a round changes nothing. Two devices recording different bytes under one version vector would be
@@ -266,7 +278,9 @@ after six rounds do not converge, which fails the run. Then:
   the bake's relink, which a failed bake discards). Any loss of the library's last copy by the app
   is a finding, whatever happened to the bytes before or after, but in its trash (the purge, a
   delete for good) for a document the replicas' journals, taken together, had in the trash at that
-  time. A document whose only file the app deleted shows as missing in the live
+  time, or had restored after a purge already took a copy of it: the user restored past the
+  retention, and a replica that had not seen the restore yet purges its copy by the retention too.
+  A document whose only file the app deleted shows as missing in the live
   index and in a rebuild alike, so the rebuild oracle cannot see it.
 - After a full sync, **convergence**: every replica shows the library the first one shows, by the
   same comparison, a row only one of them remembers for a document neither shows excepted.
@@ -289,6 +303,28 @@ means turning its switch off (or removing its `knownFailures` entry) and making 
   so two documents that swapped names (or a chain of renames) stay apart. A cloud seed's
   convergence check compares the libraries without document paths, and traces the paths that
   differ. Off once renames are settled with a temporary name.
+
+## Finding: rclone bisync loses documents
+
+Run with `-Dnpn.sim.bisync=40` over seeds 1..80 (250 steps), nearly every bisync seed failed the
+last-copy check (Syncthing-like and cloud seeds passed). Each loss is the only copy of a live
+document, taken by bisync acting on a listing older than the file:
+
+- **Two devices' runs at once** (about half): one lists the remote, the other uploads a new file at
+  a path the first saw deleted locally; the first's deletion then removes the upload, and the
+  uploader's next run deletes its own copy as a remote deletion. bisync locks a device's listings,
+  not the remote.
+- **The app writing during a run** (about a third): a file imported or moved into a path after the
+  listing is replaced by the remote's copy, or deleted as a deletion the remote made.
+- **A resync** (the rest; the majority once runs never overlap): every device's first run, and a
+  run after a failed one with no backup listing, copies the newer of two different files at one
+  path over the older (two devices that each imported `inbox/scan.pdf` before their first sync).
+
+With runs made exclusive (no two devices at once), the app's writes during a run and resyncs still
+lost documents in about two thirds of the bisync seeds. The cloud sync engine (`core.sync`) checks
+every remote move and delete against a fresh `stat` and every local one against the file's hash,
+never deletes or replaces to settle a conflict, and treats a missing remote file as unknown, which is
+what these losses lack.
 
 ## Adding an operation
 

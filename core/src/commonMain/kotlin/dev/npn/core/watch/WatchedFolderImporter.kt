@@ -129,7 +129,11 @@ class WatchedFolderImporter(
         val delete = deleteAfterImport()
         if (file.mtimeMillis != 0L || !delete) completed.add(key)
         if (delete) {
-            log.runLogged("Deleting ${file.name} from the watched folder after import") { folder.delete(file, docId) }
+            log.runLogged("Deleting ${file.name} from the watched folder after import") {
+                // The library file may have gone while the import ran (deleted or moved out from
+                // outside): the source is then the document's last copy, and stays.
+                if (ingest.holdsDocument(docId)) folder.delete(file, docId)
+            }
         }
     }
 

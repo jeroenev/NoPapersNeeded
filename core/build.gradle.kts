@@ -103,6 +103,7 @@ val simulationProperties =
         "npn.sim.steps",
         "npn.sim.traceDir",
         "npn.sim.maxReported",
+        "npn.sim.bisync",
     )
 tasks.withType<Test>().configureEach {
     simulationProperties.forEach { key ->

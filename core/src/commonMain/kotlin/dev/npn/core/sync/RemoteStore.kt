@@ -6,13 +6,15 @@ import dev.npn.core.fs.ExternalSource
  * One file on the remote. [path] is remote-root-relative, '/'-separated, no leading slash, and
  * mirrors the library-relative layout. [sha256] is present only when the backend reports SHA-256
  * natively (rclone's local and sftp backends, some object stores); it is then trusted as document
- * identity, saving a download.
+ * identity, saving a download. [dropboxHash] is Dropbox's content hash ([DropboxContentHash]), which
+ * names the document when a library file of the same size has it, also saving a download.
  */
 data class RemoteEntry(
     val path: String,
     val size: Long,
     val mtimeMillis: Long,
     val sha256: String? = null,
+    val dropboxHash: String? = null,
 )
 
 /**
@@ -51,6 +53,9 @@ interface RemoteStore {
     )
 
     suspend fun delete(path: String)
+
+    /** How many transfers of each kind this remote takes well at once. */
+    val limits: TransferLimits get() = TransferLimits.DEFAULT
 }
 
 /** Whether the transfer engine can run at all on this device. */

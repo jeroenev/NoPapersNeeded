@@ -10,6 +10,8 @@ import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.attribute.FileTime
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.io.path.isRegularFile
 import kotlin.io.path.name
 import kotlin.io.path.relativeTo
@@ -27,12 +29,22 @@ class DirectoryRemoteStore(
     val root: Path,
     var reportsHashes: Boolean = false,
 ) : RemoteStore {
+    /** Report Dropbox's content hash in listings, as rclone's Dropbox backend does. */
+    var reportsDropboxHash = false
     val failDownloads = HashSet<String>()
     val tamperDownloads = HashSet<String>()
     var failList = false
-    var downloads = 0
-    var uploads = 0
-    private val statHooks = HashMap<String, () -> Unit>()
+
+    // A pass transfers several files at once, on more than one thread.
+    private val downloadCount = AtomicInteger()
+    private val uploadCount = AtomicInteger()
+    private val downloadedPaths = ConcurrentLinkedQueue<String>()
+    val downloads: Int get() = downloadCount.get()
+    val uploads: Int get() = uploadCount.get()
+
+    /** Every path downloaded, in order. */
+    val downloaded: List<String> get() = downloadedPaths.toList()
+    private val statHooks = java.util.concurrent.ConcurrentHashMap<String, () -> Unit>()
 
     init {
         Files.createDirectories(root)
@@ -65,7 +77,8 @@ class DirectoryRemoteStore(
         path: String,
         toLocalPath: String,
     ) {
-        downloads++
+        downloadCount.incrementAndGet()
+        downloadedPaths += path
         val source = root.resolve(path)
         if (path in failDownloads) {
             // Half a file, then the wire drops.
@@ -90,7 +103,7 @@ class DirectoryRemoteStore(
         fromLocalPath: String,
         path: String,
     ) {
-        uploads++
+        uploadCount.incrementAndGet()
         val target = root.resolve(path)
         Files.createDirectories(target.parent)
         Files.copy(
@@ -162,7 +175,16 @@ class DirectoryRemoteStore(
         val attrs = Files.readAttributes(file, BasicFileAttributes::class.java)
         val rel = file.relativeTo(root).toString().replace('\\', '/')
         val hash = if (reportsHashes) sha256(file) else null
-        return RemoteEntry(rel, attrs.size(), attrs.lastModifiedTime().toMillis(), hash)
+        val dropbox =
+            if (reportsDropboxHash) {
+                DropboxContentHash()
+                    .apply {
+                        Files.readAllBytes(file).let { update(it, it.size) }
+                    }.hex()
+            } else {
+                null
+            }
+        return RemoteEntry(rel, attrs.size(), attrs.lastModifiedTime().toMillis(), hash, dropbox)
     }
 
     private fun sha256(file: Path): String = sha256Bytes(Files.readAllBytes(file))

@@ -37,6 +37,12 @@ data class SyncConfig(
      * cloud sync ([SimRemote]), and no folder sync tool runs.
      */
     val cloud: CloudOptions? = null,
+    /**
+     * When set (and [cloud] is not), the folder sync tool is rclone bisync through one remote
+     * ([SimBisync]) instead of a Syncthing-like one: the shape cloud sync would take if the app
+     * left the whole folder to bisync.
+     */
+    val bisync: BisyncOptions? = null,
 ) {
     companion object {
         fun forSeed(config: SimConfig): SyncConfig {
@@ -83,7 +89,17 @@ data class SyncConfig(
                         caseInsensitive = random.chance(CASE_INSENSITIVE_PERCENT),
                         reportsHashes = random.nextBoolean(),
                         failPercent = if (random.nextBoolean()) CLOUD_FAIL_PERCENT else 0,
+                        reportsDropboxHash = random.nextBoolean(),
                     )
+                } else {
+                    null
+                }
+            // Drawn after the cloud, so every draw above stays what it was for a seed, and only on
+            // request (-Dnpn.sim.bisync=<percent>): bisync loses documents (docs/SIMULATION.md).
+            val bisyncPercent = System.getProperty(BISYNC_PROPERTY)?.toIntOrNull() ?: 0
+            val bisync =
+                if (cloud == null && bisyncPercent > 0 && random.chance(bisyncPercent)) {
+                    BisyncOptions(interruptPercent = if (random.nextBoolean()) BISYNC_INTERRUPT_PERCENT else 0)
                 } else {
                     null
                 }
@@ -96,6 +112,7 @@ data class SyncConfig(
                 options = options,
                 joinsAt = joinsAt,
                 cloud = cloud,
+                bisync = bisync,
             )
         }
 
@@ -107,6 +124,8 @@ data class SyncConfig(
         private const val CLOUD_PERCENT = 30
         private const val CASE_INSENSITIVE_PERCENT = 30
         private const val CLOUD_FAIL_PERCENT = 3
+        private const val BISYNC_PROPERTY = "npn.sim.bisync"
+        private const val BISYNC_INTERRUPT_PERCENT = 15
     }
 }
 
@@ -249,7 +268,8 @@ internal class SyncSimulation(
             // A copy in another replica's folder, or on the cloud remote, keeps the library's: the
             // last copy is the library's last.
             fs.heldElsewhere = { hash, path ->
-                members.any { it !== this && it.fs.holdsCopy(hash, except = path) } || remote?.holds(hash) == true
+                members.any { it !== this && it.fs.holdsCopy(hash, except = path) } || remote?.holds(hash) == true ||
+                    tool.holds(hash)
             }
         }
 
@@ -296,13 +316,33 @@ internal class SyncSimulation(
                 json?.let { (EventDecoderRegistry.decodeStored(it).op as? JournalOp.Relink)?.newDoc }
             }
 
-    val tool =
-        SimSync(
+    private val peers =
+        members.map { member ->
+            val short = (config.seed % SHORT_ID).toString(SHORT_RADIX).uppercase()
+            SyncPeer(member.index, member.name, "DEV${member.index}$short", member.fs)
+        }
+
+    /** rclone bisync, where the seed runs it instead of the Syncthing-like tool. */
+    private val bisync: SimBisync? =
+        sync.bisync?.let {
+            SimBisync(
+                world,
+                peers,
+                Random(config.seed xor TOOL_SALT),
+                it,
+                trace,
+                present =
+                    members.map { m ->
+                        m.joinsAt ==
+                            0
+                    },
+            )
+        }
+
+    val tool: FolderSyncTool =
+        bisync ?: SimSync(
             world,
-            members.map { member ->
-                val short = (config.seed % SHORT_ID).toString(SHORT_RADIX).uppercase()
-                SyncPeer(member.index, member.name, "DEV${member.index}$short", member.fs)
-            },
+            peers,
             Random(config.seed xor TOOL_SALT),
             sync.options,
             trace,
@@ -708,7 +748,9 @@ internal class SyncSimulation(
      * taking the library's last copy is a finding whatever happened to the bytes before or after, but
      * in its trash (the trash purge, a delete for good) for a document the journals, all replicas'
      * events together, had in the trash when the loss happened (a restore since, of bytes the purge
-     * took, is not the purge's doing). The sync tool only carries out another device's change, whose
+     * took, is not the purge's doing), or had restored after a purge already took a copy of it: the
+     * user restored past the retention, and a device that had not seen the restore yet purges its
+     * copy by the retention too. The sync tool only carries out another device's change, whose
      * cause is on that device, and another process is no finding of the app's. What this finds is the
      * app deleting the last copy of a document it still shows, or would: the live index and a rebuild
      * then both hide it as missing, which neither oracle sees.
@@ -747,6 +789,30 @@ internal class SyncSimulation(
             .maxByOrNull { it.first }
             ?.second ==
             "doc-trash"
+
+        // Whether the latest of [hash]'s lifecycle events stamped no later than [atMillis] is a restore
+        // made after a purge had already taken a copy of it from the trash, while it was trashed: a
+        // purge runs only once the retention is past, so the user restored what the retention had let
+        // go, and another device's purge, which had not seen the restore yet, is the retention's doing.
+        fun restoredAfterPurge(
+            hash: String,
+            atMillis: Long,
+        ): Boolean {
+            val latest =
+                lifecycle[hash]
+                    .orEmpty()
+                    .filter {
+                        it.first.physicalMillis <= atMillis
+                    }.maxByOrNull { it.first }
+            if (latest?.second != "doc-restore") return false
+            return members.any { member ->
+                member.fs.losses.recordsOf(hash).any { purge ->
+                    purge.loss == Loss.APP_TRASH &&
+                        purge.atMillis < latest.first.physicalMillis &&
+                        trashedAt(hash, purge.atMillis)
+                }
+            }
+        }
         val held =
             members.flatMapTo(HashSet()) { member ->
                 member.fs
@@ -763,11 +829,30 @@ internal class SyncSimulation(
                 .filter { loss ->
                     when (loss.loss) {
                         Loss.APP -> true
-                        Loss.APP_TRASH -> !trashedAt(hash, loss.atMillis)
+                        Loss.APP_TRASH -> !trashedAt(hash, loss.atMillis) && !restoredAfterPurge(hash, loss.atMillis)
                         Loss.OUTSIDE, Loss.SYNC -> false
                     }
                 }
-        val lost = (known - gone - held).sorted().filter { appLosses(it).isNotEmpty() }
+        val lost =
+            (known - gone - held).sorted().filter { !tool.holds(it) && appLosses(it).isNotEmpty() }
+        // bisync's own losses (bytes it replaced or deleted that its listing did not show, or that a
+        // resync overwrote) are no change it carried for another device: the tool lost them.
+        bisync?.let { tool ->
+            val clobbered = (known - gone - held).sorted().filter { !tool.holds(it) && it in tool.clobbered.keys }
+            if (clobbered.isNotEmpty()) {
+                fail(
+                    members[0],
+                    "bisync removed the last copy of a document no journal deleted or relinked:\n  " +
+                        clobbered.joinToString("\n  ") { hash ->
+                            "${hash.take(ID)}: ${tool.clobbered[hash]}; " +
+                                members.joinToString { "${it.name} ${it.fs.losses.of(hash)}" } +
+                                members.joinToString("") { member ->
+                                    member.fs.lossesAt(hash).joinToString("") { "\n    ${member.name} $it" }
+                                }
+                        },
+                )
+            }
+        }
         if (lost.isNotEmpty()) {
             fail(
                 members[0],

@@ -3,6 +3,7 @@ package dev.npn.core.app
 import dev.npn.core.ai.AiChat
 import dev.npn.core.ai.AiSuggest
 import dev.npn.core.app.aiedit.AiEditQueueFacade
+import dev.npn.core.db.isLive
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.index.DeviceIdentity
 import dev.npn.core.index.EmptyImportException
@@ -12,6 +13,7 @@ import dev.npn.core.index.ScanReport
 import dev.npn.core.index.SupersededImportException
 import dev.npn.core.index.WriteBlock
 import dev.npn.core.index.WriteSettle
+import dev.npn.core.index.holdsDocument
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
@@ -146,6 +148,12 @@ internal class LibrarySessionImpl(
         source: ExternalSource,
         suggestedName: String,
     ): ImportOutcome = owned { importing(suggestedName) { importService.importPdf(source, suggestedName) } }
+
+    override suspend fun holdsDocument(docId: String): Boolean =
+        owned {
+            val row = deps.db.documentDao().getByDocId(docId)
+            row != null && row.isLive && fs.holdsDocument(row)
+        }
 
     /** Import a PDF held in memory: for tests, which have no [ExternalSource] to hand. */
     internal suspend fun importPdfBytes(
