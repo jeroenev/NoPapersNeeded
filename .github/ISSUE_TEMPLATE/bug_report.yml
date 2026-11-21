@@ -1,0 +1,59 @@
+name: Bug report
+description: Something doesn't work the way it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please don't attach documents with personal information.
+        A security problem goes through [a private report](https://github.com/jeroenev/NoPapersNeeded/security/advisories/new), not an issue.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open …
+        2. Tap …
+        3. See …
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: Settings → About.
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Android
+        - Linux (Flatpak)
+        - Linux (AppImage)
+        - Linux (deb/rpm)
+        - Windows
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS and device
+      placeholder: e.g. Android 15 on a Pixel 8, Fedora 43
+  - type: textarea
+    id: sync
+    attributes:
+      label: Library and sync setup
+      description: Where the library folder lives and how it syncs (Syncthing, Nextcloud, the in-app cloud sync with which provider, none), if it matters.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      render: text

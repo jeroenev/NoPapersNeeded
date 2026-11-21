@@ -105,7 +105,7 @@ class LiveEndpointProbeTest {
             // Graded against text this test drew itself, so a plausible-but-invented transcription
             // fails instead of passing on vibes.
             text shouldContain "INVOICE 2026-0142"
-            text shouldContain "Dynapps"
+            text shouldContain "Acme Supplies"
             text shouldContain "1730.50"
         }
     }
@@ -167,7 +167,7 @@ class LiveEndpointProbeTest {
         val lines =
             listOf(
                 "INVOICE 2026-0142",
-                "Dynapps BV",
+                "Acme Supplies BV",
                 "Date: 7 September 2026",
                 "Description        Amount",
                 "Odoo consulting      1250.00",
