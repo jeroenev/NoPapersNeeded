@@ -1,0 +1,1 @@
+{"v":1,"seq":1,"hlc":{"t":1795281470724,"c":0,"d":"3d6b0ebe-d720-42e7-a72c-0dafbc6837fd"},"dev":"3d6b0ebe-d720-42e7-a72c-0dafbc6837fd","doc":"3266ab579a3026872e45bb63b41d1cbd8eed9d0bc2beee17d31ef21e2afe7d37","op":"field-set","p":{"key":"docDate","value":"2026-11-09"}}

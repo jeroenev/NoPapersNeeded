@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+#MISE description="Regenerate the fictional demo library PDFs used for screenshots (design/demo-library)"
+set -euo pipefail
+
+# The demo library (design/demo-library/README.md) feeds the README and Play
+# Store screenshots. Its PDFs are generated, never scanned, and everything in
+# them is fictional. uv comes from the [tools] block in mise.toml; extra args
+# pass through to generate.py (--fresh wipes the curated journal too).
+
+cd "$(dirname "$0")/../.."
+exec uv run --quiet --with fpdf2 python design/demo-library/generate.py "$@"

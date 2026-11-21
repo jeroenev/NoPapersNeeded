@@ -1,0 +1,1 @@
+{"v":1,"seq":1,"hlc":{"t":1795281309195,"c":0,"d":"df344274-d294-49cc-b585-4fb4e0940d1f"},"dev":"df344274-d294-49cc-b585-4fb4e0940d1f","doc":"a9f95e6dc7112fb6c43ac09b5c0ebb8881ccf34c201721c4707b1841c700039f","op":"field-set","p":{"key":"docType","value":"Statement"}}

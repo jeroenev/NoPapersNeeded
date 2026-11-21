@@ -1,0 +1,1 @@
+{"v":1,"seq":1,"hlc":{"t":1795281449888,"c":0,"d":"e78ab434-07a1-4529-a289-a94c0b2fe85f"},"dev":"e78ab434-07a1-4529-a289-a94c0b2fe85f","doc":"50fdb67a18b9f3cd517089183b27efabbcf033358f3b81eae24c81a26213ba78","op":"field-set","p":{"key":"correspondent","value":"Aurora Appliances"}}

@@ -1,0 +1,1 @@
+{"v":1,"seq":1,"hlc":{"t":1795281370434,"c":0,"d":"519b27c9-00bd-4da5-ba51-046c9e3d7731"},"dev":"519b27c9-00bd-4da5-ba51-046c9e3d7731","doc":"d99f6f67f75b7d86317618a5b59400834f28ebc487aa321e5e6a9574802bd95b","op":"field-set","p":{"key":"docType","value":"Receipt"}}
