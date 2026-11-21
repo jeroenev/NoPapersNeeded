@@ -24,6 +24,11 @@ a folder you choose, readable by any other app, today and in ten years.
   automatically based on their text.
 - **Stay on top of new arrivals.** A review queue shows what still needs sorting, and
   saved views keep your favorite filters one tap away.
+- **Bring an AI assistant, if you want one.** Connect a provider of your choice —
+  from OpenAI to Ollama on your own machine — and the assistant answers questions
+  about your documents, suggests tags, titles, correspondents and dates for a batch
+  of new arrivals, and reads handwriting, tables and faint scans that regular text
+  recognition misses.
 - **Every device, one library.** Keep the folder in sync with the tool you already use,
   such as Syncthing or Nextcloud, and every phone and computer sees the same documents,
   tags and search results. Changes made on two devices at once merge cleanly.
@@ -56,12 +61,6 @@ The same library, laid out for a small screen.
 </p>
 
 ## Optional AI assistant
-
-Connect an AI provider of your choice and the assistant can:
-
-- answer questions about your documents,
-- suggest tags and fill in titles, correspondents and dates for a batch of documents,
-- read handwriting, tables and faint scans that regular text recognition misses.
 
 It's off until you set it up, it asks before anything that sends documents to your
 provider, and nothing lands in your library until you've reviewed it.
