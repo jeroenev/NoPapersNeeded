@@ -23,8 +23,8 @@ Tools: Xvfb, xdotool and ImageMagick (`driving-the-desktop-app`), `uv` (OCR and 
 | `filters.png` | 2560×1600 | Filter sheet with two tags selected |
 | `phone-library.png`, `phone-details.png`, `phone-tags.png` | 824×1800 | Same library on a phone |
 
-`search.png` is cropped to the content (one result row plus its tags), so it is shorter than
-the other 2560-wide files.
+`search.png` is cropped to the content: the first result row and its tag chips end at about
+y=1035, so 2560×1040. Cropping to 1000 cuts the tags off.
 
 Check current sizes with `identify design/screenshots/*.png` and match them. `README.md`
 ("A closer look", "On your phone") and the SVGs in `design/play-store/src/` reference these
@@ -44,6 +44,9 @@ and the AI setting. Use `library/` as-is; no curation needed.
   sandbox's folder back when done:
   `rsync -a --delete "$S/home/Documents/NoPapersNeeded/" design/demo-library/library/`.
   It's all write-once journal objects plus one throwaway device id: safe to commit.
+- Prefer a table-heavy page for `preview.png` and `details.png` (the bank statement works): the
+  generated paragraphs are justified, so prose pages show stretched word gaps and odd line
+  breaks in a close-up.
 
 ## 2. Desktop shots
 
@@ -56,18 +59,42 @@ Capture at 2× — start the sandbox with `NPN_JAVA_OPTS='-Dsun.java2d.uiScale=2
 scale rules in `driving-the-desktop-app`). The 2560×1600 files are 1280×800 dp; a 1× capture
 stretched to the README is visibly blurry.
 
+Only whole scales are honoured: `1.5` and `1.8` silently render at 1× (measured), and at 1×
+the grid collapses to 15 tiny columns — so 2× is the only setting that gives these files.
+
+**Measure the pane before composing it.** 2× leaves 1280×800 dp, and a details or filter pane
+can be taller than that. On the first capture, OCR the pane's last element (the tag chip,
+"Apply filters") and compare its y with 1600. If it sits at the edge or past it, do not scroll:
+one wheel notch moves about 110 px and hides the first field's label. Change the composition
+instead — the expanded details view below, with a wider form — or the shot will be clipped.
+
 - Sort: the sort chip under the search field → Document date, Descending.
 - Filters: the Filters icon in the top bar (hover the icons for tooltips to find it). A tag
   pair such as `Bills.Energy` + `Bills.Water` with Match any applies and shows the union; the
   demo library gives each document a single tag, so Match all finds nothing.
-- Details is the one shot taken in the **expanded** document view (the ↗ in the pane header),
-  not the side pane: at 2× the side pane is only 800 dp tall and the form needs more, so its
-  Tags section falls below the fold. In the expanded view, drag the divider between the page
-  and the form left until the hints wrap shorter; then Title…Tags fit without scrolling.
+- Details is the one desktop shot taken in the **expanded** document view (the ↗ in the pane
+  header), not the side pane: at 2× the side pane is only 800 dp tall and the form needs more,
+  so its Tags section falls below the fold. In the expanded view, drag the divider between the
+  page and the form left until the hints wrap shorter; then Title…Tags fit without scrolling.
   Check that the tag chip is not cut by the bottom edge.
 - AI settings: Settings → Assistant → flip "Turn on the assistant" once, pick a provider,
   type a model id (e.g. `gpt-4o-mini`); leave the API key empty. Settings' Library pane shows
   the sandbox path — don't capture that pane.
+
+### Working the UI by hand
+
+- **Script the run.** A driver that sets up a state, OCRs an anchor and captures makes a retry
+  one command instead of a dozen round trips; this set took about 40 capture/OCR rounds, and
+  every manual retry re-pays the navigation.
+- **Re-OCR the top bar after opening or closing a pane:** the pane spans half the window, so
+  the icons shift (the Filters icon sat 1200 px further right with the pane closed).
+- **Read the control's composable before fighting it.** A selected tag chip re-orders its row,
+  so the next click has to be located again; the Filters sheet keeps its edits until "Apply
+  filters".
+- **Type into the live search at `--delay 220`.** Faster typing loses keystrokes (`Octobe
+  2026`), and the suggestion popup covers the result count until Escape.
+- **The caret blinks into captures.** Take three or four frames of the same state and keep one
+  with no dark pixel in the caret column (Pillow over the box next to the last glyph).
 
 ## 3. Phone shots
 
@@ -84,6 +111,11 @@ bar can no longer be hidden (`policy_control` and System UI demo mode are ignore
 native capture is 1080×2376 with their notification icons in the bar, and cropping the bars
 leaves 824×1694 — short of the 824×1800 the Play Store SVGs expect without stretching. The
 fallback reproduces the phone layout at exactly the right size with no system bars.
+
+In that layout the details form fills all 900 dp: its last tag chip sits against the bottom
+edge, and scrolling to expose the Add tag field would hide the Title label. Leave the chip
+flush. Open the document from the grid rather than through a search, so the header reads
+"N of 18" instead of "1 of 2".
 
 Record the current library from More → Settings → Library. Create a fresh directory on the
 selected device and copy the fixture into it:

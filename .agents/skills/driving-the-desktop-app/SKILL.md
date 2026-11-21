@@ -48,7 +48,8 @@ helper=.agents/skills/driving-the-desktop-app/scripts/sandbox.sh
     factor is **literal**. In the same 2560×1600 window the whole UI renders at 2× — a
     1280×800 dp desktop, what a HiDPI screen at 200% system scaling shows. Measured by OCR
     on the welcome heading: 332 px wide at 1×, 655 px at 2.0, 1319 px at 4.0. So `4.0` really
-    is 4× and clips the UI; a capture that "came out zoomed" is this, not a DPI bug.
+    is 4× and clips the UI; a capture that "came out zoomed" is this, not a DPI bug. Only whole
+    numbers are honoured: `1.5` and `1.8` silently render at 1× (measured).
   - Anything that passes `-Dcompose.application.configure.swing.globals=true` — the packaged
     launcher does (`jpackage` writes it into `lib/app/no-papers-needed.cfg`) — sets
     `skiko.linux.autodpi=true`, and Skiko's `Setup.init` **overwrites** `sun.java2d.uiScale`
@@ -100,11 +101,16 @@ xdotool mousemove X Y; sleep 1                    # hover shows a tooltip: ident
 Lessons that cost time:
 
 - **Verify every step.** Screenshot + OCR after each click; layouts reflow (selecting a chip
-  moves the next one, a closing menu lets the click fall through to a document behind it).
+  moves the next one, a closing menu lets the click fall through to a document behind it, and
+  an icon row shifts sideways when a side pane opens or closes).
 - **Toggles toggle.** Clicking a switch's label row *and* the switch flips it twice. Read the
   state, then click once.
-- **Clear text fields first** (`ctrl+a BackSpace`) and type slowly; fast typing into a search
-  field with live results garbles it.
+- **Clear text fields first** (`ctrl+a BackSpace`) and type at `--delay 200` or slower: the
+  live search drops keystrokes below that, and its suggestion popup covers content until Escape.
+- **Enter does not always commit a field; Tab does.** A title typed and confirmed with Return
+  sat in the field while the card and pane heading kept the old name; Tab committed it.
+- **The text caret blinks into captures.** For a still, take a few frames of the same state and
+  keep one with no dark pixel in the caret column beside the last glyph.
 - **Read the composable instead of guessing.** When a control won't respond, find it in
   `composeApp/src/commonMain/kotlin/dev/npn/app/ui/` — e.g. adding a tag is "type the name in
   the Add tag field, then click the + at that row's right end".
