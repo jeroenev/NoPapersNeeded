@@ -1,12 +1,18 @@
 ---
 name: driving-the-desktop-app
-description: Launch the No Papers Needed desktop app in an isolated sandbox (own user.home, Xvfb display) and drive it headlessly with xdotool + OCR. Use when you need to see or click through the real desktop UI — screenshots, checking a UI change, reproducing a visual bug — without touching the developer's real library.
+description: Launch the No Papers Needed desktop app in an isolated sandbox (own user.home, Xvfb display) and drive it headlessly with xdotool + OCR. Use when you need to click through the real desktop UI — checking a UI change, reproducing a visual bug, verifying a flow — without touching the developer's real library. For a still of a fixed screen (README, Play Store), use refreshing-screenshots and its offscreen capture test instead.
 ---
 
 # Driving the desktop app
 
 The developer runs this app daily against their **real library**. A carelessly
 launched instance opens it. Everything below exists to make that impossible.
+
+**A still is usually not this skill's job.** For a screenshot of a screen in a fixed state at an
+exact pixel size, `ScreenshotCaptureTest` composes the same UI offscreen: no Xvfb, no window, no
+pointer, tooltip or caret in frame, and exactly 2560×1600 or 824×1800 whatever the desktop's DPI.
+`refreshing-screenshots` runs it. Come here to *interact*: walk a flow, find where a click lands,
+reproduce a visual bug, or reach a state the capture test does not drive yet.
 
 ## Isolation: the two traps
 

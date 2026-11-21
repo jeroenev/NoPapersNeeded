@@ -97,7 +97,8 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   core's and composeApp's Android code. Errors fail it; there is no baseline, and
   `config/lint/lint.xml` is the one configuration.
 - Fast UI iteration: `mise hot` (Compose Hot Reload on desktop) opens the real library, so use it
-  for development only; for any UI check or screenshot use `driving-the-desktop-app` instead.
+  for development only; for any UI check use `driving-the-desktop-app` instead, and for a still
+  the offscreen `ScreenshotCaptureTest` (`refreshing-screenshots`).
   Android-only paths (scanner, share intents, WorkManager) need a device: `mise deploy`. Without a
   phone, `mise emulator --headless [avd]` boots an Android emulator and waits for it; then
   `mise deploy`, `adb exec-out screencap -p > shot.png` to see it, `adb emu kill` to stop it.
@@ -236,10 +237,11 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
 
 Repo skills live in `.agents/skills/` (`.claude/skills` links to it). Reach for:
 
-- `driving-the-desktop-app` for any desktop UI check or screenshot (never `mise hot` or
-  `:desktopApp:run` against the real home); `refreshing-screenshots` for README/Play Store
-  captures; `testing-on-android` for phone or emulator verification; `triaging-ci` for a failing
-  workflow; `standards-review` to review a diff against these rules and its issue.
+- `driving-the-desktop-app` to click through the real desktop UI (never `mise hot` or
+  `:desktopApp:run` against the real home); `refreshing-screenshots` for the README/Play Store
+  stills, which its offscreen capture test renders (`NPN_SCREENSHOTS=…`); `testing-on-android`
+  for phone or emulator verification; `triaging-ci` for a failing workflow; `standards-review`
+  to review a diff against these rules and its issue.
 - Issues are GitHub issues (`docs/agents/issue-tracker.md`, triage labels in
   `docs/agents/triage-labels.md`). Domain docs are single-context: `CONTEXT.md`, ADRs in
   `docs/adr/` (`docs/agents/domain.md`).

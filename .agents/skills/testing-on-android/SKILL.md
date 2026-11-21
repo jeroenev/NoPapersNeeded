@@ -84,6 +84,11 @@ text by OCR: `.agents/skills/driving-the-desktop-app/scripts/ocr.py` works on an
 can catch the lock screen or notification shade with the user's personal notifications — check it
 and delete it, never commit one.
 
+A **still of the phone layout** (README, Play Store) does not need the device at all:
+`refreshing-screenshots` renders the same compact layout offscreen at exactly 824×1800, with no
+status or navigation bar. `screencap` is for what only the device shows — scanner, share sheet,
+permissions, sync — and for a bug report, where the bars are part of the evidence.
+
 ## 5. Device tests
 
 ```sh
@@ -101,5 +106,6 @@ logcat. R8-specific paths need the release build (`installBenchmarkRelease`, DEV
 - Stop an emulator you started: `adb emu kill`.
 - Leave the phone on the library the user expects; if you switched it, switch back and say so.
 - Report the serial, package, build type, the library path, and the log or screenshot that shows
-  the behaviour. For README/Play Store captures, use `refreshing-screenshots` instead of this
-  skill's raw captures.
+  the behaviour. A `screencap` is for a bug report: it carries the status and navigation bars.
+  For a README or Play Store still, use `refreshing-screenshots` — its capture test renders the
+  compact layout offscreen at 824×1800 instead.
