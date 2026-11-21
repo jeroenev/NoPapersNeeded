@@ -9,6 +9,9 @@ download, and find it again in seconds by typing a word from the page.
 There's no account to create and no server to run. Your documents stay ordinary PDFs in
 a folder you choose, readable by any other app, today and in ten years.
 
+And if you set up an AI assistant, it can file new arrivals for you, answer questions
+about your paperwork and read scans that regular text recognition cannot.
+
 ![Your library at a glance](design/screenshots/library.png)
 
 ## Why you'll like it
@@ -24,11 +27,14 @@ a folder you choose, readable by any other app, today and in ten years.
   automatically based on their text.
 - **Stay on top of new arrivals.** A review queue shows what still needs sorting, and
   saved views keep your favorite filters one tap away.
-- **Bring an AI assistant, if you want one.** Connect a provider of your choice —
-  from OpenAI to Ollama on your own machine — and the assistant answers questions
-  about your documents, suggests tags, titles, correspondents and dates for a batch
-  of new arrivals, and reads handwriting, tables and faint scans that regular text
-  recognition misses.
+- **Let the assistant do the filing.** Connect an AI provider of your choice and it
+  proposes tags, titles, correspondents and dates for a whole batch at once — the inbox,
+  everything untagged, a saved view or a selection. You review the suggestions before
+  anything is saved.
+- **Ask your paperwork anything.** "When does my car insurance renew?" The assistant
+  searches your library, reads the documents it finds and answers from them, showing
+  which ones it used. It also reads handwriting, tables and faint scans that on-device
+  text recognition misses.
 - **Every device, one library.** Keep the folder in sync with the tool you already use,
   such as Syncthing or Nextcloud, and every phone and computer sees the same documents,
   tags and search results. Changes made on two devices at once merge cleanly.
@@ -62,8 +68,24 @@ The same library, laid out for a small screen.
 
 ## Optional AI assistant
 
-It's off until you set it up, it asks before anything that sends documents to your
-provider, and nothing lands in your library until you've reviewed it.
+Set it up with a provider of your choice — OpenAI, Anthropic, Google, Mistral, DeepSeek,
+OpenRouter, Ollama on your own machine, or any other OpenAI-compatible server — using
+your own key. There is no account with us and no server of ours in between: requests go
+from your device straight to that provider.
+
+- **Ask.** Questions in plain words; each conversation is kept on this device, so you
+  can pick it up again later.
+- **Bulk edit.** Have it propose tags, titles, correspondents and dates across the inbox,
+  everything untagged, a saved view or a selection. Every suggestion is shown first, and
+  long runs can keep working in the background for you to review later.
+- **Read the hard pages.** Handwriting, tables and faint scans come out as searchable
+  text that on-device recognition struggles with.
+- **File as you go.** With auto-organize on, each new document gets tags from the ones you
+  already use and any field you have marked for the assistant to fill.
+
+Off by default. Bulk edits change nothing until you approve them, and auto-organize is
+the one path that applies its suggestions as documents arrive. The app warns you before a
+run sends a large batch, since that is one request per document to your provider.
 
 ## Get it
 
