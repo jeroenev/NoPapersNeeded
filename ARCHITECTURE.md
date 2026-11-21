@@ -357,7 +357,9 @@ truth; the user just never picks it.
 - Trash and delete for good are the journal's decisions, read from the fold (`JournalDocView`),
   not from index rows that may lag it. The pass mirrors them onto the remote, and a replica applies
   the same move to its own file, as a folder syncer would deliver it, only once the remote holds no
-  live copy under any path; the rescan that follows projects it. Each local trash, restore, rename
+  live copy under any path; the rescan that follows projects it. That includes a document whose
+  row still shows it because its file is still here: a rescan shows such a file until the restore
+  settle window has passed, and the pass that carries the trash is what moves it. Each local trash, restore, rename
   and delete is decided again under the writer lock (`SyncHooks.serialized`), so a restore or an
   import the user made since the plan stands. A document the journal hides is never installed from
   the remote; one an import brought back unrecorded (no `doc-undelete` written yet) stays on that

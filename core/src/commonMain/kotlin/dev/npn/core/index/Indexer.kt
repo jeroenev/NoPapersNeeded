@@ -99,6 +99,14 @@ internal class Indexer(
         to: String,
     ) = fs.move(from, to)
 
+    /** Where the documents [copies] name are, by id. */
+    private suspend fun pathsOf(copies: List<DuplicateReport>): Map<String, String> =
+        if (copies.isEmpty()) {
+            emptyMap()
+        } else {
+            documentDao.getByDocIds(copies.map { it.docId }.distinct()).associate { it.docId to it.relPath }
+        }
+
     /** Whether a rescan ever projected a document into the index. */
     suspend fun hasDocuments(): Boolean = documentDao.any()
 
@@ -170,22 +178,29 @@ internal class Indexer(
             // The reconcile writes and the fold land in one transaction, so no reader sees a row
             // before its tags and fields; the files their intents move wait until it commits.
             var resurrected: List<Resurrected> = emptyList()
+            // Where each document with a copy was before the path work, which runs once the block is done.
+            var unsettled: Map<String, String> = emptyMap()
             val plan =
                 documentPaths.deferring(known = contentAt) {
-                    db.withWriteTransaction {
-                        reconcile(toHash, hashes, dbProjection, diskPaths, metadataState).also {
-                            _scanState.value = IndexProgress(IndexProgress.Phase.FOLDING)
-                            resurrected = folds.rescan(metadataState, FoldScope.FullRescan(contentAt))
-                        }
-                    }
+                    db
+                        .withWriteTransaction {
+                            reconcile(toHash, hashes, dbProjection, diskPaths, metadataState).also {
+                                _scanState.value = IndexProgress(IndexProgress.Phase.FOLDING)
+                                resurrected = folds.rescan(metadataState, FoldScope.FullRescan(contentAt))
+                            }
+                        }.also { reconciled -> unsettled = pathsOf(reconciled.duplicates) }
                 }
             // A copy at the path its document's intent names is the document's own file once the path
-            // work moved the document onto it; its old file is then the copy, which the next rescan lists.
-            val held =
-                documentDao
-                    .getByDocIds(plan.duplicates.map { it.docId }.distinct())
-                    .associate { it.docId to it.relPath }
-            val duplicates = plan.duplicates.filterNot { held[it.docId] == it.extraRelPath }
+            // work moved the document onto it; the file it left is then the copy, still holding its bytes.
+            val held = pathsOf(plan.duplicates)
+            val duplicates =
+                plan.duplicates
+                    .mapNotNull { copy ->
+                        if (held[copy.docId] != copy.extraRelPath) return@mapNotNull copy
+                        unsettled[copy.docId]
+                            ?.takeIf { it != copy.extraRelPath && contentAt[it] == copy.docId }
+                            ?.let { left -> copy.copy(extraRelPath = left) }
+                    }.distinct()
             // Every rescan lists the whole library, so its duplicates are all there are: a copy since
             // deleted, or overwritten with another document, loses its row.
             duplicateDao.replaceAll(duplicates.map { DuplicateEntity(it.docId, it.extraRelPath) })

@@ -283,10 +283,24 @@ internal class BakeService(
                 } else {
                     ""
                 }
-            if (kept != null) {
-                log.warn("$message; the original is at $kept, where the next rescan finds it$baked", failure)
-            } else {
-                log.error("$message; the original is on disk nowhere$baked", failure)
+            // The original is kept aside beside the document, so a folder deleted during the bake
+            // (by the user, or a sync tool carrying such a delete) takes it as it takes the document:
+            // nothing the delete did not ask for.
+            val folder = NpnPaths.parentDir(norm)
+            val folderGone = folder.isNotEmpty() && runCatchingCancellable { !fs.exists(folder) }.getOrDefault(false)
+            when {
+                kept != null -> {
+                    log.warn("$message; the original is at $kept, where the next rescan finds it$baked", failure)
+                }
+
+                // The failed read-back is no fault then, so it is not passed on as one.
+                folderGone -> {
+                    log.warn("$message: $folder was deleted meanwhile, and the original with it$baked")
+                }
+
+                else -> {
+                    log.error("$message; the original is on disk nowhere$baked", failure)
+                }
             }
         }
     }

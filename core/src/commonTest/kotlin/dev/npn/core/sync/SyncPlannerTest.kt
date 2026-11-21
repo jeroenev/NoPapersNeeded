@@ -280,6 +280,20 @@ class SyncPlannerTest {
             .shouldBeEmpty()
     }
 
+    /**
+     * Another device trashed a document whose file is still here: the rescan shows it live until
+     * the restore settle window has passed, and this pass, the sync carrying the trash, parks the
+     * file. Left alone, the rescan would record the file's return once the window passed.
+     */
+    @Test
+    fun aDocumentTheJournalTrashedIsParkedWhileItsRowStillShowsIt() {
+        val journal = mapOf(docA to JournalDocView(intendedPath = null, deleted = false, trashed = true))
+        val result = plan(local(doc(docA, "a.pdf"), journal = journal, trashTimes = mapOf(docA to trashedAt)), remote())
+        result.local shouldContainExactly listOf(SyncAction.MoveLocalToTrash(docA, "a.pdf", trashedAt))
+        result.remote.shouldBeEmpty()
+        result.conflicts.shouldBeEmpty()
+    }
+
     @Test
     fun metadataOfAnotherSizeOnTheRemoteIsUploadedAgain() {
         val truncated = RemoteEntry(objectPath, size = 3, mtimeMillis = now)

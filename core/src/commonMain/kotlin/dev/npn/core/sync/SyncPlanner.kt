@@ -297,7 +297,13 @@ class SyncPlanner(
         for (doc in local.documents) {
             when {
                 doc.deleted -> planDeleted(doc)
+
                 doc.trashed -> planTrashed(doc)
+
+                trashedOnlyByJournal(
+                    doc,
+                ) -> planTrashed(doc.copy(trashed = true, trashedAt = local.trashTimes[doc.docId]))
+
                 else -> planLive(doc)
             }
         }
@@ -530,6 +536,19 @@ class SyncPlanner(
     }
 
     // ---- trashed documents ----------------------------------------------------------------
+
+    /**
+     * Whether the journal has [doc] trashed while its row shows it: a rescan shows a trashed
+     * document whose bytes are still at its path until the restore settle window has passed
+     * ([dev.npn.core.index.Resurrected]), as a sync may not have carried the trash's move yet. Here
+     * this pass is that sync, so it parks the file as for any trashed row. Left live, nothing would
+     * move it, and once the window passed the rescan would record the file's return, undoing the
+     * other device's trash on every device.
+     */
+    private fun trashedOnlyByJournal(doc: LocalDocument): Boolean {
+        val journal = local.journal[doc.docId] ?: return false
+        return journal.trashed && !journal.deleted && journal.supersededBy == null
+    }
 
     private fun planTrashed(doc: LocalDocument) {
         // A row that lags the journal (a projection that failed) moves nothing until they agree.

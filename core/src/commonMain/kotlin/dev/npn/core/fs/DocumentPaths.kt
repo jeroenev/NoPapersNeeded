@@ -46,7 +46,7 @@ internal class DocumentPaths(
      * The stat of [target], which exists, when it already holds [docId]'s bytes, as a file other than
      * [source], and kept that stat while it was hashed; null otherwise.
      *
-     * The copy at [source] stays, a duplicate the next rescan lists. Most often it is a move another
+     * The copy at [source] stays, a duplicate the rescan that settled the path lists. Most often it is a move another
      * device made, whose deletion of [source] the sync tool is still bringing. Deleted here, it could
      * be the last copy: a device whose intent for the document is still another path deletes
      * [target] for the same reason at the same time, and the sync tool carries each deletion to the

@@ -1,5 +1,6 @@
 package dev.npn.core.index
 
+import dev.npn.core.db.DuplicateEntity
 import dev.npn.core.fs.DocumentPaths
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
@@ -312,10 +313,10 @@ class DocumentPathReplicationTest {
      * A copy the rescan finds at the path a pending intent names (another device's move, whose
      * deletion of the old file is still on its way) is a duplicate only until the rescan's own path
      * work moves the document onto it: then it is the document's file, and the old one is the copy,
-     * which the next rescan lists.
+     * which that same rescan lists, so a library at rest never holds a copy nothing reports.
      */
     @Test
-    fun aCopyTheRescanMovesItsDocumentOntoIsNoDuplicateOfIt() =
+    fun aCopyTheRescanMovesItsDocumentOntoLeavesTheOldFileAsTheDuplicate() =
         indexTest { rig ->
             rig.writePdf("old.pdf", "document")
             rig.rescan()
@@ -323,13 +324,13 @@ class DocumentPathReplicationTest {
             rig.copyFile("old.pdf", "new.pdf")
             rig.writer("remote").commit(listOf(PendingOp.propSet(hash, SystemProperty.STORAGE_PATH, "new.pdf")))
 
-            rig.rescan().duplicates shouldBe emptyList()
+            rig.rescan().duplicates shouldBe listOf(DuplicateReport(hash, "old.pdf"))
 
             rig.db
                 .documentDao()
                 .requireByDocId(hash)
                 .relPath shouldBe "new.pdf"
-            rig.db.duplicateDao().forDoc(hash) shouldBe emptyList()
+            rig.db.duplicateDao().forDoc(hash) shouldBe listOf(DuplicateEntity(hash, "old.pdf"))
             rig.rescan().duplicates shouldBe listOf(DuplicateReport(hash, "old.pdf"))
         }
 
