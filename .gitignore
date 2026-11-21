@@ -16,3 +16,4 @@ docs/*
 .codex/
 
 __pycache__/
+opencode.jsonc
