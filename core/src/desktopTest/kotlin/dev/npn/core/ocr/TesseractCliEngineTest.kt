@@ -89,6 +89,22 @@ class TesseractCliEngineTest {
             }
         }
 
+    @Test
+    fun theRenderedPageIsReadableOnlyByItsOwner() =
+        runTest {
+            assumeTrue(isLinux())
+            val dir = Files.createTempDirectory("npn-tess")
+            // The page is handed over as a file in the shared temp directory; report its mode.
+            val fake = fakeTesseract(dir, "stat -c %a \"${'$'}1\"")
+            try {
+                val engine = TesseractCliEngine(binary = fake.absolutePath)
+
+                engine.recognizePng("png".encodeToByteArray(), "eng") shouldBe "600"
+            } finally {
+                dir.toFile().deleteRecursively()
+            }
+        }
+
     /** A `tesseract` that answers the probes and runs [onRecognize] for a page. */
     private fun fakeTesseract(
         dir: Path,

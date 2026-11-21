@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -29,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.ReviewedBadge
@@ -54,6 +56,8 @@ import no_papers_needed.composeapp.generated.resources.detail_tab_history
 import no_papers_needed.composeapp.generated.resources.detail_tab_preview
 import no_papers_needed.composeapp.generated.resources.detail_tab_text
 import no_papers_needed.composeapp.generated.resources.detail_tags
+import no_papers_needed.composeapp.generated.resources.ux_discard
+import no_papers_needed.composeapp.generated.resources.ux_discard_prompt
 import org.jetbrains.compose.resources.stringResource
 
 /**
@@ -161,15 +165,38 @@ internal fun MetadataTabs(
     }
 }
 
-/** What stands in for a document that is gone: trashed, or deleted on another replica while open. */
+/**
+ * What stands in for a document that is gone: trashed, or deleted on another replica while open.
+ * With [onDiscardDraft] it also offers to drop the changes still drafted for it, which can no
+ * longer be saved: without that, a draft that could not be saved before the document went would
+ * stay behind the resume banner and the library switch for good.
+ */
 @Composable
-internal fun DocumentUnavailable(modifier: Modifier = Modifier) {
+internal fun DocumentUnavailable(
+    modifier: Modifier = Modifier,
+    onDiscardDraft: (() -> Unit)? = null,
+) {
+    var confirmDiscard by remember { mutableStateOf(false) }
     EmptyState(
         icon = Icons.Filled.Delete,
         title = stringResource(Res.string.detail_document_unavailable),
         modifier = modifier,
         subtitle = stringResource(Res.string.detail_document_unavailable_hint),
+        actionLabel = onDiscardDraft?.let { stringResource(Res.string.ux_discard) },
+        onAction = onDiscardDraft?.let { { confirmDiscard = true } },
     )
+    if (confirmDiscard && onDiscardDraft != null) {
+        ConfirmDialog(
+            title = stringResource(Res.string.ux_discard),
+            message = stringResource(Res.string.ux_discard_prompt),
+            confirmLabel = stringResource(Res.string.ux_discard),
+            onConfirm = {
+                confirmDiscard = false
+                onDiscardDraft()
+            },
+            onDismiss = { confirmDiscard = false },
+        )
+    }
 }
 
 /** The metadata panel's tabs; [PREVIEW] only where the page viewer cannot sit beside them. */

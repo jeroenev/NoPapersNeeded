@@ -56,7 +56,7 @@ fun TypedTextField(
 }
 
 /** Whether a field held focus, to tell the change that takes it away from every other one. */
-private class FocusEdge {
+internal class FocusEdge {
     private var focused = false
 
     fun lost(nowFocused: Boolean): Boolean = (focused && !nowFocused).also { focused = nowFocused }

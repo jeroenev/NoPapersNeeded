@@ -57,6 +57,12 @@ class TagDaoTest {
                 .allWithLiveCounts()
                 .single { it.name == "invoice" }
                 .count shouldBe 1
+            // The tags screen counts the same way.
+            tagDao
+                .observeAllWithCounts()
+                .first()
+                .single { it.name == "invoice" }
+                .count shouldBe 1
         }
 
     @Test

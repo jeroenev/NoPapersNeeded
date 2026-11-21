@@ -707,7 +707,12 @@ internal class SyncSimulation(
         val views = present.associateWith { it.sim.checkAtRest() }
         present.forEach(::checkOwnNames)
         checkLastCopies()
-        if (full) checkConvergence(views)
+        if (full) {
+            checkConvergence(views)
+            revertedSeeds(world.customizedSeeds, views) { it.name }?.let { (member, why) -> fail(member, why) }
+        }
+        // What the rebuild oracles logged: after the run's last rest no step checks it.
+        present.forEach { it.sim.checkLog() }
     }
 
     /**

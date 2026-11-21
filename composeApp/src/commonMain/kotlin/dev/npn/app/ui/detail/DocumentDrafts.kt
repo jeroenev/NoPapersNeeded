@@ -444,8 +444,32 @@ internal class DocumentDrafts(
             queue(docId, CommitRequest(persisted, title, reviewed, onSaved))
             return
         }
-        if (!draft.writable || (!draft.dirty && reviewed == null)) return
+        if (!draft.writable) return
+        if (!draft.dirty && reviewed == null) {
+            // Nothing left to write: what waited for the save (a commit queued behind one) goes on.
+            onSaved()
+            return
+        }
         save(docId, reviewed, SavedChanges(title, draft.fields.keys.associateWith { persisted[it] }), onSaved)
+    }
+
+    /**
+     * Run [action] on [docId] as its draft shows it: once the draft is saved, at once when there is
+     * nothing to save. For an action that reads the document's metadata (a shared or baked copy, a
+     * split), which would otherwise act on the stored values while the panel shows the typed ones.
+     * A save that fails runs nothing (the editor says it failed). Returns false, running nothing,
+     * while a value in the draft does not fit its field, as nothing can be saved then.
+     */
+    fun whenSaved(
+        docId: String,
+        persisted: Map<String, String>,
+        title: String,
+        action: () -> Unit,
+    ): Boolean {
+        val draft = state[docId] ?: DocumentDraft()
+        if (!draft.writable) return false
+        commit(docId, persisted, title, onSaved = action)
+        return true
     }
 
     /**

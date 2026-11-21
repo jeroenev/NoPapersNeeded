@@ -13,14 +13,33 @@ import androidx.room3.Transaction
 @Dao
 interface FtsDao {
     /**
-     * FTS5 MATCH search, best match first, with a snippet from whichever column matched (`-1`);
-     * `char(1)` and `char(2)` mark where each hit starts and ends.
+     * FTS5 MATCH search: the matching documents, best match first. No snippets: building one
+     * re-tokenizes the document's text, and a short prefix query matches most of a library, so
+     * [snippetsFor] builds them only for the documents a caller shows.
+     */
+    @Query("SELECT docId FROM fts_documents WHERE fts_documents MATCH :query ORDER BY rank")
+    suspend fun search(query: String): List<String>
+
+    /**
+     * A snippet of each of [docIds] that matches [query], from whichever column matched (`-1`);
+     * `char(1)` and `char(2)` mark where each hit starts and ends. The rowid filter runs before the
+     * snippet is built, so only these documents' text is read.
      */
     @Query(
         "SELECT docId, snippet(fts_documents, -1, char(1), char(2), '...', 16) AS snippet " +
-            "FROM fts_documents WHERE fts_documents MATCH :query ORDER BY rank",
+            "FROM fts_documents WHERE fts_documents MATCH :query " +
+            "AND rowid IN (SELECT ftsRowid FROM fts_keys WHERE docId IN (:docIds))",
     )
-    suspend fun search(query: String): List<FtsHit>
+    suspend fun snippetsChunk(
+        query: String,
+        docIds: List<String>,
+    ): List<FtsHit>
+
+    /** [snippetsChunk] by docId, chunked under SQLite's bind-variable limit. */
+    suspend fun snippetsFor(
+        query: String,
+        docIds: List<String>,
+    ): Map<String, String?> = docIds.chunkedBind { snippetsChunk(query, it) }.associate { it.docId to it.snippet }
 
     /**
      * Indexed rows containing a token with the requested prefix, used to derive autocomplete.

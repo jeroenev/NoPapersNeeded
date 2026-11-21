@@ -270,6 +270,13 @@ internal class SimWorld(
     /** Failures that reached a scope's handler: nothing a session runs may end that way. */
     val uncaught = ArrayList<String>()
 
+    /**
+     * The well-known fields some replica's user relabelled or removed. No later step brings one
+     * back to its seed: none writes a seed's label, so a fold that shows it again took a seed over
+     * the user's change ([SyncSimulation]'s check after a full sync).
+     */
+    val customizedSeeds = HashSet<String>()
+
     fun uncaughtHandler(owner: String) =
         CoroutineExceptionHandler { _, failure ->
             uncaught += "[step $step] $owner: ${failure::class.qualifiedName}: ${failure.reason()}\n" +

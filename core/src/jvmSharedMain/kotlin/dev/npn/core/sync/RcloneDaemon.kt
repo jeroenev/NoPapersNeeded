@@ -73,6 +73,10 @@ class RcloneDaemon(
         } catch (failure: RcloneException) {
             throw failure
         } catch (expected: IOException) {
+            // A cancelled call ends by closing its own connection, which fails the exchange with an
+            // IOException too: that is no sign of a dead process, and restarting the one process
+            // every other call shares would cut those calls off. Cancelled, it ends here.
+            currentCoroutineContext().ensureActive()
             // The process may have died between calls; one restart is allowed before giving up.
             retryAfterRestart(session, method, input)
         }
@@ -125,6 +129,8 @@ class RcloneDaemon(
             if (current !== stale) {
                 return current ?: throw closedFailure()
             }
+            // The lock's fast path does not check for cancellation, and stopping [stale] is for good.
+            currentCoroutineContext().ensureActive()
             startSession(stale)
         }
 
@@ -139,6 +145,7 @@ class RcloneDaemon(
         } catch (retry: RcloneException) {
             throw retry
         } catch (retry: IOException) {
+            currentCoroutineContext().ensureActive()
             throw RcloneException(
                 "rclone is not reachable after a restart: ${retry.message}",
                 status = null,

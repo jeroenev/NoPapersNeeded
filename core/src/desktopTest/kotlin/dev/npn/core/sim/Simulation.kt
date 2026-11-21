@@ -82,7 +82,8 @@ object KnownIssues {
     const val CLOUD_NAMES_MAY_DIFFER = true
 
     /** Each finding by the phrases its failure message holds, all of them. */
-    val knownFailures: Map<List<String>, String> = emptyMap()
+    val knownFailures: Map<List<String>, String> =
+        emptyMap()
 
     /** The finding [message] reports, or null for a new failure. */
     fun classify(message: String): String? = knownFailures.entries.firstOrNull { it.key.all(message::contains) }?.value
@@ -307,10 +308,7 @@ internal class Simulation(
     fun checkCheap() {
         fs.writeOnceViolations.firstOrNull()?.let { fail("write-once broken: $it") }
         fs.misnamedObjects().firstOrNull()?.let { fail("journal object not named by its hash: $it") }
-        world.uncaught.firstOrNull()?.let { fail("an exception reached a scope's handler: $it") }
-        world.log.bugs.firstOrNull()?.let {
-            fail("a bug was logged: $it\n${it.error?.stackTraceToString()?.take(STACK_CHARS)}")
-        }
+        checkLog()
         if (replica.session == null) return
         val problems =
             world.read("structure") {
@@ -382,6 +380,18 @@ internal class Simulation(
     }
 
     /**
+     * Nothing reached a scope's handler and nothing logged is a bug. Part of [checkCheap], and run
+     * again once the checks at rest are done: a rebuild oracle's own session logs into the same
+     * world, and after the last of them no step's [checkCheap] follows.
+     */
+    fun checkLog() {
+        world.uncaught.firstOrNull()?.let { fail("an exception reached a scope's handler: $it") }
+        world.log.bugs.firstOrNull()?.let {
+            fail("a bug was logged: $it\n${it.error?.stackTraceToString()?.take(STACK_CHARS)}")
+        }
+    }
+
+    /**
      * The invariants at rest, once [settle]d: each live document's file holds its bytes, every
      * settled PDF in the folder is a document or a known duplicate, and a fresh index over the same
      * files shows the same library ([rebuildOracle]). Returns the library the replica shows.
@@ -390,6 +400,7 @@ internal class Simulation(
         checkCheap()
         val live = world.read("live view") { LibraryView.read(session, replica.indexDb) }
         checkFilesHoldTheirHashes(live)
+        checkTrashEntries()
         world.read("the fold") { lingeringOriginals(fs, replica.indexDb.fold(), live) }?.let { fail(it) }
         checkRowStats()
         rebuildOracle(live)
@@ -456,6 +467,34 @@ internal class Simulation(
                     unaccounted.keys.joinToString(
                         "\n  ",
                     ) { "'$it' (${sha256Bytes(unaccounted.getValue(it)).take(ID)})" },
+            )
+        }
+    }
+
+    /**
+     * Every file in the trash holds the bytes of the document its name names ([NpnPaths.trashPath]
+     * carries the hash's first characters). One that holds other bytes is a file the trash took
+     * under a document's name, such as a file another process put at the document's path between
+     * the trash's check of it and the move: hidden from the library for good, as no rescan indexes
+     * the trash and the purge and a restore both pass it by. A name that carries no hash (a sync
+     * tool's conflict copy, say) is not judged.
+     */
+    private fun checkTrashEntries() {
+        val foreign =
+            fs.allFiles().filter { (path, bytes) ->
+                val prefix =
+                    NpnPaths
+                        .trashHashPrefix(NpnPaths.fileName(path))
+                        ?.takeIf { path.startsWith("${NpnPaths.TRASH_DIR}/") && NpnPaths.Temp.kindOf(path) == null }
+                prefix != null && !sha256Bytes(bytes).startsWith(prefix)
+            }
+        if (foreign.isNotEmpty()) {
+            fail(
+                "files in the trash hold bytes no document of their name has:\n  " +
+                    foreign.keys.joinToString("\n  ") { path ->
+                        "'$path' (${sha256Bytes(foreign.getValue(path)).take(ID)}): " +
+                            fs.historyOf(path).joinToString("; ")
+                    },
             )
         }
     }

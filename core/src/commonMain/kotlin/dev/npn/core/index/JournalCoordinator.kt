@@ -86,12 +86,19 @@ internal data class FileMove(
  * and the file go back as they were. With [readBack], the row is read again once the change stands
  * and is projected, still under the lock, for a caller that needs what the fold made of it before
  * anything else can change it.
+ *
+ * [movedHolds], when given, says whether the file the move took is still the one it was planned
+ * for, read at its new path: another process can replace or rewrite a file between the
+ * check that chose it and the move, and the lock does not stop it. One that is not goes back, and
+ * the change goes on as one that moves nothing (a trash whose document's file is gone), which
+ * [ops] and [row] must then be as well.
  */
 internal class LifecycleChange(
     val ops: List<PendingOp>,
     val row: DocumentEntity,
     val move: FileMove? = null,
     val readBack: Boolean = false,
+    val movedHolds: (suspend (path: String) -> Boolean)? = null,
 ) {
     init {
         require(ops.isNotEmpty()) { "A lifecycle change publishes at least one event" }
@@ -377,13 +384,28 @@ internal class JournalCoordinator(
      *
      * Returns true if anything was committed (non-empty op list), false for a no-op.
      */
-    suspend fun commitBuilt(block: (FoldedState) -> List<PendingOp>): Boolean =
+    suspend fun commitBuilt(block: (FoldedState) -> List<PendingOp>): Boolean = commitBuilt(false, block)
+
+    /**
+     * [commitBuilt] for defaults this device writes without having seen the library's own decisions:
+     * every value they set loses to any other write, made before or after, on any device
+     * ([ContentAddressedJournalWriter.commit]'s beneathEveryEdit). For the seeded fields: a device
+     * that seeds before the journal of a device that already changed them arrives must not undo
+     * those changes when it does.
+     */
+    internal suspend fun commitDefaultsBuilt(block: (FoldedState) -> List<PendingOp>): Boolean =
+        commitBuilt(true, block)
+
+    private suspend fun commitBuilt(
+        beneathEveryEdit: Boolean,
+        block: (FoldedState) -> List<PendingOp>,
+    ): Boolean =
         locked {
             ensureWritable()
             val current = foldedState()
             val ops = block(current)
             if (ops.isEmpty()) return@locked false
-            commitOnto(current, ops)
+            commitOnto(current, ops, beneathEveryEdit)
             true
         }
 
@@ -396,7 +418,8 @@ internal class JournalCoordinator(
     private suspend fun commitOnto(
         current: FoldedState,
         ops: List<PendingOp>,
-    ) = withContext(NonCancellable) { project(current, writeTransaction(ops)) }
+        beneathEveryEdit: Boolean = false,
+    ) = withContext(NonCancellable) { project(current, writeTransaction(ops, beneathEveryEdit)) }
 
     /** Record [published], a transaction this session just wrote, and project it onto [current]. */
     private suspend fun project(
@@ -573,9 +596,17 @@ internal class JournalCoordinator(
             require(change.row.docId == id) { "A lifecycle change of $id writes the row of ${change.row.docId}" }
             withContext(NonCancellable) {
                 var moved = false
+                var fileMoved = false
                 var published: PublishedTransaction? = null
                 try {
-                    change.move?.let { indexer.moveFile(it.from, it.to) }
+                    change.move?.let { move ->
+                        indexer.moveFile(move.from, move.to)
+                        fileMoved = true
+                        if (change.movedHolds?.invoke(move.to) == false) {
+                            fileMoved = false
+                            putBackForeign(id, move)
+                        }
+                    }
                     moved = true
                     indexer.writeRow(change.row)
                     published = writeTransaction(change.ops)
@@ -583,7 +614,7 @@ internal class JournalCoordinator(
                     @Suppress("SuspendFunInFinallySection") // The whole block runs in NonCancellable.
                     if (published == null && moved) {
                         log.runLogged("Putting back the row of $id") { indexer.putBack(docs, before) }
-                        change.move?.let { move ->
+                        change.move?.takeIf { fileMoved }?.let { move ->
                             log.runLogged("Moving the file of $id back") { indexer.moveFile(move.to, move.from) }
                         }
                     }
@@ -602,6 +633,20 @@ internal class JournalCoordinator(
                 LifecycleDone(row, after)
             }
         }
+
+    /**
+     * Put back a file a lifecycle change of [docId] moved that turned out not to be its document's.
+     * When another file took its old path meanwhile, it stays where the move left it, and the log
+     * says where.
+     */
+    private suspend fun putBackForeign(
+        docId: String,
+        move: FileMove,
+    ) {
+        log.runLogged("Putting back ${move.from}, which was not the file of $docId when moved") {
+            indexer.moveFile(move.to, move.from)
+        }
+    }
 
     /**
      * Commit [ops], at least one, as one transaction and run a full [Indexer.rescan] inside the
@@ -698,7 +743,10 @@ internal class JournalCoordinator(
      * is transient, and a [dev.npn.core.fs.VerifiedPublicationUnavailableException] means the library
      * should never have opened (the open-time check publishes through the same primitive).
      */
-    private suspend fun writeTransaction(ops: List<PendingOp>): PublishedTransaction = writer.commit(ops)
+    private suspend fun writeTransaction(
+        ops: List<PendingOp>,
+        beneathEveryEdit: Boolean = false,
+    ): PublishedTransaction = writer.commit(ops, beneathEveryEdit)
 
     /** Refuse a write, with why ([MetadataWriteBlocked.block]), while a failed pass blocks them. */
     private fun ensureWritable() {

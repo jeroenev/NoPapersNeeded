@@ -222,14 +222,24 @@ internal object AiProviderClients {
         }
 
     /**
-     * Reasoning is only an on/off `think` flag. The local models are listed through Ollama's own
-     * management API rather than `LLMClientAPI.models()`, on the [OllamaClient] this factory builds.
+     * Reasoning is only an on/off `think` flag, and Ollama refuses `think: true` (HTTP 400, "does not
+     * support thinking") for a model that cannot think, which most local models cannot. So only
+     * NONE, which every model accepts, and MEDIUM and HIGH, which ask for thinking outright, set it;
+     * LOW, the AI-edit default, keeps the model's own behaviour, so the default never breaks every
+     * edit call on such a model. The local models are listed through Ollama's own management API
+     * rather than `LLMClientAPI.models()`, on the [OllamaClient] this factory builds.
      */
     private val ollama =
         ProviderClientFactory(
             LLMProvider.Ollama,
             capabilities = { OLLAMA_CAPABILITIES },
-            reasoning = { _, level, _ -> OllamaParams(think = level != AiReasoningLevel.NONE) },
+            reasoning = { _, level, _ ->
+                when (level) {
+                    AiReasoningLevel.NONE -> OllamaParams(think = false)
+                    AiReasoningLevel.MEDIUM, AiReasoningLevel.HIGH -> OllamaParams(think = true)
+                    AiReasoningLevel.DEFAULT, AiReasoningLevel.LOW -> null
+                }
+            },
             listModels = { built -> (built as OllamaClient).getModels().map { it.name } },
         ) { _, baseUrl, _, http ->
             OllamaClient(httpClientFactory = http, baseUrl = trimBaseUrl(baseUrl))

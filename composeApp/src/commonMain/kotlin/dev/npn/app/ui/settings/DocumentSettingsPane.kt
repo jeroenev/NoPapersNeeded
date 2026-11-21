@@ -66,6 +66,8 @@ internal fun DocumentSettingsPane(
             onValueChange = actions::setTrashRetentionDays,
             range = TrashSettings.RETENTION_RANGE,
             label = stringResource(Res.string.common_settings_trash_retention_days),
+            onInvalid = { actions.setTrashRetentionDays(null) },
+            onDone = actions::doneTypingTrashRetention,
         )
         HelpText(stringResource(Res.string.library_trash_retention_zero_help))
         HelpText(stringResource(Res.string.common_settings_syncs_across_devices))

@@ -251,7 +251,10 @@ internal class CloudSetupController(
 
     /**
      * The remote this run of the wizard created, until its folder is chosen: backing out before
-     * then forgets it, so its sign-in does not linger in the engine's configuration.
+     * then forgets it, so its sign-in does not linger in the engine's configuration. Recorded as
+     * the conversation begins, not once it is done: rclone writes the remote from its first step
+     * and its token once the browser sign-in ends, and some providers still ask questions after
+     * that (Drive's shared drive, OneDrive's drive type).
      */
     private var createdRemote: String? = null
 
@@ -267,6 +270,8 @@ internal class CloudSetupController(
             scope.launch {
                 _state.value = CloudSetupState.Loading
                 if (wasSigningIn) runCatchingCancellable { client.stopOauth() }
+                // Starting over (Retry after a failure, among others) leaves the run's remote behind.
+                forgetCreatedRemote(client)
                 _state.value =
                     runCatchingCancellable { CloudSetupState.Providers(client.providers()) }
                         .getOrElse { CloudSetupState.Failed(SetupFailure.ENGINE, it.reason()) }
@@ -314,7 +319,7 @@ internal class CloudSetupController(
                         if (question == null) {
                             val filled = form.values.filterValues { it.isNotBlank() }
                             client.begin(
-                                name = newRemoteName(form.provider.type),
+                                name = newRemote(client, form.provider.type),
                                 type = form.provider.type,
                                 params = if (form.provider.type == WEBDAV_TYPE) WebDav.params(filled) else filled,
                             )
@@ -342,7 +347,7 @@ internal class CloudSetupController(
                 val step =
                     stepOrFailure {
                         client.begin(
-                            name = newRemoteName(provider.type),
+                            name = newRemote(client, provider.type),
                             type = provider.type,
                             params = values.filterValues { it.isNotBlank() },
                         )
@@ -368,6 +373,31 @@ internal class CloudSetupController(
                 if (abandoned != null) runCatchingCancellable { client.deleteRemote(abandoned) }
             }
         }
+    }
+
+    /**
+     * Name the remote a new conversation creates, and remember it as this run's ([createdRemote]),
+     * forgetting one an earlier conversation of the same run left unfinished.
+     */
+    private suspend fun newRemote(
+        client: CloudSetup,
+        type: String,
+    ): String {
+        forgetCreatedRemote(client)
+        return newRemoteName(type).also { createdRemote = it }
+    }
+
+    /**
+     * For an owner going away mid-run (its scope already cancelled): forget the remote this run
+     * created through [client], on a scope that outlives the owner.
+     */
+    suspend fun forgetUnfinished(client: CloudSetup) = forgetCreatedRemote(client)
+
+    /** Delete the remote this run created, if any, best-effort: it may not exist yet. */
+    private suspend fun forgetCreatedRemote(client: CloudSetup) {
+        val abandoned = createdRemote ?: return
+        createdRemote = null
+        runCatchingCancellable { client.deleteRemote(abandoned) }
     }
 
     override fun openFolder(name: String) {

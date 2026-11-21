@@ -111,10 +111,16 @@ interface SettingsActions {
     fun setStoragePathEnabled(enabled: Boolean)
 
     /**
-     * Edit how many days the library's trash keeps a document. Saved as the template is: once
-     * typing pauses, or when the screen is left, as each saved value is a journal event.
+     * Edit how many days the library's trash keeps a document; null while the field holds no number
+     * in range, which leaves the last one unsaved. Saved only when the field loses focus
+     * ([doneTypingTrashRetention]) or the screen is left, never on a pause: the purge acts on each
+     * saved value at once and for good, on every device, so a number passed on the way to another
+     * (the 1 of 14) must not be saved.
      */
-    fun setTrashRetentionDays(days: Int)
+    fun setTrashRetentionDays(days: Int?)
+
+    /** The trash retention field lost focus: save what was typed in it now. */
+    fun doneTypingTrashRetention()
 
     /**
      * Type [value] into the field of a device [setting]. It shows at once, and is saved once typing
@@ -130,9 +136,10 @@ interface SettingsActions {
     fun doneTyping(setting: TextSetting)
 
     /**
-     * Switch provider and drop what belonged to the previous endpoint: the model list, and the base
+     * Switch provider and drop what belonged to the previous endpoint: the model list, the base
      * URL, typed or saved, which the settings screen hides for fixed-URL providers so nobody could
-     * clear it there.
+     * clear it there, and the API key, typed or saved, which would otherwise go to the new provider's
+     * server (the field is masked, so nobody sees it is still filled).
      */
     fun setAiProvider(provider: AiProvider)
 

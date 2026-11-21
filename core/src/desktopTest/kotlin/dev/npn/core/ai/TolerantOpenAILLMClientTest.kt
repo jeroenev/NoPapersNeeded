@@ -2,6 +2,7 @@ package dev.npn.core.ai
 
 import ai.koog.http.client.ktor.KtorKoogHttpClient
 import ai.koog.prompt.executor.clients.openai.OpenAIClientSettings
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
@@ -35,6 +36,26 @@ class TolerantOpenAILLMClientTest {
     fun dropsChunkWithAbsentChoices() {
         val decoded = client().decodeStreamingResponseTolerant("""{"cost":"0"}""")
         decoded.choices.shouldBeEmpty()
+    }
+
+    @Test
+    fun anInBandErrorChunkFailsWithTheServersText() {
+        // LiteLLM and vLLM end a stream that failed mid-way with an error chunk and no choices; it
+        // must fail the turn with the server's text, not pass for an empty frame.
+        val chunk = """{"error":{"message":"upstream timed out","type":"server_error","code":504}}"""
+        shouldThrow<IllegalStateException> { client().decodeStreamingResponseTolerant(chunk) }
+            .message shouldBe "upstream timed out"
+    }
+
+    @Test
+    fun aBareStringErrorChunkFailsWithThatString() {
+        shouldThrow<IllegalStateException> { client().decodeStreamingResponseTolerant("""{"error":"overloaded"}""") }
+            .message shouldBe "overloaded"
+    }
+
+    @Test
+    fun aNullErrorIsNoError() {
+        client().decodeStreamingResponseTolerant("""{"choices":[],"error":null}""").choices.shouldBeEmpty()
     }
 
     @Test

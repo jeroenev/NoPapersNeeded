@@ -18,6 +18,11 @@
         desktop. See res/xml/network_security_config.xml.
     -->
     <!-- enableOnBackInvokedCallback opts in to predictive back on API 33+; older ones ignore it. -->
+    <!--
+        Backups leave out the settings (they hold the AI API key) and the databases (each library's
+        device.db holds its cloud connection and chats): backup_rules.xml up to Android 11,
+        data_extraction_rules.xml from 12. The rclone config lives in no-backup files already.
+    -->
     <application
         android:name=".NpnApplication"
         android:label="@string/app_name"
@@ -25,6 +30,8 @@
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:enableOnBackInvokedCallback="true"
         android:networkSecurityConfig="@xml/network_security_config"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:supportsRtl="true"
         tools:ignore="UnusedAttribute">
 

@@ -172,6 +172,7 @@
     <string name="detail_saved_changes">Modifications de « %1$s » enregistrées.</string>
     <string name="detail_undo_save_failed">Impossible d’annuler les modifications : %1$s</string>
     <string name="detail_draft_invalid">Une valeur ne correspond pas à son champ : ces modifications ne sont pas encore enregistrées.</string>
+    <string name="detail_action_needs_saved_draft">Une valeur ne correspond pas à son champ : corrigez-la ou abandonnez-la d’abord.</string>
     <plurals name="detail_drafts_invalid">
         <item quantity="one">%1$d document a une valeur qui ne correspond pas à son champ : ses modifications ne sont pas enregistrées.</item>
         <item quantity="other">%1$d documents ont des valeurs qui ne correspondent pas à leurs champs : leurs modifications ne sont pas enregistrées.</item>

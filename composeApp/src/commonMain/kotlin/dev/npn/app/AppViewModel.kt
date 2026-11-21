@@ -368,7 +368,19 @@ class AppViewModel(
     }
 
     override fun onCleared() {
-        closeCloudEngine()
+        // A wizard left mid-run (after sign-in, before a folder was chosen) would leave its remote,
+        // token and all, in the engine's configuration; forget it before the engine closes.
+        val engine = cloudEngine
+        cloudEngine = null
+        if (engine != null) {
+            env.appScope.launch {
+                try {
+                    cloud.forgetUnfinished(engine.setup)
+                } finally {
+                    engine.close()
+                }
+            }
+        }
         super.onCleared()
     }
 

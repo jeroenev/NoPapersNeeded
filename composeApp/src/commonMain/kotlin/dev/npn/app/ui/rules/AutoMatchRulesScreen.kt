@@ -41,6 +41,7 @@ import dev.npn.app.ui.common.BackTopBar
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.Dropdown
 import dev.npn.app.ui.common.EmptyState
+import dev.npn.app.ui.common.FieldEditor
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.LoadingIndicator
 import dev.npn.app.ui.common.TooltipIconButton
@@ -48,6 +49,8 @@ import dev.npn.app.ui.common.rememberSnackbarMessages
 import dev.npn.app.ui.common.resolve
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.model.FieldDef
+import dev.npn.core.model.FieldParse
+import dev.npn.core.model.FieldValues
 import dev.npn.core.model.labelFor
 import dev.npn.core.rules.AutoMatchRule
 import dev.npn.core.rules.MatchAlgorithm
@@ -354,7 +357,7 @@ private fun RuleFormDialog(
         onConfirm = onConfirm,
         onDismiss = onDismiss,
         confirmLabel = stringResource(Res.string.common_save),
-        confirmEnabled = state.canSave,
+        confirmEnabled = state.canSave && state.setsFit(fields),
     ) {
         RuleFormFields(state, fields, preview, onChange)
     }
@@ -373,9 +376,14 @@ internal data class RuleFormState(
     val algorithm: MatchAlgorithm = MatchAlgorithm.ANY_WORD,
     val pattern: String = "",
     val tags: String = "",
-    /** Field key -> value the rule sets; blank values are dropped on save. */
+    /**
+     * Field key -> value the rule sets, canonical as the field's editor reads it ([withSet]), or as
+     * typed for a key in [refused]; blank values are dropped on save.
+     */
     val sets: Map<String, String> = emptyMap(),
     val position: Int = 0,
+    /** Keys whose typed value does not fit the field's type, so the rule cannot be saved yet. */
+    val refused: Set<String> = emptySet(),
 ) {
     val isNew: Boolean get() = id.isEmpty()
 
@@ -384,6 +392,33 @@ internal data class RuleFormState(
         get() = RuleMatcher.isValidPattern(algorithm, pattern)
 
     val canSave: Boolean get() = name.isNotBlank() && pattern.isNotBlank() && patternValid
+
+    /**
+     * Whether every value the rule sets fits its field's type among [fields]: one typed that does not
+     * ([refused]), or one an older rule stored off-type, would be skipped by the rule every time, so
+     * the rule is not saved with it.
+     */
+    fun setsFit(fields: List<FieldDef>): Boolean =
+        refused.isEmpty() &&
+            fields.none { def ->
+                sets[def.key]?.let { FieldValues.canonicalize(def.type, it) is FieldParse.Invalid } ==
+                    true
+            }
+
+    /** This form with what the editor of field [key] made of the value typed for it. */
+    fun withSet(
+        key: String,
+        parse: FieldParse,
+    ): RuleFormState =
+        when (parse) {
+            is FieldParse.Ok -> {
+                copy(sets = parse.canonical?.let { sets + (key to it) } ?: (sets - key), refused = refused - key)
+            }
+
+            is FieldParse.Invalid -> {
+                copy(sets = sets + (key to parse.raw), refused = refused + key)
+            }
+        }
 
     fun toRule(): AutoMatchRule =
         AutoMatchRule(
@@ -458,10 +493,16 @@ private fun RuleFormFields(
         }
         // One "set" row per single-line registry field, in registry order. Prose fields are left
         // out: a rule stamping the same paragraph onto every match is not a use case worth a row.
+        // Each is the field's own editor (a date picker, a number as the locale writes it), so the
+        // rule stores the canonical value the applier will write, and a value the type refuses
+        // shows as an error and blocks the save instead of being skipped at every match.
         for (def in fields.filter { it.type.singleLine }) {
-            FormTextField(state.sets[def.key].orEmpty(), stringResource(Res.string.common_rules_set_field, def.label)) {
-                onChange(state.copy(sets = state.sets + (def.key to it)))
-            }
+            FieldEditor(
+                def = def.copy(label = stringResource(Res.string.common_rules_set_field, def.label)),
+                value = state.sets[def.key],
+                onCommit = { onChange(state.withSet(def.key, it)) },
+                refused = def.key in state.refused,
+            )
         }
     }
 }

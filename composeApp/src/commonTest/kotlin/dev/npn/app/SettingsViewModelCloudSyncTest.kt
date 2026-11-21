@@ -1,5 +1,6 @@
 package dev.npn.app
 
+import androidx.lifecycle.ViewModelStore
 import dev.npn.app.ui.settings.CloudSetupState
 import dev.npn.app.ui.settings.CloudSyncState
 import dev.npn.app.ui.settings.FolderProblem
@@ -16,6 +17,7 @@ import dev.npn.core.sync.SyncOutcome
 import dev.npn.core.sync.SyncReport
 import dev.npn.core.sync.SyncStatus
 import dev.npn.core.sync.TransportAvailability
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
@@ -258,6 +260,12 @@ class SettingsViewModelCloudSyncTest : MainDispatcherTest() {
             session.sync.configFlow.value.remote shouldBe "drive:NoPapersNeeded"
             model.cloudState.config.remote shouldBe "drive:NoPapersNeeded"
             model.cloudState.setup.shouldBeNull()
+            // Its remote is the library's now: closing the wizard later leaves it be.
+            model.cloud.start()
+            advanceUntilIdle()
+            model.cloud.cancel()
+            advanceUntilIdle()
+            setup.deletedRemotes.shouldBeEmpty()
         }
 
     @Test
@@ -435,6 +443,87 @@ class SettingsViewModelCloudSyncTest : MainDispatcherTest() {
 
             model.cloudState.setup.shouldBeNull()
             setup.stopOauthCalls shouldBe 1
+        }
+
+    @Test
+    fun cancellingAQuestionAskedAfterSignInForgetsTheRemote() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val setup = FakeCloudSetup()
+            session.sync.setup = setup
+            // Drive asks about a shared drive once the sign-in, and its token, are saved.
+            setup.beginResult = { question("config_change_team_drive", "teamdrive", type = "bool") }
+            val model = vm(session)
+
+            model.cloud.start()
+            advanceUntilIdle()
+            model.cloud.chooseProvider(provider(options = emptyList(), browserSignIn = true))
+            advanceUntilIdle()
+            (model.cloudState.setup as CloudSetupState.Form).question?.option?.name shouldBe "config_change_team_drive"
+
+            model.cloud.cancel()
+            advanceUntilIdle()
+
+            setup.deletedRemotes shouldContainExactly listOf("drive-1")
+        }
+
+    /**
+     * Leaving the screen at a question after sign-in clears the viewmodel, whose scope goes with
+     * it: the remote is forgotten on the app's scope all the same.
+     */
+    @Test
+    fun leavingTheScreenAfterSignInForgetsTheRemote() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val setup = FakeCloudSetup()
+            session.sync.setup = setup
+            setup.beginResult = { question("config_change_team_drive", "teamdrive", type = "bool") }
+            val model = settingsVm(session = session, outliving = backgroundScope)
+            val store = ViewModelStore().apply { put("settings", model) }
+            collecting(model.paneState)
+
+            model.cloud.start()
+            advanceUntilIdle()
+            model.cloud.chooseProvider(provider(options = emptyList(), browserSignIn = true))
+            advanceUntilIdle()
+            setup.deletedRemotes.shouldBeEmpty()
+
+            store.clear()
+            advanceUntilIdle()
+
+            setup.deletedRemotes shouldContainExactly listOf("drive-1")
+        }
+
+    @Test
+    fun startingOverAfterAFailureForgetsTheRemoteThatRunCreated() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val setup = FakeCloudSetup()
+            session.sync.setup = setup
+            setup.beginResult = { SetupStep.Failed(SetupFailure.ENGINE, "quota") }
+            val chosen = provider()
+            setup.providersResult = listOf(chosen)
+            val model = vm(session)
+
+            model.cloud.start()
+            advanceUntilIdle()
+            model.cloud.chooseProvider(chosen)
+            model.cloud.submit()
+            advanceUntilIdle()
+            model.cloudState.setup shouldBe CloudSetupState.Failed(SetupFailure.ENGINE, "quota")
+
+            model.cloud.start()
+            advanceUntilIdle()
+
+            setup.deletedRemotes shouldContainExactly listOf("drive-1")
+            model.cloudState.setup shouldBe CloudSetupState.Providers(listOf(chosen))
+            // The next run's remote is forgotten on its own way out, and only once.
+            model.cloud.chooseProvider(chosen)
+            model.cloud.submit()
+            advanceUntilIdle()
+            model.cloud.cancel()
+            advanceUntilIdle()
+            setup.deletedRemotes shouldContainExactly listOf("drive-1", "drive-1")
         }
 
     @Test

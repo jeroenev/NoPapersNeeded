@@ -6,6 +6,7 @@ import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
+import java.nio.file.Files
 import java.util.concurrent.TimeUnit
 
 /**
@@ -101,8 +102,8 @@ class TesseractCliEngine(
         timeoutSeconds: Long,
         mergeStderr: Boolean,
     ): String {
-        val out = File.createTempFile("npn-tess-", ".out")
-        val err = File.createTempFile("npn-tess-", ".err")
+        val out = privateTempFile(".out")
+        val err = privateTempFile(".err")
         var proc: Process? = null
         try {
             val builder = process(listOf(binary) + args).redirectOutput(out)
@@ -135,6 +136,13 @@ class TesseractCliEngine(
         }
     }
 
+    /**
+     * A temp file only this user can read: it holds a rendered page or the text read off it.
+     * `File.createTempFile` follows the umask (usually world-readable in a shared `/tmp`); NIO's
+     * creates owner-only files on POSIX.
+     */
+    private fun privateTempFile(suffix: String): File = Files.createTempFile("npn-tess-", suffix).toFile()
+
     private fun process(command: List<String>): ProcessBuilder =
         ProcessBuilder(command).apply {
             tessdataDir?.let { environment()["TESSDATA_PREFIX"] = it }
@@ -150,7 +158,7 @@ class TesseractCliEngine(
     ): String =
         withContext(io) {
             if (!detected) throw IOException("tesseract is not available")
-            val temp = File.createTempFile("npn-ocr-", ".png")
+            val temp = privateTempFile(".png")
             try {
                 temp.writeBytes(png)
                 val langs = usableLanguages(lang)

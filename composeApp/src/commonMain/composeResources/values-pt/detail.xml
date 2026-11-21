@@ -172,6 +172,7 @@
     <string name="detail_saved_changes">Alterações em “%1$s” salvas.</string>
     <string name="detail_undo_save_failed">Não foi possível desfazer as alterações: %1$s</string>
     <string name="detail_draft_invalid">Um valor não combina com o campo, então estas alterações ainda não foram salvas.</string>
+    <string name="detail_action_needs_saved_draft">Um valor não combina com o campo: corrija ou descarte-o primeiro.</string>
     <plurals name="detail_drafts_invalid">
         <item quantity="one">%1$d documento tem um valor que não combina com o campo, então as alterações não foram salvas.</item>
         <item quantity="other">%1$d documentos têm valores que não combinam com os campos, então as alterações não foram salvas.</item>

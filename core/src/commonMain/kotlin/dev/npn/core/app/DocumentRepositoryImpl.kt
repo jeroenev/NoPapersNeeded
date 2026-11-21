@@ -69,10 +69,10 @@ private fun DocumentEntity.cachedFields(): Map<String, String> =
  * entities cover both documents and document_tags, so tag changes re-emit).
  *
  * Two-step FTS join (design decision): when [LibraryFilter.query] is non-blank we cannot express
- * `MATCH` inside the RawQuery in a way Room verifies cleanly, so we first fetch matching docIds +
- * snippets from [FtsDao], constrain the main query to those ids, and re-attach the snippets in
- * memory. The FTS lookup runs inside [mapLatest] on each re-emission of the base flow, so it stays
- * live as underlying tables change (tag edits, new imports).
+ * `MATCH` inside the RawQuery in a way Room verifies cleanly, so we first fetch the matching docIds
+ * from [FtsDao], constrain the main query to those ids, and attach snippets in memory, built for the
+ * best [SNIPPET_LIMIT] matches only. The FTS lookup runs inside [mapLatest] on each re-emission of
+ * the base flow, so it stays live as underlying tables change (tag edits, new imports).
  */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 internal class DocumentRepositoryImpl(
@@ -103,13 +103,13 @@ internal class DocumentRepositoryImpl(
                     // instead of scanning the whole library in memory. The expensive work (tags/fields
                     // attach and the rank sort) is bounded to the matched docs only. Re-emits when any
                     // documents/tags/fields row changes re-emit the base flow.
-                    val hits = ftsDao.search(FtsQuery.sanitize(queryText))
-                    val snippetById = hits.associate { it.docId to it.snippet }
-                    val order = hits.map { it.docId }.withIndex().associate { it.value to it.index }
-                    listItems(
-                        docs.filter { it.docId in snippetById }.sortedBy { order[it.docId] ?: Int.MAX_VALUE },
-                        snippetById,
-                    )
+                    val match = FtsQuery.sanitize(queryText)
+                    val order = ftsDao.search(match).withIndex().associate { it.value to it.index }
+                    val matched = docs.filter { it.docId in order }.sortedBy { order.getValue(it.docId) }
+                    // Snippets for the best matches only: past them nobody reads one, and a short
+                    // prefix matches most of a library, whose every text a snippet would re-read.
+                    val snippets = ftsDao.snippetsFor(match, matched.take(SNIPPET_LIMIT).map { it.docId })
+                    listItems(matched, snippets)
                 }
             }.flowOn(mapping)
     }
@@ -233,6 +233,9 @@ internal class DocumentRepositoryImpl(
 
     private companion object {
         const val MIN_SUGGESTION_LENGTH = 2
+
+        /** How many of a search's best matches get a snippet: several screens' worth. */
+        const val SNIPPET_LIMIT = 200
         val TOKEN_REGEX = Regex("[\\p{L}\\p{N}_-]+")
     }
 }

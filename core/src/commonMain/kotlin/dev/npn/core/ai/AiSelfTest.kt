@@ -176,10 +176,11 @@ object AiSelfTest {
     }
 
     /**
-     * The real probes. Each one deliberately mirrors the call it is standing in for: the message
-     * probe uses the assistant's params ([AiRuntime.chatParams]) and the page probe the OCR ones
-     * ([AiRuntime.ocrParams]) and its image attachment ([AiPrompts.pageImage]), so a reasoning
-     * level or a vision capability that breaks the real feature breaks the check too.
+     * The real probes. Each one deliberately mirrors the calls it is standing in for: the message
+     * probe asks with the assistant's params ([AiRuntime.chatParams]), and again with the AI edits'
+     * ([AiRuntime.suggestionParams]) when their reasoning levels differ, and the page probe uses the
+     * OCR ones ([AiRuntime.ocrParams]) and its image attachment ([AiPrompts.pageImage]), so a
+     * reasoning level or a vision capability that breaks a real feature breaks the check too.
      */
     private class EndpointProbes(
         private val runtime: AiRuntime,
@@ -188,8 +189,16 @@ object AiSelfTest {
         override suspend fun listModels(): List<String> = runtime.listModelIds()
 
         override suspend fun answerMessage(): String {
+            val chat = ask(AiRuntime.chatParams(config) ?: LLMParams())
+            if (config.reasoningEdit == config.reasoningAssistant || !chat.contains(MESSAGE_TOKEN, ignoreCase = true)) {
+                return chat
+            }
+            return ask(AiRuntime.suggestionParams(config))
+        }
+
+        private suspend fun ask(params: LLMParams): String {
             val thePrompt =
-                prompt("npn-selftest-message", AiRuntime.chatParams(config) ?: LLMParams()) {
+                prompt("npn-selftest-message", params) {
                     system("You are a connectivity check. Answer with a single word and nothing else.")
                     user("Reply with the word: $MESSAGE_TOKEN")
                 }

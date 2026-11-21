@@ -1,5 +1,6 @@
 package dev.npn.core.rules
 
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 
@@ -32,5 +33,32 @@ class AutoMatchRuleTest {
 
         AutoMatchRuleJson.decodeList(stored).single() shouldBe
             AutoMatchRule(id = "r1", name = "Bank", pattern = "statement", tags = listOf("a"), sets = mapOf("k" to "v"))
+    }
+
+    /**
+     * A list holding a key a newer build added does not decode: matched without it, the rule would act
+     * otherwise than its writer meant, and any edit here would write the list back without it.
+     */
+    @Test
+    fun aListWithAKeyThisBuildDoesNotKnowDoesNotDecode() {
+        val newer = """[{"id":"r1","name":"Bank","pattern":"statement","caseSensitive":true}]"""
+
+        shouldThrow<IllegalArgumentException> { AutoMatchRuleJson.decodeList(newer) }
+    }
+
+    /** A newer build's option that no rule uses changes nothing. */
+    @Test
+    fun anUnusedNewKeyStillDecodes() {
+        val newer = """[{"id":"r1","name":"Bank","pattern":"statement","caseSensitive":false,"exclude":[]}]"""
+
+        AutoMatchRuleJson.decodeList(newer).single().id shouldBe "r1"
+    }
+
+    /** The pre-registry shape still reads, its correspondent and type moved into the set values. */
+    @Test
+    fun theLegacyShapeStillDecodes() {
+        val legacy = """[{"id":"r1","name":"Bank","pattern":"statement","correspondent":"ACME","docType":null}]"""
+
+        AutoMatchRuleJson.decodeList(legacy).single().sets shouldBe mapOf("correspondent" to "ACME")
     }
 }

@@ -172,6 +172,7 @@
     <string name="detail_saved_changes">Änderungen an „%1$s“ gespeichert.</string>
     <string name="detail_undo_save_failed">Die Änderungen konnten nicht rückgängig gemacht werden: %1$s</string>
     <string name="detail_draft_invalid">Ein Wert passt nicht zu seinem Feld, daher sind diese Änderungen noch nicht gespeichert.</string>
+    <string name="detail_action_needs_saved_draft">Ein Wert passt nicht zu seinem Feld: Korrigiere oder verwirf ihn zuerst.</string>
     <plurals name="detail_drafts_invalid">
         <item quantity="one">%1$d Dokument hat einen Wert, der nicht zu seinem Feld passt, daher sind seine Änderungen nicht gespeichert.</item>
         <item quantity="other">%1$d Dokumente haben Werte, die nicht zu ihren Feldern passen, daher sind ihre Änderungen nicht gespeichert.</item>

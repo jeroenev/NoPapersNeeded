@@ -122,6 +122,29 @@ class SettingsAiEndpointTest : MainDispatcherTest() {
             model.paneState.value.settings.snapshot.aiBaseUrl shouldBe ""
         }
 
+    /** The previous provider's key, saved or typed, never goes to the next provider's server. */
+    @Test
+    fun switchingProviderDropsTheApiKey() =
+        runTest(dispatcher) {
+            val settings =
+                FakeSettingsRepository().apply {
+                    updateSettings { it.copy(aiProvider = AiProvider.OPENAI, aiApiKey = "sk-saved") }
+                }
+            val model = settingsVm(settings = settings)
+            collecting(model.paneState)
+
+            model.setAiProvider(AiProvider.OPENAI)
+            advanceUntilIdle()
+            settings.settingsFlow.value.aiApiKey shouldBe "sk-saved"
+
+            model.type(TextSetting.AI_API_KEY, "sk-typed")
+            model.setAiProvider(AiProvider.OPENROUTER)
+            advanceUntilIdle()
+
+            settings.settingsFlow.value.aiApiKey shouldBe ""
+            model.paneState.value.settings.snapshot.aiApiKey shouldBe ""
+        }
+
     @Test
     fun editClampsOutOfRangeValuesInsideTheRepository() =
         runTest(dispatcher) {

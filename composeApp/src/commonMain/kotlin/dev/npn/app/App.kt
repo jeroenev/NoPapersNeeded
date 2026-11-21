@@ -98,6 +98,8 @@ internal class LibraryUi(
     held: LibrarySessionUi,
     val drafts: DocumentDrafts,
     val nav: NavHostController,
+    /** The app's scope, for what a screen leaves to finish after it is gone. */
+    val outliving: CoroutineScope,
 ) {
     val viewModels: ViewModelStoreOwner = held
     val documents = held.documents
@@ -215,7 +217,7 @@ private fun rememberLibraryUi(
     // activity or a restored process. Saved, so the restore finds the key it was saved under.
     val navKey = rememberSaveable(session) { Random.nextLong() }
     val nav = key(navKey) { rememberNavController() }
-    return remember(held, drafts, nav) { LibraryUi(held, drafts, nav) }
+    return remember(held, drafts, nav, scope) { LibraryUi(held, drafts, nav, scope) }
 }
 
 /** [content], with [library]'s screens' viewmodels kept in its store ([LibraryUi.viewModels]). */

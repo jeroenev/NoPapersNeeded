@@ -55,7 +55,9 @@ class Losses {
          * Whether a file at [path] is none of the library's copies, so it neither takes a document's
          * bytes away when it goes nor keeps them while it is there: an import's staging file is the
          * import's copy of its source, and a bake's temporary file holds output no journal names
-         * until the bake's relink, which a failed bake discards.
+         * until the bake's relink, which a failed bake discards. Once a relink names them, they are
+         * a document's, and the folder counts the temporary file as a copy
+         * (`InMemoryLibraryFileSystem.isNoCopy`).
          */
         fun isNoCopy(path: String) = NpnPaths.Temp.kindOf(path) in NO_COPY
 

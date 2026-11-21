@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
 import java.nio.file.FileVisitOption
 import java.nio.file.FileVisitResult
 import java.nio.file.Files
@@ -210,7 +211,8 @@ internal class JvmLibraryFileSystem(
     /**
      * Create [relPath], which must not exist yet: [fill] writes a temp file in the same directory,
      * which is then installed under the final name without replacement, so a partial file is never
-     * visible there and a target that appeared meanwhile is not replaced.
+     * visible there and a target that appeared meanwhile is not replaced. The bytes reach the device
+     * before the name does, and the name before this returns ([syncFile], [syncDirectory]).
      */
     private suspend fun installNew(
         relPath: String,
@@ -225,11 +227,13 @@ internal class JvmLibraryFileSystem(
         val tmp = Files.createTempFile(parent ?: root, NpnPaths.Temp.WRITE_PREFIX, NpnPaths.Temp.PART)
         try {
             fill(tmp)
+            syncFile(tmp)
             try {
                 atomicMoveNoReplace(tmp, target)
             } catch (e: java.nio.file.FileAlreadyExistsException) {
                 throw IllegalStateException("Target already exists: $relPath", e)
             }
+            syncDirectory(parent ?: root)
         } finally {
             // Clean up the temp file if it survived (move failed).
             try {
@@ -252,6 +256,7 @@ internal class JvmLibraryFileSystem(
         check(hashPath(staging) == expectedHash) { "Staging object hash mismatch: $stagingPath" }
         try {
             publishObject(staging, canonical)
+            syncDirectory(canonical.parent)
         } catch (_: java.nio.file.FileAlreadyExistsException) {
             check(Files.isRegularFile(canonical) && hashPath(canonical) == expectedHash) {
                 "Canonical object exists with invalid bytes: $canonicalPath"
@@ -307,6 +312,9 @@ internal class JvmLibraryFileSystem(
         val to = resolve(toRelPath)
         Files.createDirectories(to.parent)
         Files.copy(resolve(fromRelPath), to)
+        // A caller deletes the original once the copy is in place (a move across volumes).
+        syncFile(to)
+        syncDirectory(to.parent)
         Unit
     }
 
@@ -407,6 +415,28 @@ internal class JvmLibraryFileSystem(
         }
 
     private fun hashPath(path: Path): String = Files.newInputStream(path).use { it.sha256Hex() }
+
+    /**
+     * Wait until [file]'s bytes are on the device. Without it, a name linked or renamed onto a new
+     * file can reach the disk first (delayed allocation, the ext4 and f2fs default), and a power
+     * loss leaves the name on an empty or zeroed file: a write-once journal object nothing repairs,
+     * or a document whose other copy the caller deleted right after (a bake, a watched folder's
+     * import, a move across volumes). Reading the file back proves nothing, as it reads the cache.
+     */
+    private fun syncFile(file: Path) {
+        FileChannel.open(file, StandardOpenOption.WRITE).use { it.force(true) }
+    }
+
+    /**
+     * Wait until the names in [dir] are on the device, so a file installed there survives a power
+     * loss under its name. Best effort: not every platform can open a directory (Windows cannot).
+     */
+    private fun syncDirectory(dir: Path) {
+        try {
+            FileChannel.open(dir, StandardOpenOption.READ).use { it.force(true) }
+        } catch (_: IOException) {
+        }
+    }
 
     override suspend fun importExternal(
         source: ExternalSource,

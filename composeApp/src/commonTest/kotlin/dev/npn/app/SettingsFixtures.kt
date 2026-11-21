@@ -18,18 +18,21 @@ import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.settings.SettingsSnapshot
 import dev.npn.core.sync.RcloneProvider
+import kotlinx.coroutines.CoroutineScope
 
 /** A Settings viewmodel that counts the library folder and any folder under it as in the library. */
 internal fun settingsVm(
     settings: FakeSettingsRepository = FakeSettingsRepository(),
     session: FakeLibrarySession = FakeLibrarySession(),
     saved: SavedStateHandle = SavedStateHandle(),
+    outliving: CoroutineScope? = null,
 ) = SettingsViewModel(
     settings,
     session,
     inLibrary = { folder, library -> folder == library || folder.startsWith("$library/") },
     saved = saved,
     newRemoteName = { type -> "$type-1" },
+    outliving = outliving,
 )
 
 /** What a settings pane shows for [snapshot], with no AI models, self-test or fields loaded. */
@@ -53,7 +56,9 @@ internal open class NoSettingsPaneActions : SettingsPaneActions {
 
     override fun setStoragePathEnabled(enabled: Boolean) = Unit
 
-    override fun setTrashRetentionDays(days: Int) = Unit
+    override fun setTrashRetentionDays(days: Int?) = Unit
+
+    override fun doneTypingTrashRetention() = Unit
 
     override fun type(
         setting: TextSetting,

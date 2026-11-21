@@ -27,22 +27,16 @@ interface TagDao {
         limit: Int,
     ): List<String>
 
-    @Query(
-        "SELECT t.name AS name, t.color AS color, t.icon AS icon, " +
-            "COUNT(dt.docId) AS count " +
-            "FROM tags t LEFT JOIN document_tags dt ON t.name = dt.tag " +
-            "GROUP BY t.name, t.color, t.icon ORDER BY t.name",
-    )
+    /**
+     * Every tag with its count of live documents, for the tags screen. A trashed, missing or
+     * deleted document (a relink's superseded original among them) is not counted, though a tag
+     * only trashed documents hold stays listed, at zero, until they are purged.
+     */
+    @Query(TAGS_WITH_LIVE_COUNTS)
     fun observeAllWithCounts(): Flow<List<TagWithCount>>
 
-    /** Tag counts limited to documents the AI search tools can reach. */
-    @Query(
-        "SELECT t.name AS name, t.color AS color, t.icon AS icon, COUNT(d.docId) AS count " +
-            "FROM tags t LEFT JOIN document_tags dt ON t.name = dt.tag " +
-            "LEFT JOIN documents d ON d.docId = dt.docId " +
-            "AND $LIVE_DOCUMENT " +
-            "GROUP BY t.name, t.color, t.icon ORDER BY t.name",
-    )
+    /** [observeAllWithCounts] once, for the AI search tools. */
+    @Query(TAGS_WITH_LIVE_COUNTS)
     suspend fun allWithLiveCounts(): List<TagWithCount>
 
     /**
@@ -94,5 +88,12 @@ interface TagDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertDocumentTags(rows: List<DocumentTagEntity>)
 }
+
+private const val TAGS_WITH_LIVE_COUNTS =
+    "SELECT t.name AS name, t.color AS color, t.icon AS icon, COUNT(d.docId) AS count " +
+        "FROM tags t LEFT JOIN document_tags dt ON t.name = dt.tag " +
+        "LEFT JOIN documents d ON d.docId = dt.docId " +
+        "AND $LIVE_DOCUMENT " +
+        "GROUP BY t.name, t.color, t.icon ORDER BY t.name"
 
 private const val TAGS_FOR_DOCUMENT = "SELECT tag FROM document_tags WHERE docId = :docId ORDER BY tag"

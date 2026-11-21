@@ -2,8 +2,10 @@ package dev.npn.core.fs
 
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
 import java.io.IOException
@@ -29,6 +31,11 @@ import java.nio.file.attribute.BasicFileAttributes
  * Registering walks the tree, so it runs on [io], like the blocking wait for events, and stops when
  * the collector does. A directory that cannot be watched is skipped. Once nothing is watched the
  * flow goes quiet; it ends only when its collector stops, which closes the watcher.
+ *
+ * The buffer is unbounded: the producer's `trySend` never waits, so a bounded one would drop
+ * events (the overflow marker among them) whenever the collector falls behind, as it does while
+ * a rescan hashes through a sync tool's backlog. An event is one path, so even a large backlog
+ * costs little memory.
  */
 internal fun watchDirs(
     root: Path,
@@ -45,7 +52,7 @@ internal fun watchDirs(
             } catch (_: IOException) {
             }
         }
-    }
+    }.buffer(Channel.UNLIMITED)
 
 /** One [watchDirs] collection: the directories [watcher] watches, by their key. */
 private class DirWatch(

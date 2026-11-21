@@ -232,6 +232,84 @@ class DocumentDraftsCommitTest : MainDispatcherTest() {
             movedOn shouldBe 1
         }
 
+    /**
+     * An action that reads the document's metadata (a shared copy, a bake, a split) runs on what the
+     * panel shows: after the typed values are saved, at once when nothing is typed, and never while a
+     * value does not fit its field.
+     */
+    @Test
+    fun anActionWaitsForTheDraftToBeSaved() =
+        runTest(dispatcher) {
+            val fake = FakeMetadataWriter()
+            val finish = CompletableDeferred<Unit>()
+            val writer =
+                object : MetadataWriter by fake {
+                    override suspend fun applyEdits(
+                        docIds: List<String>,
+                        addTags: List<String>,
+                        fields: Map<String, String?>,
+                        fillOnly: Boolean,
+                    ) {
+                        finish.await()
+                        fake.applyEdits(docIds, addTags, fields, fillOnly)
+                    }
+                }
+            val store = DocumentDrafts(writer, this)
+            store.registerEditing("one")
+            val ran = mutableListOf<List<Map<String, String?>>>()
+
+            store.whenSaved("one", stored, "Old") { ran += fake.batchedEdits.map { it.fields } } shouldBe true
+            ran shouldContainExactly listOf(emptyList())
+
+            store.field("one", FieldKeys.TITLE, "New", persisted = "Old")
+            store.whenSaved("one", stored, "New") { ran += fake.batchedEdits.map { it.fields } } shouldBe true
+            runCurrent()
+            ran.size shouldBe 1
+            finish.complete(Unit)
+            runCurrent()
+            ran.last() shouldContainExactly listOf(mapOf(FieldKeys.TITLE to "New"))
+
+            store.field("one", FieldKeys.DOC_DATE, "2026-02-30", persisted = null, type = FieldType.DATE)
+            store.whenSaved("one", stored, "New") { ran += emptyList<Map<String, String?>>() } shouldBe false
+            advanceUntilIdle()
+            ran.size shouldBe 2
+        }
+
+    /** An action asked for while the field's own save runs follows it, even with nothing left to save. */
+    @Test
+    fun anActionAskedForDuringASaveFollowsIt() =
+        runTest(dispatcher) {
+            val fake = FakeMetadataWriter()
+            val finish = CompletableDeferred<Unit>()
+            val writer =
+                object : MetadataWriter by fake {
+                    override suspend fun applyEdits(
+                        docIds: List<String>,
+                        addTags: List<String>,
+                        fields: Map<String, String?>,
+                        fillOnly: Boolean,
+                    ) {
+                        finish.await()
+                        fake.applyEdits(docIds, addTags, fields, fillOnly)
+                    }
+                }
+            val store = DocumentDrafts(writer, this)
+            store.registerEditing("one")
+            store.field("one", FieldKeys.TITLE, "New", persisted = "Old")
+            store.commit("one", stored, "New")
+            runCurrent()
+
+            var ran = 0
+            store.whenSaved("one", stored, "New") { ran++ }
+            runCurrent()
+            ran shouldBe 0
+            finish.complete(Unit)
+            runCurrent()
+
+            ran shouldBe 1
+            fake.batchedEdits.map { it.fields } shouldContainExactly listOf(mapOf(FieldKeys.TITLE to "New"))
+        }
+
     /** A suggestion that fails to land does not take a save asked for meanwhile with it. */
     @Test
     fun aSaveAskedForDuringAFailedSuggestionStillHappens() =

@@ -126,6 +126,16 @@ class AiRuntimeTest {
             .think shouldBe true
     }
 
+    /**
+     * LOW is the AI edits' default, and Ollama refuses `think: true` for a model that cannot think:
+     * the default must leave the flag unset, or every edit call fails on most local models.
+     */
+    @Test
+    fun ollamaLeavesThinkingUnsetAtTheDefaultEditLevel() {
+        AiConfig().reasoningEdit shouldBe AiReasoningLevel.LOW
+        AiRuntime.reasoningParams(AiProvider.OLLAMA, "llama3.2", AiReasoningLevel.LOW, toolLoop = false) shouldBe null
+    }
+
     @Test
     fun providersWithoutReasoningKnobIgnoreTheLevel() {
         listOf(AiProvider.OPENROUTER, AiProvider.DEEPSEEK, AiProvider.MISTRAL).forEach { provider ->

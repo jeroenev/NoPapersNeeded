@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Auto Backup rules for Android 11 (minSdk 30); data_extraction_rules.xml says the same for 12+.
+    Settings hold the AI endpoint's API key, and each library's device.db holds its cloud
+    connection, assistant chats and queues, none of which may leave the phone. The index beside it
+    is rebuilt from the library folder anyway, so the whole database directory stays out.
+-->
+<full-backup-content>
+    <exclude domain="sharedpref" path="npn_settings.xml" />
+    <exclude domain="database" path="." />
+</full-backup-content>

@@ -37,8 +37,16 @@ object IntentImport {
     private const val FALLBACK_SHARED_PDF = "shared.pdf"
     private const val FALLBACK_SCAN_PDF = "scan.pdf"
 
-    /** Extract shareable content URIs from a SEND / SEND_MULTIPLE / VIEW intent. */
+    /**
+     * Extract shareable content URIs from a SEND / SEND_MULTIPLE / VIEW intent. Only `content://`
+     * is taken: the activity is exported, and a `file://` URI would be read with this app's own
+     * access, so another app could have it import the app's private files. Apps share through
+     * content URIs since Android 7 anyway.
+     */
     fun extractUris(intent: Intent): List<Uri> =
+        intentUris(intent).filter { it.scheme == ContentResolver.SCHEME_CONTENT }
+
+    private fun intentUris(intent: Intent): List<Uri> =
         when (intent.action) {
             Intent.ACTION_SEND -> {
                 val uri = intent.getParcelableExtraCompat<Uri>(Intent.EXTRA_STREAM)

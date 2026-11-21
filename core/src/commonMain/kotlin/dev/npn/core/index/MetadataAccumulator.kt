@@ -114,6 +114,9 @@ internal class MetadataAccumulator(
     /** Judges whether the source set is safe to fold; see [SourceSetValidator]. */
     private val validator = SourceSetValidator(dao)
 
+    /** [sourceSetFingerprint] kept up to date per changed source rather than recomputed; see [AppliedSourceSet]. */
+    private val appliedSet = AppliedSourceSet()
+
     /**
      * A journal source read and checked off disk, waiting for [ingestObject] (or a reconcile pass)
      * to record it. Reading is filesystem work, so the watch path does it before the transaction
@@ -121,6 +124,8 @@ internal class MetadataAccumulator(
      */
     class StagedSource internal constructor(
         internal val relPath: String,
+        /** The source's row when it was staged: what recording it replaces. */
+        internal val existing: MetadataSourceEntity?,
         internal val kind: SourceKind,
         internal val previouslyApplied: Boolean,
         internal val fingerprint: SourceFingerprint,
@@ -136,7 +141,7 @@ internal class MetadataAccumulator(
         val path = JournalPaths.classify(relPath)
         require(path is JournalPath.ObjectV2) { "Not a storage-v2 object: $relPath" }
         val meta = fs.stat(relPath) ?: return null
-        return stage(meta, path)
+        return stage(meta, path, dao.source(relPath))
     }
 
     /**
@@ -156,13 +161,13 @@ internal class MetadataAccumulator(
      * are read, hashed and staged whatever their hash: an applied source whose stat moved is recorded
      * again with its new fingerprint, which leaves the next pass the new stat to match, and costs a
      * reconcile pass a full refold even when only the mtime changed ([IngestBatch.refold]). No DB
-     * writes.
+     * writes. [existing] is the source's row as recorded before, null for a new source.
      */
     private suspend fun stage(
         meta: FileMeta,
         path: JournalPath,
+        existing: MetadataSourceEntity?,
     ): StagedSource? {
-        val existing = dao.source(meta.relPath)
         val applied = existing?.status == SourceStatus.APPLIED
         if (applied && existing.fingerprint.sameStat(meta.size, meta.mtimeMillis)) return null
         val bytes = fs.readBytes(meta.relPath)
@@ -171,6 +176,7 @@ internal class MetadataAccumulator(
         val (kind, read) = readSource(meta.relPath, path, bytes, contentHash)
         return StagedSource(
             relPath = meta.relPath,
+            existing = existing,
             kind = kind,
             previouslyApplied = applied,
             fingerprint = fingerprint,
@@ -183,8 +189,9 @@ internal class MetadataAccumulator(
      * Record [staged]: its events when it read as valid, else why not, failing the pass. A source
      * applied before that no longer reads as valid fails without being recorded.
      */
-    suspend fun record(staged: StagedSource): RecordedSource =
-        when (val result = staged.read) {
+    suspend fun record(staged: StagedSource): RecordedSource {
+        appliedSet.changing(staged.relPath, staged.existing)
+        return when (val result = staged.read) {
             is JournalSourceRead.Accepted -> {
                 val source =
                     MetadataSourceEntity(
@@ -228,6 +235,7 @@ internal class MetadataAccumulator(
                 fail(WriteBlock.NEWER_FORMAT, result.message)
             }
         }
+    }
 
     /** What one [runReconcilePass] observed, before any decision about how to fold it. */
     private class ReconcilePass(
@@ -241,7 +249,10 @@ internal class MetadataAccumulator(
      * an object nobody holds any more (`JournalCoordinator.rebuildIndex`): what only it held is
      * forgotten, as a device that never saw it never knew it.
      */
-    suspend fun forgetSources() = dao.clearAccumulator()
+    suspend fun forgetSources() {
+        appliedSet.forget()
+        dao.clearAccumulator()
+    }
 
     /**
      * Read the metadata directory and bring the persisted source/event tables up to date with it.
@@ -250,14 +261,15 @@ internal class MetadataAccumulator(
     private suspend fun runReconcilePass(): ReconcilePass {
         val projectionCleared = dao.state()?.projectionVersion != PROJECTION_VERSION
         if (projectionCleared) {
-            dao.clearAccumulator()
+            forgetSources()
         }
         val entries = fs.listAllUnder(NpnPaths.JOURNAL_DIR)
         validator.newerStore(entries)?.let { fail(WriteBlock.NEWER_FORMAT, it) }
         validator.invalidObjectPath(entries)?.let { fail(WriteBlock.JOURNAL_DAMAGED, it) }
         val previous = dao.allSources()
         val files = entries.filter { !it.isDirectory }.associateBy { it.relPath }
-        val ingest = ingestFiles(files.values)
+        // Staging checks each file against its recorded row: these, not a query per journal object.
+        val ingest = ingestFiles(files.values, previous.associateBy { it.path })
         val gone = previous.filter { it.path !in files }
         if (gone.isNotEmpty()) {
             val listed =
@@ -271,7 +283,10 @@ internal class MetadataAccumulator(
             // build's compaction deleted, which its snapshot holds; a snapshot whose objects a
             // restore put back), and a gone file that never read as a source recorded none. The
             // index forgets each, as a rebuild would; the event table, and so the fold, stays as it was.
-            gone.forEach { dao.forgetSource(it.path) }
+            gone.forEach {
+                appliedSet.changing(it.path, it)
+                dao.forgetSource(it.path)
+            }
         }
         return ReconcilePass(projectionCleared, ingest)
     }
@@ -347,8 +362,8 @@ internal class MetadataAccumulator(
 
     /**
      * Digest of the currently APPLIED source set: every path paired with its content fingerprint,
-     * in path order. The folded state is a pure function of the events these sources carry, so two
-     * passes that compute the same digest must fold to the same state.
+     * in no particular order ([AppliedSourceSet]). The folded state is a pure function of the events
+     * these sources carry, so two passes that compute the same digest must fold to the same state.
      *
      * Restricting it to applied sources is what makes status changes visible: a source promoted
      * from retryable to applied (or demoted) enters or leaves the set and so moves the digest. A
@@ -356,23 +371,11 @@ internal class MetadataAccumulator(
      * fingerprint embeds size and mtime — conservative in the safe direction, and self-correcting
      * on the next open once the new mtime is stored.
      */
-    private suspend fun sourceSetFingerprint(): String {
-        val applied =
-            dao
-                .allSources()
-                .filter { it.status == SourceStatus.APPLIED }
-                .sortedBy { it.path }
-        val payload =
-            buildString {
-                for (source in applied) {
-                    append(source.path)
-                    append('\u0000')
-                    append(source.fingerprint.value)
-                    append('\n')
-                }
-            }
-        return sha256Bytes(payload.encodeToByteArray())
-    }
+    private suspend fun sourceSetFingerprint(): String =
+        appliedSet.fingerprint(
+            all = { dao.allSources() },
+            at = { paths -> dao.sources(paths) },
+        )
 
     /**
      * Fold ONLY the events of [operation]: a slice of the state that is needed without the whole
@@ -403,26 +406,30 @@ internal class MetadataAccumulator(
         var refold = false
     }
 
-    private suspend fun ingestFiles(files: Collection<FileMeta>): IngestBatch {
+    private suspend fun ingestFiles(
+        files: Collection<FileMeta>,
+        recorded: Map<String, MetadataSourceEntity>,
+    ): IngestBatch {
         val batch = IngestBatch()
         val sources =
             files.sortedBy { it.relPath }.filter { meta ->
                 val path = JournalPaths.classify(meta.relPath)
                 path !is JournalPath.Staging && path !is JournalPath.SyncTemp && path !is JournalPath.Unknown
             }
-        for (meta in sources) ingestFile(meta, batch)
+        for (meta in sources) ingestFile(meta, recorded[meta.relPath], batch)
         return batch
     }
 
     private suspend fun ingestFile(
         meta: FileMeta,
+        existing: MetadataSourceEntity?,
         batch: IngestBatch,
     ) {
         val path = JournalPaths.classify(meta.relPath)
         if (path is JournalPath.UnsupportedObjectStore) {
             fail(WriteBlock.NEWER_FORMAT, "Unsupported metadata object store version ${path.version}")
         }
-        val staged = stage(meta, path) ?: return
+        val staged = stage(meta, path, existing) ?: return
         val recorded = record(staged)
         batch.read++
         batch.newEvents.addAll(recorded.events)
@@ -465,6 +472,7 @@ internal class MetadataAccumulator(
     }
 
     suspend fun recordLocalSource(local: LocalSource) {
+        appliedSet.changing(local.source.path) { dao.source(local.source.path) }
         dao.ingest(local.source, local.events, local.actor)
     }
 

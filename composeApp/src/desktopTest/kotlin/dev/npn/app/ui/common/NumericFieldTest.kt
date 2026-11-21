@@ -70,9 +70,26 @@ class NumericFieldTest : EnglishLocaleTest() {
             }
         }
 
+    /** Clearing the field says so, so an owner can drop the number it was last given. */
+    @Test
+    fun aClearedOrOutOfRangeFieldSaysItHoldsNoNumber() =
+        onUiThread {
+            val committed = mutableListOf<Int>()
+            var invalid = 0
+            withField({ 30 }, committed, onInvalid = { invalid++ }) { scene ->
+                scene.type("3")
+                scene.type("")
+                scene.type("99")
+
+                committed shouldContainExactly listOf(3)
+                invalid shouldBe 2
+            }
+        }
+
     private fun withField(
         value: () -> Int,
         committed: MutableList<Int>,
+        onInvalid: () -> Unit = {},
         block: (ImageComposeScene) -> Unit,
     ) {
         themedScene(WIDTH, HEIGHT) {
@@ -81,6 +98,7 @@ class NumericFieldTest : EnglishLocaleTest() {
                 onValueChange = { committed += it },
                 range = 1..50,
                 label = "Batch size",
+                onInvalid = onInvalid,
             )
         }.closing {
             render()

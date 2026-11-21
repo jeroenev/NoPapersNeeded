@@ -177,6 +177,7 @@
     <string name="detail_saved_changes">Saved changes to “%1$s”.</string>
     <string name="detail_undo_save_failed">Could not undo the changes: %1$s</string>
     <string name="detail_draft_invalid">A value does not fit its field, so these changes are not saved yet.</string>
+    <string name="detail_action_needs_saved_draft">A value does not fit its field: fix or discard it first.</string>
     <plurals name="detail_drafts_invalid">
         <item quantity="one">%1$d document has a value that does not fit its field, so its changes are not saved.</item>
         <item quantity="other">%1$d documents have values that do not fit their fields, so their changes are not saved.</item>

@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -21,6 +22,7 @@ import dev.npn.app.ui.common.TextInputDialog
 import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.TopBarAction
 import dev.npn.app.ui.common.TopBarActions
+import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.DocListItem
 import dev.npn.core.fs.NpnPaths
@@ -29,6 +31,7 @@ import io.github.vinceglb.filekit.dialogs.FileKitDialogSettings
 import io.github.vinceglb.filekit.dialogs.compose.rememberFileSaverLauncher
 import io.github.vinceglb.filekit.write
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.detail_action_needs_saved_draft
 import no_papers_needed.composeapp.generated.resources.detail_ai_ocr
 import no_papers_needed.composeapp.generated.resources.detail_ai_ocr_confirm
 import no_papers_needed.composeapp.generated.resources.detail_ai_ocr_large
@@ -81,6 +84,35 @@ interface DocumentActions {
 
     /** Move the document to the trash. */
     fun trash()
+}
+
+/**
+ * [actions] acting on the document as its draft shows it: those that read its metadata (a shared,
+ * exported or baked copy, a split, whose parts copy it) save the draft first and run once it landed
+ * ([DocumentDrafts.whenSaved]). While a typed value does not fit its field nothing can be saved, so
+ * they do not run, and [DocumentDrafts.notices] says why. [persisted] and [title] are the document's,
+ * as the library holds it and as its draft shows it.
+ */
+internal class SavedFirstActions(
+    private val actions: DocumentActions,
+    private val drafts: DocumentDrafts,
+    private val docId: String,
+    private val persisted: State<Map<String, String>>,
+    private val title: State<String>,
+) : DocumentActions by actions {
+    private fun afterSave(action: () -> Unit) {
+        if (!drafts.whenSaved(docId, persisted.value, title.value, action)) {
+            drafts.notices.message(uiText(Res.string.detail_action_needs_saved_draft))
+        }
+    }
+
+    override fun split(segments: List<IntRange>) = afterSave { actions.split(segments) }
+
+    override fun bakeInPlace() = afterSave(actions::bakeInPlace)
+
+    override fun exportBakedCopy(write: suspend (ByteArray) -> Unit) = afterSave { actions.exportBakedCopy(write) }
+
+    override fun shareBakedCopy(share: suspend (ByteArray) -> Unit) = afterSave { actions.shareBakedCopy(share) }
 }
 
 /**

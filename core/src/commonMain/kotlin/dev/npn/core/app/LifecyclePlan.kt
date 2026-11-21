@@ -21,10 +21,14 @@ internal object LifecyclePlan {
     /**
      * Trash [doc], moving its file to [trashPath] when that is where its own bytes go (null: the file
      * at its path is not the document's, or is gone, and stays where it is for the next rescan).
+     * [holds] says whether the file the move took, at its new path, still holds them: one another
+     * process put at the path or was writing meanwhile goes back, and the trash goes on as for a
+     * document whose file is gone, which is the same events and row.
      */
     fun trash(
         doc: DocumentEntity,
         trashPath: String?,
+        holds: (suspend (path: String) -> Boolean)? = null,
     ): LifecycleChange {
         val origPath = doc.relPath
         return LifecycleChange(
@@ -34,6 +38,7 @@ internal object LifecyclePlan {
             move = trashPath?.let { FileMove(origPath, it) },
             // The time the fold gives this trash, which a later one replaces: the Undo's check.
             readBack = true,
+            movedHolds = holds,
         )
     }
 

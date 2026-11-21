@@ -3,6 +3,7 @@ package dev.npn.core.rules
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.util.KnownEnumSerializer
 import dev.npn.core.util.NpnJson
+import dev.npn.core.util.carriesUnknownData
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
@@ -132,20 +133,30 @@ object MatchAlgorithmSerializer : KnownEnumSerializer<MatchAlgorithm>("MatchAlgo
  * The codec for the stored rule list: the journal setting, and the device setting it was adopted
  * from. Reads the pre-registry shape too, where a rule carried `correspondent` and `docType` as
  * top-level strings instead of [AutoMatchRule.sets]. A list with a rule this build cannot match as
- * its writer meant (a field kind or an algorithm it does not know) fails to decode as a whole.
+ * its writer meant (a field kind or an algorithm it does not know, or a key it would drop, see
+ * [carriesUnknownData]) fails to decode as a whole.
  */
 internal object AutoMatchRuleJson {
     private val json = NpnJson.Persisted
     private val listSerializer = ListSerializer(LegacyAware)
 
     /** The rules in [text], each [AutoMatchRule.normalized]. */
-    fun decodeList(text: String): List<AutoMatchRule> =
-        json.decodeFromString(listSerializer, text).map(AutoMatchRule::normalized)
+    fun decodeList(text: String): List<AutoMatchRule> {
+        val written = json.parseToJsonElement(text)
+        val rules = json.decodeFromJsonElement(listSerializer, written)
+        if (carriesUnknownData(written, json.encodeToJsonElement(listSerializer, rules), LegacyAware.retired)) {
+            throw SerializationException("The rule list holds what this build does not know")
+        }
+        return rules.map(AutoMatchRule::normalized)
+    }
 
     fun encodeList(rules: List<AutoMatchRule>): String = json.encodeToString(listSerializer, rules)
 
     private object LegacyAware : JsonTransformingSerializer<AutoMatchRule>(AutoMatchRule.serializer()) {
         private val legacyKeys = mapOf("correspondent" to FieldKeys.CORRESPONDENT, "docType" to FieldKeys.DOC_TYPE)
+
+        /** The pre-registry keys, read into [AutoMatchRule.sets]; a rule written now has none. */
+        val retired: Set<String> = legacyKeys.keys
 
         override fun transformDeserialize(element: JsonElement): JsonElement {
             val obj = element.jsonObject

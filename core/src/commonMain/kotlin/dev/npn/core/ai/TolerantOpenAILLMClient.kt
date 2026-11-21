@@ -15,7 +15,11 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.onEach
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 /**
  * [OpenAILLMClient] that tolerates the non-standard SSE chunks some OpenAI-compatible gateways
@@ -73,12 +77,16 @@ internal class TolerantOpenAILLMClient(
 
     /**
      * Testable core of [decodeStreamingResponse] (the override is `protected`, so tests exercise
-     * this `internal` entry point). A choiceless chunk cannot yield a frame, so it is short-circuited
-     * to a benign empty response; every other chunk is decoded strictly, and a failure names the
-     * chunk.
+     * this `internal` entry point). An in-band error chunk (`{"error":{"message":...}}`, which
+     * gateways such as LiteLLM and vLLM send when they fail mid-stream) throws with the server's
+     * text, so the turn fails rather than ending as if it were complete. Any other choiceless chunk
+     * cannot yield a frame, so it is short-circuited to a benign empty response; every other chunk
+     * is decoded strictly, and a failure names the chunk.
      */
     internal fun decodeStreamingResponseTolerant(data: String): OpenAIChatCompletionStreamResponse {
-        if (hasNoChoices(data)) return EMPTY_STREAM_RESPONSE
+        val chunk = runCatching { NpnJson.Lenient.parseToJsonElement(data) as? JsonObject }.getOrNull()
+        chunk?.get("error")?.takeUnless { it is JsonNull }?.let { throw IllegalStateException(errorText(it, data)) }
+        if (chunk != null && hasNoChoices(chunk)) return EMPTY_STREAM_RESPONSE
         return try {
             super.decodeStreamingResponse(data)
         } catch (e: Exception) {
@@ -86,11 +94,20 @@ internal class TolerantOpenAILLMClient(
         }
     }
 
-    private fun hasNoChoices(data: String): Boolean =
-        runCatching {
-            val choices = NpnJson.Lenient.parseToJsonElement(data).jsonObject["choices"]
-            choices == null || (choices as? JsonArray)?.isEmpty() == true
-        }.getOrDefault(false)
+    private fun hasNoChoices(chunk: JsonObject): Boolean {
+        val choices = chunk["choices"]
+        return choices == null || (choices as? JsonArray)?.isEmpty() == true
+    }
+
+    /** The server's own words for an in-band [error]: its `message`, else the error itself. */
+    private fun errorText(
+        error: JsonElement,
+        data: String,
+    ): String {
+        val message = ((error as? JsonObject)?.get("message") as? JsonPrimitive)?.contentOrNull
+        val bare = (error as? JsonPrimitive)?.contentOrNull
+        return message?.takeIf { it.isNotBlank() } ?: bare?.takeIf { it.isNotBlank() } ?: data.take(CHUNK_PREVIEW)
+    }
 
     private companion object {
         /** How much of an undecodable chunk its failure quotes. */

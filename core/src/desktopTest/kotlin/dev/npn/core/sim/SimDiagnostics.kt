@@ -5,6 +5,7 @@ import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.journal.EventDecoderRegistry
 import dev.npn.core.journal.FoldedState
+import dev.npn.core.model.FieldKeys
 
 /**
  * For a document two indexes show differently, which journal events one has folded and the other
@@ -117,3 +118,28 @@ internal fun lingeringOriginals(
 }
 
 private const val HISTORY_ID = 8
+
+/**
+ * After a full sync: the first replica of [views] that shows a well-known field a user relabelled or
+ * removed ([SimWorld.customizedSeeds]) with its seed's label again, and why, or null. No step writes
+ * a seed's label, so a field back to it took a seed over the user's change: a device seeding the
+ * registry after another device's user changed it, as one joining the library later does.
+ */
+internal fun <M> revertedSeeds(
+    customized: Set<String>,
+    views: Map<M, LibraryView>,
+    name: (M) -> String,
+): Pair<M, String>? {
+    for ((member, view) in views) {
+        val reverted =
+            customized.sorted().filter { key ->
+                view.fieldDefs[key]?.substringBefore('|') == FieldKeys.SEED_LABELS.getValue(key)
+            }
+        if (reverted.isNotEmpty()) {
+            return member to
+                "${name(member)} shows seeded fields a user changed back as seeded: " +
+                reverted.joinToString { "$it ('${view.fieldDefs.getValue(it)}')" }
+        }
+    }
+    return null
+}

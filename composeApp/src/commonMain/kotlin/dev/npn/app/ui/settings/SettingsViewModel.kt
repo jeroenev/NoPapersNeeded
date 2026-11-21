@@ -32,6 +32,7 @@ import dev.npn.core.sync.TransportAvailability
 import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.watch.liesInLibrary
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -86,6 +87,11 @@ class SettingsViewModel(
      * so connecting a second account (or a second library) never overwrites the first one's sign-in.
      */
     newRemoteName: (type: String) -> String = ::newCloudRemoteName,
+    /**
+     * A scope that outlives this viewmodel (the app's), where [onCleared] forgets a remote the cloud
+     * wizard signed in to and never finished with; none, and that is left to the next wizard run.
+     */
+    private val outliving: CoroutineScope? = null,
 ) : MessagesViewModel(),
     SettingsActions {
     private val content = session.content
@@ -101,7 +107,7 @@ class SettingsViewModel(
         }
 
     private val typedRetention =
-        TypedSetting<Int>(viewModelScope) { days ->
+        TypedSetting<Int>(viewModelScope, savesOnPause = false) { days ->
             reporting(Res.string.common_save_setting_failed) { trashRetention.setTrashRetentionDays(days) }
         }
 
@@ -310,7 +316,16 @@ class SettingsViewModel(
             storagePath.setStoragePathEnabled(enabled)
         }
 
-    override fun setTrashRetentionDays(days: Int) = typedRetention.type(days)
+    override fun setTrashRetentionDays(days: Int?) =
+        if (days ==
+            null
+        ) {
+            typedRetention.withhold()
+        } else {
+            typedRetention.type(days)
+        }
+
+    override fun doneTypingTrashRetention() = typedRetention.flush()
 
     override fun type(
         setting: TextSetting,
@@ -323,8 +338,13 @@ class SettingsViewModel(
         launchReporting(Res.string.common_save_setting_failed) {
             aiModelsJob?.cancel()
             aiModels.value = AiModelListState()
-            if (settings.settings.first().aiProvider != provider) typedText.getValue(TextSetting.AI_BASE_URL).discard()
-            settings.edit { if (it.aiProvider == provider) it else it.copy(aiProvider = provider, aiBaseUrl = "") }
+            if (settings.settings.first().aiProvider != provider) {
+                typedText.getValue(TextSetting.AI_BASE_URL).discard()
+                typedText.getValue(TextSetting.AI_API_KEY).discard()
+            }
+            settings.edit {
+                if (it.aiProvider == provider) it else it.copy(aiProvider = provider, aiBaseUrl = "", aiApiKey = "")
+            }
         }
 
     /** The settings as the screen shows them, typed values included, for a request made from it. */
@@ -460,6 +480,15 @@ class SettingsViewModel(
             }
             reviewConfig.setReviewMode(ReviewMode.INBOX_WORKFLOW)
         }
+
+    override fun onCleared() {
+        // Leaving the screen mid-run (a question after sign-in, or the folder step) would leave the
+        // remote it signed in to, token and all, in the engine's configuration, where nothing would
+        // ever remove it: forget it where the leaving cannot cut that short.
+        val setup = sync.setup
+        if (setup != null) outliving?.launch { cloud.forgetUnfinished(setup) }
+        super.onCleared()
+    }
 
     private companion object {
         const val PICKED_KEY = "settings.picked"

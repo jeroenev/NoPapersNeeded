@@ -568,8 +568,9 @@ one still in transfer (`NpnPaths.isSyncTemp`: Syncthing, Nextcloud and ownCloud,
 reconcile passes over and never deletes; any other name there fails the pass. A staging file a
 crash left behind, on any installation, is the rescan's `TempFileSweep`'s to delete once a day old.
 
-**Publication.** An object is staged under a `.part` name in its bucket, hash-checked, then
-published without replacement: a hard link, or where the filesystem has none (Android shared
+**Publication.** An object is staged under a `.part` name in its bucket, forced to the device
+(a hash check reads the page cache, and a name can reach the disk before the bytes it names), then
+hash-checked and published without replacement, its directory forced after: a hard link, or where the filesystem has none (Android shared
 storage, exFAT) an exclusive rename (`renameat2(RENAME_NOREPLACE)` on Linux and Android,
 `MoveFileExW` without `MOVEFILE_REPLACE_EXISTING` on Windows), or on SAF a rename checked by name
 and hash afterwards, in a bucket whose directories carry exactly their names. A filesystem with
@@ -635,7 +636,8 @@ Kept by `FoldedState`, `MetadataAccumulator`, `FoldProjection`, `Indexer`:
   property-tests its convergence.
 - The projection is a pure function of the applied source set. `MetadataAccumulator` fingerprints
   that set beside the ready marker: an open whose fingerprint still matches reuses the stored
-  projection instead of refolding. **Changing what a fold produces from the same events requires
+  projection instead of refolding. The fingerprint is an order-independent digest kept up to date
+  per changed source (`AppliedSourceSet`), so a commit does not re-read every source row. **Changing what a fold produces from the same events requires
   bumping `MetadataAccumulator.PROJECTION_VERSION`**, or existing installs keep rows built by the
   old fold.
 - Field values land in `document_fields` (one row per document and key, canonical string plus a
@@ -659,7 +661,10 @@ Kept by `FoldedState`, `MetadataAccumulator`, `FoldProjection`, `Indexer`:
 - Title, correspondent, docType, docDate and notes are ordinary `field-set` fields whose definitions
   the library seeds (`FieldKeys`); there is no per-field Kotlin. A change to the seeds raises
   `FieldKeys.SEED_VERSION`, and `FieldKeys.upgradeSeeded` brings older libraries up once, never
-  overriding what their users changed.
+  overriding what their users changed. A library's first seeding is written beneath every edit
+  (`JournalCoordinator.commitDefaultsBuilt`: clock at physical time 0), as a device that opens the
+  library before another device's journal reached it seeds too, and its seeds must lose to what
+  that device's user changed in the fields once its journal arrives.
 - An exhaustive `when (FieldType)` belongs only in `FieldValues` (canonical form), `FieldEditor.kt`
   (the editor and its type label) and the filter sheet's per-type control. Everything else reads
   the `FieldDef`'s flags, hint and the capabilities each `FieldType` constant declares (`aiLiteral`,

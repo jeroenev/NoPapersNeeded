@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -39,6 +40,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -211,7 +213,7 @@ private fun TagListScaffold(
                         // Opening a menu on an unselected card replaces the selection with that
                         // card, so the menu never silently acts on off-screen tags.
                         onPrepareMenu = {
-                            if (selectionActive && node.info != null && !isSelected) {
+                            if (selectionActive && !isSelected) {
                                 selection.selectOnly(node.path)
                             }
                         },
@@ -394,34 +396,43 @@ private fun TagCard(
     onOpen: (TagDialog) -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
+    // Only a real tag has anything to act on. A namespace-only card ("finance" over "finance.tax")
+    // names no tag a document holds, and the writes act on exact names, so it offers no actions.
     val selectable = node.info != null
     val hoverInteraction = remember { MutableInteractionSource() }
     val hovered by hoverInteraction.collectIsHoveredAsState()
     val selectionLabel =
         stringResource(if (selected) Res.string.library_deselect else Res.string.library_select)
+    val actionsLabel = stringResource(Res.string.common_tags_actions)
     OutlinedCard(
         Modifier
             .fillMaxWidth()
             .hoverable(hoverInteraction)
-            .onSecondaryClick {
-                onPrepareMenu()
-                menu = true
-            }.semantics { if (selectable) this.selected = selected }
-            .combinedClickable(
-                role = Role.Button,
-                onClickLabel =
-                    if (selectionMode && selectable) selectionLabel else stringResource(Res.string.common_tags_actions),
-                onLongClickLabel = selectionLabel.takeIf { selectable },
-                // A normal tap opens the actions; once selection mode starts it toggles selection.
-                onClick = {
-                    if (selectionMode && selectable) {
-                        onToggleSelect()
-                    } else {
-                        onPrepareMenu()
-                        menu = true
-                    }
+            .then(
+                if (!selectable) {
+                    Modifier
+                } else {
+                    Modifier
+                        .onSecondaryClick {
+                            onPrepareMenu()
+                            menu = true
+                        }.semantics { this.selected = selected }
+                        .combinedClickable(
+                            role = Role.Button,
+                            onClickLabel = if (selectionMode) selectionLabel else actionsLabel,
+                            onLongClickLabel = selectionLabel,
+                            // A normal tap opens the actions; once selection mode starts it toggles selection.
+                            onClick = {
+                                if (selectionMode) {
+                                    onToggleSelect()
+                                } else {
+                                    onPrepareMenu()
+                                    menu = true
+                                }
+                            },
+                            onLongClick = onToggleSelect,
+                        )
                 },
-                onLongClick = { if (selectable) onToggleSelect() },
             ),
     ) {
         Row(
@@ -438,16 +449,21 @@ private fun TagCard(
             val dot = parseHexColor(node.info?.color) ?: MaterialTheme.colorScheme.outline
             Box(Modifier.size(12.dp).clip(CircleShape).background(dot))
             TagCardLabel(node, Modifier.weight(1f))
-            TagCardMenu(
-                expanded = menu,
-                onExpand = {
-                    onPrepareMenu()
-                    menu = true
-                },
-                onDismiss = { menu = false },
-                targets = targets,
-                onOpen = onOpen,
-            )
+            if (selectable) {
+                TagCardMenu(
+                    expanded = menu,
+                    onExpand = {
+                        onPrepareMenu()
+                        menu = true
+                    },
+                    onDismiss = { menu = false },
+                    targets = targets,
+                    onOpen = onOpen,
+                )
+            } else {
+                // Where the menu button would be, so every card in the grid is as tall.
+                Spacer(Modifier.minimumInteractiveComponentSize())
+            }
         }
     }
 }

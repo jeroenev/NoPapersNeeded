@@ -4,6 +4,7 @@ import dev.npn.core.db.LegacyIndexTables
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.util.NpnJson
+import dev.npn.core.util.carriesUnknownData
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -13,7 +14,9 @@ import kotlinx.coroutines.flow.map
  * holding the whole [SavedView], so every device sees the same views and two devices saving
  * different views both keep theirs. Deleting one clears its setting. They read in name order.
  * A view this build cannot decode (a newer build's) is not listed: a rename or a pin saves the view
- * as this build read it, and would write over what that build meant.
+ * as this build read it, and would write over what that build meant. That includes a view that
+ * decodes but carries something this build would drop, such as a filter key a newer build added
+ * ([carriesUnknownData]).
  * Writes run through [SessionLifetime.owned], so the session waits them out before it closes.
  */
 internal class SavedViewRepositoryImpl(
@@ -52,11 +55,20 @@ internal class SavedViewRepositoryImpl(
     private fun decode(value: String?): SavedView? =
         value?.let {
             try {
-                json.decodeFromString(SavedView.serializer(), it)
+                val written = json.parseToJsonElement(it)
+                val view = json.decodeFromJsonElement(SavedView.serializer(), written)
+                val read = json.encodeToJsonElement(SavedView.serializer(), view)
+                view.takeUnless { carriesUnknownData(written, read, RETIRED_KEYS) }
             } catch (_: IllegalArgumentException) {
                 null
             }
         }
 
     private fun key(id: String): String = LibrarySettingKeys.SAVED_VIEW_PREFIX + id
+
+    private companion object {
+        /** Filter keys earlier builds wrote and this one dropped on purpose (the registry, the creation-date sort). */
+        val RETIRED_KEYS =
+            setOf("addedFrom", "addedTo", "correspondent", "docType", "docDateFrom", "docDateTo", "missingAny")
+    }
 }

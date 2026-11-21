@@ -32,8 +32,18 @@ internal class ContentAddressedJournalWriter(
     val watermark: Pair<Long, Int>
         get() = allocator.physicalMillis to allocator.counter
 
-    /** Publish [ops], at least one, as one transaction object. */
-    suspend fun commit(ops: List<PendingOp>): PublishedTransaction {
+    /**
+     * Publish [ops], at least one, as one transaction object.
+     *
+     * With [beneathEveryEdit], the events carry the earliest clock there is (physical time 0), so
+     * every last-writer-wins value they set loses to any write made anywhere else, whenever that
+     * write's object arrives: for defaults a device writes before it has seen what the library
+     * decided (the seeded fields). The fresh actor keeps them distinct from every other event.
+     */
+    suspend fun commit(
+        ops: List<PendingOp>,
+        beneathEveryEdit: Boolean = false,
+    ): PublishedTransaction {
         require(ops.isNotEmpty()) { "A transaction publishes at least one event" }
         val actor = ids.next()
         val events =
@@ -41,7 +51,7 @@ internal class ContentAddressedJournalWriter(
                 JournalEvent(
                     version = JournalEventVersions.CANONICAL,
                     seq = index + 1L,
-                    hlc = allocator.next(actor),
+                    hlc = if (beneathEveryEdit) Hlc(0L, index, actor) else allocator.next(actor),
                     dev = actor,
                     doc = pending.doc,
                     op = pending.op,

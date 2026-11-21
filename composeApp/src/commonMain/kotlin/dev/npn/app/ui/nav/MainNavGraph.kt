@@ -293,7 +293,7 @@ private fun MainNavHost(
                 },
             )
         }
-        settingsRoutes(nav, settings, session, browse, onOpenLibrary)
+        settingsRoutes(nav, settings, session, library, onOpenLibrary)
         aiRoutes(library, session, settings, aiConfigured)
     }
 }
@@ -303,14 +303,16 @@ private fun NavGraphBuilder.settingsRoutes(
     nav: NavHostController,
     settings: SettingsRepository,
     session: LibrarySession,
-    browse: BrowseContext,
+    library: LibraryUi,
     onOpenLibrary: (location: String) -> Unit,
 ) {
+    val browse = library.browse
     composable<Route.Settings> { entry ->
         val route = entry.toRoute<Route.Settings>()
         SettingsScreen(
             settings = settings,
             session = session,
+            outliving = library.outliving,
             category = SettingsCategoryId.fromRouteKey(route.category),
             revealAdvanced = route.revealAdvanced,
             onOpenCategory = { id, reveal -> nav.from(entry) { navigate(Route.Settings(id.routeKey, reveal)) } },

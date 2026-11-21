@@ -66,7 +66,8 @@ internal class DocLifecycleImpl(
                 // entry from an older one's that a lagging journal still describes (TrashOps.purgeOlderThan).
                 val trashPath =
                     if (fs.holdsDocument(doc)) trashOps.trashTarget(doc.relPath, doc.docId, clock.nowMillis()) else null
-                LifecyclePlan.trash(doc, trashPath)
+                // A move keeps the stat, so the file it took is checked the same way where it went.
+                LifecyclePlan.trash(doc, trashPath) { moved -> fs.holdsDocument(doc.copy(relPath = moved)) }
             }
         return done?.let { TrashReceipt(it.before.docId, it.after?.trashedAt) }
     }

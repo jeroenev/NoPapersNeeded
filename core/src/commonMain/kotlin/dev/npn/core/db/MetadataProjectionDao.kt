@@ -129,6 +129,12 @@ interface MetadataProjectionDao {
     @Query("SELECT * FROM metadata_sources ORDER BY path")
     suspend fun allSources(): List<MetadataSourceEntity>
 
+    @Query("SELECT * FROM metadata_sources WHERE path IN (:paths)")
+    suspend fun sourcesChunk(paths: List<String>): List<MetadataSourceEntity>
+
+    /** The source rows at [paths] that exist, chunked under SQLite's bind-variable limit. */
+    suspend fun sources(paths: List<String>): List<MetadataSourceEntity> = paths.chunkedBind { sourcesChunk(it) }
+
     @Upsert
     suspend fun upsertSource(source: MetadataSourceEntity)
 

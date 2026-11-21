@@ -15,12 +15,29 @@ import dev.npn.core.model.FieldKeys
  * and paying that on every open is exactly what [JournalCoordinator.refreshState]'s projection
  * reuse avoids. Only a library that has not been seeded at [version] yet (once, ever) reaches the
  * fold.
+ *
+ * The first seeding writes beneath every edit ([JournalCoordinator.commitDefaultsBuilt]): a device
+ * that opens the library before another device's journal has reached it sees no marker and seeds,
+ * and those seeds must not undo what the other device's user changed in the fields meanwhile (a
+ * label, a removed field) once that journal arrives. Its marker loses the same way, so a marker an
+ * earlier seed version wrote takes over then, and the next open brings the library up from it.
  */
 internal suspend fun JournalCoordinator.seedFieldRegistryIfNeeded(
     defs: List<FieldDef>,
     version: Int = FieldKeys.SEED_VERSION,
 ) {
-    if (seedVersion(setting(FieldKeys.SEEDED_SETTING)) >= version || !canWrite()) return
+    val marker = setting(FieldKeys.SEEDED_SETTING)
+    if (seedVersion(marker) >= version || !canWrite()) return
+    if (marker == null) {
+        val seeded =
+            commitDefaultsBuilt { state ->
+                if (state.effectiveSetting(FieldKeys.SEEDED_SETTING) != null) return@commitDefaultsBuilt emptyList()
+                defs.map { PendingOp.fieldDefSet(it) } +
+                    PendingOp.settingSet(FieldKeys.SEEDED_SETTING, version.toString())
+            }
+        if (seeded) return
+    }
+    // An upgrade builds on what the library holds, so it is a write like any other.
     commitBuilt { state ->
         val seeded = state.effectiveSetting(FieldKeys.SEEDED_SETTING)
         val defOps =

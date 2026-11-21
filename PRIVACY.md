@@ -41,9 +41,10 @@ sends GitHub an ordinary request, which includes your IP address, and nothing ab
 documents. You can turn it off in Settings → About. App store installs (Google Play, Flathub) do
 not make this request; the store handles updates.
 
-**Android's own backup.** Like any app, the app's settings (including an API key or cloud
-sign-in) can be part of the device backup Android makes to your Google account, if you have that
-switched on. Your library folder is not part of it.
+**Android's own backup.** The app keeps its settings (including an API key), cloud sign-ins and
+assistant chats out of the device backup Android makes to your Google account and out of a
+transfer to a new phone, so you set those up again there. Your library folder is not part of the
+backup either; it is an ordinary folder you can copy or sync yourself.
 
 ## Permissions
 

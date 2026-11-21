@@ -217,26 +217,64 @@ class SettingsViewModelTest : MainDispatcherTest() {
         }
 
     /**
-     * The retention is the library's, and each saved value a journal event: the field commits every
-     * number typed, the screen follows each at once, and only the last is saved, once typing pauses.
+     * The retention is the library's, and each saved value a journal event the purge acts on at
+     * once: the field commits every number typed, the screen follows each at once, and only the last
+     * is saved, when the field loses focus, never on a pause (the 1 of 14 must not be saved).
      */
     @Test
-    fun aTrashRetentionIsSavedToTheLibraryOnceTypingPauses() =
+    fun aTrashRetentionIsSavedToTheLibraryWhenTheFieldLosesFocus() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val model = settingsVm(session = session)
             collecting(model.paneState)
             for (typed in listOf(1, 14)) {
                 model.setTrashRetentionDays(typed)
-                runCurrent()
+                advanceUntilIdle()
                 model.paneState.value.settings.trashRetentionDays shouldBe typed
             }
             session.trashRetention.writes shouldBe emptyList()
 
+            model.doneTypingTrashRetention()
             advanceUntilIdle()
 
             session.trashRetention.writes shouldContainExactly listOf(14)
             model.paneState.value.settings.trashRetentionDays shouldBe 14
+        }
+
+    /**
+     * Clearing the field leaves its last number (the 3 of 30) behind in the viewmodel: it must not
+     * be saved when the field loses focus or the screen is left, as the field shows no number.
+     */
+    @Test
+    fun aTrashRetentionClearedFromTheFieldIsNotSaved() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = settingsVm(session = session)
+            val store = ViewModelStore().apply { put("settings", model) }
+
+            model.setTrashRetentionDays(3)
+            model.setTrashRetentionDays(null)
+            model.doneTypingTrashRetention()
+            store.clear()
+            advanceUntilIdle()
+
+            session.trashRetention.writes shouldBe emptyList()
+        }
+
+    /** A number typed after the field was cleared is saved as usual. */
+    @Test
+    fun aTrashRetentionTypedAfterClearingIsSaved() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = settingsVm(session = session)
+
+            model.setTrashRetentionDays(3)
+            model.setTrashRetentionDays(null)
+            model.setTrashRetentionDays(60)
+            model.doneTypingTrashRetention()
+            advanceUntilIdle()
+
+            session.trashRetention.writes shouldContainExactly listOf(60)
         }
 
     /** A retention typed just before the screen is left is saved all the same. */
@@ -265,6 +303,7 @@ class SettingsViewModelTest : MainDispatcherTest() {
             val messages = collecting(model.messages.map { it.text })
 
             model.setTrashRetentionDays(7)
+            model.doneTypingTrashRetention()
             advanceUntilIdle()
 
             model.paneState.value.settings.trashRetentionDays shouldBe 7

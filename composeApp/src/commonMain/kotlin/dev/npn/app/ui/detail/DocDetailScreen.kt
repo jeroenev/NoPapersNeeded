@@ -81,7 +81,14 @@ fun DocDetailScreen(
             }
 
             is DocLoadState.Missing -> {
-                DocPlaceholderScaffold(onBack) { padding -> DocumentUnavailable(Modifier.padding(padding)) }
+                val drafts = LocalDocumentDrafts.current
+                val draft = drafts.state[docId]
+                // The resume banner and the library switch bring the user here for a draft whose
+                // document went; this is the one place it can still be dropped.
+                val discard = { drafts.discard(docId) }.takeIf { draft != null && draft.dirty && !draft.saving }
+                DocPlaceholderScaffold(onBack) { padding ->
+                    DocumentUnavailable(Modifier.padding(padding), onDiscardDraft = discard)
+                }
             }
 
             is DocLoadState.Present -> {

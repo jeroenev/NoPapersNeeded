@@ -172,6 +172,7 @@
     <string name="detail_saved_changes">Wijzigingen aan '%1$s' opgeslagen.</string>
     <string name="detail_undo_save_failed">De wijzigingen konden niet ongedaan worden gemaakt: %1$s</string>
     <string name="detail_draft_invalid">Een waarde past niet bij het veld, dus deze wijzigingen zijn nog niet opgeslagen.</string>
+    <string name="detail_action_needs_saved_draft">Een waarde past niet bij het veld: pas die eerst aan of verwerp hem.</string>
     <plurals name="detail_drafts_invalid">
         <item quantity="one">%1$d document heeft een waarde die niet bij het veld past, dus de wijzigingen zijn niet opgeslagen.</item>
         <item quantity="other">%1$d documenten hebben waarden die niet bij hun velden passen, dus de wijzigingen zijn niet opgeslagen.</item>

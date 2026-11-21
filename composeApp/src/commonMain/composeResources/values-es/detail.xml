@@ -172,6 +172,7 @@
     <string name="detail_saved_changes">Cambios guardados en «%1$s».</string>
     <string name="detail_undo_save_failed">No se pudieron deshacer los cambios: %1$s</string>
     <string name="detail_draft_invalid">Un valor no encaja en su campo, así que estos cambios aún no se han guardado.</string>
+    <string name="detail_action_needs_saved_draft">Un valor no encaja en su campo: corrígelo o descártalo primero.</string>
     <plurals name="detail_drafts_invalid">
         <item quantity="one">%1$d documento tiene un valor que no encaja en su campo, así que sus cambios no se han guardado.</item>
         <item quantity="other">%1$d documentos tienen valores que no encajan en sus campos, así que sus cambios no se han guardado.</item>

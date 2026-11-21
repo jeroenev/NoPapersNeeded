@@ -7,6 +7,8 @@ import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
 import dev.npn.core.fs.sha256Bytes
+import dev.npn.core.journal.EventDecoderRegistry
+import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
 import kotlinx.coroutines.delay
@@ -698,9 +700,48 @@ class InMemoryLibraryFileSystem(
 
     /**
      * Each time bytes were taken from a path here; never from a file that is none of the library's
-     * copies (an import's staging file, a bake's temporary file: [Losses.isNoCopy]).
+     * copies (an import's staging file, a bake's temporary file: [isNoCopy]).
      */
     val losses = Losses()
+
+    /**
+     * Whether the file at [path], holding [bytes], is none of the library's copies ([Losses.isNoCopy]).
+     * A bake's temporary file is one once its bytes are a document a journal object here names as a
+     * relink's target: a bake undone after its relink landed parks the document's bytes there, maybe
+     * its only copy, and deleting them then loses the document.
+     */
+    private fun isNoCopy(
+        path: String,
+        bytes: ByteArray,
+    ): Boolean {
+        if (!Losses.isNoCopy(path)) return false
+        if (NpnPaths.Temp.kindOf(path) != NpnPaths.Temp.Kind.BAKE) return true
+        return sha256Bytes(bytes) !in relinkTargets()
+    }
+
+    /** Every document a journal object in this folder relinks another onto. */
+    private fun relinkTargets(): Set<String> =
+        files
+            .keysWithPrefix("${NpnPaths.JOURNAL_DIR}/")
+            .filter { JournalPaths.classify(it) is JournalPath.ObjectV2 && it !in writing }
+            .flatMapTo(HashSet()) { path ->
+                files
+                    .getValue(path)
+                    .bytes
+                    .decodeToString()
+                    .lineSequence()
+                    .filter { it.isNotBlank() }
+                    .mapNotNull { line ->
+                        runCatching {
+                            (
+                                EventDecoderRegistry
+                                    .decode(
+                                        line,
+                                    ).event.op as? JournalOp.Relink
+                            )?.newDoc
+                        }.getOrNull()
+                    }.toList()
+            }
 
     private var syncCalls = 0
 
@@ -731,11 +772,11 @@ class InMemoryLibraryFileSystem(
                 syncCalls > 0 -> Loss.SYNC
                 else -> Loss.OUTSIDE
             }
-        if (Losses.isNoCopy(norm)) return
+        if (isNoCopy(norm, node.bytes)) return
         val hash = sha256Bytes(node.bytes)
         val kept =
             files.any { (path, other) ->
-                path != norm && !(inPlace && other === node) && !Losses.isNoCopy(path) &&
+                path != norm && !(inPlace && other === node) && !isNoCopy(path, other.bytes) &&
                     sha256Bytes(other.bytes) == hash
             }
         val lastAnywhere = !kept && !heldElsewhere(hash, norm)
@@ -750,13 +791,13 @@ class InMemoryLibraryFileSystem(
      */
     var heldElsewhere: (hash: String, path: String) -> Boolean = { _, _ -> false }
 
-    /** Whether one of the library's copies here ([Losses.isNoCopy]), not at [except], holds [hash]'s bytes. */
+    /** Whether one of the library's copies here ([isNoCopy]), not at [except], holds [hash]'s bytes. */
     fun holdsCopy(
         hash: String,
         except: String,
     ): Boolean =
         files.any { (path, node) ->
-            path != except && !Losses.isNoCopy(path) && sha256Bytes(node.bytes) == hash
+            path != except && !isNoCopy(path, node.bytes) && sha256Bytes(node.bytes) == hash
         }
 
     /** Each path the bytes hashing to [hash] were taken from, with that path's history: what a failure shows. */

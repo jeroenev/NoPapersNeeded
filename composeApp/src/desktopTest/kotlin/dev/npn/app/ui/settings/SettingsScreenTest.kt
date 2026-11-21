@@ -51,6 +51,7 @@ class SettingsScreenTest : EnglishLocaleTest() {
                         SettingsScreen(
                             settings = FakeSettingsRepository(),
                             session = FakeLibrarySession(),
+                            outliving = CoroutineScope(Dispatchers.Unconfined),
                             category = null,
                             onOpenCategory = { _, _ -> },
                             onBack = { leftSettings = true },
@@ -96,6 +97,7 @@ class SettingsScreenTest : EnglishLocaleTest() {
                             SettingsScreen(
                                 settings = FakeSettingsRepository(),
                                 session = FakeLibrarySession(),
+                                outliving = CoroutineScope(Dispatchers.Unconfined),
                                 category = null,
                                 onOpenCategory = { _, _ -> },
                                 onBack = {},
@@ -142,6 +144,7 @@ class SettingsScreenTest : EnglishLocaleTest() {
                         SettingsScreen(
                             settings = FakeSettingsRepository(),
                             session = FakeLibrarySession(),
+                            outliving = CoroutineScope(Dispatchers.Unconfined),
                             category = null,
                             onOpenCategory = { id, reveal -> opened += id to reveal },
                             onBack = {},

@@ -7,6 +7,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -65,7 +66,8 @@ internal fun DocumentView(
 ) {
     var shownPage by rememberSaveable(docId) { mutableIntStateOf(0) }
     // What outlives this view (a trash and its Undo) is shown by the library shell, not [snackbar].
-    val notices = LocalDocumentDrafts.current.notices
+    val drafts = LocalDocumentDrafts.current
+    val notices = drafts.notices
 
     @Suppress("ViewModelInjection") // not a parameter's default: a viewmodel built here starts at shownPage
     val vm =
@@ -101,7 +103,13 @@ internal fun DocumentView(
             metadata.document.loadState,
             { compact ->
                 metadata.document.item?.let { item ->
-                    DocActions(item = item, state = ui, actions = vm, compact = compact)
+                    // The document as its draft shows it: an action that reads its metadata (and the
+                    // name a shared copy gets) sees what the panel shows, saved first.
+                    val edited = (drafts.state[docId] ?: DocumentDraft()).overlay(item)
+                    val persisted = rememberUpdatedState(item.doc.fields)
+                    val title = rememberUpdatedState(edited.doc.displayTitle)
+                    val actions = remember(vm, drafts, docId) { SavedFirstActions(vm, drafts, docId, persisted, title) }
+                    DocActions(item = edited, state = ui, actions = actions, compact = compact)
                 }
             },
             { editorModifier ->

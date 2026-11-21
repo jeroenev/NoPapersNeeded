@@ -182,7 +182,8 @@ kept 5 days. ci.yml keeps running only the CI-sized test above, as part of `:cor
   engine installed, so it runs no OCR), `SimWatchedFolder` (a watched inbox folder in memory, swept
   by the real `WatchedFolderImporter`) and in-memory thumbnails.
 - `SimGenerator` picks an `OpKind` by weight, from one seeded stream per replica: the app's writes
-  through the facets, rescans, OCR completions, bake in place, multi-page imports and split, the
+  through the facets (a user's change to a seeded field among them: relabelled or removed), rescans,
+  OCR completions, bake in place, multi-page imports and split, the
   relink of a missing document to other bytes, auto-match rule saves, deletes and toggles (whose
   field sets drive the storage-path rule, which moves documents on every replica), the watched folder
   where the replica has one (new, slowly written, known, overwritten and removed files, and sweeps,
@@ -244,6 +245,10 @@ after six rounds do not converge, which fails the run. Then:
   a live document, a known duplicate, or bytes a relink superseded (or, while doc-undelete is not
   written, a document deleted for good). A trashed document's own bytes back at its path is no
   exception: past the window, the rescan has recorded its restore.
+- Every file in the trash holds the bytes of the document its name names (the hash prefix
+  `NpnPaths.trashPath` gives it): one holding other bytes is a file the trash took under a
+  document's name, hidden from the library for good, since no rescan indexes the trash and neither
+  the purge nor a restore touches it. A name without that prefix (a conflict copy) is not judged.
 - No bake's original lingers: no file under a recovery name holds bytes a relink superseded while
   the live document they became has its own bytes at its path. The bake deletes its original once
   its relink stands, and the rescan one a crash (the simulation's hard crash stops a bake at any
@@ -275,7 +280,9 @@ after six rounds do not converge, which fails the run. Then:
   holds at the same path does not count, since the sync tool carries the change there and takes it
   too. Two kinds of file are none of the library's copies and count neither way: an import's staging
   file (a copy of the import's source) and a bake's temporary file (output no journal names until
-  the bake's relink, which a failed bake discards). Any loss of the library's last copy by the app
+  the bake's relink, which a failed bake discards). A bake's temporary file whose bytes a journal
+  object in the folder names as a relink's target is a copy, though: a bake undone after its relink
+  landed parks the document's bytes there. Any loss of the library's last copy by the app
   is a finding, whatever happened to the bytes before or after, but in its trash (the purge, a
   delete for good) for a document the replicas' journals, taken together, had in the trash at that
   time, or had restored after a purge already took a copy of it: the user restored past the
@@ -284,6 +291,10 @@ after six rounds do not converge, which fails the run. Then:
   index and in a rebuild alike, so the rebuild oracle cannot see it.
 - After a full sync, **convergence**: every replica shows the library the first one shows, by the
   same comparison, a row only one of them remembers for a document neither shows excepted.
+- After a full sync, no seeded field a user relabelled or removed shows its seed's label again on
+  any replica (no step writes a seed's label, so one back took a seed over the user's change).
+- Last, the log and the scope handlers once more: the rebuild oracles log into the same world, and
+  after the run's final rest no step's cheap check follows.
 
 ## Known issues
 

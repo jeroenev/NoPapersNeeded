@@ -43,6 +43,7 @@ enum class OpKind(
     ADD_TAG(4),
     REMOVE_TAG(3),
     DEFINE_FIELD(1),
+    CUSTOMIZE_SEEDED_FIELD(1),
     LIBRARY_SETTING(2),
     STORAGE_PATH_RULE(1),
     SAVED_VIEW(1),
@@ -218,6 +219,7 @@ internal class SimGenerator(
             OpKind.ADD_TAG -> s.live.pickOrNull()?.let(::addTag)
             OpKind.REMOVE_TAG -> s.live.pickOrNull()?.let { removeTag(it, s.tags) }
             OpKind.DEFINE_FIELD -> defineField()
+            OpKind.CUSTOMIZE_SEEDED_FIELD -> customizeSeededField(s)
             OpKind.LIBRARY_SETTING -> librarySetting()
             OpKind.STORAGE_PATH_RULE -> storagePathRule()
             OpKind.SAVED_VIEW -> savedView(s)
@@ -407,6 +409,29 @@ internal class SimGenerator(
         return Planned.Act("define field ${def.key}:${def.type.wire} '${def.label}'") { session ->
             session.fieldRegistry.upsert(def)
             "done"
+        }
+    }
+
+    /**
+     * Relabel one of the well-known fields the library seeds, or remove it: the changes a user makes
+     * to the defaults, which a device joining the library later must not undo with its own seeding.
+     */
+    private fun customizeSeededField(s: Snapshot): Planned.Act? {
+        val def = s.fields.filter { it.key in FieldKeys.WELL_KNOWN }.pickOrNull() ?: return null
+        val world = sim.world
+        return if (random.nextInt(REMOVE_SEEDED_ONE_IN) == 0) {
+            Planned.Act("remove seeded field ${def.key}") { session ->
+                session.fieldRegistry.remove(def.key)
+                world.customizedSeeds += def.key
+                "done"
+            }
+        } else {
+            val label = "${def.key} custom ${random.nextInt(LABELS)}"
+            Planned.Act("relabel seeded field ${def.key} '$label'") { session ->
+                session.fieldRegistry.upsert(def.copy(label = label))
+                world.customizedSeeds += def.key
+                "done"
+            }
         }
     }
 
@@ -833,6 +858,9 @@ private const val DURING = 2
 private const val DURING_MILLIS = 600L
 private const val RETENTION_MAX_DAYS = 60
 private const val LABELS = 5
+
+/** One in how many changes to a seeded field removes it rather than relabels it. */
+private const val REMOVE_SEEDED_ONE_IN = 3
 private const val VIEWS = 3
 private const val NAMED = 12
 private const val PARTIAL = 12

@@ -55,6 +55,7 @@ import dev.npn.app.ui.common.rememberStorageAccess
 import dev.npn.app.ui.detail.LocalDocumentDrafts
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.settings.SettingsRepository
+import kotlinx.coroutines.CoroutineScope
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_settings_search
 import no_papers_needed.composeapp.generated.resources.common_settings_search_no_results
@@ -97,6 +98,7 @@ private val PaneGroupSpacing: Dp = 24.dp
 fun SettingsScreen(
     settings: SettingsRepository,
     session: LibrarySession,
+    outliving: CoroutineScope,
     category: SettingsCategoryId?,
     onOpenCategory: (SettingsCategoryId, revealAdvanced: Boolean) -> Unit,
     onBack: () -> Unit,
@@ -104,7 +106,8 @@ fun SettingsScreen(
     onResumeDraft: (docId: String) -> Unit,
     onAutoMatchRules: () -> Unit,
     revealAdvanced: Boolean = false,
-    vm: SettingsViewModel = viewModel { SettingsViewModel(settings, session, saved = createSavedStateHandle()) },
+    vm: SettingsViewModel =
+        viewModel { SettingsViewModel(settings, session, saved = createSavedStateHandle(), outliving = outliving) },
 ) {
     val paneState by vm.paneState.collectAsStateWithLifecycle()
 

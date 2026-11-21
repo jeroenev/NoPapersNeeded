@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Backup and device-to-device transfer rules for Android 12+: the same exclusions as
+    backup_rules.xml (Android 11), for both. Settings hold the AI endpoint's API key, and each
+    library's device.db holds its cloud connection, assistant chats and queues.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="npn_settings.xml" />
+        <exclude domain="database" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="npn_settings.xml" />
+        <exclude domain="database" path="." />
+    </device-transfer>
+</data-extraction-rules>

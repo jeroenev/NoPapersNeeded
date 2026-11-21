@@ -269,17 +269,12 @@ internal object LibraryAiTools {
 
         override suspend fun execute(args: Args): String {
             if (args.query.isBlank()) return "Error: query must not be blank."
-            val hits = ftsDao.search(FtsQuery.sanitize(args.query))
-            val docs = documentDao.getByDocIds(hits.map { it.docId }).associateBy { it.docId }
-            val lines =
-                hits
-                    .asSequence()
-                    .mapNotNull { hit ->
-                        docs[hit.docId]
-                            ?.takeIf { it.isLive }
-                            ?.let { docLine(it, hit.snippet) }
-                    }.take(MAX_SEARCH_RESULTS)
-                    .toList()
+            val match = FtsQuery.sanitize(args.query)
+            val hits = ftsDao.search(match)
+            val docs = documentDao.getByDocIds(hits).associateBy { it.docId }
+            val shown = hits.mapNotNull { docs[it]?.takeIf { doc -> doc.isLive } }.take(MAX_SEARCH_RESULTS)
+            val snippets = ftsDao.snippetsFor(match, shown.map { it.docId })
+            val lines = shown.map { docLine(it, snippets[it.docId]) }
             return if (lines.isEmpty()) {
                 "No documents match \"${args.query}\". Try fewer or different terms."
             } else {

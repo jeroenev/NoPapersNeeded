@@ -5,10 +5,22 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
+import java.net.ServerSocket
+import java.net.Socket
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 
@@ -117,4 +129,50 @@ class RcloneDaemonTest {
             }
             Unit
         }
+
+    /**
+     * A cancelled call ends by closing its connection, which fails the exchange with an IOException:
+     * that must not read as a dead process and restart the one process every other call shares.
+     */
+    @Test
+    fun aCancelledCallLeavesTheProcessRunning() =
+        runBlocking {
+            if (!requireRclone()) return@runBlocking
+            // A server that takes the connection and never answers, so a listing on it hangs.
+            ServerSocket(0).use { silent ->
+                val held = AtomicReference<Socket?>()
+                val acceptor = Thread { runCatching { held.set(silent.accept()) } }.apply { start() }
+                RcloneDaemon(RcloneLaunch(binary)).use { daemon ->
+                    val before =
+                        daemon
+                            .call("core/pid")["pid"]
+                            ?.jsonPrimitive
+                            ?.contentOrNull
+                            .shouldNotBeNull()
+                    val hanging =
+                        async(Dispatchers.Default, start = CoroutineStart.UNDISPATCHED) {
+                            daemon.call(
+                                "operations/list",
+                                buildJsonObject {
+                                    put("fs", JsonPrimitive(":http,url='http://127.0.0.1:${silent.localPort}/':"))
+                                    put("remote", JsonPrimitive(""))
+                                },
+                            )
+                        }
+                    withTimeout(TimeUnit.SECONDS.toMillis(WAIT_SECONDS)) {
+                        while (held.get() == null) delay(POLL_MS)
+                    }
+                    hanging.cancelAndJoin()
+
+                    daemon.call("core/pid")["pid"]?.jsonPrimitive?.contentOrNull shouldBe before
+                }
+                held.get()?.close()
+                acceptor.join()
+            }
+        }
+
+    private companion object {
+        const val WAIT_SECONDS = 20L
+        const val POLL_MS = 20L
+    }
 }

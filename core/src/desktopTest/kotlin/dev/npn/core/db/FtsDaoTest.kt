@@ -3,9 +3,9 @@ package dev.npn.core.db
 import dev.npn.core.app.DocumentRepositoryImpl
 import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -108,10 +108,24 @@ class FtsDaoTest {
                     content = "the total amount due for your electricity usage this month",
                 ),
             )
-            val hits = fts.search("electricity")
-            hits.size shouldBe 1
-            hits.first().docId shouldBe "a".repeat(64)
-            hits.first().snippet.lowercase() shouldContain "\u0001electricity\u0002"
+            fts.search("electricity") shouldContainExactly listOf("a".repeat(64))
+            val snippet = fts.snippetsFor("electricity", listOf("a".repeat(64))).getValue("a".repeat(64))
+            snippet.orEmpty().lowercase() shouldContain "\u0001electricity\u0002"
+        }
+
+    /** Snippets come only for the documents asked about, and only for those the query matches. */
+    @Test
+    fun snippetsAreBuiltForTheDocumentsAskedAbout() =
+        runTest {
+            val fts = db.ftsDao()
+            for ((id, text) in listOf("a" to "electricity bill", "b" to "electricity meter", "c" to "water bill")) {
+                fts.upsertContent(
+                    FtsRows.row(id.repeat(64), "$id.pdf", tags = emptyList(), fields = emptyMap(), content = text),
+                )
+            }
+
+            fts.search("electricity") shouldContainExactlyInAnyOrder listOf("a".repeat(64), "b".repeat(64))
+            fts.snippetsFor("electricity", listOf("b".repeat(64), "c".repeat(64))).keys shouldBe setOf("b".repeat(64))
         }
 
     @Test

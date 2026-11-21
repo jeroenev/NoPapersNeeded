@@ -1,6 +1,7 @@
 package dev.npn.core.fs
 
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
@@ -63,6 +64,39 @@ class WatchDirsTest {
         }
 
     @Test
+    fun aCollectorThatFallsBehindLosesNoEvent() =
+        runBlocking {
+            withTimeout(TIMEOUT_MILLIS) {
+                val gate = CompletableDeferred<Unit>()
+                val seen = Channel<Path?>(Channel.UNLIMITED)
+                var registered = false
+                val collector =
+                    launch {
+                        watchDirs(root, recursive = false, kinds = arrayOf(ENTRY_CREATE)).collect {
+                            // The first event proves the watch is up; every later one waits, as a
+                            // collector busy with a rescan would.
+                            if (registered) gate.await()
+                            registered = true
+                            seen.send(it)
+                        }
+                    }
+                try {
+                    var probe = 0
+                    while (withTimeoutOrNull(PROBE_MILLIS) { seen.receive() } == null) {
+                        Files.write(root.resolve("probe-${probe++}"), byteArrayOf(1))
+                    }
+                    val backlog = List(BACKLOG) { Files.write(root.resolve("backlog-$it.pdf"), byteArrayOf(1)) }
+                    delay(QUIET_MILLIS)
+                    gate.complete(Unit)
+                    val missing = backlog.toMutableSet()
+                    while (missing.isNotEmpty()) missing.remove(seen.receive() ?: error("the watcher overflowed"))
+                } finally {
+                    collector.cancel()
+                }
+            }
+        }
+
+    @Test
     fun aMissingDirectoryGoesQuietInsteadOfFailing() {
         val absent = watchDirs(root.resolve("absent"), recursive = true)
         val first = runBlocking { withTimeoutOrNull(QUIET_MILLIS) { absent.first() } }
@@ -111,5 +145,6 @@ class WatchDirsTest {
         const val DIRECTORIES = 500
         const val STOPS = 40
         const val STOP_SPREAD_MILLIS = 8L
+        const val BACKLOG = 300
     }
 }
