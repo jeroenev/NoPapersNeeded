@@ -17,13 +17,14 @@ Tools: Xvfb, xdotool and ImageMagick (`driving-the-desktop-app`), `uv` (OCR and 
 | File | Size | Shows |
 |---|---|---|
 | `design/screenshots/library.png` | 2560×1600 | Library grid, sorted by document date |
-| `search.png` | 2560×1600 | A full-text query with several tagged hits (e.g. `invoice`) |
+| `search.png` | 2560×1040 | A full-text query with several tagged hits (e.g. `October`) |
 | `preview.png` | 2560×1600 | A document open in the side preview |
 | `details.png` | 2560×1600 | Details tab of a curated document (correspondent, type, date, coloured tag) |
 | `filters.png` | 2560×1600 | Filter sheet with two tags selected |
-| `tags.png` | 2560×1600 | Tags screen: nested, colour-coded tree |
-| `ai-settings.png` | 2560×1600 | Settings → Assistant, enabled, provider + model filled in |
 | `phone-library.png`, `phone-details.png`, `phone-tags.png` | 824×1800 | Same library on a phone |
+
+`search.png` is cropped to the content (one result row plus its tags), so it is shorter than
+the other 2560-wide files.
 
 Check current sizes with `identify design/screenshots/*.png` and match them. `README.md`
 ("A closer look", "On your phone") and the SVGs in `design/play-store/src/` reference these
@@ -56,7 +57,14 @@ scale rules in `driving-the-desktop-app`). The 2560×1600 files are 1280×800 dp
 stretched to the README is visibly blurry.
 
 - Sort: the sort chip under the search field → Document date, Descending.
-- Filters: the Filters icon in the top bar (hover the icons for tooltips to find it).
+- Filters: the Filters icon in the top bar (hover the icons for tooltips to find it). A tag
+  pair such as `Bills.Energy` + `Bills.Water` with Match any applies and shows the union; the
+  demo library gives each document a single tag, so Match all finds nothing.
+- Details is the one shot taken in the **expanded** document view (the ↗ in the pane header),
+  not the side pane: at 2× the side pane is only 800 dp tall and the form needs more, so its
+  Tags section falls below the fold. In the expanded view, drag the divider between the page
+  and the form left until the hints wrap shorter; then Title…Tags fit without scrolling.
+  Check that the tag chip is not cut by the bottom edge.
 - AI settings: Settings → Assistant → flip "Turn on the assistant" once, pick a provider,
   type a model id (e.g. `gpt-4o-mini`); leave the API key empty. Settings' Library pane shows
   the sandbox path — don't capture that pane.
@@ -70,6 +78,12 @@ No phone available: the desktop app switches to the same shared phone layout in 
 window. Start the sandbox with `NPN_SIZE=824x1800` **and** `NPN_JAVA_OPTS='-Dsun.java2d.uiScale=2.0'`
 (824×1800 device pixels = 412×900 dp, the size in the table), then capture with the helper.
 Without the 2× option the same window is a desktop-wide layout.
+
+Prefer that fallback even when the phone is connected: on the developer's phone the status
+bar can no longer be hidden (`policy_control` and System UI demo mode are ignored), so a
+native capture is 1080×2376 with their notification icons in the bar, and cropping the bars
+leaves 824×1694 — short of the 824×1800 the Play Store SVGs expect without stretching. The
+fallback reproduces the phone layout at exactly the right size with no system bars.
 
 Record the current library from More → Settings → Library. Create a fresh directory on the
 selected device and copy the fixture into it:
