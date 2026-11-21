@@ -1,0 +1,3 @@
+interface:
+  display_name: "Triaging CI"
+  short_description: "Diagnose and fix a failing GitHub Actions run"

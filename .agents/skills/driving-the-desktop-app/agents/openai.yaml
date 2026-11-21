@@ -1,0 +1,3 @@
+interface:
+  display_name: "Driving the Desktop App"
+  short_description: "Run and drive the desktop app in an isolated sandbox"

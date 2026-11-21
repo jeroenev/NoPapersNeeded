@@ -1,0 +1,3 @@
+interface:
+  display_name: "Testing on Android"
+  short_description: "Deploy to a phone or emulator, run device tests, read logcat"
