@@ -75,17 +75,19 @@ publication primitive refuses the library. They also check that relinked bytes c
 with the relink chain's final target in the folder, that a replica joining late with an empty
 folder ends up showing what the others show, and that a seed replays the same virtual timeline.
 
-## Scheduled runs
+## Long runs
 
-`.github/workflows/simulation.yml` runs the simulation nightly on fresh seeds (each night the day's
-block of `NIGHTLY_SEEDS` from 1000 on, keyed on the date, so it never repeats CI's seeds 1..10 and a
-manual run does not shift it), and on demand
-with `seeds`, `steps` and `first_seed` inputs. `.github/scripts/simulation-seeds.sh` picks the seeds.
+`.github/workflows/simulation.yml` runs the simulation long, on demand only: nothing schedules it
+and no push or release waits for it. Start it by hand (`gh workflow run simulation.yml`, with
+`-f seeds=`, `-f steps=` and `-f first_seed=` to change the defaults) after a change to the session,
+index, journal, file system or sync code. With `first_seed` empty it takes the day's block of seeds
+from 1000 on, keyed on the date, so it never repeats CI's seeds 1..10 and a run on a later day
+covers fresh ones. `.github/scripts/simulation-seeds.sh` picks the seeds.
 A seed of 400 steps costs about 9.6 s on a laptop core, and the eight shards run on eight cores at
 that speed each (400 seeds took 9 minutes). A two-core hosted runner gets one test JVM, so at an
-assumed 1.5 times the laptop's cost per seed, about 15 s, the nightly 60 seeds of 400 steps take about
-fifteen minutes of simulation, under a 30-minute step timeout and a 40-minute job timeout: some 20
-Actions minutes a night with checkout and the build, about 600 a month. The workflow's `--tests`
+assumed 1.5 times the laptop's cost per seed, about 15 s, the default 60 seeds of 400 steps take
+about fifteen minutes of simulation, under a 30-minute step timeout and a 40-minute job timeout. A
+long local run (AGENTS.md, "Commands") is faster on a machine with more cores. The workflow's `--tests`
 filter must name the shards, `dev.npn.core.sim.LibrarySimulationTest*`: the exact class name
 matches nothing since the seeds were dealt over eight classes, and Gradle fails a filter that
 matches no test. When a seed fails, the run uploads every seed's trace and the test report as an artifact

@@ -135,9 +135,11 @@ modules also lint their own Android and desktop code as part of `check`.
 `./gradlew checkFieldTypeBranches` (also part of `check`) keeps document fields registry data: it
 fails on code that branches on a `FieldType` constant outside the few files allowed to (canonical
 form and the per-type UI controls, listed in `build.gradle.kts`).
-Run `mise hooks-install` once per clone to enable the pre-commit formatting, source-only
-detekt, localization, FieldType and fast-test checks; the hook never formats or stages files. Commit messages are
-prefixed with the current branch name when needed.
+Run `mise hooks-install` once per clone to enable the hooks. The pre-commit hook checks
+formatting, source-only detekt, localization and FieldType branches, which takes seconds; it never
+formats or stages files. The pre-push hook runs the core and composeApp desktop tests without the
+library simulation's seeds (about two minutes after a change to core; `git push --no-verify` skips
+it). Commit messages are prefixed with the current branch name when needed.
 
 ### Tests
 

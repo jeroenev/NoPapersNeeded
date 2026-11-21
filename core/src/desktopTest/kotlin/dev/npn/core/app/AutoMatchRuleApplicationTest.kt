@@ -1,5 +1,6 @@
 package dev.npn.core.app
 
+import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.PendingOp
@@ -109,8 +110,10 @@ class AutoMatchRuleApplicationTest {
         appSessionTest { rig ->
             rig.session.start()
             rig.session.rules.save(INVOICES)
-            rig.writePdf("inv.pdf", PdfFixtures.embeddedTextPdf(TEXT))
-            val id = rig.docId("inv.pdf")
+            val pdf = PdfFixtures.embeddedTextPdf(TEXT)
+            val id = sha256Bytes(pdf)
+            // The sidecar is in place before the file: the folder watch is running, and a PDF it saw
+            // alone would have its embedded text read by this device, which does run the rules.
             val sidecar =
                 OcrSidecar(
                     doc = id,
@@ -125,6 +128,7 @@ class AutoMatchRuleApplicationTest {
                 OcrSidecarName.writerKey("device-two", OcrEngineId.EMBEDDED.column),
                 OcrSidecarCodec.encode(sidecar),
             )
+            rig.writePdf("inv.pdf", pdf)
             val objects = rig.journalObjectCount()
 
             rig.session.rescan()

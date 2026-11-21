@@ -102,7 +102,7 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   iterating (never for a release). Desktop packaging downloads the pinned rclone release
   (`:desktopApp:downloadRclone`, hash-pinned) into the app image.
 - CI (`.github/workflows/ci.yml`) runs, with `+` joining one Gradle invocation's tasks:
-  shellcheck (hooks, mise tasks, `.github/scripts`) → spotlessCheck + checkLocalization +
+  shellcheck (hooks, mise tasks, `.github/scripts`) → actionlint → spotlessCheck + checkLocalization +
   checkFieldTypeBranches + detekt → tests with coverage (kover drives both desktop test suites) +
   Android-target host tests + buildSrc tests and detekt + desktopApp tests → `compileDeviceTests`
   (the root task that builds every device test, and so all Android code, without a device; add a
@@ -111,8 +111,12 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   public, so standard runners and artifact storage cost nothing: pull requests run all of `ci.yml`,
   APK and packaging included, and every run uploads the debug APK, the AppImage and the coverage
   report (kept a week). The Windows build (`windows.yml`) and CodeQL also run on pull requests and
-  pushes to `main`, and weekly; mutation testing (`mutation.yml`) runs on demand only, as a run
-  takes hours, and the long library simulation (`simulation.yml`) nightly. The `main` ruleset
+  pushes to `main`, and weekly. Mutation testing (`mutation.yml`, hours) and the long library
+  simulation (`simulation.yml`, up to half an hour) run on demand only: never schedule them or make
+  a push or release wait on them. Start `gh workflow run simulation.yml` after a change to the
+  session, index, journal, file system or sync code, and only then. `actionlint` checks the
+  workflows in `ci.yml`, and `ci.yml` has no paths filter: its required check must report on
+  every pull request, and `mise release` needs a passing run on the `main` commit. The `main` ruleset
   requires `ci.yml`'s `build` check: renaming that job means updating the ruleset. Fork pull
   requests wait for a maintainer's approval before any workflow runs. `mise release` refuses
   unless CI passed on the `main` commit it bumps; the tagged commit changes only `npn.version`,
@@ -243,8 +247,8 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   a fault or an invariant in the library simulation (docs/SIMULATION.md). Add an example test only
   when the simulation cannot express the bug.
 - Stability over churn in `core.app`, `core.index` and `core.journal`: a change there is a bug fix,
-  a new operation, or a refactor the simulation is already green on (the nightly run,
-  `simulation.yml`, over the long seed range). A rename or restructuring with no behaviour behind
+  a new operation, or a refactor the simulation is already green on (a long run,
+  `simulation.yml` or locally, over fresh seeds). A rename or restructuring with no behaviour behind
   it waits until then; a review round in those packages reports what the simulation or an
   invariant would have caught, not style.
 - Done is measured, not reviewed: the long simulation run passes with `KnownIssues` empty, and the

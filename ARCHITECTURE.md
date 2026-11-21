@@ -896,7 +896,7 @@ DEVELOPMENT.md.
 |---|---|
 | `core/src/commonTest` | Tests of platform-agnostic core code, compiled for both targets. `FoldConvergencePropertyTest` lives here. |
 | `core/src/desktopTest` | The bulk of core's tests, on the desktop JVM, including every test over a real session. |
-| `core/src/desktopTest/.../sim` | The library simulation (docs/SIMULATION.md): two to four replicas of one library, real sessions over in-memory folders with a seeded sync tool between them, on virtual time, checked against invariants, a rebuild of each replica's index and each other. CI runs ten seeds in `:core:desktopTest`; `simulation.yml` runs fresh seeds nightly. |
+| `core/src/desktopTest/.../sim` | The library simulation (docs/SIMULATION.md): two to four replicas of one library, real sessions over in-memory folders with a seeded sync tool between them, on virtual time, checked against invariants, a rebuild of each replica's index and each other. CI runs ten seeds in `:core:desktopTest`; `simulation.yml` runs a long run of fresh seeds on demand. |
 | `core/src/androidHostTest` | Tests of `androidMain`-only code that needs no framework implementation. |
 | `composeApp/src/commonTest` | Viewmodel tests over `core-testing`'s fakes, asserting on `UiText`. |
 | `desktopApp/src/test`, `buildSrc/src/test` | The single-instance lock; the build guards. |

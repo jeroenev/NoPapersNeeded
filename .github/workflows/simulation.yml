@@ -1,12 +1,11 @@
 name: Library simulation
 
 # The deterministic simulation of several replicas sharing a library through a sync tool
-# (docs/SIMULATION.md), run long. ci.yml runs its CI-sized seeds on every push; this runs about ten
-# minutes of fresh seeds a night, and any seeds on demand. The run is time-boxed, and the traces
-# upload only when a seed fails: a passing run's traces show nothing.
+# (docs/SIMULATION.md), run long. ci.yml runs its CI-sized seeds on every push; this runs on demand
+# only, never on a schedule or a push: start it by hand after a change to the session, index,
+# journal, file system or sync code. A long run takes up to half an hour. The run is time-boxed,
+# and the traces upload only when a seed fails: a passing run's traces show nothing.
 on:
-  schedule:
-    - cron: "23 2 * * *"
   workflow_dispatch:
     inputs:
       seeds:
@@ -18,7 +17,7 @@ on:
         required: false
         default: "400"
       first_seed:
-        description: The first seed (empty for the block of seeds tonight's nightly run takes)
+        description: The first seed (empty for a fresh block of seeds, picked by the date)
         required: false
         default: ""
 
@@ -28,11 +27,6 @@ permissions:
 concurrency:
   group: simulation-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
-env:
-  # About fifteen minutes on an ubuntu-latest runner at the cost measured in docs/SIMULATION.md.
-  NIGHTLY_SEEDS: "60"
-  NIGHTLY_STEPS: "400"
 
 jobs:
   simulate:

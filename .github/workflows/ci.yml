@@ -3,14 +3,12 @@ name: CI
 # Checks, tests, compiles, and builds the debug APK and the AppImage, on pull requests and on pushes
 # to main alike; every run uploads both, so a pull request's build can be tried before it merges.
 # The main ruleset requires this job's check (`build`). Windows packaging lives in windows.yml.
+# No paths filter: the ruleset's required check has to report on every pull request, docs-only ones
+# included, and `mise release` needs a passing run on the main commit it bumps.
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - "**.md"
   pull_request:
-    paths-ignore:
-      - "**.md"
   workflow_dispatch:
 
 permissions:
@@ -63,6 +61,17 @@ jobs:
 
       - name: Shell scripts
         run: shellcheck .githooks/* .mise/tasks/* .github/scripts/*
+
+      # actionlint also shellchecks each workflow's run steps.
+      - name: Workflows
+        run: |
+          curl --fail --location --silent --show-error \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz \
+            --output /tmp/actionlint.tar.gz
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  /tmp/actionlint.tar.gz" \
+            | sha256sum --check
+          tar --extract --gzip --file /tmp/actionlint.tar.gz --directory /tmp actionlint
+          /tmp/actionlint -color
 
       # Grouped into few Gradle invocations: each one pays configuration again.
       - name: Formatting, localization and FieldType guards, and static analysis

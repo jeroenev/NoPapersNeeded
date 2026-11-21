@@ -17,8 +17,8 @@ Thanks for your interest in No Papers Needed. Bug reports, ideas and pull reques
 - [AGENTS.md](AGENTS.md): the rules the codebase keeps (architecture invariants, conventions,
   lint). They apply to every change, whether or not an AI agent wrote it.
 
-Install the repository's Git hooks once with `mise hooks-install`. The pre-commit hook runs
-formatting, lint and the desktop tests.
+Install the repository's Git hooks once with `mise hooks-install`. The pre-commit hook checks
+formatting, lint and localization in seconds; the pre-push hook runs the desktop tests.
 
 ## Pull requests
 

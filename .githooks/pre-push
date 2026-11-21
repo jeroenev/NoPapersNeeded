@@ -1,0 +1,10 @@
+#!/bin/sh
+# The desktop test suites, about two minutes after a change to core. The library simulation's seeds
+# are left out (CI runs its CI-sized seeds, and a long run is started by hand: docs/SIMULATION.md).
+# `git push --no-verify` skips the hook.
+set -eu
+
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+./gradlew :core:desktopTest :composeApp:desktopTest -Dnpn.sim.seeds=0

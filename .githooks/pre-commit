@@ -1,7 +1,9 @@
 #!/bin/sh
+# The fast checks, which take seconds once the Gradle daemon is warm. The tests run before a push
+# (pre-push), and everything else in CI.
 set -eu
 
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 
-./gradlew spotlessCheck detekt checkLocalization checkFieldTypeBranches :core:desktopTest :composeApp:desktopTest
+./gradlew spotlessCheck detekt checkLocalization checkFieldTypeBranches
