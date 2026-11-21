@@ -2,8 +2,8 @@ name: Library simulation
 
 # The deterministic simulation of several replicas sharing a library through a sync tool
 # (docs/SIMULATION.md), run long. ci.yml runs its CI-sized seeds on every push; this runs about ten
-# minutes of fresh seeds a night, and any seeds on demand. Actions minutes and artifact storage are
-# metered on this private repo: the run is time-boxed, and the traces upload only when a seed fails.
+# minutes of fresh seeds a night, and any seeds on demand. The run is time-boxed, and the traces
+# upload only when a seed fails: a passing run's traces show nothing.
 on:
   schedule:
     - cron: "23 2 * * *"

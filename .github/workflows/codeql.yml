@@ -1,13 +1,22 @@
 name: CodeQL
 
-# A full build plus analysis takes ~17 minutes, so this runs weekly and on demand only.
+# A full build plus analysis takes ~17 minutes. It runs on pull requests and pushes to main, and
+# weekly, so new CodeQL queries reach code that has not changed. Results go to the repository's
+# code scanning alerts (the Security tab).
 on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+  pull_request:
+    paths-ignore:
+      - "**.md"
   schedule:
     - cron: "23 4 * * 1"
   workflow_dispatch:
 
 permissions:
-  actions: read # the CodeQL action reads its own workflow run; required on private repos
+  actions: read # the CodeQL action reads its own workflow run
   contents: read
   security-events: write
 
@@ -46,25 +55,14 @@ jobs:
       - name: Compile Android and desktop code
         run: ./gradlew :androidApp:compileDebugKotlin :desktopApp:compileKotlin
 
-      # The private-repo runner has ~8 GB. Leftover Gradle and Kotlin daemons (4 GB + 3 GB heaps)
-      # plus CodeQL's default RAM budget exhaust it, and the runner gets killed mid-analysis.
+      # Leftover Gradle and Kotlin daemons (4 GB + 3 GB heaps) would hold memory CodeQL's analysis
+      # wants, which sizes its RAM budget from the runner's total.
       - name: Stop build daemons
         run: |
           ./gradlew --stop
           pkill -f KotlinCompileDaemon || true
 
-      # Code scanning is not enabled on this private repo (it needs GitHub Code Security), so
-      # results are kept as an artifact instead of uploaded.
       - name: Analyze
         uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
-          ram: 5500
-          upload: never
-          output: sarif-results
-
-      - name: Upload SARIF
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: codeql-sarif
-          path: sarif-results
-          retention-days: 7
+          category: "/language:java-kotlin"

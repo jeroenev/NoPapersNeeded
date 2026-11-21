@@ -107,12 +107,14 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   Android-target host tests + buildSrc tests and detekt + desktopApp tests → `compileDeviceTests`
   (the root task that builds every device test, and so all Android code, without a device; add a
   new module's there) → `detektTyped` → `:androidApp:lintDebug` → committed Room schema exports →
-  assembleDebug + packageAppImage. Match that order when verifying larger changes. Actions
-  minutes and artifact storage are metered (private repo): PRs stop before the APK and packaging,
-  which run on `main` only, the coverage report uploads only on `main` or after a failure, binaries
-  upload only on a manual run, and the Windows build (`windows.yml`) and CodeQL run weekly or on
-  demand, mutation testing (`mutation.yml`) on demand only, and the long library simulation
-  (`simulation.yml`) nightly. Keep it that way. `mise release` refuses
+  assembleDebug + packageAppImage. Match that order when verifying larger changes. The repo is
+  public, so standard runners and artifact storage cost nothing: pull requests run all of `ci.yml`,
+  APK and packaging included, and every run uploads the debug APK, the AppImage and the coverage
+  report (kept a week). The Windows build (`windows.yml`) and CodeQL also run on pull requests and
+  pushes to `main`, and weekly; mutation testing (`mutation.yml`) runs on demand only, as a run
+  takes hours, and the long library simulation (`simulation.yml`) nightly. The `main` ruleset
+  requires `ci.yml`'s `build` check: renaming that job means updating the ruleset. Fork pull
+  requests wait for a maintainer's approval before any workflow runs. `mise release` refuses
   unless CI passed on the `main` commit it bumps; the tagged commit changes only `npn.version`,
   and `release.yml` builds it without waiting for CI.
   Its draft job builds nothing unless CI passed on the tagged commit, or the tag only bumps

@@ -1,8 +1,8 @@
 name: CI
 
-# Actions minutes and artifact storage are metered on this private repo, so this workflow keeps
-# per-push work to what catches breakage: PRs check, test and compile; pushes to main also package;
-# binaries are only uploaded on a manual run. Windows packaging lives in windows.yml.
+# Checks, tests, compiles, and builds the debug APK and the AppImage, on pull requests and on pushes
+# to main alike; every run uploads both, so a pull request's build can be tried before it merges.
+# The main ruleset requires this job's check (`build`). Windows packaging lives in windows.yml.
 on:
   push:
     branches: [main]
@@ -40,18 +40,16 @@ jobs:
           cache-provider: basic
 
       # The bundled rclone is cross-compiled with Go and the NDK into the APK, which only the
-      # assembleDebug below merges (compileDeviceTests and lintDebug never package jniLibs), so
-      # pull requests, which stop before the APK, skip all three steps. Caching Go's module and
-      # build caches keeps the build from downloading rclone's whole dependency tree on every run.
+      # assembleDebug below merges (compileDeviceTests and lintDebug never package jniLibs). Caching
+      # Go's module and build caches keeps the build from downloading rclone's whole dependency tree
+      # on every run.
       - name: Set up Go
-        if: github.event_name != 'pull_request'
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version: "1.26.x"
           cache: false
 
       - name: Cache Go build and module caches
-        if: github.event_name != 'pull_request'
         uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: |
@@ -61,7 +59,6 @@ jobs:
           restore-keys: rclone-${{ runner.os }}-
 
       - name: Install Android NDK (for the bundled rclone)
-        if: github.event_name != 'pull_request'
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;29.0.14206865"
 
       - name: Shell scripts
@@ -89,9 +86,9 @@ jobs:
       - name: Compile and device tests
         run: ./gradlew compileDeviceTests
 
-      # detektTyped is detekt with type resolution over the compiled classpaths. The runner has
-      # ~8 GB, so the Kotlin daemon left over from compiling is stopped first, and typed detekt and
-      # Android lint each get their own invocation rather than sharing one.
+      # detektTyped is detekt with type resolution over the compiled classpaths. Both it and Android
+      # lint need a large heap, so the Kotlin daemon left over from compiling is stopped first, and
+      # each gets its own invocation rather than sharing one.
       - name: Typed static analysis
         run: |
           pkill -f KotlinCompileDaemon || true
@@ -115,14 +112,12 @@ jobs:
 
       # packageAppImage builds the desktop jar on the way.
       - name: Assemble APK and package desktop app
-        if: github.event_name != 'pull_request'
         run: >-
           ./gradlew
           :androidApp:assembleDebug
           :desktopApp:packageAppImage
 
       - name: Upload debug APK
-        if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: androidApp-debug
@@ -130,7 +125,6 @@ jobs:
           retention-days: 7
 
       - name: Upload AppImage
-        if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: no-papers-needed-appimage
@@ -150,9 +144,8 @@ jobs:
             androidApp/build/reports/lint-results-debug.html
           retention-days: 7
 
-      # Artifact storage is metered: coverage is kept for main, and for a run that failed.
       - name: Upload coverage reports
-        if: failure() || (success() && github.ref == 'refs/heads/main')
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: kover-coverage-reports
