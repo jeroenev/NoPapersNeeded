@@ -67,6 +67,44 @@ class FieldSeedUpgradeTest {
         }
 
     /**
+     * A device that opens the library before another device's journal reached it sees no seeding
+     * marker and seeds too, later than the other device's user changed the fields. Its seeds lose
+     * to those changes once they arrive, rather than undoing them on every device.
+     */
+    @Test
+    fun aDeviceSeedingBeforeAnotherDevicesChangesArriveDoesNotUndoThem() =
+        runTest {
+            val other = rig.writer("other-device")
+            val relabelled = seeds.getValue(FieldKeys.TITLE).copy(label = "Onderwerp")
+            val written =
+                listOf(
+                    other.commit(
+                        seeds.values.map { PendingOp.fieldDefSet(it) } +
+                            PendingOp.settingSet(FieldKeys.SEEDED_SETTING, FieldKeys.SEED_VERSION.toString()),
+                    ),
+                    other.commit(
+                        listOf(PendingOp.fieldDefSet(relabelled), PendingOp.fieldDefRemove(FieldKeys.DOC_DATE)),
+                    ),
+                )
+            // Not here yet: the sync tool brings them only after this device opened the library.
+            val arriving = written.associate { it.relPath to rig.fs.readBytes(it.relPath) }
+            arriving.keys.forEach { rig.fs.delete(it) }
+            rig.clock.advance(MINUTE)
+            val coordinator = rig.coordinator()
+            coordinator.refreshState()
+            coordinator.seedFieldRegistryIfNeeded(FieldKeys.seedDefinitions())
+            registry().getValue(FieldKeys.TITLE) shouldBe seeds.getValue(FieldKeys.TITLE)
+
+            arriving.forEach { (path, bytes) -> rig.fs.writeBytesOnce(path, bytes) }
+            coordinator.reconcileMetadata()
+
+            val registry = registry()
+            registry.getValue(FieldKeys.TITLE) shouldBe relabelled
+            registry.containsKey(FieldKeys.DOC_DATE) shouldBe false
+            coordinator.setting(FieldKeys.SEEDED_SETTING) shouldBe FieldKeys.SEED_VERSION.toString()
+        }
+
+    /**
      * An older build's label edit writes a newer title definition without the per-document flag, as
      * it drops every key it does not know. The next open gives the flag back and keeps the edit; an
      * open that finds the flag in place writes nothing.
@@ -107,4 +145,8 @@ class FieldSeedUpgradeTest {
             registry().getValue(FieldKeys.TITLE).sharesVocabulary shouldBe false
             coordinator.setting(FieldKeys.SEEDED_SETTING) shouldBe FieldKeys.SEED_VERSION.toString()
         }
+
+    private companion object {
+        const val MINUTE = 60_000L
+    }
 }
