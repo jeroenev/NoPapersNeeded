@@ -29,7 +29,7 @@ design, build/packaging/release details, and the library folder layout.
   Android shares it and minSdk 30 lacks newer library APIs. Raising `jdk` never raises the
   target; raising the target is a separate, Android-driven decision. Compiler warnings are
   errors in every compilation (`npn.toolchain`, and buildSrc's own build); fix the warning, or pass
-  `-Pnpn.werror=false` locally while experimenting. Tests already opt in to `ExperimentalCoroutinesApi`.
+  `-Pnpn.werror=false` locally while experimenting.
 - `buildSrc` — build logic: every task class the build scripts register (packaging, `BuildInfo`,
   `checkLocalization`), and convention plugins that read the catalog: `npn.toolchain` (the JDK and
   bytecode target, applied by every module, plus the SDK levels of `androidApp` and
@@ -56,10 +56,15 @@ design, build/packaging/release details, and the library folder layout.
 mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Key ones:
 
 - Tests: `./gradlew :core:desktopTest` and `./gradlew :composeApp:desktopTest`
-  (viewmodel tests). `mise test-fast` runs both; `mise test` runs only core.
-  Every `:core:desktopTest` run forks up to half the cores' worth of test JVMs (at most eight,
-  capped by `--max-workers`), each with its own heap; on a laptop short of memory pass a lower
-  `--max-workers`.
+  (viewmodel tests). `mise test-fast` runs both; `mise test` runs only core. Tests already opt
+  in to `ExperimentalCoroutinesApi`.
+- Memory: run one Gradle build at a time across local worktrees. Every `:core:desktopTest` run
+  forks up to half the cores' worth of test JVMs (at most eight, capped by `--max-workers`), each
+  with its own heap. Exit 137 is a SIGKILL: check memory pressure and the daemons
+  (`./gradlew --status`), then pass a lower `--max-workers`.
+- For long builds, simulations and mutation runs, report the command and log path. Check the
+  running process and log for progress before restarting. For work spanning sessions, keep
+  a checkpoint under `docs/` with completed stages and the next step.
 - Same suites on the Android target: `./gradlew :core:testAndroidHostTest
   :composeApp:testAndroidHostTest`. Both are in `check`/`allTests`, so `mise test-all` and
   `mise check` cover them; `mise test-fast` deliberately does not.
@@ -84,13 +89,17 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   `core/build/reports/pitest/`; how to read a report in `docs/MUTATION_TESTING.md`. Never in
   `check` or `ci.yml`: `mutation.yml` runs it on demand.
 - Formatting and lint: `./gradlew spotlessCheck detekt`, then `./gradlew detektTyped` (see
-  Detekt below; it compiles first, so keep it a separate invocation from spotless).
+  Detekt below; it compiles first, so keep it a separate invocation from spotless). The pre-commit
+  hook runs `spotlessCheck detekt checkLocalization checkFieldTypeBranches`; run that set yourself
+  when the hook is not installed. A later "apply spotless" or "fix detekt" commit means the earlier
+  commit was not ready.
 - Android lint: `./gradlew :androidApp:lintDebug` lints the app and, through `checkDependencies`,
   core's and composeApp's Android code. Errors fail it; there is no baseline, and
   `config/lint/lint.xml` is the one configuration.
-- Fast UI iteration: `mise hot` (Compose Hot Reload on desktop). Android-only paths
-  (scanner, share intents, WorkManager) need a device: `mise deploy`. Without a phone,
-  `mise emulator --headless [avd]` boots an Android emulator and waits for it; then
+- Fast UI iteration: `mise hot` (Compose Hot Reload on desktop) opens the real library, so use it
+  for development only; for any UI check or screenshot use `driving-the-desktop-app` instead.
+  Android-only paths (scanner, share intents, WorkManager) need a device: `mise deploy`. Without a
+  phone, `mise emulator --headless [avd]` boots an Android emulator and waits for it; then
   `mise deploy`, `adb exec-out screencap -p > shot.png` to see it, `adb emu kill` to stop it.
   The ML Kit scanner needs a real phone. The APK carries the cloud sync engine (rclone) for
   `arm64-v8a` only: `mise deploy` adds `-Pnpn.rclone.abis=<device abi>` for an x86_64 emulator,
@@ -107,39 +116,27 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   Android-target host tests + buildSrc tests and detekt + desktopApp tests → `compileDeviceTests`
   (the root task that builds every device test, and so all Android code, without a device; add a
   new module's there) → `detektTyped` → `:androidApp:lintDebug` → committed Room schema exports →
-  assembleDebug + packageAppImage. Match that order when verifying larger changes. The repo is
-  public, so standard runners and artifact storage cost nothing: pull requests run all of `ci.yml`,
-  APK and packaging included, and every run uploads the debug APK, the AppImage and the coverage
-  report (kept a week). The Windows build (`windows.yml`) and CodeQL also run on pull requests and
-  pushes to `main`, and weekly. Mutation testing (`mutation.yml`, hours) and the long library
-  simulation (`simulation.yml`, up to half an hour) run on demand only: never schedule them or make
-  a push or release wait on them. Start `gh workflow run simulation.yml` after a change to the
-  session, index, journal, file system or sync code, and only then. `actionlint` checks the
-  workflows in `ci.yml`, and `ci.yml` has no paths filter: its required check must report on
-  every pull request, and `mise release` needs a passing run on the `main` commit. The `main` ruleset
-  requires `ci.yml`'s `build` check: renaming that job means updating the ruleset. Fork pull
-  requests wait for a maintainer's approval before any workflow runs. `mise release` refuses
-  unless CI passed on the `main` commit it bumps; the tagged commit changes only `npn.version`,
-  and `release.yml` builds it without waiting for CI.
-  Its draft job builds nothing unless CI passed on the tagged commit, or the tag only bumps
-  `npn.version` on top of a `main` commit CI passed on (`.github/scripts/check-release-commit.sh`).
-  Both count only a `push` or `workflow_dispatch` run as CI on a commit, through the one
-  `ci_status` they source (`.github/scripts/ci-status.sh`): a `pull_request` run
-  tested the pull request merged into its base branch, not the commit itself.
+  assembleDebug + packageAppImage. Match that order when verifying larger changes. Keep `ci.yml`
+  free of a paths filter: its `build` job is the required check. Mutation testing (`mutation.yml`)
+  and the long simulation (`simulation.yml`) run on demand only: never schedule them or make a
+  push or release wait on them. Start `gh workflow run simulation.yml` after a change to the
+  session, index, journal, file system or sync code, and only then. The other workflows, the
+  ruleset and fork approvals: DEVELOPMENT.md, "Continuous integration"; release gating:
+  DEVELOPMENT.md, "Releases". A failing run: the `triaging-ci` skill.
 - Version: `npn.version` in `gradle.properties` is the only version; everything else derives
   from it (`buildSrc` `NpnVersion`, generated `dev.npn.app.BuildInfo`). Never hardcode a version
   or bump it by hand: `mise release <version>` bumps, commits and tags together, and
   `release.yml` rejects a tag that does not match.
+- A push is not verified until the workflow run on that commit reports; local checks do not stand
+  in for the required `build` job. Say which run is still going rather than calling the work done.
 
 ## Detekt
 
 - One config, `config/detekt/detekt.yml`, two runs; `check` runs both:
   - `./gradlew detekt`: source-only (no type resolution) over every source set. Fast, needs no
     compile.
-  - `./gradlew detektTyped`: the type-resolved per-compilation tasks (`detektMainDesktop`,
-    `detektMainAndroid`, `detektTestDesktop`, `detektHostTestAndroid` in `core`/`composeApp`;
-    `detektMainDesktop` in `core-testing`; `detektDebug` in `androidApp`; `detektMain` in
-    `desktopApp`). Only these run the rules that need the Analysis API (`LongParameterList`,
+  - `./gradlew detektTyped`: the type-resolved per-compilation tasks (`npn.detekt` maps them).
+    Only these run the rules that need the Analysis API (`LongParameterList`,
     `UnusedPrivate*`, `UnusedVariable`, `SuspendFunSwallowedCancellation`, ...); the source-only
     run skips them silently. They also load the Compose ruleset (`io.nlopez.compose.rules:detekt`,
     its default config): viewmodels forwarded into child composables, composables without a
@@ -164,10 +161,8 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
 - Typed `SuspendFunInFinallySection` (main sources): a `finally` that suspends does its cleanup in
   `withContext(NonCancellable)`, or a cancelled coroutine skips it. Where the enclosing block or the
   callee already is NonCancellable, suppress the hit with that reason.
-- Typed potential-bug rules beyond the defaults: `UnconditionalJumpStatementInLoop`,
-  `DontDowncastCollectionTypes`, `CharArrayToStringCall`, `ExitOutsideMain`,
-  `UnnecessaryNotNullCheck`, and `SuspendFunWithCoroutineScopeReceiver`, `ObjectExtendsThrowable`,
-  `ErrorUsageWithThrowable` (the config lists the ones tried and left off, with why).
+- The config enables potential-bug rules beyond detekt's defaults and lists the ones tried and
+  left off, with why: read it before enabling or disabling a rule.
 
 ## Architecture invariants (do not break)
 
@@ -237,12 +232,20 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   `1.50`) through `FieldValues.normalized`. The five typed `documents` columns are a read cache
   the fold writes from the field map, never a second source.
 
-## Conventions
+## Agent skills
 
-- Read ARCHITECTURE.md for the module/package map, data flow, and where to look
-  for common tasks before navigating the codebase.
-- CONTEXT.md is the domain glossary: what terms such as Field, Edit Run or Review mean here.
-- Commit messages: `[main] Imperative summary` (branch name in brackets).
+Repo skills live in `.agents/skills/` (`.claude/skills` links to it). Reach for:
+
+- `driving-the-desktop-app` for any desktop UI check or screenshot (never `mise hot` or
+  `:desktopApp:run` against the real home); `refreshing-screenshots` for README/Play Store
+  captures; `testing-on-android` for phone or emulator verification; `triaging-ci` for a failing
+  workflow; `standards-review` to review a diff against these rules and its issue.
+- Issues are GitHub issues (`docs/agents/issue-tracker.md`, triage labels in
+  `docs/agents/triage-labels.md`). Domain docs are single-context: `CONTEXT.md`, ADRs in
+  `docs/adr/` (`docs/agents/domain.md`).
+
+## Bugs, reviews and done
+
 - A bug found in the session, index, journal or lifecycle code first becomes a generator operation,
   a fault or an invariant in the library simulation (docs/SIMULATION.md). Add an example test only
   when the simulation cannot express the bug.
@@ -251,14 +254,27 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   `simulation.yml` or locally, over fresh seeds). A rename or restructuring with no behaviour behind
   it waits until then; a review round in those packages reports what the simulation or an
   invariant would have caught, not style.
-- Done is measured, not reviewed: the long simulation run passes with `KnownIssues` empty, and the
-  mutation score of `core.index`/`core.app`/`core.journal` (docs/MUTATION_TESTING.md,
-  `./gradlew :core:mutationTest`) does not drop, compared by hand against the last run's
-  `mutations.xml`/report, as nothing compares runs automatically. Another review round is not a
-  stopping criterion.
+- A review finding becomes a commit only with a reproducer: a failing test, a simulation operation
+  or invariant, or a user-reachable path with steps. A theoretical interleaving without one is a
+  proposal or an issue, not a fix to land. Review the diff since a fixed point.
 - Before adding complexity for a speculative or vanishingly unlikely race or security edge case,
   explain the concrete failure mode, likelihood, and complexity cost to the user and get their
-  buy-in. Do not silently expand scope for theoretical robustness.
+  buy-in.
+- Done is measured, not reviewed: the long simulation run passes with `KnownIssues` empty, and the
+  mutation score of `core.index`/`core.app`/`core.journal` (Commands, "Mutation testing") does not
+  drop, compared by hand against the last run's `mutations.xml`/report, as nothing compares runs
+  automatically. Another review round, of the diff or the whole codebase, is not a stopping
+  criterion.
+
+## Conventions
+
+- Read ARCHITECTURE.md for the module/package map, data flow, and where to look
+  for common tasks before navigating the codebase.
+- CONTEXT.md is the domain glossary: what terms such as Field, Edit Run or Review mean here.
+- Commit messages: `[main] Imperative summary` (branch name in brackets).
+- In a shared checkout, inspect the staged diff and stage only your hunks. Keep branches to one
+  concern, rebase your branch on main, and merge with `--ff-only`. Preserve other agents' work
+  and branches. Ask before changing Git configuration or hooks.
 - Shared Flow subscriptions use `WhileSubscribedTimeout` (`WhileSubscribed(5_000)`, in
   `composeApp`'s `ui/common/StateFlowConfig.kt`) instead of inline timeouts; typed detekt forbids
   `SharingStarted.WhileSubscribed` elsewhere.

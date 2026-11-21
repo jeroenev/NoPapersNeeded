@@ -432,6 +432,23 @@ On Windows, the release workflow submits each version's `.msi` to winget once th
 version is in `microsoft/winget-pkgs` (submit that one by hand with `komac new`) and the
 `WINGET_TOKEN` secret holds a classic token with `public_repo`.
 
+### Continuous integration
+
+The repo is public, so standard runners and artifact storage cost nothing.
+
+- `ci.yml` runs on every pull request and push, with no paths filter: its `build` job is the
+  check the `main` ruleset requires, so it must report on every pull request (renaming the job
+  means updating the ruleset). Every run uploads the debug APK, the AppImage and the coverage
+  report, kept a week.
+- `windows.yml` (the Windows build) and `codeql.yml` run on pull requests, pushes to `main`, and
+  weekly. `secrets.yml` scans for committed secrets.
+- `mutation.yml` (hours) and `simulation.yml` (up to half an hour) run on demand only.
+- Pull requests from forks wait for a maintainer's approval before any workflow runs.
+- Only a `push` or `workflow_dispatch` run counts as CI on a commit
+  (`.github/scripts/ci-status.sh`): a `pull_request` run tested the pull request merged into its
+  base branch, not the commit itself. `mise release` and `release.yml` both rely on that (see
+  Releases).
+
 ### Releases
 
 The version lives in one place: `npn.version` in `gradle.properties`. The Android
