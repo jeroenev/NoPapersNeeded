@@ -21,6 +21,13 @@ interface ReminderNotificationDao {
     suspend fun claim(entries: List<ReminderNotificationEntity>): List<ReminderNotificationEntity> =
         entries.filter { insert(it) != -1L }
 
-    @Query("DELETE FROM reminder_notifications WHERE docId = :docId")
-    suspend fun deleteForDocument(docId: String)
+    /** Release one claim whose delivery failed, so a later check can show it. */
+    @Query(
+        "DELETE FROM reminder_notifications WHERE docId = :docId AND fieldKey = :fieldKey AND dueDate = :dueDate",
+    )
+    suspend fun release(
+        docId: String,
+        fieldKey: String,
+        dueDate: String,
+    )
 }

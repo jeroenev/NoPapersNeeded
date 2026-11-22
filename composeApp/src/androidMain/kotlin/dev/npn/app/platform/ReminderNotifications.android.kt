@@ -11,14 +11,15 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.Keep
 import androidx.compose.runtime.Composable
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import dev.npn.app.di.AppEnvironment
@@ -26,8 +27,12 @@ import dev.npn.app.di.createAppEnvironment
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.util.AndroidLog
 import dev.npn.core.util.runCatchingCancellable
+import dev.npn.core.util.runLogged
 import dev.npn.core.util.warn
 import io.github.vinceglb.filekit.FileKit
+import io.github.vinceglb.filekit.context
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.reminders_notification_body
 import no_papers_needed.composeapp.generated.resources.reminders_notification_channel
@@ -49,6 +54,13 @@ actual fun canShowReminderNotifications(): Boolean {
         PackageManager.PERMISSION_GRANTED
     ) {
         return false
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val channel =
+            context
+                .getSystemService(NotificationManager::class.java)
+                ?.getNotificationChannel(CHANNEL_ID)
+        if (channel?.importance == NotificationManager.IMPORTANCE_NONE) return false
     }
     return NotificationManagerCompat.from(context).areNotificationsEnabled()
 }
@@ -94,7 +106,7 @@ actual suspend fun showReminderNotification(
             .setAutoCancel(true)
             .build()
     @SuppressLint("MissingPermission") // Checked by canShowReminderNotifications above.
-    NotificationManagerCompat.from(context).notify(("$docId:$fieldLabel").hashCode(), notification)
+    NotificationManagerCompat.from(context).notify(docId.hashCode(), notification)
     return ReminderDelivery.NOTIFIED
 }
 
@@ -107,12 +119,15 @@ actual fun scheduleReminderChecks(
         work.cancelUniqueWork(WORK_NAME)
         return
     }
+    // A one-shot job, re-enqueued for the next local time after each run. A fixed 24-hour periodic
+    // job would drift before the configured wall-clock time across DST or a time-zone change and
+    // then keep skipping its own check.
     val request =
-        PeriodicWorkRequestBuilder<ReminderWorker>(1, TimeUnit.DAYS)
+        OneTimeWorkRequestBuilder<ReminderWorker>()
             .setInitialDelay(delayMillis.coerceAtLeast(0), TimeUnit.MILLISECONDS)
             .setConstraints(Constraints.Builder().setRequiresBatteryNotLow(true).build())
             .build()
-    work.enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE, request)
+    work.enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.REPLACE, request)
 }
 
 @Composable
@@ -130,6 +145,7 @@ actual fun rememberReminderPermissionRequest(): (() -> Unit)? {
  * library when the process was started for this work alone, waits for its initial rescan so the
  * index knows the dates, then shows what the library's reminder settings say is due.
  */
+@Keep // WorkManager instantiates it by name after storing the request.
 class ReminderWorker(
     context: Context,
     params: WorkerParameters,
@@ -138,15 +154,24 @@ class ReminderWorker(
         if (!canShowReminderNotifications()) return Result.success()
         val env = ReminderRuntime.orCreate(applicationContext)
         val session =
-            env.session.value ?: runCatchingCancellable {
-                env.openPersistedLibrary()
-                env.session.value
-            }.getOrNull() ?: return Result.success()
+            env.session.value
+                ?: runCatchingCancellable {
+                    env.openPersistedLibrary()
+                    env.session.value
+                }.getOrElse {
+                    AndroidLog.warn("Opening the library for reminders failed; retrying", it)
+                    return Result.retry()
+                } ?: return Result.success()
         return runCatchingCancellable {
-            session.awaitInitialRescan()
+            check(session.awaitInitialRescan()) { "The initial rescan failed" }
             deliverDueReminders(session)
         }.fold(
-            onSuccess = { Result.success() },
+            onSuccess = {
+                // The one-shot job is consumed; the next check is the next configured local time.
+                val next = session.reminders.nextCheckDelayMillis()
+                scheduleReminderChecks(active = next != null, delayMillis = next ?: 0L)
+                Result.success()
+            },
             onFailure = {
                 AndroidLog.warn("Checking reminders failed; retrying", it)
                 Result.retry()
@@ -155,21 +180,39 @@ class ReminderWorker(
     }
 }
 
-/** The in-app check and the worker share this: claim, show, and let the platform say it could not. */
-internal suspend fun deliverDueReminders(session: LibrarySession) {
-    val due = session.reminders.claimDueReminders()
-    for (candidate in due) {
-        val delivery =
-            showReminderNotification(
-                docId = candidate.docId,
-                documentTitle = candidate.documentTitle,
-                fieldLabel = candidate.fieldLabel,
-                dueDate = candidate.dueDate.toString(),
-                overdue = candidate.bucket == dev.npn.core.app.ReminderBucket.OVERDUE,
-            )
-        if (delivery == ReminderDelivery.NOT_PERMITTED) return
+/** The in-app check and the worker share this: claim, show, and release what could not be shown. */
+internal suspend fun deliverDueReminders(session: LibrarySession) =
+    withContext(NonCancellable) {
+        val due =
+            AndroidLog
+                .runLogged("Reading the reminders due now") {
+                    session.reminders.claimDueReminders()
+                }.orEmpty()
+        for (candidate in due) {
+            val delivery =
+                AndroidLog.runLogged("Showing a reminder for ${candidate.documentTitle}") {
+                    showReminderNotification(
+                        docId = candidate.docId,
+                        documentTitle = candidate.documentTitle,
+                        fieldLabel = candidate.fieldLabel,
+                        dueDate = candidate.dueDate.toString(),
+                        overdue = candidate.bucket == dev.npn.core.app.ReminderBucket.OVERDUE,
+                    )
+                }
+            when (delivery) {
+                null -> {
+                    session.reminders.releaseReminder(candidate)
+                }
+
+                ReminderDelivery.NOT_PERMITTED -> {
+                    session.reminders.releaseReminder(candidate)
+                    return@withContext
+                }
+
+                ReminderDelivery.NOTIFIED, ReminderDelivery.IN_APP -> {}
+            }
+        }
     }
-}
 
 private suspend fun ensureChannel(context: Context) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -193,13 +236,9 @@ internal object ReminderRuntime {
 
     fun existing(): AppEnvironment? = installed
 
-    fun install(environment: AppEnvironment): AppEnvironment {
-        installed = environment
-        return environment
-    }
+    /** Create the process-wide environment once, under one lock, even when a worker and the UI race. */
+    fun create(build: () -> AppEnvironment): AppEnvironment =
+        synchronized(this) { installed ?: build().also { installed = it } }
 
-    fun orCreate(context: Context): AppEnvironment =
-        installed ?: synchronized(this) {
-            installed ?: createAppEnvironment(context.applicationContext)
-        }
+    fun orCreate(context: Context): AppEnvironment = existing() ?: createAppEnvironment(context.applicationContext)
 }

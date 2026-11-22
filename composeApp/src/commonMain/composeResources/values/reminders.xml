@@ -11,6 +11,8 @@
     <string name="reminders_empty_subtitle">Documents with a reminder date appear here.</string>
     <string name="reminders_disabled_title">Reminders are off</string>
     <string name="reminders_disabled_subtitle">Choose reminder dates in Settings → Documents.</string>
+    <string name="reminders_no_fields_title">No reminder dates</string>
+    <string name="reminders_no_fields_subtitle">Choose a date field in Settings → Documents.</string>
     <string name="reminders_row_meta">%1$s · %2$s</string>
     <string name="reminders_notification_channel">Reminders</string>
     <string name="reminders_notification_title">Reminder: %1$s</string>

@@ -11,6 +11,8 @@
     <string name="reminders_empty_subtitle">Documenten met een herinneringsdatum verschijnen hier.</string>
     <string name="reminders_disabled_title">Herinneringen staan uit</string>
     <string name="reminders_disabled_subtitle">Kies herinneringsdatums in Instellingen → Documenten.</string>
+    <string name="reminders_no_fields_title">Geen herinneringsdatums</string>
+    <string name="reminders_no_fields_subtitle">Kies een datumveld in Instellingen → Documenten.</string>
     <string name="reminders_row_meta">%1$s · %2$s</string>
     <string name="reminders_notification_channel">Herinneringen</string>
     <string name="reminders_notification_title">Herinnering: %1$s</string>

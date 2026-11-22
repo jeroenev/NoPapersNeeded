@@ -86,7 +86,9 @@ internal fun MainNav(
     val upcomingBadge by library.reminderBadge.collectAsStateWithLifecycle()
     ReminderChecks(session) { library.noteInAppReminder() }
     LaunchedEffect(session, nav) {
-        OpenDocumentRequests.documents.arrivals.collect { docId -> nav.openDoc(docId, library.browse) }
+        OpenDocumentRequests.documents.arrivals.collect { docId ->
+            nav.openDoc(docId, library.browse, options = { launchSingleTop = true })
+        }
     }
     var shortcutsOpen by rememberSaveable { mutableStateOf(false) }
     val openShortcuts: (() -> Unit)? = if (offersKeyboardShortcutList()) ({ shortcutsOpen = true }) else null

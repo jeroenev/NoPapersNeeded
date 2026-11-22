@@ -46,6 +46,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_folder_access_not_kept_library
 import no_papers_needed.composeapp.generated.resources.common_folder_access_not_kept_watched
@@ -115,6 +117,9 @@ class SettingsViewModel(
         TypedSetting<Int>(viewModelScope, savesOnPause = false) { days ->
             reporting(Res.string.common_save_setting_failed) { trashRetention.setTrashRetentionDays(days) }
         }
+
+    /** Serializes the read-modify-write of the watched field set, so two quick ticks cannot lose one. */
+    private val reminderFieldWrites = Mutex()
 
     private val typedReminderLead =
         TypedSetting<Int>(viewModelScope, savesOnPause = false) { days ->
@@ -368,9 +373,15 @@ class SettingsViewModel(
     override fun setReminderField(
         key: String,
         selected: Boolean,
-    ) = launchReporting(Res.string.common_save_setting_failed) {
-        val current = reminders.settings.first().fieldKeys
-        reminders.setFieldKeys(if (selected) current + key else current - key)
+    ) {
+        viewModelScope.launch {
+            reminderFieldWrites.withLock {
+                reporting(Res.string.common_save_setting_failed) {
+                    val current = reminders.settings.first().fieldKeys
+                    reminders.setFieldKeys(if (selected) current + key else current - key)
+                }
+            }
+        }
     }
 
     override fun setReminderLeadDays(days: Int?) =

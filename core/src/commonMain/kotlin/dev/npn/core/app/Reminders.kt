@@ -11,12 +11,15 @@ import dev.npn.core.util.EpochClock
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runLogged
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
@@ -116,6 +119,12 @@ interface RemindersFacade {
      * Empty before the configured time of day.
      */
     suspend fun claimDueReminders(): List<ReminderCandidate>
+
+    /**
+     * Release a claim whose delivery failed or was refused, so the next check can try it again.
+     * The claim is the anti-duplicate guard, not a statement that the user saw it.
+     */
+    suspend fun releaseReminder(candidate: ReminderCandidate)
 }
 
 /**
@@ -222,7 +231,6 @@ internal class JournalReminders(
     private val lifetime: SessionLifetime,
     private val clock: EpochClock,
     private val log: NpnLog,
-    private val zone: TimeZone = TimeZone.currentSystemDefault(),
 ) : RemindersFacade {
     private val raw: Flow<ReminderSettings> =
         combine(
@@ -255,7 +263,9 @@ internal class JournalReminders(
         combine(raw, dateKeys) { stored, valid -> stored.copy(fieldKeys = stored.fieldKeys.filter { it in valid }) }
 
     override suspend fun setEnabled(enabled: Boolean) {
-        if (enabled && currentFieldKeys().isEmpty()) {
+        // The filtered set, not the raw stored list: a watched field removed or retyped away from
+        // DATE leaves the raw list looking non-empty while reminders can do nothing.
+        if (enabled && settings.first().fieldKeys.isEmpty()) {
             // Turning reminders on with nothing chosen would do nothing: start from the seeded
             // document date, as the settings pane's first suggestion would.
             val dateFields =
@@ -303,9 +313,10 @@ internal class JournalReminders(
                 combine(
                     indexDb.documentDao().observeReminderRows(current.fieldKeys),
                     indexDb.fieldDefDao().observeAll(),
-                ) { rows, defs ->
+                    midnightTicks(),
+                ) { rows, defs, _ ->
                     val labels = defs.mapNotNull { it.toFieldDef() }.associate { it.key to it.label }
-                    val today = ReminderWindow.today(clock.nowMillis(), zone)
+                    val today = ReminderWindow.today(clock.nowMillis(), currentZone())
                     upcoming(rows.mapNotNull { it.toDue(labels) }, today)
                 }
             }
@@ -314,12 +325,13 @@ internal class JournalReminders(
     override suspend fun nextCheckDelayMillis(): Long? {
         val current = settings.first()
         if (!current.isActive) return null
-        return ReminderWindow.delayUntilNextTrigger(clock.nowMillis(), zone, current.timeOfDay)
+        return ReminderWindow.delayUntilNextTrigger(clock.nowMillis(), currentZone(), current.timeOfDay)
     }
 
     override suspend fun claimDueReminders(): List<ReminderCandidate> {
         val current = settings.first()
         if (!current.isActive) return emptyList()
+        val zone = currentZone()
         val now = clock.nowMillis()
         if (!ReminderWindow.checkAllowed(now, zone, current.timeOfDay)) return emptyList()
         val today = ReminderWindow.today(now, zone)
@@ -334,27 +346,60 @@ internal class JournalReminders(
                 .runLogged("Reading the reminder dates") {
                     indexDb.documentDao().reminderRows(current.fieldKeys)
                 }.orEmpty()
+        // One reminder per document, its earliest watched date: the same rule the Upcoming list
+        // uses, so a document with several watched dates cannot post two notifications under one id.
         val candidates =
             due
                 .mapNotNull { it.toDue(labels) }
                 .filter { it.dueDate <= end }
-                .map { it.toCandidate(today) }
+                .groupBy { it.doc.docId }
+                .values
+                .mapNotNull { group -> group.minByOrNull { it.dueDate }?.toCandidate(today) }
         if (candidates.isEmpty()) return emptyList()
         val claimed =
             log
                 .runLogged("Claiming reminders") {
-                    notifications.claim(
-                        candidates.map {
-                            ReminderNotificationEntity(it.docId, it.fieldKey, it.dueDate.toString(), now)
-                        },
-                    )
+                    lifetime.owned {
+                        notifications.claim(
+                            candidates.map {
+                                ReminderNotificationEntity(it.docId, it.fieldKey, it.dueDate.toString(), now)
+                            },
+                        )
+                    }
                 }.orEmpty()
         val keys = claimed.map { Triple(it.docId, it.fieldKey, it.dueDate) }.toSet()
         return candidates.filter { Triple(it.docId, it.fieldKey, it.dueDate.toString()) in keys }
     }
 
-    private suspend fun currentFieldKeys(): List<String> =
-        parseFieldKeys(coordinator.setting(LibrarySettingKeys.REMINDER_FIELDS))
+    override suspend fun releaseReminder(candidate: ReminderCandidate) {
+        log.runLogged("Releasing a reminder claim") {
+            lifetime.owned {
+                notifications.release(candidate.docId, candidate.fieldKey, candidate.dueDate.toString())
+            }
+        }
+    }
+
+    /**
+     * Emits at local midnight, so the Upcoming groups and the library's due count roll over while
+     * the app stays open. The first emission is immediate, so the combine starts at once.
+     */
+    private fun midnightTicks(): Flow<Unit> =
+        flow {
+            while (true) {
+                val now = clock.nowMillis()
+                val zone = currentZone()
+                val next =
+                    ReminderWindow.triggerAt(
+                        ReminderWindow.today(now, zone).plus(DatePeriod(days = 1)),
+                        LocalTime(0, 0),
+                        zone,
+                    )
+                delay((next - now).coerceAtLeast(1_000L))
+                emit(Unit)
+            }
+        }.onStart { emit(Unit) }
+
+    private fun currentZone(): TimeZone = TimeZone.currentSystemDefault()
 
     private fun parseFieldKeys(stored: String?): List<String> =
         stored

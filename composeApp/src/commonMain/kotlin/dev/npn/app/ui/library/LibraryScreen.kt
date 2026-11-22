@@ -101,7 +101,8 @@ private val SidePanelMinWidth = 420.dp
 private val SidePanelMaxWidth = 800.dp
 
 // The list gets the viewmodel only as its LibraryActions interface, the hand-down the conventions prescribe.
-@Suppress("ViewModelForwarding")
+// Screen wiring: every callback names one destination, so folding two more into an object only moves the list.
+@Suppress("ViewModelForwarding", "LongParameterList")
 @Composable
 fun LibraryScreen(
     session: LibrarySession,
@@ -121,11 +122,11 @@ fun LibraryScreen(
     onOpenSettings: (SettingsCategoryId) -> Unit,
     /** Opens the Upcoming reminders screen; the entry shows while reminders are on. */
     onOpenUpcoming: () -> Unit,
-    /** Unseen in-app reminder fallbacks (a desktop without a tray), shown as a badge on Upcoming. */
-    upcomingBadge: Int = 0,
     /** Each document's viewmodel store, shared with the detail screen; the side panel holds the previewed one's. */
     documents: KeyedViewModelStores<String>,
     modifier: Modifier = Modifier,
+    /** Unseen in-app reminder fallbacks (a desktop without a tray), shown as a badge on Upcoming. */
+    upcomingBadge: Int = 0,
     vm: LibraryViewModel = viewModel { LibraryViewModel(session, settings, createSavedStateHandle()) },
     previewed: ViewModelStoreLease<String> = viewModel { ViewModelStoreLease(documents) },
 ) {
@@ -284,6 +285,7 @@ private class LibraryExits(
  * shares with the preview panel, where navigation goes ([onOpenDoc], [exits]), and [onDialog] for
  * the dialogs the screen hosts. [onAiEdit] is null while no AI endpoint is configured.
  */
+@Suppress("LongParameterList") // The screen's own wiring: state, actions, and one callback per exit.
 @Composable
 private fun LibraryContent(
     state: LibraryContentState,

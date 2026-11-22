@@ -11,6 +11,8 @@
     <string name="reminders_empty_subtitle">Les documents avec une date de rappel apparaissent ici.</string>
     <string name="reminders_disabled_title">Les rappels sont désactivés</string>
     <string name="reminders_disabled_subtitle">Choisissez des dates de rappel dans Paramètres → Documents.</string>
+    <string name="reminders_no_fields_title">Aucune date de rappel</string>
+    <string name="reminders_no_fields_subtitle">Choisissez un champ de date dans Paramètres → Documents.</string>
     <string name="reminders_row_meta">%1$s · %2$s</string>
     <string name="reminders_notification_channel">Rappels</string>
     <string name="reminders_notification_title">Rappel : %1$s</string>

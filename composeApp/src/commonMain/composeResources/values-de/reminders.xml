@@ -11,6 +11,8 @@
     <string name="reminders_empty_subtitle">Dokumente mit einem Erinnerungsdatum erscheinen hier.</string>
     <string name="reminders_disabled_title">Erinnerungen sind aus</string>
     <string name="reminders_disabled_subtitle">Wähle Erinnerungsdaten unter Einstellungen → Dokumente.</string>
+    <string name="reminders_no_fields_title">Keine Erinnerungsdaten</string>
+    <string name="reminders_no_fields_subtitle">Wähle ein Datumsfeld unter Einstellungen → Dokumente.</string>
     <string name="reminders_row_meta">%1$s · %2$s</string>
     <string name="reminders_notification_channel">Erinnerungen</string>
     <string name="reminders_notification_title">Erinnerung: %1$s</string>

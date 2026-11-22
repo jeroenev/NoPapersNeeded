@@ -22,7 +22,8 @@ import kotlinx.coroutines.Dispatchers
  *   ([AiEnrichQueueDao]);
  * - the OCR queue with its requests, attempts and backoff, and the pages a failed run already paid
  *   for ([OcrQueueDao]);
- * - what the cloud sync last established about each file on its remote ([SyncRemoteDao]).
+ * - what the cloud sync last established about each file on its remote ([SyncRemoteDao]);
+ * - the reminders this device already showed ([ReminderNotificationDao]).
  *
  * Rows are keyed by document hash, which a rebuilt index gives the same documents again.
  */

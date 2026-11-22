@@ -5,10 +5,12 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import dev.npn.app.platform.canShowReminderNotifications
 import dev.npn.app.platform.rememberReminderPermissionRequest
 import dev.npn.app.ui.common.CheckboxRow
 import dev.npn.app.ui.common.HelpText
@@ -102,15 +104,21 @@ private fun RemindersSection(
 ) {
     val requestPermission = rememberReminderPermissionRequest()
     val dateFields = state.fields.filter { it.type.isDate }
+    // A library whose reminders arrived enabled from another device never sees the switch change
+    // here, so ask when the pane opens with reminders on and notifications still blocked.
+    var permissionAsked by rememberSaveable { mutableStateOf(false) }
+    SideEffect {
+        if (state.settings.reminderEnabled && !canShowReminderNotifications() && !permissionAsked) {
+            permissionAsked = true
+            requestPermission?.invoke()
+        }
+    }
     SettingsSection(title = stringResource(Res.string.common_settings_reminders)) {
         SwitchRow(
             label = stringResource(Res.string.common_settings_reminders_enabled),
             help = stringResource(Res.string.common_settings_reminders_enabled_help),
             checked = state.settings.reminderEnabled,
-            onCheckedChange = { enabled ->
-                actions.setRemindersEnabled(enabled)
-                if (enabled) requestPermission?.invoke()
-            },
+            onCheckedChange = actions::setRemindersEnabled,
         )
         if (state.settings.reminderEnabled) {
             if (dateFields.isEmpty()) {

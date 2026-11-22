@@ -264,6 +264,12 @@ class FakeRemindersFacade : RemindersFacade {
         claims++
         return due
     }
+
+    val released = mutableListOf<ReminderCandidate>()
+
+    override suspend fun releaseReminder(candidate: ReminderCandidate) {
+        released += candidate
+    }
 }
 
 /** Duplicate resolution, relinks and splitting. */

@@ -11,8 +11,10 @@ import dev.npn.app.platform.showReminderNotification
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.ReminderBucket
 import dev.npn.core.util.runLogged
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.withContext
 
 /**
  * The in-process reminder check, for as long as the library is open. The next check is scheduled
@@ -31,7 +33,10 @@ internal fun ReminderChecks(
             val untilNext = session.reminders.nextCheckDelayMillis()
             scheduleReminderChecks(settings.isActive, untilNext ?: 0L)
             if (!settings.isActive) return@collectLatest
-            if (!canShowReminderNotifications()) return@collectLatest
+            // A permission granted while this session runs must let the catch-up check proceed.
+            // Waiting here also covers a second device that syncs reminders on: its user grants
+            // the permission from the system prompt and the next check is not lost.
+            while (!canShowReminderNotifications()) delay(PERMISSION_RECHECK_MS)
             deliver(session, inApp)
             while (true) {
                 val next = session.reminders.nextCheckDelayMillis() ?: break
@@ -45,7 +50,7 @@ internal fun ReminderChecks(
 private suspend fun deliver(
     session: LibrarySession,
     onInAppNotification: () -> Unit,
-) {
+) = withContext(NonCancellable) {
     val due =
         session.log
             .runLogged("Reading the reminders due now") {
@@ -61,11 +66,25 @@ private suspend fun deliver(
                     dueDate = candidate.dueDate.toString(),
                     overdue = candidate.bucket == ReminderBucket.OVERDUE,
                 )
-            } ?: continue
+            }
         when (delivery) {
-            ReminderDelivery.IN_APP -> onInAppNotification()
-            ReminderDelivery.NOT_PERMITTED -> return
-            ReminderDelivery.NOTIFIED -> Unit
+            null -> {
+                session.reminders.releaseReminder(candidate)
+            }
+
+            ReminderDelivery.IN_APP -> {
+                onInAppNotification()
+            }
+
+            ReminderDelivery.NOT_PERMITTED -> {
+                session.reminders.releaseReminder(candidate)
+                return@withContext
+            }
+
+            ReminderDelivery.NOTIFIED -> {}
         }
     }
 }
+
+/** How often a check waits for the notification permission to be granted. */
+private const val PERMISSION_RECHECK_MS = 30_000L

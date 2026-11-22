@@ -38,6 +38,8 @@ import no_papers_needed.composeapp.generated.resources.reminders_group_later
 import no_papers_needed.composeapp.generated.resources.reminders_group_next_7_days
 import no_papers_needed.composeapp.generated.resources.reminders_group_overdue
 import no_papers_needed.composeapp.generated.resources.reminders_group_today
+import no_papers_needed.composeapp.generated.resources.reminders_no_fields_subtitle
+import no_papers_needed.composeapp.generated.resources.reminders_no_fields_title
 import no_papers_needed.composeapp.generated.resources.reminders_row_meta
 import no_papers_needed.composeapp.generated.resources.reminders_upcoming_title
 import org.jetbrains.compose.resources.StringResource
@@ -87,6 +89,15 @@ internal fun UpcomingScreen(
                     icon = Icons.Outlined.NotificationsOff,
                     title = stringResource(Res.string.reminders_disabled_title),
                     subtitle = stringResource(Res.string.reminders_disabled_subtitle),
+                    modifier = Modifier.padding(padding),
+                )
+            }
+
+            !state.active -> {
+                EmptyState(
+                    icon = Icons.Outlined.NotificationsOff,
+                    title = stringResource(Res.string.reminders_no_fields_title),
+                    subtitle = stringResource(Res.string.reminders_no_fields_subtitle),
                     modifier = Modifier.padding(padding),
                 )
             }

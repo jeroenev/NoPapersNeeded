@@ -22,10 +22,9 @@ import java.nio.file.Paths
  * only checks that a location can be opened and binds the session's settings to the repository.
  */
 fun createAppEnvironment(context: Context): AppEnvironment {
-    ReminderRuntime.existing()?.let { return it }
     val appContext = context.applicationContext
-    val settings = SettingsRepositoryImpl(appContext)
-    return ReminderRuntime.install(
+    return ReminderRuntime.create {
+        val settings = SettingsRepositoryImpl(appContext)
         DefaultAppEnvironment(
             settings,
             watchedFolder = { location -> androidWatchedFolder(appContext, location) },
@@ -40,8 +39,8 @@ fun createAppEnvironment(context: Context): AppEnvironment {
                 settings = SessionSettings.from(settings),
                 installationId = settings.settings.first().installationId,
             )
-        },
-    )
+        }
+    }
 }
 
 /**

@@ -11,6 +11,8 @@
     <string name="reminders_empty_subtitle">Documentos com uma data de lembrete aparecem aqui.</string>
     <string name="reminders_disabled_title">Os lembretes estão desativados</string>
     <string name="reminders_disabled_subtitle">Escolha datas de lembrete em Configurações → Documentos.</string>
+    <string name="reminders_no_fields_title">Sem datas de lembrete</string>
+    <string name="reminders_no_fields_subtitle">Escolha um campo de data em Configurações → Documentos.</string>
     <string name="reminders_row_meta">%1$s · %2$s</string>
     <string name="reminders_notification_channel">Lembretes</string>
     <string name="reminders_notification_title">Lembrete: %1$s</string>
