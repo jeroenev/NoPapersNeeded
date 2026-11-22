@@ -4,6 +4,7 @@ import ai.koog.agents.core.tools.SimpleTool
 import ai.koog.agents.core.tools.ToolBase
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.serialization.typeToken
+import dev.npn.core.app.HistoryEntry
 import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.DocumentFieldDao
@@ -13,13 +14,22 @@ import dev.npn.core.db.FtsQuery
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.TagDao
 import dev.npn.core.db.isLive
+import dev.npn.core.journal.EventDecoderRegistry
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.ReviewMode
+import dev.npn.core.model.reviewMarkerIsAuthoritative
 import dev.npn.core.ocr.OcrEngineId
+import dev.npn.core.ocr.OcrState
 import dev.npn.core.util.NpnJson
+import dev.npn.core.util.runCatchingCancellable
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlin.time.Instant
 
 /**
  * The library tools as one chat run needs them, built from one construction of each tool: [tools]
@@ -46,6 +56,8 @@ object ChatTools {
     const val SEARCH_FIELDS = "search_fields"
     const val GET_DOCUMENT = "get_document"
     const val GET_DOCUMENT_TEXT = "get_document_text"
+    const val GET_DOCUMENT_HISTORY = "get_document_history"
+    const val LIBRARY_STATS = "library_stats"
 
     /** [SEARCH_DOCUMENTS]' search terms. */
     const val ARG_QUERY = "query"
@@ -56,7 +68,7 @@ object ChatTools {
     /** [SEARCH_FILENAMES]' substring. */
     const val ARG_PATTERN = "pattern"
 
-    /** The document [GET_DOCUMENT] and [GET_DOCUMENT_TEXT] read. */
+    /** The document [GET_DOCUMENT], [GET_DOCUMENT_TEXT] and [GET_DOCUMENT_HISTORY] read. */
     const val ARG_DOC_ID = "docId"
 
     /** The field [SEARCH_FIELDS] searches: a key or label, or [ANY_FIELD]. */
@@ -68,6 +80,24 @@ object ChatTools {
     /** [SEARCH_FIELDS]' inclusive range bounds, for a date or number field. */
     const val ARG_FROM = "from"
     const val ARG_TO = "to"
+
+    /** [SEARCH_DOCUMENTS]' inclusive range on when a document joined the library. */
+    const val ARG_ADDED_FROM = "addedAtFrom"
+    const val ARG_ADDED_TO = "addedAtTo"
+
+    /** [SEARCH_DOCUMENTS]' OCR pipeline state filter: one [OcrState.column]. */
+    const val ARG_OCR_STATE = "ocrState"
+
+    /** [SEARCH_DOCUMENTS]' review-marker filter. */
+    const val ARG_REVIEWED = "reviewed"
+
+    /** [SEARCH_DOCUMENTS]' lifecycle filter: one of the `LIFECYCLE_*` values. */
+    const val ARG_LIFECYCLE = "lifecycle"
+
+    const val LIFECYCLE_LIVE = "live"
+    const val LIFECYCLE_TRASHED = "trashed"
+    const val LIFECYCLE_MISSING = "missing"
+    const val LIFECYCLE_DELETED = "deleted"
 
     /** [ARG_FIELD]'s value for every user-authored field at once (also what an omitted field means). */
     const val ANY_FIELD = "any"
@@ -83,17 +113,30 @@ internal object LibraryAiTools {
     const val MAX_LISTED_DOCS = 50
     const val TEXT_CHUNK_CHARS = 4_000
 
+    /** How many of a document's most recent journal events get_document_history shows. */
+    const val MAX_HISTORY_EVENTS = 20
+
+    /** How much of one history value get_document_history quotes. */
+    const val MAX_HISTORY_VALUE_CHARS = 120
+
+    private const val MILLIS_PER_DAY = 86_400_000L
+
     /**
      * Build the library tool set (see [LibraryToolSet]). Each tool is constructed once, so a tool the
-     * model is advertised is the same instance the loop calls.
+     * model is advertised is the same instance the loop calls. [reviewMode] decides what "reviewed"
+     * means, exactly as it does on the review screens.
      */
     fun toolSetFor(
         db: NpnDatabase,
         fields: List<FieldDef>,
+        reviewMode: ReviewMode = ReviewMode.DEFAULT,
     ): LibraryToolSet {
         val entries =
             listOf(
-                Entry(SearchDocumentsTool(db.ftsDao(), db.documentDao()), SearchDocumentsTool.Args.serializer()),
+                Entry(
+                    SearchDocumentsTool(db.ftsDao(), db.documentDao(), db.tagDao(), reviewMode),
+                    SearchDocumentsTool.Args.serializer(),
+                ),
                 Entry(ListTagsTool(db.tagDao()), ListTagsTool.Args.serializer()),
                 Entry(DocumentsWithTagTool(db.documentDao()), DocumentsWithTagTool.Args.serializer()),
                 Entry(SearchFileNamesTool(db.documentDao()), SearchFileNamesTool.Args.serializer()),
@@ -107,6 +150,8 @@ internal object LibraryAiTools {
                     GetDocumentTool.Args.serializer(),
                 ),
                 Entry(GetDocumentTextTool(db.ftsDao()), GetDocumentTextTool.Args.serializer()),
+                Entry(GetDocumentHistoryTool(db), GetDocumentHistoryTool.Args.serializer()),
+                Entry(LibraryStatsTool(db.documentDao(), reviewMode), LibraryStatsTool.Args.serializer()),
             )
         return LibraryToolSet(
             tools = entries.map { it.tool },
@@ -127,6 +172,7 @@ internal object LibraryAiTools {
         doc: DocumentEntity,
         snippet: String? = null,
         field: Pair<String, String>? = null,
+        includeAdded: Boolean = false,
     ): String =
         buildString {
             append("- [doc:")
@@ -136,6 +182,7 @@ internal object LibraryAiTools {
                 .append('"')
             doc.title?.takeIf { it.isNotBlank() }?.let { append(" title=\"").append(escapeQuoted(it)).append('"') }
             doc.docDate?.let { append(" date=").append(it) }
+            if (includeAdded) append(" added=").append(isoDate(addedMillis(doc)))
             doc.correspondent
                 ?.takeIf { it.isNotBlank() }
                 ?.let { append(" correspondent=\"").append(escapeQuoted(it)).append('"') }
@@ -146,10 +193,45 @@ internal object LibraryAiTools {
                     .append(escapeQuoted(it.second))
                     .append('"')
             }
+            if (doc.deleted) append(" status=deleted")
+            if (doc.trashed) append(" status=trashed")
+            if (doc.missing) append(" status=missing")
             snippet?.takeIf { it.isNotBlank() }?.let {
                 append(" snippet=\"").append(escapeQuoted(stripSnippetMarkers(it))).append('"')
             }
         }
+
+    /**
+     * When a document joined the library as the index knows it: [DocumentEntity.createdAt], the PDF's
+     * own creation date (or its file's mtime when the PDF names none). This is the library's `added`
+     * sort; it is not the date printed on the document ([DocumentEntity.docDate]).
+     */
+    internal fun addedMillis(doc: DocumentEntity): Long = doc.createdAt ?: doc.mtime
+
+    /** The UTC calendar day of [millis], the timezone tool date filters compare in. */
+    internal fun isoDate(millis: Long): String = instantAt(millis).date.toString()
+
+    /** A UTC timestamp for history lines: `2026-11-20T13:45Z`. */
+    internal fun isoDateTime(millis: Long): String {
+        val local = instantAt(millis)
+        val hour = local.hour.toString().padStart(2, '0')
+        val minute = local.minute.toString().padStart(2, '0')
+        return "${local.date}T$hour:$minute" + "Z"
+    }
+
+    private fun instantAt(millis: Long) = Instant.fromEpochMilliseconds(millis).toLocalDateTime(TimeZone.UTC)
+
+    /** A `YYYY-MM-DD` day as the model wrote it, or null when it is not one. */
+    internal fun parseDay(value: String): LocalDate? =
+        try {
+            LocalDate.parse(value.trim())
+        } catch (_: IllegalArgumentException) {
+            null
+        }
+
+    /** [value] cut at [MAX_HISTORY_VALUE_CHARS], so one long note cannot fill the history output. */
+    internal fun truncated(value: String): String =
+        if (value.length <= MAX_HISTORY_VALUE_CHARS) value else value.take(MAX_HISTORY_VALUE_CHARS) + "…"
 
     /** Escape values embedded in the tool's quoted, one-document-per-line format. */
     internal fun escapeQuoted(value: String): String =
@@ -249,37 +331,172 @@ internal object LibraryAiTools {
                 }?.let { doc to it }
         }
 
+    /** How the lifecycle filter reads a row; each predicate is the one its screen queries with. */
+    private enum class Lifecycle {
+        LIVE,
+        TRASHED,
+        MISSING,
+        DELETED,
+        ;
+
+        fun matches(doc: DocumentEntity): Boolean =
+            when (this) {
+                LIVE -> doc.isLive
+                TRASHED -> doc.trashed && !doc.deleted
+                MISSING -> doc.missing && !doc.deleted
+                DELETED -> doc.deleted
+            }
+    }
+
+    private fun lifecycleOf(value: String?): Lifecycle? =
+        when (value?.trim()?.lowercase()) {
+            null, "", ChatTools.LIFECYCLE_LIVE -> Lifecycle.LIVE
+            ChatTools.LIFECYCLE_TRASHED -> Lifecycle.TRASHED
+            ChatTools.LIFECYCLE_MISSING -> Lifecycle.MISSING
+            ChatTools.LIFECYCLE_DELETED -> Lifecycle.DELETED
+            else -> null
+        }
+
     class SearchDocumentsTool(
         private val ftsDao: FtsDao,
         private val documentDao: DocumentDao,
+        private val tagDao: TagDao,
+        private val reviewMode: ReviewMode = ReviewMode.DEFAULT,
     ) : SimpleTool<SearchDocumentsTool.Args>(
             argsType = typeToken<Args>(),
             name = ChatTools.SEARCH_DOCUMENTS,
             description =
-                "Full-text search over all documents (OCR text, embedded text, titles, " +
-                    "filenames, tags, notes). Terms are AND-combined. Returns matching documents " +
-                    "ranked by relevance, each with a docId and a snippet.",
+                "Search documents by full text and/or filters. Terms are AND-combined. Returns at " +
+                    "most $MAX_SEARCH_RESULTS documents, ranked by relevance when query is given and " +
+                    "newest added first otherwise, each with a docId and snippet. Leave query empty to " +
+                    "list documents matching the filters. addedAtFrom/addedAtTo are an inclusive date " +
+                    "range (YYYY-MM-DD) on when a document joined the library: its PDF's own creation " +
+                    "date, else the file's modification time — not the date printed on it. ocrState, " +
+                    "reviewed and lifecycle narrow the list; lifecycle=${ChatTools.LIFECYCLE_TRASHED}, " +
+                    "${ChatTools.LIFECYCLE_MISSING} or ${ChatTools.LIFECYCLE_DELETED} discovers documents " +
+                    "the library normally hides.",
         ) {
         @Serializable
         data class Args(
-            @property:LLMDescription("Search terms, e.g. \"invoice 2024 electricity\"")
+            @property:LLMDescription("Search terms, e.g. \"invoice 2024 electricity\". Empty lists by filter.")
             @SerialName(ChatTools.ARG_QUERY)
-            val query: String,
+            val query: String = "",
+            @property:LLMDescription(
+                "Inclusive lower bound (YYYY-MM-DD) on when the document joined the library: its PDF's " +
+                    "creation date, else the file's modification time.",
+            )
+            @SerialName(ChatTools.ARG_ADDED_FROM)
+            val addedAtFrom: String? = null,
+            @property:LLMDescription("Inclusive upper bound (YYYY-MM-DD) on when the document joined the library.")
+            @SerialName(ChatTools.ARG_ADDED_TO)
+            val addedAtTo: String? = null,
+            @property:LLMDescription("OCR state: none, pending, done, failed or adopted.")
+            @SerialName(ChatTools.ARG_OCR_STATE)
+            val ocrState: String? = null,
+            @property:LLMDescription(
+                "Review marker: true for reviewed, false for still needing review. In untagged-only " +
+                    "mode a document counts as reviewed once it has any tag.",
+            )
+            @SerialName(ChatTools.ARG_REVIEWED)
+            val reviewed: Boolean? = null,
+            @property:LLMDescription(
+                "Which documents to search: live (default), trashed, missing (its file is gone), or deleted.",
+            )
+            @SerialName(ChatTools.ARG_LIFECYCLE)
+            val lifecycle: String? = null,
         )
 
         override suspend fun execute(args: Args): String {
-            if (args.query.isBlank()) return "Error: query must not be blank."
-            val match = FtsQuery.sanitize(args.query)
-            val hits = ftsDao.search(match)
-            val docs = documentDao.getByDocIds(hits).associateBy { it.docId }
-            val shown = hits.mapNotNull { docs[it]?.takeIf { doc -> doc.isLive } }.take(MAX_SEARCH_RESULTS)
-            val snippets = ftsDao.snippetsFor(match, shown.map { it.docId })
-            val lines = shown.map { docLine(it, snippets[it.docId]) }
-            return if (lines.isEmpty()) {
-                "No documents match \"${args.query}\". Try fewer or different terms."
-            } else {
-                lines.joinToString("\n")
+            val lifecycle =
+                lifecycleOf(args.lifecycle)
+                    ?: return "Error: lifecycle must be one of ${ChatTools.LIFECYCLE_LIVE}, " +
+                        "${ChatTools.LIFECYCLE_TRASHED}, ${ChatTools.LIFECYCLE_MISSING}, ${ChatTools.LIFECYCLE_DELETED}."
+            val stateName = args.ocrState?.trim()?.takeIf { it.isNotEmpty() }
+            val state = stateName?.let { wanted -> OcrState.entries.firstOrNull { it.column.equals(wanted, ignoreCase = true) } }
+            if (stateName != null && state == null) {
+                return "Error: ocrState must be one of " +
+                    OcrState.entries.joinToString(", ") { it.column } + "."
             }
+            val from =
+                args.addedAtFrom?.trim()?.takeIf { it.isNotEmpty() }?.let { value ->
+                    parseDay(value) ?: return "Error: addedAtFrom must be a date in YYYY-MM-DD form."
+                }
+            val to =
+                args.addedAtTo?.trim()?.takeIf { it.isNotEmpty() }?.let { value ->
+                    parseDay(value) ?: return "Error: addedAtTo must be a date in YYYY-MM-DD form."
+                }
+            if (from != null && to != null && from > to) {
+                return "Error: addedAtFrom is after addedAtTo."
+            }
+            val fromMillis = from?.let { it.toEpochDays() * MILLIS_PER_DAY }
+            val toExclusiveMillis = to?.let { (it.toEpochDays() + 1) * MILLIS_PER_DAY }
+
+            val query = args.query.trim()
+            val matching =
+                candidates(query)
+                    .filter { doc ->
+                        lifecycle.matches(doc) &&
+                            (fromMillis == null || addedMillis(doc) >= fromMillis) &&
+                            (toExclusiveMillis == null || addedMillis(doc) < toExclusiveMillis) &&
+                            (state == null || doc.ocrState == state.column)
+                    }.let { filterReviewed(it, args.reviewed) }
+            val shown = matching.take(MAX_SEARCH_RESULTS)
+            val lines =
+                if (query.isEmpty()) {
+                    shown.map { docLine(it, includeAdded = true) }
+                } else {
+                    val snippets = ftsDao.snippetsFor(FtsQuery.sanitize(query), shown.map { it.docId })
+                    shown.map { docLine(it, snippets[it.docId], includeAdded = true) }
+                }
+            if (lines.isEmpty()) {
+                val filtered =
+                    lifecycle != Lifecycle.LIVE || fromMillis != null || toExclusiveMillis != null ||
+                        state != null || args.reviewed != null
+                return when {
+                    query.isEmpty() -> "No documents match those filters."
+                    filtered -> "No documents match \"$query\" with those filters. Try fewer or different terms."
+                    else -> "No documents match \"$query\". Try fewer or different terms."
+                }
+            }
+            return buildString {
+                append(lines.joinToString("\n"))
+                val more = matching.size - shown.size
+                if (more > 0) append("\n… and $more more matches (showing $MAX_SEARCH_RESULTS).")
+            }
+        }
+
+        /**
+         * The rows to consider, in the order the answer wants them: FTS rank for a query, newest
+         * added first for a filter-only list. Hidden rows stay candidates so a lifecycle filter can
+         * find them; the lifecycle predicate drops them from a default search.
+         */
+        private suspend fun candidates(query: String): List<DocumentEntity> {
+            if (query.isEmpty()) {
+                return documentDao
+                    .getAllRows()
+                    .sortedWith(
+                        compareByDescending<DocumentEntity> { addedMillis(it) }
+                            .thenBy { it.fileName.lowercase() }
+                            .thenBy { it.docId },
+                    )
+            }
+            val hits = ftsDao.search(FtsQuery.sanitize(query))
+            val docs = documentDao.getByDocIds(hits).associateBy { it.docId }
+            return hits.mapNotNull { docs[it] }
+        }
+
+        /**
+         * The review filter as the review screens mean it: the stored marker where it is
+         * authoritative, else "has any tag". Null leaves the list alone.
+         */
+        private suspend fun filterReviewed(
+            docs: List<DocumentEntity>,
+            wanted: Boolean?,
+        ): List<DocumentEntity> {
+            if (wanted == null || docs.isEmpty()) return docs
+            if (reviewMode.reviewMarkerIsAuthoritative) return docs.filter { it.reviewed == wanted }
+            val tagged = tagDao.tagsForDocs(docs.map { it.docId }).mapTo(HashSet()) { it.docId }
+            return docs.filter { (it.docId in tagged) == wanted }
         }
     }
 
@@ -571,6 +788,7 @@ internal object LibraryAiTools {
                 appendLine("docId: ${doc.docId}")
                 appendLine("file: ${doc.fileName}")
                 appendLine("path: ${doc.relPath}")
+                appendLine("added: ${isoDate(addedMillis(doc))}")
                 appendLine("tags: ${if (tags.isEmpty()) "(none)" else tags.joinToString(", ")}")
                 for (key in order) values[key]?.let { appendLine("$key: $it") }
                 doc.pageCount?.let { appendLine("pages: $it") }
@@ -613,6 +831,160 @@ internal object LibraryAiTools {
             val end = minOf(start + TEXT_CHUNK_CHARS, text.length)
             return "Chunk ${index + 1} of $chunks (chars $start until $end of ${text.length}):\n" +
                 text.substring(start, end)
+        }
+    }
+
+    /**
+     * A document's recent journal history, bounded: the newest [MAX_HISTORY_EVENTS] events with long
+     * values cut at [MAX_HISTORY_VALUE_CHARS]. Only events journaled against this docId are read, so
+     * nothing another document carries can appear in the answer.
+     */
+    class GetDocumentHistoryTool(
+        private val db: NpnDatabase,
+    ) : SimpleTool<GetDocumentHistoryTool.Args>(
+            argsType = typeToken<Args>(),
+            name = ChatTools.GET_DOCUMENT_HISTORY,
+            description =
+                "Recent recorded history of one document by docId: the newest $MAX_HISTORY_EVENTS " +
+                    "journal events (tag changes, field edits, review marks, OCR engine pin, trash/restore/" +
+                    "delete), newest first. Long values are truncated. An import itself leaves no event, " +
+                    "and events older than the displayed window are only counted.",
+        ) {
+        @Serializable
+        data class Args(
+            @property:LLMDescription("The docId (64-char hash) from a previous search result")
+            @SerialName(ChatTools.ARG_DOC_ID)
+            val docId: String,
+        )
+
+        override suspend fun execute(args: Args): String {
+            val docId = args.docId.trim()
+            val total = db.metadataProjectionDao().eventCountForDocument(docId)
+            if (total == 0) {
+                return "No recorded history for [doc:$docId]. Imports and OCR runs leave no journal event."
+            }
+            val recent = db.metadataProjectionDao().recentEventsForDocument(docId, MAX_HISTORY_EVENTS)
+            val lines =
+                recent.map { row ->
+                    val event = runCatchingCancellable { EventDecoderRegistry.decodeStored(row.canonicalJson) }.getOrNull()
+                    val entry = event?.let { HistoryEntry.of(it.op) } ?: HistoryEntry.Undecodable(row.operation)
+                    "- [doc:$docId] ${isoDateTime(row.hlcPhysical)} device=${row.deviceId.take(8)}: ${describe(entry)}"
+                }
+            val shownNote =
+                if (total > recent.size) {
+                    "$total recorded events, newest first, showing the latest ${recent.size}:"
+                } else {
+                    "$total recorded events, newest first:"
+                }
+            return (listOf("History of [doc:$docId]: $shownNote") + lines).joinToString("\n")
+        }
+
+        /** One event as a short sentence; text that came from the journal is quoted and truncated. */
+        private fun describe(entry: HistoryEntry): String =
+            when (entry) {
+                is HistoryEntry.TagAdded -> "tag added \"${truncated(entry.tag)}\""
+                is HistoryEntry.TagRemoved -> "tag removed \"${truncated(entry.tag)}\""
+                is HistoryEntry.Reviewed ->
+                    when (entry.reviewed) {
+                        true -> "marked reviewed"
+                        false -> "marked needing review"
+                        null -> "review mark cleared"
+                    }
+                is HistoryEntry.ReviewUnreadable -> "review mark set to an unreadable value \"${truncated(entry.value)}\""
+                is HistoryEntry.OcrEnginePinned ->
+                    entry.engine?.let { "OCR engine pinned to \"${truncated(it.label)}\"" } ?: "OCR engine pin cleared"
+                is HistoryEntry.StoragePathSet ->
+                    entry.path?.let { "storage path set to \"${truncated(it)}\"" } ?: "storage path cleared"
+                is HistoryEntry.FieldSet ->
+                    entry.value?.let { "field \"${truncated(entry.key)}\" set to \"${truncated(it)}\"" }
+                        ?: "field \"${truncated(entry.key)}\" cleared"
+                is HistoryEntry.Trashed -> "moved to trash from \"${truncated(entry.path)}\""
+                HistoryEntry.Restored -> "restored"
+                HistoryEntry.Deleted -> "permanently deleted"
+                is HistoryEntry.Relinked -> "relinked to doc ${entry.newDocId}"
+                is HistoryEntry.TagRenamed -> "tag \"${truncated(entry.from)}\" renamed to \"${truncated(entry.to)}\""
+                is HistoryEntry.TagMerged -> "tag \"${truncated(entry.from)}\" merged into \"${truncated(entry.to)}\""
+                is HistoryEntry.TagStyled -> "style changed for tag \"${truncated(entry.tag)}\""
+                is HistoryEntry.SettingChanged -> "library setting \"${truncated(entry.key)}\" changed"
+                is HistoryEntry.Unknown ->
+                    "unrecorded event \"${truncated(entry.operation)}\"" +
+                        (entry.payload?.let { " payload=\"${truncated(it)}\"" } ?: "")
+                is HistoryEntry.Undecodable -> "unreadable event \"${truncated(entry.operation)}\""
+            }
+    }
+
+    /**
+     * Totals the assistant can quote: live documents, untagged and review-queue counts, OCR coverage,
+     * added and document-date ranges, and what the lifecycle screens hold. Every number is a query;
+     * nothing is derived or guessed, and a lifecycle total uses the same predicate as its screen.
+     */
+    class LibraryStatsTool(
+        private val documentDao: DocumentDao,
+        private val reviewMode: ReviewMode = ReviewMode.DEFAULT,
+    ) : SimpleTool<LibraryStatsTool.Args>(
+            argsType = typeToken<Args>(),
+            name = ChatTools.LIBRARY_STATS,
+            description =
+                "Library totals: live documents, untagged, the review queue for this library's review " +
+                    "mode, OCR coverage per state, the range of when documents were added, the range of " +
+                    "document dates, and how many are trashed, missing or permanently deleted.",
+        ) {
+        @Serializable
+        class Args
+
+        override suspend fun execute(args: Args): String {
+            val live = documentDao.countLive()
+            if (live == 0 && !documentDao.any()) {
+                return "The library has no documents yet."
+            }
+            val untagged = documentDao.countUntaggedOnce()
+            val queue =
+                when (reviewMode) {
+                    ReviewMode.UNTAGGED_ONLY -> untagged
+                    ReviewMode.INBOX_WORKFLOW -> documentDao.countUnreviewedOrUntaggedOnce()
+                }
+            val ocrRows = documentDao.ocrStateCounts()
+            val byColumn = ocrRows.associate { it.ocrState to it.count }
+            val knownColumns = OcrState.entries.map { it.column }.toSet()
+            val added = documentDao.addedRange()
+            val dates = documentDao.documentDateRange()
+            return buildString {
+                appendLine("Library statistics (live documents unless a lifecycle line says otherwise):")
+                appendLine("- live documents: $live")
+                appendLine("- untagged: $untagged")
+                appendLine("- review queue (${reviewMode.wire} mode): $queue")
+                appendLine("- in trash: ${documentDao.countTrashed()}")
+                appendLine("- missing files: ${documentDao.countMissing()}")
+                appendLine("- permanently deleted: ${documentDao.countDeleted()}")
+                append("- OCR coverage: ")
+                append(
+                    OcrState.entries.joinToString(", ") { state ->
+                        "${state.column}=${byColumn[state.column] ?: 0}"
+                    },
+                )
+                for (row in ocrRows.filter { it.ocrState !in knownColumns }) {
+                    append(", ${row.ocrState}=${row.count}")
+                }
+                appendLine()
+                append("- added range: ")
+                append(
+                    if (added.oldest == null || added.newest == null) {
+                        "(no live documents)"
+                    } else {
+                        "${isoDate(added.oldest)} to ${isoDate(added.newest)}"
+                    },
+                )
+                appendLine()
+                append("- document dates: ")
+                append(
+                    if (dates.oldest == null || dates.newest == null) {
+                        "(none recorded)"
+                    } else {
+                        "${dates.oldest} to ${dates.newest}"
+                    },
+                )
+                appendLine()
+            }.trimEnd()
         }
     }
 }

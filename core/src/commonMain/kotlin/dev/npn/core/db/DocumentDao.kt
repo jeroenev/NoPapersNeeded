@@ -222,6 +222,63 @@ interface DocumentDao {
     )
     fun countUnreviewedOrUntagged(): Flow<Int>
 
+    /** One-shot [countUntagged], for a reader that reports a number instead of observing it. */
+    @Query(
+        "SELECT COUNT(*) FROM documents d WHERE $LIVE_DOCUMENT " +
+            "AND NOT EXISTS (SELECT 1 FROM document_tags t WHERE t.docId = d.docId)",
+    )
+    suspend fun countUntaggedOnce(): Int
+
+    /** One-shot [countUnreviewedOrUntagged], for a reader that reports a number instead of observing it. */
+    @Query(
+        "SELECT COUNT(*) FROM documents d WHERE $LIVE_DOCUMENT " +
+            "AND (d.reviewed = 0 OR NOT EXISTS (SELECT 1 FROM document_tags t WHERE t.docId = d.docId))",
+    )
+    suspend fun countUnreviewedOrUntaggedOnce(): Int
+
+    /** How many live documents the library shows ([LIVE_DOCUMENT]). */
+    @Query("SELECT COUNT(*) FROM documents d WHERE $LIVE_DOCUMENT")
+    suspend fun countLive(): Int
+
+    /**
+     * Lifecycle totals for the AI assistant's library_stats, each the same predicate its screen
+     * uses: [observeTrashed] lists rows in [countTrashed], [observeMissing] those in [countMissing],
+     * and a tombstoned row is [countDeleted]. A trashed row whose file is also gone counts in both
+     * trash and missing, as it appears on both screens.
+     */
+    @Query("SELECT COUNT(*) FROM documents WHERE trashed = 1 AND deleted = 0")
+    suspend fun countTrashed(): Int
+
+    @Query("SELECT COUNT(*) FROM documents WHERE missing = 1 AND deleted = 0")
+    suspend fun countMissing(): Int
+
+    @Query("SELECT COUNT(*) FROM documents WHERE deleted = 1")
+    suspend fun countDeleted(): Int
+
+    /** Live documents per [DocumentEntity.ocrState] value; a state with no documents is absent. */
+    @Query(
+        "SELECT d.ocrState AS ocrState, COUNT(*) AS count FROM documents d " +
+            "WHERE $LIVE_DOCUMENT GROUP BY d.ocrState",
+    )
+    suspend fun ocrStateCounts(): List<OcrStateCount>
+
+    /**
+     * The oldest and newest "added" time among live documents: [DocumentEntity.createdAt] when the
+     * PDF names one, else its file's mtime. The same pair the library's `added` sort orders by.
+     */
+    @Query(
+        "SELECT MIN(COALESCE(d.createdAt, d.mtime)) AS oldest, " +
+            "MAX(COALESCE(d.createdAt, d.mtime)) AS newest FROM documents d WHERE $LIVE_DOCUMENT",
+    )
+    suspend fun addedRange(): EpochRange
+
+    /** The earliest and latest document dates (the date printed on the documents) among live rows. */
+    @Query(
+        "SELECT MIN(d.docDate) AS oldest, MAX(d.docDate) AS newest FROM documents d " +
+            "WHERE $LIVE_DOCUMENT AND d.docDate IS NOT NULL AND d.docDate != ''",
+    )
+    suspend fun documentDateRange(): DateRange
+
     /**
      * Live documents not reviewed yet, or with [taggedOnly] only those among them with a tag: what
      * the review migration marks.

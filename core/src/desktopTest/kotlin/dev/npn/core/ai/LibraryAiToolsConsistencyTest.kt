@@ -40,12 +40,20 @@ class LibraryAiToolsConsistencyTest {
                 ChatTools.SEARCH_FIELDS,
                 ChatTools.GET_DOCUMENT,
                 ChatTools.GET_DOCUMENT_TEXT,
+                ChatTools.GET_DOCUMENT_HISTORY,
+                ChatTools.LIBRARY_STATS,
             )
         parameters.getValue(ChatTools.SEARCH_DOCUMENTS) shouldContain ChatTools.ARG_QUERY
+        parameters.getValue(ChatTools.SEARCH_DOCUMENTS) shouldContain ChatTools.ARG_ADDED_FROM
+        parameters.getValue(ChatTools.SEARCH_DOCUMENTS) shouldContain ChatTools.ARG_ADDED_TO
+        parameters.getValue(ChatTools.SEARCH_DOCUMENTS) shouldContain ChatTools.ARG_OCR_STATE
+        parameters.getValue(ChatTools.SEARCH_DOCUMENTS) shouldContain ChatTools.ARG_REVIEWED
+        parameters.getValue(ChatTools.SEARCH_DOCUMENTS) shouldContain ChatTools.ARG_LIFECYCLE
         parameters.getValue(ChatTools.DOCUMENTS_WITH_TAG) shouldContain ChatTools.ARG_TAG
         parameters.getValue(ChatTools.SEARCH_FILENAMES) shouldContain ChatTools.ARG_PATTERN
         parameters.getValue(ChatTools.GET_DOCUMENT) shouldContain ChatTools.ARG_DOC_ID
         parameters.getValue(ChatTools.GET_DOCUMENT_TEXT) shouldContain ChatTools.ARG_DOC_ID
+        parameters.getValue(ChatTools.GET_DOCUMENT_HISTORY) shouldContain ChatTools.ARG_DOC_ID
     }
 
     @Test
@@ -122,7 +130,7 @@ class LibraryAiToolsConsistencyTest {
                     documentEntity(live),
             )
             (hidden + live).forEach { db.ftsDao().upsertContent(FtsDocumentEntity(docId = it, content = "needle")) }
-            val tool = LibraryAiTools.SearchDocumentsTool(db.ftsDao(), db.documentDao())
+            val tool = LibraryAiTools.SearchDocumentsTool(db.ftsDao(), db.documentDao(), db.tagDao())
 
             tool.execute(LibraryAiTools.SearchDocumentsTool.Args("needle")) shouldContain "[doc:$live]"
         }

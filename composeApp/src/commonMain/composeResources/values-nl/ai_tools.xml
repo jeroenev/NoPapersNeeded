@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ai_tool_filtered_documents">Documenten op filters doorzocht</string>
+    <string name="ai_tool_read_library_stats">Bibliotheekstatistieken gelezen</string>
+    <string name="ai_tool_read_document_history">Geschiedenis van %1$s gelezen</string>
+</resources>

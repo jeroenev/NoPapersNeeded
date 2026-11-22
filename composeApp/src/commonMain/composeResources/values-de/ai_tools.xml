@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ai_tool_filtered_documents">Dokumente nach Filtern durchsucht</string>
+    <string name="ai_tool_read_library_stats">Bibliotheksstatistik gelesen</string>
+    <string name="ai_tool_read_document_history">Verlauf von %1$s gelesen</string>
+</resources>

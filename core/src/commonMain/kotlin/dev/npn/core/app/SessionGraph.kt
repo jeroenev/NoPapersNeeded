@@ -31,6 +31,7 @@ import dev.npn.core.work.drainedQueue
 import dev.npn.core.xmp.BakeService
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.first
 
 /**
  * Every part of one open session, each built once, in dependency order, over the journal
@@ -68,6 +69,7 @@ internal class SessionGraph(
             chats = deps.deviceDb.keyValueDao(),
             ownWrite = { lifetime.owned(it) },
             clock = deps.clock,
+            reviewModeProvider = { reviewConfig.reviewMode.first() },
             configProvider = deps.settings.aiConfig,
         ).also { lifetime.releaseOnClose(it::close) }
 

@@ -110,6 +110,23 @@ interface MetadataProjectionDao {
     )
     suspend fun eventsForDocument(documentId: String): List<MetadataEventEntity>
 
+    /**
+     * The most recent [limit] events scoped to [documentId], newest first. Bounded in SQL, for a
+     * reader that reports a document's history to the assistant and must not load the whole list.
+     */
+    @Query(
+        "SELECT * FROM metadata_events WHERE documentId = :documentId " +
+            "ORDER BY hlcPhysical DESC, hlcCounter DESC, hlcDevice DESC LIMIT :limit",
+    )
+    suspend fun recentEventsForDocument(
+        documentId: String,
+        limit: Int,
+    ): List<MetadataEventEntity>
+
+    /** How many events are recorded against [documentId]; the history tool says what it left out. */
+    @Query("SELECT COUNT(*) FROM metadata_events WHERE documentId = :documentId")
+    suspend fun eventCountForDocument(documentId: String): Int
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertEvent(event: MetadataEventEntity): Long
 
