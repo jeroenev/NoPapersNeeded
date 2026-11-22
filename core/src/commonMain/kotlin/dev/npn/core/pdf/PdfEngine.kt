@@ -91,6 +91,13 @@ interface PdfEngine {
     suspend fun open(bytes: ByteArray): PdfDocumentHandle
 
     /**
+     * The XML files embedded in [bytes] (PDF/A-3 attachments), for structured e-invoice detection.
+     * Empty when the document has none; attachments that are not XML, or are too large to be an
+     * invoice, are left out rather than read.
+     */
+    suspend fun embeddedXmlFiles(bytes: ByteArray): List<EmbeddedXmlFile> = emptyList()
+
+    /**
      * Combine JPEG/PNG page images into a single PDF (one image per page). The bytes depend only on
      * [images], so converting the same images again makes a duplicate, not another document.
      */
@@ -111,6 +118,18 @@ class PdfOpenException(
     message: String,
     cause: Throwable? = null,
 ) : Exception(message, cause)
+
+/** One XML attachment a PDF carries (a PDF/A-3 embedded file), by its name and bytes. */
+class EmbeddedXmlFile(
+    val name: String,
+    val bytes: ByteArray,
+)
+
+/**
+ * Largest embedded XML attachment read for e-invoice detection. A structured invoice is kilobytes;
+ * a larger file is not one, and reading it would only cost memory.
+ */
+const val MAX_EMBEDDED_XML_BYTES = 8 * 1024 * 1024
 
 /** JPEG magic bytes: FF D8 FF. */
 internal fun isJpeg(bytes: ByteArray): Boolean =

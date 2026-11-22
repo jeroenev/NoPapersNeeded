@@ -4,7 +4,9 @@ import dev.npn.core.ai.AiChat
 import dev.npn.core.ai.AiSuggest
 import dev.npn.core.app.aiedit.AiEditQueueFacade
 import dev.npn.core.db.isLive
+import dev.npn.core.einvoice.EInvoiceDetector
 import dev.npn.core.fs.ExternalSource
+import dev.npn.core.fs.readDocument
 import dev.npn.core.index.DeviceIdentity
 import dev.npn.core.index.EmptyImportException
 import dev.npn.core.index.ImportResult
@@ -147,7 +149,11 @@ internal class LibrarySessionImpl(
     override suspend fun importPdf(
         source: ExternalSource,
         suggestedName: String,
-    ): ImportOutcome = owned { importing(suggestedName) { importService.importPdf(source, suggestedName) } }
+    ): ImportOutcome =
+        owned {
+            importing(suggestedName) { importService.importPdf(source, suggestedName) }
+                .also { fillEInvoiceFields(it) }
+        }
 
     override suspend fun holdsDocument(docId: String): Boolean =
         owned {
@@ -159,7 +165,26 @@ internal class LibrarySessionImpl(
     internal suspend fun importPdfBytes(
         bytes: ByteArray,
         suggestedName: String,
-    ): ImportOutcome = owned { importing(suggestedName) { importService.importBytes(bytes, suggestedName) } }
+    ): ImportOutcome =
+        owned {
+            importing(suggestedName) { importService.importBytes(bytes, suggestedName) }
+                .also { fillEInvoiceFields(it) }
+        }
+
+    /**
+     * Fill a freshly imported document's blank fields from an embedded structured e-invoice. Only a
+     * blank field is written ([MetadataWriter.applyEdits] with `fillOnly`), so a value somebody else
+     * already wrote wins, and only an import does this: a rescan never re-applies it. A failure is
+     * logged; the import stands either way.
+     */
+    private suspend fun fillEInvoiceFields(outcome: ImportOutcome) {
+        val imported = outcome as? ImportOutcome.Imported ?: return
+        log.runLogged("Reading the e-invoice of ${imported.relPath}") {
+            val bytes = fs.readDocument(imported.relPath, imported.docId) ?: return@runLogged
+            val invoice = EInvoiceDetector.detect(deps.pdfEngine.embeddedXmlFiles(bytes)) ?: return@runLogged
+            meta.applyEdits(listOf(imported.docId), fields = invoice.documentFields(), fillOnly = true)
+        }
+    }
 
     override suspend fun importImagesAsPdf(
         images: List<ByteArray>,

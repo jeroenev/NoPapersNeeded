@@ -32,6 +32,23 @@ internal class PdfBoxEngine(
     override suspend fun open(bytes: ByteArray): PdfDocumentHandle =
         withContext(io) { PdfBoxDocumentHandle(loadOrThrow(bytes)) }
 
+    override suspend fun embeddedXmlFiles(bytes: ByteArray): List<EmbeddedXmlFile> =
+        withContext(io) {
+            loadOrThrow(bytes).use { doc ->
+                val tree = doc.documentCatalog.names?.embeddedFiles ?: return@use emptyList()
+                tree.names.orEmpty().mapNotNull { (key, spec) ->
+                    val name = spec.filename ?: key
+                    if (!name.lowercase().endsWith(".xml")) return@mapNotNull null
+                    val file = spec.embeddedFile ?: return@mapNotNull null
+                    if (file.size > MAX_EMBEDDED_XML_BYTES) return@mapNotNull null
+                    val content = file.createInputStream().use { it.readBytes() }
+                    content
+                        .takeIf { it.size <= MAX_EMBEDDED_XML_BYTES }
+                        ?.let { EmbeddedXmlFile(name, it) }
+                }
+            }
+        }
+
     private fun loadOrThrow(bytes: ByteArray): PDDocument =
         try {
             Loader.loadPDF(bytes)

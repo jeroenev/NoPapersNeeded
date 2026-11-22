@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+    xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
+    xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2">
+    <cbc:ID>UBL-2024-77</cbc:ID>
+    <cbc:IssueDate>2024-03-01</cbc:IssueDate>
+    <cbc:DueDate>2024-03-31</cbc:DueDate>
+    <cbc:DocumentCurrencyCode>GBP</cbc:DocumentCurrencyCode>
+    <cac:AccountingSupplierParty>
+        <cac:Party>
+            <cac:PartyName>
+                <cbc:Name>Widgets Ltd</cbc:Name>
+            </cac:PartyName>
+        </cac:Party>
+    </cac:AccountingSupplierParty>
+    <cac:AccountingCustomerParty>
+        <cac:Party>
+            <cac:PartyName>
+                <cbc:Name>Buyer Corp</cbc:Name>
+            </cac:PartyName>
+        </cac:Party>
+    </cac:AccountingCustomerParty>
+    <cac:PaymentMeans>
+        <cbc:PaymentID>PAY-REF-9</cbc:PaymentID>
+        <cac:PayeeFinancialAccount>
+            <cbc:ID>GB33BUKB20201555555555</cbc:ID>
+        </cac:PayeeFinancialAccount>
+    </cac:PaymentMeans>
+    <cac:LegalMonetaryTotal>
+        <cbc:PayableAmount currencyID="GBP">250.50</cbc:PayableAmount>
+    </cac:LegalMonetaryTotal>
+</Invoice>

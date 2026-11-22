@@ -80,7 +80,9 @@ internal fun FieldsSection(
     var newField by rememberSaveable(
         stateSaver = jsonSaver(NewFieldSeed.serializer().nullable),
     ) { mutableStateOf(null) }
-    val shown = defs.filter { it.showByDefault || it.key in doc.fields || it.key in revealed }
+    // The e-invoice marker is a value the detail screen shows as a badge, not a field to edit.
+    val listedDefs = defs.filter { it.key != FieldKeys.EINVOICE }
+    val shown = listedDefs.filter { it.showByDefault || it.key in doc.fields || it.key in revealed }
     val orphanKeys = (doc.fields.keys - defs.map { it.key }.toSet()).sorted()
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -134,7 +136,7 @@ internal fun FieldsSection(
         // "Add field": every definition not on screen, then "New field…".
         AddFieldMenu(
             label = stringResource(Res.string.detail_add_field),
-            fields = defs.filter { it !in shown },
+            fields = listedDefs.filter { it !in shown },
             onPick = { revealed = revealed + it.key },
             newLabel = stringResource(Res.string.detail_new_field_menu),
             onNew = { newField = NewFieldSeed() },

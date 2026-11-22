@@ -150,6 +150,23 @@ object FieldKeys {
     const val DOC_TYPE = "docType"
     const val DOC_DATE = "docDate"
     const val NOTES = "notes"
+
+    /** Added with the e-invoice fields (seed version 3); see [EInvoiceData.documentFields]. */
+    const val INVOICE_NUMBER = "invoiceNumber"
+    const val INVOICE_TOTAL = "invoiceTotal"
+    const val INVOICE_CURRENCY = "invoiceCurrency"
+    const val INVOICE_DUE_DATE = "invoiceDueDate"
+    const val INVOICE_BUYER = "invoiceBuyer"
+    const val PAYMENT_REFERENCE = "paymentReference"
+    const val IBAN = "iban"
+
+    /**
+     * Marker set when a document's metadata came from an embedded structured e-invoice. It is a
+     * registered field rather than a system property so an older build still opens the library: an
+     * unknown `field-set` key is an orphan value there, while an unknown property would refuse it.
+     */
+    const val EINVOICE = "eInvoice"
+
     val WELL_KNOWN: Set<String> = setOf(TITLE, CORRESPONDENT, DOC_TYPE, DOC_DATE, NOTES)
 
     /** Fields that a split does not carry onto its parts: they describe the whole, not each piece. */
@@ -161,8 +178,22 @@ object FieldKeys {
     /**
      * Raised whenever [seedDefinitions] gains something a library seeded earlier should get too
      * ([upgradeSeeded]). 1: the five definitions. 2: title's [FieldDef.perDocument] and the hints.
+     * 3: the e-invoice fields and their marker.
      */
-    const val SEED_VERSION = 2
+    const val SEED_VERSION = 3
+
+    /** Seeded fields introduced at [SEED_VERSION] 3; [upgradeSeeded] adds them to older libraries. */
+    private val ADDED_IN_VERSION_3: Set<String> =
+        setOf(
+            INVOICE_NUMBER,
+            INVOICE_TOTAL,
+            INVOICE_CURRENCY,
+            INVOICE_DUE_DATE,
+            INVOICE_BUYER,
+            PAYMENT_REFERENCE,
+            IBAN,
+            EINVOICE,
+        )
 
     private val invalidKeyChars = Regex("[^A-Za-z0-9_]")
     private val whitespace = Regex("\\s+")
@@ -235,26 +266,115 @@ object FieldKeys {
             // Not AI-enabled on purpose: automatic enrichment must not start generating prose into
             // the user's notes on every OCR completion, which is exactly today's behaviour.
             FieldDef(NOTES, labels(NOTES), FieldType.LONG_TEXT, showByDefault = true, aiEnabled = false, position = 4),
+        ) + eInvoiceDefinitions(labels)
+
+    /**
+     * The fields an embedded structured e-invoice fills ([dev.npn.core.einvoice.EInvoiceData]).
+     * Deliberately not AI-enabled: a seller's own numbers are not a model's guess. All are hidden
+     * until a value lands, and the last is only the badge marker.
+     */
+    private fun eInvoiceDefinitions(labels: (String) -> String): List<FieldDef> =
+        listOf(
+            FieldDef(
+                INVOICE_NUMBER,
+                labels(INVOICE_NUMBER),
+                FieldType.TEXT,
+                showByDefault = false,
+                aiEnabled = false,
+                position = 5,
+                perDocument = true,
+            ),
+            FieldDef(
+                INVOICE_TOTAL,
+                labels(INVOICE_TOTAL),
+                FieldType.DECIMAL,
+                showByDefault = false,
+                aiEnabled = false,
+                position = 6,
+            ),
+            FieldDef(
+                INVOICE_CURRENCY,
+                labels(INVOICE_CURRENCY),
+                FieldType.TEXT,
+                showByDefault = false,
+                aiEnabled = false,
+                position = 7,
+            ),
+            FieldDef(
+                INVOICE_DUE_DATE,
+                labels(INVOICE_DUE_DATE),
+                FieldType.DATE,
+                showByDefault = false,
+                aiEnabled = false,
+                position = 8,
+            ),
+            FieldDef(
+                INVOICE_BUYER,
+                labels(INVOICE_BUYER),
+                FieldType.TEXT,
+                showByDefault = false,
+                aiEnabled = false,
+                position = 9,
+                perDocument = true,
+            ),
+            FieldDef(
+                PAYMENT_REFERENCE,
+                labels(PAYMENT_REFERENCE),
+                FieldType.TEXT,
+                showByDefault = false,
+                aiEnabled = false,
+                position = 10,
+                perDocument = true,
+            ),
+            FieldDef(
+                IBAN,
+                labels(IBAN),
+                FieldType.TEXT,
+                showByDefault = false,
+                aiEnabled = false,
+                position = 11,
+                perDocument = true,
+            ),
+            // The badge marker: a value, not a field the panel lists (FieldsSection hides it).
+            FieldDef(
+                EINVOICE,
+                labels(EINVOICE),
+                FieldType.TEXT,
+                showByDefault = false,
+                aiEnabled = false,
+                position = 12,
+                perDocument = true,
+            ),
         )
 
     /**
-     * What a library seeded at an earlier [SEED_VERSION] gains from [seeds]: each definition still
+     * What a library seeded at an earlier [fromVersion] gains from [seeds]: each definition still
      * registered under a seeded key takes the seed's [FieldDef.perDocument], and its hint where it has
-     * none. Everything else the library decided stays: a label, type, flag or position changed since,
-     * a hint of its own, and a deleted definition, which stays deleted. Only the changed definitions
-     * are returned.
+     * none; definitions introduced at seed version 3 and missing from [current] are added, because a
+     * library seeded at 2 never had the chance to delete them. Everything else the library decided
+     * stays: a label, type, flag or position changed since, a hint of its own, and a definition seeded
+     * before [fromVersion] that was deleted, which stays deleted. Only the changed definitions are
+     * returned.
      */
     fun upgradeSeeded(
         current: List<FieldDef>,
         seeds: List<FieldDef>,
+        fromVersion: Int,
     ): List<FieldDef> {
         val seedsByKey = seeds.associateBy { it.key }
+        val present = current.mapTo(HashSet()) { it.key.lowercase() }
+        val added =
+            if (fromVersion < 3) {
+                seeds.filter { it.key in ADDED_IN_VERSION_3 && it.key.lowercase() !in present }
+            } else {
+                emptyList()
+            }
         return current.mapNotNull { def ->
             val seed = seedsByKey[def.key] ?: return@mapNotNull null
             def
                 .copy(perDocument = def.perDocument || seed.perDocument, hint = def.hint ?: seed.hint)
                 .takeIf { it != def }
-        }
+        } + added
     }
 
     /**
@@ -279,5 +399,13 @@ object FieldKeys {
             DOC_TYPE to "Document type",
             DOC_DATE to "Document date",
             NOTES to "Notes",
+            INVOICE_NUMBER to "Invoice number",
+            INVOICE_TOTAL to "Invoice total",
+            INVOICE_CURRENCY to "Currency",
+            INVOICE_DUE_DATE to "Due date",
+            INVOICE_BUYER to "Invoice buyer",
+            PAYMENT_REFERENCE to "Payment reference",
+            IBAN to "IBAN",
+            EINVOICE to "E-invoice",
         )
 }

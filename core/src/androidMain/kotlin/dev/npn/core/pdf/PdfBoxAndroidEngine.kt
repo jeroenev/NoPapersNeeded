@@ -43,6 +43,23 @@ internal class PdfBoxAndroidEngine(
     override suspend fun open(bytes: ByteArray): PdfDocumentHandle =
         LazyPdfDocumentHandle(openText = { openText(bytes) }, openPages = { openPages(bytes) })
 
+    override suspend fun embeddedXmlFiles(bytes: ByteArray): List<EmbeddedXmlFile> =
+        withContext(io) {
+            loadOrThrow(bytes).use { doc ->
+                val tree = doc.documentCatalog.names?.embeddedFiles ?: return@use emptyList()
+                tree.names.orEmpty().mapNotNull { (key, spec) ->
+                    val name = spec.filename ?: key
+                    if (!name.lowercase().endsWith(".xml")) return@mapNotNull null
+                    val file = spec.embeddedFile ?: return@mapNotNull null
+                    if (file.size > MAX_EMBEDDED_XML_BYTES) return@mapNotNull null
+                    val content = file.createInputStream().use { it.readBytes() }
+                    content
+                        .takeIf { it.size <= MAX_EMBEDDED_XML_BYTES }
+                        ?.let { EmbeddedXmlFile(name, it) }
+                }
+            }
+        }
+
     private fun openText(bytes: ByteArray): PdfTextBackend = PdfBoxTextBackend(loadOrThrow(bytes))
 
     private fun loadOrThrow(bytes: ByteArray): PDDocument {

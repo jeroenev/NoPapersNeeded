@@ -1,19 +1,45 @@
 package dev.npn.core.pdf
 
 import org.apache.pdfbox.pdmodel.PDDocument
+import org.apache.pdfbox.pdmodel.PDDocumentNameDictionary
+import org.apache.pdfbox.pdmodel.PDEmbeddedFilesNameTreeNode
 import org.apache.pdfbox.pdmodel.PDPage
 import org.apache.pdfbox.pdmodel.PDPageContentStream
 import org.apache.pdfbox.pdmodel.common.PDRectangle
+import org.apache.pdfbox.pdmodel.common.filespecification.PDComplexFileSpecification
+import org.apache.pdfbox.pdmodel.common.filespecification.PDEmbeddedFile
 import org.apache.pdfbox.pdmodel.font.PDType1Font
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts
 import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory
 import java.awt.Color
 import java.awt.image.BufferedImage
+import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import javax.imageio.ImageIO
 
 /** Test fixtures: real PDFs and images generated with PDFBox 3.x in-process. */
 object PdfFixtures {
+    /** One-page PDF carrying [bytes] as an embedded attachment named [name]. */
+    fun pdfWithEmbeddedFile(
+        name: String,
+        bytes: ByteArray,
+    ): ByteArray =
+        PDDocument().use { doc ->
+            doc.addPage(PDPage(PDRectangle.A4))
+            val embedded = PDEmbeddedFile(doc, ByteArrayInputStream(bytes)).apply { subtype = "text/xml" }
+            val spec =
+                PDComplexFileSpecification().apply {
+                    file = name
+                    embeddedFile = embedded
+                }
+            val tree = PDEmbeddedFilesNameTreeNode().apply { names = mapOf(name to spec) }
+            doc.documentCatalog.names =
+                PDDocumentNameDictionary(doc.documentCatalog).apply { embeddedFiles = tree }
+            val out = ByteArrayOutputStream()
+            doc.save(out)
+            out.toByteArray()
+        }
+
     /** Two-page PDF with an embedded text layer containing [lines] on each page. */
     fun embeddedTextPdf(vararg lines: String): ByteArray {
         PDDocument().use { doc ->
