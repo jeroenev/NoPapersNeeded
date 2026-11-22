@@ -78,7 +78,9 @@ class OcrFacadeTest {
                 .pageCount
                 .shouldBeNull()
 
-            rig.session.ocr.aiOcrOffer(docId) shouldBe AiOcrOffer.Large(LONG_PAGES)
+            val offer = rig.session.ocr.aiOcrOffer(docId)
+            (offer as AiOcrOffer.Large).pages shouldBe LONG_PAGES
+            offer.estimate?.requests shouldBe LONG_PAGES
 
             rig.db
                 .documentDao()
