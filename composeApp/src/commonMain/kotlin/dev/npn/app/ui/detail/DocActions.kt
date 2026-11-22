@@ -283,16 +283,16 @@ private fun DocActionsMenu(
             enabled = printable && !state.printing,
         )
     // A wide bar promotes the direct document edits to icons; AI OCR and bake-in-place stay one tap
-    // away in the overflow, and print sits beside share/export above. A compact bar — and the narrow
-    // side-panel header — keep everything in the overflow so the few icons that fit there are not
-    // crowded out.
+    // away in the overflow, and print is both beside share/export above and in this menu. A compact
+    // bar — and the narrow side-panel header — keep everything in the overflow so the few icons that
+    // fit there are not crowded out.
     TopBarActions(
         inline = if (compact) emptyList() else listOf(rename, reOcr, split, trash),
         overflow =
             if (compact) {
                 listOfNotNull(rename, reOcr, aiOcrAction, split, print, bake, trash)
             } else {
-                listOfNotNull(aiOcrAction, bake)
+                listOfNotNull(aiOcrAction, print, bake)
             },
         overflowLabel = stringResource(Res.string.detail_more_actions),
     )
