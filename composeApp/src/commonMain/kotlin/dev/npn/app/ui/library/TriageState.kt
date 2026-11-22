@@ -1,6 +1,5 @@
 package dev.npn.app.ui.library
 
-import androidx.compose.runtime.Immutable
 import dev.npn.core.app.DocListItem
 
 /**
@@ -9,8 +8,10 @@ import dev.npn.core.app.DocListItem
  * current filter and sort, so the progress line and next/previous keep their footing while a
  * document marked reviewed leaves the live results; each document itself is read live from its own
  * viewmodel as the mode shows it.
+ *
+ * The order is the current result set, not the whole library: the Inbox filter narrows it to the
+ * review queue, while another filter lets triage work through whatever that filter shows.
  */
-@Immutable
 data class TriageState(
     val currentId: String,
     /** The documents in the order the library showed them when the mode opened. */
@@ -48,6 +49,10 @@ interface TriageActions {
     /** Move back without marking anything: a skip backwards. At the first document this stays put. */
     fun triagePrevious()
 
-    /** The document was marked reviewed and its draft saved: move on, or finish at the last one. */
-    fun triageReviewedAndAdvance()
+    /**
+     * [docId]'s draft and reviewed marker landed: count it reviewed and move on, or finish after the
+     * last one. A save that lands after the user moved on itself is ignored, so it cannot advance or
+     * count the document now on screen.
+     */
+    fun triageReviewedAndAdvance(docId: String)
 }

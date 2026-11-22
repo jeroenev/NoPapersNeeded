@@ -14,8 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -30,12 +28,14 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.BackTopBar
-import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.LoadingIndicator
 import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.PositionStepper
@@ -57,16 +57,13 @@ import dev.npn.core.app.LibrarySession
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.reviewMarkerIsAuthoritative
 import dev.npn.core.settings.SettingsRepository
+import dev.npn.core.util.runCatchingCancellable
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.detail_next_document
-import no_papers_needed.composeapp.generated.resources.detail_previous_document
 import no_papers_needed.composeapp.generated.resources.detail_tags
-import no_papers_needed.composeapp.generated.resources.triage_empty_subtitle
-import no_papers_needed.composeapp.generated.resources.triage_empty_title
+import no_papers_needed.composeapp.generated.resources.triage_next_document
+import no_papers_needed.composeapp.generated.resources.triage_previous_document
 import no_papers_needed.composeapp.generated.resources.triage_progress
 import no_papers_needed.composeapp.generated.resources.triage_title
-import no_papers_needed.composeapp.generated.resources.ux_review_finish
-import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
 /** The registry keys the triage mode edits, in the order they appear. */
@@ -95,7 +92,9 @@ internal fun TriageScreen(
 ) {
     val item = state.current
     if (item == null) {
-        TriageEmpty(actions::exitTriage, modifier)
+        // The movers only pick ids the mode knows, so this is only reachable from a hand-built
+        // state; leave rather than stranding the user on a surface with no way out.
+        LaunchedEffect(Unit) { actions.exitTriage() }
         return
     }
     val drafts = LocalDocumentDrafts.current
@@ -112,12 +111,11 @@ internal fun TriageScreen(
     // Every move lands the keyboard back on the mode, so J/K work at once after a button or a save.
     LaunchedEffect(state.currentId) {
         withFrameNanos { }
-        runCatching { modeFocus.requestFocus() }
+        runCatchingCancellable { modeFocus.requestFocus() }
     }
     val progress =
-        pluralStringResource(
-            Res.plurals.triage_progress,
-            state.unreviewedRemaining,
+        stringResource(
+            Res.string.triage_progress,
             state.position,
             state.total,
             state.unreviewedRemaining,
@@ -128,18 +126,23 @@ internal fun TriageScreen(
                 .fillMaxSize()
                 .focusRequester(modeFocus)
                 .focusable()
-                .triageKeys(onNext = actions::triageNext, onPrevious = actions::triagePrevious)
-                .triageEscapeKey(actions::exitTriage),
+                .triageKeys(
+                    onNext = actions::triageNext,
+                    onPrevious = actions::triagePrevious,
+                    onExit = actions::exitTriage,
+                ),
         topBar = {
             BackTopBar(
                 title = stringResource(Res.string.triage_title),
                 onBack = actions::exitTriage,
                 subtitle = progress,
+                // Next/previous swap the whole document under the user; say the new progress.
+                subtitleModifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
             ) {
                 PositionStepper(
                     position = null,
-                    previousLabel = stringResource(Res.string.detail_previous_document),
-                    nextLabel = stringResource(Res.string.detail_next_document),
+                    previousLabel = stringResource(Res.string.triage_previous_document),
+                    nextLabel = stringResource(Res.string.triage_next_document),
                     onPrevious = actions::triagePrevious.takeIf { state.hasPrevious },
                     onNext = actions::triageNext.takeIf { state.hasNext },
                 )
@@ -181,6 +184,7 @@ internal fun TriageScreen(
                 preview = preview,
                 modifier = Modifier.fillMaxWidth().weight(1f),
             )
+            val docId = document.doc.docId
             EditorStatusBar(
                 draft = editing.draft,
                 onRetry = editing.actions::commitDraft,
@@ -188,7 +192,15 @@ internal fun TriageScreen(
                 onDiscard = editing::discard,
                 onReview =
                     if (metadata.document.reviewMode.reviewMarkerIsAuthoritative) {
-                        { editing.markReviewed(actions::triageReviewedAndAdvance) }
+                        {
+                            if (metadata.document.reviewed) {
+                                // Already reviewed: a redundant marker write is a journal event for
+                                // no change, so this is a skip (or the finish at the last one).
+                                if (state.hasNext) actions.triageNext() else actions.exitTriage()
+                            } else {
+                                editing.markReviewed { actions.triageReviewedAndAdvance(docId) }
+                            }
+                        }
                     } else {
                         null
                     },
@@ -258,26 +270,6 @@ private fun TriageMetadata(
             onAdd = editing.actions::addTag,
             onRemove = editing.actions::removeTag,
             onAddWithStyle = editing.actions::addTagWithStyle,
-        )
-    }
-}
-
-@Composable
-private fun TriageEmpty(
-    onExit: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Scaffold(
-        modifier = modifier.fillMaxSize(),
-        topBar = { BackTopBar(title = stringResource(Res.string.triage_title), onBack = onExit) },
-    ) { padding ->
-        EmptyState(
-            icon = Icons.Filled.CheckCircle,
-            title = stringResource(Res.string.triage_empty_title),
-            subtitle = stringResource(Res.string.triage_empty_subtitle),
-            actionLabel = stringResource(Res.string.ux_review_finish),
-            onAction = onExit,
-            modifier = Modifier.padding(padding),
         )
     }
 }

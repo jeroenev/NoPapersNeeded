@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 
 package dev.npn.app.ui.library
 
@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -85,7 +87,7 @@ import no_papers_needed.composeapp.generated.resources.library_no_documents_titl
 import no_papers_needed.composeapp.generated.resources.library_no_matches_subtitle
 import no_papers_needed.composeapp.generated.resources.library_no_matches_title
 import no_papers_needed.composeapp.generated.resources.library_scan_document
-import no_papers_needed.composeapp.generated.resources.triage_start
+import no_papers_needed.composeapp.generated.resources.triage_title
 import no_papers_needed.composeapp.generated.resources.ux_review_count
 import org.jetbrains.compose.resources.stringResource
 
@@ -463,18 +465,21 @@ private fun LibraryContent(
                 focusRequester = searchFocus,
                 onFocusChange = { searchFocused = it },
             )
-            if (reviewMode.reviewMarkerIsAuthoritative && !ui.selectionMode && state.reviewCount > 0) {
-                Row(
+            if (reviewMode.reviewMarkerIsAuthoritative && !ui.selectionMode) {
+                FlowRow(
                     Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    itemVerticalAlignment = Alignment.CenterVertically,
                 ) {
-                    ReviewChip(count = state.reviewCount, filter = ui.filter, actions = actions)
+                    if (state.reviewCount > 0) {
+                        ReviewChip(count = state.reviewCount, filter = ui.filter, actions = actions)
+                    }
                     FilledTonalButton(
                         onClick = actions::startTriage,
                         enabled = !results?.items.isNullOrEmpty(),
                     ) {
-                        Text(stringResource(Res.string.triage_start))
+                        Text(stringResource(Res.string.triage_title))
                     }
                 }
             }

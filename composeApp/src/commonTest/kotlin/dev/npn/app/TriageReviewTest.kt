@@ -49,4 +49,21 @@ class TriageReviewTest : MainDispatcherTest() {
 
             writer.batchedEdits.single().fields shouldBe mapOf(FieldKeys.TITLE to "New")
         }
+
+    /** A save that fails keeps the draft and does not run its move: the user stays on the document. */
+    @Test
+    fun aFailedReviewWriteDoesNotMoveOn() =
+        runTest(dispatcher) {
+            val writer = FakeMetadataWriter().apply { failBatchOps = { error("write failed") } }
+            val drafts = DocumentDrafts(writer, this)
+            drafts.registerEditing("one")
+            drafts.field("one", FieldKeys.TITLE, "New", persisted = "Old")
+            var moved = 0
+
+            drafts.commitTriageReview("one", stored, "New") { moved++ }
+            advanceUntilIdle()
+
+            moved shouldBe 0
+            drafts.state.getValue("one").error shouldBe "write failed"
+        }
 }

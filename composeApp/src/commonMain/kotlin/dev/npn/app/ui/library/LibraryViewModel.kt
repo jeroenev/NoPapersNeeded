@@ -353,12 +353,14 @@ class LibraryViewModel(
         if (items.isEmpty() || !mode.reviewMarkerIsAuthoritative) return
         val ids = items.map { it.doc.docId }
         val current = _preview.value?.takeIf { it in ids } ?: ids.first()
+        // A dialog open over the list belongs to the list; triage takes the screen.
+        _dialog.set(null)
         _triage.value =
             TriageState(
                 currentId = current,
                 order = ids,
                 known = items.associateBy { it.doc.docId },
-                unreviewed = items.filterNot { it.effectiveReviewed(mode) }.mapTo(LinkedHashSet()) { it.doc.docId },
+                unreviewed = items.filterNot { it.effectiveReviewed(mode) }.map { it.doc.docId }.toSet(),
             )
     }
 
@@ -372,18 +374,27 @@ class LibraryViewModel(
 
     private fun moveTriage(delta: Int) {
         val state = _triage.value ?: return
-        val next = state.order.getOrNull(state.order.indexOf(state.currentId) + delta) ?: return
+        val index = state.order.indexOf(state.currentId).takeIf { it >= 0 } ?: return
+        val next = state.order.getOrNull(index + delta) ?: return
         _triage.value = state.copy(currentId = next)
     }
 
     /**
-     * The current document's draft and reviewed marker landed: count it reviewed and move on, or
-     * leave the mode after the last one.
+     * The document's draft and reviewed marker landed: count it reviewed and move on, or leave the
+     * mode after the last one. A save that lands after a J/K move (the user may keep moving while it
+     * runs) belongs to a document that is no longer current and is ignored; it must never advance or
+     * count the document now on screen.
      */
-    override fun triageReviewedAndAdvance() {
+    override fun triageReviewedAndAdvance(docId: String) {
         val state = _triage.value ?: return
-        val reviewed = state.reviewed + state.currentId
-        val next = state.order.getOrNull(state.order.indexOf(state.currentId) + 1)
+        val reviewed = state.reviewed + docId
+        // A save that lands after the user moved on still counts the document it wrote, but it
+        // never advances or counts the document now on screen.
+        if (state.currentId != docId) {
+            _triage.value = state.copy(reviewed = reviewed)
+            return
+        }
+        val next = state.order.getOrNull(state.order.indexOf(docId) + 1)
         _triage.value = if (next == null) null else state.copy(currentId = next, reviewed = reviewed)
     }
 

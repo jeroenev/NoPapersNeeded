@@ -77,11 +77,16 @@ class TriageViewModelTest : MainDispatcherTest() {
             model.triage.value?.currentId shouldBe "d3"
         }
 
-    /** Moving on with J/K is a skip: it writes no reviewed marker. */
+    /** Moving on with J/K is a skip: it writes no reviewed marker, nor any other metadata. */
     @Test
     fun skippingMarksNothingReviewed() =
         runTest(dispatcher) {
-            val model = vm()
+            val session =
+                FakeLibrarySession().apply {
+                    documents.documents.value = listOf(listItem("d1"), listItem("d2"))
+                    reviewConfig.reviewModeFlow.value = ReviewMode.INBOX_WORKFLOW
+                }
+            val model = LibraryViewModel(session, FakeSettingsRepository()).also { collecting(it.content) }
             advanceUntilIdle()
             model.startTriage()
 
@@ -91,6 +96,8 @@ class TriageViewModelTest : MainDispatcherTest() {
 
             model.triage.value?.currentId shouldBe "d1"
             model.triage.value?.reviewed shouldBe emptySet()
+            session.meta.reviewedSets shouldBe emptyList()
+            session.meta.batchedEdits shouldBe emptyList()
         }
 
     @Test
@@ -100,7 +107,23 @@ class TriageViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
             model.startTriage()
 
-            model.triageReviewedAndAdvance()
+            model.triageReviewedAndAdvance("d1")
+
+            model.triage.value?.currentId shouldBe "d2"
+            model.triage.value?.reviewed shouldBe setOf("d1")
+            model.triage.value?.unreviewedRemaining shouldBe 2
+        }
+
+    /** A save that lands after the user moved on counts its document but must not advance the next. */
+    @Test
+    fun aReviewSaveLandingAfterAMoveDoesNotAdvanceTheNextDocument() =
+        runTest(dispatcher) {
+            val model = vm()
+            advanceUntilIdle()
+            model.startTriage()
+            model.triageNext()
+
+            model.triageReviewedAndAdvance("d1")
 
             model.triage.value?.currentId shouldBe "d2"
             model.triage.value?.reviewed shouldBe setOf("d1")
@@ -113,11 +136,12 @@ class TriageViewModelTest : MainDispatcherTest() {
             val model = vm(items = listOf(listItem("d1"), listItem("d2")))
             advanceUntilIdle()
             model.startTriage()
-            model.triageReviewedAndAdvance()
+            model.triageNext()
+            model.triageReviewedAndAdvance("d2")
 
             model.triage.value?.currentId shouldBe "d2"
             model.triage.value?.hasNext shouldBe false
-            model.triageReviewedAndAdvance()
+            model.triageReviewedAndAdvance("d2")
 
             model.triage.value shouldBe null
         }
@@ -137,6 +161,29 @@ class TriageViewModelTest : MainDispatcherTest() {
     fun anEmptyResultSetDoesNotStartATriageSession() =
         runTest(dispatcher) {
             val model = vm(items = emptyList())
+            advanceUntilIdle()
+            model.startTriage()
+
+            model.triage.value shouldBe null
+        }
+
+    @Test
+    fun startsOnThePreviewedDocumentWhenItIsInTheResultSet() =
+        runTest(dispatcher) {
+            val model = vm()
+            advanceUntilIdle()
+            model.preview("d2")
+            model.startTriage()
+
+            model.triage.value?.currentId shouldBe "d2"
+            model.triage.value?.position shouldBe 2
+        }
+
+    /** Untagged-only review has no stored marker for the mode's action to write. */
+    @Test
+    fun doesNotStartWithoutTheAuthoritativeReviewMarker() =
+        runTest(dispatcher) {
+            val model = vm(mode = ReviewMode.UNTAGGED_ONLY)
             advanceUntilIdle()
             model.startTriage()
 
