@@ -392,14 +392,14 @@ tasks.register<Tar>("packageLinuxTarball") {
 // host platform in its app resources, `rclone/rclone` (`rclone.exe` on Windows), where core's
 // bundledRcloneBinary() looks after the NPN_RCLONE override. Pinned by hash like every download a package ships: the values are the ones
 // rclone lists in the PGP-signed SHA256SUMS of the release (check its signature when bumping).
-val rcloneVersion = "v1.75.1"
+val rcloneVersion = "v1.76.0"
 val rcloneSha256 =
     mapOf(
-        "linux-amd64" to "982b5aa772841168f8e380f139e9e787b2a105403e32b94da8676a0e1c0a13ab",
-        "linux-arm64" to "03f2504174034b6d004152ed7369251c9a9ec1f7e0836eda420f5c7a5ec0dff9",
-        "osx-amd64" to "29253d0288b8fbbac46baad6e5f6add6cb01d462c79f10805bbd4631c4cdf82c",
-        "osx-arm64" to "c61d7a371c62bcbbe882c3423aa4b8bf63485c248dd0f692997b8f0c3f6d0c6f",
-        "windows-amd64" to "200eb602c126d82aa38b51e0f6b9ae837473ff99b51278d3f6f837574c494d6e",
+        "linux-amd64" to "b00f00b3266c3764413afe599d3ec316f6f43b3e0ea8a0bc1d186d2133e46df7",
+        "linux-arm64" to "ee169016675e23a69d77240565133ff7dbc9b33d16fa8f7053d4af39f1eaeb78",
+        "osx-amd64" to "4f5835733d52b818340f97b1fc0348a70461534d123363a183ca2b660219595a",
+        "osx-arm64" to "e72dc90b70f4947a7b72b61bde4a4fbba5777b2874fb448951ffdde67ebd0ab7",
+        "windows-amd64" to "8b4fd2737ade4e70c057ef4a49deb7cffe94b0fb9d7587c189d149823f21a1dc",
     )
 
 val rclonePlatform: String =

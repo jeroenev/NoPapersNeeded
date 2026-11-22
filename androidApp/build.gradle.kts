@@ -42,7 +42,7 @@ dependencies {
 //
 // `-Pnpn.rclone.skip=true` produces a build without the engine (fast local iteration on anything
 // that does not touch sync); a release must not use it.
-private val rcloneVersion = "v1.75.1"
+private val rcloneVersion = "v1.76.0"
 private val rcloneNdkVersion = "29.0.14206865"
 private val rcloneAndroidApi = "26"
 

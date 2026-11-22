@@ -1,5 +1,5 @@
 [versions]
-agp = "9.4.1"
+agp = "9.5.2"
 # The JDK that runs Gradle, compiles everything and is bundled with the desktop app.
 jdk = "25"
 # The bytecode every module targets. Android shares it and only offers newer Java library APIs on
@@ -16,10 +16,10 @@ androidx-lifecycle = "2.11.0"
 androidx-profileinstaller = "1.4.1"
 androidx-test-junit = "1.3.0"
 androidx-test-runner = "1.7.0"
-androidx-uiautomator = "2.4.0"
+androidx-uiautomator = "2.4.1"
 androidx-work = "2.12.0"
 compose-material-icons = "1.7.3"
-# No stable Material 3 for Compose 1.12 yet; this alpha is the one FileKit 0.16 pairs with it.
+# Material 3 for Compose 1.12 has no stable release yet; this is the newest alpha of that line.
 compose-material3 = "1.12.0-alpha03"
 compose-navigation = "2.10.0"
 # Back handling (system gesture, Esc on desktop); the JetBrains build carries the desktop actual.
@@ -29,28 +29,28 @@ compose-rules = "0.6.8"
 composeMultiplatform = "1.12.2"
 coroutines = "1.11.0"
 detekt = "2.0.0-alpha.6"
-filekit = "0.16.0"
+filekit = "0.17.1"
 jna = "5.19.1"
 kotlin = "2.4.21"
 kotlinx-datetime = "0.8.0"
-kotlinx-serialization = "1.12.0"
+kotlinx-serialization = "1.13.0"
 koog = "1.3.0"
 # Koog clients not yet promoted to stable; they depend on the stable 1.3.0 base modules.
 koog-beta = "1.3.0-beta"
-kotest = "6.2.6"
+kotest = "6.2.7"
 kover = "0.9.11"
-ksp = "2.3.12"
+ksp = "2.3.14"
 ktlint = "1.8.0"
-ktor = "3.6.0"
+ktor = "3.6.1"
 mlkit-docscanner = "16.0.0"
 mlkit-textrecognition = "16.0.1"
 pdfbox = "3.0.8"
 pdfbox-android = "2.0.27.0"
 # Mutation testing (`:core:mutationTest`), run from its command-line jar; never part of `check`.
-pitest = "1.30.1"
+pitest = "1.30.2"
 room3 = "3.0.3"
 sqlite = "2.7.1"
-spotless = "8.10.4"
+spotless = "8.12.0"
 
 [libraries]
 jna = { module = "net.java.dev.jna:jna", version.ref = "jna" }
