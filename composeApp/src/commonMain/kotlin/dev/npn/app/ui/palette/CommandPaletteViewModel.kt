@@ -241,7 +241,11 @@ internal class CommandPaletteViewModel(
         if (tag.isEmpty()) return
         newTagOpen.value = false
         launchReporting(Res.string.palette_new_tag_failed) {
-            session.tagAdmin.setTagStyle(tag, null, null)
+            // Writing a style to a name that already exists would clear its colour and icon: an
+            // existing tag is simply shown, and only a new one is created.
+            if (tag !in session.tags.allTagNames()) {
+                session.tagAdmin.setTagStyle(tag, null, null)
+            }
             navigation.openTags()
         }
     }
@@ -332,7 +336,7 @@ internal class CommandPaletteViewModel(
         val documents = library.documents.map { it.toPaletteItem() }
         val tags = library.tags.map { it.toPaletteItem() }
         val views = library.views.map { it.toPaletteItem() }
-        val settings = settingsItems(q, static.settings)
+        val settings = settingsItems(q, static.settings, static.recents)
         val commands = static.commands.map { it.toPaletteItem() }
 
         if (q.isEmpty()) {
@@ -403,8 +407,18 @@ internal class CommandPaletteViewModel(
     private fun settingsItems(
         query: String,
         entries: List<PaletteSettingsEntry>,
+        recents: List<String>,
     ): List<PaletteItem> {
-        if (query.isEmpty()) return entries.map { it.toPaletteItem() }
+        val recentIndex = recents.withIndex().associate { it.value to it.index }
+        if (query.isEmpty()) {
+            return entries
+                .sortedWith(
+                    compareBy(
+                        { recentIndex[settingsPaletteKey(it.id)] ?: Int.MAX_VALUE },
+                        { it.id.ordinal },
+                    ),
+                ).map { it.toPaletteItem() }
+        }
         val scored =
             entries.mapNotNull { entry ->
                 val titleScore = paletteMatchScore(query, entry.title)
@@ -425,19 +439,24 @@ internal class CommandPaletteViewModel(
                                         bestKeyword?.first?.let { it in entry.advancedKeywords } == true,
                             ),
                         score = score,
+                        recent = recentIndex[settingsPaletteKey(entry.id)] ?: Int.MAX_VALUE,
                         index = entry.id.ordinal,
                     )
                 }
             }
         return scored
-            .sortedWith(compareByDescending<PaletteSettingsMatch> { it.score }.thenBy { it.index })
-            .take(PALETTE_GROUP_LIMIT)
+            .sortedWith(
+                compareByDescending<PaletteSettingsMatch> { it.score }
+                    .thenBy { it.recent }
+                    .thenBy { it.index },
+            ).take(PALETTE_GROUP_LIMIT)
             .map { it.item }
     }
 
     private class PaletteSettingsMatch(
         val item: PaletteItem,
         val score: Int,
+        val recent: Int,
         val index: Int,
     )
 

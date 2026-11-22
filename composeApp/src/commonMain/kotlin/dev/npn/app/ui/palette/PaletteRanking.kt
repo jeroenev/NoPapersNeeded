@@ -33,7 +33,7 @@ private fun phraseScore(
     return if (isSubsequence(q, t)) SCORE_FUZZY else 0
 }
 
-/** Whether [q] starts at the beginning of a word of [t] (after a space, punctuation, or a case change). */
+/** Whether [q] starts at the beginning of a word of [t] (after a space or punctuation, not mid-word). */
 private fun startsAWord(
     q: String,
     t: String,

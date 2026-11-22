@@ -245,6 +245,40 @@ class CommandPaletteViewModelTest : MainDispatcherTest() {
         }
 
     @Test
+    fun togglingOpensAndClosesTheOverlay() =
+        runTest(dispatcher) {
+            val model = vm()
+            model.toggle()
+            advanceUntilIdle()
+            model.state.value.open shouldBe true
+            model.toggle()
+            advanceUntilIdle()
+            model.state.value.open shouldBe false
+        }
+
+    @Test
+    fun aRecentSettingsPaneLeadsTheEmptyQuery() =
+        runTest(dispatcher) {
+            val model = vm()
+            model.setSources(
+                commands = emptyList(),
+                settings =
+                    listOf(
+                        PaletteSettingsEntry(SettingsCategoryId.AI, "Assistant"),
+                        PaletteSettingsEntry(SettingsCategoryId.APPEARANCE, "Appearance"),
+                    ),
+            )
+            model.open()
+            advanceUntilIdle()
+            model.run(model.state.value.items.single { it.key == "settings:AI" })
+            advanceUntilIdle()
+
+            model.open()
+            advanceUntilIdle()
+            model.state.value.groups.first().items.first().key shouldBe "settings:AI"
+        }
+
+    @Test
     fun aQueryWithNoMatchesShowsNothing() =
         runTest(dispatcher) {
             val model = vm()
@@ -293,6 +327,19 @@ class CommandPaletteViewModelTest : MainDispatcherTest() {
 
             session.tagAdmin.tagStyles shouldContainExactly
                 listOf(Triple("invoices", null, null))
+            navigation.tags shouldBe 1
+        }
+
+    @Test
+    fun anExistingTagIsNotRestyled() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession().apply { tags.tagNames = listOf("invoices") }
+            val navigation = FakePaletteNavigation()
+            val model = vm(session, navigation)
+            model.confirmNewTag("invoices")
+            advanceUntilIdle()
+
+            session.tagAdmin.tagStyles shouldContainExactly emptyList()
             navigation.tags shouldBe 1
         }
 
