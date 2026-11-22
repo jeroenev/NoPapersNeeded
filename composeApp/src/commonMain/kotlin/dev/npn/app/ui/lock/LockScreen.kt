@@ -90,7 +90,6 @@ fun LockScreen(
     // through the prompt, never straight to unlockSystem (which would be no check at all).
     val promptForDevice: () -> Unit = {
         deviceAuth?.authenticate(title, subtitle) { unlocked -> if (unlocked) actions.unlockWithDevice() }
-        Unit
     }
     LaunchedEffect(deviceAuth, deviceAuthAvailable) {
         // Offer the device prompt as soon as the lock shows, once; cancelling leaves the PIN field.
