@@ -90,6 +90,11 @@ fun PageViewer(
     onPageChange: (Int) -> Unit,
     onRetryPageCount: () -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * Whether a horizontal swipe turns pages. False where a parent document pager owns horizontal
+     * swipes; the page indicator, its "go to page" dialog and the keyboard still turn pages.
+     */
+    swipePages: Boolean = true,
 ) {
     val ready = pageCount as? PageCountState.Ready
     if (ready == null) {
@@ -188,9 +193,10 @@ fun PageViewer(
             modifier = Modifier.fillMaxSize(),
             // While zoomed, drag belongs to pan until the page hits its horizontal edge.
             userScrollEnabled =
-                gestures
-                    .transformOf(current)
-                    .canPagerConsumeHorizontal(cache.fittedSizeFor(current, containerSize), containerSize),
+                swipePages &&
+                    gestures
+                        .transformOf(current)
+                        .canPagerConsumeHorizontal(cache.fittedSizeFor(current, containerSize), containerSize),
             beyondViewportPageCount = 1,
         ) { page ->
             PageSlide(

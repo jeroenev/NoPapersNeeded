@@ -12,19 +12,27 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.BackTopBar
 import dev.npn.app.ui.common.FloatingControls
 import dev.npn.app.ui.common.FocusOnEntry
+import dev.npn.app.ui.common.KeyedViewModelStores
 import dev.npn.app.ui.common.LoadingIndicator
+import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.PositionStepper
 import dev.npn.app.ui.common.PublishWindowTitle
+import dev.npn.app.ui.common.ViewModelStoreLease
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.settings.SettingsRepository
 import no_papers_needed.composeapp.generated.resources.Res
@@ -36,29 +44,115 @@ import org.jetbrains.compose.resources.stringResource
 
 /**
  * Full-screen document view: the shared [DocumentView] under a top bar that pages through the
- * library's browse order. Compact layouts (phones, narrow windows) open documents here; wide ones
- * show them in the library's side panel and come here only through its expand button, onto the same
- * viewmodel, the one in the document's own store [viewModels].
+ * library's browse order. Compact layouts (phones, narrow windows) open documents here as a
+ * horizontal pager over the library's current filtered and sorted list, with the metadata in a
+ * draggable peek sheet over the preview; wide ones show a single document in the split pane and
+ * come here only through the side panel's expand button, onto the same viewmodel, the one in the
+ * document's own store [documentStores].
+ *
+ * The document shown is kept here rather than only in the route, so swiping to another document and
+ * then crossing the wide/compact breakpoint keeps that document, and Back still returns to the
+ * library as it was.
  */
 @Composable
 fun DocDetailScreen(
     docId: String,
     session: LibrarySession,
     settings: SettingsRepository,
-    viewModels: ViewModelStoreOwner,
+    documentStores: KeyedViewModelStores<String>,
     browse: BrowseContext,
     onBack: () -> Unit,
     onNavigateToDoc: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val snackbar = remember { SnackbarHostState() }
-    // The viewer takes focus once the document is in, so its keyboard shortcuts work on desktop.
-    val viewerFocus = remember { FocusRequester() }
+    // Held for as long as this entry is on the back stack; shared with the library's side panel
+    // when it shows the same document, so expanding the panel continues where it was.
+    val documents = viewModel { ViewModelStoreLease(documentStores) }
+    // The pager's selection, not just the route's: a swiped-to document stays current across a
+    // width change, and a restored process can reopen it even when its browse order is gone.
+    var shownDocId by rememberSaveable(docId) { mutableStateOf(docId) }
+    // The order starts at what is on screen when that is still in the library's list, at the
+    // route's document when the list holds it, and at what was on screen alone after a restore.
+    val startDocId =
+        when {
+            shownDocId in browse.order -> shownDocId
+            docId in browse.order -> docId
+            else -> shownDocId
+        }
+    val order = remember(browse.order, startDocId) { DetailBrowseOrder.of(browse.order, startDocId) }
+    val wide = LocalWindowWidthClass.current.isWide
+    if (wide) {
+        val currentDocId = shownDocId.takeIf { it in order.ids } ?: docId
+        DocPage(
+            docId = currentDocId,
+            session = session,
+            settings = settings,
+            viewModels = documents.of(currentDocId),
+            browse = browse,
+            onBack = onBack,
+            onReviewNext = { browse.neighbour(currentDocId, 1)?.let(onNavigateToDoc) ?: onBack() },
+            hasNext = browse.neighbour(currentDocId, 1) != null,
+            goPrevDoc = browse.neighbour(currentDocId, -1)?.let { { onNavigateToDoc(it) } },
+            goNextDoc = browse.neighbour(currentDocId, 1)?.let { { onNavigateToDoc(it) } },
+            peekSheet = null,
+            swipePreviewPages = true,
+            modifier = modifier,
+        )
+        return
+    }
+    DocumentPager(
+        order = order,
+        modifier = modifier,
+        onShown = { shownDocId = it },
+    ) { _, pageDocId, isCurrent, onPrevious, onNext ->
+        DocPage(
+            docId = pageDocId,
+            session = session,
+            settings = settings,
+            viewModels = documents.of(pageDocId),
+            browse = browse,
+            onBack = onBack,
+            onReviewNext = { onNext?.invoke() ?: onBack() },
+            hasNext = onNext != null,
+            goPrevDoc = onPrevious,
+            goNextDoc = onNext,
+            peekSheet = rememberSaveable(pageDocId, saver = PeekSheetState.Saver) { PeekSheetState() },
+            // The document pager owns horizontal swipes; the preview's page controls still turn pages.
+            swipePreviewPages = order.ids.size <= 1,
+            modifier = Modifier.fillMaxSize(),
+            publishWindowTitle = isCurrent,
+        )
+    }
+}
 
-    // Doc-to-doc paging within the browse order the library handed us.
+/**
+ * One document in the detail route. [peekSheet] switches the compact layout to the draggable
+ * metadata sheet; without it (wide, and the library's side panel) the tabbed panel is unchanged.
+ */
+@Composable
+private fun DocPage(
+    docId: String,
+    session: LibrarySession,
+    settings: SettingsRepository,
+    viewModels: ViewModelStoreOwner,
+    browse: BrowseContext,
+    onBack: () -> Unit,
+    onReviewNext: () -> Unit,
+    hasNext: Boolean,
+    goPrevDoc: (() -> Unit)?,
+    goNextDoc: (() -> Unit)?,
+    peekSheet: PeekSheetState?,
+    swipePreviewPages: Boolean,
+    modifier: Modifier = Modifier,
+    publishWindowTitle: Boolean = true,
+) {
+    val snackbar = remember(docId) { SnackbarHostState() }
+    // The viewer takes focus once the document is in, so its keyboard shortcuts work on desktop.
+    val viewerFocus = remember(docId) { FocusRequester() }
     val browsePosition = browse.positionOf(docId)
-    val goPrevDoc: (() -> Unit)? = browse.neighbour(docId, -1)?.let { { onNavigateToDoc(it) } }
-    val goNextDoc: (() -> Unit)? = browse.neighbour(docId, 1)?.let { { onNavigateToDoc(it) } }
+    // The top bar's Back collapses an expanded sheet first; only a collapsed one leaves the detail.
+    // A document that left the library is not the sheet's business and closes at once.
+    val leave = { if (peekSheet?.collapseIfExpanded() != true) onBack() }
 
     DocumentView(
         docId = docId,
@@ -67,17 +161,19 @@ fun DocDetailScreen(
         viewModels = viewModels,
         snackbar = snackbar,
         onClose = onBack,
-        onReviewNext = { goNextDoc?.invoke() ?: onBack() },
-        hasNext = goNextDoc != null,
+        onReviewNext = onReviewNext,
+        hasNext = hasNext,
         modifier = modifier,
         viewerModifier = Modifier.focusRequester(viewerFocus).focusable(),
         searchQuery = browse.searchQuery,
+        peekSheet = peekSheet,
+        swipePreviewPages = swipePreviewPages,
     ) { loadState, actions, editor ->
         // Loading and missing are distinct: a null item before the first observeDoc emission is
         // still loading, and must not flash the "unavailable" surface. Only a confirmed absence does.
         when (loadState) {
             is DocLoadState.Loading -> {
-                DocPlaceholderScaffold(onBack) { padding -> LoadingIndicator(Modifier.padding(padding)) }
+                DocPlaceholderScaffold(leave) { padding -> LoadingIndicator(Modifier.padding(padding)) }
             }
 
             is DocLoadState.Missing -> {
@@ -86,7 +182,7 @@ fun DocDetailScreen(
                 // The resume banner and the library switch bring the user here for a draft whose
                 // document went; this is the one place it can still be dropped.
                 val discard = { drafts.discard(docId) }.takeIf { draft != null && draft.dirty && !draft.saving }
-                DocPlaceholderScaffold(onBack) { padding ->
+                DocPlaceholderScaffold(leave) { padding ->
                     DocumentUnavailable(Modifier.padding(padding), onDiscardDraft = discard)
                 }
             }
@@ -94,7 +190,8 @@ fun DocDetailScreen(
             is DocLoadState.Present -> {
                 val title = loadState.item.doc.displayTitle
                 // Reflect the open document in the native window title (desktop); inert elsewhere.
-                PublishWindowTitle(title)
+                // In the pager only the settled page names the window, never a neighbour sliding in.
+                if (publishWindowTitle) PublishWindowTitle(title)
                 FocusOnEntry(viewerFocus)
                 LoadedDocScreen(
                     title = title,
@@ -104,7 +201,7 @@ fun DocDetailScreen(
                     browsePosition = browsePosition,
                     goPrevDoc = goPrevDoc,
                     goNextDoc = goNextDoc,
-                    onBack = onBack,
+                    onBack = leave,
                 )
             }
         }

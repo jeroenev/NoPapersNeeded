@@ -58,6 +58,14 @@ internal fun DocumentView(
     viewerModifier: Modifier = Modifier,
     searchQuery: String? = null,
     initialItem: DocListItem? = null,
+    /** The compact detail's peek sheet; null leaves the tabbed panel (the wide layout and side panel). */
+    peekSheet: PeekSheetState? = null,
+    /**
+     * Whether swiping the page preview may turn its pages. False on the compact detail's document
+     * pager, where a horizontal swipe walks to the next document instead; page controls and keys
+     * still turn the PDF's pages there.
+     */
+    swipePreviewPages: Boolean = true,
     frame: @Composable (
         loadState: DocLoadState,
         actions: @Composable (compact: Boolean) -> Unit,
@@ -130,10 +138,12 @@ internal fun DocumentView(
                                 onPageChange = vm::goToPage,
                                 onRetryPageCount = vm::retryPageCount,
                                 modifier = previewModifier.then(viewerModifier),
+                                swipePages = swipePreviewPages,
                             )
                         }
                     },
                     modifier = editorModifier,
+                    peekSheet = peekSheet,
                 )
             },
         )

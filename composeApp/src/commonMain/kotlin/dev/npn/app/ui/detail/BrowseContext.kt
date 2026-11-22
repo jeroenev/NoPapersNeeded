@@ -18,6 +18,9 @@ import androidx.compose.runtime.setValue
 class BrowseContext {
     private var docIds: List<String> by mutableStateOf(emptyList())
 
+    /** The ordered documents the user is browsing; empty until the library hands an order over. */
+    val order: List<String> get() = docIds
+
     /** Search query that produced the current browse order, if any. */
     var searchQuery: String? by mutableStateOf(null)
         private set
