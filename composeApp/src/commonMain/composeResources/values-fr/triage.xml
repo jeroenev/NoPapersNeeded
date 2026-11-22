@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="triage_title">Tri</string>
+    <string name="triage_start">Trier</string>
+    <plurals name="triage_progress">
+        <item quantity="one">%1$d sur %2$d · %3$d encore à vérifier</item>
+        <item quantity="other">%1$d sur %2$d · %3$d encore à vérifier</item>
+    </plurals>
+    <string name="triage_empty_title">Rien à trier</string>
+    <string name="triage_empty_subtitle">Le filtre actuel n’affiche aucun document.</string>
+</resources>

@@ -33,6 +33,7 @@ import dev.npn.core.app.TagInfo
 import dev.npn.core.app.TrashReceipt
 import dev.npn.core.app.ViewType
 import dev.npn.core.app.WorkStage
+import dev.npn.core.app.effectiveReviewed
 import dev.npn.core.app.reviewQueueFilter
 import dev.npn.core.app.textFieldValues
 import dev.npn.core.fs.ExternalSource
@@ -187,7 +188,7 @@ internal data class LibraryBanners(
  * What the library list asks of its viewmodel, so the list composables take this and never the
  * viewmodel itself. Implemented by [LibraryViewModel]; each member's contract is documented there.
  */
-interface LibraryActions {
+interface LibraryActions : TriageActions {
     fun onQueryChange(text: String)
 
     fun acceptSuggestion(text: String)
@@ -238,6 +239,9 @@ interface LibraryActions {
     fun toggleSavedViewPin(view: SavedView)
 
     fun deleteSavedView(view: SavedView)
+
+    /** Open the Inbox triage mode over the documents the current filter and sort show. */
+    fun startTriage()
 }
 
 /** The part of [LibraryContentState] that changes as the user types and the results arrive. */
@@ -332,6 +336,56 @@ class LibraryViewModel(
     val dialog: StateFlow<LibraryDialog?> = _dialog.flow
 
     fun openDialog(dialog: LibraryDialog?) = _dialog.set(dialog)
+
+    /** The Inbox triage session open over the library, or null when the list is showing. */
+    private val _triage = MutableStateFlow<TriageState?>(null)
+    val triage: StateFlow<TriageState?> = _triage.asStateFlow()
+
+    /**
+     * Open triage on the current result set, starting on the previewed document when it is in the
+     * set and on the first otherwise. The set is captured once so next/previous and the progress
+     * line do not shift while a document marked reviewed leaves the live results; the documents
+     * themselves keep being read live from their own viewmodels.
+     */
+    override fun startTriage() {
+        val items = documents.value?.items.orEmpty()
+        val mode = reviewMode.value
+        if (items.isEmpty() || !mode.reviewMarkerIsAuthoritative) return
+        val ids = items.map { it.doc.docId }
+        val current = _preview.value?.takeIf { it in ids } ?: ids.first()
+        _triage.value =
+            TriageState(
+                currentId = current,
+                order = ids,
+                known = items.associateBy { it.doc.docId },
+                unreviewed = items.filterNot { it.effectiveReviewed(mode) }.mapTo(LinkedHashSet()) { it.doc.docId },
+            )
+    }
+
+    override fun exitTriage() {
+        _triage.value = null
+    }
+
+    override fun triageNext() = moveTriage(1)
+
+    override fun triagePrevious() = moveTriage(-1)
+
+    private fun moveTriage(delta: Int) {
+        val state = _triage.value ?: return
+        val next = state.order.getOrNull(state.order.indexOf(state.currentId) + delta) ?: return
+        _triage.value = state.copy(currentId = next)
+    }
+
+    /**
+     * The current document's draft and reviewed marker landed: count it reviewed and move on, or
+     * leave the mode after the last one.
+     */
+    override fun triageReviewedAndAdvance() {
+        val state = _triage.value ?: return
+        val reviewed = state.reviewed + state.currentId
+        val next = state.order.getOrNull(state.order.indexOf(state.currentId) + 1)
+        _triage.value = if (next == null) null else state.copy(currentId = next, reviewed = reviewed)
+    }
 
     init {
         viewModelScope.launch {

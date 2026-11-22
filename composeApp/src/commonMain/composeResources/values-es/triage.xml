@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="triage_title">Clasificar</string>
+    <string name="triage_start">Clasificar</string>
+    <plurals name="triage_progress">
+        <item quantity="one">%1$d de %2$d · %3$d sin revisar</item>
+        <item quantity="other">%1$d de %2$d · %3$d sin revisar</item>
+    </plurals>
+    <string name="triage_empty_title">Nada que clasificar</string>
+    <string name="triage_empty_subtitle">El filtro actual no muestra ningún documento.</string>
+</resources>
