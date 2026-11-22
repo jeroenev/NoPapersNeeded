@@ -183,7 +183,7 @@ class FieldRegistryTest {
     fun moveShiftsOneFieldAndIgnoresAMovePastTheEnd() =
         appSessionTest { rig ->
             val registry = rig.session.fieldRegistry
-            val initial = registry.fields.first { it.isNotEmpty() }
+            val initial = registry.fields.first { it.size == FieldKeys.seedDefinitions().size }
             registry.move("docType", -2)
             val ordered = registry.fields.first { it.first().key == "docType" }
             // The move brings docType to the front and renumbers the whole registry 0, 1, 2...
