@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reminders_upcoming">À venir</string>
+    <string name="reminders_upcoming_count">À venir · %1$d</string>
+    <string name="reminders_upcoming_title">À venir</string>
+    <string name="reminders_group_overdue">En retard</string>
+    <string name="reminders_group_today">Aujourd’hui</string>
+    <string name="reminders_group_next_7_days">7 prochains jours</string>
+    <string name="reminders_group_later">Plus tard</string>
+    <string name="reminders_empty_title">Rien à venir</string>
+    <string name="reminders_empty_subtitle">Les documents avec une date de rappel apparaissent ici.</string>
+    <string name="reminders_disabled_title">Les rappels sont désactivés</string>
+    <string name="reminders_disabled_subtitle">Choisissez des dates de rappel dans Paramètres → Documents.</string>
+    <string name="reminders_row_meta">%1$s · %2$s</string>
+    <string name="reminders_notification_channel">Rappels</string>
+    <string name="reminders_notification_title">Rappel : %1$s</string>
+    <string name="reminders_notification_body">%1$s arrive à échéance le %2$s.</string>
+    <string name="reminders_notification_overdue">%1$s était à échéance le %2$s.</string>
+
+    <string name="common_settings_reminders">Rappels</string>
+    <string name="common_settings_reminders_enabled">Activer les rappels</string>
+    <string name="common_settings_reminders_enabled_help">Vous prévenir des documents dont les dates approchent.</string>
+    <string name="common_settings_reminders_fields">Dates de rappel</string>
+    <string name="common_settings_reminders_fields_help">Choisissez les champs de date à surveiller.</string>
+    <string name="common_settings_reminders_no_date_fields">Ajoutez un champ DATE pour utiliser les rappels.</string>
+    <string name="common_settings_reminders_lead_days">Prévenir jours à l’avance</string>
+    <string name="common_settings_reminders_lead_days_help">Les dates en retard sont toujours incluses.</string>
+    <string name="common_settings_reminders_time">Heure de notification</string>
+    <string name="common_settings_reminders_time_help">Heure locale de la vérification quotidienne, au format HH:mm.</string>
+</resources>

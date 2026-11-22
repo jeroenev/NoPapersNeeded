@@ -9,11 +9,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import dev.npn.app.platform.rememberReminderPermissionRequest
+import dev.npn.app.ui.common.CheckboxRow
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.NumericField
 import dev.npn.app.ui.common.SettingsSection
 import dev.npn.app.ui.common.SwitchRow
+import dev.npn.app.ui.common.TypedTextField
+import dev.npn.core.app.ReminderSettings
 import dev.npn.core.app.TrashSettings
+import dev.npn.core.app.parseReminderTime
 import dev.npn.core.model.ReviewMode
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_cancel
@@ -24,6 +29,15 @@ import no_papers_needed.composeapp.generated.resources.common_settings_inbox_mig
 import no_papers_needed.composeapp.generated.resources.common_settings_mark_all_reviewed
 import no_papers_needed.composeapp.generated.resources.common_settings_mark_none_reviewed
 import no_papers_needed.composeapp.generated.resources.common_settings_mark_tagged_reviewed
+import no_papers_needed.composeapp.generated.resources.common_settings_reminders
+import no_papers_needed.composeapp.generated.resources.common_settings_reminders_enabled
+import no_papers_needed.composeapp.generated.resources.common_settings_reminders_enabled_help
+import no_papers_needed.composeapp.generated.resources.common_settings_reminders_fields_help
+import no_papers_needed.composeapp.generated.resources.common_settings_reminders_lead_days
+import no_papers_needed.composeapp.generated.resources.common_settings_reminders_lead_days_help
+import no_papers_needed.composeapp.generated.resources.common_settings_reminders_no_date_fields
+import no_papers_needed.composeapp.generated.resources.common_settings_reminders_time
+import no_papers_needed.composeapp.generated.resources.common_settings_reminders_time_help
 import no_papers_needed.composeapp.generated.resources.common_settings_review_workflow
 import no_papers_needed.composeapp.generated.resources.common_settings_syncs_across_devices
 import no_papers_needed.composeapp.generated.resources.common_settings_trash
@@ -60,6 +74,8 @@ internal fun DocumentSettingsPane(
         )
     }
 
+    RemindersSection(state, actions)
+
     SettingsSection(title = stringResource(Res.string.common_settings_trash)) {
         NumericField(
             value = state.settings.trashRetentionDays,
@@ -70,6 +86,63 @@ internal fun DocumentSettingsPane(
             onDone = actions::doneTypingTrashRetention,
         )
         HelpText(stringResource(Res.string.library_trash_retention_zero_help))
+        HelpText(stringResource(Res.string.common_settings_syncs_across_devices))
+    }
+}
+
+/**
+ * Reminders watch DATE fields in the library and notify on a daily schedule. The setting is library
+ * data (synced through the journal), so the fields and their times are the same on every device;
+ * what this device already notified lives in `device.db`.
+ */
+@Composable
+private fun RemindersSection(
+    state: SettingsPaneState,
+    actions: SettingsPaneActions,
+) {
+    val requestPermission = rememberReminderPermissionRequest()
+    val dateFields = state.fields.filter { it.type.isDate }
+    SettingsSection(title = stringResource(Res.string.common_settings_reminders)) {
+        SwitchRow(
+            label = stringResource(Res.string.common_settings_reminders_enabled),
+            help = stringResource(Res.string.common_settings_reminders_enabled_help),
+            checked = state.settings.reminderEnabled,
+            onCheckedChange = { enabled ->
+                actions.setRemindersEnabled(enabled)
+                if (enabled) requestPermission?.invoke()
+            },
+        )
+        if (state.settings.reminderEnabled) {
+            if (dateFields.isEmpty()) {
+                HelpText(stringResource(Res.string.common_settings_reminders_no_date_fields))
+            } else {
+                HelpText(stringResource(Res.string.common_settings_reminders_fields_help))
+                dateFields.forEach { field ->
+                    CheckboxRow(
+                        label = field.label,
+                        checked = field.key in state.settings.reminderFieldKeys,
+                        onCheckedChange = { selected -> actions.setReminderField(field.key, selected) },
+                    )
+                }
+            }
+            NumericField(
+                value = state.settings.reminderLeadDays,
+                onValueChange = { actions.setReminderLeadDays(it) },
+                range = ReminderSettings.LEAD_DAY_RANGE,
+                label = stringResource(Res.string.common_settings_reminders_lead_days),
+                supportingText = stringResource(Res.string.common_settings_reminders_lead_days_help),
+                onInvalid = { actions.setReminderLeadDays(null) },
+                onDone = actions::doneTypingReminderLead,
+            )
+            TypedTextField(
+                value = state.settings.reminderTime,
+                onValueChange = actions::setReminderTime,
+                onDone = actions::doneTypingReminderTime,
+                label = stringResource(Res.string.common_settings_reminders_time),
+                supportingText = { Text(stringResource(Res.string.common_settings_reminders_time_help)) },
+                isError = parseReminderTime(state.settings.reminderTime) == null,
+            )
+        }
         HelpText(stringResource(Res.string.common_settings_syncs_across_devices))
     }
 }

@@ -35,6 +35,10 @@ sealed interface Route {
     @Serializable
     data object AutoMatchRules : Route
 
+    /** The reminder window over the library's watched dates, opened from the Inbox area. */
+    @Serializable
+    data object Upcoming : Route
+
     /**
      * Activity, the processing queue's page: problems first, then the text recognition and
      * Auto-organize backlog, the bulk edits handed to the background and the cloud sync. A

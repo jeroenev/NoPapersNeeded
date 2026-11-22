@@ -68,6 +68,18 @@ internal object LibrarySettingKeys {
 
     /** Days the trash keeps a document, as a decimal number. */
     const val TRASH_RETENTION_DAYS = "trashRetentionDays"
+
+    /** Whether this library's reminders are on. */
+    const val REMINDER_ENABLED = "reminderEnabled"
+
+    /** The watched DATE field keys, comma-separated; empty when none is chosen. */
+    const val REMINDER_FIELDS = "reminderFields"
+
+    /** How many days before a due date the notification window opens, as a decimal number. */
+    const val REMINDER_LEAD_DAYS = "reminderLeadDays"
+
+    /** The local time of the daily check, `HH:mm`. */
+    const val REMINDER_TIME = "reminderTime"
 }
 
 /** Library-wide review workflow, synced via the journal. */

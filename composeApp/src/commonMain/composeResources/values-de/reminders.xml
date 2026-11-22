@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reminders_upcoming">Anstehend</string>
+    <string name="reminders_upcoming_count">Anstehend · %1$d</string>
+    <string name="reminders_upcoming_title">Anstehend</string>
+    <string name="reminders_group_overdue">Überfällig</string>
+    <string name="reminders_group_today">Heute</string>
+    <string name="reminders_group_next_7_days">Nächste 7 Tage</string>
+    <string name="reminders_group_later">Später</string>
+    <string name="reminders_empty_title">Nichts anstehend</string>
+    <string name="reminders_empty_subtitle">Dokumente mit einem Erinnerungsdatum erscheinen hier.</string>
+    <string name="reminders_disabled_title">Erinnerungen sind aus</string>
+    <string name="reminders_disabled_subtitle">Wähle Erinnerungsdaten unter Einstellungen → Dokumente.</string>
+    <string name="reminders_row_meta">%1$s · %2$s</string>
+    <string name="reminders_notification_channel">Erinnerungen</string>
+    <string name="reminders_notification_title">Erinnerung: %1$s</string>
+    <string name="reminders_notification_body">%1$s ist am %2$s fällig.</string>
+    <string name="reminders_notification_overdue">%1$s war am %2$s fällig.</string>
+
+    <string name="common_settings_reminders">Erinnerungen</string>
+    <string name="common_settings_reminders_enabled">Erinnerungen aktivieren</string>
+    <string name="common_settings_reminders_enabled_help">Benachrichtige dich über Dokumente mit nahenden Daten.</string>
+    <string name="common_settings_reminders_fields">Erinnerungsdaten</string>
+    <string name="common_settings_reminders_fields_help">Wähle die zu überwachenden Datumsfelder.</string>
+    <string name="common_settings_reminders_no_date_fields">Füge ein DATUM-Feld hinzu, um Erinnerungen zu nutzen.</string>
+    <string name="common_settings_reminders_lead_days">Tage vorher benachrichtigen</string>
+    <string name="common_settings_reminders_lead_days_help">Überfällige Daten sind immer enthalten.</string>
+    <string name="common_settings_reminders_time">Benachrichtigungszeit</string>
+    <string name="common_settings_reminders_time_help">Lokale Zeit der täglichen Prüfung, als HH:mm.</string>
+</resources>

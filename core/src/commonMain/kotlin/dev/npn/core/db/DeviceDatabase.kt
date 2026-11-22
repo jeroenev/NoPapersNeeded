@@ -28,10 +28,12 @@ import kotlinx.coroutines.Dispatchers
  */
 @Database(
     // v2: adds sync_remote_entries (what the cloud sync engine last knew about each remote file).
-    version = 2,
+    // v3: adds reminder_notifications (the reminders this device already showed).
+    version = 3,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
+        AutoMigration(from = 2, to = 3),
     ],
     entities = [
         KeyValueEntity::class,
@@ -42,6 +44,7 @@ import kotlinx.coroutines.Dispatchers
         OcrQueueEntity::class,
         OcrPageCacheEntity::class,
         SyncRemoteEntryEntity::class,
+        ReminderNotificationEntity::class,
     ],
 )
 @ConstructedBy(DeviceDatabaseConstructor::class)
@@ -55,6 +58,8 @@ abstract class DeviceDatabase : RoomDatabase() {
     abstract fun ocrQueueDao(): OcrQueueDao
 
     abstract fun syncRemoteDao(): SyncRemoteDao
+
+    abstract fun reminderNotificationDao(): ReminderNotificationDao
 
     companion object {
         /**

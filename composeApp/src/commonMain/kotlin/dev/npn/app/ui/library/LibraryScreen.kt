@@ -20,6 +20,9 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.UploadFile
+import androidx.compose.material.icons.outlined.Event
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -81,6 +84,8 @@ import no_papers_needed.composeapp.generated.resources.library_no_documents_titl
 import no_papers_needed.composeapp.generated.resources.library_no_matches_subtitle
 import no_papers_needed.composeapp.generated.resources.library_no_matches_title
 import no_papers_needed.composeapp.generated.resources.library_scan_document
+import no_papers_needed.composeapp.generated.resources.reminders_upcoming
+import no_papers_needed.composeapp.generated.resources.reminders_upcoming_count
 import no_papers_needed.composeapp.generated.resources.ux_review_count
 import org.jetbrains.compose.resources.stringResource
 
@@ -114,6 +119,10 @@ fun LibraryScreen(
     filterHandoff: Handoff<LibraryFilter>,
     /** Opens one settings pane, where the "Getting started" card's steps are set. */
     onOpenSettings: (SettingsCategoryId) -> Unit,
+    /** Opens the Upcoming reminders screen; the entry shows while reminders are on. */
+    onOpenUpcoming: () -> Unit,
+    /** Unseen in-app reminder fallbacks (a desktop without a tray), shown as a badge on Upcoming. */
+    upcomingBadge: Int = 0,
     /** Each document's viewmodel store, shared with the detail screen; the side panel holds the previewed one's. */
     documents: KeyedViewModelStores<String>,
     modifier: Modifier = Modifier,
@@ -180,6 +189,8 @@ fun LibraryScreen(
                             LibraryExits(queue = onOpenQueue, trash = onTrash, settings = onOpenSettings)
                         },
                     onAiEdit = onAiEdit,
+                    onOpenUpcoming = onOpenUpcoming,
+                    upcomingBadge = upcomingBadge,
                     onDialog = vm::openDialog,
                 )
             }
@@ -282,6 +293,8 @@ private fun LibraryContent(
     onOpenDoc: (String) -> Unit,
     exits: LibraryExits,
     onAiEdit: ((selection: List<String>) -> Unit)?,
+    onOpenUpcoming: () -> Unit,
+    upcomingBadge: Int,
     onDialog: (LibraryDialog) -> Unit,
 ) {
     val ui = state.ui
@@ -445,6 +458,12 @@ private fun LibraryContent(
             if (reviewMode.reviewMarkerIsAuthoritative && !ui.selectionMode && state.reviewCount > 0) {
                 ReviewChip(count = state.reviewCount, filter = ui.filter, actions = actions)
             }
+            UpcomingEntry(
+                state = state,
+                unseen = upcomingBadge,
+                selectionMode = ui.selectionMode,
+                onClick = onOpenUpcoming,
+            )
             ActiveFilters(
                 filter = ui.filter,
                 fields = state.fields,
@@ -582,6 +601,57 @@ private fun ReviewChip(
                 contentDescription = null,
                 modifier = Modifier.size(FilterChipDefaults.IconSize),
             )
+        },
+        modifier = Modifier.padding(horizontal = 16.dp),
+    )
+}
+
+/** The Upcoming entry, shown only when reminders are on and the list is not in selection mode. */
+@Composable
+private fun UpcomingEntry(
+    state: LibraryContentState,
+    unseen: Int,
+    selectionMode: Boolean,
+    onClick: () -> Unit,
+) {
+    if (!state.remindersEnabled || selectionMode) return
+    UpcomingChip(count = state.upcomingCount, unseen = unseen, onClick = onClick)
+}
+
+/**
+ * The way into Upcoming, beside the Inbox chip: the count is what is due now, and a badge marks
+ * an unseen in-app reminder.
+ */
+@Composable
+private fun UpcomingChip(
+    count: Int,
+    unseen: Int,
+    onClick: () -> Unit,
+) {
+    FilterChip(
+        selected = false,
+        onClick = onClick,
+        label = {
+            Text(
+                if (count > 0) {
+                    stringResource(Res.string.reminders_upcoming_count, count)
+                } else {
+                    stringResource(Res.string.reminders_upcoming)
+                },
+            )
+        },
+        leadingIcon = {
+            BadgedBox(
+                badge = {
+                    if (unseen > 0) Badge { Text(unseen.toString()) }
+                },
+            ) {
+                Icon(
+                    Icons.Outlined.Event,
+                    contentDescription = null,
+                    modifier = Modifier.size(FilterChipDefaults.IconSize),
+                )
+            }
         },
         modifier = Modifier.padding(horizontal = 16.dp),
     )

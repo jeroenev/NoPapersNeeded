@@ -206,6 +206,24 @@ data class AiEditJobDocEntity(
 )
 
 /**
+ * A reminder this device already showed, in [DeviceDatabase]: one row per document, watched DATE
+ * field and due date. It is what keeps the in-app check and the Android worker from repeating a
+ * reminder for the same date; a changed date is a new row and does notify again. Device-local by
+ * nature, so another device has its own and notifies once too.
+ */
+@Entity(
+    tableName = "reminder_notifications",
+    primaryKeys = ["docId", "fieldKey", "dueDate"],
+)
+data class ReminderNotificationEntity(
+    val docId: String,
+    val fieldKey: String,
+    /** The due date the reminder was for, canonical `yyyy-MM-dd`. */
+    val dueDate: String,
+    val notifiedAt: Long,
+)
+
+/**
  * What this device last established about one file on the configured cloud remote, in
  * [DeviceDatabase]: the document (or trash entry) behind a remote path, and the size/mtime the
  * remote reported when that identity was established. The sync engine re-identifies an entry whose

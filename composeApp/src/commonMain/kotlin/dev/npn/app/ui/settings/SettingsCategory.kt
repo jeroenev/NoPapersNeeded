@@ -75,6 +75,11 @@ import no_papers_needed.composeapp.generated.resources.common_settings_ocr_other
 import no_papers_needed.composeapp.generated.resources.common_settings_reasoning_assistant
 import no_papers_needed.composeapp.generated.resources.common_settings_reasoning_edit
 import no_papers_needed.composeapp.generated.resources.common_settings_reasoning_help
+import no_papers_needed.composeapp.generated.resources.common_settings_reminders
+import no_papers_needed.composeapp.generated.resources.common_settings_reminders_enabled
+import no_papers_needed.composeapp.generated.resources.common_settings_reminders_fields
+import no_papers_needed.composeapp.generated.resources.common_settings_reminders_lead_days
+import no_papers_needed.composeapp.generated.resources.common_settings_reminders_time
 import no_papers_needed.composeapp.generated.resources.common_settings_remove_after_import
 import no_papers_needed.composeapp.generated.resources.common_settings_review_workflow
 import no_papers_needed.composeapp.generated.resources.common_settings_server_url
@@ -141,7 +146,9 @@ internal data class SettingsPaneState(
 )
 
 /** What a settings pane can do: change a setting ([SettingsActions]), or open what one leads to. */
-internal interface SettingsPaneActions : SettingsActions {
+internal interface SettingsPaneActions :
+    SettingsActions,
+    ReminderSettingsActions {
     /** Pick another library folder; a document with unsaved changes is offered back first. */
     fun changeLibrary()
 
@@ -250,6 +257,11 @@ internal val SettingsCategories: List<SettingsCategory> =
                     Res.string.detail_add_field,
                     Res.string.common_settings_review_workflow,
                     Res.string.common_settings_enable_inbox,
+                    Res.string.common_settings_reminders,
+                    Res.string.common_settings_reminders_enabled,
+                    Res.string.common_settings_reminders_fields,
+                    Res.string.common_settings_reminders_lead_days,
+                    Res.string.common_settings_reminders_time,
                     Res.string.common_settings_trash,
                     Res.string.common_settings_trash_retention_days,
                 ),

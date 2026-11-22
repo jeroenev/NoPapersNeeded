@@ -5,7 +5,9 @@ import dev.npn.app.ui.common.UiText
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiSelfTest
 import dev.npn.core.ai.AiSelfTestReport
+import dev.npn.core.app.ReminderSettings
 import dev.npn.core.app.TrashSettings
+import dev.npn.core.app.formatReminderTime
 import dev.npn.core.model.FieldDef
 import dev.npn.core.settings.SettingsSnapshot
 import dev.npn.core.settings.toAiConfig
@@ -26,6 +28,10 @@ data class SettingsUiState(
     val storagePathTemplate: String = DEFAULT_STORAGE_PATH_TEMPLATE,
     val storagePathEnabled: Boolean = false,
     val trashRetentionDays: Int = TrashSettings.DEFAULT_TRASH_RETENTION_DAYS,
+    val reminderEnabled: Boolean = false,
+    val reminderFieldKeys: Set<String> = emptySet(),
+    val reminderLeadDays: Int = ReminderSettings.DEFAULT_LEAD_DAYS,
+    val reminderTime: String = formatReminderTime(ReminderSettings.DEFAULT_TIME),
 ) {
     /** Whether the endpoint is complete enough to call — what gates the self-test button. */
     val aiConfigured: Boolean get() = snapshot.toAiConfig().configured
@@ -121,6 +127,30 @@ interface SettingsActions {
 
     /** The trash retention field lost focus: save what was typed in it now. */
     fun doneTypingTrashRetention()
+}
+
+/** The library's reminder settings, split from the rest because the settings screen already has many. */
+interface ReminderSettingsActions {
+    /** Turn the library's reminders on or off; turning them on chooses a date field when none is chosen. */
+    fun setRemindersEnabled(enabled: Boolean)
+
+    /** Watch or stop watching the DATE field [key] for reminders. */
+    fun setReminderField(
+        key: String,
+        selected: Boolean,
+    )
+
+    /** How many days before a due date the notification window opens; null while the field holds no valid number. */
+    fun setReminderLeadDays(days: Int?)
+
+    /** The lead-days field lost focus: save what was typed in it now. */
+    fun doneTypingReminderLead()
+
+    /** Type the daily check's local time as `HH:mm`; an invalid value stays unsaved. */
+    fun setReminderTime(text: String)
+
+    /** The time field lost focus: save what was typed in it now. */
+    fun doneTypingReminderTime()
 
     /**
      * Type [value] into the field of a device [setting]. It shows at once, and is saved once typing

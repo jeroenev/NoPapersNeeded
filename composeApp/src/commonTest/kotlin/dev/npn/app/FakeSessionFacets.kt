@@ -12,6 +12,9 @@ import dev.npn.core.app.OcrVersion
 import dev.npn.core.app.QueuedEditRun
 import dev.npn.core.app.QueuedWork
 import dev.npn.core.app.RebuildOutcome
+import dev.npn.core.app.ReminderCandidate
+import dev.npn.core.app.ReminderSettings
+import dev.npn.core.app.RemindersFacade
 import dev.npn.core.app.ReviewConfigFacade
 import dev.npn.core.app.SplitOutcome
 import dev.npn.core.app.StoragePathFacade
@@ -41,6 +44,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.datetime.LocalTime
 
 // Test doubles for the session's own facets: ingest, OCR ops, review config, storage path,
 // maintenance and work.
@@ -206,6 +210,59 @@ class FakeTrashRetention : TrashRetentionFacade {
         fail?.invoke()
         writes += days
         this.days.value = days
+    }
+}
+
+/** The library's reminders: settings, the Upcoming list and the notification check. */
+class FakeRemindersFacade : RemindersFacade {
+    val settingsFlow = MutableStateFlow(ReminderSettings())
+    override val settings: Flow<ReminderSettings> get() = settingsFlow
+
+    val upcomingFlow = MutableStateFlow<List<dev.npn.core.app.UpcomingReminder>>(emptyList())
+
+    override fun observeUpcoming(): Flow<List<dev.npn.core.app.UpcomingReminder>> = upcomingFlow
+
+    val enabledWrites = mutableListOf<Boolean>()
+    val fieldWrites = mutableListOf<List<String>>()
+    val leadWrites = mutableListOf<Int>()
+    val timeWrites = mutableListOf<LocalTime>()
+
+    /** What [claimDueReminders] answers, and how often it was asked. */
+    var due: List<ReminderCandidate> = emptyList()
+    var claims = 0
+
+    /** If set, the setters throw this, to drive the viewmodel's failure path. */
+    var fail: (() -> Nothing)? = null
+
+    override suspend fun setEnabled(enabled: Boolean) {
+        fail?.invoke()
+        enabledWrites += enabled
+        settingsFlow.update { it.copy(enabled = enabled) }
+    }
+
+    override suspend fun setFieldKeys(keys: List<String>) {
+        fail?.invoke()
+        fieldWrites += keys
+        settingsFlow.update { it.copy(fieldKeys = keys) }
+    }
+
+    override suspend fun setLeadDays(days: Int) {
+        fail?.invoke()
+        leadWrites += days
+        settingsFlow.update { it.copy(leadDays = days) }
+    }
+
+    override suspend fun setTimeOfDay(time: LocalTime) {
+        fail?.invoke()
+        timeWrites += time
+        settingsFlow.update { it.copy(timeOfDay = time) }
+    }
+
+    override suspend fun nextCheckDelayMillis(): Long? = if (settingsFlow.value.isActive) 1_000L else null
+
+    override suspend fun claimDueReminders(): List<ReminderCandidate> {
+        claims++
+        return due
     }
 }
 
