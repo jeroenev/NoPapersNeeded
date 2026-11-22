@@ -5,6 +5,8 @@ set -euo pipefail
 
 # The version lives only in gradle.properties (npn.version). This bumps it and tags that same
 # commit, so the tag and the code cannot disagree; .github/workflows/release.yml checks it again.
+# Passing the version already in gradle.properties tags the current commit instead: that is how the
+# first release gets a tag, as there is no earlier version to bump from.
 
 version="${usage_version:?usage: mise release <major.minor.patch>}"
 version="${version#v}"
@@ -35,9 +37,11 @@ git fetch --quiet --tags origin main
 ! git rev-parse --quiet --verify "refs/tags/$tag" >/dev/null || die "tag $tag already exists"
 
 # ...and only once CI has passed on it. The tag goes on the bump commit made below, which changes
-# only npn.version; release.yml builds it without rerunning the tests or waiting for CI on it, once
-# .github/scripts/check-release-commit.sh has checked both of those again. Both read CI the same way
-# (.github/scripts/ci-status.sh): only a push or manual run tested the commit itself.
+# only npn.version, or on the current commit when it already carries the version being released (a
+# first release has nothing to bump from); release.yml builds it without rerunning the tests or
+# waiting for CI on it, once .github/scripts/check-release-commit.sh has checked both of those
+# again. Both read CI the same way (.github/scripts/ci-status.sh): only a push or manual run tested
+# the commit itself.
 command -v gh >/dev/null || die "needs the GitHub CLI (gh) to check CI on main"
 # shellcheck source=.github/scripts/ci-status.sh
 source .github/scripts/ci-status.sh
@@ -55,16 +59,22 @@ esac
 
 current=$(sed -n 's/^npn\.version=//p' "$props")
 [ -n "$current" ] || die "npn.version not found in $props"
-newest=$(printf '%s\n%s\n' "$current" "$version" | sort -V | tail -n1)
-if [ "$version" = "$current" ] || [ "$newest" != "$version" ]; then
-    die "$version is not newer than the current $current"
-fi
 
-echo ">> $current -> $version"
-sed -i "s/^npn\.version=.*/npn.version=$version/" "$props"
-git commit --quiet -m "[main] Release $version" -- "$props"
-git tag -a "$tag" -m "Release $version"
-git push --atomic origin main "$tag"
+if [ "$version" = "$current" ]; then
+    # The first release has nothing earlier to bump from, so it tags the commit as it is. The tag
+    # check above proved this version was never released, so this cannot re-tag one.
+    echo ">> Tagging $version, which has not been released yet"
+    git tag -a "$tag" -m "Release $version"
+    git push origin "$tag"
+else
+    newest=$(printf '%s\n%s\n' "$current" "$version" | sort -V | tail -n1)
+    [ "$newest" = "$version" ] || die "$version is not newer than the current $current"
+    echo ">> $current -> $version"
+    sed -i "s/^npn\.version=.*/npn.version=$version/" "$props"
+    git commit --quiet -m "[main] Release $version" -- "$props"
+    git tag -a "$tag" -m "Release $version"
+    git push --atomic origin main "$tag"
+fi
 
 echo ">> Pushed $tag. The release workflow builds the binaries into a draft and publishes it:"
 echo "   gh run watch \$(gh run list --workflow release.yml --limit 1 --json databaseId --jq '.[0].databaseId')"

@@ -1,7 +1,8 @@
 name: Release
 
-# Cut with `mise release <version>`, which bumps npn.version and pushes the matching v<version> tag.
-# Binaries go straight onto a draft release (release assets do not count against the Actions
+# Cut with `mise release <version>`, which bumps npn.version and pushes the matching v<version> tag
+# (or, for the first release, tags the commit that already carries it). Binaries go straight onto a
+# draft release (release assets do not count against the Actions
 # artifact quota), and the draft is published only once every platform has uploaded. Tests are not
 # rerun here, and nothing waits for CI on the tagged commit: `mise release` refuses unless CI passed
 # on the main commit it bumps, and the tagged commit changes only npn.version. The draft job holds
@@ -9,6 +10,11 @@ name: Release
 # the tagged commit itself, or it changes only the npn.version line on top of a main commit CI
 # passed on. CI passed on a commit when a push or manual ci.yml run on it succeeded; a pull_request
 # run tested the pull request merged into its base branch, not the commit itself.
+#
+# Everything before 1.0.0 is a beta: the version cannot say so (jpackage/MSI only take plain
+# numbers), so the channel follows the major version and 0.x is published as a pre-release. That
+# keeps a beta out of GitHub's "latest", which the AppImage's zsync update info and Flathub's
+# x-checker read, while a 0.x build's own update check looks for pre-releases too.
 #
 # Secrets are scoped to the steps that need them: GH_TOKEN (contents: write, plus actions: read in
 # the draft job for that check) to the steps that call `gh`, the signing key to the one Gradle run
@@ -42,6 +48,8 @@ jobs:
       contents: write
       # The release check reads ci.yml's runs.
       actions: read
+    outputs:
+      prerelease: ${{ steps.channel.outputs.prerelease }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -64,10 +72,26 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: bash .github/scripts/check-release-commit.sh
 
+      - name: Decide the release channel
+        id: channel
+        run: |
+          version=$(sed -n 's/^npn\.version=//p' gradle.properties)
+          case "$version" in
+            0.*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+
       - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$TAG" --draft --verify-tag --generate-notes --title "$TAG"
+        run: |
+          title="$TAG"
+          channel=()
+          if [ "${{ steps.channel.outputs.prerelease }}" = true ]; then
+            title="$TAG (beta)"
+            channel=(--prerelease)
+          fi
+          gh release create "$TAG" --draft --verify-tag --generate-notes "${channel[@]}" --title "$title"
 
   linux:
     name: Android and Linux packages
@@ -232,7 +256,7 @@ jobs:
 
   publish:
     name: Checksums and publish
-    needs: [linux, windows]
+    needs: [draft, linux, windows]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -254,9 +278,11 @@ jobs:
   # winget-pkgs takes a pull request per version. The first version has to be submitted by hand
   # (`komac new`), and the WINGET_TOKEN secret (a classic token with public_repo, for the fork of
   # microsoft/winget-pkgs that the PR comes from) must be set; without it this job only says so.
+  # winget has no pre-releases, so a beta is never submitted: it would become the package every
+  # winget user gets.
   winget:
     name: Submit to winget
-    needs: publish
+    needs: [publish, draft]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -265,7 +291,9 @@ jobs:
         env:
           WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
         run: |
-          if [ -n "$WINGET_TOKEN" ]; then
+          if [ "${{ needs.draft.outputs.prerelease }}" = true ]; then
+            echo "::notice::This is a beta; skipping the winget submission."
+          elif [ -n "$WINGET_TOKEN" ]; then
             echo "present=true" >> "$GITHUB_OUTPUT"
           else
             echo "::notice::WINGET_TOKEN is not set; skipping the winget submission."

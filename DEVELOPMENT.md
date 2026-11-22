@@ -424,13 +424,17 @@ per start and shows a banner with a download link when it is newer (`dev.npn.cor
 The check is a setting under About, on by default; dismissing the banner hides that version
 for good. Inside Flatpak the check is off and hidden, since Flathub delivers updates.
 
-The AppImage embeds update information pointing at the latest release's `.zsync`, so
-AppImageUpdate and launchers such as Gear Lever can update it in place; `packageAppImage`
-writes that `.zsync` next to the AppImage.
+The AppImage embeds update information pointing at the `.zsync` of the newest release on its
+channel, so AppImageUpdate and launchers such as Gear Lever can update it in place; `packageAppImage`
+writes that `.zsync` next to the AppImage. On 0.x the channel is `latest-pre` (the newest beta), a
+value Gear Lever and the classic AppImageUpdate read as a tag name and therefore ignore: a beta
+AppImage updates through the app's own banner. `latest` from 1.0.0 onwards means the newest stable
+release.
 
-On Windows, the release workflow submits each version's `.msi` to winget once the first
+On Windows, the release workflow submits each stable version's `.msi` to winget once the first
 version is in `microsoft/winget-pkgs` (submit that one by hand with `komac new`) and the
-`WINGET_TOKEN` secret holds a classic token with `public_repo`.
+`WINGET_TOKEN` secret holds a classic token with `public_repo`. A beta is never submitted: winget
+has no pre-releases and would hand it to every winget user as the stable package.
 
 ### Continuous integration
 
@@ -462,7 +466,17 @@ To release, from an up-to-date `main` that CI has passed:
 mise release 1.2.0
 ```
 
-That bumps `npn.version`, commits `[main] Release 1.2.0`, tags `v1.2.0` and pushes both.
+That bumps `npn.version`, commits `[main] Release 1.2.0`, tags `v1.2.0` and pushes both. The first
+release has no earlier version to bump from: `mise release 0.1.0` while `npn.version` is already
+`0.1.0` tags the current commit instead, since no `v0.1.0` tag exists yet.
+
+Everything before 1.0.0 is a beta. The version cannot say so (jpackage and MSI take plain numbers
+only), so the release workflow takes the channel from the major version: a 0.x release is published
+as a GitHub pre-release, titled `v0.2.0 (beta)`. That keeps a beta out of "latest", which the
+AppImage's zsync update info and Flathub's external-data checker read, while a 0.x build's own
+update check asks for pre-releases too (a 1.x build is only offered stable releases). winget has no
+pre-releases, so a beta is never submitted there. Flathub likewise only follows a stable release.
+
 It refuses unless `main` matches `origin/main` and the CI workflow has passed on that commit,
 which it asks `gh` (the GitHub CLI, logged in). Only a run on a push or a manual run
 (`gh workflow run ci.yml --ref main`) counts: a pull request's run tested the pull request merged

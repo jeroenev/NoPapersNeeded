@@ -33,8 +33,20 @@ tasks.test {
 }
 
 val npnAppName = "no-papers-needed"
-val npnAppVersion = NpnVersion.of(project).name
+val npnVersion = NpnVersion.of(project)
+val npnAppVersion = npnVersion.name
+// The channel the AppImage's embedded update info names: AppImageUpdate resolves `latest` to the
+// newest stable release and `latest-pre` to the newest pre-release. 0.x is the beta channel
+// (release.yml), so a beta AppImage follows pre-releases; Gear Lever and the classic AppImageUpdate
+// only know `latest` and read any other value as a tag name, which leaves a beta AppImage to the
+// app's own update banner.
+val appImageChannel = if (npnVersion.major == 0) "latest-pre" else "latest"
 val npnDisplayName = "No papers needed"
+// The maker, as every package names it: the .deb's Maintainer, the .rpm's Packager, the MSI's
+// manufacturer. jpackage's default is "Unknown".
+val npnVendor = "Jeroen Evens"
+// The address the .deb's Maintainer field carries; jpackage has no other way to set it.
+val npnMaintainerEmail = "usual-filter-even@duck.com"
 val npnFlatpakId = "io.github.jeroenev.NoPapersNeeded"
 val npnDescription = "Personal paperless document library"
 val npnMainClass = "dev.npn.desktop.MainKt"
@@ -229,9 +241,12 @@ val packageAppImage =
         appName.set(npnAppName)
         desktopEntry.set(appImageDesktopEntry.flatMap { it.outFile })
         arch.set(appImageArch)
-        // AppImageUpdate (and launchers such as Gear Lever) fetch the .zsync of the latest GitHub
-        // release, so the release has to upload it next to the AppImage.
-        updateInfo.set("gh-releases-zsync|jeroenev|NoPapersNeeded|latest|$npnAppName-*-$appImageArch.AppImage.zsync")
+        // AppImageUpdate (and launchers such as Gear Lever) fetch the .zsync of the release the
+        // update info names, and the release has to upload it next to the AppImage.
+        updateInfo.set(
+            "gh-releases-zsync|jeroenev|NoPapersNeeded|$appImageChannel|" +
+                "$npnAppName-*-$appImageArch.AppImage.zsync",
+        )
         appImageSrc.set(distributableAppImage)
         appImageTool.set(downloadAppImageTool.flatMap { it.outFile })
         runtimeFile.set(downloadAppImageRuntime.flatMap { it.outFile })

@@ -31,10 +31,13 @@ source_block=$(
         sha256: $sha256
         x-checker-data:
           type: json
-          url: https://api.github.com/repos/$repo/releases/latest
-          version-query: .tag_name | sub("^v"; "")
+          # The releases list, not /releases/latest: 0.x releases are pre-releases, which that
+          # endpoint skips, and Flathub only ever follows a stable release.
+          url: https://api.github.com/repos/$repo/releases
+          version-query: first(.[] | select(.prerelease | not)) | .tag_name | sub("^v"; "")
           url-query: >-
-            .assets[] | select(.name | endswith("-linux-x86_64.tar.gz")) | .browser_download_url
+            .[] | select(.tag_name == "v\(\$version)") | .assets[]
+            | select(.name | endswith("-linux-x86_64.tar.gz")) | .browser_download_url
 EOF
 )
 
