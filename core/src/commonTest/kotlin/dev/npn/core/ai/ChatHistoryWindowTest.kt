@@ -114,6 +114,55 @@ class ChatHistoryWindowTest {
             listOf(false, false, false, true)
     }
 
+    @Test
+    fun aGrowingTurnKeepsTheEarlierTurnsItStartedWith() {
+        // Signed reasoning is bound to every message before it: an earlier turn dropped mid-loop
+        // would invalidate the reasoning of the turn being answered.
+        val start = listOf(system) + turn(1) + question(2)
+        val turns = ChatHistoryWindow.turnsForRequest(start)
+        val grown = start + turn(2, result = "x".repeat(ChatHistoryWindow.REQUEST_CHARS)).drop(1)
+
+        ChatHistoryWindow.turnsForRequest(grown) shouldBe 1
+        questions(ChatHistoryWindow.forRequest(grown, turns)) shouldContainExactly listOf("question 1", "question 2")
+    }
+
+    @Test
+    fun onlyTheTurnBeingAnsweredReplaysItsReasoning() {
+        val conversation = listOf(system) + withReasoning(turn(1)) + withReasoning(turn(2))
+
+        val window = ChatHistoryWindow.forRequest(conversation, turns = 2)
+
+        val reasoningByTurn =
+            window.filterIsInstance<Message.Assistant>().map { m ->
+                m.parts.any {
+                    it is MessagePart.Reasoning
+                }
+            }
+        reasoningByTurn shouldContainExactly listOf(false, false, true, false)
+    }
+
+    @Test
+    fun anEarlierAnswerHoldingOnlyReasoningIsNotReplayedEmpty() {
+        val reasoningOnly =
+            Message.Assistant(
+                MessagePart.Reasoning(content = listOf("thinking")),
+                ResponseMetaInfo.Empty,
+            )
+        val conversation = listOf(system) + turn(1) + reasoningOnly + turn(2)
+
+        val window = ChatHistoryWindow.forRequest(conversation, turns = 2)
+
+        window.filterIsInstance<Message.Assistant>().none { it.parts.isEmpty() } shouldBe true
+        window.size shouldBe conversation.size - 1
+    }
+
+    /** [turn] with a reasoning part before its tool call. */
+    private fun withReasoning(turn: List<Message>): List<Message> {
+        val call = turn[1] as Message.Assistant
+        val reasoning = MessagePart.Reasoning(content = listOf("thinking"), encrypted = "sig")
+        return listOf(turn[0], call.copy(parts = listOf(reasoning) + call.parts)) + turn.drop(2)
+    }
+
     private fun question(n: Int): Message.User = Message.User("question $n", RequestMetaInfo.Empty)
 
     /** Question [n], a `search_documents` call answered with [result], and the answer. */

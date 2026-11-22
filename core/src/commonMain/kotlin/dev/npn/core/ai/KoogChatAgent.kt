@@ -45,16 +45,19 @@ internal class KoogChatAgent(
             val basePrompt = prompt("npn-chat", params ?: LLMParams()) { system(systemPrompt) }
             val strategy =
                 functionalStrategy<String, String>("npn-chat") {
-                    llm.writeSession {
-                        // Chat memory has replaced the prompt with the stored conversation, whose system
-                        // message is the one its first turn was asked under. The field registry, the
-                        // language and today's date may have changed since, so this turn's replaces it.
-                        prompt =
-                            prompt.withMessages { stored ->
-                                basePrompt.messages + stored.filterNot { it is Message.System }
-                            }
-                        appendPrompt { user(question) }
-                    }
+                    // Fixed for the whole tool loop: see ChatHistoryWindow.forRequest.
+                    val replayedTurns =
+                        llm.writeSession {
+                            // Chat memory has replaced the prompt with the stored conversation, whose system
+                            // message is the one its first turn was asked under. The field registry, the
+                            // language and today's date may have changed since, so this turn's replaces it.
+                            prompt =
+                                prompt.withMessages { stored ->
+                                    basePrompt.messages + stored.filterNot { it is Message.System }
+                                }
+                            appendPrompt { user(question) }
+                            ChatHistoryWindow.turnsForRequest(prompt.messages)
+                        }
                     val answer = StringBuilder()
                     var iteration = 0
                     var finished = false
@@ -64,7 +67,7 @@ internal class KoogChatAgent(
                         val turnText = StringBuilder()
                         var textFlushed = false
                         llm.writeSession {
-                            streamOverReplayWindow { frame ->
+                            streamOverReplayWindow(replayedTurns) { frame ->
                                 when (frame) {
                                     is StreamFrame.TextDelta -> {
                                         responseFrames += frame
@@ -137,13 +140,16 @@ internal class KoogChatAgent(
 }
 
 /**
- * Stream the model's next response to the part of the conversation [ChatHistoryWindow] replays,
+ * Stream the model's next response to the newest [turns] turns [ChatHistoryWindow] replays,
  * handing each frame to [onFrame]. The session's prompt keeps the whole conversation, for the
  * transcript and the next turn.
  */
-private suspend fun AIAgentLLMWriteSession.streamOverReplayWindow(onFrame: suspend (StreamFrame) -> Unit) {
+private suspend fun AIAgentLLMWriteSession.streamOverReplayWindow(
+    turns: Int,
+    onFrame: suspend (StreamFrame) -> Unit,
+) {
     val conversation = prompt
-    prompt = conversation.withMessages(ChatHistoryWindow::forRequest)
+    prompt = conversation.withMessages { ChatHistoryWindow.forRequest(it, turns) }
     try {
         requestLLMStreaming().collect { onFrame(it) }
     } finally {

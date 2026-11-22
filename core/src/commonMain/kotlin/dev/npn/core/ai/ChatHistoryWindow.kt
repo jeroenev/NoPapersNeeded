@@ -41,7 +41,33 @@ internal object ChatHistoryWindow {
         }
 
     /** What one request sends of the conversation (see [FULL_TOOL_RESULT_TURNS], [REQUEST_CHARS]). */
-    fun forRequest(messages: List<Message>): List<Message> = window(messages, REQUEST_CHARS, FULL_TOOL_RESULT_TURNS)
+    fun forRequest(messages: List<Message>): List<Message> = forRequest(messages, turnsForRequest(messages))
+
+    /** How many of the newest turns [forRequest] replays of [messages]. */
+    fun turnsForRequest(messages: List<Message>): Int =
+        turns(window(messages, REQUEST_CHARS, FULL_TOOL_RESULT_TURNS)).size
+
+    /**
+     * The request for the newest [turns] turns of [messages], however long they have grown since
+     * [turnsForRequest] counted them.
+     *
+     * One turn's tool loop keeps the same [turns]. A model whose reasoning comes back signed (Claude's
+     * thinking blocks) binds each block to every message before it, and rejects a block replayed after
+     * any of those messages changed: so within a turn no earlier turn is dropped or re-stubbed, and the
+     * reasoning of earlier turns is not replayed at all, since their tool results were stubbed and the
+     * system message replaced after it was written.
+     */
+    fun forRequest(
+        messages: List<Message>,
+        turns: Int,
+    ): List<Message> {
+        val replayed =
+            turns(messages).takeLast(turns).asReversed().mapIndexed { age, turn ->
+                val stubbed = if (age < FULL_TOOL_RESULT_TURNS) turn else turn.map(::stubToolResults)
+                if (age == 0) stubbed else stubbed.mapNotNull(::withoutReasoning)
+            }
+        return messages.filterIsInstance<Message.System>() + replayed.asReversed().flatten()
+    }
 
     /**
      * The system messages of [messages], then its newest turns, newest first, until the next would
@@ -94,6 +120,13 @@ internal object ChatHistoryWindow {
                 }
             }
         return message.copy(parts = parts)
+    }
+
+    /** [message] without its reasoning; null when reasoning was all it held. */
+    private fun withoutReasoning(message: Message): Message? {
+        if (message !is Message.Assistant || message.parts.none { it is MessagePart.Reasoning }) return message
+        val parts = message.parts.filterNot { it is MessagePart.Reasoning }
+        return if (parts.isEmpty()) null else message.copy(parts = parts)
     }
 
     private fun stubFor(tool: String): String = "[Earlier $tool result omitted. Call $tool again if you need it.]"
