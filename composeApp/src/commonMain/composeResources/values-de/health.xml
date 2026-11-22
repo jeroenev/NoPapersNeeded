@@ -14,7 +14,7 @@
         <item quantity="one">%1$d Synchronisierung in Folge ist fehlgeschlagen.</item>
         <item quantity="other">%1$d Synchronisierungen in Folge sind fehlgeschlagen.</item>
     </plurals>
-    <string name="common_sync_health_next">Nächste automatische Synchronisierung: %1$s</string>
+    <string name="common_sync_health_next">Die automatische Synchronisierung ist bis %1$s fällig.</string>
     <string name="common_sync_health_pending">Letzte Prüfung: %1$d hochzuladen, %2$d herunterzuladen (Stand %3$s).</string>
     <string name="common_sync_health_pending_none">Bei der letzten Prüfung war nichts mehr zu übertragen (%1$s).</string>
     <string name="common_sync_health_never_checked">Diese Bibliothek wurde noch nicht synchronisiert.</string>
@@ -25,13 +25,25 @@
     <!-- Library settings: the read-only check of every document and journal file. -->
     <string name="common_settings_verify_library">Bibliothek prüfen</string>
     <string name="common_settings_verify_help">Prüft, ob jede Datei und jedes Journalobjekt noch die erwarteten Bytes enthält. Es wird nichts geändert.</string>
-    <string name="common_settings_verify_running">Prüfe %1$d von %2$d…</string>
+    <string name="common_settings_verify_checking_documents">Prüfe Dokumente: %1$d von %2$d…</string>
+    <string name="common_settings_verify_checking_journal">Prüfe Journaldateien: %1$d von %2$d…</string>
     <string name="common_settings_verify_cancel">Abbrechen</string>
     <string name="common_settings_verify_cancelled">Bibliotheksprüfung abgebrochen.</string>
     <string name="common_settings_verify_failed">Die Bibliothek konnte nicht geprüft werden: %1$s</string>
     <string name="common_settings_verify_title">Bibliotheksprüfung</string>
-    <string name="common_settings_verify_summary_ok">%1$d Dokumente und %2$d Journaldateien geprüft. Keine Probleme gefunden.</string>
-    <string name="common_settings_verify_summary_problems">%1$d Dokumente und %2$d Journaldateien geprüft. %3$d Probleme gefunden.</string>
+    <plurals name="common_settings_verify_count_documents">
+        <item quantity="one">%1$d Dokument geprüft.</item>
+        <item quantity="other">%1$d Dokumente geprüft.</item>
+    </plurals>
+    <plurals name="common_settings_verify_count_journal">
+        <item quantity="one">%1$d Journaldatei geprüft.</item>
+        <item quantity="other">%1$d Journaldateien geprüft.</item>
+    </plurals>
+    <string name="common_settings_verify_clean">Keine Probleme gefunden.</string>
+    <plurals name="common_settings_verify_count_problems">
+        <item quantity="one">%1$d Problem gefunden.</item>
+        <item quantity="other">%1$d Probleme gefunden.</item>
+    </plurals>
     <string name="common_settings_verify_group_documents">Dokumente</string>
     <string name="common_settings_verify_group_journal">Journaldateien</string>
     <string name="common_settings_verify_missing">Die Datei fehlt.</string>
@@ -45,6 +57,7 @@
         <item quantity="one">%1$d ersetztes Dokument hat noch seine alte Datei; ein erneuter Scan entfernt sie.</item>
         <item quantity="other">%1$d ersetzte Dokumente haben noch ihre alten Dateien; ein erneuter Scan entfernt sie.</item>
     </plurals>
+    <string name="common_settings_verify_note_unsupported">%1$s (Journalobjektspeicher einer anderen Version; diese App liest ihn nicht)</string>
     <string name="common_settings_verify_copy">Bericht kopieren</string>
     <string name="common_settings_verify_close">Schließen</string>
     <string name="common_settings_verify_copied">Bericht kopiert.</string>

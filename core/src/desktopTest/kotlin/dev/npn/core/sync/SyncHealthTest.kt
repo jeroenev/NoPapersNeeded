@@ -27,7 +27,7 @@ class SyncHealthTest {
 
     @Test
     fun anUnconfiguredLibraryIsNotHealthyAndHasNoSchedule() {
-        val health = SyncHealth.of(CloudSyncConfig.DISABLED, SyncStatus())
+        val health = SyncHealth.of(CloudSyncConfig.DISABLED, SyncStatus(), nowMillis = finishedAt)
 
         health.configured shouldBe false
         health.healthy shouldBe false
@@ -44,6 +44,9 @@ class SyncHealthTest {
                 finishedAt = finishedAt,
                 report = report(pendingUploads = 3, pendingDownloads = 1, checkedAt = finishedAt - 1_000),
                 lastSuccessAt = finishedAt,
+                pendingUploads = 3,
+                pendingDownloads = 1,
+                pendingCheckedAt = finishedAt - 1_000,
             )
         val config = CloudSyncConfig(enabled = true, remote = "drive:Library", intervalMinutes = 15)
 
@@ -51,11 +54,13 @@ class SyncHealthTest {
             SyncHealth.of(
                 config,
                 SyncStatus(running = false, lastRun = summary),
+                nowMillis = finishedAt + minute,
             )
 
         health.configured shouldBe true
         health.automatic shouldBe true
-        health.healthy shouldBe true
+        // Pending work is still owed, so the library is not settled even though the pass finished.
+        health.healthy shouldBe false
         health.consecutiveFailures shouldBe 0
         health.lastSuccessAt shouldBe finishedAt
         health.nextAutomaticAt shouldBe finishedAt + 15 * minute
@@ -82,6 +87,7 @@ class SyncHealthTest {
             SyncHealth.of(
                 config,
                 SyncStatus(lastRun = summary),
+                nowMillis = finishedAt,
             )
 
         health.healthy shouldBe false
@@ -102,6 +108,7 @@ class SyncHealthTest {
             SyncHealth.of(
                 CloudSyncConfig(remote = "drive:Library"),
                 SyncStatus(lastRun = summary),
+                nowMillis = finishedAt,
             )
 
         health.lastSuccessAt shouldBe finishedAt
@@ -123,6 +130,7 @@ class SyncHealthTest {
             SyncHealth.of(
                 CloudSyncConfig(remote = "drive:Library"),
                 SyncStatus(running = true, progress = progress, lastRun = summary),
+                nowMillis = finishedAt,
             )
 
         health.running shouldBe true
@@ -130,5 +138,38 @@ class SyncHealthTest {
         health.conflicts shouldBe listOf(conflict)
         health.attentionCount shouldBe 2
         health.healthy shouldBe false
+    }
+
+    @Test
+    fun aConfiguredLibraryWithNoPendingWorkIsHealthyOnlyOnceAPassFinished() {
+        val summary =
+            SyncRunSummary(
+                startedAt = finishedAt - 1_000,
+                finishedAt = finishedAt,
+                report = report(pendingUploads = 0, pendingDownloads = 0, checkedAt = finishedAt),
+                lastSuccessAt = finishedAt,
+                pendingCheckedAt = finishedAt,
+            )
+        val config = CloudSyncConfig(enabled = true, remote = "drive:Library")
+
+        SyncHealth.of(config, SyncStatus(), nowMillis = finishedAt).healthy shouldBe false
+        SyncHealth.of(config, SyncStatus(lastRun = summary), nowMillis = finishedAt).healthy shouldBe true
+    }
+
+    @Test
+    fun aDueTimeAlreadyPastIsNotShownAsTheNextPass() {
+        // A pass that never reached the engine (no engine, unreachable remote) leaves finishedAt
+        // where it was, and the card must not promise a time that has long gone.
+        val summary = SyncRunSummary(startedAt = finishedAt, finishedAt = finishedAt, lastSuccessAt = finishedAt)
+        val config = CloudSyncConfig(enabled = true, remote = "drive:Library", intervalMinutes = 5)
+
+        val health =
+            SyncHealth.of(
+                config,
+                SyncStatus(lastRun = summary),
+                nowMillis = finishedAt + 60 * minute,
+            )
+
+        health.nextAutomaticAt.shouldBeNull()
     }
 }

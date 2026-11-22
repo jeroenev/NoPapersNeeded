@@ -16,6 +16,7 @@ class SyncPendingCountsTest {
             remote =
                 listOf(
                     SyncAction.UploadDocument("b", "b.pdf", "b.pdf"),
+                    SyncAction.UploadTrash("trash/t.pdf", docId = "b"),
                     SyncAction.DeleteRemote(null, "old.pdf", RemoteEntry("old.pdf", 1, 1)),
                 ),
             pushMetadata = listOf(SyncAction.UploadObject(".npn/journal/objects-v2-ab/object.jsonl")),
@@ -23,22 +24,25 @@ class SyncPendingCountsTest {
         )
 
     @Test
-    fun thePlanCountsDocumentsAndMetadataItWouldTransfer() {
-        // A move, delete or trash copy is not a document upload or download of its own.
-        plan.plannedUploads shouldBe 2
-        plan.plannedDownloads shouldBe 1
+    fun thePlanCountsEverythingItWouldTransfer() {
+        // A move or delete is not a transfer of its own; a trash marker is.
+        plan.plannedUploads shouldBe 3
+        plan.plannedDownloads shouldBe 2
     }
 
     @Test
     fun whatThePassFinishedIsNotPending() {
         val builder = SyncReportBuilder(startedAt = 1_000)
         builder.uploadedDocuments = 1
-        builder.uploadedObjects = 1
+        // One journal object and one trash marker, the plan's only other uploads.
+        builder.uploadedObjects = 2
+        builder.downloadedDocuments = 1
+        builder.downloadedTrash = 1
 
         val report = builder.build(nowMillis = 2_000, plan = this.plan)
 
         report.pendingUploads shouldBe 0
-        report.pendingDownloads shouldBe 1
+        report.pendingDownloads shouldBe 0
         report.pendingCheckedAt shouldBe 2_000
     }
 
@@ -49,8 +53,32 @@ class SyncPendingCountsTest {
 
         val report = builder.build(nowMillis = 2_000, plan = plan)
 
-        report.pendingUploads shouldBe 2
-        report.pendingDownloads shouldBe 1
+        report.pendingUploads shouldBe 3
+        report.pendingDownloads shouldBe 2
+    }
+
+    @Test
+    fun trashUploadsDoNotMakeABlockedDocumentsPendingCountDisappear() {
+        // Four trash markers went up, the one document did not: it is still owed.
+        val builder = SyncReportBuilder(startedAt = 1_000)
+        builder.uploadedObjects = 4
+        val trashHeavy =
+            SyncPlan(
+                local = emptyList(),
+                remote = listOf(SyncAction.UploadDocument("b", "b.pdf", "b.pdf")),
+                pushMetadata = emptyList(),
+                conflicts = emptyList(),
+            )
+
+        builder.build(nowMillis = 2_000, plan = trashHeavy).pendingUploads shouldBe 0
+        // The same uploads against a plan that also carried the four trash markers.
+        val withTrash =
+            trashHeavy.copy(
+                remote =
+                    trashHeavy.remote +
+                        List(4) { SyncAction.UploadTrash("trash/$it.pdf", docId = null) },
+            )
+        builder.build(nowMillis = 2_000, plan = withTrash).pendingUploads shouldBe 1
     }
 
     @Test

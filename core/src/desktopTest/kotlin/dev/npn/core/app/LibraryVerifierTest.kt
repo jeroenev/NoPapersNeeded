@@ -203,6 +203,73 @@ class LibraryVerifierTest {
         }
 
     @Test
+    fun aFailedJournalWalkIsReportedOnceAndNotAsThousandsOfMissingObjects() =
+        runTest {
+            val f = fixture()
+            val source = JournalPaths.objectPath("c".repeat(64))
+            f.fs.faults.arm(SimFaults.Rule(FsMethod.LIST_UNDER, NpnPaths.JOURNAL_DIR, SimFaults.Point.BEFORE, 1))
+
+            val report = f.verifier.run(rows = emptyList(), sources = listOf(source))
+
+            report.storeProblems.single().kind shouldBe VerificationProblemKind.STORE_UNREADABLE
+            report.objectProblems.shouldBeEmpty()
+            report.objectsChecked shouldBe 0
+        }
+
+    @Test
+    fun aFolderAtADocumentsPathIsNotAFileNotASizeMismatch() =
+        runTest {
+            val f = fixture()
+            val bytes = "a document".encodeToByteArray()
+            f.fs.writeBytesOnce("Contracts/Lease.pdf", bytes)
+            val row = row(bytes, relPath = "Contracts")
+
+            val report = f.verifier.run(listOf(row))
+
+            report.documentProblems.single().kind shouldBe VerificationProblemKind.DOCUMENT_NOT_A_FILE
+        }
+
+    @Test
+    fun anUnreadableJournalObjectIsReported() =
+        runTest {
+            val f = fixture()
+            val bytes = "{}".encodeToByteArray()
+            val path = objectPath(bytes)
+            f.fs.writeBytesOnce(path, bytes)
+            f.fs.faults.arm(SimFaults.Rule(FsMethod.SHA256, path, SimFaults.Point.BEFORE, 1))
+
+            val report = f.verifier.run(rows = emptyList())
+
+            report.objectProblems.single().kind shouldBe VerificationProblemKind.OBJECT_UNREADABLE
+        }
+
+    @Test
+    fun theAppsOwnStagingFileIsNotAnOrphan() =
+        runTest {
+            val f = fixture()
+            val hash = "d".repeat(64)
+            f.fs.writeBytesOnce(JournalPaths.stagingPath(hash, "install", "nonce"), "{}".encodeToByteArray())
+
+            val report = f.verifier.run(rows = emptyList())
+
+            report.problems.shouldBeEmpty()
+            report.notes.shouldBeEmpty()
+        }
+
+    @Test
+    fun anObjectStoreOfAnotherVersionIsANotedLeftover() =
+        runTest {
+            val f = fixture()
+            val hash = "e".repeat(64)
+            f.fs.writeBytesOnce(".npn/journal/objects-v3-${hash.take(2)}/$hash.jsonl", "{}".encodeToByteArray())
+
+            val report = f.verifier.run(rows = emptyList())
+
+            report.problems.shouldBeEmpty()
+            report.notes.single().kind shouldBe VerificationNoteKind.UNSUPPORTED_OBJECT_STORE
+        }
+
+    @Test
     fun progressWalksBothPhasesAndEndsAtTheirTotals() =
         runTest {
             val f = fixture()

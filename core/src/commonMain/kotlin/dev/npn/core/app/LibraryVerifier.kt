@@ -46,8 +46,10 @@ internal class LibraryVerifier(
         val documents = listLibrary(rows, problems)
         val journalFiles = listJournal(problems)
 
-        val journalPaths = journalFiles.mapTo(HashSet()) { it.relPath }
-        val missingSources = missingSources(metadataSources, journalPaths)
+        // Without the listing, every source looks missing; the one STORE_UNREADABLE already says why.
+        val journalPaths = journalFiles?.mapTo(HashSet()) { it.relPath }.orEmpty()
+        val missingSources =
+            if (journalFiles == null) emptyList() else missingSources(metadataSources, journalPaths)
 
         val live = documents?.let { rows.filter { row -> row.shows(views[row.docId]) } }.orEmpty()
         var documentsChecked = 0
@@ -66,10 +68,10 @@ internal class LibraryVerifier(
         noteSuperseded(rows, views, documents, notes)
 
         var objectsChecked = 0
-        val objectTotal = journalFiles.size + missingSources.size
+        val objectTotal = journalFiles.orEmpty().size + missingSources.size
         done = 0
         onProgress(LibraryVerificationProgress(VerificationPhase.OBJECTS, done, objectTotal))
-        for (meta in journalFiles) {
+        for (meta in journalFiles.orEmpty()) {
             currentCoroutineContext().ensureActive()
             if (verifyObject(meta, problems, notes)) objectsChecked++
             done++
@@ -104,19 +106,19 @@ internal class LibraryVerifier(
         runCatchingCancellable { fs.listAllIndexable() }
             .onFailure {
                 log.warn("Listing ${rows.size} documents for verification failed", it)
-                problems += storeUnreadable()
+                problems += storeUnreadable("")
             }.getOrNull()
             ?.associateBy { it.relPath }
 
-    private suspend fun listJournal(problems: MutableList<LibraryVerificationProblem>): List<FileMeta> =
+    /** The object store's files, or null when it could not be listed (reported once). */
+    private suspend fun listJournal(problems: MutableList<LibraryVerificationProblem>): List<FileMeta>? =
         runCatchingCancellable { fs.listAllUnder(NpnPaths.JOURNAL_DIR) }
             .onFailure {
                 log.warn("Listing the journal object store for verification failed", it)
-                problems += storeUnreadable()
+                problems += storeUnreadable(NpnPaths.JOURNAL_DIR)
             }.getOrNull()
-            .orEmpty()
-            .filter { !it.isDirectory }
-            .sortedBy { it.relPath }
+            ?.filter { !it.isDirectory }
+            ?.sortedBy { it.relPath }
 
     /** Whether the row still names a document the library shows, by both the row and the journal. */
     private fun DocumentEntity.shows(view: JournalDocView?): Boolean =
@@ -132,18 +134,37 @@ internal class LibraryVerifier(
         problems: MutableList<LibraryVerificationProblem>,
     ) {
         if (listed == null) {
-            // A path that exists but the walk did not include is a folder, a link or something else
-            // the library cannot hold; only "nothing is there" is missing.
-            val exists = runCatchingCancellable { fs.exists(row.relPath) }.getOrDefault(false)
-            val kind =
-                if (exists) {
-                    VerificationProblemKind.DOCUMENT_NOT_A_FILE
-                } else {
-                    VerificationProblemKind.DOCUMENT_MISSING
-                }
+            // A path that exists but the walk did not include is a link or something else the library
+            // cannot hold; only "nothing is there" is missing. A failure to ask is not evidence.
+            val exists =
+                runCatchingCancellable { fs.exists(row.relPath) }
+                    .onFailure {
+                        problems +=
+                            LibraryVerificationProblem(
+                                kind = VerificationProblemKind.DOCUMENT_UNREADABLE,
+                                docId = row.docId,
+                                fileName = row.fileName,
+                                relPath = row.relPath,
+                            )
+                    }.getOrNull() ?: return
             problems +=
                 LibraryVerificationProblem(
-                    kind = kind,
+                    kind =
+                        if (exists) {
+                            VerificationProblemKind.DOCUMENT_NOT_A_FILE
+                        } else {
+                            VerificationProblemKind.DOCUMENT_MISSING
+                        },
+                    docId = row.docId,
+                    fileName = row.fileName,
+                    relPath = row.relPath,
+                )
+            return
+        }
+        if (listed.isDirectory) {
+            problems +=
+                LibraryVerificationProblem(
+                    kind = VerificationProblemKind.DOCUMENT_NOT_A_FILE,
                     docId = row.docId,
                     fileName = row.fileName,
                     relPath = row.relPath,
@@ -203,7 +224,9 @@ internal class LibraryVerifier(
                     path.expectedHash
                 }
 
-                JournalPath.SyncTemp -> {
+                // Neither the app's own staging file (the temp sweep owns those) nor another
+                // tool's in-flight transfer is damage.
+                JournalPath.SyncTemp, JournalPath.Staging -> {
                     return false
                 }
 
@@ -212,7 +235,7 @@ internal class LibraryVerifier(
                     return false
                 }
 
-                JournalPath.Staging, JournalPath.Unknown -> {
+                JournalPath.Unknown -> {
                     problems += orphan(meta.relPath)
                     return false
                 }
@@ -291,6 +314,6 @@ internal class LibraryVerifier(
     private fun orphan(relPath: String): LibraryVerificationProblem =
         LibraryVerificationProblem(kind = VerificationProblemKind.OBJECT_ORPHANED, relPath = relPath)
 
-    private fun storeUnreadable(): LibraryVerificationProblem =
-        LibraryVerificationProblem(kind = VerificationProblemKind.STORE_UNREADABLE, relPath = "")
+    private fun storeUnreadable(relPath: String): LibraryVerificationProblem =
+        LibraryVerificationProblem(kind = VerificationProblemKind.STORE_UNREADABLE, relPath = relPath)
 }

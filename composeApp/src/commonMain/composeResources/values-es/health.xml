@@ -14,7 +14,7 @@
         <item quantity="one">%1$d sincronización seguida ha fallado.</item>
         <item quantity="other">%1$d sincronizaciones seguidas han fallado.</item>
     </plurals>
-    <string name="common_sync_health_next">Próxima sincronización automática: %1$s</string>
+    <string name="common_sync_health_next">La sincronización automática vence como muy tarde a las %1$s.</string>
     <string name="common_sync_health_pending">Última comprobación: %1$d por subir, %2$d por descargar (a fecha de %3$s).</string>
     <string name="common_sync_health_pending_none">En la última comprobación no quedaba nada por transferir (%1$s).</string>
     <string name="common_sync_health_never_checked">Ninguna sincronización ha comprobado esta biblioteca todavía.</string>
@@ -25,13 +25,25 @@
     <!-- Library settings: the read-only check of every document and journal file. -->
     <string name="common_settings_verify_library">Verificar biblioteca</string>
     <string name="common_settings_verify_help">Comprueba que cada documento y cada archivo del diario siguen conteniendo los bytes esperados. No se cambia nada.</string>
-    <string name="common_settings_verify_running">Comprobando %1$d de %2$d…</string>
+    <string name="common_settings_verify_checking_documents">Comprobando documentos: %1$d de %2$d…</string>
+    <string name="common_settings_verify_checking_journal">Comprobando archivos del diario: %1$d de %2$d…</string>
     <string name="common_settings_verify_cancel">Cancelar</string>
     <string name="common_settings_verify_cancelled">Comprobación de la biblioteca cancelada.</string>
     <string name="common_settings_verify_failed">No se pudo comprobar la biblioteca: %1$s</string>
     <string name="common_settings_verify_title">Comprobación de la biblioteca</string>
-    <string name="common_settings_verify_summary_ok">%1$d documentos y %2$d archivos del diario comprobados. No se encontraron problemas.</string>
-    <string name="common_settings_verify_summary_problems">%1$d documentos y %2$d archivos del diario comprobados. Se encontraron %3$d problemas.</string>
+    <plurals name="common_settings_verify_count_documents">
+        <item quantity="one">%1$d documento comprobado.</item>
+        <item quantity="other">%1$d documentos comprobados.</item>
+    </plurals>
+    <plurals name="common_settings_verify_count_journal">
+        <item quantity="one">%1$d archivo del diario comprobado.</item>
+        <item quantity="other">%1$d archivos del diario comprobados.</item>
+    </plurals>
+    <string name="common_settings_verify_clean">No se encontraron problemas.</string>
+    <plurals name="common_settings_verify_count_problems">
+        <item quantity="one">%1$d problema encontrado.</item>
+        <item quantity="other">%1$d problemas encontrados.</item>
+    </plurals>
     <string name="common_settings_verify_group_documents">Documentos</string>
     <string name="common_settings_verify_group_journal">Archivos del diario</string>
     <string name="common_settings_verify_missing">Falta el archivo.</string>
@@ -45,6 +57,7 @@
         <item quantity="one">%1$d documento reemplazado aún conserva su archivo antiguo; un nuevo escaneo lo elimina.</item>
         <item quantity="other">%1$d documentos reemplazados aún conservan sus archivos antiguos; un nuevo escaneo los elimina.</item>
     </plurals>
+    <string name="common_settings_verify_note_unsupported">%1$s (almacén de objetos del diario de otra versión; esta aplicación no lo lee)</string>
     <string name="common_settings_verify_copy">Copiar informe</string>
     <string name="common_settings_verify_close">Cerrar</string>
     <string name="common_settings_verify_copied">Informe copiado.</string>

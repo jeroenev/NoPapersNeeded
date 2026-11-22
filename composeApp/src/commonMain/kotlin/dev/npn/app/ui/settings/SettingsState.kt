@@ -53,10 +53,9 @@ data class CloudSyncState(
     val conflictDocuments: Map<String, ConflictDocument> = emptyMap(),
 )
 
-/** A document a conflict can be linked to: its title and where it sits in the library. */
+/** A document a conflict can be linked to, by the title the user knows it by. */
 data class ConflictDocument(
     val title: String,
-    val relPath: String,
 )
 
 /**
@@ -67,6 +66,8 @@ data class LibraryVerificationState(
     val running: Boolean = false,
     val progress: LibraryVerificationProgress? = null,
     val report: LibraryVerificationReport? = null,
+    /** Whether the open result was just copied, for a confirmation the dialog itself shows. */
+    val reportCopied: Boolean = false,
 )
 
 /**

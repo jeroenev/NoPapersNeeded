@@ -50,7 +50,11 @@ internal fun explainConflict(
     conflict: SyncConflict,
     document: ConflictDocument?,
 ): ConflictExplanation {
-    val label = document?.title?.takeIf { it.isNotBlank() } ?: conflict.remotePath
+    // A title is what the user searches for; the remote path is where the pass saw it and is what
+    // makes an occupied target or a copy actionable, so a resolved document keeps both.
+    val label =
+        document?.title?.takeIf { it.isNotBlank() }?.let { "$it — ${conflict.remotePath}" }
+            ?: conflict.remotePath
     val other = conflict.otherPath.orEmpty()
     return when (conflict.kind) {
         ConflictKind.TARGET_OCCUPIED -> ConflictExplanation.TargetOccupied(label)

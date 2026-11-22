@@ -114,6 +114,14 @@ data class SyncRunSummary(
     val consecutiveFailures: Int = 0,
     /** When a pass last finished without ending early, across remote changes this device kept. */
     val lastSuccessAt: Long? = null,
+    /**
+     * The pending work the last plan that made one found, carried across a pass that ended before
+     * planning so a failure does not erase what is still owed.
+     */
+    val pendingUploads: Int = 0,
+    val pendingDownloads: Int = 0,
+    /** When that plan was made; null until a pass planned. */
+    val pendingCheckedAt: Long? = null,
 ) {
     val ok: Boolean get() = failure == null
 }
@@ -189,16 +197,24 @@ data class SyncHealth(
     val attentionCount: Int
         get() = conflicts.size + errors.size + if (lastFailure != null) 1 else 0
 
-    val healthy: Boolean get() = configured && lastFailure == null && attentionCount == 0
+    val healthy: Boolean
+        get() =
+            configured &&
+                lastPass != null &&
+                !running &&
+                lastFailure == null &&
+                attentionCount == 0 &&
+                pendingUploads == 0 &&
+                pendingDownloads == 0
 
     companion object {
-        /** Derive the health of [config] and [status]. */
+        /** Derive the health of [config] and [status], with [nowMillis] dropping a due time already past. */
         fun of(
             config: CloudSyncConfig,
             status: SyncStatus,
+            nowMillis: Long,
         ): SyncHealth {
             val last = status.lastRun
-            val report = last?.report
             return SyncHealth(
                 configured = config.configured,
                 automatic = config.enabled && config.configured,
@@ -210,13 +226,15 @@ data class SyncHealth(
                 consecutiveFailures = last?.consecutiveFailures ?: 0,
                 nextAutomaticAt =
                     if (config.enabled && config.configured && last != null) {
-                        last.finishedAt + config.intervalMinutes * MILLIS_PER_MINUTE
+                        // A pass that never reached the engine (no engine, unreachable remote) leaves
+                        // finishedAt where it was; a due time already past would read as a promise.
+                        (last.finishedAt + config.intervalMinutes * MILLIS_PER_MINUTE).takeIf { it > nowMillis }
                     } else {
                         null
                     },
-                pendingUploads = report?.pendingUploads ?: 0,
-                pendingDownloads = report?.pendingDownloads ?: 0,
-                pendingAsOf = report?.pendingCheckedAt,
+                pendingUploads = last?.pendingUploads ?: 0,
+                pendingDownloads = last?.pendingDownloads ?: 0,
+                pendingAsOf = last?.pendingCheckedAt,
             )
         }
 

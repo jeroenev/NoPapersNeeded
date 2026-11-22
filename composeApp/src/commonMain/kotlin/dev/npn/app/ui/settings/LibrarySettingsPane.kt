@@ -25,8 +25,12 @@ import dev.npn.app.ui.common.SwitchRow
 import dev.npn.app.ui.common.TypedTextField
 import dev.npn.app.ui.common.rememberStorageAccess
 import dev.npn.app.ui.common.resolve
+import dev.npn.core.app.LibraryVerificationNote
 import dev.npn.core.app.LibraryVerificationProblem
+import dev.npn.core.app.LibraryVerificationProgress
 import dev.npn.core.app.LibraryVerificationReport
+import dev.npn.core.app.VerificationNoteKind
+import dev.npn.core.app.VerificationPhase
 import dev.npn.core.app.VerificationProblemKind
 import dev.npn.core.model.FieldType
 import dev.npn.core.pathrules.StoragePathContext
@@ -56,8 +60,15 @@ import no_papers_needed.composeapp.generated.resources.common_settings_thumbnail
 import no_papers_needed.composeapp.generated.resources.common_settings_use_saf
 import no_papers_needed.composeapp.generated.resources.common_settings_use_saf_help
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_cancel
+import no_papers_needed.composeapp.generated.resources.common_settings_verify_checking_documents
+import no_papers_needed.composeapp.generated.resources.common_settings_verify_checking_journal
+import no_papers_needed.composeapp.generated.resources.common_settings_verify_clean
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_close
+import no_papers_needed.composeapp.generated.resources.common_settings_verify_copied
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_copy
+import no_papers_needed.composeapp.generated.resources.common_settings_verify_count_documents
+import no_papers_needed.composeapp.generated.resources.common_settings_verify_count_journal
+import no_papers_needed.composeapp.generated.resources.common_settings_verify_count_problems
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_group_documents
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_group_journal
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_hash
@@ -67,15 +78,13 @@ import no_papers_needed.composeapp.generated.resources.common_settings_verify_mi
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_more
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_not_a_file
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_note_superseded
+import no_papers_needed.composeapp.generated.resources.common_settings_verify_note_unsupported
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_notes
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_orphaned
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_problem_line
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_report_title
-import no_papers_needed.composeapp.generated.resources.common_settings_verify_running
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_size
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_store_unreadable
-import no_papers_needed.composeapp.generated.resources.common_settings_verify_summary_ok
-import no_papers_needed.composeapp.generated.resources.common_settings_verify_summary_problems
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_title
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_unreadable
 import no_papers_needed.composeapp.generated.resources.common_storage_access_grant
@@ -243,12 +252,7 @@ private fun VerifyLibraryAction(
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (progress != null) {
                 Text(
-                    text =
-                        stringResource(
-                            Res.string.common_settings_verify_running,
-                            progress.done,
-                            progress.total,
-                        ),
+                    text = verificationProgressText(progress),
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 if (progress.total > 0) {
@@ -274,6 +278,7 @@ private fun VerifyLibraryAction(
     verification.report?.let { report ->
         VerifyLibraryReportDialog(
             report = report,
+            copied = verification.reportCopied,
             onCopy = actions::copyLibraryVerificationReport,
             onDismiss = actions::dismissLibraryVerification,
         )
@@ -287,6 +292,7 @@ private fun VerifyLibraryAction(
 @Composable
 private fun VerifyLibraryReportDialog(
     report: LibraryVerificationReport,
+    copied: Boolean,
     onCopy: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -299,7 +305,14 @@ private fun VerifyLibraryReportDialog(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(text = verificationSummary(report), style = MaterialTheme.typography.bodyMedium)
+                for (line in verificationSummaryLines(report)) {
+                    Text(text = line, style = MaterialTheme.typography.bodyMedium)
+                }
+                // A store that could not be listed belongs to neither group; its sentence already
+                // says which part of the library it is about.
+                for (problem in report.storeProblems) {
+                    Text(text = verificationProblemText(problem), style = MaterialTheme.typography.bodySmall)
+                }
                 val documents = report.documentProblems
                 if (documents.isNotEmpty()) {
                     Text(
@@ -322,14 +335,21 @@ private fun VerifyLibraryReportDialog(
                     }
                     VerificationMoreLine(objects.size)
                 }
-                if (report.notes.isNotEmpty()) {
+                val superseded = report.notes.count { it.kind == VerificationNoteKind.SUPERSEDED_DOCUMENT }
+                if (superseded > 0) {
                     HelpText(
                         pluralStringResource(
                             Res.plurals.common_settings_verify_notes,
-                            report.notes.size,
-                            report.notes.size,
+                            superseded,
+                            superseded,
                         ),
                     )
+                }
+                for (note in report.notes.filter { it.kind != VerificationNoteKind.SUPERSEDED_DOCUMENT }) {
+                    Text(text = verificationNoteLine(note), style = MaterialTheme.typography.bodySmall)
+                }
+                if (copied) {
+                    HelpText(stringResource(Res.string.common_settings_verify_copied))
                 }
             }
         },
@@ -346,21 +366,56 @@ private fun VerifyLibraryReportDialog(
     )
 }
 
+/** The counts, each a plural of its own so a one-item library reads correctly in every language. */
 @Composable
-private fun verificationSummary(report: LibraryVerificationReport): String =
-    if (report.ok) {
-        stringResource(
-            Res.string.common_settings_verify_summary_ok,
-            report.documentsChecked,
-            report.objectsChecked,
+private fun verificationSummaryLines(report: LibraryVerificationReport): List<String> =
+    buildList {
+        add(
+            pluralStringResource(
+                Res.plurals.common_settings_verify_count_documents,
+                report.documentsChecked,
+                report.documentsChecked,
+            ),
         )
-    } else {
-        stringResource(
-            Res.string.common_settings_verify_summary_problems,
-            report.documentsChecked,
-            report.objectsChecked,
-            report.problems.size,
+        add(
+            pluralStringResource(
+                Res.plurals.common_settings_verify_count_journal,
+                report.objectsChecked,
+                report.objectsChecked,
+            ),
         )
+        if (report.ok) {
+            add(stringResource(Res.string.common_settings_verify_clean))
+        } else {
+            add(
+                pluralStringResource(
+                    Res.plurals.common_settings_verify_count_problems,
+                    report.problems.size,
+                    report.problems.size,
+                ),
+            )
+        }
+    }
+
+/** What the walk is doing, named by its phase so the count restarting is not read as a loop. */
+@Composable
+private fun verificationProgressText(progress: LibraryVerificationProgress): String =
+    when (progress.phase) {
+        VerificationPhase.DOCUMENTS -> {
+            stringResource(
+                Res.string.common_settings_verify_checking_documents,
+                progress.done,
+                progress.total,
+            )
+        }
+
+        VerificationPhase.OBJECTS -> {
+            stringResource(
+                Res.string.common_settings_verify_checking_journal,
+                progress.done,
+                progress.total,
+            )
+        }
     }
 
 /** One finding: the file it names, then what is wrong with it. */
@@ -371,6 +426,19 @@ private fun verificationProblemLine(problem: LibraryVerificationProblem): String
         problem.fileName ?: problem.relPath,
         verificationProblemText(problem),
     )
+
+/** A note in the app's language; notes are expected leftovers, never a problem. */
+@Composable
+private fun verificationNoteLine(note: LibraryVerificationNote): String =
+    when (note.kind) {
+        VerificationNoteKind.SUPERSEDED_DOCUMENT -> {
+            stringResource(Res.string.common_settings_verify_note_superseded, note.relPath)
+        }
+
+        VerificationNoteKind.UNSUPPORTED_OBJECT_STORE -> {
+            stringResource(Res.string.common_settings_verify_note_unsupported, note.relPath)
+        }
+    }
 
 @Composable
 private fun verificationProblemText(problem: LibraryVerificationProblem): String =
@@ -432,22 +500,15 @@ private fun VerificationMoreLine(total: Int) {
 @Composable
 private fun verificationReportText(report: LibraryVerificationReport): String {
     val title = stringResource(Res.string.common_settings_verify_report_title)
-    val summary = verificationSummary(report)
-    val documents =
-        report.documentProblems.map { problem ->
-            " - " + verificationProblemLine(problem)
-        }
-    val objects =
-        report.objectProblems.map { problem ->
-            " - " + verificationProblemLine(problem)
-        }
-    val notes =
-        report.notes.map { note ->
-            " - " + stringResource(Res.string.common_settings_verify_note_superseded, note.relPath)
-        }
+    val summary = verificationSummaryLines(report)
+    val stores = report.storeProblems.map { verificationProblemText(it) }
+    val documents = report.documentProblems.map { " - " + verificationProblemLine(it) }
+    val objects = report.objectProblems.map { " - " + verificationProblemLine(it) }
+    val notes = report.notes.map { " - " + verificationNoteLine(it) }
     return buildString {
         appendLine(title)
-        appendLine(summary)
+        summary.forEach(::appendLine)
+        stores.forEach(::appendLine)
         if (documents.isNotEmpty()) {
             appendLine(stringResource(Res.string.common_settings_verify_group_documents))
             documents.forEach(::appendLine)
@@ -456,9 +517,7 @@ private fun verificationReportText(report: LibraryVerificationReport): String {
             appendLine(stringResource(Res.string.common_settings_verify_group_journal))
             objects.forEach(::appendLine)
         }
-        if (notes.isNotEmpty()) {
-            notes.forEach(::appendLine)
-        }
+        notes.forEach(::appendLine)
     }.trimEnd()
 }
 

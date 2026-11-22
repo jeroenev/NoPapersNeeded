@@ -89,7 +89,7 @@ enum class VerificationNoteKind {
     /** A document a relink superseded still has its old file; the next rescan removes it. */
     SUPERSEDED_DOCUMENT,
 
-    /** A journal object published under another name than its content hash (a sync tool's copy). */
+    /** A journal object store of a version this build does not read (another build's format). */
     UNSUPPORTED_OBJECT_STORE,
 }
 
@@ -118,5 +118,9 @@ data class LibraryVerificationReport(
         get() = problems.filter { it.kind.isDocument }
 
     val objectProblems: List<LibraryVerificationProblem>
-        get() = problems.filterNot { it.kind.isDocument }
+        get() = problems.filter { !it.kind.isDocument && it.kind != VerificationProblemKind.STORE_UNREADABLE }
+
+    /** A folder or object store that could not be listed; it belongs to neither group below. */
+    val storeProblems: List<LibraryVerificationProblem>
+        get() = problems.filter { it.kind == VerificationProblemKind.STORE_UNREADABLE }
 }

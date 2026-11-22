@@ -2,11 +2,11 @@
 <resources>
     <!-- Cloud sync: how the last passes went, beyond the one-line status. -->
     <string name="common_sync_health_title">Estado da sincronização</string>
-    <string name="common_sync_health_working">A sincronizar…</string>
-    <string name="common_sync_health_healthy">Está tudo sincronizado.</string>
+    <string name="common_sync_health_working">Sincronizando…</string>
+    <string name="common_sync_health_healthy">Tudo está sincronizado.</string>
     <plurals name="common_sync_health_attention">
-        <item quantity="one">%1$d item precisa da tua atenção.</item>
-        <item quantity="other">%1$d itens precisam da tua atenção.</item>
+        <item quantity="one">%1$d item precisa da sua atenção.</item>
+        <item quantity="other">%1$d itens precisam da sua atenção.</item>
     </plurals>
     <string name="common_sync_health_last_success">Última sincronização bem-sucedida: %1$s</string>
     <string name="common_sync_health_never_success">Esta biblioteca ainda não concluiu nenhuma sincronização.</string>
@@ -14,42 +14,55 @@
         <item quantity="one">%1$d sincronização seguida falhou.</item>
         <item quantity="other">%1$d sincronizações seguidas falharam.</item>
     </plurals>
-    <string name="common_sync_health_next">Próxima sincronização automática: %1$s</string>
-    <string name="common_sync_health_pending">Última verificação: %1$d por enviar, %2$d por receber (a %3$s).</string>
-    <string name="common_sync_health_pending_none">Na última verificação não havia nada por transferir (%1$s).</string>
+    <string name="common_sync_health_next">A sincronização automática vence no máximo em %1$s.</string>
+    <string name="common_sync_health_pending">Última verificação: %1$d para enviar, %2$d para baixar (em %3$s).</string>
+    <string name="common_sync_health_pending_none">Na última verificação não restava nada para transferir (%1$s).</string>
     <string name="common_sync_health_never_checked">Nenhuma sincronização verificou esta biblioteca ainda.</string>
     <string name="common_sync_health_retry">Tentar novamente</string>
     <string name="common_sync_health_open_document">Abrir documento</string>
-    <string name="common_sync_health_more">%1$d mais não mostrados.</string>
+    <string name="common_sync_health_more">%1$d mais não exibidos.</string>
 
     <!-- Library settings: the read-only check of every document and journal file. -->
     <string name="common_settings_verify_library">Verificar biblioteca</string>
-    <string name="common_settings_verify_help">Verifica se cada documento e cada ficheiro do diário ainda contém os bytes esperados. Nada é alterado.</string>
-    <string name="common_settings_verify_running">A verificar %1$d de %2$d…</string>
+    <string name="common_settings_verify_help">Verifica se cada documento e cada arquivo do diário ainda contém os bytes esperados. Nada é alterado.</string>
+    <string name="common_settings_verify_checking_documents">Verificando documentos: %1$d de %2$d…</string>
+    <string name="common_settings_verify_checking_journal">Verificando arquivos do diário: %1$d de %2$d…</string>
     <string name="common_settings_verify_cancel">Cancelar</string>
     <string name="common_settings_verify_cancelled">Verificação da biblioteca cancelada.</string>
     <string name="common_settings_verify_failed">Não foi possível verificar a biblioteca: %1$s</string>
     <string name="common_settings_verify_title">Verificação da biblioteca</string>
-    <string name="common_settings_verify_summary_ok">%1$d documentos e %2$d ficheiros do diário verificados. Nenhum problema encontrado.</string>
-    <string name="common_settings_verify_summary_problems">%1$d documentos e %2$d ficheiros do diário verificados. %3$d problemas encontrados.</string>
+    <plurals name="common_settings_verify_count_documents">
+        <item quantity="one">%1$d documento verificado.</item>
+        <item quantity="other">%1$d documentos verificados.</item>
+    </plurals>
+    <plurals name="common_settings_verify_count_journal">
+        <item quantity="one">%1$d arquivo do diário verificado.</item>
+        <item quantity="other">%1$d arquivos do diário verificados.</item>
+    </plurals>
+    <string name="common_settings_verify_clean">Nenhum problema encontrado.</string>
+    <plurals name="common_settings_verify_count_problems">
+        <item quantity="one">%1$d problema encontrado.</item>
+        <item quantity="other">%1$d problemas encontrados.</item>
+    </plurals>
     <string name="common_settings_verify_group_documents">Documentos</string>
-    <string name="common_settings_verify_group_journal">Ficheiros do diário</string>
-    <string name="common_settings_verify_missing">O ficheiro não existe.</string>
-    <string name="common_settings_verify_unreadable">Não foi possível ler o ficheiro.</string>
-    <string name="common_settings_verify_not_a_file">Isto não é um ficheiro normal.</string>
-    <string name="common_settings_verify_size">O ficheiro tem %2$d bytes; eram esperados %1$d.</string>
-    <string name="common_settings_verify_hash">O conteúdo já não corresponde.</string>
-    <string name="common_settings_verify_orphaned">Este não é um ficheiro do diário que esta aplicação consiga ler.</string>
+    <string name="common_settings_verify_group_journal">Arquivos do diário</string>
+    <string name="common_settings_verify_missing">O arquivo está ausente.</string>
+    <string name="common_settings_verify_unreadable">Não foi possível ler o arquivo.</string>
+    <string name="common_settings_verify_not_a_file">Isto não é um arquivo comum.</string>
+    <string name="common_settings_verify_size">O arquivo tem %2$d bytes; eram esperados %1$d.</string>
+    <string name="common_settings_verify_hash">O conteúdo não corresponde mais.</string>
+    <string name="common_settings_verify_orphaned">Este não é um arquivo do diário que este aplicativo consiga ler.</string>
     <string name="common_settings_verify_store_unreadable">Não foi possível ler esta parte da biblioteca.</string>
     <plurals name="common_settings_verify_notes">
-        <item quantity="one">%1$d documento substituído ainda tem o ficheiro antigo; uma nova verificação remove-o.</item>
-        <item quantity="other">%1$d documentos substituídos ainda têm os ficheiros antigos; uma nova verificação remove-os.</item>
+        <item quantity="one">%1$d documento substituído ainda tem seu arquivo antigo; uma nova verificação da pasta o remove.</item>
+        <item quantity="other">%1$d documentos substituídos ainda têm seus arquivos antigos; uma nova verificação da pasta os remove.</item>
     </plurals>
+    <string name="common_settings_verify_note_unsupported">%1$s (armazenamento de objetos do diário de outra versão; este aplicativo não o lê)</string>
     <string name="common_settings_verify_copy">Copiar relatório</string>
     <string name="common_settings_verify_close">Fechar</string>
     <string name="common_settings_verify_copied">Relatório copiado.</string>
     <string name="common_settings_verify_copy_failed">Não foi possível copiar o relatório: %1$s</string>
-    <string name="common_settings_verify_more">%1$d mais não mostrados.</string>
+    <string name="common_settings_verify_more">%1$d mais não exibidos.</string>
     <string name="common_settings_verify_report_title">Relatório da verificação da biblioteca</string>
     <string name="common_settings_verify_problem_line">%1$s: %2$s</string>
     <string name="common_settings_verify_note_superseded">%1$s (documento substituído; esperado)</string>

@@ -7,7 +7,7 @@ import kotlin.test.Test
 
 /** How a conflict is explained: every kind, its label, and the copy's second path. */
 class ConflictExplanationTest {
-    private val document = ConflictDocument(title = "Electricity bill", relPath = "Bills/electricity.pdf")
+    private val document = ConflictDocument(title = "Electricity bill")
 
     private fun explain(
         kind: ConflictKind,
@@ -21,23 +21,29 @@ class ConflictExplanationTest {
     @Test
     fun everyKindIsExplainedInPlainLanguage() {
         explain(ConflictKind.TARGET_OCCUPIED) shouldBe
-            ConflictExplanation.TargetOccupied("Electricity bill")
+            ConflictExplanation.TargetOccupied("Electricity bill — Bills/electricity (1).pdf")
         explain(ConflictKind.UNIDENTIFIED) shouldBe
-            ConflictExplanation.Unidentified("Electricity bill")
+            ConflictExplanation.Unidentified("Electricity bill — Bills/electricity (1).pdf")
         explain(ConflictKind.REMOTE_CHANGED) shouldBe
-            ConflictExplanation.RemoteChanged("Electricity bill")
+            ConflictExplanation.RemoteChanged("Electricity bill — Bills/electricity (1).pdf")
         explain(ConflictKind.LOCAL_CHANGED) shouldBe
-            ConflictExplanation.LocalChanged("Electricity bill")
+            ConflictExplanation.LocalChanged("Electricity bill — Bills/electricity (1).pdf")
         explain(ConflictKind.KEPT_ON_THIS_DEVICE) shouldBe
-            ConflictExplanation.KeptOnThisDevice("Electricity bill")
+            ConflictExplanation.KeptOnThisDevice("Electricity bill — Bills/electricity (1).pdf")
     }
 
     @Test
     fun aCopysExplanationCarriesWhereItWent() {
         explain(ConflictKind.UPLOADED_AS_COPY, otherPath = "Bills/electricity (2).pdf") shouldBe
-            ConflictExplanation.UploadedAsCopy("Electricity bill", "Bills/electricity (2).pdf")
+            ConflictExplanation.UploadedAsCopy(
+                "Electricity bill — Bills/electricity (1).pdf",
+                "Bills/electricity (2).pdf",
+            )
         explain(ConflictKind.INSTALLED_AS_COPY, otherPath = "Bills/electricity (2).pdf") shouldBe
-            ConflictExplanation.InstalledAsCopy("Electricity bill", "Bills/electricity (2).pdf")
+            ConflictExplanation.InstalledAsCopy(
+                "Electricity bill — Bills/electricity (1).pdf",
+                "Bills/electricity (2).pdf",
+            )
     }
 
     @Test

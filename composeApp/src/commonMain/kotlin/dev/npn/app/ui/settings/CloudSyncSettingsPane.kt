@@ -339,7 +339,7 @@ private fun SyncHealthSection(
                 }
             }
         }
-        Text(text = healthHeadline(health), style = MaterialTheme.typography.bodyMedium)
+        Text(text = healthHeadline(health, cloud.transport), style = MaterialTheme.typography.bodyMedium)
         if (status.running) {
             val progress = status.progress
             if (progress != null) {
@@ -370,7 +370,10 @@ private fun SyncHealthSection(
  * the failure itself. A quiet board on a library that never synced, not an alarm.
  */
 @Composable
-private fun healthHeadline(health: SyncHealth): String {
+private fun healthHeadline(
+    health: SyncHealth,
+    transport: TransportAvailability?,
+): String {
     val failure = health.lastFailure
     return when {
         health.running -> {
@@ -379,6 +382,11 @@ private fun healthHeadline(health: SyncHealth): String {
 
         !health.configured -> {
             stringResource(Res.string.common_settings_cloud_never)
+        }
+
+        // A pass cannot even start without an engine; say that instead of a stale "in sync".
+        transport != null && transport !is TransportAvailability.Available -> {
+            engineText(transport)
         }
 
         health.lastPass == null -> {

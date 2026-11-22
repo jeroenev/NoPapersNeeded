@@ -40,6 +40,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
@@ -99,6 +100,8 @@ class SettingsViewModel(
      * wizard signed in to and never finished with; none, and that is left to the next wizard run.
      */
     private val outliving: CoroutineScope? = null,
+    /** Where a copied report goes; injectable so its success and failure are testable. */
+    private val copy: suspend (String) -> Unit = ::copyToClipboard,
 ) : MessagesViewModel(),
     SettingsActions {
     private val content = session.content
@@ -235,16 +238,18 @@ class SettingsViewModel(
      * easier to act on with a title than with the remote path it kept.
      */
     private val conflictDocuments: Flow<Map<String, ConflictDocument>> =
-        sync.health.map { health ->
-            val ids = health.conflicts.mapNotNull { it.docId }.distinct()
-            if (ids.isEmpty()) {
-                emptyMap()
-            } else {
-                documents.liveDocuments(ids).associate { item ->
-                    item.doc.docId to ConflictDocument(item.doc.displayTitle, item.doc.relPath)
+        sync.health
+            .map { health -> health.conflicts.mapNotNull { it.docId }.distinct() }
+            .distinctUntilChanged()
+            .map { ids ->
+                if (ids.isEmpty()) {
+                    emptyMap()
+                } else {
+                    documents.liveDocuments(ids).associate { item ->
+                        item.doc.docId to ConflictDocument(item.doc.displayTitle)
+                    }
                 }
             }
-        }
 
     private val cloudState: Flow<CloudSyncState> =
         combine(
@@ -481,8 +486,11 @@ class SettingsViewModel(
     }
 
     override fun cancelLibraryVerification() {
-        if (verificationJob?.isActive != true) return
-        verificationJob?.cancel()
+        val job = verificationJob ?: return
+        if (!job.isActive) return
+        job.cancel()
+        // A job cancelled before its first dispatch never runs the body's finally; clear here too.
+        verification.value = LibraryVerificationState()
         message(uiText(Res.string.common_settings_verify_cancelled))
     }
 
@@ -492,7 +500,8 @@ class SettingsViewModel(
 
     override fun copyLibraryVerificationReport(text: String) =
         launchReporting(Res.string.common_settings_verify_copy_failed) {
-            copyToClipboard(text)
+            copy(text)
+            verification.update { it.copy(reportCopied = true) }
             message(uiText(Res.string.common_settings_verify_copied))
         }
 

@@ -286,6 +286,40 @@ class SyncServiceTest {
         }
 
     @Test
+    fun aStreakOfFailuresIsRememberedAndClearedByAPassThatFinishes() =
+        withHarness { h ->
+            val service = h.configured(enabled = true)
+            h.transport.listFailure = IOException("one")
+
+            service.syncNow().shouldBeInstanceOf<SyncOutcome.Failed>()
+            service
+                .current()
+                .lastRun
+                .shouldNotBeNull()
+                .consecutiveFailures shouldBe 1
+
+            h.transport.listFailure = IOException("two")
+            service.syncNow().shouldBeInstanceOf<SyncOutcome.Failed>()
+            val failed = service.current().lastRun.shouldNotBeNull()
+            failed.consecutiveFailures shouldBe 2
+            failed.lastSuccessAt.shouldBeNull()
+
+            // The streak and the missing success survive a relaunch: they are in the library's device.db.
+            val relaunched = h.service()
+            relaunched
+                .current()
+                .lastRun
+                .shouldNotBeNull()
+                .consecutiveFailures shouldBe 2
+
+            h.transport.listFailure = null
+            service.syncNow().shouldBeInstanceOf<SyncOutcome.Completed>()
+            val finished = service.current().lastRun.shouldNotBeNull()
+            finished.consecutiveFailures shouldBe 0
+            finished.lastSuccessAt shouldBe finished.finishedAt
+        }
+
+    @Test
     fun aFailureIsNamedByTheTransportsReading() =
         withHarness { h ->
             val service = h.configured()

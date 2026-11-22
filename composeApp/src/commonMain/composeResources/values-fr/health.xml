@@ -14,7 +14,7 @@
         <item quantity="one">%1$d synchronisation consécutive a échoué.</item>
         <item quantity="other">%1$d synchronisations consécutives ont échoué.</item>
     </plurals>
-    <string name="common_sync_health_next">Prochaine synchronisation automatique : %1$s</string>
+    <string name="common_sync_health_next">La synchronisation automatique est prévue au plus tard le %1$s.</string>
     <string name="common_sync_health_pending">Dernière vérification : %1$d à envoyer, %2$d à recevoir (au %3$s).</string>
     <string name="common_sync_health_pending_none">Rien ne restait à transférer lors de la dernière vérification (%1$s).</string>
     <string name="common_sync_health_never_checked">Aucune synchronisation n'a encore vérifié cette bibliothèque.</string>
@@ -25,13 +25,25 @@
     <!-- Library settings: the read-only check of every document and journal file. -->
     <string name="common_settings_verify_library">Vérifier la bibliothèque</string>
     <string name="common_settings_verify_help">Vérifie que chaque document et chaque fichier du journal contient toujours les octets attendus. Rien n'est modifié.</string>
-    <string name="common_settings_verify_running">Vérification de %1$d sur %2$d…</string>
+    <string name="common_settings_verify_checking_documents">Vérification des documents : %1$d sur %2$d…</string>
+    <string name="common_settings_verify_checking_journal">Vérification des fichiers du journal : %1$d sur %2$d…</string>
     <string name="common_settings_verify_cancel">Annuler</string>
     <string name="common_settings_verify_cancelled">Vérification de la bibliothèque annulée.</string>
     <string name="common_settings_verify_failed">Impossible de vérifier la bibliothèque : %1$s</string>
     <string name="common_settings_verify_title">Vérification de la bibliothèque</string>
-    <string name="common_settings_verify_summary_ok">%1$d documents et %2$d fichiers du journal vérifiés. Aucun problème détecté.</string>
-    <string name="common_settings_verify_summary_problems">%1$d documents et %2$d fichiers du journal vérifiés. %3$d problèmes détectés.</string>
+    <plurals name="common_settings_verify_count_documents">
+        <item quantity="one">%1$d document vérifié.</item>
+        <item quantity="other">%1$d documents vérifiés.</item>
+    </plurals>
+    <plurals name="common_settings_verify_count_journal">
+        <item quantity="one">%1$d fichier du journal vérifié.</item>
+        <item quantity="other">%1$d fichiers du journal vérifiés.</item>
+    </plurals>
+    <string name="common_settings_verify_clean">Aucun problème détecté.</string>
+    <plurals name="common_settings_verify_count_problems">
+        <item quantity="one">%1$d problème détecté.</item>
+        <item quantity="other">%1$d problèmes détectés.</item>
+    </plurals>
     <string name="common_settings_verify_group_documents">Documents</string>
     <string name="common_settings_verify_group_journal">Fichiers du journal</string>
     <string name="common_settings_verify_missing">Le fichier est absent.</string>
@@ -45,6 +57,7 @@
         <item quantity="one">%1$d document remplacé conserve encore son ancien fichier ; un nouveau scan l'enlève.</item>
         <item quantity="other">%1$d documents remplacés conservent encore leurs anciens fichiers ; un nouveau scan les enlève.</item>
     </plurals>
+    <string name="common_settings_verify_note_unsupported">%1$s (stockage d'objets du journal d'une autre version ; cette application ne le lit pas)</string>
     <string name="common_settings_verify_copy">Copier le rapport</string>
     <string name="common_settings_verify_close">Fermer</string>
     <string name="common_settings_verify_copied">Rapport copié.</string>

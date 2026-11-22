@@ -19,6 +19,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_cancelled
+import no_papers_needed.composeapp.generated.resources.common_settings_verify_copy_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_failed
 import kotlin.test.Test
 
@@ -120,6 +121,58 @@ class SettingsViewModelVerificationTest : MainDispatcherTest() {
             model.paneState.value.verification.report
                 .shouldBeNull()
             model.paneState.value.verification.running shouldBe false
+        }
+
+    @Test
+    fun copyingTheOpenReportSaysSoWhereTheUserIsLooking() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            session.maintenance.verificationReport = report()
+            val copied = mutableListOf<String>()
+            val modelWithCopy = settingsVm(session = session, copy = { copied += it })
+            collecting(modelWithCopy.paneState)
+
+            modelWithCopy.verifyLibrary()
+            advanceUntilIdle()
+            modelWithCopy.copyLibraryVerificationReport("a report")
+            advanceUntilIdle()
+
+            copied shouldBe listOf("a report")
+            modelWithCopy.paneState.value.verification.reportCopied shouldBe true
+        }
+
+    @Test
+    fun aFailedCopyIsReportedInsteadOfClaimingTheReportWasCopied() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            session.maintenance.verificationReport = report()
+            val model = settingsVm(session = session, copy = { error("clipboard closed") })
+            collecting(model.paneState)
+            val messages = collecting(model.messages.map { it.text })
+
+            model.copyLibraryVerificationReport("a report")
+            advanceUntilIdle()
+
+            messages.single() shouldBe failure(Res.string.common_settings_verify_copy_failed, "clipboard closed")
+            model.paneState.value.verification.reportCopied shouldBe false
+        }
+
+    @Test
+    fun cancellingBeforeTheJobEverStartsStillClearsTheProgress() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = vm(session)
+            val gate = CompletableDeferred<Unit>()
+            session.maintenance.verifyGate = gate
+
+            model.verifyLibrary()
+            // No runCurrent(): the job exists but has not run its body yet.
+            model.cancelLibraryVerification()
+
+            model.paneState.value.verification.running shouldBe false
+            model.paneState.value.verification.progress
+                .shouldBeNull()
+            gate.complete(Unit)
         }
 
     @Test

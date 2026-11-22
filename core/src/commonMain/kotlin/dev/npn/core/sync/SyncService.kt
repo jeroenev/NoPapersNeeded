@@ -63,7 +63,7 @@ class SyncService(
 
     /** The live pass and the last outcome, read as the settings screen says them. */
     override val health: Flow<SyncHealth> =
-        combine(config, status) { cfg, current -> SyncHealth.of(cfg, current) }
+        combine(config, status) { cfg, current -> SyncHealth.of(cfg, current, clock.nowMillis()) }
 
     /** Guards loading and changing the stored settings and last run. */
     private val store = Mutex()
@@ -213,14 +213,29 @@ class SyncService(
     private suspend fun finish(summary: SyncRunSummary) {
         // A pass that finished clears the streak; one that ended early adds itself to it and keeps
         // the last success, so the settings screen can say how long this library has been failing.
+        // The pending counts describe the last plan made: a pass that failed before planning keeps
+        // the ones before it, so a failure does not claim there is nothing left to transfer.
         val previous = _status.value.lastRun
+        val report = summary.report
+        val pendingUploads = report?.pendingUploads ?: previous?.pendingUploads ?: 0
+        val pendingDownloads = report?.pendingDownloads ?: previous?.pendingDownloads ?: 0
+        val pendingCheckedAt = report?.pendingCheckedAt ?: previous?.pendingCheckedAt
         val next =
             if (summary.ok) {
-                summary.copy(consecutiveFailures = 0, lastSuccessAt = summary.finishedAt)
+                summary.copy(
+                    consecutiveFailures = 0,
+                    lastSuccessAt = summary.finishedAt,
+                    pendingUploads = pendingUploads,
+                    pendingDownloads = pendingDownloads,
+                    pendingCheckedAt = pendingCheckedAt,
+                )
             } else {
                 summary.copy(
                     consecutiveFailures = (previous?.consecutiveFailures ?: 0) + 1,
                     lastSuccessAt = previous?.lastSuccessAt ?: previous?.takeIf { it.ok }?.finishedAt,
+                    pendingUploads = pendingUploads,
+                    pendingDownloads = pendingDownloads,
+                    pendingCheckedAt = pendingCheckedAt,
                 )
             }
         _status.update { it.copy(lastRun = next) }
