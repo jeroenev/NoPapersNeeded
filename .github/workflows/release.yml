@@ -283,9 +283,9 @@ jobs:
   # winget has no pre-releases, so a beta is never submitted: it would become the package every
   # winget user gets, and one skips this job outright.
   #
-  # The action pulls in cargo-bins/cargo-binstall@main, which this repository's allowed-actions
-  # policy refuses at job setup (not SHA-pinned, not on the allowlist), so a stable release fails
-  # here until that policy or the action changes. Until then the submission stays manual.
+  # The action's composite step runs cargo-bins/cargo-binstall@main, so the repository's
+  # allowed-actions policy names that repository and leaves "require SHA pinning" off; with either
+  # missing, a stable release fails here at job setup, before the token is even checked.
   winget:
     name: Submit to winget
     needs: [publish, draft]

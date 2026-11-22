@@ -436,9 +436,11 @@ On Windows, the release workflow submits each stable version's `.msi` to winget 
 version is in `microsoft/winget-pkgs` (submit that one by hand with `komac new`) and the
 `WINGET_TOKEN` secret holds a classic token with `public_repo`. A beta is never submitted — winget
 has no pre-releases and would hand it to every winget user as the stable package — so the job is
-skipped for one. The action needs `cargo-bins/cargo-binstall` allowed and pinned, which this
-repository's allowed-actions policy currently refuses, so until that changes a stable submission is
-manual too.
+skipped for one. That action's composite step runs `cargo-bins/cargo-binstall@main`, a branch it
+pins to nothing, so the repository's allowed-actions policy names that repository and leaves
+"require actions to be pinned" off (Settings → Actions → General); every workflow here still pins
+every action it calls. Without those two settings the job fails at setup, before it can even check
+its token.
 
 ### Continuous integration
 
