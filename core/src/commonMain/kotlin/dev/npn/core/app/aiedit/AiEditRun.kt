@@ -1,6 +1,8 @@
 package dev.npn.core.app.aiedit
 
+import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiEditRequest
+import dev.npn.core.ai.AiRunBudget
 import dev.npn.core.ai.AiSuggest
 import dev.npn.core.app.Doc
 import dev.npn.core.app.DocContentFacade
@@ -65,13 +67,16 @@ sealed interface BatchResult {
     /**
      * Suggestions for review: [docs] carry at least one suggestion, [emptyDocs] came back empty.
      * [failures] of [total] documents could not be suggested (they are not marked processed and
-     * will be retried by the next batch).
+     * will be retried by the next batch). [skipped] documents were not asked because the run's
+     * per-run request cap was reached first; [capReached] says so.
      */
     data class Review(
         val docs: List<ReviewDoc>,
         val emptyDocs: List<ReviewDoc>,
         val failures: Int,
         val total: Int,
+        val capReached: Boolean = false,
+        val skipped: Int = 0,
     ) : BatchResult
 }
 
@@ -157,6 +162,7 @@ interface AiEditRun {
 fun AiEditRun(
     session: LibrarySession,
     selection: List<String> = emptyList(),
+    readConfig: suspend () -> AiConfig = { AiConfig.DISABLED },
 ): AiEditRun =
     AiEditRunImpl(
         session.documents,
@@ -166,6 +172,7 @@ fun AiEditRun(
         session.fieldRegistry,
         session.tags,
         selection,
+        readConfig = readConfig,
     )
 
 /** The [AiEditRun] over a library's facets. */
@@ -179,6 +186,8 @@ internal class AiEditRunImpl(
     tags: TagRepository,
     /** Documents handed over from the library's selection mode; empty when opened standalone. */
     private val selection: List<String> = emptyList(),
+    /** Read once per run for its per-run request cap. */
+    private val readConfig: suspend () -> AiConfig = { AiConfig.DISABLED },
 ) : AiEditRun {
     /** The current batch's Review→journal step; each batch gets its own, so counts never carry over. */
     private var reviewApply = ReviewApply(meta)
@@ -187,6 +196,13 @@ internal class AiEditRunImpl(
     private val projector = ReviewProjector(content, fieldRegistry, tags)
 
     private val runner = SuggestionRunner(ai)
+
+    /**
+     * This run's identity in the spend ledger, and the shared request counter the run's whole life
+     * uses. One id across batches is what makes queued and interactive runs groupable in settings.
+     */
+    private val runId: String = randomRunId()
+    private var budget: AiRunBudget? = null
 
     private val _processed = MutableStateFlow(emptySet<String>())
     override val processed: StateFlow<Set<String>> = _processed.asStateFlow()
@@ -252,19 +268,34 @@ internal class AiEditRunImpl(
             runner.suggest(
                 batch.map { it.doc.docId },
                 request,
+                runId = runId,
+                budget = runBudget(),
                 onEach = { index, _ ->
                     done++
                     val doc = batch[index].doc
                     onProgress(EditProgress(done, batch.size, doc.title, doc.fileName))
                 },
             ) { index, suggestion -> projector.project(batch[index], suggestion) }
-        return enterReview(outcomes.mapNotNull { it.getOrNull() }, outcomes.count { it.isFailure }, batch.size)
+        val answered = outcomes.outcomes.mapNotNull { it.outcome.getOrNull() }
+        return enterReview(
+            results = answered,
+            failures = outcomes.outcomes.count { it.outcome.isFailure },
+            total = batch.size,
+            capReached = outcomes.capReached,
+            skipped = outcomes.skipped(batch.size),
+        )
     }
+
+    /** The run's one request counter, seeded from the cap read when its first call is made. */
+    private suspend fun runBudget(): AiRunBudget =
+        budget ?: AiRunBudget(readConfig().maxRunRequests).also { budget = it }
 
     private fun enterReview(
         results: List<ReviewDoc>,
         failures: Int,
         total: Int,
+        capReached: Boolean = false,
+        skipped: Int = 0,
     ): BatchResult.Review {
         // Mark EVERY reviewed doc (incl. no-suggestion ones) processed now, not on apply, so the
         // next batch never re-suggests docs the user already saw — deselecting or skipping a doc
@@ -272,7 +303,7 @@ internal class AiEditRunImpl(
         _processed.update { done -> done + results.map { it.docId } }
         reviewApply = ReviewApply(meta)
         val (withSuggestions, empty) = results.partition { it.hasSuggestions }
-        return BatchResult.Review(withSuggestions, empty, failures, total)
+        return BatchResult.Review(withSuggestions, empty, failures, total, capReached = capReached, skipped = skipped)
     }
 
     override suspend fun apply(
@@ -292,3 +323,9 @@ internal class AiEditRunImpl(
         val SORT = LibrarySort()
     }
 }
+
+@OptIn(kotlin.uuid.ExperimentalUuidApi::class)
+private fun randomRunId(): String =
+    kotlin.uuid.Uuid
+        .random()
+        .toString()

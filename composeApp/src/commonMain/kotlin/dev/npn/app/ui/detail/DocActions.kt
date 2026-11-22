@@ -1,5 +1,7 @@
 package dev.npn.app.ui.detail
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ContentCut
@@ -9,12 +11,14 @@ import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.unit.dp
 import dev.npn.app.platform.sharePdfBytes
 import dev.npn.app.platform.supportsSharing
 import dev.npn.app.ui.common.ConfirmDialog
@@ -22,6 +26,7 @@ import dev.npn.app.ui.common.TextInputDialog
 import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.TopBarAction
 import dev.npn.app.ui.common.TopBarActions
+import dev.npn.app.ui.common.formatUsd
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.DocListItem
@@ -34,6 +39,8 @@ import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.detail_action_needs_saved_draft
 import no_papers_needed.composeapp.generated.resources.detail_ai_ocr
 import no_papers_needed.composeapp.generated.resources.detail_ai_ocr_confirm
+import no_papers_needed.composeapp.generated.resources.detail_ai_ocr_estimate
+import no_papers_needed.composeapp.generated.resources.detail_ai_ocr_estimate_tokens_only
 import no_papers_needed.composeapp.generated.resources.detail_ai_ocr_large
 import no_papers_needed.composeapp.generated.resources.detail_ai_ocr_large_prompt
 import no_papers_needed.composeapp.generated.resources.detail_bake_in_place
@@ -324,17 +331,47 @@ private fun DocActionDialogs(
 
         DocActionDialog.AI_OCR -> {
             // Only reachable for a long document; a plain one runs straight off the menu item.
-            val pages = (aiOcr as? AiOcrOffer.Large)?.pages ?: pageCount
+            val large = aiOcr as? AiOcrOffer.Large
+            val pages = large?.pages ?: pageCount
+            val estimate = large?.estimate
             ConfirmDialog(
                 title = stringResource(Res.string.detail_ai_ocr),
-                message = stringResource(Res.string.detail_ai_ocr_large_prompt, pages),
                 confirmLabel = stringResource(Res.string.detail_ai_ocr_confirm),
                 onConfirm = {
                     onDismiss()
                     actions.ocrWithAi()
                 },
                 onDismiss = onDismiss,
-            )
+            ) {
+                androidx.compose.foundation.layout.Column(
+                    verticalArrangement =
+                        androidx.compose.foundation.layout.Arrangement
+                            .spacedBy(4.dp),
+                ) {
+                    androidx.compose.material3.Text(stringResource(Res.string.detail_ai_ocr_large_prompt, pages))
+                    if (estimate != null) {
+                        val cost = estimate.estimatedCostUsd
+                        if (estimate.priceKnown && cost != null) {
+                            androidx.compose.material3.Text(
+                                stringResource(
+                                    Res.string.detail_ai_ocr_estimate,
+                                    estimate.inputTokens,
+                                    formatUsd(cost),
+                                    estimate.requestCap,
+                                ),
+                            )
+                        } else {
+                            androidx.compose.material3.Text(
+                                stringResource(
+                                    Res.string.detail_ai_ocr_estimate_tokens_only,
+                                    estimate.inputTokens,
+                                    estimate.requestCap,
+                                ),
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         DocActionDialog.SPLIT -> {

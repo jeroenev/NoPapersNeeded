@@ -90,6 +90,12 @@ data class AiConfig(
      */
     val maxNewTagsPerDoc: Int = AiTagging.DEFAULT_NEW_TAGS_PER_DOC,
     /**
+     * The most model calls one bulk run may make. Enforced by the run itself (see [AiRunBudget]),
+     * so a scope picked by filter cannot spend without bound. A run that reaches it stops and tells
+     * the user; it is a ceiling, not a target.
+     */
+    val maxRunRequests: Int = AiRunCap.DEFAULT,
+    /**
      * Whether a document is enriched automatically (existing-vocabulary tags + empty single-value
      * fields) when *this device* OCRs it. Device-local: it spends the user's own endpoint quota, so
      * it must not sync to other replicas. Off by default — it writes without a review step.

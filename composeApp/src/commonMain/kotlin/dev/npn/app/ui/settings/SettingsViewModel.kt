@@ -50,6 +50,8 @@ import no_papers_needed.composeapp.generated.resources.common_folder_in_library_
 import no_papers_needed.composeapp.generated.resources.common_folder_not_on_device
 import no_papers_needed.composeapp.generated.resources.common_save_field_failed
 import no_papers_needed.composeapp.generated.resources.common_save_setting_failed
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_spend_reset_done
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_spend_reset_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_clear_thumbnails_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_disconnect_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_move_field_failed
@@ -95,6 +97,7 @@ class SettingsViewModel(
 ) : MessagesViewModel(),
     SettingsActions {
     private val content = session.content
+    private val aiSpend = session.aiSpend
     private val reviewConfig = session.reviewConfig
     private val storagePath = session.storagePath
     private val trashRetention = session.trashRetention
@@ -131,19 +134,28 @@ class SettingsViewModel(
 
     private val state: StateFlow<SettingsUiState> =
         combine(
-            typedSettings,
-            storagePath.storagePath,
-            typedTemplate.draft,
-            trashRetention.trashRetentionDays,
-            typedRetention.draft,
-        ) { snapshot, path, template, days, typedDays ->
-            SettingsUiState(
-                snapshot = snapshot,
-                storagePathTemplate = template ?: path.template ?: DEFAULT_STORAGE_PATH_TEMPLATE,
-                storagePathEnabled = path.enabled,
-                trashRetentionDays = typedDays ?: days,
-            )
-        }.stateIn(viewModelScope, WhileSubscribedTimeout, SettingsUiState(snapshot = settings.settings.value))
+            combine(
+                typedSettings,
+                storagePath.storagePath,
+                typedTemplate.draft,
+                trashRetention.trashRetentionDays,
+                typedRetention.draft,
+            ) { snapshot, path, template, days, typedDays ->
+                SettingsUiState(
+                    snapshot = snapshot,
+                    storagePathTemplate = template ?: path.template ?: DEFAULT_STORAGE_PATH_TEMPLATE,
+                    storagePathEnabled = path.enabled,
+                    trashRetentionDays = typedDays ?: days,
+                )
+            },
+            aiSpend.summary,
+        ) { ui, spend ->
+            ui.copy(aiSpend = spend)
+        }.stateIn(
+            viewModelScope,
+            WhileSubscribedTimeout,
+            SettingsUiState(snapshot = settings.settings.value),
+        )
 
     private val reviewMode: StateFlow<ReviewMode> =
         reviewConfig.reviewMode.stateIn(viewModelScope, WhileSubscribedTimeout, ReviewMode.DEFAULT)
@@ -436,6 +448,12 @@ class SettingsViewModel(
                     uiText(Res.string.common_settings_thumbnail_cache_empty)
                 },
             )
+        }
+
+    override fun resetAiSpend() =
+        launchReporting(Res.string.common_settings_ai_spend_reset_failed) {
+            aiSpend.reset()
+            message(uiText(Res.string.common_settings_ai_spend_reset_done))
         }
 
     /** A library folder was picked that direct mode cannot use: it is not on device storage. */

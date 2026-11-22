@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="common_settings_ai_spend">Gasto de IA</string>
+    <string name="common_settings_ai_spend_last30">Últimos 30 días</string>
+    <string name="common_settings_ai_spend_all_time">Total</string>
+    <string name="common_settings_ai_spend_empty">Aún no hay solicitudes registradas.</string>
+    <string name="common_settings_ai_spend_estimated">Los costes son estimaciones según los precios de lista. Cuando un proveedor no informa del uso, los tokens también son una estimación. Solo se guarda en este dispositivo.</string>
+    <string name="common_settings_ai_spend_model_line">%1$s · %2$s — %3$s solicitudes · %4$s de entrada / %5$s de salida · %6$s</string>
+    <string name="common_settings_ai_spend_model_line_unpriced">%1$s · %2$s — %3$s solicitudes · %4$s de entrada / %5$s de salida (precio desconocido)</string>
+    <string name="common_settings_ai_spend_total">Total: %1$s solicitudes · %2$s de entrada / %3$s de salida · %4$s</string>
+    <string name="common_settings_ai_spend_total_unpriced">Total: %1$s solicitudes · %2$s de entrada / %3$s de salida (algunos modelos no tienen precio)</string>
+    <string name="common_settings_ai_spend_reset">Borrar historial de gasto</string>
+    <string name="common_settings_ai_spend_reset_title">¿Borrar el historial de gasto de IA?</string>
+    <string name="common_settings_ai_spend_reset_message">Se eliminarán de este dispositivo todas las solicitudes registradas. No se puede deshacer.</string>
+    <string name="common_settings_ai_spend_reset_confirm">Borrar</string>
+    <string name="common_settings_ai_spend_reset_done">Historial de gasto de IA borrado.</string>
+    <string name="common_settings_ai_spend_reset_failed">No se pudo borrar el historial de gasto de IA: %1$s</string>
+    <string name="common_settings_max_run_requests">Límite de solicitudes por ejecución masiva</string>
+    <string name="common_settings_max_run_requests_help">Una ejecución masiva de IA se detiene tras %1$d solicitudes al modelo e informa de lo que quedó. Rango permitido: %2$d–%3$d.</string>
+
+    <string name="ai_spend_estimate_documents">%1$s documentos</string>
+    <string name="ai_spend_estimate_requests">%1$s solicitudes al modelo</string>
+    <string name="ai_spend_estimate_pages">%1$s páginas</string>
+    <string name="ai_spend_estimate_tokens">Entrada estimada: %1$s tokens</string>
+    <string name="ai_spend_estimate_cost">Coste estimado: %1$s</string>
+    <string name="ai_spend_estimate_tokens_only">Entrada estimada: %1$s tokens (precio desconocido)</string>
+    <string name="ai_spend_estimate_cap">Límite por ejecución: %1$s solicitudes</string>
+    <string name="ai_spend_estimate_over_cap">Esta ejecución supera el límite por ejecución. Sube el límite en Ajustes → IA o reduce el alcance.</string>
+    <string name="ai_edit_confirm_spend_title">¿Iniciar esta ejecución de IA?</string>
+    <string name="ai_edit_confirm_spend_confirm">Iniciar</string>
+    <string name="ai_edit_cap_reached">Detenido al alcanzar el límite de %1$s solicitudes por ejecución; no se enviaron %2$s documentos.</string>
+    <string name="detail_ai_ocr_estimate">Entrada estimada: %1$s tokens · coste estimado: %2$s · límite por ejecución: %3$s solicitudes</string>
+    <string name="detail_ai_ocr_estimate_tokens_only">Entrada estimada: %1$s tokens (precio desconocido) · límite por ejecución: %2$s solicitudes</string>
+</resources>

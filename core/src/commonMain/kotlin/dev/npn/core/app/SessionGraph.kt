@@ -1,6 +1,7 @@
 package dev.npn.core.app
 
 import dev.npn.core.ai.AiFacadeImpl
+import dev.npn.core.ai.RoomAiLedger
 import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.app.aiedit.AiAutoEnricher
 import dev.npn.core.app.aiedit.AiEditQueue
@@ -51,6 +52,19 @@ internal class SessionGraph(
     private val db = deps.db
     private val log = deps.log
 
+    /** Every paid AI request this device makes is recorded here; never synced. */
+    private val aiLedger = RoomAiLedger(deps.deviceDb.aiUsageDao())
+
+    val aiSpend: AiSpendFacade =
+        AiSpendFacadeImpl(
+            documents = db.documentDao(),
+            fts = db.ftsDao(),
+            dao = deps.deviceDb.aiUsageDao(),
+            ledger = aiLedger,
+            configProvider = deps.settings.aiConfig,
+            clock = deps.clock,
+        )
+
     /**
      * Opened by the session's first rescan. Each drain treats a document without a row as gone and
      * drops this device's work for it, but until then an index may not know the library's documents
@@ -68,6 +82,8 @@ internal class SessionGraph(
             chats = deps.deviceDb.keyValueDao(),
             ownWrite = { lifetime.owned(it) },
             clock = deps.clock,
+            ledger = aiLedger,
+            log = log,
             configProvider = deps.settings.aiConfig,
         ).also { lifetime.releaseOnClose(it::close) }
 
@@ -269,6 +285,7 @@ internal class SessionGraph(
                 fieldRegistry = fieldRegistry,
                 tags = tags,
                 readConfig = deps.settings.aiConfig,
+                ledger = aiLedger,
                 clock = deps.clock,
                 health = endpointHealth,
                 onEnqueued = onEnqueued,
@@ -291,6 +308,7 @@ internal class SessionGraph(
             writer = writer,
             content = content,
             worker = ocrWorker,
+            spend = aiSpend,
             clock = deps.clock,
         )
 

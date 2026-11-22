@@ -155,6 +155,7 @@ class TesseractCliEngine(
     override suspend fun recognizePng(
         png: ByteArray,
         lang: String,
+        runId: String?,
     ): String =
         withContext(io) {
             if (!detected) throw IOException("tesseract is not available")

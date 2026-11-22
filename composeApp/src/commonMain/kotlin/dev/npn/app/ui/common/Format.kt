@@ -44,3 +44,9 @@ fun formatEpochDateTime(epochMillis: Long): String {
     val second = dt.second.toString().padStart(2, '0')
     return "${dt.year}-$month-$day $hour:$minute:$second"
 }
+
+/** US dollars with enough precision for one cheap request, without a locale-dependent formatter. */
+fun formatUsd(value: Double): String {
+    val rounded = kotlin.math.round(value * 10_000) / 10_000
+    return "$$rounded"
+}

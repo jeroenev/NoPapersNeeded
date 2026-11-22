@@ -239,6 +239,7 @@ class OcrPipelineRerunTest {
                     override suspend fun recognizePng(
                         png: ByteArray,
                         lang: String,
+                        runId: String?,
                     ): String {
                         if (fake.calls == 0) requestRerun(docId)
                         return fake.recognizePng(png, lang)
@@ -288,6 +289,7 @@ class OcrPipelineRerunTest {
                     override suspend fun recognizePng(
                         png: ByteArray,
                         lang: String,
+                        runId: String?,
                     ): String {
                         if (fake.calls == 0) {
                             language = "nld"

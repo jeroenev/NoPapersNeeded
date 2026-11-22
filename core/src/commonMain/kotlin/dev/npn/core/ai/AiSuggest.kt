@@ -137,5 +137,7 @@ interface AiSuggest {
     suspend fun suggestEdits(
         docId: String,
         request: AiEditRequest,
+        /** The bulk run this request belongs to, for the spend ledger; null for a one-off. */
+        runId: String? = null,
     ): AiEditSuggestion
 }

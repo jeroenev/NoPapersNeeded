@@ -32,6 +32,7 @@ class EndpointCooldownTest {
             fieldRegistry = fieldRegistry,
             tags = FakeTagRepository(),
             readConfig = { config },
+            ledger = dev.npn.core.ai.AiLedger.None,
             clock = clock,
             health = health,
             onEnqueued = {},

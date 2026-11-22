@@ -28,6 +28,9 @@ class FakeAiSuggest : AiSuggest {
     /** Every request passed to [suggestEdits], in dispatch order. */
     val suggestEditsRequests = mutableListOf<AiEditRequest>()
 
+    /** Every run id passed to [suggestEdits], in dispatch order. */
+    val suggestEditsRunIds = mutableListOf<String?>()
+
     /** Called with the docId; throw to simulate an endpoint or model failure for that document. */
     var failWith: ((String) -> Unit)? = null
 
@@ -46,9 +49,11 @@ class FakeAiSuggest : AiSuggest {
     override suspend fun suggestEdits(
         docId: String,
         request: AiEditRequest,
+        runId: String?,
     ): AiEditSuggestion {
         suggestEditsCalls += docId
         suggestEditsRequests += request
+        suggestEditsRunIds += runId
         val delayMillis = suggestDelayByDoc[docId] ?: suggestDelayMillis
         if (delayMillis > 0) delay(delayMillis)
         gate?.await()

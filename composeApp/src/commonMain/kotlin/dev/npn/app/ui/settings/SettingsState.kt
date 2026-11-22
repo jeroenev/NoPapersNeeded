@@ -5,6 +5,7 @@ import dev.npn.app.ui.common.UiText
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiSelfTest
 import dev.npn.core.ai.AiSelfTestReport
+import dev.npn.core.ai.AiSpendSummary
 import dev.npn.core.app.TrashSettings
 import dev.npn.core.model.FieldDef
 import dev.npn.core.settings.SettingsSnapshot
@@ -26,6 +27,8 @@ data class SettingsUiState(
     val storagePathTemplate: String = DEFAULT_STORAGE_PATH_TEMPLATE,
     val storagePathEnabled: Boolean = false,
     val trashRetentionDays: Int = TrashSettings.DEFAULT_TRASH_RETENTION_DAYS,
+    /** The two spend windows the AI pane shows, read from this device's ledger. */
+    val aiSpend: AiSpendSummary = AiSpendSummary.EMPTY,
 ) {
     /** Whether the endpoint is complete enough to call — what gates the self-test button. */
     val aiConfigured: Boolean get() = snapshot.toAiConfig().configured
@@ -164,6 +167,9 @@ interface SettingsActions {
 
     /** Drop all cached thumbnails so they regenerate at the current render quality, and say so. */
     fun clearThumbnailCache()
+
+    /** Delete this device's AI spend ledger after the user confirms it. */
+    fun resetAiSpend()
 
     /** Ask the transfer engine whether it is usable; the pane asks when it opens. Only the latest probe answers. */
     fun probeTransport()

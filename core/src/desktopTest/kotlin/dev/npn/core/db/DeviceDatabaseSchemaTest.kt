@@ -73,6 +73,7 @@ class DeviceDatabaseSchemaTest {
             mapOf(
                 1 to "c682552d5e6662738f8589c47bbd5f32",
                 2 to "2de9d041f774d090fff7fd96af3375f6",
+                3 to "8ddc5dd7b1ff8647e9b898f292feaa6f",
             )
     }
 }

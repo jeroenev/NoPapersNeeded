@@ -3,6 +3,8 @@ package dev.npn.core.app.aiedit
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiEditSuggestion
+import dev.npn.core.ai.AiLedger
+import dev.npn.core.ai.AiRunBudget
 import dev.npn.core.ai.AiSuggest
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.DocListItem
@@ -164,6 +166,8 @@ internal class AiEditQueue(
     /** The library's tag vocabulary, which decides whether a suggested tag is new. */
     tags: TagRepository,
     private val readConfig: suspend () -> AiConfig,
+    /** The device-local spend ledger, which resumes a queued run's request count after a restart. */
+    private val ledger: AiLedger,
     private val clock: EpochClock,
     /** The endpoint's cooldown, shared with every other queue that calls it. */
     private val health: EndpointHealth,
@@ -288,7 +292,29 @@ internal class AiEditQueue(
         val (live, gone) = pending.partition { it.docId in items }
         if (gone.isNotEmpty()) dao.deleteDocs(job.jobId, gone.map { it.docId })
         if (live.isEmpty()) return dropIfEmptied(job)
-        return recordChunk(job, live, runner.suggest(live.map { it.docId }, request) { _, suggestion -> suggestion })
+        val config = readConfig()
+        val budget = AiRunBudget(config.maxRunRequests, ledger.requestsForRun(job.jobId))
+        val asked =
+            runner.suggest(
+                live.map { it.docId },
+                request,
+                runId = job.jobId,
+                budget = budget,
+            ) { _, suggestion -> suggestion }
+        // Documents the cap left unasked are given up on exactly like documents the endpoint kept
+        // rejecting: the run can then become reviewable, and its failure count says how many were
+        // not asked. Nothing silently disappears from the job.
+        val askedIndexes = asked.outcomes.mapTo(HashSet()) { it.index }
+        val skipped =
+            live
+                .filterIndexed { index, _ -> index !in askedIndexes }
+                .map { it.copy(failed = true, lastError = CAP_REACHED) }
+        return recordChunk(
+            job = job,
+            rows = asked.outcomes.map { live[it.index] },
+            outcomes = asked.outcomes.map { it.outcome },
+            skipped = skipped,
+        )
     }
 
     /**
@@ -299,15 +325,17 @@ internal class AiEditQueue(
         job: AiEditJobEntity,
         rows: List<AiEditJobDocEntity>,
         outcomes: List<Result<AiEditSuggestion>>,
+        skipped: List<AiEditJobDocEntity> = emptyList(),
     ): Boolean {
-        val allFailed = outcomes.all { it.isFailure }
+        val allFailed = outcomes.isNotEmpty() && outcomes.all { it.isFailure }
         // Read a total failure as an outage only while the job still has budget for that reading;
         // past it the documents are charged, or a run whose last document is poison never ends.
+        // A cap-skipped document is charged at once: waiting would not buy it a call.
         val charged =
             if (allFailed && job.attempts < MAX_JOB_ATTEMPTS) {
-                emptyList()
+                skipped
             } else {
-                rows.mapIndexed { index, row -> row.recording(outcomes[index]) }
+                rows.mapIndexed { index, row -> row.recording(outcomes[index]) } + skipped
             }
         val now = clock.nowMillis()
         if (allFailed) {
@@ -401,6 +429,9 @@ internal class AiEditQueue(
          * run within an afternoon.
          */
         internal const val MAX_JOB_ATTEMPTS = 5
+
+        /** Diagnostic on a document the run's request cap left unasked; never shown as copy. */
+        private const val CAP_REACHED = "per-run request cap reached"
     }
 }
 

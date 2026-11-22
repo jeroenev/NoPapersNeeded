@@ -28,6 +28,7 @@ internal class FakeOcrEngine(
     override suspend fun recognizePng(
         png: ByteArray,
         lang: String,
+        runId: String?,
     ): String {
         calls++
         lastLang = lang

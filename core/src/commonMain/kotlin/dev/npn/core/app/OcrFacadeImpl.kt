@@ -33,6 +33,8 @@ internal class OcrFacadeImpl(
     private val content: DocContentFacade,
     /** Drains the queue through [OcrPipeline.processNext]; the session's work facet drains it too. */
     private val worker: QueueDrainer,
+    /** What a long AI OCR run would cost, shown in the confirmation. */
+    private val spend: AiSpendFacade,
     private val clock: EpochClock,
 ) : OcrFacade {
     // `running` is asked of the pipeline rather than inferred from the count. The two are not the
@@ -60,7 +62,11 @@ internal class OcrFacadeImpl(
     override suspend fun aiOcrOffer(docId: String): AiOcrOffer {
         if (!engines.aiAvailable()) return AiOcrOffer.Unavailable
         val pages = content.pageCount(docId) ?: return AiOcrOffer.Ready
-        return if (engines.isLargeForAi(pages)) AiOcrOffer.Large(pages) else AiOcrOffer.Ready
+        return if (engines.isLargeForAi(pages)) {
+            AiOcrOffer.Large(pages, estimate = spend.estimateOcrForPages(pages))
+        } else {
+            AiOcrOffer.Ready
+        }
     }
 
     override suspend fun ocrWithAi(docId: String): AiOcrOutcome =
