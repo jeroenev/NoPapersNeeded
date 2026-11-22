@@ -285,6 +285,8 @@ private fun handlePaletteKey(
     }
 }
 
+private val SCRIM = Color.Black.copy(alpha = 0.32f)
+
 private sealed interface PaletteRow {
     data class Header(
         val kind: PaletteGroupKind,
