@@ -115,7 +115,8 @@ The ones that need more than their description:
 - `mise apk-release` is signed only with `NPN_KEYSTORE_*` set, and `mise release <version>`
   bumps the version, tags `v<version>` and pushes; CI publishes the release (see
   [Releases](#releases)).
-- `mise package-flatpak` needs `flatpak-builder`; `mise flathub-manifest [version]` derives the
+- `mise package-flatpak` needs `flatpak-builder` and `elfutils` (its `eu-strip`);
+  `mise flathub-manifest [version]` derives the
   Flathub manifest for a published release.
 - `mise hooks-install` points Git at the repository's hooks (`.githooks/`), once per clone.
 

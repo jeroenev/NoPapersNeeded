@@ -174,7 +174,9 @@ jobs:
       - name: Install rpmbuild and flatpak-builder
         run: |
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends rpm flatpak flatpak-builder
+          # elfutils carries eu-strip and eu-elfcompress, which flatpak-builder runs on every
+          # module's libraries and fails without.
+          sudo apt-get install --yes --no-install-recommends rpm flatpak flatpak-builder elfutils
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 
       - name: Build AppImage, deb, rpm and Linux tarball
