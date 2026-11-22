@@ -59,8 +59,8 @@ class AiRuntimeTest {
     }
 
     @Test
-    fun defaultReasoningMapsToNoOverrideForEveryProvider() {
-        AiProvider.entries.forEach { provider ->
+    fun defaultReasoningMapsToNoOverrideForEveryProviderButAnthropic() {
+        AiProvider.entries.filter { it != AiProvider.ANTHROPIC }.forEach { provider ->
             AiRuntime.reasoningParams(provider, "some-model", AiReasoningLevel.DEFAULT, toolLoop = false) shouldBe null
             AiRuntime.reasoningParams(provider, "some-model", AiReasoningLevel.DEFAULT, toolLoop = true) shouldBe null
         }
@@ -77,28 +77,86 @@ class AiRuntimeTest {
     }
 
     @Test
-    fun anthropicSuggestionReasoningEnablesThinkingWithHeadroom() {
-        val params =
-            AiRuntime.reasoningParams(
-                AiProvider.ANTHROPIC,
-                "some-model",
-                AiReasoningLevel.HIGH,
-                toolLoop = false,
-            )
-        val anthropic = params.shouldBeInstanceOf<AnthropicParams>()
-        anthropic.thinking.shouldBeInstanceOf<AnthropicThinking.Enabled>().budgetTokens shouldBe 16_384
-        anthropic.maxTokens shouldBe 16_384 + 4_096
+    fun budgetThinkingClaudeIdsAreRecognised() {
+        listOf(
+            "claude-3-7-sonnet-latest",
+            "claude-sonnet-4-5",
+            "claude-sonnet-4-5-20250929",
+            "claude-haiku-4-5",
+            "claude-opus-4-1",
+            "claude-opus-4-0",
+            "claude-opus-4-20250514",
+        ).forEach { AiProviderClients.isBudgetThinkingClaude(it) shouldBe true }
+        listOf(
+            "claude-opus-4-6",
+            "claude-opus-4-8",
+            "claude-sonnet-5-5",
+            "claude-opus-5",
+            "claude-haiku-5-5",
+            "some-model",
+        ).forEach { AiProviderClients.isBudgetThinkingClaude(it) shouldBe false }
     }
 
     @Test
-    fun anthropicChatSkipsEnablingThinkingButCanDisableIt() {
-        // Enabling thinking in the tool loop is unsupported: Anthropic requires emitted thinking
-        // blocks to be replayed verbatim with tool results, and the chat loop replays plain text.
-        AiRuntime.reasoningParams(AiProvider.ANTHROPIC, "some-model", AiReasoningLevel.MEDIUM, toolLoop = true) shouldBe
-            null
-        val none = AiRuntime.reasoningParams(AiProvider.ANTHROPIC, "some-model", AiReasoningLevel.NONE, toolLoop = true)
-        none.shouldBeInstanceOf<AnthropicParams>().thinking.shouldBeInstanceOf<AnthropicThinking.Disabled>()
+    fun currentClaudeGetsAdaptiveThinkingAndEffortNeverABudgetOrDisabled() {
+        // Current Claude models reject budget_tokens, and the newest reject thinking: disabled.
+        AiReasoningLevel.entries.forEach { level ->
+            listOf(true, false).forEach { toolLoop ->
+                val params =
+                    AiRuntime
+                        .reasoningParams(AiProvider.ANTHROPIC, "claude-opus-5-5", level, toolLoop)
+                        .shouldBeInstanceOf<AnthropicParams>()
+                params.thinking shouldBe null
+                params.maxTokens shouldBe 16_000
+            }
+        }
+        val high = AiRuntime.reasoningParams(AiProvider.ANTHROPIC, "claude-opus-5-5", AiReasoningLevel.HIGH, false)
+        high.shouldBeInstanceOf<AnthropicParams>().additionalProperties.toString() shouldBe
+            """{thinking={"type":"adaptive"}, output_config={"effort":"high"}}"""
+        val none = AiRuntime.reasoningParams(AiProvider.ANTHROPIC, "claude-opus-5-5", AiReasoningLevel.NONE, true)
+        none.shouldBeInstanceOf<AnthropicParams>().additionalProperties.toString() shouldBe
+            """{output_config={"effort":"low"}}"""
+        val ocr = AiRuntime.ocrParams(anthropicConfig("claude-sonnet-5-5")).shouldBeInstanceOf<AnthropicParams>()
+        ocr.thinking shouldBe null
+        ocr.maxTokens shouldBe 16_000
     }
+
+    @Test
+    fun budgetThinkingClaudeKeepsItsBudgetOutsideTheToolLoop() {
+        val params =
+            AiRuntime.reasoningParams(AiProvider.ANTHROPIC, "claude-haiku-4-5", AiReasoningLevel.HIGH, toolLoop = false)
+        val anthropic = params.shouldBeInstanceOf<AnthropicParams>()
+        anthropic.thinking.shouldBeInstanceOf<AnthropicThinking.Enabled>().budgetTokens shouldBe 16_384
+        anthropic.maxTokens shouldBe 16_384 + 4_096
+        AiRuntime.reasoningParams(
+            AiProvider.ANTHROPIC,
+            "claude-haiku-4-5",
+            AiReasoningLevel.MEDIUM,
+            toolLoop = true,
+        ) shouldBe
+            null
+        AiRuntime.reasoningParams(
+            AiProvider.ANTHROPIC,
+            "claude-haiku-4-5",
+            AiReasoningLevel.DEFAULT,
+            toolLoop = true,
+        ) shouldBe
+            null
+        val none =
+            AiRuntime.reasoningParams(
+                AiProvider.ANTHROPIC,
+                "claude-haiku-4-5",
+                AiReasoningLevel.NONE,
+                toolLoop = true,
+            )
+        none.shouldBeInstanceOf<AnthropicParams>().thinking.shouldBeInstanceOf<AnthropicThinking.Disabled>()
+        val ocr = AiRuntime.ocrParams(anthropicConfig("claude-haiku-4-5")).shouldBeInstanceOf<AnthropicParams>()
+        ocr.thinking.shouldBeInstanceOf<AnthropicThinking.Disabled>()
+        ocr.maxTokens shouldBe 4_096
+    }
+
+    private fun anthropicConfig(model: String) =
+        AiConfig(enabled = true, provider = AiProvider.ANTHROPIC, apiKey = "unused", model = model)
 
     @Test
     fun googleMapsToThinkingBudget() {

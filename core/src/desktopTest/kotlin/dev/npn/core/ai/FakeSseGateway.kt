@@ -44,13 +44,16 @@ internal class FakeSseGateway(
     /** Paths the client asked for, in order — lets a test assert WHICH endpoint was called. */
     val requestedPaths = mutableListOf<String>()
 
+    /** Request bodies, in order — lets a test assert the shape of what the client sent. */
+    val requestBodies = mutableListOf<String>()
+
     val baseUrl: String
         get() = "http://127.0.0.1:${server.address.port}"
 
     fun start(): FakeSseGateway {
         server.createContext("/") { exchange ->
             requestedPaths += exchange.requestURI.path
-            exchange.requestBody.readBytes()
+            requestBodies += exchange.requestBody.readBytes().decodeToString()
             exchange.responseHeaders.add("Content-Type", "text/event-stream")
             // 0 = chunked transfer encoding, which is how a real SSE endpoint answers; a fixed
             // Content-Length makes the Ktor SSE client abort with a length mismatch.

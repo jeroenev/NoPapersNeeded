@@ -28,6 +28,8 @@ import ai.koog.prompt.llm.LLMProvider
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.params.LLMParams
 import io.ktor.client.HttpClient
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /**
  * Everything that differs by [AiProvider]: the provider the Koog client registers under, what the
@@ -39,7 +41,8 @@ import io.ktor.client.HttpClient
  *  Koog's own.
  * @param reasoning the params for one [AiReasoningLevel] other than [AiReasoningLevel.DEFAULT] on a
  *  model, in a tool loop or not; null leaves the endpoint's default (see [AiRuntime.reasoningParams]).
- * @param ocrParams the params of one page transcription (see [AiRuntime.ocrParams]).
+ * @param defaults the params for [AiReasoningLevel.DEFAULT] on a model; null sends Koog's own.
+ * @param ocrParams the params of one page transcription on a model (see [AiRuntime.ocrParams]).
  * @param transport derives the Ktor client the provider's requests go through from the runtime's
  *  base one, for a wire requirement of the provider's own; never in place of what the base has.
  * @param listModels the ids of the models the endpoint offers, asked of a client [client] built.
@@ -48,7 +51,8 @@ internal class ProviderClientFactory(
     val provider: LLMProvider,
     val capabilities: (AiConfig) -> List<LLMCapability>,
     val reasoning: (model: String, level: AiReasoningLevel, toolLoop: Boolean) -> LLMParams? = { _, _, _ -> null },
-    val ocrParams: () -> LLMParams = { LLMParams() },
+    val defaults: (model: String) -> LLMParams? = { null },
+    val ocrParams: (model: String) -> LLMParams = { LLMParams() },
     val transport: (HttpClient) -> HttpClient = { it },
     val listModels: suspend (LLMClient) -> List<String> = { built -> built.models().map { it.id } },
     val client: (apiKey: String, baseUrl: String, model: LLModel, http: KoogHttpClient.Factory) -> LLMClient,
@@ -70,25 +74,30 @@ internal object AiProviderClients {
 
     /**
      * Thinking-token budgets for providers configured through a budget rather than an effort label
-     * (Anthropic, Google). Anthropic requires at least 1024.
+     * (Google, and Claude models from before adaptive thinking). Anthropic requires at least 1024.
      */
     private const val THINKING_BUDGET_LOW = 2_048
     private const val THINKING_BUDGET_MEDIUM = 8_192
     private const val THINKING_BUDGET_HIGH = 16_384
 
     /**
-     * Anthropic requires `max_tokens` to exceed the thinking budget (Koog's default is a flat 2048),
-     * so thinking calls raise it to budget + this answer headroom.
+     * On a budget-thinking Claude model `max_tokens` must exceed the thinking budget (Koog's default
+     * is a flat 2048), so thinking calls raise it to budget + this answer headroom.
      */
     private const val ANTHROPIC_ANSWER_HEADROOM = 4_096
 
     /**
-     * Output budget for one page transcription ([AiFacadeImpl.ocrEngine]). Comfortably more than any
-     * single scanned page holds, and the ceiling every Claude 3+ model accepts — raising it further
-     * would be an API error on the older ones, and costs nothing to leave here since output tokens
-     * are billed as produced, not as reserved.
+     * Output budget for one page transcription on a budget-thinking Claude model, where thinking is
+     * off: comfortably more than a scanned page holds, and within the 4096 the Claude 3 models accept.
      */
-    private const val OCR_ANSWER_MAX_TOKENS = 4_096
+    private const val BUDGET_CLAUDE_OCR_MAX_TOKENS = 4_096
+
+    /**
+     * `max_tokens` for every call to a current Claude model. Their thinking counts toward it, and on
+     * the newest it cannot be turned off, so Koog's 2048 default would cut a dense page or a long
+     * answer short. Output is billed as produced, not as reserved.
+     */
+    private const val ADAPTIVE_CLAUDE_MAX_TOKENS = 16_000
 
     /**
      * OpenAI, and the servers compatible with it. [TolerantOpenAILLMClient] subclasses
@@ -161,24 +170,28 @@ internal object AiProviderClients {
      * "Unsupported model" for anything absent, so the user's model must be mapped explicitly (the
      * default map only covers Koog's predefined AnthropicModels).
      *
-     * Reasoning is a thinking budget, plus a raised `max_tokens` (the API requires
-     * `max_tokens > budget_tokens`). ENABLING thinking is skipped in the tool loop: Anthropic
-     * requires the emitted thinking blocks to be replayed verbatim with tool results, and the chat
-     * loop replays turns as plain text. Disabling is safe.
+     * Two generations want different requests ([isBudgetThinkingClaude]). Current models take
+     * adaptive thinking and an `effort`, and reject `budget_tokens`; the newest also reject
+     * `thinking: disabled`, so "no reasoning" is the lowest effort with no thinking field. Koog 1.3
+     * models neither adaptive thinking nor effort, so both go out as additional request properties.
+     * Older models take a thinking budget and a raised `max_tokens` (the API requires
+     * `max_tokens > budget_tokens`), and their thinking is not enabled in the tool loop.
      *
-     * The only provider whose page transcription gets params of its own: thinking off, and a
-     * `max_tokens` above Koog's 2048 default.
+     * The only provider whose page transcription gets params of its own: as little reasoning as the
+     * model allows, and a `max_tokens` above Koog's 2048 default.
      */
     private val anthropic =
         ProviderClientFactory(
             LLMProvider.Anthropic,
             capabilities = { STANDARD_CAPABILITIES },
-            reasoning = { _, level, toolLoop -> anthropicReasoningParams(level, toolLoop) },
-            ocrParams = {
-                AnthropicParams(
-                    maxTokens = OCR_ANSWER_MAX_TOKENS,
-                    thinking = AnthropicThinking.Disabled(),
-                )
+            reasoning = { model, level, toolLoop -> anthropicReasoningParams(model, level, toolLoop) },
+            defaults = { model -> if (isBudgetThinkingClaude(model)) null else adaptiveClaudeParams(effort = null) },
+            ocrParams = { model ->
+                if (isBudgetThinkingClaude(model)) {
+                    AnthropicParams(maxTokens = BUDGET_CLAUDE_OCR_MAX_TOKENS, thinking = AnthropicThinking.Disabled())
+                } else {
+                    adaptiveClaudeParams(effort = "low", thinking = false)
+                }
             },
         ) { apiKey, baseUrl, model, http ->
             AnthropicLLMClient(
@@ -245,10 +258,48 @@ internal object AiProviderClients {
             OllamaClient(httpClientFactory = http, baseUrl = trimBaseUrl(baseUrl))
         }
 
+    /**
+     * Claude models from before adaptive thinking (Claude 3, and the 4.0, 4.1 and 4.5 models), which
+     * take a thinking budget and no `effort`. A model id is free text, so anything else, including an
+     * id this does not recognise, is treated as current.
+     */
+    internal fun isBudgetThinkingClaude(model: String): Boolean =
+        BUDGET_THINKING_CLAUDE.containsMatchIn(model.lowercase())
+
+    /** `claude-3-…`, `claude-sonnet-4-5`, `claude-opus-4-1`, `claude-haiku-4-5-…`, `claude-opus-4-20250514`, ... */
+    private val BUDGET_THINKING_CLAUDE = Regex("claude-(3|(opus|sonnet|haiku)-4-[015](-|$)|(opus|sonnet)-4-20)")
+
+    /**
+     * A current Claude model's params: the raised `max_tokens`, adaptive thinking when [thinking] (an
+     * omitted field leaves thinking off where it can be off), and [effort] when given.
+     */
+    private fun adaptiveClaudeParams(
+        effort: String?,
+        thinking: Boolean = false,
+    ): AnthropicParams =
+        AnthropicParams(
+            maxTokens = ADAPTIVE_CLAUDE_MAX_TOKENS,
+            additionalProperties =
+                buildMap {
+                    if (thinking) put("thinking", buildJsonObject { put("type", "adaptive") })
+                    if (effort != null) put("output_config", buildJsonObject { put("effort", effort) })
+                }.ifEmpty { null },
+        )
+
     private fun anthropicReasoningParams(
+        model: String,
         level: AiReasoningLevel,
         toolLoop: Boolean,
     ): LLMParams? {
+        if (!isBudgetThinkingClaude(model)) {
+            return when (level) {
+                AiReasoningLevel.DEFAULT -> error("DEFAULT never maps to params")
+                AiReasoningLevel.NONE -> adaptiveClaudeParams(effort = "low")
+                AiReasoningLevel.LOW -> adaptiveClaudeParams(effort = "low", thinking = true)
+                AiReasoningLevel.MEDIUM -> adaptiveClaudeParams(effort = "medium", thinking = true)
+                AiReasoningLevel.HIGH -> adaptiveClaudeParams(effort = "high", thinking = true)
+            }
+        }
         if (level == AiReasoningLevel.NONE) return AnthropicParams(thinking = AnthropicThinking.Disabled())
         if (toolLoop) return null
         val budget = level.toBudget()

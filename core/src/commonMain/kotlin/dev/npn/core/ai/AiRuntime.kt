@@ -95,12 +95,13 @@ internal class AiRuntime(
          * reasoning buys nothing on a verbatim transcription, would be paid per page, and on
          * Anthropic takes most of `max_tokens`, truncating a dense page into a write-once sidecar.
          *
-         * Only Anthropic gets an override (thinking off, a `max_tokens` above Koog's 2048 default).
+         * Only Anthropic gets an override (as little reasoning as the model allows, and a `max_tokens`
+         * above Koog's 2048 default).
          * The others keep their endpoint defaults, because an explicit "no reasoning" label errors
          * on some models (see [reasoningParams]), and a page that cannot be read at all is worse
          * than an unwanted thought.
          */
-        fun ocrParams(config: AiConfig): LLMParams = AiProviderClients.of(config.provider).ocrParams()
+        fun ocrParams(config: AiConfig): LLMParams = AiProviderClients.of(config.provider).ocrParams(config.model)
 
         /**
          * Params for the chat assistant, from [AiConfig.reasoningAssistant]; null keeps the
@@ -112,8 +113,8 @@ internal class AiRuntime(
 
         /**
          * Map one user-facing [AiReasoningLevel] onto provider-specific Koog params; null means
-         * "no override" (either [AiReasoningLevel.DEFAULT] or an unsupported combination). Each
-         * provider's mapping, and why, is its [ProviderClientFactory.reasoning] in [AiProviderClients].
+         * "no override". Each provider's mapping, and why, is its [ProviderClientFactory.reasoning]
+         * (and, for [AiReasoningLevel.DEFAULT], its [ProviderClientFactory.defaults]) in [AiProviderClients].
          */
         internal fun reasoningParams(
             provider: AiProvider,
@@ -122,7 +123,7 @@ internal class AiRuntime(
             toolLoop: Boolean,
         ): LLMParams? =
             if (level == AiReasoningLevel.DEFAULT) {
-                null
+                AiProviderClients.of(provider).defaults(model)
             } else {
                 AiProviderClients.of(provider).reasoning(model, level, toolLoop)
             }
