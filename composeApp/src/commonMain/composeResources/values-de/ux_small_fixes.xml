@@ -8,12 +8,10 @@
     <string name="detail_history_another_device">Anderes Gerät</string>
 
     <!-- Activity: queued work that cannot progress until something is fixed. -->
-    <string name="queue_block_ocr_missing">Die Texterkennung ist auf diesem Gerät nicht eingerichtet, daher warten diese Dokumente.</string>
+    <string name="queue_block_ocr_missing">Die Texterkennung ist auf diesem Gerät nicht eingerichtet, daher wartet dieses Dokument.</string>
     <string name="queue_block_ocr_fix">Texterkennung einrichten</string>
-    <string name="queue_block_ai_unconfigured">Für die automatische Organisation ist kein Assistent verbunden, daher warten diese Dokumente.</string>
-    <string name="queue_block_ai_unreachable">Der Assistent hat nicht geantwortet, die automatische Organisation versucht es erneut.</string>
+    <string name="queue_block_ai_unconfigured">Für „Automatisch ordnen“ ist kein Assistent verbunden, daher wartet dieses Dokument.</string>
     <string name="queue_block_ai_fix">Assistent verbinden</string>
-    <string name="queue_block_ai_check">Assistenteneinstellungen prüfen</string>
     <string name="queue_problem_storage_access">Importe warten auf die Berechtigung, auf den Speicher dieses Geräts zuzugreifen.</string>
 
     <!-- The assistant screen's hint that it needs an endpoint. -->

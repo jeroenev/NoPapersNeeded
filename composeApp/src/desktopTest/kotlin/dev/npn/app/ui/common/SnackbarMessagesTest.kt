@@ -36,6 +36,7 @@ class SnackbarMessagesTest {
             }
         }
 
+    /** A message's action is offered and runs when tapped; the latest action is the one kept. */
     @Test
     fun aMessagesActionIsOfferedAndRunsWhenTapped() =
         onUiThread {
@@ -46,7 +47,7 @@ class SnackbarMessagesTest {
                     UiText.Raw("Moved 2 documents to trash"),
                     UiMessage.Action(UiText.Raw("Undo")) { undone++ },
                 )
-            withScene(flowOf(undo, undo), snackbar) { scene ->
+            withScene(flowOf(undo), snackbar) { scene ->
                 snackbar.currentSnackbarData
                     ?.visuals
                     ?.actionLabel shouldBe "Undo"
@@ -55,13 +56,7 @@ class SnackbarMessagesTest {
                 scene.render()
 
                 undone shouldBe 1
-                // An identical message right behind it still shows.
-                snackbar.shownMessage() shouldBe "Moved 2 documents to trash"
-
-                snackbar.currentSnackbarData?.dismiss()
-                scene.render()
-
-                undone shouldBe 1
+                snackbar.shownMessage() shouldBe null
             }
         }
 

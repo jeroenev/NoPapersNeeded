@@ -165,6 +165,12 @@ internal class JournalCoordinator(
      * finds the file shows the document, for that scan. Tests of the writing path turn it on.
      */
     private val writeUndelete: Boolean = JournalOp.DocUndelete.WRITTEN,
+    /**
+     * Record the authors of a transaction this session published, after its object is durable, for
+     * the history timeline to tell this device's changes from another's
+     * ([dev.npn.core.app.LocalJournalActors]). A failure is logged and never fails the write.
+     */
+    private val recordPublished: suspend (List<JournalEvent>) -> Unit = {},
 ) {
     private val mutex = Mutex()
 
@@ -427,6 +433,7 @@ internal class JournalCoordinator(
         published: PublishedTransaction,
         preserveLifecycleDocs: Set<String> = emptySet(),
     ) = withDurableProjectionRecovery {
+        log.runLogged("Recording this device's journal actors") { recordPublished(published.events) }
         val local = accumulator.localSource(published)
         indexer.projection {
             recordWritten(current, local)

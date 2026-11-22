@@ -121,6 +121,7 @@ private suspend fun createCoordinator(
         dispatcher = deps.computation,
         clock = deps.clock,
         log = deps.log,
+        recordPublished = { events -> LocalJournalActors(deps.deviceDb.keyValueDao()).record(events) },
         writeUndelete = writeUndelete,
     )
 

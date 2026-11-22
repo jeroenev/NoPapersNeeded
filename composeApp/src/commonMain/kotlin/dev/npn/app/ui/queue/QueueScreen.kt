@@ -47,6 +47,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.npn.app.platform.isAppPrivateLocation
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.HelpText
@@ -66,6 +67,7 @@ import dev.npn.core.app.WorkBlock
 import dev.npn.core.app.WorkStage
 import dev.npn.core.app.WorkState
 import dev.npn.core.index.IndexProgress
+import dev.npn.core.settings.LibraryLocations
 import dev.npn.core.settings.SettingsRepository
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_cancel_confirm
@@ -77,10 +79,8 @@ import no_papers_needed.composeapp.generated.resources.common_storage_access_gra
 import no_papers_needed.composeapp.generated.resources.queue_ai_failed_help
 import no_papers_needed.composeapp.generated.resources.queue_ai_temporary_failure
 import no_papers_needed.composeapp.generated.resources.queue_attempts
-import no_papers_needed.composeapp.generated.resources.queue_block_ai_check
 import no_papers_needed.composeapp.generated.resources.queue_block_ai_fix
 import no_papers_needed.composeapp.generated.resources.queue_block_ai_unconfigured
-import no_papers_needed.composeapp.generated.resources.queue_block_ai_unreachable
 import no_papers_needed.composeapp.generated.resources.queue_block_ocr_fix
 import no_papers_needed.composeapp.generated.resources.queue_block_ocr_missing
 import no_papers_needed.composeapp.generated.resources.queue_edit_run_discard
@@ -144,6 +144,15 @@ fun QueueScreen(
     val scan by vm.scan.collectAsStateWithLifecycle()
     val sync by vm.sync.collectAsStateWithLifecycle()
     val storage = rememberStorageAccess()
+    // Only a library on plain shared storage needs Android's all-files grant; a SAF or app-private
+    // (cloud working copy) library imports fine without it.
+    val settingsState by settings.settings.collectAsStateWithLifecycle()
+    val location = settingsState.libraryLocation
+    val storageProblem =
+        location != null &&
+            !LibraryLocations.isContentUri(location) &&
+            !isAppPrivateLocation(location) &&
+            !storage.usable
     val snackbar = rememberSnackbarMessages(vm.messages)
 
     Scaffold(
@@ -162,7 +171,7 @@ fun QueueScreen(
         } else {
             ActivityList(
                 activity = Activity(loadedItems, loadedRuns, scan, sync),
-                storageProblem = !storage.usable,
+                storageProblem = storageProblem,
                 actions =
                     ActivityActions(
                         onOpenDoc = onOpenDoc,
@@ -369,7 +378,7 @@ private fun BlockedRow(
             onClick = {
                 when (block) {
                     WorkBlock.OCR_ENGINE_MISSING -> actions.onOpenOcrSettings()
-                    WorkBlock.AI_ENDPOINT_UNCONFIGURED, WorkBlock.AI_ENDPOINT_UNREACHABLE -> actions.onOpenAiSettings()
+                    WorkBlock.AI_ENDPOINT_UNCONFIGURED -> actions.onOpenAiSettings()
                 }
             },
         ) {
@@ -384,7 +393,6 @@ private val WorkBlock.message: StringResource
         when (this) {
             WorkBlock.OCR_ENGINE_MISSING -> Res.string.queue_block_ocr_missing
             WorkBlock.AI_ENDPOINT_UNCONFIGURED -> Res.string.queue_block_ai_unconfigured
-            WorkBlock.AI_ENDPOINT_UNREACHABLE -> Res.string.queue_block_ai_unreachable
         }
 
 private val WorkBlock.fixLabel: StringResource
@@ -392,7 +400,6 @@ private val WorkBlock.fixLabel: StringResource
         when (this) {
             WorkBlock.OCR_ENGINE_MISSING -> Res.string.queue_block_ocr_fix
             WorkBlock.AI_ENDPOINT_UNCONFIGURED -> Res.string.queue_block_ai_fix
-            WorkBlock.AI_ENDPOINT_UNREACHABLE -> Res.string.queue_block_ai_check
         }
 
 /** A library scan or import in progress: what it is doing, and how far along. */

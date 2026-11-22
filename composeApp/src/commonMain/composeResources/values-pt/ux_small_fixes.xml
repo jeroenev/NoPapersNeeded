@@ -8,12 +8,10 @@
     <string name="detail_history_another_device">Outro dispositivo</string>
 
     <!-- Activity: queued work that cannot progress until something is fixed. -->
-    <string name="queue_block_ocr_missing">O reconhecimento de texto não está configurado neste dispositivo, por isso estes documentos aguardam.</string>
+    <string name="queue_block_ocr_missing">O reconhecimento de texto não está configurado neste dispositivo, por isso este documento aguarda.</string>
     <string name="queue_block_ocr_fix">Configurar o reconhecimento de texto</string>
-    <string name="queue_block_ai_unconfigured">A organização automática não tem um assistente ligado, por isso estes documentos aguardam.</string>
-    <string name="queue_block_ai_unreachable">O assistente não respondeu, por isso a organização automática está a tentar novamente.</string>
+    <string name="queue_block_ai_unconfigured">A organização automática não tem um assistente ligado, por isso este documento aguarda.</string>
     <string name="queue_block_ai_fix">Ligar o assistente</string>
-    <string name="queue_block_ai_check">Verificar as definições do assistente</string>
     <string name="queue_problem_storage_access">As importações aguardam permissão para ler o armazenamento deste dispositivo.</string>
 
     <!-- The assistant screen's hint that it needs an endpoint. -->

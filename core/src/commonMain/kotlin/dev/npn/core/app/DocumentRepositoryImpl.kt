@@ -79,8 +79,8 @@ internal class DocumentRepositoryImpl(
     private val db: NpnDatabase,
     /** Where a query's rows are turned into list items. */
     private val mapping: CoroutineDispatcher = Dispatchers.Default,
-    /** This installation's journal device id, which tells a history change of its own from another's. */
-    private val deviceId: String = "",
+    /** Which journal authors this installation published, for a history row's origin. */
+    private val localActors: suspend (Collection<String>) -> Set<String> = { emptySet() },
 ) : DocumentRepository {
     private val documentDao get() = db.documentDao()
     private val tagDao get() = db.tagDao()
@@ -211,18 +211,20 @@ internal class DocumentRepositoryImpl(
 
     override suspend fun history(docId: String): List<DocumentHistoryRecord> {
         val dao = db.metadataProjectionDao()
+        val rows = dao.eventsForDocument(docId)
+        // Journal events carry a fresh actor per transaction, not the device id, so this device's
+        // own writes are known only by the actors its commits recorded (LocalJournalActors).
+        val local = localActors(rows.mapTo(LinkedHashSet()) { it.deviceId })
         // In HLC order, as the query sorts them.
-        return dao
-            .eventsForDocument(docId)
-            .map { row ->
-                // A row an older build recorded may hold what this one cannot read.
-                val event = runCatchingCancellable { EventDecoderRegistry.decodeStored(row.canonicalJson) }.getOrNull()
-                DocumentHistoryRecord(
-                    timeMillis = row.hlcPhysical,
-                    origin = HistoryOrigin.of(row.deviceId, deviceId),
-                    entry = event?.let { HistoryEntry.of(it.op) } ?: HistoryEntry.Undecodable(row.operation),
-                )
-            }
+        return rows.map { row ->
+            // A row an older build recorded may hold what this one cannot read.
+            val event = runCatchingCancellable { EventDecoderRegistry.decodeStored(row.canonicalJson) }.getOrNull()
+            DocumentHistoryRecord(
+                timeMillis = row.hlcPhysical,
+                origin = if (row.deviceId in local) HistoryOrigin.THIS_DEVICE else HistoryOrigin.ANOTHER_DEVICE,
+                entry = event?.let { HistoryEntry.of(it.op) } ?: HistoryEntry.Undecodable(row.operation),
+            )
+        }
     }
 
     override suspend fun tagsForDocuments(docIds: List<String>): Map<String, List<String>> {

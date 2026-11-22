@@ -122,9 +122,6 @@ enum class WorkBlock {
 
     /** Auto-organize is owed, but no assistant endpoint is configured on this device. */
     AI_ENDPOINT_UNCONFIGURED,
-
-    /** Auto-organize is owed, but the endpoint did not answer: the queue is retrying it. */
-    AI_ENDPOINT_UNREACHABLE,
 }
 
 /**
@@ -150,11 +147,7 @@ fun QueuedWork.blockedBy(capabilities: WorkCapabilities): WorkBlock? =
         }
 
         WorkStage.AI_ENRICHMENT -> {
-            when {
-                !capabilities.aiEndpointConfigured -> WorkBlock.AI_ENDPOINT_UNCONFIGURED
-                lastError != null -> WorkBlock.AI_ENDPOINT_UNREACHABLE
-                else -> null
-            }
+            if (capabilities.aiEndpointConfigured) null else WorkBlock.AI_ENDPOINT_UNCONFIGURED
         }
     }
 

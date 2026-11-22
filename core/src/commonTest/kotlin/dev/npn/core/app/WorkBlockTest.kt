@@ -39,13 +39,10 @@ class WorkBlockTest {
             WorkBlock.AI_ENDPOINT_UNCONFIGURED
     }
 
-    /** A configured endpoint that did not answer is blocked, though the row will keep retrying. */
+    /** A failed row with an endpoint configured keeps its own retry state, not an endpoint verdict. */
     @Test
-    fun enrichmentAgainstAnAnsweringEndpointIsNotBlocked() {
-        work(WorkStage.AI_ENRICHMENT, lastError = "connection refused").blockedBy(ready) shouldBe
-            WorkBlock.AI_ENDPOINT_UNREACHABLE
-        work(WorkStage.AI_ENRICHMENT, lastError = "connection refused")
-            .blockedBy(ready.copy(aiEndpointConfigured = false)) shouldBe WorkBlock.AI_ENDPOINT_UNCONFIGURED
+    fun aFailedEnrichmentRowIsNotAnEndpointVerdict() {
+        work(WorkStage.AI_ENRICHMENT, lastError = "connection refused").blockedBy(ready) shouldBe null
     }
 
     /** An engine missing holds OCR back even after a failure: the engine is the first fix. */

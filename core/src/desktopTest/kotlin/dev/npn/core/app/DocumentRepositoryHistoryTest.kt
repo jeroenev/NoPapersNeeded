@@ -55,7 +55,7 @@ class DocumentRepositoryHistoryTest {
                 )
             dao.ingest(source, events)
 
-            val repo = DocumentRepositoryImpl(db, deviceId = "dev-a")
+            val repo = DocumentRepositoryImpl(db, localActors = { actors -> actors intersect setOf("dev-a") })
             val history = repo.history(docId)
 
             history.map { it.entry } shouldContainExactly
@@ -95,7 +95,8 @@ class DocumentRepositoryHistoryTest {
                 listOf(valid, broken),
             )
 
-            val history = DocumentRepositoryImpl(db, deviceId = "dev-a").history(docId)
+            val history =
+                DocumentRepositoryImpl(db, localActors = { actors -> actors intersect setOf("dev-a") }).history(docId)
 
             history.map { it.origin } shouldContainExactly
                 listOf(HistoryOrigin.THIS_DEVICE, HistoryOrigin.ANOTHER_DEVICE)
@@ -129,6 +130,26 @@ class DocumentRepositoryHistoryTest {
             JournalOp.Unknown("future-op") to HistoryEntry.Unknown("future-op", null),
         ).forEach { (op, entry) -> HistoryEntry.of(op) shouldBe entry }
     }
+
+    /**
+     * A write through this session is labelled this device: journal events carry a fresh actor per
+     * transaction, and the commit records that actor in `device.db` for this lookup.
+     */
+    @Test
+    fun aWriteThroughTheSessionIsThisDevice() =
+        appSessionTest { rig ->
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+
+            rig.session.meta.addTag(listOf(id), "invoice")
+
+            val record =
+                rig.session.documents
+                    .history(id)
+                    .first { it.entry == HistoryEntry.TagAdded("invoice") }
+            record.origin shouldBe HistoryOrigin.THIS_DEVICE
+        }
 
     private fun event(
         docId: String,
