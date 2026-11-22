@@ -164,8 +164,7 @@ internal fun Modifier.shellShortcutKeys(
         .focusRequester(focus)
         .previewKeyShortcuts { event ->
             if (event.key == Key.K && (event.isCtrlPressed || event.isMetaPressed)) onPalette else null
-        }
-        .focusable()
+        }.focusable()
         .keyShortcuts { event ->
             when (event.key) {
                 Key.Slash -> if (event.isCtrlPressed) onOpenShortcuts else null

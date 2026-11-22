@@ -131,6 +131,7 @@ private fun ImportOutcome.asScanUiText(): UiText =
 
 /** How long [offerSearchTip] waits for an import's text to be read. */
 private val SearchTipWait = 30.minutes
+
 /** Where a document's text recognition is over, one way or the other. */
 private val TextSettled = setOf(OcrState.DONE, OcrState.ADOPTED, OcrState.FAILED)
 

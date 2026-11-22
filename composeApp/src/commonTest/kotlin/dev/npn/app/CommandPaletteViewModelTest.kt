@@ -147,6 +147,7 @@ class CommandPaletteViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             navigation.documents shouldContainExactly listOf("doc-1")
+            session.documents.observedFilters.any { it.first.query == "tax" } shouldBe true
         }
 
     @Test
