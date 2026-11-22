@@ -9,8 +9,9 @@ for the providers the app offers, and the record of what a failure looks like. I
   apps, recorded from this document's templates.
 
 The automated suite is what CI runs; a manual run is what qualifies a provider for a release. They
-are complementary: the fake remote cannot rate-limit, expire a token, fold case on the server, or
-die with a file half-written, and a real provider cannot replay a two-device interleaving on demand.
+are complementary: the fake remote cannot rate-limit, expire a token, fold case on the server or
+reproduce a real process kill (the suite throws where the kill would land, and can leave a half-written
+object that way), and a real provider cannot replay a two-device interleaving on demand.
 
 No credential, token, account name, e-mail address or remote URL with an embedded password belongs
 in this repository. Credentials live in the app-private rclone config that the setup wizard writes;
@@ -20,7 +21,7 @@ only the redacted result table is pasted into the release checklist or an issue.
 ## Running the automated suite
 
 ```
-# The whole scenario suite (about 20 s on a laptop):
+# The whole scenario suite (under a minute on a laptop):
 mise sync-scenarios
 
 # The same task, directly, when mise is not in use:
@@ -48,6 +49,7 @@ call, no rclone process, no credentials.
 | `aDeleteForGoodRemovesEveryCopyAndSurvivesAReplicaThatWasOffline` | S6 delete for good |
 | `aPassKilledAfterAnUploadLandsAdoptsTheRemoteCopyWithoutADuplicate` | S7 process death after an upload |
 | `aTruncatedUploadIsKeptAsAForeignCopyAndTheDocumentSurvives` | S7 upload cut short (known limit) |
+| `SyncEngineTest.anInterruptedDownloadLeavesNothingInTheLibraryAndIsRetried` | S7 download cut short (the engine suite) |
 | `aMultiMegabyteDocumentTravelsIntact` | S8 large files (3 MiB) |
 | `aThirdReplicaJoiningGetsEverythingWithoutPushingAnythingBack` | S9 third device joining |
 | `aRestoredDeviceRebuildsTheLiveLibraryAndKeepsTheTrashAndTombstones` | S10 restore from an empty device |
@@ -55,8 +57,9 @@ call, no rclone process, no credentials.
 What the suite deliberately cannot prove, and a manual run must: rclone's own behaviour, the
 provider's identity/hash and case-folding rules, OAuth refresh and expiry, rate limits and their
 retries, upload sessions and their server-side behaviour, the provider's own trash/versioning,
-a real process kill (the suite throws at the same point instead), a real filesystem's locking and
-discard semantics, and Android's scoped storage.
+a real process kill (the suite throws at the same point instead), an interrupted *journal-object*
+upload (mark that part of S7 manual; PDF uploads and downloads are automated), a real filesystem's
+locking and discard semantics, and Android's scoped storage.
 
 ## Recording a manual run
 
@@ -115,14 +118,14 @@ what a second replica sees. For every run:
 | Dropbox | `dropbox` | OAuth2 | Dropbox content hash (SHA-256 over 4 MiB blocks) only for a library file of the same size; otherwise download | Folds case | rclone delete removes it; Dropbox's own deleted-files area keeps it for a while |
 | Google Drive | `drive` | OAuth2 | none usable (MD5 only) → download | Name lookups fold case; a folder may hold duplicate names | rclone delete moves it to Drive's trash by default (`--drive-use-trash`) |
 | OneDrive | `onedrive` | OAuth2 | none usable (quickXorHash) → download | Folds case | Graph DELETE moves it to the recycle bin |
-| WebDAV / Nextcloud | `webdav` | URL + user + app password | none on the wire → download | Server-dependent; Nextcloud folds case | WebDAV DELETE; Nextcloud may keep it in its own trash/versions |
+| WebDAV / Nextcloud | `webdav` | URL + user + app password | none on the wire → download | Server-dependent; Nextcloud often folds case, so treat it as case-insensitive | WebDAV DELETE; Nextcloud may keep it in its own trash/versions |
 | S3 | `s3` | Access key + secret + region | ETag only for single-part uploads (MD5), never trusted | Case-sensitive | Permanent, unless bucket versioning keeps delete markers/versions |
 | Backblaze B2 | `b2` | Key ID + application key | SHA-1 only, never trusted → download | Case-sensitive | Hides the file; old versions remain until the bucket lifecycle rule |
 | SFTP | `sftp` | Host + user + key or password | SHA-256 when the server's checksum command is available (the repo assumes it is), else download | Server filesystem | Permanent |
 
 Provider deltas that matter to every scenario:
 
-- **Dropbox**: measured limits are metadata 16 down/32 up and PDFs 8 up (`TransferLimits`); past
+- **Dropbox**: measured limits are metadata 16 down/32 up and PDFs 8 each way (`TransferLimits`); past
   that it throttles, and a refused write (`too_many_write_operations`) is retried twice. An upload
   over roughly 150 MiB uses an upload session, which does not leave a visible partial object.
 - **Google Drive**: every document is downloaded once to identify it on a new device because MD5 is
@@ -131,9 +134,10 @@ Provider deltas that matter to every scenario:
   delete for good still leaves the bytes in Drive's trash for the user to purge there.
 - **OneDrive**: same download-to-identify cost (quickXorHash is ignored), and a delete for good goes
   to the site recycle bin, not away. Names differing only in case collide.
-- **Nextcloud/WebDAV**: no hash and no atomic multi-file commit; mtime precision can be one second,
-  so a same-size change inside one second is re-identified by a download rather than trusted. Its
-  trashbin and file versions can hold a copy after the app's delete.
+- **Nextcloud/WebDAV**: no hash and no atomic multi-file commit. Its mtime may have one-second
+  resolution; a same-size change that keeps the same reported mtime leaves the manifest's size/mtime
+  pair unchanged, so it is trusted rather than re-identified and the change is missed until the
+  mtime moves. Its trashbin and file versions can hold a copy after the app's delete.
 - **S3**: no native mtime; a server-side copy resets the reported time, so the engine re-identifies
   the file after it or a foreign tool touches it. A multipart ETag is not a content hash and is never
   used as one.
@@ -235,9 +239,10 @@ deviation is a failure unless the cell says otherwise.
   remote's activity page shows the upload began, or after it completed but before the app shows the
   pass finished. Reopen the app and sync. Repeat with a download interrupted by killing the app or
   cutting the network, and with a metadata (journal) upload interrupted.
-- **Expected**: no half-written document in the library; the next pass either adopts the completed
-  remote copy (by identifying it) or uploads it again; a partial object is never installed as a
-  document that the library's own copy replaces; exactly one live copy of each document converges.
+- **Expected**: no half-written document at a live document's path; the next pass either adopts the
+  completed remote copy (by identifying it) or uploads it again; a partial PDF may be kept as a
+  separate copy document (the known limit below); the library's own document is never lost or
+  overwritten, and exactly one live copy of each real document converges.
 - **A failure means**: a corrupt document, a duplicate live copy of one document, or a pass that
   blocks on the partial object forever.
 - **Known limit**: a backend that writes in place can leave a truncated PDF at the final remote name.
@@ -246,13 +251,14 @@ deviation is a failure unless the cell says otherwise.
   (`aTruncatedUploadIsKeptAsAForeignCopyAndTheDocumentSurvives`); the
   library's document is never lost, but the user must delete the stray copy. Staged-upload providers
   (Dropbox upload sessions, Drive resumable uploads, S3 multipart, B2 large files) do not leave one.
+  Tracked as issue #38.
 - **Evidence**: the library listing after restart, the remote listing before and after the retry,
   the document's SHA-256, and both sync reports (the first with the error, the second clean).
 
 ### S8 — Large files
 
 - **Setup**: two synced devices, free space on both and on the provider; a PDF near the provider's
-  single-upload limit (for example 150 MiB for Dropbox's non-session path, 5 TiB for S3 multipart).
+  single-upload limit (for example 150 MiB for Dropbox's session path, 5 GiB for the S3 multipart path).
 - **Steps**: import and sync; then interrupt the first upload (network off) and sync again; then
   verify the download on the second device, including memory use of the app.
 - **Expected**: the file transfers whole (the engine streams through staging, never reads a PDF into
@@ -314,7 +320,7 @@ trash/version or listing page. A cell marked **manual** cannot be automated with
 
 ### Dropbox
 
-| Scenario | Setup delta | Expected | A failure means | Evidence |
+| Scenario | Setup & steps (delta) | Expected | A failure means | Evidence |
 | --- | --- | --- | --- | --- |
 | S1 | Full Dropbox or app folder; two devices | Standard; content hash identifies library files without a download | Lost import or tag | Both lists, remote listing, report |
 | S2 | — | Standard; no rate-limit errors | Different titles, lost tag | Detail screens, report |
@@ -329,7 +335,7 @@ trash/version or listing page. A cell marked **manual** cannot be automated with
 
 ### Google Drive
 
-| Scenario | Setup delta | Expected | A failure means | Evidence |
+| Scenario | Setup & steps (delta) | Expected | A failure means | Evidence |
 | --- | --- | --- | --- | --- |
 | S1 | My Drive test folder | Standard; every document downloaded once to identify | Lost import or tag | Both lists, report |
 | S2 | — | Standard | Different titles, lost tag | Detail screens |
@@ -344,7 +350,7 @@ trash/version or listing page. A cell marked **manual** cannot be automated with
 
 ### OneDrive
 
-| Scenario | Setup delta | Expected | A failure means | Evidence |
+| Scenario | Setup & steps (delta) | Expected | A failure means | Evidence |
 | --- | --- | --- | --- | --- |
 | S1 | OneDrive test folder | Standard; quickXorHash ignored, downloads to identify | Lost import or tag | Lists, report |
 | S2 | — | Standard | Title/tag divergence | Detail screens |
@@ -359,7 +365,7 @@ trash/version or listing page. A cell marked **manual** cannot be automated with
 
 ### WebDAV / Nextcloud
 
-| Scenario | Setup delta | Expected | A failure means | Evidence |
+| Scenario | Setup & steps (delta) | Expected | A failure means | Evidence |
 | --- | --- | --- | --- | --- |
 | S1 | App password; test folder on the server | Standard; downloads to identify | Lost import/tag | Lists, report |
 | S2 | — | Standard | Title/tag divergence | Detail screens |
@@ -372,9 +378,9 @@ trash/version or listing page. A cell marked **manual** cannot be automated with
 | S9 | Third device | Downloads only | Duplicate/refusal | Report, server listing |
 | S10 | New device | Standard restore | Lost document | New list, report |
 
-### S3
+### Amazon S3
 
-| Scenario | Setup delta | Expected | A failure means | Evidence |
+| Scenario | Setup & steps (delta) | Expected | A failure means | Evidence |
 | --- | --- | --- | --- | --- |
 | S1 | Bucket + prefix, region, keys | Standard; ETag never trusted | Lost import/tag | Lists, bucket listing |
 | S2 | — | Standard | Title/tag divergence | Detail screens |
@@ -389,7 +395,7 @@ trash/version or listing page. A cell marked **manual** cannot be automated with
 
 ### Backblaze B2
 
-| Scenario | Setup delta | Expected | A failure means | Evidence |
+| Scenario | Setup & steps (delta) | Expected | A failure means | Evidence |
 | --- | --- | --- | --- | --- |
 | S1 | Bucket + prefix, key ID/application key | Standard; SHA-1 ignored, downloads to identify | Lost import/tag | Lists, bucket listing |
 | S2 | — | Standard | Title/tag divergence | Detail screens |
@@ -404,7 +410,7 @@ trash/version or listing page. A cell marked **manual** cannot be automated with
 
 ### SFTP
 
-| Scenario | Setup delta | Expected | A failure means | Evidence |
+| Scenario | Setup & steps (delta) | Expected | A failure means | Evidence |
 | --- | --- | --- | --- | --- |
 | S1 | Host, user, key/password; test folder | Standard; SHA-256 from the server's checksum command when available | Lost import/tag | Lists, `sha256sum` on the server |
 | S2 | — | Standard | Title/tag divergence | Detail screens |
@@ -432,13 +438,19 @@ answer or an issue to track.
   `name (2).pdf`. Nothing is lost, but the stray copy is the user's to delete. `--inplace`-style
   backends, or a provider whose interrupted upload leaves a visible partial object, are the only
   way to reach this; staged uploads do not.
-- **Every replica that held a document uploads its own trash entry** (S5). Two devices holding the
-  same document each park their file in `.npn/trash` under their own episode and upload it, so the
-  remote's trash holds one copy per replica until the retention purge removes them. The app shows
-  the document once; the extra bytes are accounting, not a second document.
-- **A deleted document that never had metadata has no row on a device that never held it.** The
-  tombstone is in the journal and nothing installs it; the fresh device simply does not list it.
-  Nothing to fix, but do not expect a deleted item in a new device's trash.
+- **A mirrored trash can add its own trash entry** (S5, S9). A replica that parks a file it only
+  just learned was trashed may not have the trash time in its row yet, so it names the entry with its
+  own clock and uploads it beside the trashing device's entry; the remote then holds one entry per
+  such replica (the S9 run shows two, with episodes a second apart). A replica that already carries
+  the trash time reuses the same write-once name and adds nothing. Extra entries serve the retention
+  purge, which removes an entry only once every document its name can stand for has been out of the
+  library longer than the retention. While a restored document is live again, that condition is not
+  met, so a leftover entry can stay on the remote until the document is trashed again or deleted;
+  it never becomes a second document. The app shows the document once. Tracked as issue #39.
+- **A deleted document has no row on a device that never held it.** The tombstone is in the journal
+  and nothing installs it (unlike a trashed document, whose row the fold can synthesize); the fresh
+  device simply does not list it. Nothing to fix, but do not expect a deleted item in a new
+  device's trash.
 - **Manual-only coverage**: provider rate limits, OAuth expiry/revocation, server-side case folding,
   upload-session resume, provider trash/versioning, real process kills and Android scoped storage
   are not in the fake remote. They are the **manual** cells above.

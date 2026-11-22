@@ -9,10 +9,11 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 
 /**
- * Shared setup for the engine suites: two real sessions over one directory-backed remote, plus the
- * small PDF and import helpers. The tests are split across [SyncEngineTest] (convergence and the
- * document lifecycle) and [SyncEngineGuardTest] (the guards and corruption cases) so neither class
- * grows past the function-count rule.
+ * Shared setup for the engine suites: real sessions over one directory-backed remote, plus the
+ * small PDF and import helpers. [withPair] builds the two-device suites (split across
+ * [SyncEngineTest] for convergence and the document lifecycle and [SyncEngineGuardTest] for the
+ * guards and corruption cases, so neither class grows past the function-count rule); [withCluster]
+ * builds two or more devices for the qualification scenarios that add or lose a replica.
  */
 internal open class SyncEngineTestBase {
     protected fun pdf(seed: String): ByteArray = "%PDF-1.4\n$seed\n%%EOF\n".encodeToByteArray()
@@ -34,11 +35,10 @@ internal open class SyncEngineTestBase {
     /** [withPair] for [members] libraries, for the scenarios that add or lose a replica. */
     protected fun withCluster(
         members: Int = 2,
-        reportsHashes: Boolean = false,
         block: suspend (SyncCluster) -> Unit,
     ) = runBlocking {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-        val cluster = SyncCluster.open(scope, reportsHashes, members)
+        val cluster = SyncCluster.open(scope, members)
         try {
             block(cluster)
         } finally {

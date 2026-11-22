@@ -573,4 +573,5 @@ The Storage Access Framework remains available as an advanced option
 no path, such as cloud document providers, and every library chosen through SAF before
 the direct mode existed keeps opening that way. Cloud sync (Settings → Cloud sync) reaches
 Dropbox, Drive, OneDrive, WebDAV/Nextcloud and the rest through the bundled rclone, set up
-in the app rather than through SAF.
+in the app rather than through SAF. The provider qualification matrix and the fake-remote
+scenario suite (`mise sync-scenarios`) are in `docs/SYNC_QUALIFICATION.md`.

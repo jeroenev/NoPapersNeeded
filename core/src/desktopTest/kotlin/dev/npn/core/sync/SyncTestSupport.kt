@@ -285,7 +285,6 @@ internal class SyncCluster private constructor(
 
     val a: AppSessionRig get() = rigs[0]
     val b: AppSessionRig get() = rigs[1]
-    val c: AppSessionRig get() = rigs[2]
 
     suspend fun close() {
         for (rig in rigs.toList()) {
@@ -298,10 +297,9 @@ internal class SyncCluster private constructor(
     companion object {
         suspend fun open(
             scope: CoroutineScope,
-            reportsHashes: Boolean = false,
             members: Int = 2,
         ): SyncCluster {
-            val remote = DirectoryRemoteStore(Files.createTempDirectory("npn-sync-remote"), reportsHashes)
+            val remote = DirectoryRemoteStore(Files.createTempDirectory("npn-sync-remote"))
             val cluster =
                 SyncCluster(
                     scope,
@@ -327,7 +325,10 @@ internal suspend fun SyncCluster.converge(
     repeat(maxRounds) { round ->
         var changed = false
         for (rig in members.toList()) {
-            if (rig.session.syncCompleted().changedAnything) changed = true
+            val report = rig.session.syncCompleted()
+            if (report.changedAnything) changed = true
+            // A pass that keeps failing per item is not quiescent, even when it transfers nothing.
+            check(report.errors.isEmpty()) { "pass failed: ${report.errors}" }
         }
         if (!changed) return round + 1
     }

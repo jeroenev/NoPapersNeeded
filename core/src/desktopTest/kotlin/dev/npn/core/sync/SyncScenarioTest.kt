@@ -98,6 +98,7 @@ internal class SyncScenarioTest : SyncEngineTestBase() {
                     .getByDocId(doc)!!
                     .title shouldBe "A's title"
             }
+            cluster.converge() shouldBe 1
         }
 
     @Test
@@ -115,6 +116,7 @@ internal class SyncScenarioTest : SyncEngineTestBase() {
             for (rig in listOf(cluster.a, cluster.b)) {
                 rig.exists("inbox/final.pdf").shouldBeTrue()
                 rig.exists("inbox/draft.pdf").shouldBeFalse()
+                rig.fs.sha256("inbox/final.pdf") shouldBe doc
                 rig.db
                     .documentDao()
                     .getByDocId(doc)!!
@@ -125,6 +127,7 @@ internal class SyncScenarioTest : SyncEngineTestBase() {
             }
             cluster.remote.exists("inbox/final.pdf").shouldBeTrue()
             cluster.remote.exists("inbox/draft.pdf").shouldBeFalse()
+            cluster.converge() shouldBe 1
         }
 
     @Test
@@ -175,6 +178,7 @@ internal class SyncScenarioTest : SyncEngineTestBase() {
                 .paths()
                 .filter { it.startsWith("${NpnPaths.TRASH_DIR}/") }
                 .shouldBeEmpty()
+            cluster.converge() shouldBe 1
         }
 
     @Test
@@ -210,6 +214,7 @@ internal class SyncScenarioTest : SyncEngineTestBase() {
                 .paths()
                 .filter { it.startsWith("${NpnPaths.TRASH_DIR}/") }
                 .shouldBeEmpty()
+            cluster.converge() shouldBe 1
         }
 
     @Test
@@ -256,6 +261,7 @@ internal class SyncScenarioTest : SyncEngineTestBase() {
             cluster.remote.paths().filter { it.endsWith(".pdf") } shouldHaveSize 2
             for (rig in listOf(cluster.a, cluster.b)) {
                 rig.fs.sha256("inbox/cut (2).pdf") shouldBe doc
+                rig.fs.sha256("inbox/cut.pdf") shouldNotBe doc
                 rig.exists("inbox/cut.pdf").shouldBeTrue()
             }
         }
@@ -308,6 +314,8 @@ internal class SyncScenarioTest : SyncEngineTestBase() {
             cluster.converge()
 
             val third = cluster.join("install-c")
+            // A join downloads; it pushes no document of its own (only its settings metadata).
+            third.session.syncCompleted().uploadedDocuments shouldBe 0
             cluster.converge(members = listOf(cluster.a, cluster.b, third))
 
             third.exists("inbox/after.pdf").shouldBeTrue()
@@ -325,9 +333,10 @@ internal class SyncScenarioTest : SyncEngineTestBase() {
                 .getByDocId(trashed)!!
                 .trashed
                 .shouldBeTrue()
+            third.trashDocHashes() shouldContain trashed
             third.exists("inbox/deleted.pdf").shouldBeFalse()
-            // A document that only ever got a tombstone has no metadata to project, so it may have
-            // no row at all here; either way it is not live.
+            // A deleted document is never installed on a device that never held it, and the fold
+            // synthesizes no row for a deleted one: the tombstone has nothing to list here.
             third.db
                 .documentDao()
                 .getByDocId(deleted)
@@ -370,12 +379,20 @@ internal class SyncScenarioTest : SyncEngineTestBase() {
             // The laptop dies: its library folder and databases are gone. A new install opens an
             // empty library, keeps only what it can rebuild from the remote, and connects it.
             val old = cluster.a
-            val oldDeviceId = old.deviceDb.keyValueDao().get(DeviceIdentity.KEY_DEVICE_ID)
+            val b = cluster.b
+            val oldDeviceId =
+                old.deviceDb
+                    .keyValueDao()
+                    .get(DeviceIdentity.KEY_DEVICE_ID)
+                    .shouldNotBeNull()
             cluster.retire(old)
             val restored = cluster.join("restored-laptop")
-            cluster.converge(members = listOf(cluster.b, restored))
+            // A restore downloads; it pushes no document of its own.
+            restored.session.syncCompleted().uploadedDocuments shouldBe 0
+            cluster.converge(members = listOf(b, restored))
 
             restored.exists("inbox/live.pdf").shouldBeTrue()
+            restored.fs.sha256("inbox/live.pdf") shouldBe live
             restored.db
                 .documentFieldDao()
                 .valuesOf(live)[FieldKeys.TITLE] shouldBe "A live document"
@@ -394,17 +411,23 @@ internal class SyncScenarioTest : SyncEngineTestBase() {
                 .getByDocId(trashed)!!
                 .trashed
                 .shouldBeTrue()
+            restored.trashDocHashes() shouldContain trashed
             restored.db
                 .documentDao()
                 .getByDocId(deleted)
                 ?.deleted shouldNotBe false
             restored.exists("inbox/deleted.pdf").shouldBeFalse()
             // A restored installation gets a fresh device id rather than resurrecting the old one.
+            // A fresh install gets a fresh device id rather than resurrecting the old one.
             restored.deviceDb
                 .keyValueDao()
                 .get(DeviceIdentity.KEY_DEVICE_ID)
                 .shouldNotBeNull() shouldNotBe oldDeviceId
-            cluster.converge(members = listOf(cluster.b, restored)) shouldBe 1
+            cluster.remote
+                .paths()
+                .filter { it.endsWith(".pdf") && !it.startsWith("${NpnPaths.TRASH_DIR}/") }
+                .shouldContainExactlyInAnyOrder(listOf("inbox/live.pdf", "inbox/new-name.pdf"))
+            cluster.converge(members = listOf(b, restored)) shouldBe 1
         }
 
     @Test
@@ -441,11 +464,24 @@ internal class SyncScenarioTest : SyncEngineTestBase() {
             }
             cluster.remote.paths().filter { it.endsWith(".pdf") } shouldContainExactlyInAnyOrder
                 listOf("inbox/a.pdf", "inbox/b.pdf")
+            // The remote keeps the names (and the bytes) it had; each move waits and is reported.
+            cluster.remote.fileBytesEqual("inbox/a.pdf", pdf("swap-first")).shouldBeTrue()
+            cluster.remote.fileBytesEqual("inbox/b.pdf", pdf("swap-second")).shouldBeTrue()
+            cluster.a.session
+                .syncCompleted()
+                .conflicts
+                .map { it.kind } shouldContain ConflictKind.TARGET_OCCUPIED
             cluster.a.exists("inbox/a.pdf").shouldBeTrue()
             cluster.a.exists("inbox/tmp.pdf").shouldBeFalse()
             cluster.a.exists("inbox/b.pdf").shouldBeTrue()
             cluster.converge() shouldBe 1
         }
+
+    private suspend fun AppSessionRig.trashDocHashes(): List<String> =
+        fs
+            .listAllUnder(NpnPaths.TRASH_DIR)
+            .filter { !it.isDirectory }
+            .map { fs.sha256(it.relPath) }
 
     private suspend fun AppSessionRig.accountPdfs(): List<String> =
         fs
