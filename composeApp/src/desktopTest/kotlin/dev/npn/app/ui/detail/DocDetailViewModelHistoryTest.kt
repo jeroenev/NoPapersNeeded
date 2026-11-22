@@ -8,6 +8,7 @@ import dev.npn.app.liveDocDetailVm
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.DocumentHistoryRecord
 import dev.npn.core.app.HistoryEntry
+import dev.npn.core.app.HistoryOrigin
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.testing.listItem
 import io.kotest.matchers.collections.shouldContainExactly
@@ -28,8 +29,12 @@ class DocDetailViewModelHistoryTest : MainDispatcherTest() {
                     documents.singleDoc.value = listItem("doc-1")
                     documents.historyList =
                         listOf(
-                            DocumentHistoryRecord(100, "dev-a", HistoryEntry.TagAdded("invoice")),
-                            DocumentHistoryRecord(50, "dev-a", HistoryEntry.FieldSet(FieldKeys.TITLE, "X")),
+                            DocumentHistoryRecord(100, HistoryOrigin.THIS_DEVICE, HistoryEntry.TagAdded("invoice")),
+                            DocumentHistoryRecord(
+                                50,
+                                HistoryOrigin.THIS_DEVICE,
+                                HistoryEntry.FieldSet(FieldKeys.TITLE, "X"),
+                            ),
                         )
                 }
             val model = DocDetailViewModel("doc-1", session, FakeSettingsRepository())
@@ -60,8 +65,16 @@ class DocDetailViewModelHistoryTest : MainDispatcherTest() {
                     documents.singleDoc.value = listItem("doc-1")
                     documents.historyList =
                         listOf(
-                            DocumentHistoryRecord(100, "dev-a", HistoryEntry.Unknown("future-op", null)),
-                            DocumentHistoryRecord(90, "dev-b", HistoryEntry.Undecodable("other-op")),
+                            DocumentHistoryRecord(
+                                100,
+                                HistoryOrigin.THIS_DEVICE,
+                                HistoryEntry.Unknown("future-op", null),
+                            ),
+                            DocumentHistoryRecord(
+                                90,
+                                HistoryOrigin.ANOTHER_DEVICE,
+                                HistoryEntry.Undecodable("other-op"),
+                            ),
                         )
                 }
             val model = liveDocDetailVm(session, settings = FakeSettingsRepository())
