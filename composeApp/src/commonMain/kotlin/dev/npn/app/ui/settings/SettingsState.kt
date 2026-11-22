@@ -219,23 +219,23 @@ interface SettingsActions {
 /** The library's reminder settings, split from [SettingsActions] because that interface is already large. */
 interface ReminderSettingsActions {
     /** Turn the library's reminders on or off; turning them on chooses a date field when none is chosen. */
-    fun setRemindersEnabled(enabled: Boolean)
+    fun setRemindersEnabled(enabled: Boolean) = Unit
 
     /** Watch or stop watching the DATE field [key] for reminders. */
     fun setReminderField(
         key: String,
         selected: Boolean,
-    )
+    ) = Unit
 
     /** How many days before a due date the notification window opens; null while the field holds no valid number. */
-    fun setReminderLeadDays(days: Int?)
+    fun setReminderLeadDays(days: Int?) = Unit
 
     /** The lead-days field lost focus: save what was typed in it now. */
-    fun doneTypingReminderLead()
+    fun doneTypingReminderLead() = Unit
 
     /** Type the daily check's local time as `HH:mm`; an invalid value stays unsaved. */
-    fun setReminderTime(text: String)
+    fun setReminderTime(text: String) = Unit
 
     /** The time field lost focus: save what was typed in it now. */
-    fun doneTypingReminderTime()
+    fun doneTypingReminderTime() = Unit
 }
