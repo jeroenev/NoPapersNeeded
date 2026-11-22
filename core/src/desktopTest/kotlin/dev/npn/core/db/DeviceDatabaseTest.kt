@@ -38,4 +38,25 @@ class DeviceDatabaseTest {
             dao.markEnriched(AiEnrichedEntity("a".repeat(64), enrichedAt = 7))
             dao.enrichedAt("a".repeat(64)) shouldBe 7
         }
+
+    @Test
+    fun mailCursorsRoundTripAndDecodeAStoredReason() =
+        runTest {
+            val dao = db.mailCursorDao()
+            dao.get("someone@example.com:993", "INBOX") shouldBe null
+            dao.upsert(
+                MailCursorEntity(
+                    accountKey = "someone@example.com:993",
+                    folder = "INBOX",
+                    uidValidity = 9,
+                    lastUid = 42,
+                    lastCheckedAt = 100,
+                    lastError = "AUTHENTICATION_FAILED",
+                ),
+            )
+            val row = dao.get("someone@example.com:993", "INBOX")
+            row?.uidValidity shouldBe 9
+            row?.lastUid shouldBe 42
+            row?.lastError shouldBe "AUTHENTICATION_FAILED"
+        }
 }

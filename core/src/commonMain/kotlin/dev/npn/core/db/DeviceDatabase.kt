@@ -22,16 +22,19 @@ import kotlinx.coroutines.Dispatchers
  *   ([AiEnrichQueueDao]);
  * - the OCR queue with its requests, attempts and backoff, and the pages a failed run already paid
  *   for ([OcrQueueDao]);
- * - what the cloud sync last established about each file on its remote ([SyncRemoteDao]).
+ * - what the cloud sync last established about each file on its remote ([SyncRemoteDao]);
+ * - how far this device has read each mail folder ([MailCursorDao]).
  *
  * Rows are keyed by document hash, which a rebuilt index gives the same documents again.
  */
 @Database(
     // v2: adds sync_remote_entries (what the cloud sync engine last knew about each remote file).
-    version = 2,
+    // v3: adds mail_cursor (how far this device has read each IMAP folder).
+    version = 3,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
+        AutoMigration(from = 2, to = 3),
     ],
     entities = [
         KeyValueEntity::class,
@@ -42,6 +45,7 @@ import kotlinx.coroutines.Dispatchers
         OcrQueueEntity::class,
         OcrPageCacheEntity::class,
         SyncRemoteEntryEntity::class,
+        MailCursorEntity::class,
     ],
 )
 @ConstructedBy(DeviceDatabaseConstructor::class)
@@ -55,6 +59,8 @@ abstract class DeviceDatabase : RoomDatabase() {
     abstract fun ocrQueueDao(): OcrQueueDao
 
     abstract fun syncRemoteDao(): SyncRemoteDao
+
+    abstract fun mailCursorDao(): MailCursorDao
 
     companion object {
         /**

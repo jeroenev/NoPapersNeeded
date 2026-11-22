@@ -81,6 +81,12 @@ expect fun supportsSafStorage(): Boolean
 expect fun ocrHasLanguageSetting(): Boolean
 
 /**
+ * Whether this platform offers email import (IMAP). Desktop does; Android does not, so the settings
+ * category is absent there rather than a dead control.
+ */
+expect fun supportsEmailImport(): Boolean
+
+/**
  * The folder the platform recommends for a new library, or null when it has no opinion. Android
  * proposes `Documents/NoPapersNeeded` on shared storage: visible in any file manager, reachable
  * by Syncthing, and it survives an uninstall. Desktop leaves the choice to the user's file dialog.

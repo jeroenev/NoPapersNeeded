@@ -14,6 +14,8 @@ import dev.npn.core.index.SupersededImportException
 import dev.npn.core.index.WriteBlock
 import dev.npn.core.index.WriteSettle
 import dev.npn.core.index.holdsDocument
+import dev.npn.core.mail.DeviceMailCursors
+import dev.npn.core.mail.MailService
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
@@ -99,6 +101,20 @@ internal class LibrarySessionImpl(
     override val aiSuggest: AiSuggest = graph.ai
     override val sync: SyncFacade = syncService ?: NoSyncFacade
 
+    private val mailService =
+        MailService(
+            store = JournalMailAccount(coordinator, lifetime),
+            credentials = deps.mailCredentials,
+            cursors = DeviceMailCursors(deps.deviceDb.mailCursorDao()),
+            transport = deps.mailTransport,
+            sink = IngestMailSink(this),
+            pdfRenderer = deps.mailPdfRenderer,
+            clock = deps.clock,
+            log = deps.log,
+            scope = lifetime.scope,
+        )
+    override val mail: MailFacade = mailService
+
     private val scanReports = MutableStateFlow<ScanReport?>(null)
     override val lastScanReport: Flow<ScanReport?> = scanReports.asStateFlow()
 
@@ -155,8 +171,8 @@ internal class LibrarySessionImpl(
             row != null && row.isLive && fs.holdsDocument(row)
         }
 
-    /** Import a PDF held in memory: for tests, which have no [ExternalSource] to hand. */
-    internal suspend fun importPdfBytes(
+    /** Import a PDF held in memory: for tests, and for email attachments. */
+    override suspend fun importPdfBytes(
         bytes: ByteArray,
         suggestedName: String,
     ): ImportOutcome = owned { importing(suggestedName) { importService.importBytes(bytes, suggestedName) } }
@@ -228,6 +244,11 @@ internal class LibrarySessionImpl(
         // was down, a run left half-suggested. Each costs a single query when its queue is empty,
         // once the initial rescan below has let the drains start (see openSession).
         queues.kickAll()
+
+        // Email import: follows the account setting and polls while this session is open. The
+        // first check runs at once; closing the library cancels the loop, so nothing imports from
+        // a closed app.
+        mailService.start()
 
         // Journal changes are routed apart from PDFs, so journal sync never scans or hashes PDFs. An
         // event that cannot be read is logged and passed over: one event never ends the watch. A

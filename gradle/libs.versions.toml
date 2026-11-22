@@ -1,5 +1,7 @@
 [versions]
 agp = "9.5.2"
+# Jakarta Mail's reference implementation, desktop only (IMAP email import).
+angus-mail = "2.0.3"
 # The JDK that runs Gradle, compiles everything and is bundled with the desktop app.
 jdk = "25"
 # The bytecode every module targets. Android shares it and only offers newer Java library APIs on
@@ -54,6 +56,7 @@ spotless = "8.12.0"
 
 [libraries]
 jna = { module = "net.java.dev.jna:jna", version.ref = "jna" }
+angus-mail = { module = "org.eclipse.angus:angus-mail", version.ref = "angus-mail" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity" }
 androidx-benchmark-macro-junit4 = { module = "androidx.benchmark:benchmark-macro-junit4", version.ref = "androidx-benchmark" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx-core" }

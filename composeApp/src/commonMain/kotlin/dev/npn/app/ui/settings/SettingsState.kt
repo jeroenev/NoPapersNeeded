@@ -6,6 +6,7 @@ import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiSelfTest
 import dev.npn.core.ai.AiSelfTestReport
 import dev.npn.core.app.TrashSettings
+import dev.npn.core.mail.MailAccount
 import dev.npn.core.model.FieldDef
 import dev.npn.core.settings.SettingsSnapshot
 import dev.npn.core.settings.toAiConfig
@@ -208,4 +209,22 @@ interface SettingsActions {
      * access Android would not keep, or one in the library, leaves the one before and says so.
      */
     fun watchedFolderPicked(pick: FolderPick)
+
+    /** Save the IMAP account, with [password] when one was typed (blank removes it, null keeps it). */
+    fun saveMailAccount(
+        account: MailAccount,
+        password: String?,
+    )
+
+    /** Remove the password from the OS secret store, leaving the account configured otherwise. */
+    fun clearMailPassword()
+
+    /** Connect with these values and report only that it worked, without importing anything. */
+    fun testMailConnection(
+        account: MailAccount,
+        password: String?,
+    )
+
+    /** Check the saved account now, whatever the switch and interval say. */
+    fun checkMailNow()
 }

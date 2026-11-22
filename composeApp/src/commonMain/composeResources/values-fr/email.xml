@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="email_title">Import des e-mails</string>
+    <string name="email_intro">Importe les pièces jointes d’une boîte IMAP pendant que l’application est ouverte. Le mot de passe reste dans le trousseau du système, jamais dans la bibliothèque.</string>
+
+    <string name="email_account">Compte</string>
+    <string name="email_enabled">Chercher les nouveaux messages de ce compte</string>
+    <string name="email_enabled_help">Les vérifications ne tournent que pendant que No Papers Needed est ouvert. Rien n’est récupéré quand l’application est fermée.</string>
+    <string name="email_host">Serveur IMAP</string>
+    <string name="email_port">Port</string>
+    <string name="email_security">Sécurité de la connexion</string>
+    <string name="email_security_ssl">SSL/TLS</string>
+    <string name="email_security_starttls">STARTTLS</string>
+    <string name="email_security_plain">Non chiffrée</string>
+    <string name="email_username">Identifiant</string>
+    <string name="email_password">Mot de passe</string>
+    <string name="email_password_saved">Un mot de passe est enregistré dans le trousseau du système.</string>
+    <string name="email_password_help">Laissez vide pour garder le mot de passe enregistré. Il est stocké dans le trousseau du système, pas dans la bibliothèque.</string>
+    <string name="email_folder">Dossier</string>
+    <string name="email_folder_help">Le dossier de la boîte à lire, généralement INBOX.</string>
+    <string name="email_allow_plain">Autoriser une connexion non chiffrée</string>
+    <string name="email_allow_plain_help">À n’utiliser que si votre serveur ne propose ni SSL ni STARTTLS. Votre mot de passe circulerait sans protection.</string>
+    <string name="email_interval">Vérifier toutes les</string>
+    <string name="email_interval_help">Au moins 5 minutes. L’application vérifie pendant qu’elle est ouverte.</string>
+
+    <string name="email_filters">Filtres</string>
+    <string name="email_filters_help">Un message est importé dès qu’un filtre correspond. Laissez la liste vide pour importer tout message ayant une pièce jointe prise en charge.</string>
+    <string name="email_filter_from">L’expéditeur contient</string>
+    <string name="email_filter_subject">L’objet contient</string>
+    <string name="email_filter_attachment">Nom ou extension de la pièce jointe</string>
+    <string name="email_add_filter">Ajouter un filtre</string>
+    <string name="email_remove_filter">Supprimer le filtre</string>
+
+    <string name="email_post_action">Après l’import</string>
+    <string name="email_post_keep">Laisser le message tel quel</string>
+    <string name="email_post_mark_read">Le marquer comme lu</string>
+    <string name="email_post_move">Le déplacer vers un dossier</string>
+    <string name="email_post_delete">Le supprimer</string>
+    <string name="email_move_folder">Déplacer vers le dossier</string>
+    <string name="email_save_pdf">Enregistrer aussi l’e-mail en PDF</string>
+    <string name="email_save_pdf_help">Ajoute à la bibliothèque un PDF lisible avec les en-têtes et le texte du message.</string>
+
+    <string name="email_save">Enregistrer le compte</string>
+    <string name="email_test">Tester la connexion</string>
+    <string name="email_check_now">Vérifier maintenant</string>
+    <string name="email_clear_password">Supprimer le mot de passe enregistré</string>
+    <string name="email_never_checked">Pas encore vérifié</string>
+    <string name="email_last_check">Dernière vérification : %1$s</string>
+    <string name="email_last_error">Dernière erreur : %1$s</string>
+    <string name="email_checking">Vérification des e-mails…</string>
+
+    <string name="email_saved">Compte e-mail enregistré.</string>
+    <string name="email_save_failed">Impossible d’enregistrer le compte e-mail : %1$s</string>
+    <string name="email_account_invalid">Renseignez le serveur, l’identifiant et le dossier, et autorisez une connexion non chiffrée si vous l’avez choisie.</string>
+    <string name="email_test_ok">La connexion au serveur de messagerie fonctionne.</string>
+    <string name="email_test_failed">Connexion impossible : %1$s</string>
+    <string name="email_check_report">Vérification : %1$d messages vus, %2$d documents importés, %3$d doublons, %4$d ignorés.</string>
+    <string name="email_check_failed">Impossible de vérifier les e-mails : %1$s</string>
+    <string name="email_password_removed">Mot de passe e-mail enregistré supprimé.</string>
+
+    <string name="email_reason_not_configured">le compte n’est pas entièrement configuré</string>
+    <string name="email_reason_no_password">aucun mot de passe n’est enregistré</string>
+    <string name="email_reason_secret_unavailable">le trousseau du système n’est pas disponible</string>
+    <string name="email_reason_connection_failed">le serveur de messagerie est injoignable</string>
+    <string name="email_reason_authentication_failed">le serveur a refusé l’identifiant ou le mot de passe</string>
+    <string name="email_reason_tls_failed">la connexion sécurisée a échoué</string>
+    <string name="email_reason_folder_not_found">le dossier est introuvable</string>
+    <string name="email_reason_fetch_failed">la boîte n’a pas pu être lue</string>
+    <string name="email_reason_import_failed">une pièce jointe n’a pas pu être importée</string>
+    <string name="email_reason_post_action_failed">le message n’a pas pu être mis à jour après l’import</string>
+    <string name="email_reason_plain_refused">les connexions non chiffrées ne sont pas autorisées</string>
+    <string name="email_reason_pdf_render_failed">le PDF de l’e-mail n’a pas pu être créé</string>
+    <string name="email_reason_unsupported">l’import d’e-mails n’est pas pris en charge sur cette plateforme</string>
+
+    <string name="email_secret_unsupported">le trousseau du système n’est pas pris en charge sur cette plateforme</string>
+    <string name="email_secret_unavailable">le trousseau du système n’est pas disponible</string>
+    <string name="email_secret_store_failed">le trousseau du système a refusé d’enregistrer le mot de passe</string>
+</resources>

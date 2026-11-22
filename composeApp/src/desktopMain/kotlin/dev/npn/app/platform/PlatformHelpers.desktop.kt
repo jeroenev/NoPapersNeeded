@@ -44,6 +44,9 @@ actual fun supportsSafStorage(): Boolean = false
 
 actual fun ocrHasLanguageSetting(): Boolean = true
 
+/** Email import is a desktop feature: the IMAP client and the OS secret store live there. */
+actual fun supportsEmailImport(): Boolean = true
+
 /**
  * `NoPapersNeeded` in the user's documents folder (XDG's, on Linux): where file managers and sync
  * tools look, and the one place the Flatpak may keep a library (`--filesystem=xdg-documents`).
