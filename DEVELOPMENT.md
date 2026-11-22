@@ -434,8 +434,11 @@ release.
 
 On Windows, the release workflow submits each stable version's `.msi` to winget once the first
 version is in `microsoft/winget-pkgs` (submit that one by hand with `komac new`) and the
-`WINGET_TOKEN` secret holds a classic token with `public_repo`. A beta is never submitted: winget
-has no pre-releases and would hand it to every winget user as the stable package.
+`WINGET_TOKEN` secret holds a classic token with `public_repo`. A beta is never submitted — winget
+has no pre-releases and would hand it to every winget user as the stable package — so the job is
+skipped for one. The action needs `cargo-bins/cargo-binstall` allowed and pinned, which this
+repository's allowed-actions policy currently refuses, so until that changes a stable submission is
+manual too.
 
 ### Continuous integration
 

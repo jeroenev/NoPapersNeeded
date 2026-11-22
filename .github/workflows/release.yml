@@ -281,10 +281,15 @@ jobs:
   # (`komac new`), and the WINGET_TOKEN secret (a classic token with public_repo, for the fork of
   # microsoft/winget-pkgs that the PR comes from) must be set; without it this job only says so.
   # winget has no pre-releases, so a beta is never submitted: it would become the package every
-  # winget user gets.
+  # winget user gets, and one skips this job outright.
+  #
+  # The action pulls in cargo-bins/cargo-binstall@main, which this repository's allowed-actions
+  # policy refuses at job setup (not SHA-pinned, not on the allowlist), so a stable release fails
+  # here until that policy or the action changes. Until then the submission stays manual.
   winget:
     name: Submit to winget
     needs: [publish, draft]
+    if: needs.draft.outputs.prerelease == 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -293,9 +298,7 @@ jobs:
         env:
           WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
         run: |
-          if [ "${{ needs.draft.outputs.prerelease }}" = true ]; then
-            echo "::notice::This is a beta; skipping the winget submission."
-          elif [ -n "$WINGET_TOKEN" ]; then
+          if [ -n "$WINGET_TOKEN" ]; then
             echo "present=true" >> "$GITHUB_OUTPUT"
           else
             echo "::notice::WINGET_TOKEN is not set; skipping the winget submission."
