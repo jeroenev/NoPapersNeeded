@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The command palette: a searchable overlay opened from any screen with Ctrl/Cmd+K. -->
+    <string name="palette_title">Paleta de comandos</string>
+    <string name="palette_search_hint">Pesquise documentos, etiquetas, exibições, configurações e ações</string>
+    <string name="palette_hint">↑↓ para mover · Enter para executar · Esc para fechar</string>
+    <string name="palette_no_matches_title">Nenhum resultado</string>
+    <string name="palette_no_matches_body">Tente outra palavra ou um comando como “sincronizar”.</string>
+
+    <string name="palette_group_recent">Recentes</string>
+    <string name="palette_group_documents">Documentos</string>
+    <string name="palette_group_tags">Etiquetas</string>
+    <string name="palette_group_views">Exibições salvas</string>
+    <string name="palette_group_settings">Configurações</string>
+    <string name="palette_group_actions">Ações</string>
+
+    <string name="palette_action_import">Importar PDFs…</string>
+    <string name="palette_action_scan">Digitalizar um documento</string>
+    <string name="palette_action_watch_folder">Configurar uma pasta monitorada</string>
+    <string name="palette_action_sync_now">Sincronizar agora</string>
+    <string name="palette_action_assistant">Abrir o Assistente</string>
+    <string name="palette_action_inbox">Abrir a caixa de entrada</string>
+    <string name="palette_action_untagged">Mostrar documentos sem etiqueta</string>
+    <string name="palette_action_tags">Ir para Etiquetas</string>
+    <string name="palette_action_settings">Ir para Configurações</string>
+    <string name="palette_action_new_tag">Nova etiqueta…</string>
+
+    <string name="palette_new_tag_title">Nova etiqueta</string>
+    <string name="palette_new_tag_label">Nome da etiqueta</string>
+    <string name="palette_new_tag_failed">Não foi possível criar a etiqueta: %1$s</string>
+    <string name="palette_import_failed">Não foi possível importar os arquivos: %1$s</string>
+    <string name="palette_sync_failed">Não foi possível sincronizar: %1$s</string>
+
+    <plurals name="palette_tag_documents">
+        <item quantity="one">%1$d documento</item>
+        <item quantity="other">%1$d documentos</item>
+    </plurals>
+</resources>

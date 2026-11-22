@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The command palette: a searchable overlay opened from any screen with Ctrl/Cmd+K. -->
+    <string name="palette_title">Palette de commandes</string>
+    <string name="palette_search_hint">Rechercher des documents, des étiquettes, des vues, des paramètres et des actions</string>
+    <string name="palette_hint">↑↓ pour se déplacer · Entrée pour exécuter · Échap pour fermer</string>
+    <string name="palette_no_matches_title">Aucun résultat</string>
+    <string name="palette_no_matches_body">Essayez un autre mot ou une commande comme « synchroniser ».</string>
+
+    <string name="palette_group_recent">Récents</string>
+    <string name="palette_group_documents">Documents</string>
+    <string name="palette_group_tags">Étiquettes</string>
+    <string name="palette_group_views">Vues enregistrées</string>
+    <string name="palette_group_settings">Paramètres</string>
+    <string name="palette_group_actions">Actions</string>
+
+    <string name="palette_action_import">Importer des PDF…</string>
+    <string name="palette_action_scan">Numériser un document</string>
+    <string name="palette_action_watch_folder">Configurer un dossier surveillé</string>
+    <string name="palette_action_sync_now">Synchroniser maintenant</string>
+    <string name="palette_action_assistant">Ouvrir l’assistant</string>
+    <string name="palette_action_inbox">Ouvrir la boîte de réception</string>
+    <string name="palette_action_untagged">Afficher les documents sans étiquette</string>
+    <string name="palette_action_tags">Aller aux étiquettes</string>
+    <string name="palette_action_settings">Aller aux paramètres</string>
+    <string name="palette_action_new_tag">Nouvelle étiquette…</string>
+
+    <string name="palette_new_tag_title">Nouvelle étiquette</string>
+    <string name="palette_new_tag_label">Nom de l’étiquette</string>
+    <string name="palette_new_tag_failed">Impossible de créer l’étiquette : %1$s</string>
+    <string name="palette_import_failed">Impossible d’importer les fichiers : %1$s</string>
+    <string name="palette_sync_failed">Impossible de synchroniser : %1$s</string>
+
+    <plurals name="palette_tag_documents">
+        <item quantity="one">%1$d document</item>
+        <item quantity="other">%1$d documents</item>
+    </plurals>
+</resources>

@@ -64,6 +64,7 @@ import dev.npn.app.ui.settings.SettingsCategoryId
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.app.SavedView
 import dev.npn.core.app.ViewType
 import dev.npn.core.model.reviewMarkerIsAuthoritative
 import dev.npn.core.settings.SettingsRepository
@@ -112,6 +113,10 @@ fun LibraryScreen(
     onAiEdit: ((List<String>) -> Unit)?,
     /** A filter another screen hands the library to apply when it shows, or while it shows. */
     filterHandoff: Handoff<LibraryFilter>,
+    /** A saved view the command palette hands the library, applied as picking it there does. */
+    savedViewHandoff: Handoff<SavedView>,
+    /** The command palette's Inbox (or untagged documents) request. */
+    reviewQueueHandoff: Handoff<Unit>,
     /** Opens one settings pane, where the "Getting started" card's steps are set. */
     onOpenSettings: (SettingsCategoryId) -> Unit,
     /** Each document's viewmodel store, shared with the detail screen; the side panel holds the previewed one's. */
@@ -132,9 +137,13 @@ fun LibraryScreen(
     // (the "Show" of a drop's import message) as it arrives.
     DisposableEffect(Unit) {
         filterHandoff.consume()?.let(vm::setFilter)
+        savedViewHandoff.consume()?.let(vm::applySavedView)
+        if (reviewQueueHandoff.consume() != null) vm.applyReviewPreset()
         onDispose {}
     }
     LaunchedEffect(filterHandoff) { filterHandoff.arrivals.collect(vm::setFilter) }
+    LaunchedEffect(savedViewHandoff) { savedViewHandoff.arrivals.collect(vm::applySavedView) }
+    LaunchedEffect(reviewQueueHandoff) { reviewQueueHandoff.arrivals.collect { vm.applyReviewPreset() } }
 
     // Opening a doc records the current sorted+filtered order so the detail screen can page between
     // documents; ids are stable so the order stays valid across navigation. The originating search

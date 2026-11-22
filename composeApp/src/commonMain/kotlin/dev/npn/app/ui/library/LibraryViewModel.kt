@@ -15,6 +15,7 @@ import dev.npn.app.ui.common.asUiText
 import dev.npn.app.ui.common.colorsByName
 import dev.npn.app.ui.common.completeActiveSearchToken
 import dev.npn.app.ui.common.importBatch
+import dev.npn.app.ui.common.importScan
 import dev.npn.app.ui.common.offerSearchTip
 import dev.npn.app.ui.common.restored
 import dev.npn.app.ui.common.saveUiState
@@ -22,7 +23,6 @@ import dev.npn.app.ui.common.text
 import dev.npn.app.ui.common.uiState
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.DocListItem
-import dev.npn.core.app.ImportOutcome
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.LibrarySort
@@ -70,10 +70,7 @@ import kotlinx.serialization.builtins.serializer
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_restore_documents_failed
 import no_papers_needed.composeapp.generated.resources.common_save_setting_failed
-import no_papers_needed.composeapp.generated.resources.common_scan_already_in_library
-import no_papers_needed.composeapp.generated.resources.common_scan_capture_failed
 import no_papers_needed.composeapp.generated.resources.common_scan_import_failed
-import no_papers_needed.composeapp.generated.resources.common_scan_imported
 import no_papers_needed.composeapp.generated.resources.detail_add_tag_failed
 import no_papers_needed.composeapp.generated.resources.detail_remove_tag_failed
 import no_papers_needed.composeapp.generated.resources.detail_trash_failed
@@ -771,28 +768,8 @@ class LibraryViewModel(
         }
 
     /** What a platform scan came to: import the PDF, say the scanner failed, or stay quiet. */
-    override fun importScan(result: ScanResult) {
-        when (result) {
-            is ScanResult.Scanned -> {
-                launchReporting(Res.string.common_scan_import_failed) {
-                    message(scanOutcomeMessage(ingest.importPdf(result.pdf.source, result.pdf.suggestedName)))
-                }
-            }
-
-            ScanResult.Failed -> {
-                message(uiText(Res.string.common_scan_capture_failed))
-            }
-
-            ScanResult.Cancelled -> {}
-        }
-    }
-
-    private fun scanOutcomeMessage(outcome: ImportOutcome): UiText =
-        when (outcome) {
-            is ImportOutcome.Imported -> uiText(Res.string.common_scan_imported)
-            is ImportOutcome.Duplicate -> uiText(Res.string.common_scan_already_in_library)
-            is ImportOutcome.Failed -> uiText(Res.string.common_scan_import_failed, outcome.reason.text())
-        }
+    override fun importScan(result: ScanResult) =
+        launchReporting(Res.string.common_scan_import_failed) { ingest.importScan(result, ::message) }
 
     // Names arrive trimmed: TextInputDialog, which every name is typed into, trims what it confirms.
 

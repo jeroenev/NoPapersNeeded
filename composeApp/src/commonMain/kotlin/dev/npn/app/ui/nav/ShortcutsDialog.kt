@@ -22,17 +22,20 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.SectionHeading
 import dev.npn.app.ui.common.keyShortcuts
+import dev.npn.app.ui.common.previewKeyShortcuts
 import dev.npn.app.ui.common.typedKeyShortcuts
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_assistant_newline
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_assistant_send
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_back
+import no_papers_needed.composeapp.generated.resources.nav_shortcut_command_palette
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_doc_find
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_doc_first_last
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_doc_next_doc
@@ -44,6 +47,7 @@ import no_papers_needed.composeapp.generated.resources.nav_shortcut_keys_arrows
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_keys_ctrl_a
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_keys_ctrl_arrows
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_keys_ctrl_f
+import no_papers_needed.composeapp.generated.resources.nav_shortcut_keys_ctrl_k
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_keys_ctrl_o
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_keys_ctrl_s
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_keys_delete
@@ -97,6 +101,7 @@ private val SHORTCUTS =
             Res.string.nav_shortcuts_everywhere,
             listOf(
                 Shortcut(Res.string.nav_shortcut_keys_help, Res.string.nav_shortcut_show_list),
+                Shortcut(Res.string.nav_shortcut_keys_ctrl_k, Res.string.nav_shortcut_command_palette),
                 Shortcut(Res.string.nav_shortcut_keys_escape, Res.string.nav_shortcut_back),
             ),
         ),
@@ -140,8 +145,9 @@ private val TIPS =
     )
 
 /**
- * Opens the shortcut list on `?` (typed, so not while a text field takes it) or Ctrl+/. Bound once
- * around the whole shell, so the keys reach it from anywhere a screen leaves them alone.
+ * Opens the shortcut list on `?` (typed, so not while a text field takes it) or Ctrl+/, and the
+ * command palette on Ctrl/Cmd+K even while a text field has focus. Bound once around the whole
+ * shell, so the keys reach it from anywhere a screen leaves them alone.
  *
  * Keys only travel up from what holds focus, and many screens focus nothing of their own (Activity,
  * Tags, a screen whose focused element was just left), so the shell is a focus target too: while
@@ -151,17 +157,21 @@ private val TIPS =
 internal fun Modifier.shellShortcutKeys(
     focus: FocusRequester,
     onFocusHeld: (Boolean) -> Unit,
-    onOpen: () -> Unit,
+    onOpenShortcuts: (() -> Unit)?,
+    onPalette: () -> Unit,
 ): Modifier =
     onFocusChanged { onFocusHeld(it.hasFocus) }
         .focusRequester(focus)
+        .previewKeyShortcuts { event ->
+            if (event.key == Key.K && (event.isCtrlPressed || event.isMetaPressed)) onPalette else null
+        }
         .focusable()
         .keyShortcuts { event ->
             when (event.key) {
-                Key.Slash -> onOpen.takeIf { event.isCtrlPressed }
+                Key.Slash -> if (event.isCtrlPressed) onOpenShortcuts else null
                 else -> null
             }
-        }.typedKeyShortcuts { char -> onOpen.takeIf { char == '?' } }
+        }.typedKeyShortcuts { char -> onOpenShortcuts.takeIf { char == '?' } }
 
 /**
  * Gives the shell focus ([focus]) whenever nothing in it [held] it, a frame later so its node is
