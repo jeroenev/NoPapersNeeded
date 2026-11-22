@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>No Papers Needed — Your paperwork, organized. Your files, still yours.</title>
+  <meta name="description" content="No Papers Needed turns the pile of bills, contracts, receipts and letters into a searchable library on your phone and your computer. Plain PDFs in a folder you choose, with full-text search, OCR and an optional AI assistant.">
+  <meta property="og:title" content="No Papers Needed — Personal paperless document library">
+  <meta property="og:description" content="Your paperwork, organized. Your files, still yours. Scan, search and organize your documents as ordinary PDFs in a folder you own on Android, Windows and Linux.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="screenshots/library.png">
+  <meta name="theme-color" content="#123F43">
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container nav-inner">
+      <a href="#" class="brand" aria-label="No Papers Needed home">
+        <img src="icon.svg" alt="" class="brand-icon" width="36" height="36">
+        <span>No Papers Needed</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#closer-look">A closer look</a></li>
+        <li><a href="#your-files">How it stores files</a></li>
+        <li><a href="#ai-assistant">AI assistant</a></li>
+        <li><a href="#download">Download</a></li>
+      </ul>
+      <div class="nav-actions">
+        <a href="https://github.com/jeroenev/NoPapersNeeded" class="btn btn-secondary" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.02 10.02 0 0 0 22 12.017C22 6.484 17.522 2 12 2Z"/></svg>
+          <span>GitHub</span>
+        </a>
+        <a href="#download" class="btn btn-primary">Get the app</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Hero -->
+    <section class="hero">
+      <div class="container">
+        <div class="pill-badge">
+          <span class="pill-dot"></span>
+          <span>Android · Windows · Linux · Open Source (Apache-2.0)</span>
+        </div>
+        <h1>Your paperwork, organized. <span class="accent">Your files, still yours.</span></h1>
+        <p class="hero-lead">
+          No Papers Needed turns the pile of bills, contracts, receipts and letters into a
+          searchable library on your phone and your computer. Scan a letter, drop in a
+          download, and find it again in seconds by typing a word from the page.
+        </p>
+        <p class="hero-sub">
+          There's no account to create and no server to run. Your documents stay ordinary PDFs in
+          a folder you choose, readable by any other app, today and in ten years.
+        </p>
+        <div class="hero-cta">
+          <a href="#download" class="btn btn-primary btn-lg">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>Download latest release</span>
+          </a>
+          <a href="#closer-look" class="btn btn-secondary btn-lg">See how it works</a>
+        </div>
+        <p class="hero-meta">Free and open source · No account, no analytics, no tracking</p>
+
+        <figure class="hero-showcase">
+          <img src="screenshots/library.png" alt="Your library at a glance in No Papers Needed, showing document cards sorted by date with tags and correspondents" width="2560" height="1600">
+        </figure>
+      </div>
+    </section>
+
+    <!-- Core Pillars -->
+    <section class="pillars" aria-label="Key principles">
+      <div class="container">
+        <div class="pillars-grid">
+          <div class="pillar">
+            <div class="pillar-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              <span>Plain folder of PDFs</span>
+            </div>
+            <p>Never locked in a database or proprietary format. Stop using the app and you still have a tidy folder of PDFs.</p>
+          </div>
+          <div class="pillar">
+            <div class="pillar-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <span>On-device OCR &amp; search</span>
+            </div>
+            <p>Background text recognition makes every scan and photo searchable by any word on the page.</p>
+          </div>
+          <div class="pillar">
+            <div class="pillar-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              <span>Sync your way</span>
+            </div>
+            <p>Use Syncthing, Nextcloud, or built-in cloud sync to Google Drive, Dropbox, OneDrive, WebDAV, S3, B2 or SFTP.</p>
+          </div>
+          <div class="pillar">
+            <div class="pillar-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8l-6.2 4.5 2.4-7.4L2 9.4h7.6z"/></svg>
+              <span>Optional AI assistant</span>
+            </div>
+            <p>Bring your own API key or local Ollama server to file arrivals, read hard scans and answer questions.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Why you'll like it -->
+    <section id="features" class="section">
+      <div class="container">
+        <div class="section-header">
+          <div class="section-eyebrow">Why you'll like it</div>
+          <h2>Everything you need to tame everyday paperwork.</h2>
+          <p>Built for both your computer and your phone, without forcing you to maintain a home server or hand your documents to a subscription service.</p>
+        </div>
+
+        <div class="features-grid">
+          <article class="feature-card">
+            <div class="feature-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            </div>
+            <h3>Find anything</h3>
+            <p>Search the full text of every document, scans included. Text recognition runs in the background, so a photo of a letter becomes searchable too.</p>
+          </article>
+
+          <article class="feature-card">
+            <div class="feature-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            </div>
+            <h3>Scan in seconds</h3>
+            <p>On Android, point your camera at a page and the scanner crops and straightens it. Share a PDF or photo from any app straight into your library.</p>
+          </article>
+
+          <article class="feature-card">
+            <div class="feature-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+            </div>
+            <h3>Drag, drop, done</h3>
+            <p>On the desktop, drag files into the window or let the app watch an inbox folder and pick up whatever lands there automatically.</p>
+          </article>
+
+          <article class="feature-card">
+            <div class="feature-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+            </div>
+            <h3>Organize your way</h3>
+            <p>Tags (nested if you like), correspondents, document types, dates, notes, and fields you define yourself. Rules can tag new documents automatically based on their text.</p>
+          </article>
+
+          <article class="feature-card">
+            <div class="feature-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            </div>
+            <h3>Stay on top of new arrivals</h3>
+            <p>A review queue shows what still needs sorting, and saved views keep your favorite filters one tap away.</p>
+          </article>
+
+          <article class="feature-card">
+            <div class="feature-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            </div>
+            <h3>Every device, one library</h3>
+            <p>Keep the folder in sync with Syncthing or Nextcloud and every phone and computer sees the same documents, tags and search results. Concurrent edits merge cleanly.</p>
+          </article>
+
+          <article class="feature-card">
+            <div class="feature-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+            </div>
+            <h3>Built-in cloud sync</h3>
+            <p>Or mirror the library directly from the app to Google Drive, Dropbox, OneDrive, WebDAV/Nextcloud, S3, Backblaze B2, SFTP and more. Your files stay plain files there too.</p>
+          </article>
+
+          <article class="feature-card">
+            <div class="feature-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </div>
+            <h3>Ask your paperwork anything</h3>
+            <p>"When does my car insurance renew?" With an AI provider configured, the assistant searches your library, reads the relevant documents and answers with citations.</p>
+          </article>
+
+          <article class="feature-card">
+            <div class="feature-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </div>
+            <h3>Safe by design</h3>
+            <p>Deleted documents go to a trash you can restore from, and the app spots duplicates and files that went missing.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- A closer look -->
+    <section id="closer-look" class="section">
+      <div class="container">
+        <div class="section-header">
+          <div class="section-eyebrow">A closer look</div>
+          <h2>Calm, focused interfaces on desktop and phone.</h2>
+          <p>Designed around fast full-text search, side-by-side reading, and structured metadata that stays out of your way until you need it.</p>
+        </div>
+
+        <div class="showcase-grid">
+          <figure class="shot-card">
+            <div class="shot-frame">
+              <img src="screenshots/search.png" alt="Search finds words inside your documents" loading="lazy" width="2560" height="1040">
+            </div>
+            <figcaption class="shot-caption">
+              <p><strong>Search</strong> finds the words inside your documents, not just their file names.</p>
+            </figcaption>
+          </figure>
+
+          <figure class="shot-card">
+            <div class="shot-frame">
+              <img src="screenshots/preview.png" alt="Read a document right next to your library" loading="lazy" width="2560" height="1600">
+            </div>
+            <figcaption class="shot-caption">
+              <p><strong>Preview</strong> a document right next to your library without opening an external viewer.</p>
+            </figcaption>
+          </figure>
+
+          <figure class="shot-card">
+            <div class="shot-frame">
+              <img src="screenshots/details.png" alt="Title, correspondent, type, date and tags" loading="lazy" width="2560" height="1600">
+            </div>
+            <figcaption class="shot-caption">
+              <p><strong>Details</strong> such as correspondent, document type and date, plus custom fields of your own.</p>
+            </figcaption>
+          </figure>
+
+          <figure class="shot-card">
+            <div class="shot-frame">
+              <img src="screenshots/filters.png" alt="Filter by tags, correspondent, type and more" loading="lazy" width="2560" height="1600">
+            </div>
+            <figcaption class="shot-caption">
+              <p><strong>Filters</strong> narrow the library down by tags, correspondent, type or any field you define.</p>
+            </figcaption>
+          </figure>
+        </div>
+
+        <div class="phone-section">
+          <div class="phone-header">
+            <h3>On your phone</h3>
+            <p>The same library, laid out for a small screen — with a camera scanner and share-sheet import always in your pocket.</p>
+          </div>
+          <div class="phone-trio">
+            <figure class="phone-card">
+              <div class="phone-device">
+                <img src="screenshots/phone-library.png" alt="Library on a phone" loading="lazy" width="824" height="1800">
+              </div>
+              <figcaption>Library at a glance</figcaption>
+            </figure>
+            <figure class="phone-card">
+              <div class="phone-device">
+                <img src="screenshots/phone-details.png" alt="Document details on a phone" loading="lazy" width="824" height="1800">
+              </div>
+              <figcaption>Document details &amp; preview</figcaption>
+            </figure>
+            <figure class="phone-card">
+              <div class="phone-device">
+                <img src="screenshots/phone-tags.png" alt="Tags on a phone" loading="lazy" width="824" height="1800">
+              </div>
+              <figcaption>Nested tags &amp; organization</figcaption>
+            </figure>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- No lock-in / Your files -->
+    <section id="your-files" class="section">
+      <div class="container">
+        <div class="folder-split">
+          <div>
+            <div class="section-eyebrow">No lock-in</div>
+            <h2 style="font-size: clamp(1.75rem, 3.2vw, 2.4rem); font-weight: 800; letter-spacing: -0.025em; line-height: 1.18; margin-bottom: 14px;">Your folder is the source of truth.</h2>
+            <p style="font-size: 1.05rem; color: var(--muted);">
+              Your files are never converted, renamed behind your back or locked inside a database.
+              Move or rename a PDF in your file manager and its tags, title and notes stay attached.
+            </p>
+            <ul class="folder-points">
+              <li>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                <span><strong>Ordinary PDFs:</strong> Open them in any PDF reader on any system, today or ten years from now.</span>
+              </li>
+              <li>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                <span><strong>Conflict-free sync:</strong> Edit tags on your phone while offline and edit fields on your laptop — changes merge cleanly when your folder syncs.</span>
+              </li>
+              <li>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                <span><strong>Shared OCR:</strong> Once one device recognizes the text on a scan, your other devices adopt it instead of redoing the work.</span>
+              </li>
+            </ul>
+          </div>
+
+          <div class="folder-tree-card" aria-label="Example library folder layout">
+            <div class="folder-tree-title">~/Documents/Paperwork/</div>
+            <div class="tree-line"><span class="tree-highlight">📄 Car insurance renewal.pdf</span></div>
+            <div class="tree-line"><span class="tree-highlight">📄 Electricity bill – October 2026.pdf</span></div>
+            <div class="tree-line"><span class="tree-highlight">📄 Mortgage overview 2025.pdf</span></div>
+            <div class="tree-line"><span class="tree-highlight">📄 Receipt – laptop.pdf</span></div>
+            <div class="tree-line"><span class="tree-highlight">📄 Rental agreement – Lindenlaan 42.pdf</span></div>
+            <div class="tree-line"><span class="tree-highlight">📄 Tax assessment notice 2025.pdf</span></div>
+            <div class="tree-line"><span>📁 .npn/</span><span class="tree-comment">tags, fields &amp; OCR text</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Optional AI assistant -->
+    <section id="ai-assistant" class="section">
+      <div class="container">
+        <div class="ai-banner">
+          <div class="ai-top">
+            <div>
+              <div class="section-eyebrow">Optional AI assistant</div>
+              <h2 style="font-size: clamp(1.65rem, 3vw, 2.25rem); font-weight: 800; letter-spacing: -0.025em; line-height: 1.2; margin-bottom: 12px;">Let the assistant do the filing — on your terms.</h2>
+              <p style="font-size: 1.02rem; color: var(--muted);">
+                Set it up with a provider of your choice using your own API key, or run Ollama on your own machine.
+                There is no account with us and no server of ours in between: requests go from your device straight to that provider.
+              </p>
+            </div>
+            <div class="ai-providers">
+              <div class="ai-providers-label">Works with your provider</div>
+              <div class="provider-chips">
+                <span class="chip">Ollama (Local)</span>
+                <span class="chip">OpenAI</span>
+                <span class="chip">Anthropic</span>
+                <span class="chip">Google Gemini</span>
+                <span class="chip">Mistral</span>
+                <span class="chip">DeepSeek</span>
+                <span class="chip">OpenRouter</span>
+                <span class="chip">OpenAI-compatible</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="ai-cards">
+            <div class="ai-card">
+              <h3>Ask in plain words</h3>
+              <p>Ask questions across your library; the assistant searches and reads the relevant documents and shows which ones it used. Conversations stay on your device so you can pick them up later.</p>
+            </div>
+            <div class="ai-card">
+              <h3>Bulk edit with review</h3>
+              <p>Have it propose tags, titles, correspondents and dates across the inbox, everything untagged, a saved view or a selection. Every suggestion is shown first before anything is saved.</p>
+            </div>
+            <div class="ai-card">
+              <h3>Read the hard pages</h3>
+              <p>Handwriting, complex tables and faint scans come out as searchable text that regular on-device recognition struggles with.</p>
+            </div>
+            <div class="ai-card">
+              <h3>File as you go</h3>
+              <p>With auto-organize turned on, each new document gets tags from the ones you already use and any field you have marked for the assistant to fill.</p>
+            </div>
+          </div>
+
+          <p class="ai-note">
+            <strong>Off by default.</strong> Bulk edits change nothing until you approve them, and the app warns you before a run sends a large batch, since that is one request per document to your provider.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Get it / Download -->
+    <section id="download" class="section">
+      <div class="container">
+        <div class="section-header">
+          <div class="section-eyebrow">Get it</div>
+          <h2>Download No Papers Needed</h2>
+          <p>Grab the latest package for your phone or computer from the GitHub releases page. The app tells you when a new version is out.</p>
+        </div>
+
+        <div class="download-grid">
+          <!-- Android -->
+          <div class="os-card">
+            <div class="os-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+            </div>
+            <h3>Android</h3>
+            <div class="os-req">Android 11 or newer · 64-bit ARM phone</div>
+            <p>Includes camera document scanning, share-sheet import, background on-device text recognition and built-in cloud sync.</p>
+            <div class="package-tags">
+              <span class="pkg-tag">.apk</span>
+            </div>
+            <a href="https://github.com/jeroenev/NoPapersNeeded/releases" class="btn btn-primary" target="_blank" rel="noopener">Download on GitHub</a>
+          </div>
+
+          <!-- Windows -->
+          <div class="os-card">
+            <div class="os-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            </div>
+            <h3>Windows</h3>
+            <div class="os-req">Windows 10 or 11 (64-bit)</div>
+            <p>Self-contained installer with its own runtime, cloud sync engine and Tesseract text recognition included out of the box.</p>
+            <div class="package-tags">
+              <span class="pkg-tag">.msi</span>
+              <span class="pkg-tag">.exe</span>
+            </div>
+            <a href="https://github.com/jeroenev/NoPapersNeeded/releases" class="btn btn-primary" target="_blank" rel="noopener">Download on GitHub</a>
+          </div>
+
+          <!-- Linux -->
+          <div class="os-card">
+            <div class="os-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            </div>
+            <h3>Linux</h3>
+            <div class="os-req">64-bit Linux (x86_64)</div>
+            <p>Everything needed to run is included. The Flatpak bundles Tesseract OCR; for the other packages, install <code>tesseract-ocr</code> from your distro.</p>
+            <div class="package-tags">
+              <span class="pkg-tag">Flatpak</span>
+              <span class="pkg-tag">AppImage</span>
+              <span class="pkg-tag">.deb</span>
+              <span class="pkg-tag">.rpm</span>
+            </div>
+            <a href="https://github.com/jeroenev/NoPapersNeeded/releases" class="btn btn-primary" target="_blank" rel="noopener">Download on GitHub</a>
+          </div>
+        </div>
+
+        <div class="download-meta-bar">
+          <div>
+            <strong>Languages:</strong> Available in English, Dutch, German, Spanish, French and Portuguese.
+          </div>
+          <div>
+            Version 0.x is a beta — <a href="https://github.com/jeroenev/NoPapersNeeded/releases" target="_blank" rel="noopener">all releases</a> and <a href="https://github.com/jeroenev/NoPapersNeeded/issues" target="_blank" rel="noopener">feedback &amp; issues</a> are welcome.
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <div class="footer-brand">
+        <div class="brand">
+          <img src="icon.svg" alt="" class="brand-icon" width="28" height="28">
+          <span>No Papers Needed</span>
+        </div>
+        <p>Your paperwork, organized. Your files, still yours. Free and open-source software licensed under Apache-2.0.</p>
+      </div>
+
+      <div class="footer-links">
+        <div class="footer-col">
+          <h4>Project</h4>
+          <ul>
+            <li><a href="https://github.com/jeroenev/NoPapersNeeded" target="_blank" rel="noopener">GitHub Repository</a></li>
+            <li><a href="https://github.com/jeroenev/NoPapersNeeded/releases" target="_blank" rel="noopener">Releases</a></li>
+            <li><a href="https://github.com/jeroenev/NoPapersNeeded/issues" target="_blank" rel="noopener">Issue Tracker</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Documentation</h4>
+          <ul>
+            <li><a href="https://github.com/jeroenev/NoPapersNeeded/blob/main/PRIVACY.md" target="_blank" rel="noopener">Privacy Policy</a></li>
+            <li><a href="https://github.com/jeroenev/NoPapersNeeded/blob/main/DEVELOPMENT.md" target="_blank" rel="noopener">Development Guide</a></li>
+            <li><a href="https://github.com/jeroenev/NoPapersNeeded/blob/main/ARCHITECTURE.md" target="_blank" rel="noopener">Architecture</a></li>
+            <li><a href="https://github.com/jeroenev/NoPapersNeeded/blob/main/LICENSE" target="_blank" rel="noopener">License (Apache-2.0)</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>

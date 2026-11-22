@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">No Papers Needed icon</title>
+  <desc id="desc">An ivory folded page resting in an apricot folder on a deep teal rounded square.</desc>
+  <rect width="512" height="512" rx="116" fill="#123F43"/>
+  <g transform="translate(256 256) scale(1.35) translate(-256 -256)">
+    <path d="M128 214a24 24 0 0 1 24-24h62l28 28h118a24 24 0 0 1 24 24v112a30 30 0 0 1-30 30H158a30 30 0 0 1-30-30Z" fill="#78AAA3"/>
+    <path d="M184 128h96l56 56v148H160V152a24 24 0 0 1 24-24Z" fill="#FFF7E8"/>
+    <path d="M280 128v40a16 16 0 0 0 16 16h40Z" fill="#BBD4CB"/>
+    <path d="M196 216h68m-68 32h104" fill="none" stroke="#123F43" stroke-width="14" stroke-linecap="round"/>
+    <path d="M128 276h82a32 32 0 0 1 23 10l17 18h134v50a30 30 0 0 1-30 30H158a30 30 0 0 1-30-30Z" fill="#FFB77E"/>
+  </g>
+</svg>
