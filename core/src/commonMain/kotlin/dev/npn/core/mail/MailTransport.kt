@@ -57,6 +57,12 @@ sealed interface MailFetchResult {
         val messages: List<MailMessage>,
         /** The highest UID the mailbox held when listed, so an empty page can still move the cursor. */
         val uidNext: Long,
+        /**
+         * The last UID this fetch examined, whether or not a message held it. A page can be empty
+         * because the whole UID window was deleted; advancing to this end is what lets the next
+         * check look at the following window instead of retrying the same empty one forever.
+         */
+        val scannedThroughUid: Long,
     ) : MailFetchResult
 
     data class Failed(
@@ -115,7 +121,7 @@ interface MailTransport {
 
     companion object {
         /** The most messages one fetch returns; a check pages on from the cursor after these. */
-        const val PAGE_SIZE = 200
+        const val PAGE_SIZE = 10
     }
 }
 

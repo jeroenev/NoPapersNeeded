@@ -31,37 +31,46 @@ internal class LibsecretMailCredentialStore(
         withContext(io) {
             val lib = library ?: return@withContext MailSecretResult.Failed(MailSecretFailure.UNAVAILABLE)
             val error = PointerByReference()
+            val label = cString(LABEL)
+            val secret = cString(password)
+            val account = cString(accountKey)
+            val attribute = cString(ACCOUNT_ATTRIBUTE)
             val stored =
                 lib.store.invoke(
                     Integer.TYPE,
                     arrayOf<Any?>(
                         lib.schema.memory,
                         null,
-                        LABEL,
-                        password,
+                        label,
+                        secret,
                         null,
                         error,
-                        ACCOUNT_ATTRIBUTE,
-                        accountKey,
+                        attribute,
+                        account,
                         null,
                     ),
                 ) as Int
             lib.discardError(error)
-            if (stored != 0) MailSecretResult.Success(Unit) else MailSecretResult.Failed(MailSecretFailure.UNAVAILABLE)
+            if (stored != 0) MailSecretResult.Success(Unit) else MailSecretResult.Failed(MailSecretFailure.STORE_FAILED)
         }
 
     override suspend fun load(accountKey: String): MailSecretResult<String?> =
         withContext(io) {
             val lib = library ?: return@withContext MailSecretResult.Failed(MailSecretFailure.UNAVAILABLE)
             val error = PointerByReference()
+            val attribute = cString(ACCOUNT_ATTRIBUTE)
+            val account = cString(accountKey)
             val found =
                 lib.lookup.invoke(
                     Pointer::class.java,
-                    arrayOf<Any?>(lib.schema.memory, null, error, ACCOUNT_ATTRIBUTE, accountKey, null),
+                    arrayOf<Any?>(lib.schema.memory, null, error, attribute, account, null),
                 ) as Pointer?
             val failed = error.value != null
             lib.discardError(error)
-            if (failed) return@withContext MailSecretResult.Failed(MailSecretFailure.UNAVAILABLE)
+            if (failed) {
+                found?.let(lib::free)
+                return@withContext MailSecretResult.Failed(MailSecretFailure.UNAVAILABLE)
+            }
             if (found == null) return@withContext MailSecretResult.Success(null)
             val password =
                 try {
@@ -76,13 +85,21 @@ internal class LibsecretMailCredentialStore(
         withContext(io) {
             val lib = library ?: return@withContext MailSecretResult.Failed(MailSecretFailure.UNAVAILABLE)
             val error = PointerByReference()
+            val attribute = cString(ACCOUNT_ATTRIBUTE)
+            val account = cString(accountKey)
             val cleared =
                 lib.clear.invoke(
                     Integer.TYPE,
-                    arrayOf<Any?>(lib.schema.memory, null, error, ACCOUNT_ATTRIBUTE, accountKey, null),
+                    arrayOf<Any?>(lib.schema.memory, null, error, attribute, account, null),
                 ) as Int
             lib.discardError(error)
-            if (cleared != 0) MailSecretResult.Success(Unit) else MailSecretResult.Failed(MailSecretFailure.UNAVAILABLE)
+            if (cleared !=
+                0
+            ) {
+                MailSecretResult.Success(Unit)
+            } else {
+                MailSecretResult.Failed(MailSecretFailure.STORE_FAILED)
+            }
         }
 
     private class SecretLibrary {
@@ -165,7 +182,8 @@ internal class LibsecretMailCredentialStore(
                     last = failure
                 }
             }
-            throw last ?: IllegalStateException("No library name to load")
+            if (last != null) throw last
+            error("No library name to load")
         }
     }
 }

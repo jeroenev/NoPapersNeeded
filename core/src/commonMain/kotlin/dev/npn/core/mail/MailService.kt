@@ -119,6 +119,9 @@ internal class MailService(
 
     private val runtime = MutableStateFlow(Runtime())
     private val checkMutex = Mutex()
+
+    /** Failed attempts per message this session, so one bad mail cannot wedge the whole folder. */
+    private val failedAttempts = mutableMapOf<String, Int>()
     private var started = false
 
     override val state: StateFlow<MailState> =
@@ -156,11 +159,9 @@ internal class MailService(
             }
         }
         scope.launch {
-            log.runLogged("Checking email") {
-                while (isActive) {
-                    pollIfDue()
-                    delay(POLL_TICK_MILLIS)
-                }
+            while (isActive) {
+                log.runLogged("Checking email") { pollIfDue() }
+                delay(POLL_TICK_MILLIS)
             }
         }
     }
@@ -172,23 +173,21 @@ internal class MailService(
         val normalized = account.normalized()
         if (!normalized.isConfigured) return MailSaveOutcome.AccountInvalid
         val oldKey = store.current().accountKey
+        // Save the account first: a keyring failure then leaves the account visible and fixable,
+        // rather than a password stored for a host the journal never accepted.
+        store.save(normalized)
         if (password != null) {
             val result =
                 if (password.isEmpty()) {
-                    credentials.clear(
-                        normalized.accountKey,
-                    )
+                    credentials.clear(normalized.accountKey)
                 } else {
                     credentials.store(normalized.accountKey, password)
                 }
             if (result is MailSecretResult.Failed) return MailSaveOutcome.CredentialFailed(result.reason)
-            // A changed host or username makes a new key; forget the old password rather than leave
-            // it in the keyring under an account nothing reads.
-            if (password.isNotEmpty() && oldKey.isNotBlank() && oldKey != normalized.accountKey) {
-                clearQuietly(oldKey)
-            }
         }
-        store.save(normalized)
+        // A changed host or username makes a new key; forget the old password rather than leave it
+        // in the keyring under an account nothing reads.
+        if (oldKey.isNotBlank() && oldKey != normalized.accountKey) clearQuietly(oldKey)
         refreshCredentials(normalized)
         reloadCursor(normalized)
         return MailSaveOutcome.Saved
@@ -235,6 +234,7 @@ internal class MailService(
     }
 
     private suspend fun pollIfDue() {
+        if (!transport.available) return
         val account = store.current()
         if (!account.enabled || !account.isConfigured) return
         val cursor = cursors.get(account.accountKey, account.folder)
@@ -321,17 +321,24 @@ internal class MailService(
                     val reset = uidValidity != null && uidValidity != fetched.uidValidity
                     if (uidValidity == null || reset) lastUid = 0
                     uidValidity = fetched.uidValidity
+                    val previous = lastUid
                     val messages = fetched.messages.filter { it.uid > lastUid }.sortedBy(MailMessage::uid)
                     if (messages.isEmpty()) {
+                        // An empty window advances to what it scanned, so a UID gap is crossed
+                        // instead of being retried forever. An empty folder stays where it is.
+                        lastUid = maxOf(lastUid, fetched.scannedThroughUid)
                         result = finish(account, report, uidValidity, lastUid, null, now)
                     } else {
                         val page = processMessages(account, password, messages, report, lastUid)
                         report = page.report
-                        lastUid = page.lastUid
                         if (page.error != null) {
-                            result = finish(account, report, uidValidity, lastUid, page.error, now)
-                        } else if (messages.size < MailTransport.PAGE_SIZE) {
-                            result = finish(account, report, uidValidity, lastUid, null, now)
+                            result = finish(account, report, uidValidity, page.lastUid, page.error, now)
+                        } else {
+                            lastUid = maxOf(page.lastUid, fetched.scannedThroughUid)
+                            val exhausted = fetched.scannedThroughUid >= fetched.uidNext - 1
+                            if (exhausted || lastUid <= previous) {
+                                result = finish(account, report, uidValidity, lastUid, null, now)
+                            }
                         }
                     }
                 }
@@ -389,7 +396,20 @@ internal class MailService(
                                     duplicates = report.duplicates + handled.duplicates,
                                     errors = report.errors + MailCheckError(handled.reason, handled.detail),
                                 )
-                            error = handled.reason
+                            val key = "${account.accountKey}|${account.folder}|${message.uid}"
+                            val attempts = (failedAttempts[key] ?: 0) + 1
+                            if (attempts >= MAX_MESSAGE_ATTEMPTS) {
+                                // A permanently bad message (a vanished UID, an undecodable image)
+                                // is passed over after bounded retries instead of stopping the folder.
+                                failedAttempts.remove(key)
+                                log.warn(
+                                    "Skipping email UID ${message.uid} after $attempts failed attempts: " +
+                                        handled.reason.name,
+                                )
+                            } else {
+                                failedAttempts[key] = attempts
+                                error = handled.reason
+                            }
                         }
                     }
                 }
@@ -526,6 +546,12 @@ internal class MailService(
     }
 
     private suspend fun refreshCredentials(account: MailAccount) {
+        if (account.host.isBlank() && account.username.isBlank()) {
+            // The untouched default account: looking up an empty key would only show a keyring
+            // error before the user has configured anything.
+            runtime.update { it.copy(hasPassword = false, credentialProblem = null) }
+            return
+        }
         when (val stored = credentials.load(account.accountKey)) {
             is MailSecretResult.Success -> {
                 runtime.update { it.copy(hasPassword = !stored.value.isNullOrBlank(), credentialProblem = null) }
@@ -580,5 +606,8 @@ internal class MailService(
 
         /** A safety cap on pages one check reads; the cursor resumes from where it stopped. */
         const val MAX_PAGES_PER_CHECK = 5
+
+        /** After this many failed tries, a message is passed over rather than stopping the folder. */
+        const val MAX_MESSAGE_ATTEMPTS = 5
     }
 }

@@ -79,7 +79,12 @@ internal class JakartaMailTransport(
                                 .filterNotNull()
                                 .map { MimeParser.parse(uidFolder.getUID(it), it) }
                         }
-                    MailFetchResult.Success(uidValidity, messages, uidFolder.uidNext)
+                    MailFetchResult.Success(
+                        uidValidity = uidValidity,
+                        messages = messages,
+                        uidNext = uidFolder.uidNext,
+                        scannedThroughUid = maxOf(afterUid, last),
+                    )
                 } catch (failure: Exception) {
                     MailFetchResult.Failed(reason(failure, MailFailureReason.FETCH_FAILED))
                 }
@@ -211,6 +216,10 @@ internal class JakartaMailTransport(
             val prefix = "mail.$protocol"
             put("$prefix.host", account.host)
             put("$prefix.port", account.port.toString())
+            // Finite timeouts: a stalled server must not hold a library close open indefinitely.
+            put("$prefix.connectiontimeout", CONNECT_TIMEOUT_MILLIS.toString())
+            put("$prefix.timeout", READ_TIMEOUT_MILLIS.toString())
+            put("$prefix.writetimeout", WRITE_TIMEOUT_MILLIS.toString())
             // Fetching a body must not mark the message read; only a post-action does that.
             put("$prefix.peek", "true")
             // JavaMail reads the peek setting under the bare IMAP protocol name too.
@@ -316,6 +325,11 @@ private class MissingFolderException(
     val folderName: String,
 ) : Exception("No such folder: $folderName")
 
+/** How long a connection attempt, a read and a write may take before the server is treated as gone. */
+private const val CONNECT_TIMEOUT_MILLIS = 15_000
+private const val READ_TIMEOUT_MILLIS = 60_000
+private const val WRITE_TIMEOUT_MILLIS = 60_000
+
 /**
  * Walks a Jakarta Mail message into the small model the importer needs. Pure and testable without
  * a server: a test builds a [jakarta.mail.internet.MimeMessage] in memory. The body is capped, and
@@ -323,7 +337,8 @@ private class MissingFolderException(
  */
 internal object MimeParser {
     private const val MAX_BODY_CHARS = 1_000_000
-    private const val MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024
+    private const val MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
+    private const val MAX_PART_DEPTH = 10
 
     fun parse(
         uid: Long,
@@ -331,7 +346,7 @@ internal object MimeParser {
     ): MailMessage {
         val body = StringBuilder()
         val attachments = mutableListOf<MailAttachment>()
-        walk(message, body, attachments)
+        walk(message, body, attachments, depth = 0)
         return MailMessage(
             uid = uid,
             from = addresses(message.from),
@@ -352,11 +367,17 @@ internal object MimeParser {
         part: Part,
         body: StringBuilder,
         attachments: MutableList<MailAttachment>,
+        depth: Int,
     ) {
+        if (depth > MAX_PART_DEPTH) return
+        if (part.isMimeType("message/rfc822")) {
+            (part.content as? Message)?.let { walk(it, body, attachments, depth + 1) }
+            return
+        }
         if (part.isMimeType("multipart/*")) {
             val multipart = part.content as? Multipart ?: return
             for (index in 0 until multipart.count) {
-                multipart.getBodyPart(index)?.let { walk(it, body, attachments) }
+                multipart.getBodyPart(index)?.let { walk(it, body, attachments, depth + 1) }
             }
             return
         }

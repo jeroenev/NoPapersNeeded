@@ -46,7 +46,10 @@ data class MailAccount(
                 username.isNotBlank() &&
                 port in 1..MAX_PORT &&
                 folder.isNotBlank() &&
-                (postAction != MailPostAction.MOVE || moveToFolder.isNotBlank()) &&
+                (
+                    postAction != MailPostAction.MOVE ||
+                        (moveToFolder.isNotBlank() && !moveToFolder.equals(folder, ignoreCase = true))
+                ) &&
                 (security != MailSecurity.PLAIN || allowPlain)
 
     /** This account with the blanks trimmed and the values that have a range brought into it. */

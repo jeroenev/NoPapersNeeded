@@ -141,12 +141,18 @@ class MailServiceTest {
         ): MailFetchResult {
             fetches++
             fetchFailure?.let { return MailFetchResult.Failed(it) }
-            val reset = knownUidValidity != null && knownUidValidity != validity
-            val from = if (knownUidValidity == validity) afterUid else 0
+            val start = if (knownUidValidity == validity) afterUid + 1 else 1
+            val maxUid = messages.maxOfOrNull(MailMessage::uid) ?: 0
+            val uidNext = maxUid + 1
             return MailFetchResult.Success(
                 uidValidity = validity,
-                messages = messages.filter { it.uid > from }.sortedBy(MailMessage::uid).take(MailTransport.PAGE_SIZE),
-                uidNext = (messages.maxOfOrNull(MailMessage::uid) ?: 0) + 1,
+                messages =
+                    messages
+                        .filter { it.uid >= start }
+                        .sortedBy(MailMessage::uid)
+                        .take(MailTransport.PAGE_SIZE),
+                uidNext = uidNext,
+                scannedThroughUid = maxOf(start - 1, minOf(uidNext - 1, start + MailTransport.PAGE_SIZE - 1)),
             )
         }
 
@@ -391,13 +397,14 @@ class MailServiceTest {
         }
 
     @Test
-    fun savingWithAnUnavailableSecretStoreKeepsTheOldAccount() =
+    fun savingWithAnUnavailableSecretStoreKeepsTheAccountButReportsTheKeyring() =
         runTest {
             val fixture = fixture(credentials = FakeCredentials(failure = MailSecretFailure.UNAVAILABLE))
             val outcome = fixture.service.saveAccount(account.copy(host = "other.example.com"), "secret")
             assertIs<MailSaveOutcome.CredentialFailed>(outcome)
-            assertEquals("mail.example.com", fixture.store.current().host)
-            assertEquals("someone@example.com", fixture.store.current().username)
+            // The account is saved; only the password did not land, so the user can fix the keyring
+            // and retry without retyping the whole account.
+            assertEquals("other.example.com", fixture.store.current().host)
         }
 
     @Test

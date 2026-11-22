@@ -44,8 +44,8 @@ actual fun supportsSafStorage(): Boolean = false
 
 actual fun ocrHasLanguageSetting(): Boolean = true
 
-/** Email import is a desktop feature: the IMAP client and the OS secret store live there. */
-actual fun supportsEmailImport(): Boolean = true
+/** Email import needs libsecret, which this build wires on Linux only; Windows gets no dead pane. */
+actual fun supportsEmailImport(): Boolean = System.getProperty("os.name").lowercase().contains("linux")
 
 /**
  * `NoPapersNeeded` in the user's documents folder (XDG's, on Linux): where file managers and sync

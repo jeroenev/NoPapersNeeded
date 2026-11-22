@@ -15,7 +15,6 @@ import kotlin.test.assertTrue
  */
 class MimeParserTest {
     private val pdfBytes = byteArrayOf(1, 2, 3, 4)
-    private val docxBytes = byteArrayOf(5, 6, 7)
 
     private fun raw(): String =
         listOf(

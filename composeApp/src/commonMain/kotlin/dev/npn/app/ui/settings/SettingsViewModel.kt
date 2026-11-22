@@ -17,7 +17,6 @@ import dev.npn.core.ai.AiSelfTestReport
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.mail.MailAccount
 import dev.npn.core.mail.MailCheckReport
-import dev.npn.core.mail.MailFailureReason
 import dev.npn.core.mail.MailSaveOutcome
 import dev.npn.core.mail.MailState
 import dev.npn.core.mail.MailTestOutcome
@@ -253,7 +252,8 @@ class SettingsViewModel(
         viewModelScope.launch {
             val outcome =
                 runCatchingCancellable { mail.testConnection(account, password) }.getOrElse {
-                    MailTestOutcome.Failed(MailFailureReason.UNSUPPORTED)
+                    message(uiText(Res.string.email_test_failed, it.reasonText()))
+                    return@launch
                 }
             when (outcome) {
                 MailTestOutcome.Ok -> {

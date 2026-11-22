@@ -16,7 +16,6 @@ import org.apache.pdfbox.pdmodel.font.Standard14Fonts
 import java.nio.ByteBuffer
 import java.security.MessageDigest
 import java.time.Instant
-import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Calendar
 import java.util.GregorianCalendar
@@ -38,7 +37,7 @@ internal class PdfBoxMailPdfRenderer(
             PDDocument().use { document ->
                 val regular = PDType1Font(Standard14Fonts.FontName.HELVETICA)
                 val bold = PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD)
-                val writer = PageWriter(document, regular, bold)
+                val writer = PageWriter(document, regular)
                 writer.line("From: ${message.from}", bold, SIZE + 1, GAP)
                 writer.line("To: ${message.to}", regular, SIZE, GAP)
                 writer.line("Date: ${formatDate(message.dateMillis)}", regular, SIZE, GAP)
@@ -68,7 +67,7 @@ internal class PdfBoxMailPdfRenderer(
         millis?.let {
             DateTimeFormatter
                 .ofPattern("yyyy-MM-dd HH:mm")
-                .format(Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()))
+                .format(Instant.ofEpochMilli(it).atZone(java.time.ZoneOffset.UTC))
         } ?: "unknown"
 
     /** A stable `/ID` from what the PDF shows, so the same message always hashes to the same bytes. */
@@ -95,7 +94,6 @@ internal class PdfBoxMailPdfRenderer(
     private class PageWriter(
         private val document: PDDocument,
         private val regular: PDFont,
-        private val bold: PDFont,
     ) {
         private var page: PDPage = newPage()
         private var stream = PDPageContentStream(document, page)
@@ -173,10 +171,20 @@ internal class PdfBoxMailPdfRenderer(
                 } else {
                     var rest = word
                     while (width(rest, font, size) > MAX_WIDTH) {
-                        var take = rest.length
-                        while (take > 1 && width(rest.take(take), font, size) > MAX_WIDTH) take--
-                        lines += rest.take(take)
-                        rest = rest.drop(take)
+                        var low = 1
+                        var high = rest.length
+                        var best = 1
+                        while (low <= high) {
+                            val middle = (low + high) / 2
+                            if (width(rest.take(middle), font, size) <= MAX_WIDTH) {
+                                best = middle
+                                low = middle + 1
+                            } else {
+                                high = middle - 1
+                            }
+                        }
+                        lines += rest.take(best)
+                        rest = rest.drop(best)
                     }
                     current.append(rest)
                 }

@@ -14,6 +14,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -94,7 +95,7 @@ internal fun EmailSettingsPane(
     // The form is one draft: every field is written when Save is pressed, not once per keystroke
     // (a journal event per character would be permanent). It survives recreation with the screen.
     var draft by rememberSaveable(mail.account, stateSaver = MailAccountSaver) { mutableStateOf(mail.account) }
-    var password by rememberSaveable { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
     var intervalText by rememberSaveable(mail.account.pollIntervalMinutes) {
         mutableStateOf(mail.account.pollIntervalMinutes.toString())
     }
@@ -106,161 +107,165 @@ internal fun EmailSettingsPane(
             .copy(pollIntervalMinutes = interval ?: draft.pollIntervalMinutes)
             .normalized()
 
-    SettingsSection(title = stringResource(Res.string.email_account)) {
-        HelpText(stringResource(Res.string.email_intro))
-        SwitchRow(
-            label = stringResource(Res.string.email_enabled),
-            help = stringResource(Res.string.email_enabled_help),
-            checked = draft.enabled,
-            onCheckedChange = { draft = draft.copy(enabled = it) },
-        )
-        TextField(
-            value = draft.host,
-            label = stringResource(Res.string.email_host),
-            onChange = { draft = draft.copy(host = it) },
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            TextField(
-                value = draft.port.toString(),
-                label = stringResource(Res.string.email_port),
-                onChange = { text -> text.toIntOrNull()?.let { draft = draft.copy(port = it) } },
-                number = true,
-                modifier = Modifier.weight(1f),
-            )
-            Dropdown(
-                selected = draft.security.label(),
-                options = MailSecurity.entries,
-                optionLabel = { it.label() },
-                onSelect = { security ->
-                    val oldDefault = draft.security.defaultPort()
-                    val port = if (draft.port == oldDefault) security.defaultPort() else draft.port
-                    draft = draft.copy(security = security, port = port)
-                },
-                label = stringResource(Res.string.email_security),
-                modifier = Modifier.weight(2f),
-            )
-        }
-        TextField(
-            value = draft.username,
-            label = stringResource(Res.string.email_username),
-            onChange = { draft = draft.copy(username = it) },
-        )
-        TextField(
-            value = password,
-            label = stringResource(Res.string.email_password),
-            onChange = { password = it },
-            password = true,
-            placeholder = stringResource(Res.string.email_password_saved).takeIf { mail.hasPassword },
-        )
-        HelpText(stringResource(Res.string.email_password_help))
-        TextField(
-            value = draft.folder,
-            label = stringResource(Res.string.email_folder),
-            onChange = { draft = draft.copy(folder = it) },
-        )
-        HelpText(stringResource(Res.string.email_folder_help))
-        TextField(
-            value = intervalText,
-            label = stringResource(Res.string.email_interval),
-            onChange = { intervalText = it.filter(Char::isDigit) },
-            number = true,
-        )
-        HelpText(stringResource(Res.string.email_interval_help))
-        if (draft.security == MailSecurity.PLAIN) {
+    // One entry emitter, so the pane composes its sections as one unit and the Compose detekt
+    // ruleset can see the pane's single top-level content source.
+    SettingsSection(title = null) {
+        SettingsSection(title = stringResource(Res.string.email_account)) {
+            HelpText(stringResource(Res.string.email_intro))
             SwitchRow(
-                label = stringResource(Res.string.email_allow_plain),
-                help = stringResource(Res.string.email_allow_plain_help),
-                checked = draft.allowPlain,
-                onCheckedChange = { draft = draft.copy(allowPlain = it) },
+                label = stringResource(Res.string.email_enabled),
+                help = stringResource(Res.string.email_enabled_help),
+                checked = draft.enabled,
+                onCheckedChange = { draft = draft.copy(enabled = it) },
             )
-        }
-    }
-
-    SettingsSection(title = stringResource(Res.string.email_filters)) {
-        HelpText(stringResource(Res.string.email_filters_help))
-        draft.filters.forEachIndexed { index, filter ->
-            FilterRow(
-                filter = filter,
-                onChange = { changed ->
-                    draft = draft.copy(filters = draft.filters.toMutableList().also { it[index] = changed })
-                },
-                onRemove = { draft = draft.copy(filters = draft.filters.filterIndexed { i, _ -> i != index }) },
-            )
-        }
-        OutlinedButton(onClick = { draft = draft.copy(filters = draft.filters + MailFilter()) }) {
-            Text(stringResource(Res.string.email_add_filter))
-        }
-    }
-
-    SettingsSection(title = stringResource(Res.string.email_post_action)) {
-        Dropdown(
-            selected = draft.postAction.label(),
-            options = MailPostAction.entries,
-            optionLabel = { it.label() },
-            onSelect = { draft = draft.copy(postAction = it) },
-            label = stringResource(Res.string.email_post_action),
-        )
-        if (draft.postAction == MailPostAction.MOVE) {
             TextField(
-                value = draft.moveToFolder,
-                label = stringResource(Res.string.email_move_folder),
-                onChange = { draft = draft.copy(moveToFolder = it) },
+                value = draft.host,
+                label = stringResource(Res.string.email_host),
+                onChange = { draft = draft.copy(host = it) },
             )
-        }
-        SwitchRow(
-            label = stringResource(Res.string.email_save_pdf),
-            help = stringResource(Res.string.email_save_pdf_help),
-            checked = draft.saveEmailAsPdf,
-            onCheckedChange = { draft = draft.copy(saveEmailAsPdf = it) },
-            enabled = mail.pdfAvailable,
-        )
-    }
-
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
-        OutlinedButton(
-            onClick = { actions.saveMailAccount(whenSaved(), password.ifBlank { null }) },
-            enabled = intervalValid,
-        ) { Text(stringResource(Res.string.email_save)) }
-        OutlinedButton(
-            onClick = { actions.testMailConnection(whenSaved(), password.ifBlank { null }) },
-            enabled = intervalValid,
-        ) { Text(stringResource(Res.string.email_test)) }
-        OutlinedButton(
-            onClick = actions::checkMailNow,
-            enabled = !mail.checking && mail.transportAvailable,
-        ) { Text(stringResource(Res.string.email_check_now)) }
-        if (mail.hasPassword) {
-            OutlinedButton(onClick = actions::clearMailPassword) {
-                Text(stringResource(Res.string.email_clear_password))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                TextField(
+                    value = draft.port.toString(),
+                    label = stringResource(Res.string.email_port),
+                    onChange = { text -> text.toIntOrNull()?.let { draft = draft.copy(port = it) } },
+                    number = true,
+                    modifier = Modifier.weight(1f),
+                )
+                Dropdown(
+                    selected = draft.security.label(),
+                    options = MailSecurity.entries,
+                    optionLabel = { it.label() },
+                    onSelect = { security ->
+                        val oldDefault = draft.security.defaultPort()
+                        val port = if (draft.port == oldDefault) security.defaultPort() else draft.port
+                        draft = draft.copy(security = security, port = port)
+                    },
+                    label = stringResource(Res.string.email_security),
+                    modifier = Modifier.weight(2f),
+                )
+            }
+            TextField(
+                value = draft.username,
+                label = stringResource(Res.string.email_username),
+                onChange = { draft = draft.copy(username = it) },
+            )
+            TextField(
+                value = password,
+                label = stringResource(Res.string.email_password),
+                onChange = { password = it },
+                password = true,
+                placeholder = stringResource(Res.string.email_password_saved).takeIf { mail.hasPassword },
+            )
+            HelpText(stringResource(Res.string.email_password_help))
+            TextField(
+                value = draft.folder,
+                label = stringResource(Res.string.email_folder),
+                onChange = { draft = draft.copy(folder = it) },
+            )
+            HelpText(stringResource(Res.string.email_folder_help))
+            TextField(
+                value = intervalText,
+                label = stringResource(Res.string.email_interval),
+                onChange = { intervalText = it.filter(Char::isDigit) },
+                number = true,
+            )
+            HelpText(stringResource(Res.string.email_interval_help))
+            if (draft.security == MailSecurity.PLAIN) {
+                SwitchRow(
+                    label = stringResource(Res.string.email_allow_plain),
+                    help = stringResource(Res.string.email_allow_plain_help),
+                    checked = draft.allowPlain,
+                    onCheckedChange = { draft = draft.copy(allowPlain = it) },
+                )
             }
         }
-    }
 
-    Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        if (mail.checking) {
-            Text(stringResource(Res.string.email_checking), style = MaterialTheme.typography.bodySmall)
-        } else {
-            Text(
-                text =
-                    mail.lastCheckedAtMillis?.let {
-                        stringResource(Res.string.email_last_check, formatEpochDateTime(it))
-                    } ?: stringResource(Res.string.email_never_checked),
-                style = MaterialTheme.typography.bodySmall,
+        SettingsSection(title = stringResource(Res.string.email_filters)) {
+            HelpText(stringResource(Res.string.email_filters_help))
+            draft.filters.forEachIndexed { index, filter ->
+                FilterRow(
+                    filter = filter,
+                    onChange = { changed ->
+                        draft = draft.copy(filters = draft.filters.toMutableList().also { it[index] = changed })
+                    },
+                    onRemove = { draft = draft.copy(filters = draft.filters.filterIndexed { i, _ -> i != index }) },
+                )
+            }
+            OutlinedButton(onClick = { draft = draft.copy(filters = draft.filters + MailFilter()) }) {
+                Text(stringResource(Res.string.email_add_filter))
+            }
+        }
+
+        SettingsSection(title = stringResource(Res.string.email_post_action)) {
+            Dropdown(
+                selected = draft.postAction.label(),
+                options = MailPostAction.entries,
+                optionLabel = { it.label() },
+                onSelect = { draft = draft.copy(postAction = it) },
+                label = stringResource(Res.string.email_post_action),
+            )
+            if (draft.postAction == MailPostAction.MOVE) {
+                TextField(
+                    value = draft.moveToFolder,
+                    label = stringResource(Res.string.email_move_folder),
+                    onChange = { draft = draft.copy(moveToFolder = it) },
+                )
+            }
+            SwitchRow(
+                label = stringResource(Res.string.email_save_pdf),
+                help = stringResource(Res.string.email_save_pdf_help),
+                checked = draft.saveEmailAsPdf,
+                onCheckedChange = { draft = draft.copy(saveEmailAsPdf = it) },
+                enabled = mail.pdfAvailable,
             )
         }
-        mail.lastError?.let {
-            Text(
-                text = stringResource(Res.string.email_last_error, it.text()),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-            )
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+            OutlinedButton(
+                onClick = { actions.saveMailAccount(whenSaved(), password.ifBlank { null }) },
+                enabled = intervalValid,
+            ) { Text(stringResource(Res.string.email_save)) }
+            OutlinedButton(
+                onClick = { actions.testMailConnection(whenSaved(), password.ifBlank { null }) },
+                enabled = intervalValid,
+            ) { Text(stringResource(Res.string.email_test)) }
+            OutlinedButton(
+                onClick = actions::checkMailNow,
+                enabled = !mail.checking && mail.transportAvailable,
+            ) { Text(stringResource(Res.string.email_check_now)) }
+            if (mail.hasPassword) {
+                OutlinedButton(onClick = actions::clearMailPassword) {
+                    Text(stringResource(Res.string.email_clear_password))
+                }
+            }
         }
-        mail.credentialProblem?.let {
-            Text(
-                text = stringResource(Res.string.email_last_error, stringResource(it.textRes())),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-            )
+
+        Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (mail.checking) {
+                Text(stringResource(Res.string.email_checking), style = MaterialTheme.typography.bodySmall)
+            } else {
+                Text(
+                    text =
+                        mail.lastCheckedAtMillis?.let {
+                            stringResource(Res.string.email_last_check, formatEpochDateTime(it))
+                        } ?: stringResource(Res.string.email_never_checked),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            mail.lastError?.let {
+                Text(
+                    text = stringResource(Res.string.email_last_error, it.text()),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            mail.credentialProblem?.let {
+                Text(
+                    text = stringResource(Res.string.email_last_error, stringResource(it.textRes())),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
         }
     }
 }
