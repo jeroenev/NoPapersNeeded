@@ -70,8 +70,9 @@ private val RUNNING_RING_SIZE = 30.dp
  * The two surfaces offer the same destinations, but the compact bar has room for fewer of them at
  * once, so it keeps [TopLevelDestination.compactBar], the assistant and Activity, and reaches the
  * others through a "More" sheet. [queue] drives Activity's indicator: a running ring while work is
- * pending, and a badge when something waits on the user. [onShortcuts] opens the keyboard
- * shortcut list; null on a platform without one.
+ * pending, and a badge when something waits on the user. [onPalette] opens the command palette from
+ * the rail or the "More" sheet. [onShortcuts] opens the keyboard shortcut list; null on a platform
+ * without one.
  */
 @Composable
 fun NavigationShell(

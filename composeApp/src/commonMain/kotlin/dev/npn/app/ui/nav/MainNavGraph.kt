@@ -65,7 +65,8 @@ import org.jetbrains.compose.resources.stringResource
  * banners that sit above every screen. [queue] is the shell's Activity indicator; [snackbar] is the
  * shell's own, for what is reported outside any one screen. [writeBlock] is why the library refuses
  * writes now, if it does, and [writeBlockActions] the ways out of it. Where the platform offers it,
- * `?` and Ctrl+/ open the keyboard shortcut list from anywhere in the shell.
+ * `?` and Ctrl+/ open the keyboard shortcut list from anywhere in the shell, and Ctrl/Cmd+K (or the
+ * rail's search button) opens the command palette.
  */
 @Composable
 internal fun MainNav(

@@ -31,8 +31,10 @@ class PaletteRankingTest {
 
     @Test
     fun prefixBeatsWordWhichBeatsSubstringWhichBeatsFuzzy() {
-        rank("ivc", listOf("myivc", "invoice copy", "an ivc tag", "ivc invoice"))
-            .shouldContainExactly(listOf("ivc invoice", "an ivc tag", "myivc", "invoice copy"))
+        rank("ivc", listOf("tax invoice", "myivc", "invoice copy", "an ivc tag", "ivc invoice"))
+            .shouldContainExactly(
+                listOf("ivc invoice", "an ivc tag", "myivc", "tax invoice", "invoice copy"),
+            )
     }
 
     @Test
