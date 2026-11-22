@@ -63,6 +63,8 @@ internal class SessionGraph(
      * Chat, suggestions and the AI OCR engine: one facade, so the vision calls share the cached
      * endpoint client with chat and edits.
      */
+    val reviewConfig: ReviewConfigFacade = JournalReviewConfig(coordinator, db.documentDao(), lifetime)
+
     val ai =
         AiFacadeImpl(
             db,
@@ -86,7 +88,6 @@ internal class SessionGraph(
     val tags: TagRepository = TagRepositoryImpl(db.tagDao())
     val savedViews = SavedViewRepositoryImpl(coordinator, lifetime)
     val fieldRegistry: FieldRegistry = FieldRegistryImpl(db, coordinator, lifetime)
-    val reviewConfig: ReviewConfigFacade = JournalReviewConfig(coordinator, db.documentDao(), lifetime)
     val storagePath = JournalStoragePath(coordinator, lifetime)
 
     private val pathRules =

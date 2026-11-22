@@ -26,6 +26,7 @@ import dev.npn.core.util.runCatchingCancellable
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -193,9 +194,17 @@ internal object LibraryAiTools {
                     .append(escapeQuoted(it.second))
                     .append('"')
             }
-            if (doc.deleted) append(" status=deleted")
-            if (doc.trashed) append(" status=trashed")
-            if (doc.missing) append(" status=missing")
+            if (doc.deleted || doc.trashed || doc.missing) {
+                // One key, not one per flag: a row can be trashed and missing (or tombstoned while
+                // trashed), and a repeated key would read as two unrelated statuses.
+                val statuses =
+                    buildList {
+                        if (doc.deleted) add("deleted")
+                        if (doc.trashed) add("trashed")
+                        if (doc.missing) add("missing")
+                    }
+                append(" status=").append(statuses.joinToString("+"))
+            }
             snippet?.takeIf { it.isNotBlank() }?.let {
                 append(" snippet=\"").append(escapeQuoted(stripSnippetMarkers(it))).append('"')
             }
@@ -230,8 +239,13 @@ internal object LibraryAiTools {
         }
 
     /** [value] cut at [MAX_HISTORY_VALUE_CHARS], so one long note cannot fill the history output. */
-    internal fun truncated(value: String): String =
-        if (value.length <= MAX_HISTORY_VALUE_CHARS) value else value.take(MAX_HISTORY_VALUE_CHARS) + "…"
+    internal fun truncated(value: String): String {
+        if (value.length <= MAX_HISTORY_VALUE_CHARS) return value
+        var cut = value.take(MAX_HISTORY_VALUE_CHARS)
+        // Never end on half a surrogate pair: that is not text the model can read.
+        if (cut.lastOrNull()?.isHighSurrogate() == true) cut = cut.dropLast(1)
+        return cut + "…"
+    }
 
     /** Escape values embedded in the tool's quoted, one-document-per-line format. */
     internal fun escapeQuoted(value: String): String =
@@ -369,12 +383,12 @@ internal object LibraryAiTools {
                 "Search documents by full text and/or filters. Terms are AND-combined. Returns at " +
                     "most $MAX_SEARCH_RESULTS documents, ranked by relevance when query is given and " +
                     "newest added first otherwise, each with a docId and snippet. Leave query empty to " +
-                    "list documents matching the filters. addedAtFrom/addedAtTo are an inclusive date " +
-                    "range (YYYY-MM-DD) on when a document joined the library: its PDF's own creation " +
-                    "date, else the file's modification time — not the date printed on it. ocrState, " +
-                    "reviewed and lifecycle narrow the list; lifecycle=${ChatTools.LIFECYCLE_TRASHED}, " +
-                    "${ChatTools.LIFECYCLE_MISSING} or ${ChatTools.LIFECYCLE_DELETED} discovers documents " +
-                    "the library normally hides.",
+                    "list documents matching the filters. addedAtFrom/addedAtTo are an inclusive UTC " +
+                    "date range (YYYY-MM-DD) on the library's added date: the PDF's own creation date, " +
+                    "else the file's modification time — not the import time and not the date printed on " +
+                    "the document. ocrState, reviewed and lifecycle narrow the list; " +
+                    "lifecycle=${ChatTools.LIFECYCLE_TRASHED}, ${ChatTools.LIFECYCLE_MISSING} or " +
+                    "${ChatTools.LIFECYCLE_DELETED} discovers documents the library normally hides.",
         ) {
         @Serializable
         data class Args(
@@ -382,20 +396,24 @@ internal object LibraryAiTools {
             @SerialName(ChatTools.ARG_QUERY)
             val query: String = "",
             @property:LLMDescription(
-                "Inclusive lower bound (YYYY-MM-DD) on when the document joined the library: its PDF's " +
-                    "creation date, else the file's modification time.",
+                "Inclusive lower UTC bound (YYYY-MM-DD) on the library's added date: the PDF's creation " +
+                    "date, else the file's modification time. Not the import time or the printed date.",
             )
             @SerialName(ChatTools.ARG_ADDED_FROM)
             val addedAtFrom: String? = null,
-            @property:LLMDescription("Inclusive upper bound (YYYY-MM-DD) on when the document joined the library.")
+            @property:LLMDescription(
+                "Inclusive upper UTC bound (YYYY-MM-DD) on the library's added date; the whole day is included.",
+            )
             @SerialName(ChatTools.ARG_ADDED_TO)
             val addedAtTo: String? = null,
             @property:LLMDescription("OCR state: none, pending, done, failed or adopted.")
             @SerialName(ChatTools.ARG_OCR_STATE)
             val ocrState: String? = null,
             @property:LLMDescription(
-                "Review marker: true for reviewed, false for still needing review. In untagged-only " +
-                    "mode a document counts as reviewed once it has any tag.",
+                "Review state: true for documents not needing review, false for those in the review " +
+                    "queue. The queue is the same predicate the review screen counts: in inbox-workflow " +
+                    "mode an untagged document needs review even when marked reviewed; in untagged-only " +
+                    "mode reviewed means it has a tag.",
             )
             @SerialName(ChatTools.ARG_REVIEWED)
             val reviewed: Boolean? = null,
@@ -433,7 +451,7 @@ internal object LibraryAiTools {
 
             val query = args.query.trim()
             val matching =
-                candidates(query)
+                candidates(query, lifecycle)
                     .filter { doc ->
                         lifecycle.matches(doc) &&
                             (fromMillis == null || addedMillis(doc) >= fromMillis) &&
@@ -470,15 +488,17 @@ internal object LibraryAiTools {
          * added first for a filter-only list. Hidden rows stay candidates so a lifecycle filter can
          * find them; the lifecycle predicate drops them from a default search.
          */
-        private suspend fun candidates(query: String): List<DocumentEntity> {
+        private suspend fun candidates(
+            query: String,
+            lifecycle: Lifecycle,
+        ): List<DocumentEntity> {
             if (query.isEmpty()) {
-                return documentDao
-                    .getAllRows()
-                    .sortedWith(
-                        compareByDescending<DocumentEntity> { addedMillis(it) }
-                            .thenBy { it.fileName.lowercase() }
-                            .thenBy { it.docId },
-                    )
+                val rows = if (lifecycle == Lifecycle.LIVE) documentDao.getAllLive() else documentDao.getAllRows()
+                return rows.sortedWith(
+                    compareByDescending<DocumentEntity> { addedMillis(it) }
+                        .thenBy { it.fileName.lowercase() }
+                        .thenBy { it.docId },
+                )
             }
             val hits = ftsDao.search(FtsQuery.sanitize(query))
             val docs = documentDao.getByDocIds(hits).associateBy { it.docId }
@@ -486,15 +506,25 @@ internal object LibraryAiTools {
         }
 
         /**
-         * The review filter as the review screens mean it: the stored marker where it is
-         * authoritative, else "has any tag". Null leaves the list alone.
+         * The review filter as the review screens mean it. In UNTAGGED_ONLY a document is reviewed
+         * once it has any tag; in INBOX_WORKFLOW it is reviewed once it is marked *and* tagged,
+         * because the queue is "unreviewed or untagged" — so `reviewed=false` is exactly the
+         * queue `library_stats` counts. Null leaves the list alone.
          */
         private suspend fun filterReviewed(
             docs: List<DocumentEntity>,
             wanted: Boolean?,
         ): List<DocumentEntity> {
             if (wanted == null || docs.isEmpty()) return docs
-            if (reviewMode.reviewMarkerIsAuthoritative) return docs.filter { it.reviewed == wanted }
+            if (reviewMode.reviewMarkerIsAuthoritative) {
+                val tagged =
+                    if (wanted) {
+                        emptySet()
+                    } else {
+                        tagDao.tagsForDocs(docs.map { it.docId }).mapTo(HashSet()) { it.docId }
+                    }
+                return docs.filter { if (wanted) it.reviewed else !it.reviewed || it.docId !in tagged }
+            }
             val tagged = tagDao.tagsForDocs(docs.map { it.docId }).mapTo(HashSet()) { it.docId }
             return docs.filter { (it.docId in tagged) == wanted }
         }
@@ -864,6 +894,7 @@ internal object LibraryAiTools {
                 return "No recorded history for [doc:$docId]. Imports and OCR runs leave no journal event."
             }
             val recent = db.metadataProjectionDao().recentEventsForDocument(docId, MAX_HISTORY_EVENTS)
+            val recorded = maxOf(total, recent.size)
             val lines =
                 recent.map { row ->
                     val event = runCatchingCancellable { EventDecoderRegistry.decodeStored(row.canonicalJson) }.getOrNull()
@@ -871,45 +902,48 @@ internal object LibraryAiTools {
                     "- [doc:$docId] ${isoDateTime(row.hlcPhysical)} device=${row.deviceId.take(8)}: ${describe(entry)}"
                 }
             val shownNote =
-                if (total > recent.size) {
-                    "$total recorded events, newest first, showing the latest ${recent.size}:"
+                if (recorded > recent.size) {
+                    "$recorded recorded events, newest first, showing the latest ${recent.size}:"
                 } else {
-                    "$total recorded events, newest first:"
+                    "$recorded recorded events, newest first:"
                 }
             return (listOf("History of [doc:$docId]: $shownNote") + lines).joinToString("\n")
         }
 
+        /** One quoted value from the journal: escaped and truncated, so it cannot forge a line. */
+        private fun q(value: String): String = escapeQuoted(truncated(value))
+
         /** One event as a short sentence; text that came from the journal is quoted and truncated. */
         private fun describe(entry: HistoryEntry): String =
             when (entry) {
-                is HistoryEntry.TagAdded -> "tag added \"${truncated(entry.tag)}\""
-                is HistoryEntry.TagRemoved -> "tag removed \"${truncated(entry.tag)}\""
+                is HistoryEntry.TagAdded -> "tag added \"${q(entry.tag)}\""
+                is HistoryEntry.TagRemoved -> "tag removed \"${q(entry.tag)}\""
                 is HistoryEntry.Reviewed ->
                     when (entry.reviewed) {
                         true -> "marked reviewed"
                         false -> "marked needing review"
                         null -> "review mark cleared"
                     }
-                is HistoryEntry.ReviewUnreadable -> "review mark set to an unreadable value \"${truncated(entry.value)}\""
+                is HistoryEntry.ReviewUnreadable -> "review mark set to an unreadable value \"${q(entry.value)}\""
                 is HistoryEntry.OcrEnginePinned ->
-                    entry.engine?.let { "OCR engine pinned to \"${truncated(it.label)}\"" } ?: "OCR engine pin cleared"
+                    entry.engine?.let { "OCR engine pinned to \"${q(it.label)}\"" } ?: "OCR engine pin cleared"
                 is HistoryEntry.StoragePathSet ->
-                    entry.path?.let { "storage path set to \"${truncated(it)}\"" } ?: "storage path cleared"
+                    entry.path?.let { "storage path set to \"${q(it)}\"" } ?: "storage path cleared"
                 is HistoryEntry.FieldSet ->
-                    entry.value?.let { "field \"${truncated(entry.key)}\" set to \"${truncated(it)}\"" }
-                        ?: "field \"${truncated(entry.key)}\" cleared"
-                is HistoryEntry.Trashed -> "moved to trash from \"${truncated(entry.path)}\""
+                    entry.value?.let { "field \"${q(entry.key)}\" set to \"${q(it)}\"" }
+                        ?: "field \"${q(entry.key)}\" cleared"
+                is HistoryEntry.Trashed -> "moved to trash from \"${q(entry.path)}\""
                 HistoryEntry.Restored -> "restored"
                 HistoryEntry.Deleted -> "permanently deleted"
                 is HistoryEntry.Relinked -> "relinked to doc ${entry.newDocId}"
-                is HistoryEntry.TagRenamed -> "tag \"${truncated(entry.from)}\" renamed to \"${truncated(entry.to)}\""
-                is HistoryEntry.TagMerged -> "tag \"${truncated(entry.from)}\" merged into \"${truncated(entry.to)}\""
-                is HistoryEntry.TagStyled -> "style changed for tag \"${truncated(entry.tag)}\""
-                is HistoryEntry.SettingChanged -> "library setting \"${truncated(entry.key)}\" changed"
+                is HistoryEntry.TagRenamed -> "tag \"${q(entry.from)}\" renamed to \"${q(entry.to)}\""
+                is HistoryEntry.TagMerged -> "tag \"${q(entry.from)}\" merged into \"${q(entry.to)}\""
+                is HistoryEntry.TagStyled -> "style changed for tag \"${q(entry.tag)}\""
+                is HistoryEntry.SettingChanged -> "library setting \"${q(entry.key)}\" changed"
                 is HistoryEntry.Unknown ->
-                    "unrecorded event \"${truncated(entry.operation)}\"" +
-                        (entry.payload?.let { " payload=\"${truncated(it)}\"" } ?: "")
-                is HistoryEntry.Undecodable -> "unreadable event \"${truncated(entry.operation)}\""
+                    "unrecorded event \"${q(entry.operation)}\"" +
+                        (entry.payload?.let { " payload=\"${q(it)}\"" } ?: "")
+                is HistoryEntry.Undecodable -> "unreadable event \"${q(entry.operation)}\""
             }
     }
 
