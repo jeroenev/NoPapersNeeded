@@ -55,6 +55,7 @@ import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.formatEpochDate
 import dev.npn.app.ui.common.parseQueryHighlight
+import dev.npn.app.ui.common.reducedMotion
 import dev.npn.app.ui.common.resolve
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.OcrVersion
@@ -149,12 +150,14 @@ internal fun OcrTextTab(
     val scrollState = rememberScrollState()
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     val textPadding = with(LocalDensity.current) { OCR_TEXT_PADDING.toPx() }
+    val reduceMotion = reducedMotion
     // Bring the active match into view; without this prev/next only recolours off-screen text.
     LaunchedEffect(effectiveCurrent, matches, layout) {
         val result = layout
         if (result == null || matches.isEmpty()) return@LaunchedEffect
         val line = result.getLineForOffset(matches[effectiveCurrent])
-        scrollState.animateScrollTo((result.getLineTop(line) + textPadding).toInt().coerceAtLeast(0))
+        val offset = (result.getLineTop(line) + textPadding).toInt().coerceAtLeast(0)
+        if (reduceMotion) scrollState.scrollTo(offset) else scrollState.animateScrollTo(offset)
     }
 
     Column(modifier) {

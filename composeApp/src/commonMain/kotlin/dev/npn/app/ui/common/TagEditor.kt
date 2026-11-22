@@ -91,7 +91,8 @@ fun TagEditor(
                             )
                             IconButton(
                                 onClick = { onRemove(tag) },
-                                modifier = Modifier.size(28.dp),
+                                // No fixed size: IconButton keeps a 48dp touch target even though the
+                                // icon itself stays small beside the chip's label.
                             ) {
                                 Icon(
                                     Icons.Filled.Clear,

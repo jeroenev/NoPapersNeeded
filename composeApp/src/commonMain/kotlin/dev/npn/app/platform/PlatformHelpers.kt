@@ -118,6 +118,13 @@ expect fun acceptsFileDrops(): Boolean
 expect fun checksForUpdates(): Boolean
 
 /**
+ * Whether the platform currently wants animations: false when the user turned them off
+ * (Android's "Remove animations" setting, which zeroes the animator duration scale). The app's own
+ * reduced-motion setting adds to this; see [dev.npn.core.settings.reducesMotion].
+ */
+expect fun systemAnimationsEnabled(): Boolean
+
+/**
  * Create a new library folder named [name] inside [parentLocation] (a [FolderAccess.DIRECT]
  * location) and return its location string, or null on failure. Creating an existing directory
  * succeeds, so the recommended default folder is opened through this too.

@@ -41,6 +41,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -54,6 +56,7 @@ import dev.npn.app.ui.common.LoadingIndicator
 import dev.npn.app.ui.common.SectionHeading
 import dev.npn.app.ui.common.StatusBadge
 import dev.npn.app.ui.common.TechnicalDetails
+import dev.npn.app.ui.common.focusRing
 import dev.npn.app.ui.common.formatEpochDateTime
 import dev.npn.app.ui.common.rememberSnackbarMessages
 import dev.npn.app.ui.common.resolve
@@ -136,7 +139,7 @@ fun QueueScreen(
         topBar = {
             // No back arrow: Activity is a top-level destination (rail / bar / banners), not a pushed
             // screen.
-            TopAppBar(title = { Text(stringResource(Res.string.queue_title)) })
+            TopAppBar(title = { Text(stringResource(Res.string.queue_title), Modifier.semantics { heading() }) })
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
@@ -369,12 +372,19 @@ private fun EditRunRow(
     onDiscard: (String) -> Unit,
 ) {
     val ready = run.state == WorkState.READY
+    val reviewLabel = stringResource(Res.string.queue_edit_run_review)
     var confirmingDiscard by rememberSaveable(run.jobId) { mutableStateOf(false) }
     Row(
         Modifier
             .fillMaxWidth()
-            .then(if (ready) Modifier.clickable { onOpen(run.jobId) } else Modifier)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .focusRing()
+            .then(
+                if (ready) {
+                    Modifier.clickable(role = Role.Button, onClickLabel = reviewLabel) { onOpen(run.jobId) }
+                } else {
+                    Modifier
+                },
+            ).padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -461,6 +471,7 @@ private fun QueueRow(
     Row(
         Modifier
             .fillMaxWidth()
+            .focusRing()
             .clickable(
                 onClickLabel = openLabel,
                 onClick = { onOpenDoc(entry.docId) },

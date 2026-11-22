@@ -255,4 +255,28 @@ class SettingsRepositoryImplTest {
 
             SettingsRepositoryImpl(NpnLog.None, file).legacyLibrarySettings().trashRetentionDays shouldBe 7
         }
+
+    /** Reduced motion is off on a fresh install, and a choice of it survives the next start. */
+    @Test
+    fun reducedMotionDefaultsOffAndPersists() =
+        runTest {
+            val file = directory.resolve("settings.properties").toFile()
+            SettingsRepositoryImpl(NpnLog.None, file).settings.first().reducedMotion shouldBe false
+
+            SettingsRepositoryImpl(NpnLog.None, file).edit { it.copy(reducedMotion = true) }
+
+            SettingsRepositoryImpl(NpnLog.None, file).settings.first().reducedMotion shouldBe true
+        }
+
+    /**
+     * The app's reduced-motion preference and the platform's animation setting both ask for less
+     * motion: either one alone is enough, and only both being off leaves transitions animated.
+     */
+    @Test
+    fun eitherReducedMotionPreferenceOrThePlatformTurnsMotionOff() {
+        reducesMotion(preference = false, systemAnimationsEnabled = true) shouldBe false
+        reducesMotion(preference = true, systemAnimationsEnabled = true) shouldBe true
+        reducesMotion(preference = false, systemAnimationsEnabled = false) shouldBe true
+        reducesMotion(preference = true, systemAnimationsEnabled = false) shouldBe true
+    }
 }

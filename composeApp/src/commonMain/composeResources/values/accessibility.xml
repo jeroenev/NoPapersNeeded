@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Accessibility: motion preferences and the labels the semantics audit added. -->
+<resources>
+    <string name="accessibility_title">Accessibility</string>
+    <string name="accessibility_reduce_motion">Reduce motion</string>
+    <string name="accessibility_reduce_motion_help">Skip page and list transitions, and expand details at once.</string>
+</resources>

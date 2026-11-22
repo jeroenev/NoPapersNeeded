@@ -156,6 +156,17 @@ class AppViewModel(
             .distinctUntilChanged()
             .stateIn(viewModelScope, WhileSubscribedTimeout, env.settings.settings.value.appLanguage)
 
+    /**
+     * Whether the user asked for less motion, from the device settings. The shell provides it to
+     * every screen ([dev.npn.app.ui.common.ProvideReducedMotion]), which also honours the platform's
+     * own animation setting.
+     */
+    val reducedMotion: StateFlow<Boolean> =
+        env.settings.settings
+            .map { it.reducedMotion }
+            .distinctUntilChanged()
+            .stateIn(viewModelScope, WhileSubscribedTimeout, env.settings.settings.value.reducedMotion)
+
     /** Whether AI is configured, for the shell's AI entries. */
     val aiConfigured: StateFlow<Boolean> =
         env.settings

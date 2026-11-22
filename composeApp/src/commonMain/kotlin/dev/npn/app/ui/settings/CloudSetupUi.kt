@@ -36,7 +36,6 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.Dropdown
 import dev.npn.app.ui.common.ExpandIcon
@@ -225,7 +224,7 @@ private fun ProviderRow(
         headlineContent = { Text(provider.name) },
         supportingContent =
             detail?.let {
-                { Text(it, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+                { Text(it) }
             },
         leadingContent = {
             Icon(

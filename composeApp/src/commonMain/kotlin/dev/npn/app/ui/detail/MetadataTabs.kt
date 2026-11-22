@@ -121,7 +121,6 @@ internal fun MetadataTabs(
                                 PanelTab.TEXT -> stringResource(Res.string.detail_tab_text)
                                 PanelTab.HISTORY -> stringResource(Res.string.detail_tab_history)
                             },
-                            maxLines = 1,
                         )
                     },
                 )
