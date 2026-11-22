@@ -13,6 +13,7 @@ import dev.npn.core.journal.JournalOp
 import dev.npn.core.model.SystemProperty
 import dev.npn.core.ocr.OcrEngineId
 import dev.npn.core.ocr.OcrEngineRef
+import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
