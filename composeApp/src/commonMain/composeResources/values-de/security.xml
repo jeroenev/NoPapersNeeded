@@ -24,6 +24,6 @@
     <string name="security_unlock">Entsperren</string>
     <string name="security_unlock_device">Mit Gerät entsperren</string>
     <string name="security_wrong_pin">Diese PIN ist nicht korrekt.</string>
-    <string name="security_too_many">Zu viele Versuche. Versuche es in %1$d Sekunden erneut.</string>
+    <string name="security_too_many">Zu viele Versuche. Versuche es in %1$d s erneut.</string>
     <string name="security_device_prompt_subtitle">No Papers Needed entsperren</string>
 </resources>

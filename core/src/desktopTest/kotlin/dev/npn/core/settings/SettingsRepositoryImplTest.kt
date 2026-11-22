@@ -151,12 +151,13 @@ class SettingsRepositoryImplTest {
             }
 
             val settings = SettingsRepositoryImpl(NpnLog.None, file).settings.first()
+            val savedCredential = requireNotNull(settings.appLock.credential) { "the stored hash is missing" }
 
             settings.appLock.enabled shouldBe true
             settings.appLock.timeout shouldBe LockTimeout.FIVE_MINUTES
-            settings.appLock.credential shouldBe credential
-            LockCrypto.verify("swordfish", settings.appLock.credential) shouldBe true
-            LockCrypto.verify("swordfish2", settings.appLock.credential) shouldBe false
+            savedCredential shouldBe credential
+            LockCrypto.verify("swordfish", savedCredential) shouldBe true
+            LockCrypto.verify("swordfish2", savedCredential) shouldBe false
             // The file holds the salt and hash, never the secret itself.
             val stored = file.readText()
             stored.contains("swordfish") shouldBe false

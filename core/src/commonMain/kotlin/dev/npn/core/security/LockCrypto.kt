@@ -9,7 +9,7 @@ package dev.npn.core.security
  */
 object LockCrypto {
     const val SCHEME = "pbkdf2-sha256"
-    const val DEFAULT_ITERATIONS = 210_000
+    const val DEFAULT_ITERATIONS = 600_000
     const val MIN_ITERATIONS = 10_000
     const val MAX_ITERATIONS = 2_000_000
     const val SALT_BYTES = 16

@@ -11,6 +11,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -52,9 +54,24 @@ class LockViewModel(
             LockUiState(lock = lockState, checking = inFlight, outcome = last)
         }.stateIn(viewModelScope, WhileSubscribedTimeout, LockUiState(lock.state.value))
 
+    init {
+        // A fresh lock starts without the previous unlock attempt's verdict on screen.
+        viewModelScope.launch {
+            lock.state
+                .map { it.locked }
+                .distinctUntilChanged()
+                .collect { locked ->
+                    if (locked) {
+                        outcome.value = null
+                        checking.value = false
+                    }
+                }
+        }
+    }
+
     override fun unlock(secret: String) {
-        if (secret.isEmpty() || checking.value) return
-        checking.value = true
+        // The button and the IME "Done" can fire together; only one attempt may be in flight.
+        if (secret.isEmpty() || !checking.compareAndSet(false, true)) return
         outcome.value = null
         viewModelScope.launch {
             val result = withContext(verifyDispatcher) { lock.unlockWithSecret(secret) }
@@ -64,6 +81,7 @@ class LockViewModel(
         }
     }
 
+    /** Unlock by the platform's proof; only a successful [AppLockAuthenticator] callback calls this. */
     override fun unlockWithDevice() {
         outcome.value = null
         lock.unlockWithSystem()

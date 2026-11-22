@@ -50,13 +50,14 @@ import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_app_name
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.skia.Image
+import java.awt.AWTEvent
 import java.awt.Dimension
 import java.awt.KeyboardFocusManager
+import java.awt.Toolkit
+import java.awt.event.AWTEventListener
 import java.awt.event.KeyEvent
 import java.awt.event.KeyEventDispatcher
-import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
-import java.awt.event.MouseWheelEvent
 import java.awt.event.WindowAdapter
 import java.awt.event.WindowEvent
 import java.net.URI
@@ -174,19 +175,14 @@ private fun runApp() =
                         false
                     }
                 focusManager.addKeyEventDispatcher(keys)
-                val mouse =
-                    object : MouseAdapter() {
-                        override fun mousePressed(event: MouseEvent) = lock.onInteraction()
-
-                        override fun mouseMoved(event: MouseEvent) = lock.onInteraction()
-
-                        override fun mouseDragged(event: MouseEvent) = lock.onInteraction()
-
-                        override fun mouseWheelMoved(event: MouseWheelEvent) = lock.onInteraction()
-                    }
-                window.addMouseListener(mouse)
-                window.addMouseMotionListener(mouse)
-                window.addMouseWheelListener(mouse)
+                // A window listener never sees pointer events Compose consumes; the toolkit listener
+                // sees every mouse event in the process, whatever component it lands on.
+                val toolkit = Toolkit.getDefaultToolkit()
+                val mouse = AWTEventListener { event -> if (event is MouseEvent) lock.onInteraction() }
+                toolkit.addAWTEventListener(
+                    mouse,
+                    AWTEvent.MOUSE_EVENT_MASK or AWTEvent.MOUSE_MOTION_EVENT_MASK or AWTEvent.MOUSE_WHEEL_EVENT_MASK,
+                )
                 val windowEvents =
                     object : WindowAdapter() {
                         override fun windowIconified(event: WindowEvent) = lock.onBackground()
@@ -196,9 +192,7 @@ private fun runApp() =
                 window.addWindowListener(windowEvents)
                 onDispose {
                     focusManager.removeKeyEventDispatcher(keys)
-                    window.removeMouseListener(mouse)
-                    window.removeMouseMotionListener(mouse)
-                    window.removeMouseWheelListener(mouse)
+                    toolkit.removeAWTEventListener(mouse)
                     window.removeWindowListener(windowEvents)
                 }
             }

@@ -6,9 +6,9 @@ import dev.npn.core.app.SessionDeps
 import dev.npn.core.app.openSession
 import dev.npn.core.security.AppLock
 import dev.npn.core.settings.SettingsRepository
-import dev.npn.core.util.EpochClock
+import dev.npn.core.util.MonotonicClock
 import dev.npn.core.util.NpnLog
-import dev.npn.core.util.SystemEpochClock
+import dev.npn.core.util.SystemMonotonicClock
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
 import dev.npn.core.util.warn
@@ -56,8 +56,8 @@ class DefaultAppEnvironment(
     appDispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val cloudSetup: (() -> CloudSetupEngine)? = null,
     private val readOcrModels: (suspend () -> OcrModels)? = null,
-    /** The wall clock the app lock measures background and idle time with. */
-    clock: EpochClock = SystemEpochClock,
+    /** The monotonic clock the app lock measures background and idle time with. */
+    clock: MonotonicClock = SystemMonotonicClock,
     private val factory: suspend (location: String, scope: CoroutineScope) -> SessionDeps,
 ) : AppEnvironment {
     override val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + appDispatcher)

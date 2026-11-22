@@ -64,6 +64,7 @@ import no_papers_needed.composeapp.generated.resources.common_settings_review_wo
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_rule_stays_off
 import no_papers_needed.composeapp.generated.resources.common_settings_thumbnail_cache_empty
 import no_papers_needed.composeapp.generated.resources.common_settings_thumbnails_cleared
+import no_papers_needed.composeapp.generated.resources.security_pin_too_short
 
 /**
  * Settings screen view model. Device settings go through the one [SettingsRepository.edit]
@@ -343,11 +344,16 @@ class SettingsViewModel(
         }
 
     override fun setAppLockPin(pin: String) {
+        if (pin.length < MIN_APP_LOCK_SECRET_LENGTH) {
+            message(uiText(Res.string.security_pin_too_short))
+            return
+        }
         viewModelScope.launch {
-            // PBKDF2 is deliberately slow; hashing on the main thread would freeze the dialog.
-            val credential = withContext(lockDispatcher) { createLockCredential(pin) }
             val saved =
                 reporting(Res.string.common_save_setting_failed) {
+                    // PBKDF2 is deliberately slow; hashing on the main thread would freeze the dialog.
+                    // The hashing is inside the report so a rejected input cannot escape as a crash.
+                    val credential = withContext(lockDispatcher) { createLockCredential(pin) }
                     settings.edit { it.copy(appLock = it.appLock.copy(enabled = true, credential = credential)) }
                 }
             if (saved) openSecurityDialog(null)

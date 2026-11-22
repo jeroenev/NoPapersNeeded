@@ -6,7 +6,7 @@ import dev.npn.core.security.AppLock
 import dev.npn.core.security.AppLockSettings
 import dev.npn.core.security.LockCrypto
 import dev.npn.core.security.UnlockResult
-import dev.npn.core.util.EpochClock
+import dev.npn.core.util.MonotonicClock
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -21,7 +21,7 @@ class LockViewModelTest : MainDispatcherTest() {
     @Test
     fun aWrongSecretLeavesTheAppLockedAndSaysSo() =
         runTest(dispatcher) {
-            val lock = AppLock(AppLockSettings(enabled = true, credential = credential), EpochClock { 0L })
+            val lock = AppLock(AppLockSettings(enabled = true, credential = credential), MonotonicClock { 0L })
             val vm = LockViewModel(lock, StandardTestDispatcher(testScheduler))
             collecting(vm.state)
 
@@ -35,7 +35,7 @@ class LockViewModelTest : MainDispatcherTest() {
     @Test
     fun theRightSecretUnlocks() =
         runTest(dispatcher) {
-            val lock = AppLock(AppLockSettings(enabled = true, credential = credential), EpochClock { 0L })
+            val lock = AppLock(AppLockSettings(enabled = true, credential = credential), MonotonicClock { 0L })
             val vm = LockViewModel(lock, StandardTestDispatcher(testScheduler))
             collecting(vm.state)
 
@@ -49,7 +49,7 @@ class LockViewModelTest : MainDispatcherTest() {
     @Test
     fun theDeviceUnlockOpensItWithoutASecret() =
         runTest(dispatcher) {
-            val lock = AppLock(AppLockSettings(enabled = true, credential = credential), EpochClock { 0L })
+            val lock = AppLock(AppLockSettings(enabled = true, credential = credential), MonotonicClock { 0L })
             val vm = LockViewModel(lock, StandardTestDispatcher(testScheduler))
             collecting(vm.state)
 
@@ -62,7 +62,7 @@ class LockViewModelTest : MainDispatcherTest() {
     fun repeatedWrongSecretsReportTheWait() =
         runTest(dispatcher) {
             val now = 1_000L
-            val lock = AppLock(AppLockSettings(enabled = true, credential = credential), EpochClock { now })
+            val lock = AppLock(AppLockSettings(enabled = true, credential = credential), MonotonicClock { now })
             val vm = LockViewModel(lock, StandardTestDispatcher(testScheduler))
             collecting(vm.state)
 
@@ -70,10 +70,14 @@ class LockViewModelTest : MainDispatcherTest() {
                 vm.unlock("0000")
                 testScheduler.advanceUntilIdle()
             }
+            vm.state.value.outcome shouldBe UnlockResult.WrongSecret
+            vm.retryRemainingMillis() shouldBe 5_000L
 
+            // The next attempt is refused during the wait, without being hashed again.
+            vm.unlock("0000")
+            testScheduler.advanceUntilIdle()
             vm.state.value.outcome
                 .shouldBeInstanceOf<UnlockResult.TooManyAttempts>()
-            vm.retryRemainingMillis() shouldBe 5_000L
             vm.state.value.lock.locked shouldBe true
         }
 }

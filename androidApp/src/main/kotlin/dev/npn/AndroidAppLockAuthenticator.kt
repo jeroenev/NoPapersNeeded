@@ -15,6 +15,9 @@ import dev.npn.app.platform.AppLockAuthenticator
 class AndroidAppLockAuthenticator(
     private val activity: FragmentActivity,
 ) : AppLockAuthenticator {
+    /** One prompt at a time: the auto-offer and the button must not stack system dialogs. */
+    private var authenticating = false
+
     override fun isAvailable(): Boolean =
         BiometricManager
             .from(activity)
@@ -25,21 +28,27 @@ class AndroidAppLockAuthenticator(
         subtitle: String,
         onResult: (Boolean) -> Unit,
     ) {
+        if (authenticating) return
         if (!isAvailable()) {
             onResult(false)
             return
         }
+        authenticating = true
+        val finish = { unlocked: Boolean ->
+            authenticating = false
+            onResult(unlocked)
+        }
         val callback =
             object : BiometricPrompt.AuthenticationCallback() {
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                    onResult(true)
+                    finish(true)
                 }
 
                 override fun onAuthenticationError(
                     errorCode: Int,
                     errString: CharSequence,
                 ) {
-                    onResult(false)
+                    finish(false)
                 }
 
                 // A finger that did not match: the prompt stays open for another try.

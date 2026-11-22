@@ -86,11 +86,15 @@ fun LockScreen(
 
     val title = stringResource(Res.string.security_locked_title)
     val subtitle = stringResource(Res.string.security_device_prompt_subtitle)
+    // The one way the platform's proof unlocks the app: both the auto-offer and the button go
+    // through the prompt, never straight to unlockSystem (which would be no check at all).
+    val promptForDevice: () -> Unit = {
+        deviceAuth?.authenticate(title, subtitle) { unlocked -> if (unlocked) actions.unlockWithDevice() }
+        Unit
+    }
     LaunchedEffect(deviceAuth, deviceAuthAvailable) {
         // Offer the device prompt as soon as the lock shows, once; cancelling leaves the PIN field.
-        if (deviceAuth != null && deviceAuthAvailable) {
-            deviceAuth.authenticate(title, subtitle) { unlocked -> if (unlocked) actions.unlockWithDevice() }
-        }
+        if (deviceAuth != null && deviceAuthAvailable) promptForDevice()
     }
 
     val error =
@@ -152,7 +156,7 @@ fun LockScreen(
                 Text(stringResource(Res.string.security_unlock))
             }
             if (deviceAuthAvailable) {
-                OutlinedButton(onClick = actions::unlockWithDevice, enabled = !state.checking) {
+                OutlinedButton(onClick = promptForDevice, enabled = !state.checking) {
                     Text(stringResource(Res.string.security_unlock_device))
                 }
             }

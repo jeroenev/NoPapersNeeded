@@ -1,6 +1,6 @@
 package dev.npn.core.security
 
-import dev.npn.core.util.EpochClock
+import dev.npn.core.util.MonotonicClock
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlin.test.Test
@@ -181,16 +181,45 @@ class AppLockTest {
     }
 
     @Test
+    fun aSettingsUpdateThatKeepsTheCredentialStaysLocked() {
+        val lock = AppLock(AppLockSettings(enabled = true, credential = credential), FakeClock())
+
+        lock.updateSettings(
+            AppLockSettings(enabled = true, credential = credential, timeout = LockTimeout.FIVE_MINUTES),
+        )
+
+        lock.state.value.locked shouldBe true
+        lock.state.value.timeout shouldBe LockTimeout.FIVE_MINUTES
+    }
+
+    @Test
+    fun returningWithoutHavingLeftDoesNotLock() {
+        val lock = AppLock(AppLockSettings(enabled = true, credential = credential), FakeClock())
+
+        lock.unlockWithSecret(secret)
+        // onCreate/onStart without a preceding stop: a cold start, or an activity recreated in place.
+        lock.onForeground()
+
+        lock.state.value.locked shouldBe false
+    }
+
+    @Test
+    fun anUnknownStoredTimeoutFallsBackToTheStrictest() {
+        LockTimeout.fromWire(null) shouldBe LockTimeout.IMMEDIATELY
+        LockTimeout.fromWire("SOMETIME") shouldBe LockTimeout.IMMEDIATELY
+        LockTimeout.fromWire(LockTimeout.FIFTEEN_MINUTES.name) shouldBe LockTimeout.FIFTEEN_MINUTES
+    }
+
+    @Test
     fun disablingTheLockClearsTheHashAndUnlocks() {
         val lock = AppLock(AppLockSettings(enabled = true, credential = credential), FakeClock())
-        lock.state.value.credential shouldBe credential
 
         lock.updateSettings(AppLockSettings(enabled = false))
 
         lock.state.value.enabled shouldBe false
         lock.state.value.locked shouldBe false
-        lock.state.value.credential shouldBe null
         lock.state.value.retryAtMillis shouldBe null
+        lock.unlockWithSecret(secret) shouldBe UnlockResult.Disabled
     }
 
     @Test
@@ -233,8 +262,8 @@ class AppLockTest {
 
     private class FakeClock(
         var now: Long = 1_000_000L,
-    ) : EpochClock {
-        override fun nowMillis(): Long = now
+    ) : MonotonicClock {
+        override fun elapsedMillis(): Long = now
 
         fun advance(millis: Long) {
             now += millis

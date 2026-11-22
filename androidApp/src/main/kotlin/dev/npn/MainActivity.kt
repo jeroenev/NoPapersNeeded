@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
+import android.os.PowerManager
 import android.os.SystemClock
 import android.view.WindowManager
 import android.widget.Toast
@@ -40,6 +41,9 @@ class MainActivity : FragmentActivity() {
 
     /** The token of this activity's launch import ([LaunchImports]), saved with its state while it runs. */
     private var launchImport: String? = null
+
+    /** Whether the user left with Home/Recents since the last stop, rather than an activity we started. */
+    private var leftByUser = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -102,20 +106,36 @@ class MainActivity : FragmentActivity() {
         handleIntent(intent, launch = false)
     }
 
-    /** The app returned to the foreground: lock it if it was away long enough for its setting. */
+    /**
+     * The app went to the background by the user's choice (Home, Recents, another app), which is
+     * when the lock's timeout starts. Other activities this app starts — the scanner, a folder
+     * picker, the share sheet — stop the activity without this hint, so they are an interruption,
+     * not the app being left, and must not lock the user out mid-flow. A screen turned off is
+     * covered separately, since it produces no hint.
+     */
+    override fun onUserLeaveHint() {
+        leftByUser = true
+        if (env.lock.state.value.enabled) {
+            // Taken now so the recents thumbnail is blank rather than the library.
+            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
+        super.onUserLeaveHint()
+    }
+
     override fun onStart() {
         super.onStart()
         env.lock.onForeground()
+        if (env.lock.state.value.locked) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
     }
 
-    /**
-     * The app left the foreground. An activity being recreated for a configuration change is not
-     * the app going away, so it is not measured as background time ([isChangingConfigurations]).
-     */
     override fun onStop() {
-        if (!isChangingConfigurations) env.lock.onBackground()
+        val leaving = leftByUser || !screenIsOn()
+        leftByUser = false
+        if (!isChangingConfigurations && leaving) env.lock.onBackground()
         super.onStop()
     }
+
+    private fun screenIsOn(): Boolean = (getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive
 
     /**
      * Syncthing and other apps change the library while this app is in the background, and the
@@ -125,6 +145,7 @@ class MainActivity : FragmentActivity() {
      */
     override fun onResume() {
         super.onResume()
+        if (!env.lock.state.value.locked) window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         val session = env.session.value ?: return
         val now = SystemClock.elapsedRealtime()
         if (now - lastResumeRescan < RESUME_RESCAN_MIN_INTERVAL_MS) return

@@ -24,6 +24,6 @@
     <string name="security_unlock">Unlock</string>
     <string name="security_unlock_device">Unlock with device</string>
     <string name="security_wrong_pin">That PIN is not correct.</string>
-    <string name="security_too_many">Too many attempts. Try again in %1$d seconds.</string>
+    <string name="security_too_many">Too many attempts. Try again in %1$d s.</string>
     <string name="security_device_prompt_subtitle">Unlock No Papers Needed</string>
 </resources>

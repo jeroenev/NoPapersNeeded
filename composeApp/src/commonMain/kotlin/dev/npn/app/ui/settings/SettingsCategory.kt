@@ -13,6 +13,7 @@ import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.vector.ImageVector
+import dev.npn.app.platform.appLockRecoveryFile
 import dev.npn.app.platform.ocrHasLanguageSetting
 import dev.npn.app.platform.supportsSafStorage
 import dev.npn.app.ui.automation.AutomationSettingsPane
@@ -95,13 +96,18 @@ import no_papers_needed.composeapp.generated.resources.common_settings_watched_f
 import no_papers_needed.composeapp.generated.resources.detail_add_field
 import no_papers_needed.composeapp.generated.resources.onboarding_add_device
 import no_papers_needed.composeapp.generated.resources.security_app_lock
+import no_papers_needed.composeapp.generated.resources.security_app_lock_help
 import no_papers_needed.composeapp.generated.resources.security_change_pin
 import no_papers_needed.composeapp.generated.resources.security_lock_after
 import no_papers_needed.composeapp.generated.resources.security_lock_fifteen_minutes
 import no_papers_needed.composeapp.generated.resources.security_lock_five_minutes
 import no_papers_needed.composeapp.generated.resources.security_lock_immediately
 import no_papers_needed.composeapp.generated.resources.security_lock_one_minute
+import no_papers_needed.composeapp.generated.resources.security_not_encrypted
+import no_papers_needed.composeapp.generated.resources.security_recovery_android
+import no_papers_needed.composeapp.generated.resources.security_recovery_desktop
 import no_papers_needed.composeapp.generated.resources.security_recovery_title
+import no_papers_needed.composeapp.generated.resources.security_set_pin
 import no_papers_needed.composeapp.generated.resources.security_title
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
@@ -349,13 +355,21 @@ internal val SettingsCategories: List<SettingsCategory> =
             keywords =
                 listOf(
                     Res.string.security_app_lock,
+                    Res.string.security_app_lock_help,
+                    Res.string.security_set_pin,
                     Res.string.security_change_pin,
+                    Res.string.security_not_encrypted,
                     Res.string.security_lock_after,
                     Res.string.security_lock_immediately,
                     Res.string.security_lock_one_minute,
                     Res.string.security_lock_five_minutes,
                     Res.string.security_lock_fifteen_minutes,
                     Res.string.security_recovery_title,
+                    if (appLockRecoveryFile() != null) {
+                        Res.string.security_recovery_desktop
+                    } else {
+                        Res.string.security_recovery_android
+                    },
                 ),
             content = { state, actions -> SecuritySettingsPane(state, actions) },
         ),

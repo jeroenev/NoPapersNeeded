@@ -119,15 +119,15 @@ private fun lockTimeoutLabel(timeout: LockTimeout): String =
         LockTimeout.FIFTEEN_MINUTES -> stringResource(Res.string.security_lock_fifteen_minutes)
     }
 
-/** The set-or-change-PIN dialog. Its buffer is saved for a recreated screen, but never persisted. */
+/** The set-or-change-PIN dialog. Its buffer is plain [remember]: a secret never goes in saved state. */
 @Composable
 private fun SecurityDialogContent(
     dialog: SecurityDialog,
     onDismiss: () -> Unit,
     onSave: (String) -> Unit,
 ) {
-    var pin by rememberSaveable(dialog) { mutableStateOf("") }
-    var confirmation by rememberSaveable(dialog) { mutableStateOf("") }
+    var pin by remember(dialog) { mutableStateOf("") }
+    var confirmation by remember(dialog) { mutableStateOf("") }
     var showErrors by rememberSaveable(dialog) { mutableStateOf(false) }
 
     val tooShort = showErrors && pin.length < MIN_APP_LOCK_SECRET_LENGTH
