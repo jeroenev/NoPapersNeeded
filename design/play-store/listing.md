@@ -42,13 +42,18 @@ WHY YOU'LL LIKE IT
 
 OPTIONAL AI ASSISTANT
 
-Connect an AI provider of your choice and the assistant can answer questions about your documents, suggest tags and fill in titles, correspondents and dates for a batch of documents, and read handwriting, tables and faint scans that regular text recognition misses.
+Connect an AI provider of your choice — OpenAI, Anthropic, Google, Mistral, DeepSeek, OpenRouter, Ollama on your own machine, or any other OpenAI-compatible server — using your own key. There is no account with us and no server of ours in between: requests go from your device straight to that provider.
 
-It's off until you set it up, it asks before anything that sends documents to your provider, and nothing lands in your library until you've reviewed it.
+• Ask. "When does my car insurance renew?" The assistant searches your library, reads the documents it finds and answers from them, showing which ones it used.
+• Bulk edit. Have it propose tags, titles, correspondents and dates across the inbox, everything untagged, a saved view or a selection. Every suggestion is shown before anything is saved.
+• Read the hard pages. Handwriting, tables and faint scans come out as searchable text that on-device recognition struggles with.
+• File as you go. With auto-organize on, each new document gets tags from the ones you already use and any field you have marked for the assistant to fill.
 
-ALSO ON LINUX
+It's off until you set it up, and it asks before anything that sends documents to your provider. Bulk edits change nothing until you approve them; auto-organize is the one path that applies its suggestions as documents arrive.
 
-The same library opens in the desktop app for Linux (Flatpak, AppImage, .deb or .rpm).
+ALSO ON WINDOWS AND LINUX
+
+The same library opens in the desktop apps for Windows (an .msi or .exe installer) and Linux (Flatpak, AppImage, .deb or .rpm).
 
 WHY "ALL FILES ACCESS"
 
@@ -61,4 +66,4 @@ Available in English, Dutch, German, Spanish, French and Portuguese. Open source
 - Category: Productivity
 - Tags: Business, House & home, Privacy & security, Productivity, Tools (Play has no document or file manager tag)
 - Contact email: usual-filter-even@duck.com
-- Website: https://github.com/jeroenev/NoPapersNeeded (public from the first published version)
+- Website: https://github.com/jeroenev/NoPapersNeeded

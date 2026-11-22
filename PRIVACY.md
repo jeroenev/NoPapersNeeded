@@ -1,8 +1,8 @@
 # Privacy policy
 
-_Last updated: 3 November 2026_
+_Last updated: 22 November 2026_
 
-No Papers Needed is a document manager for Android and Linux. This policy explains what happens
+No Papers Needed is a document manager for Android, Windows and Linux. This policy explains what happens
 to your data when you use it.
 
 ## The short version

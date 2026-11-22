@@ -92,10 +92,14 @@ run sends a large batch, since that is one request per document to your provider
 Download the latest version from the
 [releases page](https://github.com/jeroenev/NoPapersNeeded/releases):
 
-- **Android** 11 or newer: the `.apk`.
+- **Android** 11 or newer on a 64-bit ARM phone: the `.apk`.
+- **Windows**: the `.msi` or `.exe` installer, with text recognition included.
 - **Linux**: AppImage, Flatpak, `.deb` or `.rpm`. Everything needed to run it is
-  included. For text recognition on the desktop, install `tesseract-ocr` (the Flatpak
-  already includes it).
+  included; for text recognition, install `tesseract-ocr` (the Flatpak already
+  includes it).
+
+Version 0.x is a beta: things may still change, and
+[issues](https://github.com/jeroenev/NoPapersNeeded/issues) are welcome.
 
 The app tells you when a new version is out.
 

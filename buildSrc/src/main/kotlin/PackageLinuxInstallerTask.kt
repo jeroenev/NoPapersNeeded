@@ -47,6 +47,14 @@ abstract class PackageLinuxInstallerTask
         @get:Input
         abstract val appDescription: Property<String>
 
+        /** jpackage `--vendor`: the .deb Maintainer's name and the .rpm's Packager. */
+        @get:Input
+        abstract val appVendor: Property<String>
+
+        /** jpackage `--linux-deb-maintainer`: the address beside [appVendor] in the .deb's Maintainer. */
+        @get:Input
+        abstract val maintainerEmail: Property<String>
+
         @get:OutputDirectory
         abstract val destinationDir: DirectoryProperty
 
@@ -57,31 +65,39 @@ abstract class PackageLinuxInstallerTask
             val dest = destinationDir.get().asFile
             dest.mkdirs()
 
+            val jpackageArgs =
+                mutableListOf(
+                    "--type",
+                    packageType.get(),
+                    // Packages the already-built app image, which carries the bundled
+                    // runtime, the launcher and the icon.
+                    "--app-image",
+                    src.absolutePath,
+                    "--name",
+                    appName.get(),
+                    "--app-version",
+                    appVersion.get(),
+                    "--description",
+                    appDescription.get(),
+                    "--vendor",
+                    appVendor.get(),
+                    "--license-file",
+                    licenseFile.get().asFile.absolutePath,
+                    "--linux-shortcut",
+                    "--resource-dir",
+                    resourceDir.get().asFile.absolutePath,
+                    "--dest",
+                    dest.absolutePath,
+                )
+            // Only the .deb carries a Maintainer field; without an address jpackage writes "Unknown".
+            if (packageType.get() == "deb") {
+                jpackageArgs.addAll(listOf("--linux-deb-maintainer", maintainerEmail.get()))
+            }
+
             execOps
                 .exec {
                     executable = jpackageTool.get()
-                    args =
-                        listOf(
-                            "--type",
-                            packageType.get(),
-                            // Packages the already-built app image, which carries the bundled
-                            // runtime, the launcher and the icon.
-                            "--app-image",
-                            src.absolutePath,
-                            "--name",
-                            appName.get(),
-                            "--app-version",
-                            appVersion.get(),
-                            "--description",
-                            appDescription.get(),
-                            "--license-file",
-                            licenseFile.get().asFile.absolutePath,
-                            "--linux-shortcut",
-                            "--resource-dir",
-                            resourceDir.get().asFile.absolutePath,
-                            "--dest",
-                            dest.absolutePath,
-                        )
+                    args = jpackageArgs
                 }.assertNormalExitValue()
             logger.lifecycle("The distribution is written to ${dest.absolutePath}")
         }

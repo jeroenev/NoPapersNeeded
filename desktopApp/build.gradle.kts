@@ -104,6 +104,9 @@ compose.desktop {
             packageName = npnAppName
             packageVersion = npnAppVersion
             description = npnDescription
+            // jpackage defaults the vendor to "Unknown", which becomes the .deb Maintainer and the
+            // MSI manufacturer (what Windows shows as the publisher).
+            vendor = npnVendor
             licenseFile.set(rootProject.file("LICENSE"))
             appResourcesRootDir.set(appResources)
             linux {
@@ -189,6 +192,8 @@ fun PackageLinuxInstallerTask.packageAs(type: String) {
     appName.set(npnAppName)
     appVersion.set(npnAppVersion)
     appDescription.set(npnDescription)
+    appVendor.set(npnVendor)
+    maintainerEmail.set(npnMaintainerEmail)
     destinationDir.set(layout.buildDirectory.dir("compose/binaries/main/$type"))
 }
 
