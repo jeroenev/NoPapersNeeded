@@ -27,8 +27,8 @@ fun BackTopBar(
     title: String,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
-    subtitle: String? = null,
     subtitleModifier: Modifier = Modifier,
+    subtitle: String? = null,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     TopAppBar(

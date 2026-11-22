@@ -21,9 +21,12 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -94,7 +97,7 @@ internal fun TriageScreen(
     if (item == null) {
         // The movers only pick ids the mode knows, so this is only reachable from a hand-built
         // state; leave rather than stranding the user on a surface with no way out.
-        LaunchedEffect(Unit) { actions.exitTriage() }
+        SideEffect { actions.exitTriage() }
         return
     }
     val drafts = LocalDocumentDrafts.current
@@ -218,15 +221,19 @@ private fun TriageDocument(
     preview: @Composable (Modifier) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // One composition of the page viewer, moved between the wide and compact layouts rather than
+    // built again in each: the viewer's pager, zoom and bitmap cache survive a window-width change.
+    val latestPreview by rememberUpdatedState(preview)
+    val previewContent = remember { movableContentOf<Modifier> { latestPreview(it) } }
     if (wide) {
         Row(modifier) {
-            Box(Modifier.weight(1f).fillMaxHeight()) { preview(Modifier.fillMaxSize()) }
+            Box(Modifier.weight(1f).fillMaxHeight()) { previewContent(Modifier.fillMaxSize()) }
             Box(Modifier.width(1.dp).fillMaxHeight().background(MaterialTheme.colorScheme.outlineVariant))
             Box(Modifier.weight(1f).fillMaxHeight()) { TriageMetadata(editing, metadata, Modifier.fillMaxSize()) }
         }
     } else {
         Column(modifier) {
-            Box(Modifier.fillMaxWidth().weight(0.45f)) { preview(Modifier.fillMaxSize()) }
+            Box(Modifier.fillMaxWidth().weight(0.45f)) { previewContent(Modifier.fillMaxSize()) }
             HorizontalDivider()
             TriageMetadata(editing, metadata, Modifier.fillMaxWidth().weight(0.55f))
         }
