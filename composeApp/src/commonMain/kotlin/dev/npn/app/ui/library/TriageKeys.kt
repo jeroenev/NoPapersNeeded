@@ -2,6 +2,7 @@ package dev.npn.app.ui.library
 
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.key
 import dev.npn.app.ui.common.keyShortcuts
 
 /**
