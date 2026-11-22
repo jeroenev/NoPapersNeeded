@@ -288,7 +288,10 @@ internal object LibraryAiTools {
     ) : SimpleTool<ListTagsTool.Args>(
             argsType = typeToken<Args>(),
             name = ChatTools.LIST_TAGS,
-            description = "List every tag in the library with its document count.",
+            description =
+                "List every tag in the library with how many live documents carry it (trashed and " +
+                    "deleted documents are not counted). Use it to find exact tag names before " +
+                    "${ChatTools.DOCUMENTS_WITH_TAG}, or to answer how the library is organised.",
         ) {
         @Serializable
         class Args
@@ -308,7 +311,11 @@ internal object LibraryAiTools {
     ) : SimpleTool<DocumentsWithTagTool.Args>(
             argsType = typeToken<Args>(),
             name = ChatTools.DOCUMENTS_WITH_TAG,
-            description = "List documents carrying an exact tag name (use ${ChatTools.LIST_TAGS} to discover names).",
+            description =
+                "List live documents carrying one tag, matched by its exact name (get names from " +
+                    "${ChatTools.LIST_TAGS}). Returns at most $MAX_LISTED_DOCS documents, each with its " +
+                    "docId, or says that no document has the tag. For words inside documents use " +
+                    "${ChatTools.SEARCH_DOCUMENTS} instead.",
         ) {
         @Serializable
         data class Args(

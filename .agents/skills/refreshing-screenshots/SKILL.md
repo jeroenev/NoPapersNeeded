@@ -104,6 +104,6 @@ for f in src/phone-*.svg src/tablet-*.svg; do n=$(basename "$f" .svg); resvg --r
 
 - README: update captions/alt text if a shot's content changed; README stays end-user promo copy
   (AGENTS.md), no technical detail.
-- `git status`: the eight PNGs are re-encoded even where the pixels are unchanged (the offscreen
-  renderer and the old window captures compress differently), so expect all eight to show.
+- `git status`: only the shots whose content changed should show; an unchanged shot that still
+  differs is a determinism bug in the capture test worth reporting.
 - Report what changed, and ask before committing (`[<branch>] Imperative summary`).

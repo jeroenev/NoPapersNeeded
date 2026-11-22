@@ -193,9 +193,9 @@ internal object AiPrompts {
         You are an OCR engine. You transcribe one scanned page image into plain text.
 
         Rules:
-        - Output ONLY the page's text. No preamble, no commentary, no explanation of what the
-          document is, no markdown code fences.
-        - Transcribe VERBATIM in the page's own language. Never translate, summarise, rephrase,
+        - Output only the page's text. No preamble, no commentary, no explanation of what the
+          document is, no markdown code fences: the reply is stored as the page's archived text.
+        - Transcribe verbatim in the page's own language. Never translate, summarise, rephrase,
           correct spelling, or fix what looks like an error: reproduce what is printed.
         - Keep the natural reading order and the line and paragraph breaks of the page.
         - Render tables as plain text rows, keeping columns separated by spaces or tabs.
@@ -303,20 +303,20 @@ internal object AiPrompts {
     ): String {
         val newTagRule =
             if (caps.maxNew <= 0) {
-                "Do NOT invent brand-new tags: use ONLY tags from the provided vocabulary."
+                "Use only tags from the provided vocabulary; do not create new ones."
             } else {
                 val language =
                     context.appLanguage?.let { "Write brand-new tags in $it, the app's language. " }.orEmpty()
-                "${language}Strongly prefer existing vocabulary tags and propose at most ${caps.maxNew} brand-new tags."
+                "${language}Prefer existing vocabulary tags; propose at most ${caps.maxNew} new ones."
             }
-        return "\"add_tags\": tags to ADD to this document (must not already be on it). " +
-            "When an existing library tag fits, copy it VERBATIM (exact spelling and case); " +
+        return "\"add_tags\": tags to add to this document (not already on it). " +
+            "When an existing library tag fits, copy its exact spelling and case; " +
             "only invent a new tag when none fits. Tags are short lowercase labels (topic, " +
             "document kind, organisation, year). $newTagRule At most ${caps.max}, best first."
     }
 
     private const val REMOVE_TAGS_RULE =
-        "\"remove_tags\": tags currently on this document that should be REMOVED. " +
+        "\"remove_tags\": tags currently on this document that should be removed. " +
             "Only list tags from the document's current tag list, verbatim. Leave empty " +
             "unless the document genuinely should no longer have those tags."
 
@@ -368,7 +368,7 @@ internal object AiPrompts {
             for (spec in fields) {
                 if (spec.vocabulary.isEmpty()) continue
                 add(
-                    "Existing values of ${spec.def.label} (\"${spec.key}\") in this library — copy one VERBATIM " +
+                    "Existing values of ${spec.def.label} (\"${spec.key}\") in this library — copy one exactly " +
                         "when it fits: " + spec.vocabulary.joinToString(", "),
                 )
             }
@@ -427,7 +427,7 @@ internal object AiPrompts {
     ): String {
         val reuse =
             if (spec.vocabulary.isNotEmpty()) {
-                "; when an existing value from the provided list matches, copy it VERBATIM"
+                "; when an existing value from the provided list matches, copy it exactly"
             } else {
                 ""
             }
