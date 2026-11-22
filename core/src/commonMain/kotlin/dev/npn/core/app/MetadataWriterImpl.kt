@@ -231,6 +231,16 @@ internal class MetadataWriterImpl(
         }
     }
 
+    override suspend fun createTag(
+        name: String,
+        color: String?,
+        icon: String?,
+    ) = owned {
+        val t = name.trim()
+        if (t.isEmpty() || (color == null && icon == null)) return@owned
+        coordinator.commitAndApply(listOf(PendingOp.tagStyle(t, color, icon)))
+    }
+
     override suspend fun renameTag(
         from: String,
         to: String,
@@ -241,7 +251,14 @@ internal class MetadataWriterImpl(
         to: String,
     ) = owned { retag(from, to, PendingOp::tagMerge) }
 
-    /** Move tag [from] onto [to] with [op] (a rename or a merge), then follow up on what [to] tags. */
+    /**
+     * Move tag [from] onto [to] with [op] (a rename or a merge), then follow up on what [to] tags.
+     *
+     * A style is vocabulary, so it follows the name: the target keeps its own style, or takes the
+     * source's when it has none, and the source's is cleared in the same write. Without that, a
+     * style would stay behind under a name nothing carries any more (keeping a deleted tag alive in
+     * the tag list) and the name it moved to would lose its color.
+     */
     private suspend fun retag(
         from: String,
         to: String,
@@ -250,7 +267,19 @@ internal class MetadataWriterImpl(
         val f = from.trim()
         val t = to.trim()
         if (f.isEmpty() || t.isEmpty() || f == t) return
-        coordinator.commitAndApply(listOf(op(f, t)))
+        coordinator.commitBuilt { state ->
+            val source = state.tagStyle(f)
+            val target = state.tagStyle(t)
+            buildList {
+                add(op(f, t))
+                if (source != null && (source.color != null || source.icon != null)) {
+                    add(PendingOp.tagStyle(f, null, null))
+                    if (target == null || (target.color == null && target.icon == null)) {
+                        add(PendingOp.tagStyle(t, source.color, source.icon))
+                    }
+                }
+            }
+        }
         followUp(taggedNow(t))
     }
 
@@ -260,8 +289,13 @@ internal class MetadataWriterImpl(
             if (t.isEmpty()) return@owned
             val affected = tagDao.docIdsWithTag(t)
             // No dedicated journal op by design: remove the tag from every doc currently holding it,
-            // listing all observed dots (OR-set delete-everywhere).
-            coordinator.commitBuilt { state -> state.tagRemovalOps(state.taggedDocs(), t) }
+            // listing all observed dots (OR-set delete-everywhere). A style of its own is cleared in
+            // the same write, or a tag the user created and then deleted would stay in the list.
+            coordinator.commitBuilt { state ->
+                val styled = state.tagStyle(t)?.let { it.color != null || it.icon != null } == true
+                state.tagRemovalOps(state.taggedDocs(), t) +
+                    if (styled) listOf(PendingOp.tagStyle(t, null, null)) else emptyList()
+            }
             followUp(affected)
         }
 

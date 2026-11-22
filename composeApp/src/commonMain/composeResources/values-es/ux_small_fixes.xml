@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- A tag the user creates on the Tags screen, which no document carries yet. -->
+    <string name="common_tags_create_failed">No se pudo crear la etiqueta: %1$s</string>
+
+    <!-- Who made a change in a document's history. -->
+    <string name="detail_history_this_device">Este dispositivo</string>
+    <string name="detail_history_another_device">Otro dispositivo</string>
+
+    <!-- Activity: queued work that cannot progress until something is fixed. -->
+    <string name="queue_block_ocr_missing">El reconocimiento de texto no está configurado en este dispositivo, así que estos documentos esperan.</string>
+    <string name="queue_block_ocr_fix">Configurar el reconocimiento de texto</string>
+    <string name="queue_block_ai_unconfigured">La organización automática no tiene un asistente conectado, así que estos documentos esperan.</string>
+    <string name="queue_block_ai_unreachable">El asistente no respondió, así que la organización automática lo está reintentando.</string>
+    <string name="queue_block_ai_fix">Conectar el asistente</string>
+    <string name="queue_block_ai_check">Revisar los ajustes del asistente</string>
+    <string name="queue_problem_storage_access">Las importaciones esperan permiso para acceder al almacenamiento de este dispositivo.</string>
+
+    <!-- The assistant screen's hint that it needs an endpoint. -->
+    <string name="ai_open_settings">Abrir los ajustes del asistente</string>
+</resources>

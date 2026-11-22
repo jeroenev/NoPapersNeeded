@@ -65,6 +65,29 @@ class TagDaoTest {
                 .count shouldBe 1
         }
 
+    /** A tag with a style is the user's, even with no document: pruning keeps it and drops the rest. */
+    @Test
+    fun pruneKeepsStyledTagsAndDropsUnreferencedUnstyledOnes() =
+        runTest {
+            val docDao = db.documentDao()
+            val tagDao = db.tagDao()
+            val doc = "a".repeat(64)
+            docDao.upsert(documentEntity(doc))
+            tagDao.upsertAll(
+                listOf(
+                    TagEntity("created", color = "#ff0000"),
+                    TagEntity("auto"),
+                    TagEntity("carried"),
+                ),
+            )
+            tagDao.setForDocuments(mapOf(doc to listOf("carried")))
+
+            tagDao.pruneUnreferenced()
+
+            // The empty styled tag survives; the unreferenced unstyled one goes; the carried one stays.
+            tagDao.names() shouldContainExactly listOf("carried", "created")
+        }
+
     @Test
     fun setForDocumentReplacesTags() =
         runTest {

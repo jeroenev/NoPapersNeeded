@@ -79,6 +79,8 @@ internal class DocumentRepositoryImpl(
     private val db: NpnDatabase,
     /** Where a query's rows are turned into list items. */
     private val mapping: CoroutineDispatcher = Dispatchers.Default,
+    /** This installation's journal device id, which tells a history change of its own from another's. */
+    private val deviceId: String = "",
 ) : DocumentRepository {
     private val documentDao get() = db.documentDao()
     private val tagDao get() = db.tagDao()
@@ -217,7 +219,7 @@ internal class DocumentRepositoryImpl(
                 val event = runCatchingCancellable { EventDecoderRegistry.decodeStored(row.canonicalJson) }.getOrNull()
                 DocumentHistoryRecord(
                     timeMillis = row.hlcPhysical,
-                    deviceId = row.deviceId,
+                    origin = HistoryOrigin.of(row.deviceId, deviceId),
                     entry = event?.let { HistoryEntry.of(it.op) } ?: HistoryEntry.Undecodable(row.operation),
                 )
             }

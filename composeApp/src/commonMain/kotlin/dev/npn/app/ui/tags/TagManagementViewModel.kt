@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_tags_color_some_failed
+import no_papers_needed.composeapp.generated.resources.common_tags_create_failed
 import no_papers_needed.composeapp.generated.resources.common_tags_delete_failed
 import no_papers_needed.composeapp.generated.resources.common_tags_delete_some_failed
 import no_papers_needed.composeapp.generated.resources.common_tags_merge_failed
@@ -72,6 +73,12 @@ internal fun tagRows(tags: List<TagInfo>): List<TagRow> {
  * passes one, the selection passes all of it, and both go through the same write.
  */
 interface TagWrites {
+    /** Create a tag no document carries yet; [color] is what keeps it in the list. */
+    fun create(
+        name: String,
+        color: String?,
+    )
+
     fun rename(
         from: String,
         to: String,
@@ -118,6 +125,10 @@ interface TagSelectionActions {
  */
 @Serializable
 internal sealed interface TagDialog {
+    /** A tag this screen brings into the vocabulary with no document carrying it. */
+    @Serializable
+    data object Create : TagDialog
+
     @Serializable
     data class Rename(
         val name: String,
@@ -198,6 +209,11 @@ class TagManagementViewModel(
     private fun ordered(names: List<String>): List<String> = rows.value?.selectable(names) ?: names
 
     // Names arrive trimmed: the dialogs they are typed or picked in trim what they confirm.
+
+    override fun create(
+        name: String,
+        color: String?,
+    ) = launchReporting(Res.string.common_tags_create_failed) { tagAdmin.createTag(name, color) }
 
     override fun rename(
         from: String,

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- A tag the user creates on the Tags screen, which no document carries yet. -->
+    <string name="common_tags_create_failed">Could not create the tag: %1$s</string>
+
+    <!-- Who made a change in a document's history. -->
+    <string name="detail_history_this_device">This device</string>
+    <string name="detail_history_another_device">Another device</string>
+
+    <!-- Activity: queued work that cannot progress until something is fixed. -->
+    <string name="queue_block_ocr_missing">Text recognition is not set up on this device, so these documents wait.</string>
+    <string name="queue_block_ocr_fix">Set up text recognition</string>
+    <string name="queue_block_ai_unconfigured">Auto-organize has no assistant connected, so these documents wait.</string>
+    <string name="queue_block_ai_unreachable">The assistant did not answer, so Auto-organize is being retried.</string>
+    <string name="queue_block_ai_fix">Connect the assistant</string>
+    <string name="queue_block_ai_check">Check the assistant settings</string>
+    <string name="queue_problem_storage_access">Imports are waiting for permission to read this device's storage.</string>
+
+    <!-- The assistant screen's hint that it needs an endpoint. -->
+    <string name="ai_open_settings">Open assistant settings</string>
+</resources>

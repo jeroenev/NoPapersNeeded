@@ -80,7 +80,7 @@ internal class SessionGraph(
      */
     private val endpointHealth = EndpointHealth()
 
-    val documents: DocumentRepository = DocumentRepositoryImpl(db, mapping = deps.computation)
+    val documents: DocumentRepository = DocumentRepositoryImpl(db, mapping = deps.computation, deviceId = deviceId)
     val tags: TagRepository = TagRepositoryImpl(db.tagDao())
     val savedViews = SavedViewRepositoryImpl(coordinator, lifetime)
     val fieldRegistry: FieldRegistry = FieldRegistryImpl(db, coordinator, lifetime)

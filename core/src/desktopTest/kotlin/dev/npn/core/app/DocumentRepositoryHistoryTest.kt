@@ -55,7 +55,7 @@ class DocumentRepositoryHistoryTest {
                 )
             dao.ingest(source, events)
 
-            val repo = DocumentRepositoryImpl(db)
+            val repo = DocumentRepositoryImpl(db, deviceId = "dev-a")
             val history = repo.history(docId)
 
             history.map { it.entry } shouldContainExactly
@@ -95,9 +95,10 @@ class DocumentRepositoryHistoryTest {
                 listOf(valid, broken),
             )
 
-            val history = DocumentRepositoryImpl(db).history(docId)
+            val history = DocumentRepositoryImpl(db, deviceId = "dev-a").history(docId)
 
-            history.map { it.deviceId } shouldContainExactly listOf("dev-a", "dev-z")
+            history.map { it.origin } shouldContainExactly
+                listOf(HistoryOrigin.THIS_DEVICE, HistoryOrigin.ANOTHER_DEVICE)
             history.first().entry shouldBe HistoryEntry.Undecodable("future-op")
         }
 

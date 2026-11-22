@@ -291,6 +291,9 @@ internal class FoldProjection(
         val allTags = LinkedHashSet<String>()
         for (doc in journalDocs) allTags.addAll(state.inheritedTags(doc))
         allTags.addAll(styledTags)
+        // A tag a style keeps alive has no document to name it, and a full fold names no styled
+        // tags of its own, so every fold takes them from the fold's own state.
+        allTags.addAll(state.retainedTags())
         val existingTagRows = tagDao.all().associateBy { it.name }
         val changed =
             allTags.mapNotNull { tag ->

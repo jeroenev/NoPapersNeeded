@@ -91,7 +91,7 @@
     <string name="detail_text_unavailable">No text available.</string>
     <string name="detail_no_history">No history events yet.</string>
     <string name="detail_history_load_failed">History could not be loaded: %1$s</string>
-    <string name="detail_history_secondary">%1$s · Device %2$s</string>
+    <string name="detail_history_secondary">%1$s · %2$s</string>
     <string name="detail_ocr_not_processed">Not processed</string>
     <string name="detail_ocr_queued">Queued</string>
     <string name="detail_ocr_done">Done</string>

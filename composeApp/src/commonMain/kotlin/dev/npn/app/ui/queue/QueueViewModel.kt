@@ -7,8 +7,13 @@ import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.QueuedEditRun
 import dev.npn.core.app.QueuedWork
+import dev.npn.core.app.WorkBlock
+import dev.npn.core.app.WorkCapabilities
 import dev.npn.core.app.WorkFacade
+import dev.npn.core.app.blockedBy
 import dev.npn.core.index.IndexProgress
+import dev.npn.core.settings.SettingsRepository
+import dev.npn.core.settings.aiConfigured
 import dev.npn.core.sync.SyncOutcome
 import dev.npn.core.sync.SyncRunSummary
 import kotlinx.coroutines.flow.StateFlow
@@ -34,6 +39,16 @@ data class ActivitySync(
 }
 
 /**
+ * One entry of Activity's queue with [block], what keeps it from making progress on this device.
+ * A blocked entry is not waiting for its turn: it needs a fix, and Activity shows it as a problem
+ * with the way there rather than as work in motion.
+ */
+data class ActivityWork(
+    val entry: QueuedWork,
+    val block: WorkBlock?,
+)
+
+/**
  * Activity, the processing queue's page: what the text recognition and Auto-organize passes still
  * owe ([items]), the bulk edits handed to the background ([editRuns]), a library scan or import in
  * progress ([scan]) and the cloud sync ([sync]).
@@ -45,14 +60,28 @@ data class ActivitySync(
  */
 class QueueViewModel(
     session: LibrarySession,
+    /** The device settings, followed for whether an assistant endpoint is configured. */
+    settings: SettingsRepository,
 ) : MessagesViewModel() {
     private val editQueue = session.aiEditQueue
     private val ocr = session.ocr
     private val cloud = session.sync
 
     /** Null until the first load, so the screen does not flash "nothing queued" before it. */
-    val items: StateFlow<List<QueuedWork>?> =
-        session.work.queue.stateIn(viewModelScope, WhileSubscribedTimeout, null)
+    val items: StateFlow<List<ActivityWork>?> =
+        combine(
+            session.work.queue,
+            settings.aiConfigured(),
+        ) { queue, aiConfigured ->
+            // Asked per emission rather than cached: whether a local engine exists is a device fact the
+            // user can change while the app runs, and the engine's own check is cheap.
+            val capabilities =
+                WorkCapabilities(
+                    ocrEngineAvailable = ocr.anyEngineAvailable(),
+                    aiEndpointConfigured = aiConfigured,
+                )
+            queue.map { ActivityWork(it, it.blockedBy(capabilities)) }
+        }.stateIn(viewModelScope, WhileSubscribedTimeout, null)
 
     /** Queued bulk edits, finished ones first — see [WorkFacade.editRuns]. Null until the first load. */
     val editRuns: StateFlow<List<QueuedEditRun>?> =

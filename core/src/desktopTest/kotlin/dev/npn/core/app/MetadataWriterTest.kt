@@ -98,34 +98,50 @@ class MetadataWriterTest {
                 .first()
                 .map { it.name } shouldContain "fleeting"
 
-            // Untagging the last document drops the tag from the list entirely (no count-0 rows).
+            // Untagging the last document drops an unstyled tag from the list entirely (no count-0
+            // rows): nothing was given to it but a document.
             rig.session.meta.removeTag(listOf(id), "fleeting")
             rig.session.tags
                 .observeTags()
                 .first()
                 .map { it.name } shouldNotContain "fleeting"
 
-            // A style alone does not keep an unused tag alive, but it survives in the journal and
-            // comes back when the tag is used again.
+            // A style is what makes a tag the user's own, so it keeps one no document carries.
             rig.session.tagAdmin.setTagStyle("styled", "#ff0000", null)
             rig.session.tags
                 .observeTags()
                 .first()
-                .map { it.name } shouldNotContain "styled"
-            rig.session.meta.addTag(listOf(id), "styled")
-            val styled =
-                rig.session.tags
-                    .observeTags()
-                    .first()
-                    .first { it.name == "styled" }
-            styled.color shouldBe "#ff0000"
+                .map { it.name } shouldContain "styled"
 
-            // deleteTag prunes as well.
+            // Deleting it clears the style in the same write, so it goes.
             rig.session.tagAdmin.deleteTag("styled")
             rig.session.tags
                 .observeTags()
                 .first()
                 .map { it.name } shouldNotContain "styled"
+        }
+
+    /** The Tags screen's "new tag": a tag with no document, kept by its style until deleted. */
+    @Test
+    fun aTagCreatedWithoutADocumentStaysUntilDeleted() =
+        appSessionTest { rig ->
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+
+            rig.session.tagAdmin.createTag("unused", "#ff0000")
+            val created =
+                rig.session.tags
+                    .observeTags()
+                    .first()
+                    .first { it.name == "unused" }
+            created.count shouldBe 0
+            created.color shouldBe "#ff0000"
+
+            rig.session.tagAdmin.deleteTag("unused")
+            rig.session.tags
+                .observeTags()
+                .first()
+                .map { it.name } shouldNotContain "unused"
         }
 
     @Test

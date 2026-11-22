@@ -40,13 +40,15 @@ interface TagDao {
     suspend fun allWithLiveCounts(): List<TagWithCount>
 
     /**
-     * Remove tag rows that no non-deleted document references. Tags exist only through use: when
-     * the last document drops a tag (untag, rename, merge, permanent delete) it vanishes from the
-     * tag list; re-adding the name later brings it back (with its journal-kept style, if any).
-     * Trashed documents keep their tags alive so restoring is lossless.
+     * Remove tag rows that no non-deleted document references, unless the user gave them a style.
+     * A style is what keeps a tag the user created on the Tags screen but no document carries yet
+     * ([TagAdmin.createTag]); deleting such a tag clears its style in the same write, so it goes.
+     * An unstyled tag exists only through use: when the last document drops it (untag, rename,
+     * merge, permanent delete) it vanishes from the tag list, and re-adding the name later brings it
+     * back. Trashed documents keep their tags alive so restoring is lossless.
      */
     @Query(
-        "DELETE FROM tags WHERE name NOT IN (" +
+        "DELETE FROM tags WHERE color IS NULL AND icon IS NULL AND name NOT IN (" +
             "SELECT dt.tag FROM document_tags dt " +
             "JOIN documents d ON d.docId = dt.docId WHERE d.deleted = 0)",
     )

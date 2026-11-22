@@ -4,6 +4,7 @@ package dev.npn.app.ui.queue
 
 import dev.npn.app.EnglishLocaleTest
 import dev.npn.app.FakeLibrarySession
+import dev.npn.app.FakeSettingsRepository
 import dev.npn.app.ui.click
 import dev.npn.app.ui.closing
 import dev.npn.app.ui.has
@@ -72,7 +73,17 @@ class QueueScreenTest : EnglishLocaleTest() {
         hostedScene(WIDTH, HEIGHT) {
             NpnTheme(
                 darkTheme = false,
-            ) { QueueScreen(session, onOpenDoc = {}, onOpenEditRun = {}, onOpenCloudSettings = {}) }
+            ) {
+                QueueScreen(
+                    session,
+                    settings = FakeSettingsRepository(),
+                    onOpenDoc = {},
+                    onOpenEditRun = {},
+                    onOpenCloudSettings = {},
+                    onOpenOcrSettings = {},
+                    onOpenAiSettings = {},
+                )
+            }
         }
 
     private companion object {

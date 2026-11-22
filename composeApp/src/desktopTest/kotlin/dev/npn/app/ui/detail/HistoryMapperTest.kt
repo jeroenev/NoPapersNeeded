@@ -5,6 +5,7 @@ import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.DocumentHistoryRecord
 import dev.npn.core.app.HistoryEntry
+import dev.npn.core.app.HistoryOrigin
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.ocr.OcrEngineId
 import dev.npn.core.ocr.OcrEngineRef
@@ -36,7 +37,8 @@ class HistoryMapperTest {
     private fun record(
         entry: HistoryEntry,
         timeMillis: Long = 1,
-    ) = DocumentHistoryRecord(timeMillis, "dev", entry)
+        origin: HistoryOrigin = HistoryOrigin.THIS_DEVICE,
+    ) = DocumentHistoryRecord(timeMillis, origin, entry)
 
     @Test
     fun mapsAllDocumentEntries() {
@@ -99,6 +101,23 @@ class HistoryMapperTest {
 
             items.map { it.description.english() } shouldContainExactly
                 listOf("Set the text source to Embedded text", "Set the text source to future")
+        }
+
+    /** Provenance is said in the user's terms: this device, or another one, never a journal device id. */
+    @Test
+    fun provenanceNamesTheDeviceInTheUsersTerms() =
+        runTest {
+            val items =
+                HistoryMapper
+                    .toTimeline(
+                        listOf(
+                            record(HistoryEntry.Restored, origin = HistoryOrigin.THIS_DEVICE),
+                            record(HistoryEntry.Restored, origin = HistoryOrigin.ANOTHER_DEVICE),
+                        ),
+                    ).items
+
+            items.map { it.origin.english() } shouldContainExactly
+                listOf("This device", "Another device")
         }
 
     @Test

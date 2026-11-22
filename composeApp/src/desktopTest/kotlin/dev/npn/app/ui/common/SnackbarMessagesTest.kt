@@ -65,6 +65,36 @@ class SnackbarMessagesTest {
             }
         }
 
+    /** A newer Undo replaces the pending one, so the bar never offers an action on an older write. */
+    @Test
+    fun aNewestUndoReplacesThePendingOne() =
+        onUiThread {
+            val snackbar = SnackbarHostState()
+            var firstUndone = 0
+            var secondUndone = 0
+
+            fun undo(
+                message: String,
+                onUndo: () -> Unit,
+            ) = UiMessage(
+                UiText.Raw(message),
+                UiMessage.Action(UiText.Raw("Undo")) { onUndo() },
+            )
+            withScene(
+                flowOf(undo("Trashed 2 documents") { firstUndone++ }, undo("Trashed 5 documents") { secondUndone++ }),
+                snackbar,
+            ) { scene ->
+                snackbar.shownMessage() shouldBe "Trashed 5 documents"
+
+                snackbar.currentSnackbarData?.visuals?.actionLabel shouldBe "Undo"
+                snackbar.currentSnackbarData?.performAction()
+                scene.render()
+
+                firstUndone shouldBe 0
+                secondUndone shouldBe 1
+            }
+        }
+
     private fun text(value: String) = UiMessage(UiText.Raw(value))
 
     private fun SnackbarHostState.shownMessage(): String? = currentSnackbarData?.visuals?.message

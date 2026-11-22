@@ -6,13 +6,31 @@ import dev.npn.core.ocr.OcrEngineRef
 
 /**
  * One change in a document's history: when it was made ([timeMillis], the wall time of the device
- * that made it), on which device, and what it was. Records come in the journal's causal order.
+ * that made it), where it came from, and what it was. Records come in the journal's causal order.
  */
 data class DocumentHistoryRecord(
     val timeMillis: Long,
-    val deviceId: String,
+    val origin: HistoryOrigin,
     val entry: HistoryEntry,
 )
+
+/**
+ * Who made a history change, as the user may learn it: this installation, or one this library syncs
+ * with. The journal's raw device ids stay in `core`; the timeline labels the origin.
+ */
+enum class HistoryOrigin {
+    THIS_DEVICE,
+    ANOTHER_DEVICE,
+    ;
+
+    companion object {
+        /** The origin of a change recorded by [author], this installation's journal device id. */
+        fun of(
+            author: String,
+            thisDeviceId: String,
+        ): HistoryOrigin = if (author == thisDeviceId) THIS_DEVICE else ANOTHER_DEVICE
+    }
+}
 
 /**
  * What one history record changed, as the domain names it. Built from the journal in core, so a
