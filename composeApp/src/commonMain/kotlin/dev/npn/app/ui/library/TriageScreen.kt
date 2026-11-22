@@ -39,7 +39,6 @@ import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.LoadingIndicator
 import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.PositionStepper
-import dev.npn.app.ui.common.PublishWindowTitle
 import dev.npn.app.ui.common.ReviewedBadge
 import dev.npn.app.ui.common.SectionHeading
 import dev.npn.app.ui.common.SnackbarMessages
@@ -109,7 +108,6 @@ internal fun TriageScreen(
     SnackbarMessages(vm.messages, snackbar)
     val metadata by vm.metadata.collectAsStateWithLifecycle()
     val ui by vm.ui.collectAsStateWithLifecycle()
-    PublishWindowTitle(stringResource(Res.string.triage_title))
     val modeFocus = remember { FocusRequester() }
     // Every move lands the keyboard back on the mode, so J/K work at once after a button or a save.
     LaunchedEffect(state.currentId) {
