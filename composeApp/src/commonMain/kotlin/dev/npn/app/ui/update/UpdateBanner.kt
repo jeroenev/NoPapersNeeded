@@ -9,11 +9,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.npn.app.BuildInfo
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.TopBanner
 import dev.npn.app.ui.common.WithTopBanner
 import dev.npn.core.settings.SettingsRepository
 import dev.npn.core.update.AppRelease
+import dev.npn.core.update.AppVersions
 import dev.npn.core.update.GitHubLatestRelease
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.library_dismiss
@@ -29,7 +31,14 @@ import org.jetbrains.compose.resources.stringResource
 internal fun WithUpdateBanner(
     settings: SettingsRepository,
     snackbar: SnackbarHostState,
-    vm: UpdateNoticeViewModel = viewModel { UpdateNoticeViewModel(settings, GitHubLatestRelease()) },
+    vm: UpdateNoticeViewModel =
+        viewModel {
+            UpdateNoticeViewModel(
+                settings,
+                // A beta build is offered betas and stable releases; a stable build only stable ones.
+                GitHubLatestRelease(includePrereleases = AppVersions.isPreRelease(BuildInfo.VERSION)),
+            )
+        },
     content: @Composable () -> Unit,
 ) {
     SnackbarMessages(vm.messages, snackbar)
