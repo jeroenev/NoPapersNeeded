@@ -10,6 +10,8 @@ import io.github.vinceglb.filekit.absolutePath
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import org.jetbrains.skia.Image
+import java.awt.Toolkit
+import java.awt.datatransfer.StringSelection
 import java.io.File
 import java.nio.file.Paths
 
@@ -107,4 +109,9 @@ actual suspend fun sharePdfBytes(
     io: CoroutineDispatcher,
 ) {
     error("Sharing is not supported on desktop; export via the save-file dialog instead.")
+}
+
+actual suspend fun copyToClipboard(text: String) {
+    val selection = StringSelection(text)
+    Toolkit.getDefaultToolkit().systemClipboard.setContents(selection, selection)
 }

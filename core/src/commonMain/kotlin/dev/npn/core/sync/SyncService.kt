@@ -14,6 +14,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.update
@@ -59,6 +60,10 @@ class SyncService(
             loadConfig()
             emitAll(_config)
         }
+
+    /** The live pass and the last outcome, read as the settings screen says them. */
+    override val health: Flow<SyncHealth> =
+        combine(config, status) { cfg, current -> SyncHealth.of(cfg, current) }
 
     /** Guards loading and changing the stored settings and last run. */
     private val store = Mutex()
@@ -206,8 +211,20 @@ class SyncService(
         }
 
     private suspend fun finish(summary: SyncRunSummary) {
-        _status.update { it.copy(lastRun = summary) }
-        kv.put(SyncManifest.KEY_LAST_RUN, NpnJson.Persisted.encodeToString(SyncRunSummary.serializer(), summary))
+        // A pass that finished clears the streak; one that ended early adds itself to it and keeps
+        // the last success, so the settings screen can say how long this library has been failing.
+        val previous = _status.value.lastRun
+        val next =
+            if (summary.ok) {
+                summary.copy(consecutiveFailures = 0, lastSuccessAt = summary.finishedAt)
+            } else {
+                summary.copy(
+                    consecutiveFailures = (previous?.consecutiveFailures ?: 0) + 1,
+                    lastSuccessAt = previous?.lastSuccessAt ?: previous?.takeIf { it.ok }?.finishedAt,
+                )
+            }
+        _status.update { it.copy(lastRun = next) }
+        kv.put(SyncManifest.KEY_LAST_RUN, NpnJson.Persisted.encodeToString(SyncRunSummary.serializer(), next))
     }
 
     private suspend fun loadConfig(): CloudSyncConfig = store.withLock { loadConfigLocked() }

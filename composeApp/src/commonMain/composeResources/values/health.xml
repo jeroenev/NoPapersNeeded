@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Cloud sync: how the last passes went, beyond the one-line status. -->
+    <string name="common_sync_health_title">Sync health</string>
+    <string name="common_sync_health_working">Syncing now…</string>
+    <string name="common_sync_health_healthy">Everything is in sync.</string>
+    <plurals name="common_sync_health_attention">
+        <item quantity="one">%1$d item needs your attention.</item>
+        <item quantity="other">%1$d items need your attention.</item>
+    </plurals>
+    <string name="common_sync_health_last_success">Last successful sync: %1$s</string>
+    <string name="common_sync_health_never_success">No sync has finished for this library yet.</string>
+    <plurals name="common_sync_health_streak">
+        <item quantity="one">%1$d sync in a row failed.</item>
+        <item quantity="other">%1$d syncs in a row failed.</item>
+    </plurals>
+    <string name="common_sync_health_next">Next automatic sync: %1$s</string>
+    <string name="common_sync_health_pending">Last check: %1$d to upload, %2$d to download (as of %3$s).</string>
+    <string name="common_sync_health_pending_none">Nothing was left to transfer at the last check (%1$s).</string>
+    <string name="common_sync_health_never_checked">No sync has checked this library yet.</string>
+    <string name="common_sync_health_retry">Try again</string>
+    <string name="common_sync_health_open_document">Open document</string>
+    <string name="common_sync_health_more">%1$d more not shown.</string>
+
+    <!-- Library settings: the read-only check of every document and journal file. -->
+    <string name="common_settings_verify_library">Verify library</string>
+    <string name="common_settings_verify_help">Check that every document and journal file still holds the bytes it should. Nothing is changed.</string>
+    <string name="common_settings_verify_running">Checking %1$d of %2$d…</string>
+    <string name="common_settings_verify_cancel">Cancel</string>
+    <string name="common_settings_verify_cancelled">Library check cancelled.</string>
+    <string name="common_settings_verify_failed">Could not check the library: %1$s</string>
+    <string name="common_settings_verify_title">Library check</string>
+    <string name="common_settings_verify_summary_ok">%1$d documents and %2$d journal files checked. No problems found.</string>
+    <string name="common_settings_verify_summary_problems">%1$d documents and %2$d journal files checked. %3$d problems found.</string>
+    <string name="common_settings_verify_group_documents">Documents</string>
+    <string name="common_settings_verify_group_journal">Journal files</string>
+    <string name="common_settings_verify_missing">The file is missing.</string>
+    <string name="common_settings_verify_unreadable">The file could not be read.</string>
+    <string name="common_settings_verify_not_a_file">This is not a regular file.</string>
+    <string name="common_settings_verify_size">The file is %2$d bytes; %1$d was expected.</string>
+    <string name="common_settings_verify_hash">The contents no longer match.</string>
+    <string name="common_settings_verify_orphaned">This is not a journal file this app can read.</string>
+    <string name="common_settings_verify_store_unreadable">This part of the library could not be read.</string>
+    <plurals name="common_settings_verify_notes">
+        <item quantity="one">%1$d superseded document still has its old file; a rescan removes it.</item>
+        <item quantity="other">%1$d superseded documents still have their old files; a rescan removes them.</item>
+    </plurals>
+    <string name="common_settings_verify_copy">Copy report</string>
+    <string name="common_settings_verify_close">Close</string>
+    <string name="common_settings_verify_copied">Report copied.</string>
+    <string name="common_settings_verify_copy_failed">Could not copy the report: %1$s</string>
+    <string name="common_settings_verify_more">%1$d more not shown.</string>
+    <string name="common_settings_verify_report_title">Library check report</string>
+    <string name="common_settings_verify_problem_line">%1$s: %2$s</string>
+    <string name="common_settings_verify_note_superseded">%1$s (superseded document; expected)</string>
+</resources>

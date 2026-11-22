@@ -83,6 +83,12 @@ data class SyncReport(
     val movedRemote: Int = 0,
     val deletedRemote: Int = 0,
     val appliedLocally: Int = 0,
+    /** Uploads the plan found but this pass did not complete, for the next one. */
+    val pendingUploads: Int = 0,
+    /** Downloads the plan found but this pass did not complete, for the next one. */
+    val pendingDownloads: Int = 0,
+    /** When the plan behind the two pending counts was made; null when the pass never planned. */
+    val pendingCheckedAt: Long? = null,
     val conflicts: List<SyncConflict> = emptyList(),
     val errors: List<SyncError> = emptyList(),
 ) {
@@ -104,6 +110,10 @@ data class SyncRunSummary(
     val report: SyncReport? = null,
     val failure: SyncFailure? = null,
     val failureDetail: String? = null,
+    /** Passes that ended early one after another, this one included; zero after a pass that finished. */
+    val consecutiveFailures: Int = 0,
+    /** When a pass last finished without ending early, across remote changes this device kept. */
+    val lastSuccessAt: Long? = null,
 ) {
     val ok: Boolean get() = failure == null
 }
@@ -138,6 +148,81 @@ data class SyncStatus(
     val progress: SyncProgress? = null,
     val lastRun: SyncRunSummary? = null,
 )
+
+/**
+ * How this library's cloud sync is doing, as the settings screen says it: the remote, the live pass,
+ * the last outcome and its streak of failures, when the next automatic pass is due, and the work the
+ * last plan found still to do.
+ *
+ * The pending counts are what the last pass's plan saw and did not finish, never a guess at the
+ * remote's current state: a true count would need another round-trip to it. [pendingAsOf] says when
+ * that plan was made, and the UI labels the counts with it.
+ */
+data class SyncHealth(
+    val configured: Boolean = false,
+    val automatic: Boolean = false,
+    val intervalMinutes: Int = CloudSyncConfig.DEFAULT_INTERVAL_MINUTES,
+    val running: Boolean = false,
+    val progress: SyncProgress? = null,
+    val lastPass: SyncRunSummary? = null,
+    /** When a pass last finished without ending early; null until one has. */
+    val lastSuccessAt: Long? = null,
+    /** Passes that ended early one after another, the last one included; zero after a pass that finished. */
+    val consecutiveFailures: Int = 0,
+    /** When the next automatic pass is due, while automatic sync is on. */
+    val nextAutomaticAt: Long? = null,
+    val pendingUploads: Int = 0,
+    val pendingDownloads: Int = 0,
+    /** When the plan behind the pending counts was made, null when none was. */
+    val pendingAsOf: Long? = null,
+) {
+    val conflicts: List<SyncConflict> get() = lastPass?.report?.conflicts.orEmpty()
+
+    val errors: List<SyncError> get() = lastPass?.report?.errors.orEmpty()
+
+    /** The last typed failure, when the last pass ended early. */
+    val lastFailure: SyncFailure? get() = lastPass?.failure
+
+    val lastFailureDetail: String? get() = lastPass?.failureDetail
+
+    /** Everything that keeps this library from being fully settled: a failed pass, conflicts, errors. */
+    val attentionCount: Int
+        get() = conflicts.size + errors.size + if (lastFailure != null) 1 else 0
+
+    val healthy: Boolean get() = configured && lastFailure == null && attentionCount == 0
+
+    companion object {
+        /** Derive the health of [config] and [status]. */
+        fun of(
+            config: CloudSyncConfig,
+            status: SyncStatus,
+        ): SyncHealth {
+            val last = status.lastRun
+            val report = last?.report
+            return SyncHealth(
+                configured = config.configured,
+                automatic = config.enabled && config.configured,
+                intervalMinutes = config.intervalMinutes,
+                running = status.running,
+                progress = status.progress,
+                lastPass = last,
+                lastSuccessAt = last?.lastSuccessAt ?: last?.takeIf { it.ok }?.finishedAt,
+                consecutiveFailures = last?.consecutiveFailures ?: 0,
+                nextAutomaticAt =
+                    if (config.enabled && config.configured && last != null) {
+                        last.finishedAt + config.intervalMinutes * MILLIS_PER_MINUTE
+                    } else {
+                        null
+                    },
+                pendingUploads = report?.pendingUploads ?: 0,
+                pendingDownloads = report?.pendingDownloads ?: 0,
+                pendingAsOf = report?.pendingCheckedAt,
+            )
+        }
+
+        private const val MILLIS_PER_MINUTE = 60L * 1000L
+    }
+}
 
 /** Why a requested pass did or did not run. */
 sealed interface SyncOutcome {

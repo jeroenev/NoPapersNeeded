@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Cloud sync: how the last passes went, beyond the one-line status. -->
+    <string name="common_sync_health_title">Estado de la sincronización</string>
+    <string name="common_sync_health_working">Sincronizando…</string>
+    <string name="common_sync_health_healthy">Todo está sincronizado.</string>
+    <plurals name="common_sync_health_attention">
+        <item quantity="one">%1$d elemento necesita tu atención.</item>
+        <item quantity="other">%1$d elementos necesitan tu atención.</item>
+    </plurals>
+    <string name="common_sync_health_last_success">Última sincronización correcta: %1$s</string>
+    <string name="common_sync_health_never_success">Esta biblioteca aún no ha terminado ninguna sincronización.</string>
+    <plurals name="common_sync_health_streak">
+        <item quantity="one">%1$d sincronización seguida ha fallado.</item>
+        <item quantity="other">%1$d sincronizaciones seguidas han fallado.</item>
+    </plurals>
+    <string name="common_sync_health_next">Próxima sincronización automática: %1$s</string>
+    <string name="common_sync_health_pending">Última comprobación: %1$d por subir, %2$d por descargar (a fecha de %3$s).</string>
+    <string name="common_sync_health_pending_none">En la última comprobación no quedaba nada por transferir (%1$s).</string>
+    <string name="common_sync_health_never_checked">Ninguna sincronización ha comprobado esta biblioteca todavía.</string>
+    <string name="common_sync_health_retry">Reintentar</string>
+    <string name="common_sync_health_open_document">Abrir documento</string>
+    <string name="common_sync_health_more">%1$d más sin mostrar.</string>
+
+    <!-- Library settings: the read-only check of every document and journal file. -->
+    <string name="common_settings_verify_library">Verificar biblioteca</string>
+    <string name="common_settings_verify_help">Comprueba que cada documento y cada archivo del diario siguen conteniendo los bytes esperados. No se cambia nada.</string>
+    <string name="common_settings_verify_running">Comprobando %1$d de %2$d…</string>
+    <string name="common_settings_verify_cancel">Cancelar</string>
+    <string name="common_settings_verify_cancelled">Comprobación de la biblioteca cancelada.</string>
+    <string name="common_settings_verify_failed">No se pudo comprobar la biblioteca: %1$s</string>
+    <string name="common_settings_verify_title">Comprobación de la biblioteca</string>
+    <string name="common_settings_verify_summary_ok">%1$d documentos y %2$d archivos del diario comprobados. No se encontraron problemas.</string>
+    <string name="common_settings_verify_summary_problems">%1$d documentos y %2$d archivos del diario comprobados. Se encontraron %3$d problemas.</string>
+    <string name="common_settings_verify_group_documents">Documentos</string>
+    <string name="common_settings_verify_group_journal">Archivos del diario</string>
+    <string name="common_settings_verify_missing">Falta el archivo.</string>
+    <string name="common_settings_verify_unreadable">No se pudo leer el archivo.</string>
+    <string name="common_settings_verify_not_a_file">Esto no es un archivo normal.</string>
+    <string name="common_settings_verify_size">El archivo tiene %2$d bytes; se esperaban %1$d.</string>
+    <string name="common_settings_verify_hash">El contenido ya no coincide.</string>
+    <string name="common_settings_verify_orphaned">Este no es un archivo del diario que esta app pueda leer.</string>
+    <string name="common_settings_verify_store_unreadable">No se pudo leer esta parte de la biblioteca.</string>
+    <plurals name="common_settings_verify_notes">
+        <item quantity="one">%1$d documento reemplazado aún conserva su archivo antiguo; un nuevo escaneo lo elimina.</item>
+        <item quantity="other">%1$d documentos reemplazados aún conservan sus archivos antiguos; un nuevo escaneo los elimina.</item>
+    </plurals>
+    <string name="common_settings_verify_copy">Copiar informe</string>
+    <string name="common_settings_verify_close">Cerrar</string>
+    <string name="common_settings_verify_copied">Informe copiado.</string>
+    <string name="common_settings_verify_copy_failed">No se pudo copiar el informe: %1$s</string>
+    <string name="common_settings_verify_more">%1$d más sin mostrar.</string>
+    <string name="common_settings_verify_report_title">Informe de comprobación de la biblioteca</string>
+    <string name="common_settings_verify_problem_line">%1$s: %2$s</string>
+    <string name="common_settings_verify_note_superseded">%1$s (documento reemplazado; es de esperar)</string>
+</resources>

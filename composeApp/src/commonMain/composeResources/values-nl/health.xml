@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Cloud sync: how the last passes went, beyond the one-line status. -->
+    <string name="common_sync_health_title">Synchronisatiestatus</string>
+    <string name="common_sync_health_working">Bezig met synchroniseren…</string>
+    <string name="common_sync_health_healthy">Alles is gesynchroniseerd.</string>
+    <plurals name="common_sync_health_attention">
+        <item quantity="one">%1$d item vraagt je aandacht.</item>
+        <item quantity="other">%1$d items vragen je aandacht.</item>
+    </plurals>
+    <string name="common_sync_health_last_success">Laatste geslaagde synchronisatie: %1$s</string>
+    <string name="common_sync_health_never_success">Voor deze bibliotheek is nog geen synchronisatie afgerond.</string>
+    <plurals name="common_sync_health_streak">
+        <item quantity="one">%1$d synchronisatie op rij is mislukt.</item>
+        <item quantity="other">%1$d synchronisaties op rij zijn mislukt.</item>
+    </plurals>
+    <string name="common_sync_health_next">Volgende automatische synchronisatie: %1$s</string>
+    <string name="common_sync_health_pending">Laatste controle: %1$d te uploaden, %2$d te downloaden (stand %3$s).</string>
+    <string name="common_sync_health_pending_none">Bij de laatste controle was niets meer over te dragen (%1$s).</string>
+    <string name="common_sync_health_never_checked">Deze bibliotheek is nog niet gesynchroniseerd.</string>
+    <string name="common_sync_health_retry">Opnieuw proberen</string>
+    <string name="common_sync_health_open_document">Document openen</string>
+    <string name="common_sync_health_more">%1$d meer niet getoond.</string>
+
+    <!-- Library settings: the read-only check of every document and journal file. -->
+    <string name="common_settings_verify_library">Bibliotheek controleren</string>
+    <string name="common_settings_verify_help">Controleert of elk document en elk journaalbestand nog de verwachte bytes bevat. Er wordt niets gewijzigd.</string>
+    <string name="common_settings_verify_running">Bezig met %1$d van %2$d…</string>
+    <string name="common_settings_verify_cancel">Annuleren</string>
+    <string name="common_settings_verify_cancelled">Controle van de bibliotheek geannuleerd.</string>
+    <string name="common_settings_verify_failed">De bibliotheek kon niet worden gecontroleerd: %1$s</string>
+    <string name="common_settings_verify_title">Controle van de bibliotheek</string>
+    <string name="common_settings_verify_summary_ok">%1$d documenten en %2$d journaalbestanden gecontroleerd. Geen problemen gevonden.</string>
+    <string name="common_settings_verify_summary_problems">%1$d documenten en %2$d journaalbestanden gecontroleerd. %3$d problemen gevonden.</string>
+    <string name="common_settings_verify_group_documents">Documenten</string>
+    <string name="common_settings_verify_group_journal">Journaalbestanden</string>
+    <string name="common_settings_verify_missing">Het bestand ontbreekt.</string>
+    <string name="common_settings_verify_unreadable">Het bestand kon niet worden gelezen.</string>
+    <string name="common_settings_verify_not_a_file">Dit is geen gewoon bestand.</string>
+    <string name="common_settings_verify_size">Het bestand is %2$d bytes; %1$d was verwacht.</string>
+    <string name="common_settings_verify_hash">De inhoud komt niet meer overeen.</string>
+    <string name="common_settings_verify_orphaned">Dit is geen journaalbestand dat deze app kan lezen.</string>
+    <string name="common_settings_verify_store_unreadable">Dit deel van de bibliotheek kon niet worden gelezen.</string>
+    <plurals name="common_settings_verify_notes">
+        <item quantity="one">%1$d vervangen document heeft nog zijn oude bestand; een nieuwe scan verwijdert het.</item>
+        <item quantity="other">%1$d vervangen documenten hebben nog hun oude bestanden; een nieuwe scan verwijdert ze.</item>
+    </plurals>
+    <string name="common_settings_verify_copy">Rapport kopiëren</string>
+    <string name="common_settings_verify_close">Sluiten</string>
+    <string name="common_settings_verify_copied">Rapport gekopieerd.</string>
+    <string name="common_settings_verify_copy_failed">Het rapport kon niet worden gekopieerd: %1$s</string>
+    <string name="common_settings_verify_more">%1$d meer niet getoond.</string>
+    <string name="common_settings_verify_report_title">Rapport van de bibliotheekcontrole</string>
+    <string name="common_settings_verify_problem_line">%1$s: %2$s</string>
+    <string name="common_settings_verify_note_superseded">%1$s (vervangen document; verwacht)</string>
+</resources>

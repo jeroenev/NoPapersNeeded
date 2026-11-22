@@ -5,11 +5,14 @@ import dev.npn.app.ui.common.UiText
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiSelfTest
 import dev.npn.core.ai.AiSelfTestReport
+import dev.npn.core.app.LibraryVerificationProgress
+import dev.npn.core.app.LibraryVerificationReport
 import dev.npn.core.app.TrashSettings
 import dev.npn.core.model.FieldDef
 import dev.npn.core.settings.SettingsSnapshot
 import dev.npn.core.settings.toAiConfig
 import dev.npn.core.sync.CloudSyncConfig
+import dev.npn.core.sync.SyncHealth
 import dev.npn.core.sync.SyncOutcome
 import dev.npn.core.sync.SyncStatus
 import dev.npn.core.sync.TransportAvailability
@@ -36,7 +39,8 @@ data class SettingsUiState(
  * live pass ([status]), whether the transfer engine answers ([transport], null until the pane
  * asked), how the last manual "sync now" ended ([outcome], cleared when any new pass starts), and
  * the setup wizard's step ([setup], null while it is closed) on a device that wired one
- * ([setupAvailable]).
+ * ([setupAvailable]). [health] is the status read as the screen says it, and [conflictDocuments]
+ * names the documents its conflicts still point at, when they exist.
  */
 data class CloudSyncState(
     val config: CloudSyncConfig = CloudSyncConfig.DISABLED,
@@ -45,6 +49,24 @@ data class CloudSyncState(
     val outcome: SyncOutcome? = null,
     val setup: CloudSetupState? = null,
     val setupAvailable: Boolean = false,
+    val health: SyncHealth = SyncHealth(),
+    val conflictDocuments: Map<String, ConflictDocument> = emptyMap(),
+)
+
+/** A document a conflict can be linked to: its title and where it sits in the library. */
+data class ConflictDocument(
+    val title: String,
+    val relPath: String,
+)
+
+/**
+ * The library check's state: [running] while it walks, [progress] for the count, and [report] once
+ * a run ended cleanly (null until one did, and after a failed or cancelled one).
+ */
+data class LibraryVerificationState(
+    val running: Boolean = false,
+    val progress: LibraryVerificationProgress? = null,
+    val report: LibraryVerificationReport? = null,
 )
 
 /**
@@ -170,6 +192,21 @@ interface SettingsActions {
 
     /** Run a cloud sync pass now and keep its outcome for the pane; progress streams through the status. */
     fun syncNow()
+
+    /**
+     * Check the library folder against itself, reporting progress in [LibraryVerificationState].
+     * Nothing is changed; a cancelled or failed run leaves no report.
+     */
+    fun verifyLibrary()
+
+    /** Stop the library check that is running, if any. */
+    fun cancelLibraryVerification()
+
+    /** Close the library check's result, keeping nothing. */
+    fun dismissLibraryVerification()
+
+    /** Copy [text] (a rendered library check report) to the system clipboard, and say so. */
+    fun copyLibraryVerificationReport(text: String)
 
     /** Turn this library's automatic passes on or off. */
     fun setCloudAutomatic(on: Boolean)

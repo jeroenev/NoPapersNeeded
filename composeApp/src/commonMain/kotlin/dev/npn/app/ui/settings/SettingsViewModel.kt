@@ -3,6 +3,7 @@ package dev.npn.app.ui.settings
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.platform.FolderPick
+import dev.npn.app.platform.copyToClipboard
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.reasonText
@@ -14,6 +15,7 @@ import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiSelfTest
 import dev.npn.core.ai.AiSelfTestReport
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.app.LibraryVerificationReport
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.pathrules.StoragePathContext
@@ -42,6 +44,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_folder_access_not_kept_library
@@ -58,6 +61,10 @@ import no_papers_needed.composeapp.generated.resources.common_settings_review_wo
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_rule_stays_off
 import no_papers_needed.composeapp.generated.resources.common_settings_thumbnail_cache_empty
 import no_papers_needed.composeapp.generated.resources.common_settings_thumbnails_cleared
+import no_papers_needed.composeapp.generated.resources.common_settings_verify_cancelled
+import no_papers_needed.composeapp.generated.resources.common_settings_verify_copied
+import no_papers_needed.composeapp.generated.resources.common_settings_verify_copy_failed
+import no_papers_needed.composeapp.generated.resources.common_settings_verify_failed
 
 /**
  * Settings screen view model. Device settings go through the one [SettingsRepository.edit]
@@ -100,6 +107,8 @@ class SettingsViewModel(
     private val trashRetention = session.trashRetention
     private val fieldRegistry = session.fieldRegistry
     private val sync = session.sync
+    private val maintenance = session.maintenance
+    private val documents = session.documents
 
     private val typedTemplate =
         TypedSetting<String>(viewModelScope) { template ->
@@ -221,15 +230,36 @@ class SettingsViewModel(
 
     override val cloudSetup: CloudSetupActions get() = cloud
 
+    /**
+     * The documents the last pass's conflicts name, when the library still shows them: a conflict is
+     * easier to act on with a title than with the remote path it kept.
+     */
+    private val conflictDocuments: Flow<Map<String, ConflictDocument>> =
+        sync.health.map { health ->
+            val ids = health.conflicts.mapNotNull { it.docId }.distinct()
+            if (ids.isEmpty()) {
+                emptyMap()
+            } else {
+                documents.liveDocuments(ids).associate { item ->
+                    item.doc.docId to ConflictDocument(item.doc.displayTitle, item.doc.relPath)
+                }
+            }
+        }
+
     private val cloudState: Flow<CloudSyncState> =
         combine(
             combine(sync.config, syncStatus, ::Pair),
-            transport,
-            syncOutcome,
+            combine(transport, syncOutcome, ::Pair),
+            combine(sync.health, conflictDocuments, ::Pair),
             cloud.state,
-        ) { (config, status), engine, outcome, setup ->
-            CloudSyncState(config, status, engine, outcome, setup, cloud.available)
+        ) { (config, status), (engine, outcome), (health, docs), setup ->
+            CloudSyncState(config, status, engine, outcome, setup, cloud.available, health, docs)
         }
+
+    /** The library check's live state; [verifyLibrary] drives it. */
+    private val verification = MutableStateFlow(LibraryVerificationState())
+
+    private var verificationJob: Job? = null
 
     private fun configureCloud(change: (CloudSyncConfig) -> CloudSyncConfig) =
         launchReporting(Res.string.common_save_setting_failed) { sync.configure(change) }
@@ -257,9 +287,14 @@ class SettingsViewModel(
             aiModels,
             aiSelfTest,
             combine(reviewMode, cloudState, rules, ::Triple),
-            combine(fields, fieldUsage, fieldDialog.flow, ::Triple),
-        ) { ui, models, selfTest, (mode, cloudState, rules), (defs, usage, dialog) ->
-            SettingsPaneState(ui, models, selfTest, mode, defs, usage, dialog, cloudState, rules)
+            combine(
+                combine(fields, fieldUsage, fieldDialog.flow, ::Triple),
+                verification,
+                ::Pair,
+            ),
+        ) { ui, models, selfTest, (mode, cloudState, rules), (fieldsNow, verify) ->
+            val (defs, usage, dialog) = fieldsNow
+            SettingsPaneState(ui, models, selfTest, mode, defs, usage, dialog, cloudState, rules, verify)
         }.stateIn(
             viewModelScope,
             WhileSubscribedTimeout,
@@ -425,6 +460,41 @@ class SettingsViewModel(
                 }
         }
     }
+
+    override fun verifyLibrary() {
+        if (verificationJob?.isActive == true) return
+        verification.value = LibraryVerificationState(running = true)
+        verificationJob =
+            viewModelScope.launch {
+                var report: LibraryVerificationReport? = null
+                try {
+                    reporting(Res.string.common_settings_verify_failed) {
+                        report =
+                            maintenance.verifyLibrary { progress ->
+                                verification.update { it.copy(progress = progress) }
+                            }
+                    }
+                } finally {
+                    verification.value = LibraryVerificationState(report = report)
+                }
+            }
+    }
+
+    override fun cancelLibraryVerification() {
+        if (verificationJob?.isActive != true) return
+        verificationJob?.cancel()
+        message(uiText(Res.string.common_settings_verify_cancelled))
+    }
+
+    override fun dismissLibraryVerification() {
+        verification.update { it.copy(report = null) }
+    }
+
+    override fun copyLibraryVerificationReport(text: String) =
+        launchReporting(Res.string.common_settings_verify_copy_failed) {
+            copyToClipboard(text)
+            message(uiText(Res.string.common_settings_verify_copied))
+        }
 
     override fun clearThumbnailCache() =
         launchReporting(Res.string.common_settings_clear_thumbnails_failed) {

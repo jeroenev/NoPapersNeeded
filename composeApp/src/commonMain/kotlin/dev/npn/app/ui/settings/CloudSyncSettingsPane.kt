@@ -9,6 +9,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -25,10 +26,9 @@ import dev.npn.app.ui.common.SettingsSection
 import dev.npn.app.ui.common.SwitchRow
 import dev.npn.app.ui.common.formatEpochDateTime
 import dev.npn.app.ui.onboarding.AddDeviceGuideDialog
-import dev.npn.core.sync.ConflictKind
 import dev.npn.core.sync.EngineProblem
-import dev.npn.core.sync.SyncConflict
 import dev.npn.core.sync.SyncFailure
+import dev.npn.core.sync.SyncHealth
 import dev.npn.core.sync.SyncOutcome
 import dev.npn.core.sync.SyncPhase
 import dev.npn.core.sync.SyncProgress
@@ -91,8 +91,21 @@ import no_papers_needed.composeapp.generated.resources.common_settings_cloud_rem
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_schedule
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_setup_title
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_setup_unavailable
-import no_papers_needed.composeapp.generated.resources.common_settings_cloud_status
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_sync_now
+import no_papers_needed.composeapp.generated.resources.common_sync_health_attention
+import no_papers_needed.composeapp.generated.resources.common_sync_health_healthy
+import no_papers_needed.composeapp.generated.resources.common_sync_health_last_success
+import no_papers_needed.composeapp.generated.resources.common_sync_health_more
+import no_papers_needed.composeapp.generated.resources.common_sync_health_never_checked
+import no_papers_needed.composeapp.generated.resources.common_sync_health_never_success
+import no_papers_needed.composeapp.generated.resources.common_sync_health_next
+import no_papers_needed.composeapp.generated.resources.common_sync_health_open_document
+import no_papers_needed.composeapp.generated.resources.common_sync_health_pending
+import no_papers_needed.composeapp.generated.resources.common_sync_health_pending_none
+import no_papers_needed.composeapp.generated.resources.common_sync_health_retry
+import no_papers_needed.composeapp.generated.resources.common_sync_health_streak
+import no_papers_needed.composeapp.generated.resources.common_sync_health_title
+import no_papers_needed.composeapp.generated.resources.common_sync_health_working
 import no_papers_needed.composeapp.generated.resources.onboarding_add_device
 import no_papers_needed.composeapp.generated.resources.onboarding_add_device_help
 import org.jetbrains.compose.resources.pluralStringResource
@@ -175,8 +188,8 @@ internal fun CloudSyncSettingsPane(
                 label = stringResource(Res.string.common_settings_cloud_interval),
             )
         }
-        SettingsSection(title = stringResource(Res.string.common_settings_cloud_status)) {
-            SyncStatusSection(cloud, available, actions::syncNow)
+        SettingsSection(title = stringResource(Res.string.common_sync_health_title)) {
+            SyncHealthSection(cloud, available, actions::syncNow, actions::openDocument)
         }
     }
 }
@@ -306,29 +319,45 @@ private fun engineText(transport: TransportAvailability): String =
     }
 
 @Composable
-private fun SyncStatusSection(
+private fun SyncHealthSection(
     cloud: CloudSyncState,
     canSync: Boolean,
     onSyncNow: () -> Unit,
+    onOpenDocument: (String) -> Unit,
 ) {
+    val health = cloud.health
     val status = cloud.status
     Column(verticalArrangement = Arrangement.spacedBy(ItemSpacing)) {
-        Button(onClick = onSyncNow, enabled = canSync && !status.running) {
-            Text(text = stringResource(Res.string.common_settings_cloud_sync_now))
-        }
-        val progress = status.progress
-        if (status.running && progress != null) {
-            Text(text = progressLabel(progress), style = MaterialTheme.typography.bodyMedium)
-            if (progress.total > 0) {
-                LinearProgressIndicator(
-                    progress = { progress.done.toFloat() / progress.total.toFloat() },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            } else {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        Row(horizontalArrangement = Arrangement.spacedBy(ItemSpacing)) {
+            Button(onClick = onSyncNow, enabled = canSync && !status.running) {
+                Text(text = stringResource(Res.string.common_settings_cloud_sync_now))
+            }
+            // The same pass; the word names what a failed one invites.
+            if (health.lastFailure != null && !status.running) {
+                OutlinedButton(onClick = onSyncNow, enabled = canSync) {
+                    Text(text = stringResource(Res.string.common_sync_health_retry))
+                }
             }
         }
-        LastRunSummary(status.lastRun)
+        Text(text = healthHeadline(health), style = MaterialTheme.typography.bodyMedium)
+        if (status.running) {
+            val progress = status.progress
+            if (progress != null) {
+                Text(text = progressLabel(progress), style = MaterialTheme.typography.bodyMedium)
+                if (progress.total > 0) {
+                    LinearProgressIndicator(
+                        progress = { progress.done.toFloat() / progress.total.toFloat() },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+            }
+        } else {
+            LastRunSummary(status.lastRun)
+        }
+        HealthDetails(health)
+        HealthProblems(health, cloud.conflictDocuments, onOpenDocument)
         val outcome = cloud.outcome
         if (outcome != null && !status.running) {
             HelpText(outcomeLabel(outcome))
@@ -336,19 +365,154 @@ private fun SyncStatusSection(
     }
 }
 
+/**
+ * One calm sentence for the top of the card: working, healthy, how many things need attention, or
+ * the failure itself. A quiet board on a library that never synced, not an alarm.
+ */
+@Composable
+private fun healthHeadline(health: SyncHealth): String {
+    val failure = health.lastFailure
+    return when {
+        health.running -> {
+            stringResource(Res.string.common_sync_health_working)
+        }
+
+        !health.configured -> {
+            stringResource(Res.string.common_settings_cloud_never)
+        }
+
+        health.lastPass == null -> {
+            stringResource(Res.string.common_sync_health_never_checked)
+        }
+
+        failure != null -> {
+            failureText(failure, health.lastFailureDetail)
+        }
+
+        health.attentionCount > 0 -> {
+            pluralStringResource(
+                Res.plurals.common_sync_health_attention,
+                health.attentionCount,
+                health.attentionCount,
+            )
+        }
+
+        else -> {
+            stringResource(Res.string.common_sync_health_healthy)
+        }
+    }
+}
+
+/** The last success, the failure streak, the next automatic pass, and what the last plan left. */
+@Composable
+private fun HealthDetails(health: SyncHealth) {
+    if (!health.configured) return
+    health.lastSuccessAt?.let {
+        HelpText(stringResource(Res.string.common_sync_health_last_success, formatEpochDateTime(it)))
+    } ?: HelpText(stringResource(Res.string.common_sync_health_never_success))
+    if (health.consecutiveFailures > 0) {
+        HelpText(
+            pluralStringResource(
+                Res.plurals.common_sync_health_streak,
+                health.consecutiveFailures,
+                health.consecutiveFailures,
+            ),
+        )
+    }
+    health.nextAutomaticAt?.let {
+        HelpText(stringResource(Res.string.common_sync_health_next, formatEpochDateTime(it)))
+    }
+    // The counts are what the last pass's plan saw, not a live remote reading; the label says so.
+    health.pendingAsOf?.let { checkedAt ->
+        val pending = health.pendingUploads + health.pendingDownloads
+        if (pending == 0) {
+            HelpText(stringResource(Res.string.common_sync_health_pending_none, formatEpochDateTime(checkedAt)))
+        } else {
+            HelpText(
+                stringResource(
+                    Res.string.common_sync_health_pending,
+                    health.pendingUploads,
+                    health.pendingDownloads,
+                    formatEpochDateTime(checkedAt),
+                ),
+            )
+        }
+    }
+}
+
+/** Conflicts and per-file errors, the first few of each, with a link to a document that still exists. */
+@Composable
+private fun HealthProblems(
+    health: SyncHealth,
+    documents: Map<String, ConflictDocument>,
+    onOpenDocument: (String) -> Unit,
+) {
+    val conflicts = health.conflicts
+    val errors = health.errors
+    Column(verticalArrangement = Arrangement.spacedBy(ItemSpacing)) {
+        if (conflicts.isNotEmpty()) {
+            HelpText(
+                pluralStringResource(
+                    Res.plurals.common_settings_cloud_conflict_count,
+                    conflicts.size,
+                    conflicts.size,
+                ),
+            )
+            for (conflict in conflicts.take(MAX_LISTED_PROBLEMS)) {
+                val docId = conflict.docId
+                val document = docId?.let(documents::get)
+                Text(
+                    text = conflictText(explainConflict(conflict, document)),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                if (docId != null && document != null) {
+                    TextButton(onClick = { onOpenDocument(docId) }) {
+                        Text(text = stringResource(Res.string.common_sync_health_open_document))
+                    }
+                }
+            }
+            MoreLine(conflicts.size)
+        }
+        if (errors.isNotEmpty()) {
+            HelpText(
+                pluralStringResource(
+                    Res.plurals.common_settings_cloud_error_count,
+                    errors.size,
+                    errors.size,
+                ),
+            )
+            for (error in errors.take(MAX_LISTED_PROBLEMS)) {
+                Text(
+                    text = stringResource(Res.string.common_settings_cloud_problem_line, error.path, error.message),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            MoreLine(errors.size)
+        }
+    }
+}
+
+/** "N more not shown", when a list was cut to [MAX_LISTED_PROBLEMS]. */
+@Composable
+private fun MoreLine(total: Int) {
+    val rest = total - MAX_LISTED_PROBLEMS
+    if (rest > 0) {
+        Text(
+            text = stringResource(Res.string.common_sync_health_more, rest),
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
+}
+
 @Composable
 private fun LastRunSummary(lastRun: SyncRunSummary?) {
     Column(verticalArrangement = Arrangement.spacedBy(ItemSpacing)) {
-        if (lastRun == null) {
-            HelpText(stringResource(Res.string.common_settings_cloud_never))
-            return@Column
-        }
+        if (lastRun == null) return@Column
         val finishedAt = formatEpochDateTime(lastRun.finishedAt)
         val report = lastRun.report
         val failure = lastRun.failure
         if (failure != null || report == null) {
             HelpText(stringResource(Res.string.common_settings_cloud_last_failed, finishedAt))
-            HelpText(failureText(failure ?: SyncFailure.UNKNOWN, lastRun.failureDetail))
             return@Column
         }
         HelpText(
@@ -361,79 +525,51 @@ private fun LastRunSummary(lastRun: SyncRunSummary?) {
                 report.deletedRemote,
             ),
         )
-        val conflicts = report.conflicts.size
-        ProblemList(
-            pluralStringResource(Res.plurals.common_settings_cloud_conflict_count, conflicts, conflicts),
-            report.conflicts.map { conflictText(it) },
-        )
-        val errors = report.errors.size
-        ProblemList(
-            pluralStringResource(Res.plurals.common_settings_cloud_error_count, errors, errors),
-            report.errors.map { stringResource(Res.string.common_settings_cloud_problem_line, it.path, it.message) },
-        )
-    }
-}
-
-/** A count of [problems] and the first few of them; nothing when there are none. */
-@Composable
-private fun ProblemList(
-    heading: String,
-    problems: List<String>,
-) {
-    if (problems.isEmpty()) return
-    Column {
-        HelpText(heading)
-        for (problem in problems.take(MAX_LISTED_PROBLEMS)) {
-            Text(text = problem, style = MaterialTheme.typography.bodySmall)
-        }
     }
 }
 
 @Composable
-private fun conflictText(conflict: SyncConflict): String {
-    val path = conflict.remotePath
-    val other = conflict.otherPath.orEmpty()
-    return when (conflict.kind) {
-        ConflictKind.TARGET_OCCUPIED -> {
-            stringResource(Res.string.common_settings_cloud_conflict_target_occupied, path)
+private fun conflictText(explanation: ConflictExplanation): String =
+    when (explanation) {
+        is ConflictExplanation.TargetOccupied -> {
+            stringResource(Res.string.common_settings_cloud_conflict_target_occupied, explanation.label)
         }
 
-        ConflictKind.UPLOADED_AS_COPY -> {
+        is ConflictExplanation.UploadedAsCopy -> {
             stringResource(
                 Res.string.common_settings_cloud_conflict_uploaded_as_copy,
-                path,
-                other,
+                explanation.label,
+                explanation.otherPath,
             )
         }
 
-        ConflictKind.INSTALLED_AS_COPY -> {
+        is ConflictExplanation.InstalledAsCopy -> {
             stringResource(
                 Res.string.common_settings_cloud_conflict_installed_as_copy,
-                path,
-                other,
+                explanation.label,
+                explanation.otherPath,
             )
         }
 
-        ConflictKind.UNIDENTIFIED -> {
-            stringResource(Res.string.common_settings_cloud_conflict_unidentified, path)
+        is ConflictExplanation.Unidentified -> {
+            stringResource(Res.string.common_settings_cloud_conflict_unidentified, explanation.label)
         }
 
-        ConflictKind.REMOTE_CHANGED -> {
-            stringResource(Res.string.common_settings_cloud_conflict_remote_changed, path)
+        is ConflictExplanation.RemoteChanged -> {
+            stringResource(Res.string.common_settings_cloud_conflict_remote_changed, explanation.label)
         }
 
-        ConflictKind.LOCAL_CHANGED -> {
-            stringResource(Res.string.common_settings_cloud_conflict_local_changed, path)
+        is ConflictExplanation.LocalChanged -> {
+            stringResource(Res.string.common_settings_cloud_conflict_local_changed, explanation.label)
         }
 
-        ConflictKind.KEPT_ON_THIS_DEVICE -> {
+        is ConflictExplanation.KeptOnThisDevice -> {
             stringResource(
                 Res.string.common_settings_cloud_conflict_kept_on_device,
-                path,
+                explanation.label,
             )
         }
     }
-}
 
 /** Why a pass failed, as a whole sentence; only an unknown failure quotes the engine's own text. */
 @Composable

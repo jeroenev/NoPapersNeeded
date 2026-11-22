@@ -79,6 +79,14 @@ internal open class NoSettingsPaneActions : SettingsPaneActions {
 
     override fun syncNow() = Unit
 
+    override fun verifyLibrary() = Unit
+
+    override fun cancelLibraryVerification() = Unit
+
+    override fun dismissLibraryVerification() = Unit
+
+    override fun copyLibraryVerificationReport(text: String) = Unit
+
     override fun setCloudAutomatic(on: Boolean) = Unit
 
     override fun setCloudInterval(minutes: Int) = Unit
@@ -110,6 +118,8 @@ internal open class NoSettingsPaneActions : SettingsPaneActions {
     override fun openCategory(id: SettingsCategoryId) = Unit
 
     override fun openFieldDialog(dialog: FieldDialog?) = Unit
+
+    override fun openDocument(docId: String) = Unit
 }
 
 /** A setup wizard that does nothing, for a pane rendered without a view model. */

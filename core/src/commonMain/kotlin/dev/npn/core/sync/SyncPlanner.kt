@@ -207,6 +207,17 @@ data class SyncPlan(
 ) {
     val isEmpty: Boolean
         get() = local.isEmpty() && remote.isEmpty() && pushMetadata.isEmpty()
+
+    /**
+     * Documents and metadata this plan would upload. A move, delete or trash transfer is not an
+     * upload of a document or object, so it is not counted.
+     */
+    val plannedUploads: Int
+        get() = remote.count { it is SyncAction.UploadDocument } + pushMetadata.size
+
+    /** Documents this plan would download and install, a trash copy or a recovered one included. */
+    val plannedDownloads: Int
+        get() = local.count { it is SyncAction.PublishDocument }
 }
 
 /**

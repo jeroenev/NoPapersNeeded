@@ -5,6 +5,8 @@ import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.AiOcrOutcome
 import dev.npn.core.app.ImportOutcome
 import dev.npn.core.app.IngestFacade
+import dev.npn.core.app.LibraryVerificationProgress
+import dev.npn.core.app.LibraryVerificationReport
 import dev.npn.core.app.MaintenanceFacade
 import dev.npn.core.app.OcrFacade
 import dev.npn.core.app.OcrStatus
@@ -34,6 +36,7 @@ import dev.npn.core.sync.OAuthStatus
 import dev.npn.core.sync.RcloneProvider
 import dev.npn.core.sync.SetupFailure
 import dev.npn.core.sync.SetupStep
+import dev.npn.core.sync.SyncHealth
 import dev.npn.core.sync.SyncOutcome
 import dev.npn.core.sync.SyncStatus
 import dev.npn.core.sync.TransportAvailability
@@ -219,6 +222,23 @@ class FakeMaintenanceFacade : MaintenanceFacade {
     var rebuildOutcome: RebuildOutcome = RebuildOutcome.Rebuilt
     var failRebuild: (() -> Nothing)? = null
 
+    /** What [verifyLibrary] returns; [verifyProgress] is fed as it "walks". */
+    var verificationReport: LibraryVerificationReport = emptyVerificationReport()
+    var verifyProgress: List<LibraryVerificationProgress> = emptyList()
+    var verifyFailure: (() -> Nothing)? = null
+    var verificationRuns = 0
+
+    /** When set, [verifyLibrary] waits here, so a test can watch a run in flight and cancel it. */
+    var verifyGate: CompletableDeferred<Unit>? = null
+
+    override suspend fun verifyLibrary(onProgress: (LibraryVerificationProgress) -> Unit): LibraryVerificationReport {
+        verificationRuns++
+        verifyGate?.await()
+        verifyFailure?.invoke()
+        verifyProgress.forEach(onProgress)
+        return verificationReport
+    }
+
     override suspend fun rebuildIndex(): RebuildOutcome {
         failRebuild?.invoke()
         rebuilds++
@@ -324,6 +344,10 @@ class FakeAiEditQueue : AiEditQueueFacade {
 class FakeSyncFacade : SyncFacade {
     val statusFlow = MutableStateFlow(SyncStatus())
     override val status: Flow<SyncStatus> get() = statusFlow
+
+    /** The health a test wants the screen to see; production derives it from status and config. */
+    val healthFlow = MutableStateFlow(SyncHealth())
+    override val health: Flow<SyncHealth> get() = healthFlow
 
     /** This library's settings on the device; [configure] writes them as the service does, normalised. */
     val configFlow = MutableStateFlow(CloudSyncConfig.DISABLED)
@@ -499,4 +523,12 @@ fun emptyScanReport(): ScanReport =
         relinkCandidates = emptyList(),
         hashedCount = 0,
         durationMillis = 0L,
+    )
+
+fun emptyVerificationReport(): LibraryVerificationReport =
+    LibraryVerificationReport(
+        startedAt = 0L,
+        durationMillis = 0L,
+        documentsChecked = 0,
+        objectsChecked = 0,
     )

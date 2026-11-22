@@ -200,8 +200,16 @@ class SyncReportBuilder(
         onError(path, cause)
     }
 
-    fun build(nowMillis: Long): SyncReport =
-        SyncReport(
+    fun build(
+        nowMillis: Long,
+        plan: SyncPlan? = null,
+    ): SyncReport {
+        // What the plan found, less what this pass finished: the rest waits for the next one. A
+        // count is never negative (a plan may be re-checked after a retry inside a transfer).
+        val pendingUploads =
+            ((plan?.plannedUploads ?: 0) - uploadedDocuments - uploadedObjects).coerceAtLeast(0)
+        val pendingDownloads = ((plan?.plannedDownloads ?: 0) - downloadedDocuments).coerceAtLeast(0)
+        return SyncReport(
             startedAt = startedAt,
             durationMillis = nowMillis - startedAt,
             downloadedDocuments = downloadedDocuments,
@@ -211,9 +219,13 @@ class SyncReportBuilder(
             movedRemote = movedRemote,
             deletedRemote = deletedRemote,
             appliedLocally = appliedLocally,
+            pendingUploads = pendingUploads,
+            pendingDownloads = pendingDownloads,
+            pendingCheckedAt = plan?.let { nowMillis },
             conflicts = conflicts.toList(),
             errors = errors.toList(),
         )
+    }
 }
 
 /**

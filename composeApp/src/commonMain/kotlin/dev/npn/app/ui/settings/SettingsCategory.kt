@@ -89,8 +89,11 @@ import no_papers_needed.composeapp.generated.resources.common_settings_trash
 import no_papers_needed.composeapp.generated.resources.common_settings_trash_retention_days
 import no_papers_needed.composeapp.generated.resources.common_settings_update_check
 import no_papers_needed.composeapp.generated.resources.common_settings_use_saf
+import no_papers_needed.composeapp.generated.resources.common_settings_verify_library
 import no_papers_needed.composeapp.generated.resources.common_settings_views
 import no_papers_needed.composeapp.generated.resources.common_settings_watched_folder
+import no_papers_needed.composeapp.generated.resources.common_sync_health_retry
+import no_papers_needed.composeapp.generated.resources.common_sync_health_title
 import no_papers_needed.composeapp.generated.resources.detail_add_field
 import no_papers_needed.composeapp.generated.resources.onboarding_add_device
 import org.jetbrains.compose.resources.StringResource
@@ -138,6 +141,8 @@ internal data class SettingsPaneState(
     val cloud: CloudSyncState = CloudSyncState(),
     /** The library's auto-match rules in run order; null until they load. */
     val rules: List<AutoMatchRule>? = null,
+    /** The library check's live state, and its last result. */
+    val verification: LibraryVerificationState = LibraryVerificationState(),
 )
 
 /** What a settings pane can do: change a setting ([SettingsActions]), or open what one leads to. */
@@ -152,6 +157,9 @@ internal interface SettingsPaneActions : SettingsActions {
 
     /** Open the field manager's [dialog], or change what it holds; null closes it. */
     fun openFieldDialog(dialog: FieldDialog?)
+
+    /** Open [docId]'s detail, for a conflict or check finding that still names a document. */
+    fun openDocument(docId: String)
 }
 
 /**
@@ -196,6 +204,7 @@ internal val SettingsCategories: List<SettingsCategory> =
                     Res.string.common_settings_storage_path_template,
                     Res.string.common_settings_advanced,
                     Res.string.common_settings_clear_thumbnail_cache,
+                    Res.string.common_settings_verify_library,
                     // Only Android offers the Storage Access Framework.
                     Res.string.common_settings_use_saf.takeIf { supportsSafStorage() },
                 ),
@@ -273,6 +282,8 @@ internal val SettingsCategories: List<SettingsCategory> =
                     Res.string.common_settings_cloud_interval,
                     Res.string.common_settings_cloud_status,
                     Res.string.common_settings_cloud_sync_now,
+                    Res.string.common_sync_health_title,
+                    Res.string.common_sync_health_retry,
                 ),
             content = { state, actions -> CloudSyncSettingsPane(state, actions) },
         ),
