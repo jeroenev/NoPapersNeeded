@@ -117,7 +117,7 @@ data class DetailUiState(
      * its length first. See [AiOcrOffer].
      */
     val aiOcr: AiOcrOffer = AiOcrOffer.Unavailable,
-    /** A print job is being prepared or the platform's print dialog is open. */
+    /** A print job is being prepared or handed to the platform's print service. */
     val printing: Boolean = false,
     /** The document left the library from here (trashed, or split into new documents): the host closes. */
     val left: Boolean = false,
@@ -175,7 +175,7 @@ class DocDetailViewModel private constructor(
     notices: DocumentNotices?,
     private val aiSuggestions: DocAiSuggestions = DocAiSuggestions(docId, session, scope, sink, metadataMutex),
     /** How a print job reaches the platform; tests inject a recording fake. */
-    private val printer: PdfPrinter = PdfPrinter { fileName, bytes -> printPdf(fileName, bytes) },
+    private val printer: PdfPrinter = PdfPrinter { fileName, bytes, pageCount -> printPdf(fileName, bytes, pageCount) },
 ) : MessagesViewModel(scope, sink),
     DocumentWrites,
     AiSuggestionActions by aiSuggestions,
@@ -204,7 +204,7 @@ class DocDetailViewModel private constructor(
          */
         notices: DocumentNotices? = null,
         /** How a print job reaches the platform; tests inject a recording fake. */
-        printer: PdfPrinter = PdfPrinter { fileName, bytes -> printPdf(fileName, bytes) },
+        printer: PdfPrinter = PdfPrinter { fileName, bytes, pageCount -> printPdf(fileName, bytes, pageCount) },
     ) : this(
         docId,
         session,
@@ -655,7 +655,10 @@ class DocDetailViewModel private constructor(
                 message(uiText(Res.string.detail_print_failed_unavailable))
                 return@launchReporting
             }
-            val outcome = busy({ copy(printing = it) }) { printer.print(item.doc.fileName, bytes) }
+            val pageCount =
+                _ui.value.pageCount.count
+                    .takeIf { it > 0 } ?: item.doc.pageCount
+            val outcome = busy({ copy(printing = it) }) { printer.print(item.doc.fileName, bytes, pageCount) }
             when (outcome) {
                 PrintOutcome.Started -> {
                     message(uiText(Res.string.detail_print_started))

@@ -22,6 +22,7 @@ import kotlinx.coroutines.withContext
 actual suspend fun printPdf(
     fileName: String,
     bytes: ByteArray,
+    pageCount: Int?,
     io: CoroutineDispatcher,
 ): PrintOutcome =
     withContext(Dispatchers.Main) {
@@ -32,7 +33,7 @@ actual suspend fun printPdf(
                     ?: return@withContext PrintOutcome.Failed(PrintFailure.UNSUPPORTED)
             manager.print(
                 fileName,
-                PdfBytesPrintAdapter(fileName, bytes),
+                PdfBytesPrintAdapter(fileName, bytes, pageCount),
                 PrintAttributes.Builder().build(),
             )
             PrintOutcome.Started
@@ -41,14 +42,18 @@ actual suspend fun printPdf(
         }
     }
 
+/** How much of the document one write to the spooler takes, so cancellation is noticed promptly. */
+private const val COPY_CHUNK_BYTES = 64 * 1024
+
 /**
  * A [PrintDocumentAdapter] over the bytes in hand: no temporary file and no second copy in the
- * library. The page count is unknown to the adapter, as only a PDF parser in the app could tell it
- * and the spooler already understands the document.
+ * library. The page count comes from the document's index row when it has been read, so the
+ * system dialog can offer a page range; otherwise it is unknown.
  */
 private class PdfBytesPrintAdapter(
     private val fileName: String,
     private val bytes: ByteArray,
+    private val pageCount: Int?,
 ) : PrintDocumentAdapter() {
     override fun onLayout(
         oldAttributes: PrintAttributes?,
@@ -65,7 +70,7 @@ private class PdfBytesPrintAdapter(
             PrintDocumentInfo
                 .Builder(fileName)
                 .setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT)
-                .setPageCount(PrintDocumentInfo.PAGE_COUNT_UNKNOWN)
+                .setPageCount(pageCount ?: PrintDocumentInfo.PAGE_COUNT_UNKNOWN)
                 .build()
         callback?.onLayoutFinished(info, true)
     }
@@ -80,8 +85,23 @@ private class PdfBytesPrintAdapter(
             callback?.onWriteFailed(null)
             return
         }
+        if (cancellationSignal?.isCanceled == true) {
+            callback?.onWriteCancelled()
+            return
+        }
         try {
-            ParcelFileDescriptor.AutoCloseOutputStream(destination).use { it.write(bytes) }
+            ParcelFileDescriptor.AutoCloseOutputStream(destination).use { out ->
+                var offset = 0
+                while (offset < bytes.size) {
+                    if (cancellationSignal?.isCanceled == true) {
+                        callback?.onWriteCancelled()
+                        return
+                    }
+                    val count = minOf(COPY_CHUNK_BYTES, bytes.size - offset)
+                    out.write(bytes, offset, count)
+                    offset += count
+                }
+            }
             if (cancellationSignal?.isCanceled == true) {
                 callback?.onWriteCancelled()
             } else {

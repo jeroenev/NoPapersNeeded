@@ -12,7 +12,7 @@ internal fun docDetailVm(
     session: FakeLibrarySession = FakeLibrarySession(),
     docId: String = "doc-1",
     settings: FakeSettingsRepository = aiConfiguredSettings(),
-    printer: PdfPrinter = PdfPrinter { _, _ -> PrintOutcome.Started },
+    printer: PdfPrinter = PdfPrinter { _, _, _ -> PrintOutcome.Started },
 ): DocDetailViewModel = DocDetailViewModel(docId, session, settings, printer = printer)
 
 /**
@@ -23,7 +23,7 @@ internal fun TestScope.liveDocDetailVm(
     session: FakeLibrarySession = FakeLibrarySession(),
     docId: String = "doc-1",
     settings: FakeSettingsRepository = aiConfiguredSettings(),
-    printer: PdfPrinter = PdfPrinter { _, _ -> PrintOutcome.Started },
+    printer: PdfPrinter = PdfPrinter { _, _, _ -> PrintOutcome.Started },
 ): DocDetailViewModel =
     docDetailVm(session, docId, settings, printer).also { model ->
         collecting(model.metadata)

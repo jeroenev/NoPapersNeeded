@@ -1,14 +1,14 @@
 package dev.npn.app.platform
 
+import dev.npn.core.pdf.pdfPrintJob
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.swing.Swing
 import kotlinx.coroutines.withContext
-import org.apache.pdfbox.Loader
-import org.apache.pdfbox.pdmodel.PDDocument
-import org.apache.pdfbox.printing.PDFPageable
 import java.awt.print.Pageable
+import java.awt.print.PrinterAbortException
+import java.awt.print.PrinterException
 import java.awt.print.PrinterJob
 
 /**
@@ -17,71 +17,63 @@ import java.awt.print.PrinterJob
  * without a printer, and the print dialog never runs in a test.
  */
 internal interface PrinterSurface {
-    /** Shows the platform's print dialog and prints [pages]; false when the user cancelled. */
-    fun print(
+    /** Whether the platform has a print service at all; a sandbox may have none. */
+    fun hasPrinters(): Boolean = true
+
+    /** Shows the platform's print dialog and prints [pages]; [PrintOutcome] carries cancel and failure. */
+    suspend fun print(
         fileName: String,
         pages: Pageable,
-    ): Boolean
+    ): PrintOutcome
 }
 
 /** AWT's print dialog and printer. */
 internal object AwtPrinterSurface : PrinterSurface {
-    override fun print(
+    override fun hasPrinters(): Boolean =
+        try {
+            PrinterJob.lookupPrintServices().isNotEmpty()
+        } catch (_: PrinterException) {
+            false
+        }
+
+    override suspend fun print(
         fileName: String,
         pages: Pageable,
-    ): Boolean {
+    ): PrintOutcome {
         val job = PrinterJob.getPrinterJob()
         job.jobName = fileName
         job.setPageable(pages)
-        if (!job.printDialog()) return false
-        job.print()
-        return true
+        // Only the dialog needs AWT's event thread; PDFBox renders and the job spools on IO.
+        val accepted = withContext(Dispatchers.Swing) { job.printDialog() }
+        if (!accepted) return PrintOutcome.Cancelled
+        withContext(Dispatchers.IO) { job.print() }
+        return PrintOutcome.Started
     }
 }
 
 /**
- * A PDF's pages as an AWT [Pageable], rendered by PDFBox. The document is held for as long as the
- * job draws from it, so this is [AutoCloseable]; the bytes it was opened from are never written.
- */
-internal class DesktopPrintJob private constructor(
-    private val document: PDDocument,
-) : AutoCloseable {
-    val pages: Pageable = PDFPageable(document)
-
-    val pageCount: Int get() = pages.numberOfPages
-
-    override fun close() = document.close()
-
-    companion object {
-        /** Opens [bytes] as a print job; throws when they are not a readable PDF. */
-        fun open(bytes: ByteArray): DesktopPrintJob = DesktopPrintJob(Loader.loadPDF(bytes))
-    }
-}
-
-/**
- * Renders [bytes] with PDFBox and hands the pages to [surface]. No printer is touched while the
- * job is built, which is what lets a test check its pages.
+ * Opens [bytes] as a PDF and hands its pages to [surface]. No printer is touched while the job is
+ * built, which is what lets a test check its pages.
  */
 internal class DesktopPdfPrinter(
     private val surface: PrinterSurface = AwtPrinterSurface,
-    /** Where the print dialog and spooling run: AWT requires its own event thread. */
-    private val dialogs: CoroutineDispatcher = Dispatchers.Swing,
 ) {
     suspend fun print(
         fileName: String,
         bytes: ByteArray,
         io: CoroutineDispatcher = Dispatchers.IO,
     ): PrintOutcome {
+        if (!withContext(io) { surface.hasPrinters() }) return PrintOutcome.Failed(PrintFailure.UNSUPPORTED)
         val job =
-            withContext(io) { runCatchingCancellable { DesktopPrintJob.open(bytes) } }
+            withContext(io) { runCatchingCancellable { pdfPrintJob(bytes) } }
                 .getOrElse { return PrintOutcome.Failed(PrintFailure.UNREADABLE_PDF, it) }
         return job.use {
-            withContext(dialogs) {
-                try {
-                    if (surface.print(fileName, it.pages)) PrintOutcome.Started else PrintOutcome.Cancelled
-                } catch (failure: Exception) {
-                    PrintOutcome.Failed(PrintFailure.PRINT_FAILED, failure)
-                }
+            try {
+                surface.print(fileName, it.pages)
+            } catch (_: PrinterAbortException) {
+                PrintOutcome.Cancelled
+            } catch (failure: Exception) {
+                PrintOutcome.Failed(PrintFailure.PRINT_FAILED, failure)
             }
         }
     }
@@ -90,5 +82,6 @@ internal class DesktopPdfPrinter(
 actual suspend fun printPdf(
     fileName: String,
     bytes: ByteArray,
+    pageCount: Int?,
     io: CoroutineDispatcher,
 ): PrintOutcome = DesktopPdfPrinter().print(fileName, bytes, io)

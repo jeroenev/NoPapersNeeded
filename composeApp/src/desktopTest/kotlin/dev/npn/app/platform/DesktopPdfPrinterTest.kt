@@ -1,5 +1,6 @@
 package dev.npn.app.platform
 
+import dev.npn.core.pdf.pdfPrintJob
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
@@ -7,24 +8,28 @@ import org.apache.pdfbox.pdmodel.PDDocument
 import org.apache.pdfbox.pdmodel.PDPage
 import org.apache.pdfbox.pdmodel.common.PDRectangle
 import java.awt.print.Pageable
+import java.awt.print.PrinterAbortException
 import java.io.ByteArrayOutputStream
 import kotlin.test.Test
 
 class DesktopPdfPrinterTest {
     /** Stands in for AWT's print dialog: records what it was asked to print, touches no printer. */
     private class RecordingSurface(
-        private val result: Boolean = true,
+        private val outcome: PrintOutcome = PrintOutcome.Started,
+        private val printers: Boolean = true,
     ) : PrinterSurface {
         var fileName: String? = null
         var pages: Pageable? = null
 
-        override fun print(
+        override fun hasPrinters(): Boolean = printers
+
+        override suspend fun print(
             fileName: String,
             pages: Pageable,
-        ): Boolean {
+        ): PrintOutcome {
             this.fileName = fileName
             this.pages = pages
-            return result
+            return outcome
         }
     }
 
@@ -37,11 +42,11 @@ class DesktopPdfPrinterTest {
             }
         }
 
-    private fun printer(surface: PrinterSurface) = DesktopPdfPrinter(surface, dialogs = Dispatchers.Unconfined)
+    private fun printer(surface: PrinterSurface) = DesktopPdfPrinter(surface)
 
     @Test
     fun aPdfBecomesAPrintableWithItsPageCount() {
-        DesktopPrintJob.open(twoPagePdf()).use { job ->
+        pdfPrintJob(twoPagePdf()).use { job ->
             job.pageCount shouldBe 2
             job.pages.numberOfPages shouldBe 2
         }
@@ -61,10 +66,46 @@ class DesktopPdfPrinterTest {
     @Test
     fun aDismissedPrintDialogCancels() =
         runTest {
-            val surface = RecordingSurface(result = false)
+            val surface = RecordingSurface(outcome = PrintOutcome.Cancelled)
 
             printer(surface).print("invoice.pdf", twoPagePdf(), Dispatchers.Unconfined) shouldBe
                 PrintOutcome.Cancelled
+        }
+
+    @Test
+    fun anAbortedJobIsCancelled() =
+        runTest {
+            val surface =
+                object : PrinterSurface {
+                    override suspend fun print(
+                        fileName: String,
+                        pages: Pageable,
+                    ): PrintOutcome = throw PrinterAbortException()
+                }
+
+            printer(surface).print("invoice.pdf", twoPagePdf(), Dispatchers.Unconfined) shouldBe
+                PrintOutcome.Cancelled
+        }
+
+    @Test
+    fun aPrinterFailureIsTyped() =
+        runTest {
+            val surface = RecordingSurface(outcome = PrintOutcome.Failed(PrintFailure.PRINT_FAILED))
+
+            val outcome = printer(surface).print("invoice.pdf", twoPagePdf(), Dispatchers.Unconfined)
+
+            (outcome as PrintOutcome.Failed).reason shouldBe PrintFailure.PRINT_FAILED
+        }
+
+    @Test
+    fun noPrinterAtAllIsUnsupported() =
+        runTest {
+            val surface = RecordingSurface(printers = false)
+
+            val outcome = printer(surface).print("invoice.pdf", twoPagePdf(), Dispatchers.Unconfined)
+
+            (outcome as PrintOutcome.Failed).reason shouldBe PrintFailure.UNSUPPORTED
+            surface.pages shouldBe null
         }
 
     @Test

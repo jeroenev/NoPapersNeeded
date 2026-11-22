@@ -71,9 +71,6 @@ kotlin {
             dependencies {
                 implementation(libs.compose.desktop)
                 implementation(libs.kotlinx.coroutines.swing)
-                // The desktop print path renders pages with the same PDFBox stack core reads them
-                // with (PDFPageable); core keeps its own implementation dependency.
-                implementation(libs.pdfbox)
             }
         }
         getByName("desktopTest") {
@@ -83,6 +80,8 @@ kotlin {
                 implementation(compose.desktop.currentOs)
                 // The environment tests query a library's databases to see that a swap closed them.
                 implementation(libs.room3.runtime)
+                // Generates the small PDF the desktop print tests turn into a printable.
+                implementation(libs.pdfbox)
             }
         }
         getByName("androidHostTest") {

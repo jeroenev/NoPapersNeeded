@@ -160,18 +160,8 @@ fun DocActions(
         compact = compact,
         state = state,
         printable = item.doc.isPrintable,
-        onRename = { dialog = DocActionDialog.RENAME },
-        onReOcr = actions::reOcr,
-        // A long document is offered like any other, but its cost is worth a sentence first: the
-        // model is billed per page, and the page count is the one thing the user cannot see from
-        // a menu item.
-        onAiOcr = {
-            if (state.aiOcr is AiOcrOffer.Large) dialog = DocActionDialog.AI_OCR else actions.ocrWithAi()
-        },
-        onSplit = { dialog = DocActionDialog.SPLIT },
-        onPrint = actions::printDocument,
-        onBakeInPlace = { dialog = DocActionDialog.BAKE },
-        onTrash = { dialog = DocActionDialog.TRASH },
+        actions = actions,
+        onOpenDialog = { dialog = it },
     )
     DocActionDialogs(
         dialog = dialog,
@@ -217,23 +207,22 @@ private fun DocActionsMenu(
     compact: Boolean,
     state: DetailUiState,
     printable: Boolean,
-    onRename: () -> Unit,
-    onReOcr: () -> Unit,
-    onAiOcr: () -> Unit,
-    onSplit: () -> Unit,
-    onPrint: () -> Unit,
-    onBakeInPlace: () -> Unit,
-    onTrash: () -> Unit,
+    actions: DocumentActions,
+    onOpenDialog: (DocActionDialog) -> Unit,
 ) {
     val reindexing = state.reindexing
     val aiOcr = state.aiOcr
     val rename =
-        TopBarAction(Icons.Filled.Edit, stringResource(Res.string.detail_rename_file), onRename)
+        TopBarAction(
+            Icons.Filled.Edit,
+            stringResource(Res.string.detail_rename_file),
+            onClick = { onOpenDialog(DocActionDialog.RENAME) },
+        )
     val reOcr =
         TopBarAction(
             icon = Icons.Filled.Refresh,
             label = stringResource(if (reindexing) Res.string.detail_rerunning_ocr else Res.string.detail_rerun_ocr),
-            onClick = onReOcr,
+            onClick = actions::reOcr,
             enabled = !reindexing,
         )
     val split =
@@ -241,7 +230,7 @@ private fun DocActionsMenu(
             icon = Icons.Filled.ContentCut,
             label =
                 stringResource(if (state.splitting) Res.string.detail_splitting else Res.string.detail_split_document),
-            onClick = onSplit,
+            onClick = { onOpenDialog(DocActionDialog.SPLIT) },
             enabled = state.pageCount.count > 1 && !state.splitting,
         )
     val bake =
@@ -251,7 +240,7 @@ private fun DocActionsMenu(
                 stringResource(
                     if (state.baking) Res.string.detail_baking else Res.string.detail_bake_metadata_in_place,
                 ),
-            onClick = onBakeInPlace,
+            onClick = { onOpenDialog(DocActionDialog.BAKE) },
             enabled = !state.baking,
         )
     // Hidden only without an endpoint: there the action can do nothing but explain itself, and this
@@ -270,16 +259,23 @@ private fun DocActionsMenu(
                     } else {
                         stringResource(Res.string.detail_ai_ocr)
                     },
-                onClick = onAiOcr,
+                onClick = {
+                    if (aiOcr is AiOcrOffer.Large) onOpenDialog(DocActionDialog.AI_OCR) else actions.ocrWithAi()
+                },
                 enabled = !reindexing,
             )
         }
-    val trash = TopBarAction(Icons.Filled.Delete, stringResource(Res.string.detail_trash), onTrash)
+    val trash =
+        TopBarAction(
+            Icons.Filled.Delete,
+            stringResource(Res.string.detail_trash),
+            onClick = { onOpenDialog(DocActionDialog.TRASH) },
+        )
     val print =
         TopBarAction(
             icon = Icons.Filled.Print,
             label = stringResource(Res.string.detail_print),
-            onClick = onPrint,
+            onClick = actions::printDocument,
             enabled = printable && !state.printing,
         )
     // A wide bar promotes the direct document edits to icons; AI OCR and bake-in-place stay one tap

@@ -43,6 +43,8 @@ fun interface PdfPrinter {
     suspend fun print(
         fileName: String,
         bytes: ByteArray,
+        /** The document's page count when the index knows it; the platform may need it to offer page ranges. */
+        pageCount: Int?,
     ): PrintOutcome
 }
 
@@ -50,11 +52,15 @@ fun interface PdfPrinter {
  * Print [bytes] as [fileName] through the platform's print service. Only called for a PDF the
  * library still holds, and never mutates or replaces the document's file.
  *
+ * [pageCount] is the document's known page count, if any: Android uses it to let the system's
+ * print dialog offer a page range, and desktop reads the count from the PDF itself.
+ *
  * Expected failures are the [PrintOutcome] it returns; reading [bytes] from the library is the
  * caller's, through [dev.npn.core.app.DocContentFacade].
  */
 expect suspend fun printPdf(
     fileName: String,
     bytes: ByteArray,
+    pageCount: Int? = null,
     io: CoroutineDispatcher = Dispatchers.IO,
 ): PrintOutcome
