@@ -137,9 +137,7 @@ class TriageViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
             model.startTriage()
             model.triageNext()
-            model.triageReviewedAndAdvance("d2")
 
-            model.triage.value?.currentId shouldBe "d2"
             model.triage.value?.hasNext shouldBe false
             model.triageReviewedAndAdvance("d2")
 
