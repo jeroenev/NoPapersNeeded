@@ -110,7 +110,7 @@ fun ImportBatch.asUiText(): UiText =
  * document, a scanner failure, or nothing for a cancelled scan. Shared by the library screen and
  * the command palette so both say the same thing.
  */
-suspend fun IngestFacade.importScan(
+suspend fun IngestFacade.importScanned(
     result: ScanResult,
     show: (UiText) -> Unit,
 ) {

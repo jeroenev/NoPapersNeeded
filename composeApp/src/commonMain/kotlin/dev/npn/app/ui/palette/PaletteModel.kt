@@ -1,6 +1,7 @@
 package dev.npn.app.ui.palette
 
 import dev.npn.app.ui.settings.SettingsCategoryId
+import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.SavedView
 
 /** The groups the palette shows, in the order it shows them. */
@@ -43,6 +44,8 @@ internal data class PaletteItem(
     val subtitle: String? = null,
     /** How many documents carry a tag; the UI renders it as a count. */
     val count: Int? = null,
+    /** The full-text snippet that matched, for a document found by its contents rather than its title. */
+    val snippet: String? = null,
 )
 
 internal data class PaletteGroup(
@@ -57,8 +60,6 @@ internal data class PaletteState(
     val groups: List<PaletteGroup> = emptyList(),
     /** The selected result, as an index into [items]; 0 while nothing matched. */
     val selected: Int = 0,
-    /** The "new tag" dialog is open over the palette. */
-    val newTagOpen: Boolean = false,
 ) {
     /** The groups' results as one list, in the order Up and Down walk them. */
     val items: List<PaletteItem> get() = groups.flatMap { it.items }
@@ -84,7 +85,6 @@ internal enum class PaletteCommandId {
     INBOX,
     TAGS,
     SETTINGS,
-    NEW_TAG,
 }
 
 /**
@@ -109,7 +109,7 @@ internal sealed interface PaletteRequest {
 internal interface PaletteNavigation {
     fun openDocument(docId: String)
 
-    fun openLibrary(filter: dev.npn.core.app.LibraryFilter)
+    fun openLibrary(filter: LibraryFilter)
 
     fun openSavedView(view: SavedView)
 

@@ -16,7 +16,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.BookmarkBorder
@@ -47,6 +46,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isMetaPressed
@@ -63,7 +63,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.npn.app.platform.LocalDocumentScanner
 import dev.npn.app.platform.platformFileToExternalSource
 import dev.npn.app.ui.common.FocusOnEntry
-import dev.npn.app.ui.common.TextInputDialog
 import dev.npn.app.ui.settings.settingsCategoryLabels
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.model.ReviewMode
@@ -77,7 +76,6 @@ import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.palette_action_assistant
 import no_papers_needed.composeapp.generated.resources.palette_action_import
 import no_papers_needed.composeapp.generated.resources.palette_action_inbox
-import no_papers_needed.composeapp.generated.resources.palette_action_new_tag
 import no_papers_needed.composeapp.generated.resources.palette_action_scan
 import no_papers_needed.composeapp.generated.resources.palette_action_settings
 import no_papers_needed.composeapp.generated.resources.palette_action_sync_now
@@ -91,8 +89,6 @@ import no_papers_needed.composeapp.generated.resources.palette_group_settings
 import no_papers_needed.composeapp.generated.resources.palette_group_tags
 import no_papers_needed.composeapp.generated.resources.palette_group_views
 import no_papers_needed.composeapp.generated.resources.palette_hint
-import no_papers_needed.composeapp.generated.resources.palette_new_tag_label
-import no_papers_needed.composeapp.generated.resources.palette_new_tag_title
 import no_papers_needed.composeapp.generated.resources.palette_no_matches_body
 import no_papers_needed.composeapp.generated.resources.palette_no_matches_title
 import no_papers_needed.composeapp.generated.resources.palette_search_hint
@@ -148,7 +144,6 @@ internal fun CommandPaletteHost(
             )
             add(PaletteCommand(PaletteCommandId.TAGS, stringResource(Res.string.palette_action_tags)))
             add(PaletteCommand(PaletteCommandId.SETTINGS, stringResource(Res.string.palette_action_settings)))
-            add(PaletteCommand(PaletteCommandId.NEW_TAG, stringResource(Res.string.palette_action_new_tag)))
         }
     val settings =
         settingsCategoryLabels().map { labels ->
@@ -180,14 +175,6 @@ internal fun CommandPaletteHost(
     }
 
     if (state.open) PaletteDialog(state, vm, modifier)
-    if (state.newTagOpen) {
-        TextInputDialog(
-            title = stringResource(Res.string.palette_new_tag_title),
-            label = stringResource(Res.string.palette_new_tag_label),
-            onConfirm = vm::confirmNewTag,
-            onDismiss = vm::dismissNewTag,
-        )
-    }
 }
 
 @Composable
@@ -201,14 +188,18 @@ private fun PaletteDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         BoxWithConstraints(
-            modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 24.dp),
+            modifier.fillMaxSize().background(SCRIM).padding(horizontal = 16.dp, vertical = 24.dp),
             contentAlignment = Alignment.TopCenter,
         ) {
             // A fixed share of the window, capped, so the card never jumps as results arrive and
             // still fits a compact window.
             val cardHeight = (maxHeight * 0.82f).coerceAtMost(560.dp)
             Surface(
-                Modifier.fillMaxWidth().widthIn(max = 640.dp).height(cardHeight),
+                Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = 640.dp)
+                    .height(cardHeight)
+                    .onPreviewKeyEvent { event -> handlePaletteKey(event, actions) },
                 shape = MaterialTheme.shapes.large,
                 tonalElevation = 3.dp,
                 shadowElevation = 8.dp,
@@ -249,44 +240,49 @@ private fun PaletteSearchField(
             Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 8.dp)
-                .focusRequester(focus)
-                .onPreviewKeyEvent { event ->
-                    if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                    when {
-                        event.key == Key.DirectionDown -> {
-                            actions.moveSelection(1)
-                            true
-                        }
-
-                        event.key == Key.DirectionUp -> {
-                            actions.moveSelection(-1)
-                            true
-                        }
-
-                        event.key == Key.Enter || event.key == Key.NumPadEnter -> {
-                            actions.runSelected()
-                            true
-                        }
-
-                        event.key == Key.Escape -> {
-                            actions.close()
-                            true
-                        }
-
-                        event.key == Key.K && (event.isCtrlPressed || event.isMetaPressed) -> {
-                            actions.close()
-                            true
-                        }
-
-                        else -> false
-                    }
-                },
+                .focusRequester(focus),
         singleLine = true,
         placeholder = { Text(stringResource(Res.string.palette_search_hint)) },
         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
         keyboardActions = KeyboardActions(onGo = { actions.runSelected() }),
     )
+}
+
+/** The palette's keys, bound on the dialog so they work wherever focus is inside it. */
+private fun handlePaletteKey(
+    event: KeyEvent,
+    actions: CommandPaletteActions,
+): Boolean {
+    if (event.type != KeyEventType.KeyDown) return false
+    return when {
+        event.key == Key.DirectionDown -> {
+            actions.moveSelection(1)
+            true
+        }
+
+        event.key == Key.DirectionUp -> {
+            actions.moveSelection(-1)
+            true
+        }
+
+        event.key == Key.Enter || event.key == Key.NumPadEnter -> {
+            actions.runSelected()
+            true
+        }
+
+        event.key == Key.Escape -> {
+            actions.close()
+            true
+        }
+
+        event.key == Key.K && (event.isCtrlPressed || event.isMetaPressed) -> {
+            actions.close()
+            true
+        }
+
+        else -> false
+    }
 }
 
 private sealed interface PaletteRow {
@@ -347,7 +343,9 @@ private fun PaletteResults(
     val rows = rowsOf(state)
     val selectedRow = rows.indexOfFirst { it is PaletteRow.Entry && it.index == state.selected }
     LaunchedEffect(selectedRow) {
-        if (selectedRow >= 0) listState.animateScrollToItem(selectedRow)
+        if (selectedRow < 0) return@LaunchedEffect
+        val visible = listState.layoutInfo.visibleItemsInfo.any { it.index == selectedRow }
+        if (!visible) listState.animateScrollToItem(selectedRow)
     }
     LazyColumn(state = listState, modifier = modifier.fillMaxWidth()) {
         rows.forEach { row ->
@@ -428,7 +426,7 @@ private fun ResultRow(
 
 @Composable
 private fun PaletteItem.subtitle(): String? =
-    subtitle ?: count?.let { pluralStringResource(Res.plurals.palette_tag_documents, it, it) }
+    snippet ?: subtitle ?: count?.let { pluralStringResource(Res.plurals.palette_tag_documents, it, it) }
 
 private fun PaletteGroupKind.label(): StringResource =
     when (this) {
@@ -441,8 +439,7 @@ private fun PaletteGroupKind.label(): StringResource =
     }
 
 private fun PaletteItem.icon(): ImageVector =
-    when (val target = target) {
-        is PaletteTarget.Doc -> Icons.Outlined.Description
+    when (val target = target) {        is PaletteTarget.Doc -> Icons.Outlined.Description
         is PaletteTarget.Tag -> Icons.Outlined.Sell
         is PaletteTarget.View -> Icons.Outlined.BookmarkBorder
         is PaletteTarget.Settings -> Icons.Outlined.Settings
@@ -456,6 +453,5 @@ private fun PaletteItem.icon(): ImageVector =
                 PaletteCommandId.INBOX -> Icons.Outlined.MoveToInbox
                 PaletteCommandId.TAGS -> Icons.Outlined.Sell
                 PaletteCommandId.SETTINGS -> Icons.Outlined.Settings
-                PaletteCommandId.NEW_TAG -> Icons.Filled.Add
             }
     }

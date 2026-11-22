@@ -103,6 +103,8 @@ internal class LibraryUi(
     val outliving: CoroutineScope,
 ) {
     val viewModels: ViewModelStoreOwner = held
+    /** The command palette's viewmodel owner, apart from the screens' store so it outlives their entries. */
+    val paletteOwner: ViewModelStoreOwner = held.palette
     val documents = held.documents
     val browse = held.handover.browse
     val libraryFilter = held.handover.libraryFilter
@@ -147,6 +149,13 @@ internal class LibraryHandover {
  */
 internal class LibrarySessionUi : ViewModelStoreOwner {
     override val viewModelStore = ViewModelStore()
+
+    /** The command palette's store, kept apart from the screens' entries and their viewmodels. */
+    val palette: ViewModelStoreOwner =
+        object : ViewModelStoreOwner {
+            override val viewModelStore = ViewModelStore()
+        }
+
     val documents = KeyedViewModelStores<String>()
     val handover = LibraryHandover()
     private var drafts: DocumentDrafts? = null
@@ -161,6 +170,7 @@ internal class LibrarySessionUi : ViewModelStoreOwner {
     /** Clear its screens' viewmodels, and with them the documents' they held. */
     fun clear() {
         viewModelStore.clear()
+        palette.viewModelStore.clear()
         documents.clear()
     }
 }

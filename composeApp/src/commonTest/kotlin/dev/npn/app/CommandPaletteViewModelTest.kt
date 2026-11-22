@@ -20,6 +20,7 @@ import dev.npn.core.testing.listItem
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -258,6 +259,39 @@ class CommandPaletteViewModelTest : MainDispatcherTest() {
         }
 
     @Test
+    fun aRecentDocumentLeadsTheEmptyQuery() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            session.documents.documents.value = listOf(listItem(doc("doc-1", title = "Tax invoice")))
+            val model = vm(session)
+            model.open()
+            model.onQueryChange("tax")
+            advanceUntilIdle()
+            model.run(model.state.value.items.single { it.key == "doc:doc-1" })
+            advanceUntilIdle()
+
+            model.open()
+            advanceUntilIdle()
+            model.state.value.groups.first().items.first().key shouldBe "doc:doc-1"
+        }
+
+    @Test
+    fun rapidTypingSearchesOnlyTheLastQuery() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = vm(session)
+            model.open()
+            advanceUntilIdle()
+            model.onQueryChange("t")
+            advanceTimeBy(50)
+            model.onQueryChange("ta")
+            advanceUntilIdle()
+
+            session.documents.observedFilters.count { it.first.query != null } shouldBe 1
+            session.documents.observedFilters.last { it.first.query != null }.first.query shouldBe "ta"
+        }
+
+    @Test
     fun aRecentSettingsPaneLeadsTheEmptyQuery() =
         runTest(dispatcher) {
             val model = vm()
@@ -308,40 +342,29 @@ class CommandPaletteViewModelTest : MainDispatcherTest() {
         }
 
     @Test
-    fun newTagWritesThroughTheTagFacadeAndShowsTags() =
+    fun commonActionsReachTheirScreens() =
         runTest(dispatcher) {
-            val session = FakeLibrarySession()
             val navigation = FakePaletteNavigation()
-            val model = vm(session, navigation)
-            model.setSources(
-                listOf(PaletteCommand(PaletteCommandId.NEW_TAG, "New tag…")),
-                emptyList(),
-            )
-            model.open()
-            advanceUntilIdle()
+            val model = vm(navigation = navigation)
+            val commands =
+                listOf(
+                    PaletteCommand(PaletteCommandId.TAGS, "Go to Tags"),
+                    PaletteCommand(PaletteCommandId.INBOX, "Open the Inbox"),
+                    PaletteCommand(PaletteCommandId.WATCH_FOLDER, "Set up a watched folder"),
+                    PaletteCommand(PaletteCommandId.ASSISTANT, "Open the Assistant"),
+                )
+            model.setSources(commands, emptyList())
+            for (command in commands) {
+                model.open()
+                advanceUntilIdle()
+                model.run(model.state.value.items.single { it.target == PaletteTarget.Action(command.id) })
+                advanceUntilIdle()
+            }
 
-            model.run(model.state.value.items.single())
-            advanceUntilIdle()
-            model.state.value.newTagOpen shouldBe true
-            model.confirmNewTag(" invoices ")
-            advanceUntilIdle()
-
-            session.tagAdmin.tagStyles shouldContainExactly
-                listOf(Triple("invoices", null, null))
             navigation.tags shouldBe 1
-        }
-
-    @Test
-    fun anExistingTagIsNotRestyled() =
-        runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { tags.tagNames = listOf("invoices") }
-            val navigation = FakePaletteNavigation()
-            val model = vm(session, navigation)
-            model.confirmNewTag("invoices")
-            advanceUntilIdle()
-
-            session.tagAdmin.tagStyles shouldContainExactly emptyList()
-            navigation.tags shouldBe 1
+            navigation.reviewQueues shouldBe 1
+            navigation.assistant shouldBe 1
+            navigation.settings shouldContainExactly listOf((SettingsCategoryId.IMPORT to false))
         }
 
     @Test

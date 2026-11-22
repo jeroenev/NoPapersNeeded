@@ -23,14 +23,9 @@
     <string name="palette_action_untagged">Mostrar documentos sem etiqueta</string>
     <string name="palette_action_tags">Ir para Etiquetas</string>
     <string name="palette_action_settings">Ir para Configurações</string>
-    <string name="palette_action_new_tag">Nova etiqueta…</string>
 
-    <string name="palette_new_tag_title">Nova etiqueta</string>
-    <string name="palette_new_tag_label">Nome da etiqueta</string>
-    <string name="palette_new_tag_failed">Não foi possível criar a etiqueta: %1$s</string>
     <string name="palette_import_failed">Não foi possível importar os arquivos: %1$s</string>
     <string name="palette_sync_failed">Não foi possível sincronizar: %1$s</string>
-
     <plurals name="palette_tag_documents">
         <item quantity="one">%1$d documento</item>
         <item quantity="other">%1$d documentos</item>

@@ -8,7 +8,7 @@ import dev.npn.app.ui.common.UiMessage
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.asUiText
 import dev.npn.app.ui.common.importBatch
-import dev.npn.app.ui.common.importScan
+import dev.npn.app.ui.common.importScanned
 import dev.npn.app.ui.common.offerSearchTip
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.settings.SettingsCategoryId
@@ -36,7 +36,6 @@ import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.library_show
 import no_papers_needed.composeapp.generated.resources.palette_import_failed
-import no_papers_needed.composeapp.generated.resources.palette_new_tag_failed
 import no_papers_needed.composeapp.generated.resources.palette_sync_failed
 
 /** What the palette's overlay asks of it: the query, the keyboard, and running a result. */
@@ -51,17 +50,11 @@ internal interface CommandPaletteActions {
     fun run(item: PaletteItem)
 
     fun close()
-
-    fun dismissNewTag()
-
-    /** Create the tag [name] through the tag facade, then show the Tags screen. */
-    fun confirmNewTag(name: String)
 }
 
 private class UiBits(
     val open: Boolean,
     val selected: Int,
-    val newTagOpen: Boolean,
 )
 
 private class LibrarySources(
@@ -97,7 +90,6 @@ internal class CommandPaletteViewModel(
     private val open = MutableStateFlow(false)
     private val query = MutableStateFlow("")
     private val selected = MutableStateFlow(0)
-    private val newTagOpen = MutableStateFlow(false)
     private val recents = MutableStateFlow<List<String>>(emptyList())
     private val commands = MutableStateFlow<List<PaletteCommand>>(emptyList())
     private val settingsEntries = MutableStateFlow<List<PaletteSettingsEntry>>(emptyList())
@@ -116,7 +108,7 @@ internal class CommandPaletteViewModel(
 
     private var searchJob: Job? = null
 
-    private val uiBits = combine(open, selected, newTagOpen, ::UiBits)
+    private val uiBits = combine(open, selected, ::UiBits)
 
     private val librarySources = combine(documents, tags, views, ::LibrarySources)
 
@@ -131,7 +123,6 @@ internal class CommandPaletteViewModel(
                 query = text,
                 groups = groups,
                 selected = if (count == 0) 0 else bits.selected.coerceIn(0, count - 1),
-                newTagOpen = bits.newTagOpen,
             )
         }.stateIn(viewModelScope, WhileSubscribedTimeout, PaletteState())
 
@@ -173,6 +164,8 @@ internal class CommandPaletteViewModel(
     }
 
     override fun run(item: PaletteItem) {
+        // Enter auto-repeat must not run a second result after the first closed the overlay.
+        if (!open.value) return
         remember(item.key)
         when (val target = item.target) {
             is PaletteTarget.Doc -> {
@@ -219,8 +212,6 @@ internal class CommandPaletteViewModel(
             PaletteCommandId.TAGS -> navigation.openTags()
 
             PaletteCommandId.SETTINGS -> navigation.openSettings(null)
-
-            PaletteCommandId.NEW_TAG -> newTagOpen.value = true
         }
     }
 
@@ -230,24 +221,6 @@ internal class CommandPaletteViewModel(
         selected.value = 0
         searchJob?.cancel()
         documents.value = emptyList()
-    }
-
-    override fun dismissNewTag() {
-        newTagOpen.value = false
-    }
-
-    override fun confirmNewTag(name: String) {
-        val tag = name.trim()
-        if (tag.isEmpty()) return
-        newTagOpen.value = false
-        launchReporting(Res.string.palette_new_tag_failed) {
-            // Writing a style to a name that already exists would clear its colour and icon: an
-            // existing tag is simply shown, and only a new one is created.
-            if (tag !in session.tags.allTagNames()) {
-                session.tagAdmin.setTagStyle(tag, null, null)
-            }
-            navigation.openTags()
-        }
     }
 
     /** Import the files the platform picker returned, and say what became of them. */
@@ -274,7 +247,7 @@ internal class CommandPaletteViewModel(
 
     /** Import what a platform scan came to, and say what became of it. */
     fun importScan(result: ScanResult) = launchReporting(Res.string.palette_import_failed) {
-        session.ingest.importScan(result, ::message)
+        session.ingest.importScanned(result, ::message)
     }
 
     /** Remember [key] as the most recent choice; the overlay keeps at most [MAX_RECENTS]. */
@@ -298,6 +271,8 @@ internal class CommandPaletteViewModel(
                 if (text.isBlank()) {
                     documents.value = recentDocuments()
                 } else {
+                    // The previous query's documents are not answers to this one.
+                    documents.value = emptyList()
                     delay(SEARCH_DEBOUNCE_MS)
                     documents.value =
                         log
@@ -333,7 +308,7 @@ internal class CommandPaletteViewModel(
         static: StaticSources,
     ): List<PaletteGroup> {
         val q = text.trim()
-        val documents = library.documents.map { it.toPaletteItem() }
+        val documents = library.documents.map { it.toPaletteItem(q) }
         val tags = library.tags.map { it.toPaletteItem() }
         val views = library.views.map { it.toPaletteItem() }
         val settings = settingsItems(q, static.settings, static.recents)
@@ -370,7 +345,7 @@ internal class CommandPaletteViewModel(
                 includeUnmatched = true,
                 key = { documentPaletteKey(it.doc.docId) },
                 text = { "${it.doc.displayTitle} ${it.doc.fileName}" },
-            ).map { it.toPaletteItem() }
+            ).map { it.toPaletteItem(q) }
         val rankedTags =
             rankPalette(
                 query = q,
@@ -415,7 +390,7 @@ internal class CommandPaletteViewModel(
                 .sortedWith(
                     compareBy(
                         { recentIndex[settingsPaletteKey(it.id)] ?: Int.MAX_VALUE },
-                        { it.id.ordinal },
+                        { entries.indexOf(it) },
                     ),
                 ).map { it.toPaletteItem() }
         }
@@ -440,7 +415,7 @@ internal class CommandPaletteViewModel(
                             ),
                         score = score,
                         recent = recentIndex[settingsPaletteKey(entry.id)] ?: Int.MAX_VALUE,
-                        index = entry.id.ordinal,
+                        index = entries.indexOf(entry),
                     )
                 }
             }
@@ -460,13 +435,28 @@ internal class CommandPaletteViewModel(
         val index: Int,
     )
 
-    private fun DocListItem.toPaletteItem(): PaletteItem =
-        PaletteItem(
+    private fun DocListItem.toPaletteItem(query: String): PaletteItem {
+        val matchedTitle =
+            query.isBlank() || paletteMatchScore(query, "${doc.displayTitle} ${doc.fileName}") > 0
+        return PaletteItem(
             key = documentPaletteKey(doc.docId),
             title = doc.displayTitle,
             target = PaletteTarget.Doc(doc.docId),
             subtitle = doc.relPath,
+            // A full-text hit whose title does not match says why it is here.
+            snippet =
+                if (matchedTitle) {
+                    null
+                } else {
+                    snippet
+                        ?.replace('\u0001', ' ')
+                        ?.replace('\u0002', ' ')
+                        ?.replace(Regex("\\s+"), " ")
+                        ?.trim()
+                        ?.takeIf { it.isNotEmpty() }
+                },
         )
+    }
 
     private fun TagInfo.toPaletteItem(): PaletteItem =
         PaletteItem(

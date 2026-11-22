@@ -14,7 +14,7 @@ import dev.npn.app.ui.common.asUiText
 import dev.npn.app.ui.common.colorsByName
 import dev.npn.app.ui.common.completeActiveSearchToken
 import dev.npn.app.ui.common.importBatch
-import dev.npn.app.ui.common.importScan
+import dev.npn.app.ui.common.importScanned
 import dev.npn.app.ui.common.offerSearchTip
 import dev.npn.app.ui.common.restored
 import dev.npn.app.ui.common.saveUiState
@@ -768,7 +768,7 @@ class LibraryViewModel(
 
     /** What a platform scan came to: import the PDF, say the scanner failed, or stay quiet. */
     override fun importScan(result: ScanResult) =
-        launchReporting(Res.string.common_scan_import_failed) { ingest.importScan(result, ::message) }
+        launchReporting(Res.string.common_scan_import_failed) { ingest.importScanned(result, ::message) }
 
     // Names arrive trimmed: TextInputDialog, which every name is typed into, trims what it confirms.
 

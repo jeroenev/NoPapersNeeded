@@ -93,21 +93,24 @@ internal fun MainNav(
     val openShortcuts: (() -> Unit)? = if (offersKeyboardShortcutList()) ({ shortcutsOpen = true }) else null
     val shellFocus = remember { FocusRequester() }
     var shellFocusHeld by remember { mutableStateOf(false) }
-    KeepShellFocus(shellFocus, shellFocusHeld)
-    // The palette's viewmodel lives in the library's store, so its recents and query survive a
-    // recreated window; its snackbars show over the shell, where its actions may run from any screen.
-    LibraryViewModelHost(library) {
-        val paletteNavigation = remember(library) { ShellPaletteNavigation(library) }
-        val palette = viewModel { CommandPaletteViewModel(session, settings, paletteNavigation) }
-        val paletteSnackbar = rememberSnackbarMessages(palette.messages)
-        Box(Modifier.fillMaxSize()) {
-            WithUpdateBanner(settings, snackbar) {
-                WithWriteBlockBanner(writeBlock, writeBlockActions) {
-                    WithCloudSyncBanner(
-                        status = syncStatus,
-                        onOpenSettings = { nav.navigate(Route.Settings(SettingsCategoryId.CLOUD_SYNC.routeKey)) },
-                    ) {
-                        WithDraftResumeBanner(snackbar, onOpen = { docId -> nav.resumeDraft(docId, library.browse) }) {
+    WithUpdateBanner(settings, snackbar) {
+        WithWriteBlockBanner(writeBlock, writeBlockActions) {
+            WithCloudSyncBanner(
+                status = syncStatus,
+                onOpenSettings = { nav.navigate(Route.Settings(SettingsCategoryId.CLOUD_SYNC.routeKey)) },
+            ) {
+                WithDraftResumeBanner(snackbar, onOpen = { docId -> nav.resumeDraft(docId, library.browse) }) {
+                    LibraryViewModelHost(library) {
+                        // The palette's viewmodel lives in the library's own store, so its recents
+                        // and query survive a recreated window.
+                        val paletteNavigation = remember(library) { ShellPaletteNavigation(library) }
+                        val palette = viewModel { CommandPaletteViewModel(session, settings, paletteNavigation) }
+                        val paletteState by palette.state.collectAsStateWithLifecycle()
+                        // Not while the palette's own window is open: the two must not fight over
+                        // focus as the dialog appears.
+                        KeepShellFocus(shellFocus, shellFocusHeld || paletteState.open)
+                        val paletteSnackbar = rememberSnackbarMessages(palette.messages)
+                        Box(Modifier.fillMaxSize()) {
                             NavigationShell(
                                 current = topLevel,
                                 assistantCurrent = assistant,
@@ -134,12 +137,12 @@ internal fun MainNav(
                                     onOpenLibrary = onOpenLibrary,
                                 )
                             }
+                            CommandPaletteHost(session = session, aiConfigured = aiConfigured, vm = palette)
+                            SnackbarHost(paletteSnackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
                         }
                     }
                 }
             }
-            CommandPaletteHost(session = session, aiConfigured = aiConfigured, vm = palette)
-            SnackbarHost(paletteSnackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
         }
     }
     if (shortcutsOpen) ShortcutsDialog(onDismiss = { shortcutsOpen = false })
