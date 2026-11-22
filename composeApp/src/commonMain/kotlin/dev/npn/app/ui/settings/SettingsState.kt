@@ -127,30 +127,6 @@ interface SettingsActions {
 
     /** The trash retention field lost focus: save what was typed in it now. */
     fun doneTypingTrashRetention()
-}
-
-/** The library's reminder settings, split from the rest because the settings screen already has many. */
-interface ReminderSettingsActions {
-    /** Turn the library's reminders on or off; turning them on chooses a date field when none is chosen. */
-    fun setRemindersEnabled(enabled: Boolean)
-
-    /** Watch or stop watching the DATE field [key] for reminders. */
-    fun setReminderField(
-        key: String,
-        selected: Boolean,
-    )
-
-    /** How many days before a due date the notification window opens; null while the field holds no valid number. */
-    fun setReminderLeadDays(days: Int?)
-
-    /** The lead-days field lost focus: save what was typed in it now. */
-    fun doneTypingReminderLead()
-
-    /** Type the daily check's local time as `HH:mm`; an invalid value stays unsaved. */
-    fun setReminderTime(text: String)
-
-    /** The time field lost focus: save what was typed in it now. */
-    fun doneTypingReminderTime()
 
     /**
      * Type [value] into the field of a device [setting]. It shows at once, and is saved once typing
@@ -238,4 +214,28 @@ interface ReminderSettingsActions {
      * access Android would not keep, or one in the library, leaves the one before and says so.
      */
     fun watchedFolderPicked(pick: FolderPick)
+}
+
+/** The library's reminder settings, split from [SettingsActions] because that interface is already large. */
+interface ReminderSettingsActions {
+    /** Turn the library's reminders on or off; turning them on chooses a date field when none is chosen. */
+    fun setRemindersEnabled(enabled: Boolean)
+
+    /** Watch or stop watching the DATE field [key] for reminders. */
+    fun setReminderField(
+        key: String,
+        selected: Boolean,
+    )
+
+    /** How many days before a due date the notification window opens; null while the field holds no valid number. */
+    fun setReminderLeadDays(days: Int?)
+
+    /** The lead-days field lost focus: save what was typed in it now. */
+    fun doneTypingReminderLead()
+
+    /** Type the daily check's local time as `HH:mm`; an invalid value stays unsaved. */
+    fun setReminderTime(text: String)
+
+    /** The time field lost focus: save what was typed in it now. */
+    fun doneTypingReminderTime()
 }
