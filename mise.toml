@@ -108,6 +108,12 @@ run = "./gradlew :core:desktopTest"
 description = "Run the core and shared UI desktop tests"
 run = "./gradlew :core:desktopTest :composeApp:desktopTest"
 
+# The cloud sync qualification scenarios (docs/SYNC_QUALIFICATION.md). They drive the real engine
+# over a fake remote, so they need no credentials and touch no provider.
+[tasks.sync-scenarios]
+description = "Run the cloud sync qualification scenarios against fake remotes"
+run = "./gradlew :core:desktopTest --tests 'dev.npn.core.sync.SyncScenarioTest'"
+
 # allTests runs every multiplatform module's suites on both targets; the desktop shell and the
 # build logic have plain JVM test tasks of their own.
 [tasks.test-all]

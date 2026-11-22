@@ -11,6 +11,7 @@ docs/*
 !docs/AI_TOOL_DATA_GAPS.md
 !docs/SIMULATION.md
 !docs/MUTATION_TESTING.md
+!docs/SYNC_QUALIFICATION.md
 !docs/agents/
 .opencode/
 .codex/
