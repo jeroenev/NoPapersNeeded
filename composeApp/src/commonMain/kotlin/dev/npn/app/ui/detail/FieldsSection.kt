@@ -83,7 +83,7 @@ internal fun FieldsSection(
     // The e-invoice marker is a value the detail screen shows as a badge, not a field to edit.
     val listedDefs = defs.filter { it.key != FieldKeys.EINVOICE }
     val shown = listedDefs.filter { it.showByDefault || it.key in doc.fields || it.key in revealed }
-    val orphanKeys = (doc.fields.keys - defs.map { it.key }.toSet()).sorted()
+    val orphanKeys = (doc.fields.keys - defs.map { it.key }.toSet() - FieldKeys.EINVOICE).sorted()
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         for (def in shown) {

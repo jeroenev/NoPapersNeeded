@@ -170,7 +170,19 @@ object FieldKeys {
     val WELL_KNOWN: Set<String> = setOf(TITLE, CORRESPONDENT, DOC_TYPE, DOC_DATE, NOTES)
 
     /** Fields that a split does not carry onto its parts: they describe the whole, not each piece. */
-    val NOT_INHERITED_ON_SPLIT: Set<String> = setOf(TITLE, NOTES)
+    val NOT_INHERITED_ON_SPLIT: Set<String> =
+        setOf(
+            TITLE,
+            NOTES,
+            INVOICE_NUMBER,
+            INVOICE_TOTAL,
+            INVOICE_CURRENCY,
+            INVOICE_DUE_DATE,
+            INVOICE_BUYER,
+            PAYMENT_REFERENCE,
+            IBAN,
+            EINVOICE,
+        )
 
     /** Synced setting holding the [SEED_VERSION] the library's well-known definitions were seeded at. */
     const val SEEDED_SETTING = "fieldsSeeded"

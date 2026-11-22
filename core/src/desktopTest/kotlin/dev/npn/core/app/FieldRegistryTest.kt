@@ -22,12 +22,12 @@ class FieldRegistryTest {
     ) = FieldDef(key, label, type, showByDefault = false, aiEnabled = false, position = position)
 
     @Test
-    fun freshLibraryIsSeededOnceWithTheWellKnownFive() =
+    fun freshLibraryIsSeededOnceWithTheWellKnownFields() =
         appSessionTest { rig ->
             val defs =
                 rig.session.fieldRegistry.fields
                     .first { it.isNotEmpty() }
-            defs.map { it.key } shouldContainExactly listOf("title", "correspondent", "docType", "docDate", "notes")
+            defs.map { it.key } shouldContainExactly FieldKeys.seedDefinitions().map { it.key }
             defs.single { it.key == FieldKeys.NOTES }.aiEnabled shouldBe false
             val objectsAfterSeed = rig.journalObjectCount()
 
@@ -36,7 +36,7 @@ class FieldRegistryTest {
             val (second, _) = rig.secondSession(backgroundScope)
             second.fieldRegistry.fields
                 .first { it.isNotEmpty() }
-                .size shouldBe 5
+                .size shouldBe FieldKeys.seedDefinitions().size
             rig.journalObjectCount() shouldBe objectsAfterSeed
         }
 
@@ -45,7 +45,7 @@ class FieldRegistryTest {
         appSessionTest { rig ->
             rig.session.fieldRegistry.fields
                 .first { it.isNotEmpty() }
-            for (key in FieldKeys.WELL_KNOWN) rig.session.fieldRegistry.remove(key)
+            for (key in FieldKeys.seedDefinitions().map { it.key }) rig.session.fieldRegistry.remove(key)
             rig.session.fieldRegistry.fields
                 .first { it.isEmpty() }
 
@@ -60,7 +60,7 @@ class FieldRegistryTest {
             registry.fields.first { it.isNotEmpty() }
             registry.upsert(def("invoice number", type = FieldType.NUMBER))
             val added = registry.fields.first { defs -> defs.any { it.key == "invoice_number" } }
-            added.single { it.key == "invoice_number" }.position shouldBe 5
+            added.single { it.key == "invoice_number" }.position shouldBe FieldKeys.seedDefinitions().size
 
             assertFailsWith<IllegalArgumentException> { registry.upsert(def("Invoice_Number")) }
             // Same key, different casing of the label is an update, not a collision.
@@ -183,12 +183,13 @@ class FieldRegistryTest {
     fun moveShiftsOneFieldAndIgnoresAMovePastTheEnd() =
         appSessionTest { rig ->
             val registry = rig.session.fieldRegistry
-            registry.fields.first { it.isNotEmpty() }
+            val initial = registry.fields.first { it.isNotEmpty() }
             registry.move("docType", -2)
             val ordered = registry.fields.first { it.first().key == "docType" }
-            ordered.map { it.key } shouldContainExactly
-                listOf("docType", "title", "correspondent", "docDate", "notes")
-            ordered.map { it.position } shouldContainExactly (0 until 5).toList()
+            // The move brings docType to the front and renumbers the whole registry 0, 1, 2...
+            ordered.first().key shouldBe "docType"
+            ordered.map { it.key }.toSet() shouldBe initial.map { it.key }.toSet()
+            ordered.map { it.position } shouldContainExactly (0 until FieldKeys.seedDefinitions().size).toList()
 
             registry.move("docType", -1)
             registry.move("notes", 1)
@@ -201,12 +202,12 @@ class FieldRegistryTest {
         appSessionTest { rig ->
             val registry = rig.session.fieldRegistry
             registry.fields.first { it.isNotEmpty() }
-            // title..notes sit at 0..4; removing two leaves three fields, the last still at 4.
+            // The seeded fields end at 12; removing two leaves the last still there.
             registry.remove(FieldKeys.CORRESPONDENT)
             registry.remove(FieldKeys.DOC_TYPE)
             registry.upsert(def("amount"))
             val defs = registry.fields.first { defs -> defs.any { it.key == "amount" } }
-            defs.single { it.key == "amount" }.position shouldBe 5
+            defs.single { it.key == "amount" }.position shouldBe FieldKeys.seedDefinitions().size
             defs.last().key shouldBe "amount"
         }
 }

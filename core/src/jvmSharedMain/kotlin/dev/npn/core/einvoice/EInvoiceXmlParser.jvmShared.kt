@@ -32,11 +32,20 @@ actual fun parseEInvoiceXml(xml: ByteArray): EInvoiceData? {
             return null
         }
     val root = document.documentElement ?: return null
+    val namespace = root.namespaceURI.orEmpty()
     val data =
-        when (root.localNameOrNodeName()) {
-            "CrossIndustryInvoice" -> parseCii(root)
-            "Invoice" -> parseUbl(root)
-            else -> null
+        when {
+            root.localNameOrNodeName() == "CrossIndustryInvoice" && namespace.contains("CrossIndustryInvoice") -> {
+                parseCii(root)
+            }
+
+            root.localNameOrNodeName() == "Invoice" && namespace.contains("Invoice-2") -> {
+                parseUbl(root)
+            }
+
+            else -> {
+                null
+            }
         }
     return data?.takeIf { !it.isEmpty }
 }
@@ -91,7 +100,7 @@ private fun parseCii(root: Element): EInvoiceData {
         sellerName = ciiPartyName(agreement?.child("SellerTradeParty")),
         buyerName = ciiPartyName(agreement?.child("BuyerTradeParty")),
         paymentReference = settlement?.child("PaymentReference")?.textValue(),
-        iban = settlement?.descendant("IBANID")?.textValue(),
+        iban = settlement?.descendant("PayeePartyCreditorFinancialAccount")?.child("IBANID")?.textValue(),
     )
 }
 
