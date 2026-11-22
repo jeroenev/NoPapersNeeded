@@ -6,6 +6,7 @@ import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
@@ -24,6 +25,7 @@ import dev.npn.app.ui.common.TopBarAction
 import dev.npn.app.ui.common.TopBarActions
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.AiOcrOffer
+import dev.npn.core.app.Doc
 import dev.npn.core.app.DocListItem
 import dev.npn.core.fs.NpnPaths
 import io.github.vinceglb.filekit.PlatformFile
@@ -43,6 +45,7 @@ import no_papers_needed.composeapp.generated.resources.detail_baking
 import no_papers_needed.composeapp.generated.resources.detail_export_baked_copy
 import no_papers_needed.composeapp.generated.resources.detail_more_actions
 import no_papers_needed.composeapp.generated.resources.detail_new_file_name
+import no_papers_needed.composeapp.generated.resources.detail_print
 import no_papers_needed.composeapp.generated.resources.detail_rename
 import no_papers_needed.composeapp.generated.resources.detail_rename_file
 import no_papers_needed.composeapp.generated.resources.detail_rerun_ocr
@@ -82,6 +85,9 @@ interface DocumentActions {
     /** Hand a copy carrying the document's metadata to the platform's share sheet through [share]. */
     fun shareBakedCopy(share: suspend (ByteArray) -> Unit)
 
+    /** Print the document's own bytes through the platform's print service. */
+    fun printDocument()
+
     /** Move the document to the trash. */
     fun trash()
 }
@@ -116,10 +122,11 @@ internal class SavedFirstActions(
 }
 
 /**
- * Shared document actions: a share/export button for a baked copy plus an overflow menu with
- * rename, re-run OCR, split, bake-in-place and trash. Used by the detail screen's top bar and by
- * the library's side-panel preview header, so both surfaces offer the same operations. Owns the
- * confirmation dialogs; [state] says which actions are busy or offered.
+ * Shared document actions: a share/export button plus an overflow menu with rename, re-run OCR,
+ * split, bake-in-place and trash, and a print action (an icon beside share on a wide bar, a menu
+ * item on a compact one). Used by the detail screen's top bar and by the library's side-panel
+ * preview header, so both surfaces offer the same operations. Owns the confirmation dialogs;
+ * [state] says which actions are busy or offered.
  *
  * A document that left the library (trashed, or split into new documents) says so in
  * [DetailUiState.left], which the host follows to close itself. A [compact] bar keeps every action
@@ -134,6 +141,16 @@ fun DocActions(
 ) {
     var dialog by rememberSaveable { mutableStateOf<DocActionDialog?>(null) }
 
+    // A wide bar offers print beside share/export; a compact one keeps it in the overflow menu with
+    // the rest, so the few icons that fit are not crowded out.
+    if (!compact) {
+        TooltipIconButton(
+            icon = Icons.Filled.Print,
+            label = stringResource(Res.string.detail_print),
+            onClick = actions::printDocument,
+            enabled = item.doc.isPrintable && !state.printing,
+        )
+    }
     ShareOrExportButton(
         exportName = exportName(item),
         onExport = { file -> actions.exportBakedCopy { bytes -> file.write(bytes) } },
@@ -142,6 +159,7 @@ fun DocActions(
     DocActionsMenu(
         compact = compact,
         state = state,
+        printable = item.doc.isPrintable,
         onRename = { dialog = DocActionDialog.RENAME },
         onReOcr = actions::reOcr,
         // A long document is offered like any other, but its cost is worth a sentence first: the
@@ -151,6 +169,7 @@ fun DocActions(
             if (state.aiOcr is AiOcrOffer.Large) dialog = DocActionDialog.AI_OCR else actions.ocrWithAi()
         },
         onSplit = { dialog = DocActionDialog.SPLIT },
+        onPrint = actions::printDocument,
         onBakeInPlace = { dialog = DocActionDialog.BAKE },
         onTrash = { dialog = DocActionDialog.TRASH },
     )
@@ -197,10 +216,12 @@ private fun ShareOrExportButton(
 private fun DocActionsMenu(
     compact: Boolean,
     state: DetailUiState,
+    printable: Boolean,
     onRename: () -> Unit,
     onReOcr: () -> Unit,
     onAiOcr: () -> Unit,
     onSplit: () -> Unit,
+    onPrint: () -> Unit,
     onBakeInPlace: () -> Unit,
     onTrash: () -> Unit,
 ) {
@@ -254,14 +275,22 @@ private fun DocActionsMenu(
             )
         }
     val trash = TopBarAction(Icons.Filled.Delete, stringResource(Res.string.detail_trash), onTrash)
+    val print =
+        TopBarAction(
+            icon = Icons.Filled.Print,
+            label = stringResource(Res.string.detail_print),
+            onClick = onPrint,
+            enabled = printable && !state.printing,
+        )
     // A wide bar promotes the direct document edits to icons; AI OCR and bake-in-place stay one tap
-    // away in the overflow. A compact bar — and the narrow side-panel header — keep everything in
-    // the overflow so the few icons that fit there are not crowded out.
+    // away in the overflow, and print sits beside share/export above. A compact bar — and the narrow
+    // side-panel header — keep everything in the overflow so the few icons that fit there are not
+    // crowded out.
     TopBarActions(
         inline = if (compact) emptyList() else listOf(rename, reOcr, split, trash),
         overflow =
             if (compact) {
-                listOfNotNull(rename, reOcr, aiOcrAction, split, bake, trash)
+                listOfNotNull(rename, reOcr, aiOcrAction, split, print, bake, trash)
             } else {
                 listOfNotNull(aiOcrAction, bake)
             },
@@ -351,6 +380,13 @@ private fun DocActionDialogs(
         null -> {}
     }
 }
+
+/**
+ * Whether [this] can be printed: a PDF whose file the library still has. A missing document keeps
+ * its metadata but has no bytes to send, and the library never prints anything else.
+ */
+internal val Doc.isPrintable: Boolean
+    get() = !missing && NpnPaths.isPdf(relPath)
 
 /**
  * The name, without its extension, that a shared or saved copy of [item] gets: its title as one

@@ -92,6 +92,12 @@ internal class DocContentFacadeImpl(
     override suspend fun extractedText(docId: String): String? =
         log.runLogged("Reading the text of $docId") { db.ftsDao().textOf(docId) }
 
+    override suspend fun documentBytes(docId: String): ByteArray? =
+        log.runLogged("Reading the bytes of $docId") {
+            val doc = documentDao.getByDocId(docId) ?: return@runLogged null
+            fs.readDocument(doc.relPath, docId)
+        }
+
     override suspend fun bakedCopyBytes(docId: String): ByteArray? =
         log.runLogged("Baking a copy of $docId") {
             val doc = documentDao.getByDocId(docId) ?: return@runLogged null
