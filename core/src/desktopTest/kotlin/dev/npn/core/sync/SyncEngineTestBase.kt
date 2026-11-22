@@ -32,20 +32,18 @@ internal open class SyncEngineTestBase {
         }
     }
 
-    /** [withPair] for [members] libraries, for the scenarios that add or lose a replica. */
-    protected fun withCluster(
-        members: Int = 2,
-        block: suspend (SyncCluster) -> Unit,
-    ) = runBlocking {
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-        val cluster = SyncCluster.open(scope, members)
-        try {
-            block(cluster)
-        } finally {
-            cluster.close()
-            scope.cancel()
+    /** [withPair] with two devices that [SyncCluster] can extend or retire, for the S9/S10 scenarios. */
+    protected fun withCluster(block: suspend (SyncCluster) -> Unit) =
+        runBlocking {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val cluster = SyncCluster.open(scope)
+            try {
+                block(cluster)
+            } finally {
+                cluster.close()
+                scope.cancel()
+            }
         }
-    }
 
     protected suspend fun SyncPair.importOnA(
         name: String,

@@ -111,6 +111,12 @@ internal class SyncScenarioTest : SyncEngineTestBase() {
                 .renameFile(doc, "final.pdf")
             cluster.b.session.meta
                 .setField(doc, FieldKeys.CORRESPONDENT, "ACME")
+            cluster.a.session
+                .syncCompleted()
+                .movedRemote shouldBe 1
+            cluster.b.session
+                .syncCompleted()
+                .downloadedDocuments shouldBe 0
             cluster.converge()
 
             for (rig in listOf(cluster.a, cluster.b)) {
@@ -160,6 +166,12 @@ internal class SyncScenarioTest : SyncEngineTestBase() {
 
             cluster.b.session.docLifecycle
                 .restoreDoc(doc)
+            cluster.b.session
+                .syncCompleted()
+                .movedRemote shouldBe 1
+            cluster.a.session
+                .syncCompleted()
+                .downloadedDocuments shouldBe 0
             cluster.converge()
 
             for (rig in listOf(cluster.a, cluster.b)) {
@@ -252,12 +264,12 @@ internal class SyncScenarioTest : SyncEngineTestBase() {
             cut.errors.map { it.path } shouldContain "inbox/cut.pdf"
 
             cluster.remote.failUploads.clear()
-            cluster.converge()
+            cluster.converge(allowConflicts = true)
 
             // A backend that writes in place left half a PDF at the final name. The next pass cannot
             // tell those bytes from a foreign document, so it keeps them as a copy and the library's
-            // own document goes up beside it (a known limit in docs/SYNC_QUALIFICATION.md). What
-            // must hold is that the document itself is never lost or overwritten.
+            // own document goes up beside it (a known limit, issue #38). What must hold is that the
+            // document itself is never lost or overwritten.
             cluster.remote.paths().filter { it.endsWith(".pdf") } shouldHaveSize 2
             for (rig in listOf(cluster.a, cluster.b)) {
                 rig.fs.sha256("inbox/cut (2).pdf") shouldBe doc
@@ -444,7 +456,7 @@ internal class SyncScenarioTest : SyncEngineTestBase() {
                 rig.session.docLifecycle.renameFile(second, "a.pdf")
                 rig.session.docLifecycle.renameFile(first, "b.pdf")
             }
-            cluster.converge()
+            cluster.converge(allowConflicts = true)
 
             // Known limit (ARCHITECTURE.md 5.6): renames settle one at a time and each waits while
             // its name is taken, so two documents that swapped names stay apart rather than trade
@@ -474,7 +486,7 @@ internal class SyncScenarioTest : SyncEngineTestBase() {
             cluster.a.exists("inbox/a.pdf").shouldBeTrue()
             cluster.a.exists("inbox/tmp.pdf").shouldBeFalse()
             cluster.a.exists("inbox/b.pdf").shouldBeTrue()
-            cluster.converge() shouldBe 1
+            cluster.converge(allowConflicts = true) shouldBe 1
         }
 
     private suspend fun AppSessionRig.trashDocHashes(): List<String> =

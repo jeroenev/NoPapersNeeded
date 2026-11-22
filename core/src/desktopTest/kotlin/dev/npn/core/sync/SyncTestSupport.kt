@@ -265,40 +265,45 @@ internal class SyncCluster private constructor(
     private val transport: DirectoryTransport,
     private val config: CloudSyncConfig,
 ) {
-    val rigs = ArrayList<AppSessionRig>()
+    private val joined = LinkedHashMap<String, AppSessionRig>()
+
+    /** The live devices, in join order. */
+    val rigs: List<AppSessionRig> get() = joined.values.toList()
 
     /** A new, empty library on this device, sharing the remote, as another install would be. */
-    suspend fun join(installationId: String): AppSessionRig =
-        AppSessionRig
+    suspend fun join(installationId: String): AppSessionRig {
+        check(installationId !in joined) { "device already joined: $installationId" }
+        return AppSessionRig
             .create(
                 scope,
                 syncTransport = transport,
                 cloudSync = config,
                 installationId = installationId,
-            ).also { rigs += it }
+            ).also { joined[installationId] = it }
+    }
 
     /** Close and forget [rig], as a device that left for good. */
     suspend fun retire(rig: AppSessionRig) {
-        rigs.remove(rig)
+        joined.values.removeIf { it === rig }
         rig.close()
     }
 
-    val a: AppSessionRig get() = rigs[0]
-    val b: AppSessionRig get() = rigs[1]
+    // Named lookups, so retiring a device cannot silently turn one test device into another.
+    val a: AppSessionRig get() = joined.getValue("install-a")
+    val b: AppSessionRig get() = joined.getValue("install-b")
 
     suspend fun close() {
-        for (rig in rigs.toList()) {
+        for (rig in rigs) {
+            // Cleanup must not mask the test's own failure; a close that throws still leaves the
+            // next test with fresh temp directories.
             runCatchingCancellable { rig.close() }
         }
-        rigs.clear()
+        joined.clear()
         remote.root.toFile().deleteRecursively()
     }
 
     companion object {
-        suspend fun open(
-            scope: CoroutineScope,
-            members: Int = 2,
-        ): SyncCluster {
+        suspend fun open(scope: CoroutineScope): SyncCluster {
             val remote = DirectoryRemoteStore(Files.createTempDirectory("npn-sync-remote"))
             val cluster =
                 SyncCluster(
@@ -307,7 +312,8 @@ internal class SyncCluster private constructor(
                     DirectoryTransport(remote),
                     CloudSyncConfig(enabled = false, remote = "test:library"),
                 )
-            repeat(members) { index -> cluster.join("install-${('a' + index)}") }
+            cluster.join("install-a")
+            cluster.join("install-b")
             return cluster
         }
     }
@@ -316,19 +322,21 @@ internal class SyncCluster private constructor(
 /**
  * Run a pass on each of [members] in order, again until a whole round changes nothing. Returns the
  * number of rounds taken. A remote-backed pass reaches quiescence once every replica has seen the
- * others' metadata.
+ * others' metadata. A pass with an error, or (unless [allowConflicts]) a conflict, is not quiescent:
+ * a scenario that promises clean convergence must not pass over failed or stuck work.
  */
 internal suspend fun SyncCluster.converge(
     members: List<AppSessionRig> = rigs,
     maxRounds: Int = 6,
+    allowConflicts: Boolean = false,
 ): Int {
     repeat(maxRounds) { round ->
         var changed = false
         for (rig in members.toList()) {
             val report = rig.session.syncCompleted()
             if (report.changedAnything) changed = true
-            // A pass that keeps failing per item is not quiescent, even when it transfers nothing.
             check(report.errors.isEmpty()) { "pass failed: ${report.errors}" }
+            check(allowConflicts || report.conflicts.isEmpty()) { "unexpected conflicts: ${report.conflicts}" }
         }
         if (!changed) return round + 1
     }

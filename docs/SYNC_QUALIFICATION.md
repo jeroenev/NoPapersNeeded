@@ -1,7 +1,8 @@
 # Cloud sync qualification
 
 This document is the repeatable proof that cloud sync (`core.sync`, ARCHITECTURE.md 5.6) converges
-for the providers the app offers, and the record of what a failure looks like. It has two halves:
+for the providers below (a representative part of the app's catalog), and the record of what a
+failure looks like. It has two halves:
 
 - an **automated suite** that drives the real engine, journal and index over a fake remote, in
   `core/src/desktopTest/kotlin/dev/npn/core/sync/SyncScenarioTest.kt`;
@@ -118,10 +119,10 @@ what a second replica sees. For every run:
 | Dropbox | `dropbox` | OAuth2 | Dropbox content hash (SHA-256 over 4 MiB blocks) only for a library file of the same size; otherwise download | Folds case | rclone delete removes it; Dropbox's own deleted-files area keeps it for a while |
 | Google Drive | `drive` | OAuth2 | none usable (MD5 only) → download | Name lookups fold case; a folder may hold duplicate names | rclone delete moves it to Drive's trash by default (`--drive-use-trash`) |
 | OneDrive | `onedrive` | OAuth2 | none usable (quickXorHash) → download | Folds case | Graph DELETE moves it to the recycle bin |
-| WebDAV / Nextcloud | `webdav` | URL + user + app password | none on the wire → download | Server-dependent; Nextcloud often folds case, so treat it as case-insensitive | WebDAV DELETE; Nextcloud may keep it in its own trash/versions |
+| WebDAV / Nextcloud | `webdav` | URL + user + app password | none on the wire the engine trusts → download | Server-dependent; Nextcloud often folds case, so treat it as case-insensitive | WebDAV DELETE; Nextcloud may keep it in its own trash/versions |
 | S3 | `s3` | Access key + secret + region | ETag only for single-part uploads (MD5), never trusted | Case-sensitive | Permanent, unless bucket versioning keeps delete markers/versions |
 | Backblaze B2 | `b2` | Key ID + application key | SHA-1 only, never trusted → download | Case-sensitive | Hides the file; old versions remain until the bucket lifecycle rule |
-| SFTP | `sftp` | Host + user + key or password | SHA-256 when the server's checksum command is available (the repo assumes it is), else download | Server filesystem | Permanent |
+| SFTP | `sftp` | Host + user + key or password | none the engine trusts by default (rclone may report MD5/SHA-1 when the server has a checksum command) → download | Server filesystem | Permanent |
 
 Provider deltas that matter to every scenario:
 
@@ -134,6 +135,9 @@ Provider deltas that matter to every scenario:
   delete for good still leaves the bytes in Drive's trash for the user to purge there.
 - **OneDrive**: same download-to-identify cost (quickXorHash is ignored), and a delete for good goes
   to the site recycle bin, not away. Names differing only in case collide.
+- **SFTP**: rclone can report MD5 or SHA-1 when the server offers a checksum command, but the engine
+  trusts neither, so every document is downloaded once to identify it on a new device. A case-folding
+  mount behaves like Dropbox for paths; a full disk fails uploads per file.
 - **Nextcloud/WebDAV**: no hash and no atomic multi-file commit. Its mtime may have one-second
   resolution; a same-size change that keeps the same reported mtime leaves the manifest's size/mtime
   pair unchanged, so it is trusted rather than re-identified and the change is missed until the
@@ -145,7 +149,9 @@ Provider deltas that matter to every scenario:
   "delete for good" is only permanent once the bucket's lifecycle removes old versions. Large files
   use B2's large-file upload.
 - **SFTP**: no provider trash and no rate limit, but the server's filesystem is the source of truth:
-  a case-folding mount behaves like Dropbox for paths, and a full disk fails uploads per file.
+  a case-folding mount behaves like Dropbox for paths, and a full disk fails uploads per file. rclone's
+  SFTP hashes are MD5/SHA-1 unless configured otherwise, and the engine trusts neither, so a new
+  device downloads documents to identify them.
 
 ## Scenario catalogue
 
@@ -212,8 +218,9 @@ deviation is a failure unless the cell says otherwise.
   it moved its file into its own trash, then restore on B, sync B, sync A.
 - **Expected**: A's trash reaches B as a trash (not a delete); B's offline tag survives into the
   restored document; after restore both devices show the file live at its original path with that
-  tag; the remote holds the live file and no live stale copy. Trash entries left by both devices
-  are the write-once union the retention purge removes later.
+  tag; the remote holds the live file and no live stale copy. The mirrored trash normally reuses the
+  trashing device's write-once entry; a replica that parks before it knows the trash time can add its
+  own (issue #39), which the retention purge leaves while the document is live again.
 - **A failure means**: the document comes back on a device that had not restored it, the restore
   downloads bytes that were already in the trash, or a tag edit is lost.
 - **Evidence**: each device's trash/restore state, the live file's SHA-256, the tag, and the remote
@@ -258,7 +265,8 @@ deviation is a failure unless the cell says otherwise.
 ### S8 — Large files
 
 - **Setup**: two synced devices, free space on both and on the provider; a PDF near the provider's
-  single-upload limit (for example 150 MiB for Dropbox's session path, 5 GiB for the S3 multipart path).
+  single-upload limit (for example 150 MiB for Dropbox's session path, above rclone's 200 MiB S3 multipart
+  switch for S3, up to its 5 TiB object ceiling).
 - **Steps**: import and sync; then interrupt the first upload (network off) and sync again; then
   verify the download on the second device, including memory use of the app.
 - **Expected**: the file transfers whole (the engine streams through staging, never reads a PDF into
@@ -296,7 +304,8 @@ This is the user-facing walkthrough; the same steps qualify a new phone.
 3. Run the first pass and let the index finish. Expected: every live document comes back at its
    journaled name with its metadata, tags and OCR/journal-derived state; documents in the trash come
    back into this device's trash; documents deleted for good stay gone; settings, saved views and
-   rules come back (they are journal data).
+   rules come back (they are journal data; the fake suite does not assert them, so check them by
+   hand here).
 4. Compare a sample of documents by SHA-256 with the remote, and check the trash count and the
    document count against the old device's last known state.
 5. Expect and accept these conflicts after a restore: a document the old device renamed but whose
@@ -344,7 +353,7 @@ trash/version or listing page. A cell marked **manual** cannot be automated with
 | S5 | — | Standard | Resurrection | Trash views, report |
 | S6 | **manual**: `--drive-use-trash` | App copy gone; bytes in Drive trash until purged there | Live copy still listed | Drive trash browser |
 | S7 | **manual**: kill during a resumable upload | Adopted or retried; no partial document | Corrupt/duplicate | Drive activity, hashes |
-| S8 | 1 GiB file | Whole, streamed | OOM/truncation | Sizes, hashes, memory |
+| S8 | 1 GiB file, **manual** (the fake suite proves 3 MiB integrity) | Whole, streamed | OOM/truncation | Sizes, hashes, memory |
 | S9 | Third device | Downloads only | Duplicate/refusal | Report, listing |
 | S10 | New device | Standard restore | Lost document | New list, report |
 
@@ -359,7 +368,7 @@ trash/version or listing page. A cell marked **manual** cannot be automated with
 | S5 | — | Standard | Resurrection | Recycle bin + app trash |
 | S6 | **manual**: check the recycle bin | App copy gone; Graph DELETE leaves it in the bin | Live copy remains | OneDrive recycle bin |
 | S7 | **manual**: kill during an upload session | Adopted or retried | Corrupt/duplicate | Activity, hashes |
-| S8 | 1 GiB file | Whole, streamed | OOM/truncation | Sizes, hashes |
+| S8 | 1 GiB file, **manual** | Whole, streamed | OOM/truncation | Sizes, hashes |
 | S9 | Third device | Downloads only | Duplicate/refusal | Report, listing |
 | S10 | New device | Standard restore | Lost document | New list, report |
 
@@ -389,7 +398,7 @@ trash/version or listing page. A cell marked **manual** cannot be automated with
 | S5 | — | Standard | Resurrection | Trash prefix listing |
 | S6 | **manual**: versioning/lifecycle | Live copy gone; versions/delete markers per bucket policy | Live key remains | Bucket versions |
 | S7 | **manual**: kill during a multipart upload | Adopted or retried; no partial key | Corrupt/duplicate | Bucket listing, hashes |
-| S8 | 5 GiB+ multipart file | Whole, streamed | OOM/truncation/failed multipart | Sizes, hashes, bucket parts |
+| S8 | Above 200 MiB (multipart), up to 5 TiB | Whole, streamed | OOM/truncation/failed multipart | Sizes, hashes, bucket parts |
 | S9 | Third device | Downloads only | Duplicate/refusal | Report, listing |
 | S10 | New device | Standard restore | Lost document | New list, report |
 
@@ -404,7 +413,7 @@ trash/version or listing page. A cell marked **manual** cannot be automated with
 | S5 | — | Standard | Resurrection | Trash prefix |
 | S6 | **manual**: lifecycle rule | Live copy hidden; old versions until lifecycle | File still visible | Bucket file versions |
 | S7 | **manual**: kill during a large-file upload | Adopted or retried; no partial document | Corrupt/duplicate | Bucket listing, hashes |
-| S8 | 1 GiB+ large file | Whole, streamed | OOM/truncation | Sizes, hashes, unfinished large files |
+| S8 | 1 GiB+ large file, **manual** | Whole, streamed | OOM/truncation | Sizes, hashes, unfinished large files |
 | S9 | Third device | Downloads only | Duplicate/refusal | Report, listing |
 | S10 | New device | Standard restore | Lost document | New list, report |
 
@@ -412,7 +421,7 @@ trash/version or listing page. A cell marked **manual** cannot be automated with
 
 | Scenario | Setup & steps (delta) | Expected | A failure means | Evidence |
 | --- | --- | --- | --- | --- |
-| S1 | Host, user, key/password; test folder | Standard; SHA-256 from the server's checksum command when available | Lost import/tag | Lists, `sha256sum` on the server |
+| S1 | Host, user, key/password; test folder | Standard; documents downloaded once to identify (MD5/SHA-1 are not evidence) | Lost import/tag | Lists, `sha256sum` on the server |
 | S2 | — | Standard | Title/tag divergence | Detail screens |
 | S3 | — | Standard; rename, or copy+delete across filesystems | Old name/duplicate | Server listing |
 | S4 | — | Known limit, `TARGET_OCCUPIED` | Loss | Listings, conflicts |
@@ -441,7 +450,7 @@ answer or an issue to track.
 - **A mirrored trash can add its own trash entry** (S5, S9). A replica that parks a file it only
   just learned was trashed may not have the trash time in its row yet, so it names the entry with its
   own clock and uploads it beside the trashing device's entry; the remote then holds one entry per
-  such replica (the S9 run shows two, with episodes a second apart). A replica that already carries
+  such replica (the S9 run shows two, with different episodes). A replica that already carries
   the trash time reuses the same write-once name and adds nothing. Extra entries serve the retention
   purge, which removes an entry only once every document its name can stand for has been out of the
   library longer than the retention. While a restored document is live again, that condition is not
