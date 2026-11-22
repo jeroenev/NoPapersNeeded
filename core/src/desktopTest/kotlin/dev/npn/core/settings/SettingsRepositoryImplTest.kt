@@ -155,8 +155,8 @@ class SettingsRepositoryImplTest {
             settings.appLock.enabled shouldBe true
             settings.appLock.timeout shouldBe LockTimeout.FIVE_MINUTES
             settings.appLock.credential shouldBe credential
-            LockCrypto.verify("swordfish", settings.appLock.credential!!) shouldBe true
-            LockCrypto.verify("swordfish2", settings.appLock.credential!!) shouldBe false
+            LockCrypto.verify("swordfish", settings.appLock.credential) shouldBe true
+            LockCrypto.verify("swordfish2", settings.appLock.credential) shouldBe false
             // The file holds the salt and hash, never the secret itself.
             val stored = file.readText()
             stored.contains("swordfish") shouldBe false
