@@ -92,6 +92,9 @@ run = "./gradlew :desktopApp:packageUberJarForCurrentOS"
 # `mise release <version>` bumps npn.version, commits, tags v<version> and pushes; the tag
 # triggers .github/workflows/release.yml (file task in .mise/tasks/release).
 
+# `mise pages-preview` assembles the GitHub Pages site and serves it locally
+# (file task in .mise/tasks/pages-preview).
+
 # `mise icons` re-renders the committed desktop icon bitmaps from the branding SVG
 # (file task in .mise/tasks/icons).
 

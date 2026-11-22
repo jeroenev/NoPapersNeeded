@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# mise pages-preview — assemble the GitHub Pages site and serve it on localhost.
+#
+# Assembles exactly what .github/workflows/pages.yml deploys (site/ plus design/screenshots/),
+# so the relative screenshot paths resolve as they do in production. Ctrl+C stops the server.
+# Unlike `mise hot`, nothing opens the real library: this only serves static files.
+set -euo pipefail
+
+: "${PORT:=8080}"
+out="build/pages-site"
+
+rm -rf "$out"
+bash .github/scripts/assemble-site.sh "$out"
+
+echo "Serving on http://localhost:${PORT} (Ctrl+C to stop)"
+cd "$out"
+python3 -m http.server "$PORT" --bind 127.0.0.1
