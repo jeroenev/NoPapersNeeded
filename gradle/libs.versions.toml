@@ -20,7 +20,7 @@ androidx-uiautomator = "2.4.1"
 androidx-work = "2.12.0"
 compose-material-icons = "1.7.3"
 # Material 3 for Compose 1.12 has no stable release yet; this is the newest alpha of that line.
-compose-material3 = "1.12.0-alpha03"
+compose-material3 = "1.13.0-rc01"
 compose-navigation = "2.10.0"
 # Back handling (system gesture, Esc on desktop); the JetBrains build carries the desktop actual.
 compose-navigationevent = "1.1.0"
