@@ -57,6 +57,9 @@
     <string name="common_settings_about_help">App pessoal e de código aberto para documentos sem papel. Os arquivos são a fonte da verdade.</string>
     <string name="common_settings_update_check">Verificar atualizações</string>
     <string name="common_settings_update_check_help">Uma vez a cada inicialização, pergunta ao GitHub se foi lançada uma versão mais recente.</string>
+    <string name="common_settings_support_title">Apoiar o projeto</string>
+    <string name="common_settings_support_help">O No papers needed é gratuito e de código aberto, sem anúncios nem versão paga. Patrocinar ajuda a cobrir o tempo necessário para manter tudo assim.</string>
+    <string name="common_settings_support_sponsor">Patrocinar no GitHub</string>
 
     <string name="common_settings_storage_organize_paths">Organizar os caminhos dos documentos automaticamente</string>
     <string name="common_settings_storage_organize_help">Move os PDFs após a importação e após alterações de metadados; os arquivos nunca são sobrescritos.</string>

@@ -57,6 +57,9 @@
     <string name="common_settings_about_help">Application personnelle et open source de gestion de documents sans papier. Les fichiers font foi.</string>
     <string name="common_settings_update_check">Rechercher les mises à jour</string>
     <string name="common_settings_update_check_help">Une fois par démarrage, demande à GitHub si une version plus récente est disponible.</string>
+    <string name="common_settings_support_title">Soutenir le projet</string>
+    <string name="common_settings_support_help">No papers needed est gratuit et open source, sans publicité ni offre payante. Un parrainage aide à couvrir le temps qu'il faut pour que ça reste ainsi.</string>
+    <string name="common_settings_support_sponsor">Parrainer sur GitHub</string>
 
     <string name="common_settings_storage_organize_paths">Organiser automatiquement les chemins des documents</string>
     <string name="common_settings_storage_organize_help">Déplace les PDF après l’import et les changements d’informations ; les fichiers ne sont jamais écrasés.</string>

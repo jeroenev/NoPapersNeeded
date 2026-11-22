@@ -3,6 +3,7 @@ package dev.npn.app.ui.settings
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalUriHandler
 import dev.npn.app.BuildInfo
 import dev.npn.app.platform.checksForUpdates
 import dev.npn.app.ui.common.HelpText
@@ -12,15 +13,22 @@ import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_app_name
 import no_papers_needed.composeapp.generated.resources.common_settings_about_help
 import no_papers_needed.composeapp.generated.resources.common_settings_product_version
+import no_papers_needed.composeapp.generated.resources.common_settings_support_help
+import no_papers_needed.composeapp.generated.resources.common_settings_support_sponsor
+import no_papers_needed.composeapp.generated.resources.common_settings_support_title
 import no_papers_needed.composeapp.generated.resources.common_settings_update_check
 import no_papers_needed.composeapp.generated.resources.common_settings_update_check_help
 import org.jetbrains.compose.resources.stringResource
+
+/** Where the sponsor button in About goes: the maintainer's GitHub Sponsors page. */
+private const val SPONSORS_URL = "https://github.com/sponsors/jeroenev"
 
 @Composable
 internal fun AboutSettingsPane(
     state: SettingsPaneState,
     actions: SettingsPaneActions,
 ) {
+    val uriHandler = LocalUriHandler.current
     SettingsSection(title = null) {
         Text(
             text =
@@ -41,5 +49,12 @@ internal fun AboutSettingsPane(
                 onCheckedChange = { on -> actions.edit { it.copy(updateCheckEnabled = on) } },
             )
         }
+    }
+    SettingsSection(title = stringResource(Res.string.common_settings_support_title)) {
+        HelpText(stringResource(Res.string.common_settings_support_help))
+        SettingsActionRow(
+            label = stringResource(Res.string.common_settings_support_sponsor),
+            onClick = { runCatching { uriHandler.openUri(SPONSORS_URL) } },
+        )
     }
 }

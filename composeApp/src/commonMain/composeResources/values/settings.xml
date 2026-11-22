@@ -58,6 +58,9 @@
     <string name="common_settings_about_help">Personal, open-source paperless document app. Files are the source of truth.</string>
     <string name="common_settings_update_check">Check for updates</string>
     <string name="common_settings_update_check_help">Once per start, ask GitHub whether a newer version has been released.</string>
+    <string name="common_settings_support_title">Support the project</string>
+    <string name="common_settings_support_help">No papers needed is free and open source, with no ads and no paid tier. A sponsorship helps cover the time it takes to keep it that way.</string>
+    <string name="common_settings_support_sponsor">Sponsor on GitHub</string>
 
     <string name="common_settings_storage_organize_paths">Organize document paths automatically</string>
     <string name="common_settings_storage_organize_help">Moves PDFs after import and metadata changes; files are never overwritten.</string>

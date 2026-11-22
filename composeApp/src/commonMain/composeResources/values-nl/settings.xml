@@ -57,6 +57,9 @@
     <string name="common_settings_about_help">Persoonlijke, opensource-app voor papierloos documentbeheer. Bestanden zijn de bron.</string>
     <string name="common_settings_update_check">Controleren op updates</string>
     <string name="common_settings_update_check_help">Vraag bij elke start aan GitHub of er een nieuwere versie is uitgebracht.</string>
+    <string name="common_settings_support_title">Steun het project</string>
+    <string name="common_settings_support_help">No papers needed is gratis en open source, zonder advertenties en zonder betaalde versie. Een bijdrage helpt de tijd te dekken die het kost om dat zo te houden.</string>
+    <string name="common_settings_support_sponsor">Word sponsor op GitHub</string>
 
     <string name="common_settings_storage_organize_paths">Documentpaden automatisch ordenen</string>
     <string name="common_settings_storage_organize_help">Verplaatst pdf-bestanden na het importeren en na wijzigingen in metagegevens; bestanden worden nooit overschreven.</string>

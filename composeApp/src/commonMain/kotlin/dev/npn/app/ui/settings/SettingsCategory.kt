@@ -82,6 +82,9 @@ import no_papers_needed.composeapp.generated.resources.common_settings_stop_watc
 import no_papers_needed.composeapp.generated.resources.common_settings_storage
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_organize_paths
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_path_template
+import no_papers_needed.composeapp.generated.resources.common_settings_support_help
+import no_papers_needed.composeapp.generated.resources.common_settings_support_sponsor
+import no_papers_needed.composeapp.generated.resources.common_settings_support_title
 import no_papers_needed.composeapp.generated.resources.common_settings_trash
 import no_papers_needed.composeapp.generated.resources.common_settings_trash_retention_days
 import no_papers_needed.composeapp.generated.resources.common_settings_update_check
@@ -327,7 +330,14 @@ internal val SettingsCategories: List<SettingsCategory> =
             id = SettingsCategoryId.ABOUT,
             title = Res.string.common_settings_about,
             icon = Icons.Outlined.Info,
-            keywords = listOf(Res.string.common_settings_about_help, Res.string.common_settings_update_check),
+            keywords =
+                listOf(
+                    Res.string.common_settings_about_help,
+                    Res.string.common_settings_update_check,
+                    Res.string.common_settings_support_title,
+                    Res.string.common_settings_support_help,
+                    Res.string.common_settings_support_sponsor,
+                ),
             content = { state, actions -> AboutSettingsPane(state, actions) },
         ),
     )
