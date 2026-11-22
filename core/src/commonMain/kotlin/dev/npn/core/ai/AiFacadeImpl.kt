@@ -108,6 +108,7 @@ internal class AiFacadeImpl(
         docId: String,
         request: AiEditRequest,
         runId: String?,
+        kind: AiUsageKind,
     ): AiEditSuggestion {
         val doc = db.documentDao().getByDocId(docId) ?: return AiEditSuggestion.EMPTY
         val text = db.ftsDao().textOf(docId)
@@ -138,7 +139,7 @@ internal class AiFacadeImpl(
         val response = suggesting.withPermit { runtime.executor.execute(thePrompt, runtime.model) }
         record(
             config = config,
-            kind = AiUsageKind.SUGGEST,
+            kind = kind,
             runId = runId,
             reported = response.metaInfo,
             estimatedInput = promptChars(thePrompt) / CHARS_PER_TOKEN.toLong(),

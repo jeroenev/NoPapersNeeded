@@ -50,6 +50,7 @@ class FakeAiSuggest : AiSuggest {
         docId: String,
         request: AiEditRequest,
         runId: String?,
+        kind: dev.npn.core.ai.AiUsageKind,
     ): AiEditSuggestion {
         suggestEditsCalls += docId
         suggestEditsRequests += request

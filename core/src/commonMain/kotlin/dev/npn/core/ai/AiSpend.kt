@@ -260,7 +260,9 @@ data class AiRunEstimate(
         if (requests == this.requests || this.requests <= 0) return copy(requests = requests)
         val factor = requests.toDouble() / this.requests
         return copy(
+            documents = (documents * factor).toInt(),
             requests = requests,
+            pages = (pages * factor).toInt(),
             inputTokens = (inputTokens * factor).toLong(),
             outputTokens = (outputTokens * factor).toLong(),
             estimatedCostUsd = estimatedCostUsd?.let { it * factor },

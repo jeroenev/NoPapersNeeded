@@ -578,26 +578,28 @@ private fun AiSpendSection(
     onReset: () -> Unit,
 ) {
     var confirming by rememberSaveable { mutableStateOf(false) }
-    SettingsSection(title = stringResource(Res.string.common_settings_ai_spend)) {
-        SpendWindow(stringResource(Res.string.common_settings_ai_spend_last30), spend.last30Days)
-        SpendWindow(stringResource(Res.string.common_settings_ai_spend_all_time), spend.allTime)
-        HelpText(stringResource(Res.string.common_settings_ai_spend_estimated))
-        OutlinedButton(onClick = { confirming = true }) {
-            Text(stringResource(Res.string.common_settings_ai_spend_reset))
+    Column {
+        SettingsSection(title = stringResource(Res.string.common_settings_ai_spend)) {
+            SpendWindow(stringResource(Res.string.common_settings_ai_spend_last30), spend.last30Days)
+            SpendWindow(stringResource(Res.string.common_settings_ai_spend_all_time), spend.allTime)
+            HelpText(stringResource(Res.string.common_settings_ai_spend_estimated))
+            OutlinedButton(onClick = { confirming = true }) {
+                Text(stringResource(Res.string.common_settings_ai_spend_reset))
+            }
         }
-    }
-    if (confirming) {
-        ConfirmDialog(
-            title = stringResource(Res.string.common_settings_ai_spend_reset_title),
-            message = stringResource(Res.string.common_settings_ai_spend_reset_message),
-            confirmLabel = stringResource(Res.string.common_settings_ai_spend_reset_confirm),
-            destructive = true,
-            onConfirm = {
-                confirming = false
-                onReset()
-            },
-            onDismiss = { confirming = false },
-        )
+        if (confirming) {
+            ConfirmDialog(
+                title = stringResource(Res.string.common_settings_ai_spend_reset_title),
+                message = stringResource(Res.string.common_settings_ai_spend_reset_message),
+                confirmLabel = stringResource(Res.string.common_settings_ai_spend_reset_confirm),
+                destructive = true,
+                onConfirm = {
+                    confirming = false
+                    onReset()
+                },
+                onDismiss = { confirming = false },
+            )
+        }
     }
 }
 
@@ -606,13 +608,15 @@ private fun SpendWindow(
     title: String,
     totals: List<AiUsageTotals>,
 ) {
-    Text(title, style = MaterialTheme.typography.titleSmall)
-    if (totals.isEmpty()) {
-        HelpText(stringResource(Res.string.common_settings_ai_spend_empty))
-        return
+    Column {
+        Text(title, style = MaterialTheme.typography.titleSmall)
+        if (totals.isEmpty()) {
+            HelpText(stringResource(Res.string.common_settings_ai_spend_empty))
+            return@Column
+        }
+        totals.forEach { line -> Text(spendLine(line), style = MaterialTheme.typography.bodyMedium) }
+        Text(totalLine(totals), style = MaterialTheme.typography.bodyMedium)
     }
-    totals.forEach { line -> Text(spendLine(line), style = MaterialTheme.typography.bodyMedium) }
-    Text(totalLine(totals), style = MaterialTheme.typography.bodyMedium)
 }
 
 @Composable

@@ -92,6 +92,7 @@ class AiSpendTest {
 
         val scaled = base.scaledTo(10)
 
+        scaled.documents shouldBe 10
         scaled.requests shouldBe 10
         scaled.inputTokens shouldBe 10_000
         scaled.outputTokens shouldBe 2_000

@@ -537,7 +537,11 @@ class AiEditViewModel(
                 if (result.capReached) {
                     message(uiText(Res.string.ai_edit_cap_reached, plan.value.requestCap, result.skipped))
                 }
-                updateUi { it.copy(phase = EditPhase.Review(ReviewBatchState(result.docs, result.emptyDocs))) }
+                if (result.capReached && result.docs.isEmpty() && result.emptyDocs.isEmpty()) {
+                    updateUi { it.copy(phase = EditPhase.Done(ApplyResult(0, 0, moreRemain = false))) }
+                } else {
+                    updateUi { it.copy(phase = EditPhase.Review(ReviewBatchState(result.docs, result.emptyDocs))) }
+                }
             }
         }
     }

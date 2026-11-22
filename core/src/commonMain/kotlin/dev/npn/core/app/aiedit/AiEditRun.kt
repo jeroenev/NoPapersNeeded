@@ -245,7 +245,7 @@ internal class AiEditRunImpl(
             }
         }
 
-    override suspend fun moreRemain(key: ScopeKey): Boolean = nextBatchDocs(key).isNotEmpty()
+    override suspend fun moreRemain(key: ScopeKey): Boolean = !budgetExhausted() && nextBatchDocs(key).isNotEmpty()
 
     override suspend fun remainingDocs(key: ScopeKey): List<DocListItem> =
         docsFor(key).first().filterNot { it.doc.docId in _processed.value }
@@ -261,6 +261,18 @@ internal class AiEditRunImpl(
     ): BatchResult {
         val batch = nextBatchDocs(key)
         if (batch.isEmpty()) return BatchResult.Empty
+        // The run already spent its cap: do not open a Review that cannot ask anything. The UI turns
+        // this into a terminal Done, so "Next batch" cannot loop on an exhausted budget.
+        if (budgetExhausted()) {
+            return BatchResult.Review(
+                docs = emptyList(),
+                emptyDocs = emptyList(),
+                failures = 0,
+                total = batch.size,
+                capReached = true,
+                skipped = batch.size,
+            )
+        }
         val first = batch.first().doc
         onProgress(EditProgress(0, batch.size, first.title, first.fileName))
         var done = 0
@@ -289,6 +301,9 @@ internal class AiEditRunImpl(
     /** The run's one request counter, seeded from the cap read when its first call is made. */
     private suspend fun runBudget(): AiRunBudget =
         budget ?: AiRunBudget(readConfig().maxRunRequests).also { budget = it }
+
+    /** Whether this run has already used every request its cap allows. */
+    private suspend fun budgetExhausted(): Boolean = budget?.let { it.usedRequests() >= it.cap } == true
 
     private fun enterReview(
         results: List<ReviewDoc>,

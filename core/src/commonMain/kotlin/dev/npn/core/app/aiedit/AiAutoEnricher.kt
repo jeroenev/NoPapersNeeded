@@ -161,6 +161,7 @@ internal class AiAutoEnricher(
                     entry.docId,
                     request,
                     runId = "enrich:${entry.docId}",
+                    kind = dev.npn.core.ai.AiUsageKind.ENRICHMENT,
                 )
             }.getOrElse { cause ->
                 reschedule(entry, cause)

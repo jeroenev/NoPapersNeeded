@@ -36,11 +36,12 @@ import io.github.vinceglb.filekit.dialogs.FileKitDialogSettings
 import io.github.vinceglb.filekit.dialogs.compose.rememberFileSaverLauncher
 import io.github.vinceglb.filekit.write
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.ai_spend_estimate_cost
+import no_papers_needed.composeapp.generated.resources.ai_spend_estimate_tokens
+import no_papers_needed.composeapp.generated.resources.ai_spend_estimate_tokens_only
 import no_papers_needed.composeapp.generated.resources.detail_action_needs_saved_draft
 import no_papers_needed.composeapp.generated.resources.detail_ai_ocr
 import no_papers_needed.composeapp.generated.resources.detail_ai_ocr_confirm
-import no_papers_needed.composeapp.generated.resources.detail_ai_ocr_estimate
-import no_papers_needed.composeapp.generated.resources.detail_ai_ocr_estimate_tokens_only
 import no_papers_needed.composeapp.generated.resources.detail_ai_ocr_large
 import no_papers_needed.composeapp.generated.resources.detail_ai_ocr_large_prompt
 import no_papers_needed.composeapp.generated.resources.detail_bake_in_place
@@ -353,20 +354,14 @@ private fun DocActionDialogs(
                         val cost = estimate.estimatedCostUsd
                         if (estimate.priceKnown && cost != null) {
                             androidx.compose.material3.Text(
-                                stringResource(
-                                    Res.string.detail_ai_ocr_estimate,
-                                    estimate.inputTokens,
-                                    formatUsd(cost),
-                                    estimate.requestCap,
-                                ),
+                                stringResource(Res.string.ai_spend_estimate_tokens, estimate.inputTokens),
+                            )
+                            androidx.compose.material3.Text(
+                                stringResource(Res.string.ai_spend_estimate_cost, formatUsd(cost)),
                             )
                         } else {
                             androidx.compose.material3.Text(
-                                stringResource(
-                                    Res.string.detail_ai_ocr_estimate_tokens_only,
-                                    estimate.inputTokens,
-                                    estimate.requestCap,
-                                ),
+                                stringResource(Res.string.ai_spend_estimate_tokens_only, estimate.inputTokens),
                             )
                         }
                     }

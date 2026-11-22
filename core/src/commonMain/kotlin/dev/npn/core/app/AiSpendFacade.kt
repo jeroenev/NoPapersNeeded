@@ -6,6 +6,7 @@ import dev.npn.core.ai.AiEstimateDoc
 import dev.npn.core.ai.AiEstimator
 import dev.npn.core.ai.AiLedger
 import dev.npn.core.ai.AiPricing
+import dev.npn.core.ai.AiPrompts
 import dev.npn.core.ai.AiRunEstimate
 import dev.npn.core.ai.AiSpendSummary
 import dev.npn.core.db.AiUsageDao
@@ -51,13 +52,14 @@ internal class AiSpendFacadeImpl(
     private val configProvider: suspend () -> AiConfig,
     private val clock: EpochClock,
 ) : AiSpendFacade {
-    override val summary: Flow<AiSpendSummary> =
-        dao.observeCount().map {
-            AiSpendSummary(
-                last30Days = ledger.totals(clock.nowMillis() - AI_SPEND_WINDOW_MS),
-                allTime = ledger.totals(null),
-            )
-        }
+    override val summary: Flow<AiSpendSummary>
+        get() =
+            dao.observeCount().map {
+                AiSpendSummary(
+                    last30Days = ledger.totals(clock.nowMillis() - AI_SPEND_WINDOW_MS),
+                    allTime = ledger.totals(null),
+                )
+            }
 
     override suspend fun reset() = ledger.reset()
 
@@ -67,7 +69,9 @@ internal class AiSpendFacadeImpl(
     ): AiRunEstimate {
         val config = configProvider()
         val textChars =
-            docIds.associateWith { docId -> fts.textOf(docId)?.length ?: 0 }
+            docIds.associateWith { docId ->
+                minOf(fts.textOf(docId)?.length ?: 0, AiPrompts.MAX_DOC_TEXT_CHARS)
+            }
         val tokens =
             AiEstimator.suggest(
                 documents = docIds.map { AiEstimateDoc(textChars = textChars.getValue(it)) },

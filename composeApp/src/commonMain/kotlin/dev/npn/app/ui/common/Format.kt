@@ -45,8 +45,28 @@ fun formatEpochDateTime(epochMillis: Long): String {
     return "${dt.year}-$month-$day $hour:$minute:$second"
 }
 
-/** US dollars with enough precision for one cheap request, without a locale-dependent formatter. */
+/** US dollars with fixed decimals: never scientific notation, and sub-cent costs stay visible. */
 fun formatUsd(value: Double): String {
-    val rounded = kotlin.math.round(value * 10_000) / 10_000
-    return "$$rounded"
+    val abs = kotlin.math.abs(value)
+    if (abs == 0.0) return "$0.00"
+    if (abs < 0.0001) return "<$0.0001"
+    val decimals = if (abs >= 1.0) 2 else 4
+    return "$" + fixedDecimals(value, decimals)
+}
+
+private fun fixedDecimals(
+    value: Double,
+    decimals: Int,
+): String {
+    var factor = 1L
+    repeat(decimals) { factor *= 10 }
+    val scaled = kotlin.math.round(value * factor).toLong()
+    val whole = scaled / factor
+    val raw =
+        kotlin.math
+            .abs(scaled % factor)
+            .toString()
+            .padStart(decimals, '0')
+    val fraction = if (decimals == 2) raw else raw.trimEnd('0').padEnd(2, '0')
+    return "$whole.$fraction"
 }
