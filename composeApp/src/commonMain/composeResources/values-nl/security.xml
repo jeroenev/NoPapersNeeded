@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="security_title">Beveiliging</string>
+    <string name="security_app_lock">App-vergrendeling</string>
+    <string name="security_app_lock_help">Vraagt om een pincode bij het openen van de app en na de tijd hieronder op de achtergrond. Een vergeten pincode kan buiten de app worden gereset.</string>
+    <string name="security_set_pin">Pincode instellen</string>
+    <string name="security_change_pin">Pincode wijzigen</string>
+    <string name="security_lock_after">Vergrendelen na</string>
+    <string name="security_lock_immediately">Meteen</string>
+    <string name="security_lock_one_minute">Na 1 minuut</string>
+    <string name="security_lock_five_minutes">Na 5 minuten</string>
+    <string name="security_lock_fifteen_minutes">Na 15 minuten</string>
+    <string name="security_not_encrypted">De app-vergrendeling verbergt de app, maar versleutelt de bibliotheekmap niet. Wie de bestanden kan openen, kan ze lezen.</string>
+    <string name="security_recovery_title">Als je je pincode vergeet</string>
+    <string name="security_recovery_desktop">Sluit de app en verwijder de app-vergrendelingsregels uit %1$s, of verwijder dat bestand om alle instellingen te resetten.</string>
+    <string name="security_recovery_android">Als je je pincode vergeet, ontgrendel met de biometrie of schermvergrendeling van het apparaat. Als geen van beide beschikbaar is, verwijdert het wissen van de app-gegevens de vergrendeling, samen met de instellingen van dit apparaat.</string>
+    <string name="security_device_help">Je kunt ook ontgrendelen met de biometrie of schermvergrendeling van dit apparaat.</string>
+    <string name="security_pin">Pincode</string>
+    <string name="security_pin_confirm">Pincode bevestigen</string>
+    <string name="security_pin_too_short">De pincode moet minstens 4 tekens hebben.</string>
+    <string name="security_pin_mismatch">De pincodes komen niet overeen.</string>
+    <string name="security_locked_title">App vergrendeld</string>
+    <string name="security_locked_help">Voer je pincode in om verder te gaan.</string>
+    <string name="security_unlock">Ontgrendelen</string>
+    <string name="security_unlock_device">Ontgrendelen met apparaat</string>
+    <string name="security_wrong_pin">Die pincode is niet juist.</string>
+    <string name="security_too_many">Te veel pogingen. Probeer het over %1$d s opnieuw.</string>
+    <string name="security_device_prompt_subtitle">No Papers Needed ontgrendelen</string>
+</resources>

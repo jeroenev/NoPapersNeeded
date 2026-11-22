@@ -7,6 +7,7 @@ import dev.npn.core.ai.AiSelfTest
 import dev.npn.core.ai.AiSelfTestReport
 import dev.npn.core.app.TrashSettings
 import dev.npn.core.model.FieldDef
+import dev.npn.core.security.LockTimeout
 import dev.npn.core.settings.SettingsSnapshot
 import dev.npn.core.settings.toAiConfig
 import dev.npn.core.sync.CloudSyncConfig
@@ -95,6 +96,18 @@ interface SettingsActions {
      * and a failed write is reported as a message.
      */
     fun edit(transform: (SettingsSnapshot) -> SettingsSnapshot)
+
+    /**
+     * Turn the app lock on (which opens its PIN dialog) or off. Off drops the stored hash; the
+     * library folder itself is never encrypted, so this changes only how the app opens.
+     */
+    fun setAppLockEnabled(enabled: Boolean)
+
+    /** Choose how long the app may stay in the background before it locks again. */
+    fun setAppLockTimeout(timeout: LockTimeout)
+
+    /** Store [pin]'s salted hash and enable the lock; the secret itself is never persisted. */
+    fun setAppLockPin(pin: String)
 
     /**
      * Edit the library's storage-path template. Each saved value is a journal event every replica

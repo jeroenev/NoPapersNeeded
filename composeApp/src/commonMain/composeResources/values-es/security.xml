@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="security_title">Seguridad</string>
+    <string name="security_app_lock">Bloqueo de la aplicación</string>
+    <string name="security_app_lock_help">Pide un PIN al abrir la aplicación y tras el tiempo de abajo en segundo plano. Un PIN olvidado se puede restablecer fuera de la aplicación.</string>
+    <string name="security_set_pin">Establecer un PIN</string>
+    <string name="security_change_pin">Cambiar PIN</string>
+    <string name="security_lock_after">Bloquear después de</string>
+    <string name="security_lock_immediately">Inmediatamente</string>
+    <string name="security_lock_one_minute">Después de 1 minuto</string>
+    <string name="security_lock_five_minutes">Después de 5 minutos</string>
+    <string name="security_lock_fifteen_minutes">Después de 15 minutos</string>
+    <string name="security_not_encrypted">El bloqueo oculta la aplicación, pero no cifra la carpeta de la biblioteca. Quien pueda abrir los archivos podrá leerlos.</string>
+    <string name="security_recovery_title">Si olvidas tu PIN</string>
+    <string name="security_recovery_desktop">Cierra la aplicación y borra las entradas del bloqueo en %1$s, o borra ese archivo para restablecer todos los ajustes.</string>
+    <string name="security_recovery_android">Si olvidas tu PIN, desbloquea con la biometría o el bloqueo de pantalla del dispositivo. Si ninguno está disponible, borrar los datos de la aplicación quita el bloqueo, junto con los ajustes de este dispositivo.</string>
+    <string name="security_device_help">También puedes desbloquear con la biometría o el bloqueo de pantalla de este dispositivo.</string>
+    <string name="security_pin">PIN</string>
+    <string name="security_pin_confirm">Confirmar PIN</string>
+    <string name="security_pin_too_short">El PIN debe tener al menos 4 caracteres.</string>
+    <string name="security_pin_mismatch">Los PIN no coinciden.</string>
+    <string name="security_locked_title">Aplicación bloqueada</string>
+    <string name="security_locked_help">Introduce tu PIN para continuar.</string>
+    <string name="security_unlock">Desbloquear</string>
+    <string name="security_unlock_device">Desbloquear con el dispositivo</string>
+    <string name="security_wrong_pin">Ese PIN no es correcto.</string>
+    <string name="security_too_many">Demasiados intentos. Vuelve a intentarlo en %1$d s.</string>
+    <string name="security_device_prompt_subtitle">Desbloquear No Papers Needed</string>
+</resources>

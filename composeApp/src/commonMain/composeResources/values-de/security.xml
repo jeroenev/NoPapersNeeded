@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="security_title">Sicherheit</string>
+    <string name="security_app_lock">App-Sperre</string>
+    <string name="security_app_lock_help">Verlangt beim Öffnen der App und nach der unten gewählten Zeit im Hintergrund eine PIN. Eine vergessene PIN lässt sich außerhalb der App zurücksetzen.</string>
+    <string name="security_set_pin">PIN festlegen</string>
+    <string name="security_change_pin">PIN ändern</string>
+    <string name="security_lock_after">Sperren nach</string>
+    <string name="security_lock_immediately">Sofort</string>
+    <string name="security_lock_one_minute">Nach 1 Minute</string>
+    <string name="security_lock_five_minutes">Nach 5 Minuten</string>
+    <string name="security_lock_fifteen_minutes">Nach 15 Minuten</string>
+    <string name="security_not_encrypted">Die App-Sperre verbirgt die App, verschlüsselt aber nicht den Bibliotheksordner. Wer die Dateien öffnen kann, kann sie lesen.</string>
+    <string name="security_recovery_title">Wenn du deine PIN vergisst</string>
+    <string name="security_recovery_desktop">Schließe die App und lösche die App-Sperre-Einträge aus %1$s, oder lösche die Datei, um alle Einstellungen zurückzusetzen.</string>
+    <string name="security_recovery_android">Wenn du deine PIN vergisst, entsperre mit den Biometrie- oder Bildschirmsperrfunktionen des Geräts. Wenn beides nicht verfügbar ist, entfernt das Löschen der App-Daten die Sperre – und die Einstellungen dieses Geräts.</string>
+    <string name="security_device_help">Du kannst auch mit den Biometrie- oder Bildschirmsperrfunktionen dieses Geräts entsperren.</string>
+    <string name="security_pin">PIN</string>
+    <string name="security_pin_confirm">PIN bestätigen</string>
+    <string name="security_pin_too_short">Die PIN muss mindestens 4 Zeichen haben.</string>
+    <string name="security_pin_mismatch">Die PINs stimmen nicht überein.</string>
+    <string name="security_locked_title">App gesperrt</string>
+    <string name="security_locked_help">Gib deine PIN ein, um fortzufahren.</string>
+    <string name="security_unlock">Entsperren</string>
+    <string name="security_unlock_device">Mit Gerät entsperren</string>
+    <string name="security_wrong_pin">Diese PIN ist nicht korrekt.</string>
+    <string name="security_too_many">Zu viele Versuche. Versuche es in %1$d Sekunden erneut.</string>
+    <string name="security_device_prompt_subtitle">No Papers Needed entsperren</string>
+</resources>

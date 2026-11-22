@@ -2,6 +2,7 @@ package dev.npn.app.di
 
 import dev.npn.app.platform.OcrModels
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.security.AppLock
 import dev.npn.core.settings.SettingsRepository
 import dev.npn.core.sync.CloudSetup
 import kotlinx.coroutines.CoroutineScope
@@ -15,6 +16,13 @@ import kotlinx.coroutines.flow.StateFlow
 interface AppEnvironment {
     val settings: SettingsRepository
     val appScope: CoroutineScope
+
+    /**
+     * The app lock: access control over every screen, not encryption of the library. It is
+     * process-wide so an activity recreated for a configuration change keeps its state, and a cold
+     * start shows it locked when the setting is on.
+     */
+    val lock: AppLock
 
     /** Currently opened library, null until onboarding completes (or while switching). */
     val session: StateFlow<LibrarySession?>

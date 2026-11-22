@@ -3,6 +3,9 @@ package dev.npn.app
 import dev.npn.app.di.AppEnvironment
 import dev.npn.app.di.CloudSetupEngine
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.security.AppLock
+import dev.npn.core.security.AppLockSettings
+import dev.npn.core.util.SystemEpochClock
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,6 +22,8 @@ class FakeAppEnvironment(
     savedLocation: String? = null,
     /** What [newCloudSetup] hands out; null is a platform without one. */
     private val cloudSetup: FakeCloudSetup? = null,
+    /** Unlocked by default so a test that is not about the lock never meets it. */
+    override val lock: AppLock = AppLock(AppLockSettings(), SystemEpochClock),
 ) : AppEnvironment {
     override val settings = FakeSettingsRepository()
     override val session = MutableStateFlow<LibrarySession?>(null)

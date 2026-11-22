@@ -227,3 +227,6 @@ internal fun shareFile(
     require(file.canonicalFile.parentFile == dir.canonicalFile) { "Not a file name: $fileName" }
     return file
 }
+
+/** Android's settings are shared preferences, not a file the user can reach; the device unlocks instead. */
+actual fun appLockRecoveryFile(): String? = null

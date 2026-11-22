@@ -5,15 +5,19 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
 import android.os.SystemClock
+import android.view.WindowManager
 import android.widget.Toast
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.lifecycleScope
 import dev.npn.app.App
 import dev.npn.app.di.AppEnvironment
+import dev.npn.app.platform.AppLockAuthenticator
 import dev.npn.app.platform.ForegroundImport
 import dev.npn.app.platform.LaunchImports
+import dev.npn.app.platform.LocalAppLockAuthenticator
 import dev.npn.app.platform.LocalDocumentScanner
 import dev.npn.app.platform.importIntoLibrary
 import dev.npn.core.app.ImportTally
@@ -21,13 +25,18 @@ import dev.npn.core.util.AndroidLog
 import dev.npn.core.util.runLogged
 import dev.npn.core.util.warn
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     private lateinit var env: AppEnvironment
+
+    /** Android's biometric-or-device-credential unlock, offered by the shared lock screen. */
+    private val appLockAuthenticator: AppLockAuthenticator by lazy { AndroidAppLockAuthenticator(this) }
 
     /** The token of this activity's launch import ([LaunchImports]), saved with its state while it runs. */
     private var launchImport: String? = null
@@ -39,9 +48,27 @@ class MainActivity : ComponentActivity() {
         env = NpnApplication.environment(this)
 
         setContent {
-            CompositionLocalProvider(LocalDocumentScanner provides MlKitDocumentScanner) {
+            CompositionLocalProvider(
+                LocalDocumentScanner provides MlKitDocumentScanner,
+                LocalAppLockAuthenticator provides appLockAuthenticator,
+            ) {
                 App(env)
             }
+        }
+
+        // Keep the locked screen out of screenshots and the recents thumbnail; the app's content
+        // comes back as soon as it is unlocked.
+        lifecycleScope.launch {
+            env.lock.state
+                .map { it.locked }
+                .distinctUntilChanged()
+                .collect { locked ->
+                    if (locked) {
+                        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                    } else {
+                        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                    }
+                }
         }
 
         // Import the share/open intent that started this activity, once (see LaunchImports): again
@@ -73,6 +100,21 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleIntent(intent, launch = false)
+    }
+
+    /** The app returned to the foreground: lock it if it was away long enough for its setting. */
+    override fun onStart() {
+        super.onStart()
+        env.lock.onForeground()
+    }
+
+    /**
+     * The app left the foreground. An activity being recreated for a configuration change is not
+     * the app going away, so it is not measured as background time ([isChangingConfigurations]).
+     */
+    override fun onStop() {
+        if (!isChangingConfigurations) env.lock.onBackground()
+        super.onStop()
     }
 
     /**
