@@ -12,6 +12,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -83,6 +84,9 @@ fun DocDetailScreen(
     val wide = LocalWindowWidthClass.current.isWide
     if (wide) {
         val currentDocId = shownDocId.takeIf { it in order.ids } ?: docId
+        // The route's lease shares the document's store with the library's side panel, but must not
+        // keep every document it ever showed: the panel's own holder keeps its preview alive.
+        SideEffect { documents.keepOnly(currentDocId) }
         DocPage(
             docId = currentDocId,
             session = session,
@@ -103,7 +107,10 @@ fun DocDetailScreen(
     DocumentPager(
         order = order,
         modifier = modifier,
-        onShown = { shownDocId = it },
+        onShown = {
+            shownDocId = it
+            documents.keepOnly(it)
+        },
     ) { _, pageDocId, isCurrent, onPrevious, onNext ->
         DocPage(
             docId = pageDocId,
