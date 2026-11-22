@@ -154,7 +154,7 @@ internal fun OcrTextTab(
     val textPadding = with(LocalDensity.current) { OCR_TEXT_PADDING.toPx() }
     val reduceMotion = reducedMotion
     // Bring the active match into view; without this prev/next only recolours off-screen text.
-    LaunchedEffect(effectiveCurrent, matches, layout) {
+    LaunchedEffect(effectiveCurrent, matches, layout, reduceMotion) {
         val result = layout
         if (result == null || matches.isEmpty()) return@LaunchedEffect
         val line = result.getLineForOffset(matches[effectiveCurrent])

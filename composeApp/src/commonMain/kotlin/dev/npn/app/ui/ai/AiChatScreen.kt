@@ -158,7 +158,7 @@ fun AiChatScreen(
     // Keep new output visible by following the bottom — but only while the user is already there,
     // so a position they scrolled to (or one restored by navigation/process death, which shows up
     // as a non-zero first visible index before the transcript loads) is never yanked away.
-    LaunchedEffect(items.size, lastLen) {
+    LaunchedEffect(items.size, lastLen, reduceMotion) {
         if (items.isEmpty()) return@LaunchedEffect
         val lastVisible =
             listState.layoutInfo.visibleItemsInfo
