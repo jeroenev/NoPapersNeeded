@@ -37,6 +37,7 @@ import no_papers_needed.composeapp.generated.resources.library_conflict_file_cou
 import no_papers_needed.composeapp.generated.resources.library_dismiss
 import no_papers_needed.composeapp.generated.resources.library_duplicate_count
 import no_papers_needed.composeapp.generated.resources.library_path_conflict_count
+import no_papers_needed.composeapp.generated.resources.queue_nav_label
 import no_papers_needed.composeapp.generated.resources.queue_open_trash
 import no_papers_needed.composeapp.generated.resources.queue_processing
 import org.jetbrains.compose.resources.pluralStringResource
@@ -147,7 +148,10 @@ private fun ScanIssuesBanner(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary,
                         textDecoration = TextDecoration.Underline,
-                        modifier = Modifier.clickable(role = Role.Button, onClick = onShowPathConflicts),
+                        modifier =
+                            Modifier
+                                .heightIn(min = 48.dp)
+                                .clickable(role = Role.Button, onClick = onShowPathConflicts),
                     )
                 }
             }
@@ -170,7 +174,7 @@ private fun QueueStatusIndicator(
         Modifier
             .clip(RoundedCornerShape(4.dp))
             .heightIn(min = 48.dp)
-            .clickable(role = Role.Button, onClickLabel = label, onClick = onClick)
+            .clickable(role = Role.Button, onClickLabel = stringResource(Res.string.queue_nav_label), onClick = onClick)
             .padding(vertical = 4.dp, horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),

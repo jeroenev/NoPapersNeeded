@@ -123,10 +123,20 @@ class AccessibilitySemanticsTest : EnglishLocaleTest() {
     fun thePreferenceReachesTheScreensThatReadIt() =
         onUiThread {
             val seen = mutableListOf<Boolean>()
-            themedScene(WIDTH, HEIGHT) {
+            hostedScene(WIDTH, HEIGHT) {
                 ProvideReducedMotion(preference = true) { seen += reducedMotion }
             }.closing { render() }
             seen shouldContain true
+
+            // The platform's animation setting alone is a reason too, as Android's "Remove
+            // animations" is; the seam stands in for a device that reports animations off.
+            val platformOnly = mutableListOf<Boolean>()
+            hostedScene(WIDTH, HEIGHT) {
+                ProvideReducedMotion(preference = false, readSystemAnimations = { false }) {
+                    platformOnly += reducedMotion
+                }
+            }.closing { render() }
+            platformOnly shouldContain true
         }
 
     private companion object {

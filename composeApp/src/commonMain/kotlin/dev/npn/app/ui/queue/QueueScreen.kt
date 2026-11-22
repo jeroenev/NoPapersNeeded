@@ -372,7 +372,6 @@ private fun EditRunRow(
     onDiscard: (String) -> Unit,
 ) {
     val ready = run.state == WorkState.READY
-    val reviewLabel = stringResource(Res.string.queue_edit_run_review)
     var confirmingDiscard by rememberSaveable(run.jobId) { mutableStateOf(false) }
     Row(
         Modifier
@@ -380,7 +379,7 @@ private fun EditRunRow(
             .focusRing()
             .then(
                 if (ready) {
-                    Modifier.clickable(role = Role.Button, onClickLabel = reviewLabel) { onOpen(run.jobId) }
+                    Modifier.clickable(role = Role.Button) { onOpen(run.jobId) }
                 } else {
                     Modifier
                 },
@@ -473,6 +472,7 @@ private fun QueueRow(
             .fillMaxWidth()
             .focusRing()
             .clickable(
+                role = Role.Button,
                 onClickLabel = openLabel,
                 onClick = { onOpenDoc(entry.docId) },
             ).padding(horizontal = 16.dp, vertical = 10.dp),

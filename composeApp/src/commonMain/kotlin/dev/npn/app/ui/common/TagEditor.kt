@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -81,7 +82,10 @@ fun TagEditor(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(start = 10.dp, end = 2.dp, top = 2.dp, bottom = 2.dp),
+                            modifier =
+                                Modifier
+                                    .heightIn(min = 48.dp)
+                                    .padding(start = 10.dp, end = 2.dp, top = 2.dp, bottom = 2.dp),
                         ) {
                             TagColorDot(tagColors[tag])
                             Text(

@@ -2,8 +2,14 @@ package dev.npn.app.ui.common
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import dev.npn.app.platform.systemAnimationsEnabled
 import dev.npn.core.settings.reducesMotion
 
@@ -15,25 +21,31 @@ import dev.npn.core.settings.reducesMotion
  * A screen that animates a transition nobody needs to follow (a page slide, an expanding row, a
  * list scrolled into view) asks this first and moves to its destination at once when it is true.
  */
-val LocalReducedMotion = staticCompositionLocalOf { false }
+val LocalReducedMotion = compositionLocalOf { false }
 
 /** Whether the app should reduce motion right now; see [LocalReducedMotion]. */
 val reducedMotion: Boolean
-    @Composable get() = LocalReducedMotion.current
+    @Composable
+    @ReadOnlyComposable
+    get() = LocalReducedMotion.current
 
 /**
  * Provide [LocalReducedMotion] for everything below: the user asked for it ([preference]), or this
- * platform reports its animations off. Read per composition, so a platform change (Android's
- * "Remove animations") is picked up when the app next composes rather than only at start.
+ * platform reports its animations off. [readSystemAnimations] is a seam for tests; production leaves
+ * it as the platform query.
+ *
+ * The platform answer is asked again whenever the app resumes, so turning "Remove animations" on in
+ * Android settings takes effect when the user comes back instead of at the next start: Android
+ * updates the animator scale without recreating the activity.
  */
 @Composable
 fun ProvideReducedMotion(
     preference: Boolean,
+    readSystemAnimations: () -> Boolean = ::systemAnimationsEnabled,
     content: @Composable () -> Unit,
 ) {
-    // The platform query is not observable. Asking it once per preference value is enough: changing
-    // the system setting sends the activity through a configuration change, which recomposes this.
-    val animationsEnabled = remember(preference) { systemAnimationsEnabled() }
+    var animationsEnabled by remember { mutableStateOf(readSystemAnimations()) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { animationsEnabled = readSystemAnimations() }
     CompositionLocalProvider(
         LocalReducedMotion provides reducesMotion(preference, animationsEnabled),
         content = content,

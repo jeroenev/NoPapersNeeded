@@ -41,6 +41,7 @@ import dev.npn.app.ui.common.Dropdown
 import dev.npn.app.ui.common.ExpandIcon
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.expander
+import dev.npn.app.ui.common.focusRing
 import dev.npn.core.sync.RcloneOption
 import dev.npn.core.sync.RcloneProvider
 import dev.npn.core.sync.SetupFailure
@@ -234,7 +235,7 @@ private fun ProviderRow(
         },
         trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null) },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        modifier = Modifier.clickable(role = Role.Button, onClick = onChoose),
+        modifier = Modifier.focusRing().clickable(role = Role.Button, onClick = onChoose),
     )
 }
 

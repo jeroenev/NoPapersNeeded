@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -53,6 +54,7 @@ import dev.npn.app.ui.common.HighlightText
 import dev.npn.app.ui.common.RadioRow
 import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.UiText
+import dev.npn.app.ui.common.focusRing
 import dev.npn.app.ui.common.formatEpochDate
 import dev.npn.app.ui.common.parseQueryHighlight
 import dev.npn.app.ui.common.reducedMotion
@@ -328,13 +330,17 @@ internal fun OcrEngineRow(
     val hasVersions = versions.isNotEmpty()
     val chooseLabel = stringResource(Res.string.detail_choose_ocr_engine)
     Row(
-        Modifier.fillMaxWidth().then(
-            if (hasVersions) {
-                Modifier.clickable(onClickLabel = chooseLabel, role = Role.DropdownList) { showPicker = true }
-            } else {
-                Modifier
-            },
-        ),
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .focusRing()
+            .then(
+                if (hasVersions) {
+                    Modifier.clickable(onClickLabel = chooseLabel, role = Role.DropdownList) { showPicker = true }
+                } else {
+                    Modifier
+                },
+            ),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
