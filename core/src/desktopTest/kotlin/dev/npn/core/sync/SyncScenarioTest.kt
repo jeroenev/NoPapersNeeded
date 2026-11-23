@@ -14,7 +14,11 @@ import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
 import kotlin.test.Test
+import kotlin.test.assertFailsWith
 
 /**
  * The qualification scenarios of `docs/SYNC_QUALIFICATION.md`, runnable against the fake remote in
@@ -27,6 +31,18 @@ import kotlin.test.Test
  * provider-side recycle bin, and a real process kill — is a manual cell of that document.
  */
 internal class SyncScenarioTest : SyncEngineTestBase() {
+    @Test
+    fun convergenceRejectsPerItemErrorsEvenWhenNoTransferSucceeds() =
+        withCluster { cluster ->
+            cluster.a.importPdf("blocked.pdf", "blocked-upload")
+            cluster.remote.failUploads += "inbox/blocked.pdf"
+            val failure = assertFailsWith<IllegalStateException> { cluster.converge() }
+            failure.message
+                .shouldNotBeNull()
+                .contains("pass failed")
+                .shouldBeTrue()
+        }
+
     @Test
     fun offlineEditsOnBothSidesConverge() =
         withCluster { cluster ->
@@ -232,16 +248,28 @@ internal class SyncScenarioTest : SyncEngineTestBase() {
     @Test
     fun aPassKilledAfterAnUploadLandsAdoptsTheRemoteCopyWithoutADuplicate() =
         withCluster { cluster ->
-            cluster.a.importPdf("killed.pdf", "process-death")
+            val doc = cluster.a.importPdf("killed.pdf", "process-death")
+            val deviceId =
+                cluster.a.deviceDb
+                    .keyValueDao()
+                    .get(DeviceIdentity.KEY_DEVICE_ID)
             // The upload lands, then the pass dies before recording its identity in the manifest.
-            cluster.remote.landThenFailUploads += "inbox/killed.pdf"
+            cluster.remote.landThenBlockUploads += "inbox/killed.pdf"
 
-            val killed = cluster.a.session.syncCompleted()
-            killed.errors.map { it.path } shouldContain "inbox/killed.pdf"
-            killed.uploadedDocuments shouldBe 0
+            coroutineScope {
+                val pass = async { cluster.a.session.syncCompleted() }
+                cluster.remote.uploadLanded.await()
+                pass.cancelAndJoin()
+                pass.isCancelled.shouldBeTrue()
+            }
             cluster.remote.exists("inbox/killed.pdf").shouldBeTrue()
 
-            cluster.remote.landThenFailUploads.clear()
+            cluster.remote.landThenBlockUploads.clear()
+            val restarted = cluster.restart("install-a")
+            restarted.deviceDb.keyValueDao().get(DeviceIdentity.KEY_DEVICE_ID) shouldBe deviceId
+            val retry = restarted.session.syncCompleted()
+            retry.errors.shouldBeEmpty()
+            retry.uploadedDocuments shouldBe 0
             cluster.converge()
 
             // The copy is identified by its download rather than uploaded again; every replica
@@ -251,6 +279,7 @@ internal class SyncScenarioTest : SyncEngineTestBase() {
             for (rig in listOf(cluster.a, cluster.b)) {
                 rig.accountPdfs() shouldHaveSize 1
                 rig.exists("inbox/killed.pdf").shouldBeTrue()
+                rig.fs.sha256("inbox/killed.pdf") shouldBe doc
             }
         }
 

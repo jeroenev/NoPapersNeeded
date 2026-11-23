@@ -260,7 +260,7 @@ deviation is a failure unless the cell says otherwise.
   (Dropbox upload sessions, Drive resumable uploads, S3 multipart, B2 large files) do not leave one.
   Tracked as issue #38.
 - **Evidence**: the library listing after restart, the remote listing before and after the retry,
-  the document's SHA-256, and both sync reports (the first with the error, the second clean).
+  the document's SHA-256, and the retry's sync report (plus the first report if the pass returned one).
 
 ### S8 — Large files
 
@@ -310,9 +310,11 @@ This is the user-facing walkthrough; the same steps qualify a new phone.
    document count against the old device's last known state.
 5. Expect and accept these conflicts after a restore: a document the old device renamed but whose
    remote move never completed appears under the old name with `TARGET_OCCUPIED` on a later pass; a
-   foreign file at a library name is installed as a copy (`INSTALLED_AS_COPY`); a document whose
-   bytes the remote only half has is identified by a download or left `UNIDENTIFIED`. None of them
-   deletes or replaces anything.
+   foreign file at a library name is installed as a copy (`INSTALLED_AS_COPY`). These conflicts do
+   not delete or replace anything.
+   If the remote's only copy is truncated, the restore is incomplete: downloading and hashing it
+   cannot recover the original bytes. Recover the document from provider versions or another backup,
+   and verify its hash before treating the restore as complete.
 6. If the provider's trash or versions still hold deleted documents, purge them there only if a
    permanent delete is intended; the app cannot see them.
 

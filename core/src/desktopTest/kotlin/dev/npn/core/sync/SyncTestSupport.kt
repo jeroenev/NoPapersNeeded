@@ -4,7 +4,9 @@ import dev.npn.core.app.AppSessionRig
 import dev.npn.core.app.LibrarySessionImpl
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.util.runCatchingCancellable
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.awaitCancellation
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -26,7 +28,7 @@ import kotlin.io.path.relativeTo
  * matches the listing); [failList] makes the listing itself throw; [onceBeforeStat] runs a hook
  * right before the next `stat` of one path, to change the remote between planning and acting.
  * [failUploads] leaves half an object at the target and throws (a connection cut mid-upload);
- * [landThenFailUploads] lands the whole object and then throws, as a process killed between the
+ * [landThenBlockUploads] lands the whole object and blocks, so the test can cancel the pass between the
  * upload and the manifest write does.
  */
 class DirectoryRemoteStore(
@@ -38,7 +40,8 @@ class DirectoryRemoteStore(
     val failDownloads = HashSet<String>()
     val tamperDownloads = HashSet<String>()
     val failUploads = HashSet<String>()
-    val landThenFailUploads = HashSet<String>()
+    val landThenBlockUploads = HashSet<String>()
+    val uploadLanded = CompletableDeferred<Unit>()
     var failList = false
 
     // A pass transfers several files at once, on more than one thread.
@@ -124,9 +127,10 @@ class DirectoryRemoteStore(
             StandardCopyOption.REPLACE_EXISTING,
             StandardCopyOption.COPY_ATTRIBUTES,
         )
-        if (path in landThenFailUploads) {
-            // The object is up; the pass dies before it can record the identity in its manifest.
-            throw IOException("process lost after $path landed")
+        if (path in landThenBlockUploads) {
+            // The object is up; hold the pass before it can record the identity in its manifest.
+            uploadLanded.complete(Unit)
+            awaitCancellation()
         }
     }
 
@@ -286,6 +290,11 @@ internal class SyncCluster private constructor(
     suspend fun retire(rig: AppSessionRig) {
         joined.values.removeIf { it === rig }
         rig.close()
+    }
+
+    suspend fun restart(installationId: String): AppSessionRig {
+        val rig = joined.getValue(installationId)
+        return rig.restart(transport, installationId).also { joined[installationId] = it }
     }
 
     // Named lookups, so retiring a device cannot silently turn one test device into another.
