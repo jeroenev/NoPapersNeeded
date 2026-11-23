@@ -38,6 +38,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
 import dev.npn.app.ui.common.BackTopBar
 import dev.npn.app.ui.common.LoadingIndicator
 import dev.npn.app.ui.common.LocalWindowWidthClass
@@ -93,6 +96,7 @@ internal fun TriageScreen(
     actions: TriageActions,
     modifier: Modifier = Modifier,
 ) {
+    TriageBackHandler(actions::exitTriage)
     val item = state.current
     if (item == null) {
         // The movers only pick ids the mode knows, so this is only reachable from a hand-built
@@ -176,7 +180,7 @@ internal fun TriageScreen(
                         render = vm::renderPage,
                         onPageChange = vm::goToPage,
                         onRetryPageCount = vm::retryPageCount,
-                        modifier = previewModifier,
+                        modifier = previewModifier.triagePreviewKeys(actions::triageNext, actions::triagePrevious),
                     )
                 }
             }
@@ -201,7 +205,7 @@ internal fun TriageScreen(
                                 // no change, so this is a skip (or the finish at the last one).
                                 if (state.hasNext) actions.triageNext() else actions.exitTriage()
                             } else {
-                                editing.markReviewed { actions.triageReviewedAndAdvance(docId) }
+                                editing.markReviewed { actions.triageReviewedAndAdvance(state.sessionId, docId) }
                             }
                         }
                     } else {
@@ -279,4 +283,12 @@ private fun TriageMetadata(
             onAddWithStyle = editing.actions::addTagWithStyle,
         )
     }
+}
+
+@Composable
+internal fun TriageBackHandler(onExit: () -> Unit) {
+    NavigationBackHandler(
+        state = rememberNavigationEventState(NavigationEventInfo.None),
+        onBackCompleted = onExit,
+    )
 }

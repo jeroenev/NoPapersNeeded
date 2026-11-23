@@ -126,7 +126,7 @@ fun LibraryScreen(
     modifier: Modifier = Modifier,
     vm: LibraryViewModel = viewModel { LibraryViewModel(session, settings, createSavedStateHandle()) },
     previewed: ViewModelStoreLease<String> = viewModel { ViewModelStoreLease(documents) },
-    triageViewModels: ViewModelStoreLease<String> = viewModel { ViewModelStoreLease(documents) },
+    triageViewModels: ViewModelStoreLease<String> = rememberTriageLease(documents),
 ) {
     val state by vm.content.collectAsStateWithLifecycle()
     val triage by vm.triage.collectAsStateWithLifecycle()
@@ -661,3 +661,7 @@ private fun LibraryFab(
         }
     }
 }
+
+@Composable
+internal fun rememberTriageLease(documents: KeyedViewModelStores<String>): ViewModelStoreLease<String> =
+    viewModel(key = "triage") { ViewModelStoreLease(documents) }

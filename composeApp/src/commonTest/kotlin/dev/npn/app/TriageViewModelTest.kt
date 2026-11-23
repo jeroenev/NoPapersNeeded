@@ -107,7 +107,7 @@ class TriageViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
             model.startTriage()
 
-            model.triageReviewedAndAdvance("d1")
+            model.triageReviewedAndAdvance(model.triage.value!!.sessionId, "d1")
 
             model.triage.value?.currentId shouldBe "d2"
             model.triage.value?.reviewed shouldBe setOf("d1")
@@ -123,7 +123,7 @@ class TriageViewModelTest : MainDispatcherTest() {
             model.startTriage()
             model.triageNext()
 
-            model.triageReviewedAndAdvance("d1")
+            model.triageReviewedAndAdvance(model.triage.value!!.sessionId, "d1")
 
             model.triage.value?.currentId shouldBe "d2"
             model.triage.value?.reviewed shouldBe setOf("d1")
@@ -139,9 +139,25 @@ class TriageViewModelTest : MainDispatcherTest() {
             model.triageNext()
 
             model.triage.value?.hasNext shouldBe false
-            model.triageReviewedAndAdvance("d2")
+            model.triageReviewedAndAdvance(model.triage.value!!.sessionId, "d2")
 
             model.triage.value shouldBe null
+        }
+
+    @Test
+    fun aSaveFromAnEarlierSessionCannotChangeAReopenedSession() =
+        runTest(dispatcher) {
+            val model = vm()
+            advanceUntilIdle()
+            model.startTriage()
+            val oldSession = model.triage.value!!.sessionId
+            model.exitTriage()
+            model.startTriage()
+
+            model.triageReviewedAndAdvance(oldSession, "d1")
+
+            model.triage.value?.currentId shouldBe "d1"
+            model.triage.value?.reviewed shouldBe emptySet()
         }
 
     @Test

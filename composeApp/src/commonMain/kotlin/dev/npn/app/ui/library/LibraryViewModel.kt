@@ -381,12 +381,15 @@ class LibraryViewModel(
 
     /**
      * The document's draft and reviewed marker landed: count it reviewed and move on, or leave the
-     * mode after the last one. A save that lands after a J/K move (the user may keep moving while it
-     * runs) belongs to a document that is no longer current and is ignored; it must never advance or
-     * count the document now on screen.
+     * mode after the last one. A save from an earlier session is ignored. A save that lands after a
+     * move counts its document but cannot advance the document now on screen.
      */
-    override fun triageReviewedAndAdvance(docId: String) {
+    override fun triageReviewedAndAdvance(
+        sessionId: Any,
+        docId: String,
+    ) {
         val state = _triage.value ?: return
+        if (state.sessionId !== sessionId) return
         val reviewed = state.reviewed + docId
         // A save that lands after the user moved on still counts the document it wrote, but it
         // never advances or counts the document now on screen.

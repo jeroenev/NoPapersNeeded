@@ -14,6 +14,7 @@ import dev.npn.core.app.DocListItem
  */
 data class TriageState(
     val currentId: String,
+    val sessionId: Any = Any(),
     /** The documents in the order the library showed them when the mode opened. */
     val order: List<String>,
     /** The documents' rows when the mode opened, seeding a document that leaves the live results. */
@@ -51,8 +52,11 @@ interface TriageActions {
 
     /**
      * [docId]'s draft and reviewed marker landed: count it reviewed and move on, or finish after the
-     * last one. A save that lands after the user moved on itself is ignored, so it cannot advance or
-     * count the document now on screen.
+     * last one. A save from an earlier session is ignored; after a move it counts only the saved
+     * document and does not advance the one now on screen.
      */
-    fun triageReviewedAndAdvance(docId: String)
+    fun triageReviewedAndAdvance(
+        sessionId: Any,
+        docId: String,
+    )
 }

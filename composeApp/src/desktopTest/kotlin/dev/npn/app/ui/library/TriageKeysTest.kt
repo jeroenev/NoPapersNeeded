@@ -8,8 +8,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.key
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.closing
+import dev.npn.app.ui.common.keyShortcuts
 import dev.npn.app.ui.focusFirst
 import dev.npn.app.ui.onUiThread
 import dev.npn.app.ui.press
@@ -37,6 +39,38 @@ class TriageKeysTest {
             pressInTriage(Key.Escape)
 
             ran shouldContainExactly listOf("exit")
+        }
+
+    @Test
+    fun previewArrowsTakePriorityOverTheFocusedViewer() =
+        onUiThread {
+            val scene =
+                ImageComposeScene(WIDTH, HEIGHT) {
+                    Box(Modifier.triagePreviewKeys({ ran += "next" }, { ran += "previous" })) {
+                        Box(
+                            Modifier
+                                .size(10.dp)
+                                .keyShortcuts { event ->
+                                    when (event.key) {
+                                        Key.DirectionRight, Key.DirectionLeft -> {
+                                            { ran += "page" }
+                                        }
+
+                                        else -> {
+                                            null
+                                        }
+                                    }
+                                }.focusable(),
+                        )
+                    }
+                }
+            scene.closing {
+                render()
+                focusFirst()
+                press(Key.DirectionRight)
+                press(Key.DirectionLeft)
+            }
+            ran shouldContainExactly listOf("next", "previous")
         }
 
     private fun pressInTriage(key: Key) {
