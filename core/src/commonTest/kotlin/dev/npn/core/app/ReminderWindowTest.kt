@@ -46,6 +46,12 @@ class ReminderWindowTest {
     }
 
     @Test
+    fun theNextCheckKeepsLocalTimeAcrossAutumnClockChange() {
+        val saturday = LocalDateTime(2026, 10, 24, 9, 0).toInstant(zone).toEpochMilliseconds()
+        ReminderWindow.delayUntilNextTrigger(saturday, zone, LocalTime(9, 0)) shouldBe 25L * 60L * 60L * 1000L
+    }
+
+    @Test
     fun aCheckBeforeTheConfiguredTimeStaysQuiet() {
         val morning = LocalDateTime(2026, 11, 22, 8, 59).toInstant(zone).toEpochMilliseconds()
         val nine = LocalDateTime(2026, 11, 22, 9, 0).toInstant(zone).toEpochMilliseconds()

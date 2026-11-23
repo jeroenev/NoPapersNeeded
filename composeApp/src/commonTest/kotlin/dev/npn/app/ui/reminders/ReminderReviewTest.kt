@@ -5,6 +5,10 @@ import dev.npn.app.platform.isReminderTimeChange
 import dev.npn.app.platform.reminderNotificationTag
 import dev.npn.app.platform.reminderNotificationsPermitted
 import dev.npn.app.ui.common.OpenDocumentRequest
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -44,6 +48,19 @@ class ReminderReviewTest {
         assertEquals(false, request.belongsTo("library-b"))
         assertEquals(false, request.belongsTo(null))
     }
+
+    @Test
+    fun grantingPermissionResumesThePendingCatchUpCheck() =
+        runTest {
+            var permitted = false
+            val pending = async { awaitReminderPermission({ permitted }) { delay(30_000) } }
+            runCurrent()
+            assertEquals(false, pending.isCompleted)
+            permitted = true
+            advanceTimeBy(30_000)
+            runCurrent()
+            assertEquals(true, pending.isCompleted)
+        }
 
     @Test
     fun failedInitialRescanDoesNotDeliverOrConsumeClaims() =

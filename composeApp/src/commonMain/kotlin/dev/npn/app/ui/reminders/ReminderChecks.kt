@@ -39,7 +39,7 @@ internal fun ReminderChecks(
             // A permission granted while this session runs must let the catch-up check proceed.
             // Waiting here also covers a second device that syncs reminders on: its user grants
             // the permission from the system prompt and the next check is not lost.
-            while (!canShowReminderNotifications()) delay(PERMISSION_RECHECK_MS)
+            awaitReminderPermission(::canShowReminderNotifications) { delay(PERMISSION_RECHECK_MS) }
             deliverAfterRescan(session) { deliver(session, libraryLocation, inApp) }
             var zone = TimeZone.currentSystemDefault()
             while (true) {
@@ -114,4 +114,12 @@ internal suspend fun deliverAfterRescan(
     deliver: suspend () -> Unit,
 ) {
     if (session.awaitInitialRescan()) deliver()
+}
+
+/** Recheck permission without losing the pending catch-up check. */
+internal suspend fun awaitReminderPermission(
+    permitted: () -> Boolean,
+    wait: suspend () -> Unit,
+) {
+    while (!permitted()) wait()
 }
