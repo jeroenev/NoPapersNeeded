@@ -28,6 +28,7 @@ import dev.npn.app.ui.common.TopBarAction
 import dev.npn.app.ui.common.TopBarActions
 import dev.npn.app.ui.common.formatUsd
 import dev.npn.app.ui.common.uiText
+import dev.npn.core.ai.AiRunEstimate
 import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.DocListItem
 import dev.npn.core.fs.NpnPaths
@@ -350,21 +351,7 @@ private fun DocActionDialogs(
                             .spacedBy(4.dp),
                 ) {
                     androidx.compose.material3.Text(stringResource(Res.string.detail_ai_ocr_large_prompt, pages))
-                    if (estimate != null) {
-                        val cost = estimate.estimatedCostUsd
-                        if (estimate.priceKnown && cost != null) {
-                            androidx.compose.material3.Text(
-                                stringResource(Res.string.ai_spend_estimate_tokens, estimate.inputTokens),
-                            )
-                            androidx.compose.material3.Text(
-                                stringResource(Res.string.ai_spend_estimate_cost, formatUsd(cost)),
-                            )
-                        } else {
-                            androidx.compose.material3.Text(
-                                stringResource(Res.string.ai_spend_estimate_tokens_only, estimate.inputTokens),
-                            )
-                        }
-                    }
+                    if (estimate != null) AiOcrEstimate(estimate)
                 }
             }
         }
@@ -391,3 +378,15 @@ private fun DocActionDialogs(
  */
 internal fun exportName(item: DocListItem): String =
     NpnPaths.sanitizeSegment(NpnPaths.stripPdfExtension(item.doc.displayTitle)).ifBlank { "document" }
+
+/** The OCR estimate does not promise a cap: page processing is not bounded by the edit-run cap. */
+@Composable
+internal fun AiOcrEstimate(estimate: AiRunEstimate) {
+    val cost = estimate.estimatedCostUsd
+    if (estimate.priceKnown && cost != null) {
+        Text(stringResource(Res.string.ai_spend_estimate_tokens, estimate.inputTokens))
+        Text(stringResource(Res.string.ai_spend_estimate_cost, formatUsd(cost)))
+    } else {
+        Text(stringResource(Res.string.ai_spend_estimate_tokens_only, estimate.inputTokens))
+    }
+}

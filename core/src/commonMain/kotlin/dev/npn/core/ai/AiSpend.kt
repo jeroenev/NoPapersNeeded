@@ -48,6 +48,16 @@ data class AiUsageTotals(
     val unpricedRequests: Int,
 )
 
+/** A dollar total is complete only when every request has a price. */
+fun List<AiUsageTotals>.completeCostUsd(): Double? =
+    if (isEmpty() ||
+        any { it.unpricedRequests > 0 || it.estimatedCostUsd == null }
+    ) {
+        null
+    } else {
+        sumOf { it.estimatedCostUsd ?: 0.0 }
+    }
+
 /** The spend ledger's totals: the rolling last 30 days and everything ever recorded on this device. */
 data class AiSpendSummary(
     val last30Days: List<AiUsageTotals> = emptyList(),

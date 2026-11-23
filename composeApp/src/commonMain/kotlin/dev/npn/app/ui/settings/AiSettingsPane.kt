@@ -48,6 +48,7 @@ import dev.npn.core.ai.AiRunCap
 import dev.npn.core.ai.AiSpendSummary
 import dev.npn.core.ai.AiTagging
 import dev.npn.core.ai.AiUsageTotals
+import dev.npn.core.ai.completeCostUsd
 import dev.npn.core.ocr.OcrEngineSelector
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_settings_advanced
@@ -623,7 +624,7 @@ private fun SpendWindow(
 private fun spendLine(totals: AiUsageTotals): String {
     val provider = AiProvider.entries.firstOrNull { it.name == totals.provider }?.displayName ?: totals.provider
     val cost = totals.estimatedCostUsd
-    return if (cost == null) {
+    return if (cost == null || totals.unpricedRequests > 0) {
         stringResource(
             Res.string.common_settings_ai_spend_model_line_unpriced,
             provider,
@@ -650,7 +651,7 @@ private fun totalLine(totals: List<AiUsageTotals>): String {
     val requests = totals.sumOf { it.requests }
     val input = totals.sumOf { it.inputTokens }
     val output = totals.sumOf { it.outputTokens }
-    val cost = totals.mapNotNull { it.estimatedCostUsd }.takeIf { it.isNotEmpty() }?.sum()
+    val cost = totals.completeCostUsd()
     return if (cost == null) {
         stringResource(
             Res.string.common_settings_ai_spend_total_unpriced,

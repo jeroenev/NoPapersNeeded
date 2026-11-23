@@ -31,6 +31,8 @@ class FakeAiSuggest : AiSuggest {
     /** Every run id passed to [suggestEdits], in dispatch order. */
     val suggestEditsRunIds = mutableListOf<String?>()
 
+    val suggestEditsKinds = mutableListOf<dev.npn.core.ai.AiUsageKind>()
+
     /** Called with the docId; throw to simulate an endpoint or model failure for that document. */
     var failWith: ((String) -> Unit)? = null
 
@@ -55,6 +57,7 @@ class FakeAiSuggest : AiSuggest {
         suggestEditsCalls += docId
         suggestEditsRequests += request
         suggestEditsRunIds += runId
+        suggestEditsKinds += kind
         val delayMillis = suggestDelayByDoc[docId] ?: suggestDelayMillis
         if (delayMillis > 0) delay(delayMillis)
         gate?.await()

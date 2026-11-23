@@ -285,7 +285,6 @@ internal class SessionGraph(
                 fieldRegistry = fieldRegistry,
                 tags = tags,
                 readConfig = deps.settings.aiConfig,
-                ledger = aiLedger,
                 clock = deps.clock,
                 health = endpointHealth,
                 onEnqueued = onEnqueued,

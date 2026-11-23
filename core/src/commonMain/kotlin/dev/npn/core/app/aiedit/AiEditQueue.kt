@@ -3,7 +3,6 @@ package dev.npn.core.app.aiedit
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiEditSuggestion
-import dev.npn.core.ai.AiLedger
 import dev.npn.core.ai.AiRunBudget
 import dev.npn.core.ai.AiSuggest
 import dev.npn.core.app.DocContentFacade
@@ -166,8 +165,6 @@ internal class AiEditQueue(
     /** The library's tag vocabulary, which decides whether a suggested tag is new. */
     tags: TagRepository,
     private val readConfig: suspend () -> AiConfig,
-    /** The device-local spend ledger, which resumes a queued run's request count after a restart. */
-    private val ledger: AiLedger,
     private val clock: EpochClock,
     /** The endpoint's cooldown, shared with every other queue that calls it. */
     private val health: EndpointHealth,
@@ -293,7 +290,10 @@ internal class AiEditQueue(
         if (gone.isNotEmpty()) dao.deleteDocs(job.jobId, gone.map { it.docId })
         if (live.isEmpty()) return dropIfEmptied(job)
         val config = readConfig()
-        val budget = AiRunBudget(config.maxRunRequests, ledger.requestsForRun(job.jobId))
+        val reserved = minOf(live.size, (config.maxRunRequests - job.requestsUsed).coerceAtLeast(0))
+        if (reserved > 0 && dao.reserveRequests(job.jobId, reserved) == 0) return true
+        val reservedJob = job.copy(requestsUsed = job.requestsUsed + reserved)
+        val budget = AiRunBudget(reserved)
         val asked =
             runner.suggest(
                 live.map { it.docId },
@@ -310,7 +310,7 @@ internal class AiEditQueue(
                 .filterIndexed { index, _ -> index !in askedIndexes }
                 .map { it.copy(failed = true, lastError = CAP_REACHED) }
         return recordChunk(
-            job = job,
+            job = reservedJob,
             rows = asked.outcomes.map { live[it.index] },
             outcomes = asked.outcomes.map { it.outcome },
             skipped = skipped,

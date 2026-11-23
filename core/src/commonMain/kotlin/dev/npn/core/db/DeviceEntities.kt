@@ -178,6 +178,8 @@ data class AiEditJobEntity(
     /** Epoch millis before which this job must not be worked on again (exponential backoff). */
     val nextAttemptAt: Long,
     val lastError: String? = null,
+    /** Requests reserved before dispatch, independent of the resettable spend ledger. */
+    @androidx.room3.ColumnInfo(defaultValue = "0") val requestsUsed: Int = 0,
 )
 
 /**
