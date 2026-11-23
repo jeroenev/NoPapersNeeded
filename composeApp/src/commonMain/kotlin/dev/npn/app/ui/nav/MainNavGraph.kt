@@ -87,7 +87,14 @@ internal fun MainNav(
     ReminderChecks(session) { library.noteInAppReminder() }
     LaunchedEffect(session, nav) {
         OpenDocumentRequests.documents.arrivals.collect { docId ->
-            nav.openDoc(docId, library.browse, options = { launchSingleTop = true })
+            nav.openDoc(
+                docId,
+                library.browse,
+                options = {
+                    popUpTo(Route.Library)
+                    launchSingleTop = true
+                },
+            )
         }
     }
     var shortcutsOpen by rememberSaveable { mutableStateOf(false) }

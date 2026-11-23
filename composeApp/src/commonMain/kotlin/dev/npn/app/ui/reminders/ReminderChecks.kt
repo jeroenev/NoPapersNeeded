@@ -14,6 +14,7 @@ import dev.npn.core.util.runLogged
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.withContext
 
 /**
@@ -29,7 +30,7 @@ internal fun ReminderChecks(
 ) {
     val inApp by rememberUpdatedState(onInAppNotification)
     LaunchedEffect(session) {
-        session.reminders.settings.collectLatest { settings ->
+        session.reminders.settings.distinctUntilChanged().collectLatest { settings ->
             val untilNext = session.reminders.nextCheckDelayMillis()
             scheduleReminderChecks(settings.isActive, untilNext ?: 0L)
             if (!settings.isActive) return@collectLatest
