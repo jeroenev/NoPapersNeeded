@@ -65,8 +65,9 @@ private fun secureFactory(): DocumentBuilderFactory =
         configure { setFeature("http://xml.org/sax/features/external-parameter-entities", false) }
         configure { setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false) }
         configure { setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true) }
-        configure { setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "") }
-        configure { setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "") }
+        // Android lacks these XMLConstants fields, but parsers can still accept their standard URIs.
+        configure { setAttribute("http://javax.xml.XMLConstants/property/accessExternalDTD", "") }
+        configure { setAttribute("http://javax.xml.XMLConstants/property/accessExternalSchema", "") }
     }
 
 /** Apply one parser setting, passing over the ones this platform's parser does not know. */
