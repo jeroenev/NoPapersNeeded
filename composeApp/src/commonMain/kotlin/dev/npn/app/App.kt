@@ -231,11 +231,13 @@ internal fun LibraryViewModelHost(
     CompositionLocalProvider(LocalViewModelStoreOwner provides library.viewModels, content = content)
 }
 
+@Suppress("ViewModelForwarding") // LockScreen receives the viewmodel only as LockActions and state.
 @Composable
 private fun AppRoot(
     env: AppEnvironment,
     modifier: Modifier = Modifier,
     vm: AppViewModel = viewModel { AppViewModel(env) },
+    lockVm: LockViewModel = viewModel { LockViewModel(env.lock) },
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val useSaf by vm.useSafStorage.collectAsStateWithLifecycle()
@@ -252,7 +254,6 @@ private fun AppRoot(
                 // Behind the lock there is no library screen to title the window; the app's own
                 // name is all the lock may say.
                 PublishWindowTitle(stringResource(Res.string.common_app_name))
-                val lockVm: LockViewModel = viewModel { LockViewModel(env.lock) }
                 val lockUi by lockVm.state.collectAsStateWithLifecycle()
                 LockScreen(state = lockUi, actions = lockVm)
                 return@AppSurface

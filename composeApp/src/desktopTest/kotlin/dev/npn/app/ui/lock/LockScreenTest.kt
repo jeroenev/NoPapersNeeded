@@ -2,6 +2,10 @@
 
 package dev.npn.app.ui.lock
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import dev.npn.app.EnglishLocaleTest
 import dev.npn.app.platform.AppLockAuthenticator
 import dev.npn.app.platform.LocalAppLockAuthenticator
@@ -20,6 +24,7 @@ class LockScreenTest : EnglishLocaleTest() {
             var result: ((Boolean) -> Unit)? = null
             var prompts = 0
             var unlocks = 0
+            var state by mutableStateOf(LockUiState())
             val authenticator =
                 object : AppLockAuthenticator {
                     override fun isAvailable() = true
@@ -44,11 +49,18 @@ class LockScreenTest : EnglishLocaleTest() {
                     override fun retryRemainingMillis() = 0L
                 }
             themedScene(800, 600, LocalAppLockAuthenticator provides authenticator) {
-                LockScreen(LockUiState(), actions)
+                LockScreen(state, actions)
             }.closing {
                 render()
                 prompts shouldBe 1
                 result!!(false)
+                state = state.copy(checking = true)
+                Snapshot.sendApplyNotifications()
+                render()
+                prompts shouldBe 1
+                state = state.copy(checking = false)
+                Snapshot.sendApplyNotifications()
+                render()
                 unlocks shouldBe 0
                 click { "Unlock with device" in it.texts() }
                 prompts shouldBe 2

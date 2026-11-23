@@ -65,6 +65,7 @@ private val FormWidth = 360.dp
  * never written to a saved-state parcel, and gone as soon as the screen leaves. A process death
  * starts locked again, as a cold start does.
  */
+@Suppress("UnnecessaryLaunchedEffect") // The prompt must run once per key, not after every recomposition.
 @Composable
 fun LockScreen(
     state: LockUiState,

@@ -26,4 +26,5 @@ interface AppLockAuthenticator {
 }
 
 /** The platform's system unlock, or null where the app's own PIN is the only unlock. */
+@Suppress("CompositionLocalAllowlist") // The platform supplies one authenticator to the lock and settings screens.
 val LocalAppLockAuthenticator = staticCompositionLocalOf<AppLockAuthenticator?> { null }
