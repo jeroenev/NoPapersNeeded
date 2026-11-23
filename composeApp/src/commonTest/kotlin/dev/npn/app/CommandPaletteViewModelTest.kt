@@ -118,6 +118,8 @@ class CommandPaletteViewModelTest : MainDispatcherTest() {
             model.run(item)
             advanceUntilIdle()
             session.sync.outcome = SyncOutcome.NotConfigured
+            model.open()
+            advanceUntilIdle()
             model.run(item)
             advanceUntilIdle()
             messages shouldContainExactly
