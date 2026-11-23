@@ -20,6 +20,7 @@ import dev.npn.core.app.SavedView
 import dev.npn.core.app.TagInfo
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.settings.SettingsRepository
+import dev.npn.core.sync.SyncOutcome
 import dev.npn.core.util.runLogged
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -37,6 +38,8 @@ import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.library_show
 import no_papers_needed.composeapp.generated.resources.palette_import_failed
 import no_papers_needed.composeapp.generated.resources.palette_sync_failed
+import no_papers_needed.composeapp.generated.resources.queue_sync_not_configured
+import no_papers_needed.composeapp.generated.resources.queue_sync_unavailable
 
 /** What the palette's overlay asks of it: the query, the keyboard, and running a result. */
 internal interface CommandPaletteActions {
@@ -82,7 +85,7 @@ private class StaticSources(
 internal class CommandPaletteViewModel(
     private val session: LibrarySession,
     private val settings: SettingsRepository,
-    private val navigation: PaletteNavigation,
+    private var navigation: PaletteNavigation,
 ) : MessagesViewModel(),
     CommandPaletteActions {
     override val log get() = session.log
@@ -126,6 +129,10 @@ internal class CommandPaletteViewModel(
             )
         }.stateIn(viewModelScope, WhileSubscribedTimeout, PaletteState())
 
+    fun bindNavigation(navigation: PaletteNavigation) {
+        this.navigation = navigation
+    }
+
     /** The commands and settings panes the current language and platform offer, from the screen. */
     fun setSources(
         commands: List<PaletteCommand>,
@@ -160,7 +167,8 @@ internal class CommandPaletteViewModel(
     }
 
     override fun runSelected() {
-        state.value.selectedItem?.let(::run)
+        val current = state.value
+        if (current.query == query.value) current.selectedItem?.let(::run)
     }
 
     override fun run(item: PaletteItem) {
@@ -188,30 +196,53 @@ internal class CommandPaletteViewModel(
                 navigation.openSettings(target.id, target.revealAdvanced)
             }
 
-            is PaletteTarget.Action -> runAction(target.id)
+            is PaletteTarget.Action -> {
+                runAction(target.id)
+            }
         }
     }
 
     private fun runAction(id: PaletteCommandId) {
         close()
         when (id) {
-            PaletteCommandId.IMPORT -> requestChannel.trySend(PaletteRequest.PickFiles)
+            PaletteCommandId.IMPORT -> {
+                requestChannel.trySend(PaletteRequest.PickFiles)
+            }
 
-            PaletteCommandId.SCAN -> requestChannel.trySend(PaletteRequest.Scan)
+            PaletteCommandId.SCAN -> {
+                requestChannel.trySend(PaletteRequest.Scan)
+            }
 
             // The watched folder is set up where it is explained, in Settings.
-            PaletteCommandId.WATCH_FOLDER -> navigation.openSettings(SettingsCategoryId.IMPORT)
+            PaletteCommandId.WATCH_FOLDER -> {
+                navigation.openSettings(SettingsCategoryId.IMPORT)
+            }
 
-            PaletteCommandId.SYNC_NOW ->
-                launchReporting(Res.string.palette_sync_failed) { session.sync.syncNow() }
+            PaletteCommandId.SYNC_NOW -> {
+                launchReporting(Res.string.palette_sync_failed) {
+                    when (session.sync.syncNow()) {
+                        is SyncOutcome.Unavailable -> message(uiText(Res.string.queue_sync_unavailable))
+                        SyncOutcome.NotConfigured -> message(uiText(Res.string.queue_sync_not_configured))
+                        is SyncOutcome.Completed, is SyncOutcome.Failed, SyncOutcome.AlreadyRunning -> Unit
+                    }
+                }
+            }
 
-            PaletteCommandId.ASSISTANT -> navigation.openAssistant()
+            PaletteCommandId.ASSISTANT -> {
+                navigation.openAssistant()
+            }
 
-            PaletteCommandId.INBOX -> navigation.openReviewQueue()
+            PaletteCommandId.INBOX -> {
+                navigation.openReviewQueue()
+            }
 
-            PaletteCommandId.TAGS -> navigation.openTags()
+            PaletteCommandId.TAGS -> {
+                navigation.openTags()
+            }
 
-            PaletteCommandId.SETTINGS -> navigation.openSettings(null)
+            PaletteCommandId.SETTINGS -> {
+                navigation.openSettings(null)
+            }
         }
     }
 
@@ -246,9 +277,10 @@ internal class CommandPaletteViewModel(
     }
 
     /** Import what a platform scan came to, and say what became of it. */
-    fun importScan(result: ScanResult) = launchReporting(Res.string.palette_import_failed) {
-        session.ingest.importScanned(result, ::message)
-    }
+    fun importScan(result: ScanResult) =
+        launchReporting(Res.string.palette_import_failed) {
+            session.ingest.importScanned(result, ::message)
+        }
 
     /** Remember [key] as the most recent choice; the overlay keeps at most [MAX_RECENTS]. */
     private fun remember(key: String) {
@@ -262,17 +294,13 @@ internal class CommandPaletteViewModel(
      */
     private fun searchDocuments(text: String) {
         searchJob?.cancel()
-        if (!open.value) {
-            documents.value = emptyList()
-            return
-        }
+        documents.value = emptyList()
+        if (!open.value) return
         searchJob =
             viewModelScope.launch {
                 if (text.isBlank()) {
                     documents.value = recentDocuments()
                 } else {
-                    // The previous query's documents are not answers to this one.
-                    documents.value = emptyList()
                     delay(SEARCH_DEBOUNCE_MS)
                     documents.value =
                         log
@@ -295,9 +323,10 @@ internal class CommandPaletteViewModel(
                 .take(MAX_RECENTS)
         if (ids.isEmpty()) return emptyList()
         val found =
-            log.runLogged("Reading the palette's recent documents") {
-                session.documents.liveDocuments(ids)
-            }.orEmpty()
+            log
+                .runLogged("Reading the palette's recent documents") {
+                    session.documents.liveDocuments(ids)
+                }.orEmpty()
         val byId = found.associateBy { it.doc.docId }
         return ids.mapNotNull(byId::get)
     }

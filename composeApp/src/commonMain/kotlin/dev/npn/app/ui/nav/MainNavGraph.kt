@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -105,6 +106,7 @@ internal fun MainNav(
                         // and query survive a recreated window.
                         val paletteNavigation = remember(library) { ShellPaletteNavigation(library) }
                         val palette = viewModel { CommandPaletteViewModel(session, settings, paletteNavigation) }
+                        SideEffect { palette.bindNavigation(paletteNavigation) }
                         val paletteState by palette.state.collectAsStateWithLifecycle()
                         // Not while the palette's own window is open: the two must not fight over
                         // focus as the dialog appears.
@@ -138,7 +140,10 @@ internal fun MainNav(
                                 )
                             }
                             CommandPaletteHost(session = session, aiConfigured = aiConfigured, vm = palette)
-                            SnackbarHost(paletteSnackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
+                            SnackbarHost(
+                                paletteSnackbar,
+                                Modifier.align(Alignment.BottomCenter).navigationBarsPadding(),
+                            )
                         }
                     }
                 }
@@ -250,7 +255,7 @@ private fun NavHostController.openAiEdit(
  * never reimplements a screen's behaviour. A saved view and the review preset are handed to the
  * library's viewmodel, which applies them exactly as picking them on that screen does.
  */
-private class ShellPaletteNavigation(
+internal class ShellPaletteNavigation(
     private val library: LibraryUi,
 ) : PaletteNavigation {
     private val nav = library.nav
@@ -259,6 +264,7 @@ private class ShellPaletteNavigation(
     override fun openDocument(docId: String) {
         // Library first, so Back from the document returns to it rather than to wherever the
         // palette was opened from.
+        nav.dropAiEdit()
         nav.openDoc(docId, browse) {
             popUpTo(Route.Library) { saveState = true }
             launchSingleTop = true
@@ -288,6 +294,7 @@ private class ShellPaletteNavigation(
         category: SettingsCategoryId?,
         revealAdvanced: Boolean,
     ) {
+        nav.dropAiEdit()
         nav.navigate(Route.Settings(category?.routeKey, revealAdvanced)) {
             popUpTo(Route.Library) { saveState = true }
             launchSingleTop = true

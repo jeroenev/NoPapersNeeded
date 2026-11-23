@@ -11,10 +11,18 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import dev.npn.app.LibrarySessionUi
+import dev.npn.app.LibraryUi
+import dev.npn.app.ui.detail.DocumentDrafts
 import dev.npn.app.ui.hostedScene
 import dev.npn.app.ui.onUiThread
+import dev.npn.core.testing.FakeMetadataWriter
 import io.kotest.assertions.withClue
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlin.test.Test
 
 /**
@@ -109,6 +117,33 @@ class ShellNavigationTest {
             probes.last().cleared shouldBe false
         }
 
+    @Test
+    fun paletteDocumentAndSettingsDiscardBulkEdit() =
+        shell {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+            val held = LibrarySessionUi()
+            try {
+                val palette =
+                    ShellPaletteNavigation(LibraryUi(held, DocumentDrafts(FakeMetadataWriter(), scope), nav, scope))
+                val destinations: List<() -> Unit> =
+                    listOf(
+                        { palette.openDocument("doc") },
+                        { palette.openSettings(null) },
+                    )
+                for (open in destinations) {
+                    nav.navigateAi(Route.AiEdit)
+                    settle()
+                    val probe = probes.last()
+                    open()
+                    settle()
+                    probe.cleared shouldBe true
+                }
+            } finally {
+                held.clear()
+                scope.cancel()
+            }
+        }
+
     private fun shell(block: Shell.() -> Unit) =
         onUiThread {
             val shell = Shell()
@@ -135,6 +170,7 @@ class ShellNavigationTest {
                     composable<Route.Trash> { Text("Trash") }
                     composable<Route.Queue> { Text("Queue") }
                     composable<Route.Settings> { Text("Settings") }
+                    composable<Route.DocDetail> { Text("Document") }
                     composable<Route.AiChat> { Text("AiChat") }
                     composable<Route.AiEdit> {
                         val probe = viewModel { Probe() }

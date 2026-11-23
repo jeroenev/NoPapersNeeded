@@ -196,8 +196,7 @@ private fun PaletteDialog(
             val cardHeight = (maxHeight * 0.82f).coerceAtMost(560.dp)
             Surface(
                 Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = 640.dp)
+                    .paletteCardWidth()
                     .height(cardHeight)
                     .onPreviewKeyEvent { event -> handlePaletteKey(event, actions) },
                 shape = MaterialTheme.shapes.large,
@@ -226,7 +225,11 @@ private fun PaletteSearchField(
     query: String,
     actions: CommandPaletteActions,
 ) {
-    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    val focus =
+        remember {
+            androidx.compose.ui.focus
+                .FocusRequester()
+        }
     val keyboard = LocalSoftwareKeyboardController.current
     FocusOnEntry(focus)
     LaunchedEffect(Unit) {
@@ -281,7 +284,9 @@ private fun handlePaletteKey(
             true
         }
 
-        else -> false
+        else -> {
+            false
+        }
     }
 }
 
@@ -352,12 +357,13 @@ private fun PaletteResults(
     LazyColumn(state = listState, modifier = modifier.fillMaxWidth()) {
         rows.forEach { row ->
             when (row) {
-                is PaletteRow.Header ->
+                is PaletteRow.Header -> {
                     item(key = "header:${row.kind.name}") {
                         GroupHeader(row.kind)
                     }
+                }
 
-                is PaletteRow.Entry ->
+                is PaletteRow.Entry -> {
                     item(key = row.item.key) {
                         ResultRow(
                             item = row.item,
@@ -365,6 +371,7 @@ private fun PaletteResults(
                             onClick = { actions.run(row.item) },
                         )
                     }
+                }
             }
         }
     }
@@ -441,11 +448,24 @@ private fun PaletteGroupKind.label(): StringResource =
     }
 
 private fun PaletteItem.icon(): ImageVector =
-    when (val target = target) {        is PaletteTarget.Doc -> Icons.Outlined.Description
-        is PaletteTarget.Tag -> Icons.Outlined.Sell
-        is PaletteTarget.View -> Icons.Outlined.BookmarkBorder
-        is PaletteTarget.Settings -> Icons.Outlined.Settings
-        is PaletteTarget.Action ->
+    when (val target = target) {
+        is PaletteTarget.Doc -> {
+            Icons.Outlined.Description
+        }
+
+        is PaletteTarget.Tag -> {
+            Icons.Outlined.Sell
+        }
+
+        is PaletteTarget.View -> {
+            Icons.Outlined.BookmarkBorder
+        }
+
+        is PaletteTarget.Settings -> {
+            Icons.Outlined.Settings
+        }
+
+        is PaletteTarget.Action -> {
             when (target.id) {
                 PaletteCommandId.IMPORT -> Icons.Outlined.UploadFile
                 PaletteCommandId.SCAN -> Icons.Outlined.DocumentScanner
@@ -456,4 +476,7 @@ private fun PaletteItem.icon(): ImageVector =
                 PaletteCommandId.TAGS -> Icons.Outlined.Sell
                 PaletteCommandId.SETTINGS -> Icons.Outlined.Settings
             }
+        }
     }
+
+internal fun Modifier.paletteCardWidth(): Modifier = widthIn(max = 640.dp).fillMaxWidth()

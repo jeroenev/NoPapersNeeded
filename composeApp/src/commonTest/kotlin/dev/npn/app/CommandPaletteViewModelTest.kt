@@ -1,5 +1,6 @@
 package dev.npn.app
 
+import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.palette.CommandPaletteViewModel
 import dev.npn.app.ui.palette.PaletteCommand
 import dev.npn.app.ui.palette.PaletteCommandId
@@ -15,14 +16,21 @@ import dev.npn.core.app.SavedView
 import dev.npn.core.app.SortField
 import dev.npn.core.app.TagInfo
 import dev.npn.core.app.ViewType
+import dev.npn.core.sync.SyncOutcome
+import dev.npn.core.sync.TransportAvailability
 import dev.npn.core.testing.doc
 import dev.npn.core.testing.listItem
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.queue_sync_not_configured
+import no_papers_needed.composeapp.generated.resources.queue_sync_unavailable
 import kotlin.test.Test
 
 class CommandPaletteViewModelTest : MainDispatcherTest() {
@@ -71,8 +79,7 @@ class CommandPaletteViewModelTest : MainDispatcherTest() {
         session: FakeLibrarySession = FakeLibrarySession(),
         navigation: FakePaletteNavigation = FakePaletteNavigation(),
         settings: FakeSettingsRepository = FakeSettingsRepository(),
-    ): CommandPaletteViewModel =
-        CommandPaletteViewModel(session, settings, navigation).also { collecting(it.state) }
+    ): CommandPaletteViewModel = CommandPaletteViewModel(session, settings, navigation).also { collecting(it.state) }
 
     private fun CommandPaletteViewModel.syncCommand() =
         setSources(listOf(PaletteCommand(PaletteCommandId.SYNC_NOW, "Sync now")), emptyList())
@@ -86,10 +93,73 @@ class CommandPaletteViewModelTest : MainDispatcherTest() {
             model.open()
             advanceUntilIdle()
 
-            model.run(model.state.value.items.single())
+            model.run(
+                model.state.value.items
+                    .single(),
+            )
             advanceUntilIdle()
 
             session.sync.manualSyncs shouldBe 1
+        }
+
+    @Test
+    fun syncReportsWhenItCannotStart() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = vm(session)
+            val messages = collecting(model.messages.map { it.text })
+            model.syncCommand()
+            model.open()
+            advanceUntilIdle()
+            val item =
+                model.state.value.items
+                    .single()
+            session.sync.outcome = SyncOutcome.Unavailable(TransportAvailability.NotInstalled("rclone"))
+            model.run(item)
+            advanceUntilIdle()
+            session.sync.outcome = SyncOutcome.NotConfigured
+            model.run(item)
+            advanceUntilIdle()
+            messages shouldContainExactly
+                listOf(
+                    uiText(Res.string.queue_sync_unavailable),
+                    uiText(Res.string.queue_sync_not_configured),
+                )
+        }
+
+    @Test
+    fun retainedModelUsesReboundNavigation() =
+        runTest(dispatcher) {
+            val old = FakePaletteNavigation()
+            val current = FakePaletteNavigation()
+            val model = vm(navigation = old)
+            model.setSources(listOf(PaletteCommand(PaletteCommandId.TAGS, "Tags")), emptyList())
+            model.open()
+            advanceUntilIdle()
+            model.bindNavigation(current)
+            model.runSelected()
+            old.tags shouldBe 0
+            current.tags shouldBe 1
+        }
+
+    @Test
+    fun changingQueryRemovesOldDocumentsBeforeDebounce() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            session.documents.documents.value = listOf(listItem(doc("doc-1", title = "Tax invoice")))
+            val navigation = FakePaletteNavigation()
+            val model = vm(session, navigation)
+            model.open()
+            model.onQueryChange("tax")
+            advanceUntilIdle()
+            model.state.value.items
+                .any { it.key == "doc:doc-1" } shouldBe true
+            model.onQueryChange("zzzz")
+            model.runSelected()
+            navigation.documents shouldBe emptyList()
+            runCurrent()
+            model.state.value.items
+                .any { it.key == "doc:doc-1" } shouldBe false
         }
 
     @Test
@@ -104,7 +174,10 @@ class CommandPaletteViewModelTest : MainDispatcherTest() {
             model.open()
             advanceUntilIdle()
 
-            model.run(model.state.value.items.single { it.key == "tag:invoice" })
+            model.run(
+                model.state.value.items
+                    .single { it.key == "tag:invoice" },
+            )
             advanceUntilIdle()
 
             navigation.filters.single().tagsAll shouldContainExactly listOf("invoice")
@@ -127,7 +200,10 @@ class CommandPaletteViewModelTest : MainDispatcherTest() {
             model.open()
             advanceUntilIdle()
 
-            model.run(model.state.value.items.single { it.key == "view:v1" })
+            model.run(
+                model.state.value.items
+                    .single { it.key == "view:v1" },
+            )
             advanceUntilIdle()
 
             navigation.views.single() shouldBe view
@@ -144,7 +220,10 @@ class CommandPaletteViewModelTest : MainDispatcherTest() {
             model.onQueryChange("tax")
             advanceUntilIdle()
 
-            model.run(model.state.value.items.single { it.key == "doc:doc-1" })
+            model.run(
+                model.state.value.items
+                    .single { it.key == "doc:doc-1" },
+            )
             advanceUntilIdle()
 
             navigation.documents shouldContainExactly listOf("doc-1")
@@ -172,7 +251,9 @@ class CommandPaletteViewModelTest : MainDispatcherTest() {
             model.onQueryChange("api")
             advanceUntilIdle()
 
-            val item = model.state.value.items.single()
+            val item =
+                model.state.value.items
+                    .single()
             item.target shouldBe PaletteTarget.Settings(SettingsCategoryId.AI, revealAdvanced = true)
             item.subtitle shouldBe "API key"
             model.run(item)
@@ -230,19 +311,34 @@ class CommandPaletteViewModelTest : MainDispatcherTest() {
             val model = vm(session)
             model.open()
             advanceUntilIdle()
-            model.run(model.state.value.items.single { it.key == "tag:travel" })
+            model.run(
+                model.state.value.items
+                    .single { it.key == "tag:travel" },
+            )
             advanceUntilIdle()
 
             model.open()
             advanceUntilIdle()
-            model.state.value.groups.first().kind shouldBe PaletteGroupKind.RECENT
-            model.state.value.groups.first().items.first().key shouldBe "tag:travel"
+            model.state.value.groups
+                .first()
+                .kind shouldBe PaletteGroupKind.RECENT
+            model.state.value.groups
+                .first()
+                .items
+                .first()
+                .key shouldBe "tag:travel"
 
-            model.run(model.state.value.items.single { it.key == "tag:invoice" })
+            model.run(
+                model.state.value.items
+                    .single { it.key == "tag:invoice" },
+            )
             advanceUntilIdle()
             model.open()
             advanceUntilIdle()
-            model.state.value.groups.first().items.map { it.key } shouldContainExactly
+            model.state.value.groups
+                .first()
+                .items
+                .map { it.key } shouldContainExactly
                 listOf("tag:invoice", "tag:travel")
         }
 
@@ -267,12 +363,19 @@ class CommandPaletteViewModelTest : MainDispatcherTest() {
             model.open()
             model.onQueryChange("tax")
             advanceUntilIdle()
-            model.run(model.state.value.items.single { it.key == "doc:doc-1" })
+            model.run(
+                model.state.value.items
+                    .single { it.key == "doc:doc-1" },
+            )
             advanceUntilIdle()
 
             model.open()
             advanceUntilIdle()
-            model.state.value.groups.first().items.first().key shouldBe "doc:doc-1"
+            model.state.value.groups
+                .first()
+                .items
+                .first()
+                .key shouldBe "doc:doc-1"
         }
 
     @Test
@@ -288,7 +391,9 @@ class CommandPaletteViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             session.documents.observedFilters.count { it.first.query != null } shouldBe 1
-            session.documents.observedFilters.last { it.first.query != null }.first.query shouldBe "ta"
+            session.documents.observedFilters
+                .last { it.first.query != null }
+                .first.query shouldBe "ta"
         }
 
     @Test
@@ -305,12 +410,19 @@ class CommandPaletteViewModelTest : MainDispatcherTest() {
             )
             model.open()
             advanceUntilIdle()
-            model.run(model.state.value.items.single { it.key == "settings:AI" })
+            model.run(
+                model.state.value.items
+                    .single { it.key == "settings:AI" },
+            )
             advanceUntilIdle()
 
             model.open()
             advanceUntilIdle()
-            model.state.value.groups.first().items.first().key shouldBe "settings:AI"
+            model.state.value.groups
+                .first()
+                .items
+                .first()
+                .key shouldBe "settings:AI"
         }
 
     @Test
@@ -337,7 +449,9 @@ class CommandPaletteViewModelTest : MainDispatcherTest() {
             model.onQueryChange("tag")
             advanceUntilIdle()
 
-            val tagGroup = model.state.value.groups.single { it.kind == PaletteGroupKind.TAGS }
+            val tagGroup =
+                model.state.value.groups
+                    .single { it.kind == PaletteGroupKind.TAGS }
             tagGroup.items.size shouldBe 8
         }
 
@@ -357,7 +471,10 @@ class CommandPaletteViewModelTest : MainDispatcherTest() {
             for (command in commands) {
                 model.open()
                 advanceUntilIdle()
-                model.run(model.state.value.items.single { it.target == PaletteTarget.Action(command.id) })
+                model.run(
+                    model.state.value.items
+                        .single { it.target == PaletteTarget.Action(command.id) },
+                )
                 advanceUntilIdle()
             }
 
@@ -379,7 +496,10 @@ class CommandPaletteViewModelTest : MainDispatcherTest() {
             model.open()
             advanceUntilIdle()
 
-            model.run(model.state.value.items.single())
+            model.run(
+                model.state.value.items
+                    .single(),
+            )
             advanceUntilIdle()
 
             requests shouldContainExactly listOf(PaletteRequest.PickFiles)

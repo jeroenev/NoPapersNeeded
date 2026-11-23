@@ -48,7 +48,7 @@ internal fun NavHostController.navigateAi(
  * copy would never come back, and would keep its viewmodel, and a batch that viewmodel was running,
  * alive until the library closes.
  */
-private fun NavHostController.dropAiEdit() {
+internal fun NavHostController.dropAiEdit() {
     if (currentBackStackEntry?.destination?.hasRoute<Route.AiEdit>() == true) {
         popBackStack<Route.AiEdit>(inclusive = true, saveState = false)
     }
