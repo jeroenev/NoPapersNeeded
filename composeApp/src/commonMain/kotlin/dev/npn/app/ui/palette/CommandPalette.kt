@@ -36,6 +36,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -61,10 +62,12 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.npn.app.platform.LocalDocumentScanner
+import dev.npn.app.platform.ScanResult
 import dev.npn.app.platform.platformFileToExternalSource
 import dev.npn.app.ui.common.FocusOnEntry
 import dev.npn.app.ui.settings.settingsCategoryLabels
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.fs.ExternalSource
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.model.reviewMarkerIsAuthoritative
 import dev.npn.core.sync.CloudSyncConfig
@@ -72,6 +75,7 @@ import io.github.vinceglb.filekit.dialogs.FileKitMode
 import io.github.vinceglb.filekit.dialogs.FileKitType
 import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher
 import io.github.vinceglb.filekit.name
+import kotlinx.coroutines.flow.Flow
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.palette_action_assistant
 import no_papers_needed.composeapp.generated.resources.palette_action_import
@@ -107,10 +111,14 @@ import org.jetbrains.compose.resources.stringResource
 internal fun CommandPaletteHost(
     session: LibrarySession,
     aiConfigured: Boolean,
-    vm: CommandPaletteViewModel,
+    state: PaletteState,
+    actions: CommandPaletteActions,
+    requests: Flow<PaletteRequest>,
+    onSetSources: (List<PaletteCommand>, List<PaletteSettingsEntry>) -> Unit,
+    onImportFiles: (List<Pair<ExternalSource, String>>) -> Unit,
+    onImportScan: (ScanResult) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val state by vm.state.collectAsStateWithLifecycle()
     val reviewMode by remember(session) { session.reviewConfig.reviewMode }
         .collectAsStateWithLifecycle(ReviewMode.DEFAULT)
     val syncConfig by remember(session) { session.sync.config }
@@ -154,19 +162,19 @@ internal fun CommandPaletteHost(
                 advancedKeywords = labels.advancedKeywords,
             )
         }
-    LaunchedEffect(commands, settings) { vm.setSources(commands, settings) }
+    SideEffect { onSetSources(commands, settings) }
 
     val picker =
         rememberFilePickerLauncher(type = FileKitType.File("pdf"), mode = FileKitMode.Multiple()) { files ->
             if (!files.isNullOrEmpty()) {
-                vm.importFiles(files.map { platformFileToExternalSource(it) to it.name })
+                onImportFiles(files.map { platformFileToExternalSource(it) to it.name })
             }
         }
-    val scan = scanner?.rememberLauncher(vm::importScan)
+    val scan = scanner?.rememberLauncher(onImportScan)
     val currentPicker by rememberUpdatedState(picker)
     val currentScan by rememberUpdatedState(scan)
-    LaunchedEffect(vm) {
-        vm.requests.collect { request ->
+    LaunchedEffect(requests) {
+        requests.collect { request ->
             when (request) {
                 PaletteRequest.PickFiles -> currentPicker.launch()
                 PaletteRequest.Scan -> currentScan?.invoke()
@@ -174,7 +182,7 @@ internal fun CommandPaletteHost(
         }
     }
 
-    if (state.open) PaletteDialog(state, vm, modifier)
+    if (state.open) PaletteDialog(state, actions, modifier)
 }
 
 @Composable

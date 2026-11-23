@@ -39,7 +39,9 @@ import dev.npn.app.ui.common.rememberSnackbarMessages
 import dev.npn.app.ui.detail.BrowseContext
 import dev.npn.app.ui.detail.DocDetailScreen
 import dev.npn.app.ui.detail.WithDraftResumeBanner
+import dev.npn.app.ui.library.LibraryHandoffs
 import dev.npn.app.ui.library.LibraryScreen
+import dev.npn.app.ui.palette.CommandPaletteActions
 import dev.npn.app.ui.palette.CommandPaletteHost
 import dev.npn.app.ui.palette.CommandPaletteViewModel
 import dev.npn.app.ui.palette.PaletteNavigation
@@ -81,6 +83,10 @@ internal fun MainNav(
     snackbar: SnackbarHostState,
     onOpenLibrary: (location: String) -> Unit,
     writeBlockActions: WriteBlockActions,
+    palette: CommandPaletteViewModel =
+        viewModel(viewModelStoreOwner = library.viewModels) {
+            CommandPaletteViewModel(session, settings, ShellPaletteNavigation(library))
+        },
 ) {
     val nav = library.nav
     val entry by nav.currentBackStackEntryAsState()
@@ -105,7 +111,6 @@ internal fun MainNav(
                         // The palette's viewmodel lives in the library's own store, so its recents
                         // and query survive a recreated window.
                         val paletteNavigation = remember(library) { ShellPaletteNavigation(library) }
-                        val palette = viewModel { CommandPaletteViewModel(session, settings, paletteNavigation) }
                         SideEffect { palette.bindNavigation(paletteNavigation) }
                         val paletteState by palette.state.collectAsStateWithLifecycle()
                         // Not while the palette's own window is open: the two must not fight over
@@ -139,7 +144,17 @@ internal fun MainNav(
                                     onOpenLibrary = onOpenLibrary,
                                 )
                             }
-                            CommandPaletteHost(session = session, aiConfigured = aiConfigured, vm = palette)
+                            val paletteActions: CommandPaletteActions = palette
+                            CommandPaletteHost(
+                                session = session,
+                                aiConfigured = aiConfigured,
+                                state = paletteState,
+                                actions = paletteActions,
+                                requests = palette.requests,
+                                onSetSources = palette::setSources,
+                                onImportFiles = palette::importFiles,
+                                onImportScan = palette::importScan,
+                            )
                             SnackbarHost(
                                 paletteSnackbar,
                                 Modifier.align(Alignment.BottomCenter).navigationBarsPadding(),
@@ -332,9 +347,10 @@ private fun MainNavHost(
                     } else {
                         null
                     },
-                filterHandoff = library.libraryFilter,
-                savedViewHandoff = library.savedView,
-                reviewQueueHandoff = library.reviewQueue,
+                handoffs =
+                    remember(library) {
+                        LibraryHandoffs(library.libraryFilter, library.savedView, library.reviewQueue)
+                    },
                 onOpenSettings = { id -> nav.from(entry) { navigate(Route.Settings(id.routeKey)) } },
                 documents = library.documents,
             )
