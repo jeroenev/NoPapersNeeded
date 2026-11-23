@@ -94,7 +94,8 @@ internal class LibrarySessionImpl(
     override val ingest: IngestFacade get() = this
     override val ocr: OcrFacade = ocrFacade
     override val work: WorkFacade = queues
-    override val meta: MetadataWriter = graph.writer
+    private val writer = graph.writer
+    override val meta: MetadataWriter = writer
     override val tagAdmin: TagAdmin = graph.writer
     override val docLifecycle: DocLifecycle = graph.lifecycle
     override val aiChat: AiChat = graph.ai
@@ -173,7 +174,7 @@ internal class LibrarySessionImpl(
 
     /**
      * Fill a freshly imported document's blank fields from an embedded structured e-invoice. Only a
-     * blank field is written ([MetadataWriter.applyEdits] with `fillOnly`), so a value somebody else
+     * compatible blank field is written, so a value somebody else
      * already wrote wins, and only an import does this: a rescan never re-applies it. A failure is
      * logged; the import stands either way. The outcome's path is re-read because filling fields can
      * trigger the storage-path rule, which may have moved the file after the import placed it.
@@ -183,7 +184,7 @@ internal class LibrarySessionImpl(
         log.runLogged("Reading the e-invoice of ${imported.relPath}") {
             val bytes = fs.readDocument(imported.relPath, imported.docId) ?: return@runLogged
             val invoice = EInvoiceDetector.detect(deps.pdfEngine.embeddedXmlFiles(bytes)) ?: return@runLogged
-            meta.applyEdits(listOf(imported.docId), fields = invoice.documentFields(), fillOnly = true)
+            writer.fillExtracted(imported.docId, invoice.documentFields())
         }
         val currentPath =
             deps.db

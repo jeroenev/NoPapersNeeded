@@ -2,6 +2,7 @@ package dev.npn.core.app
 
 import dev.npn.core.einvoice.EInvoiceFormat
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.FieldType
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
@@ -41,6 +42,40 @@ class EInvoiceImportTest {
             fields[FieldKeys.INVOICE_TOTAL] shouldBe "250.5"
             fields[FieldKeys.INVOICE_CURRENCY] shouldBe "GBP"
             fields[FieldKeys.EINVOICE] shouldBe EInvoiceFormat.UBL.wire
+        }
+
+    @Test
+    fun incompatibleExtractedValueDoesNotPreventOtherFields() =
+        appSessionTest { rig ->
+            val def =
+                rig.session.fieldRegistry
+                    .current()
+                    .single { it.key == FieldKeys.INVOICE_NUMBER }
+            rig.session.fieldRegistry.upsert(def.copy(type = FieldType.NUMBER))
+            val imported = importInvoice(rig, "factur-x.xml", "cii.xml")
+            val fields = rig.db.documentFieldDao().valuesOf(imported.docId)
+            fields[FieldKeys.INVOICE_NUMBER].shouldBeNull()
+            fields[FieldKeys.INVOICE_TOTAL] shouldBe "121"
+            fields[FieldKeys.EINVOICE] shouldBe EInvoiceFormat.CII.wire
+        }
+
+    @Test
+    fun filledRetypedFieldDoesNotPreventFillingOtherFieldsOnReturn() =
+        appSessionTest { rig ->
+            val bytes = invoicePdf("factur-x.xml", "cii.xml")
+            val first = rig.session.importPdfBytes(bytes, "invoice.pdf").shouldBeInstanceOf<ImportOutcome.Imported>()
+            rig.session.meta.setField(first.docId, FieldKeys.INVOICE_NUMBER, "123")
+            val def =
+                rig.session.fieldRegistry
+                    .current()
+                    .single { it.key == FieldKeys.INVOICE_NUMBER }
+            rig.session.fieldRegistry.upsert(def.copy(type = FieldType.NUMBER))
+            rig.session.meta.setField(first.docId, FieldKeys.INVOICE_TOTAL, null)
+            rig.session.docLifecycle.trashDoc(first.docId)
+            val again = rig.session.importPdfBytes(bytes, "invoice.pdf").shouldBeInstanceOf<ImportOutcome.Imported>()
+            val fields = rig.db.documentFieldDao().valuesOf(again.docId)
+            fields[FieldKeys.INVOICE_NUMBER] shouldBe "123"
+            fields[FieldKeys.INVOICE_TOTAL] shouldBe "121"
         }
 
     @Test

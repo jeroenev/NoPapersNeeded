@@ -1,5 +1,6 @@
 package dev.npn.core.pdf
 
+import org.apache.pdfbox.cos.COSName
 import org.apache.pdfbox.pdmodel.PDDocument
 import org.apache.pdfbox.pdmodel.PDDocumentNameDictionary
 import org.apache.pdfbox.pdmodel.PDEmbeddedFilesNameTreeNode
@@ -13,7 +14,6 @@ import org.apache.pdfbox.pdmodel.font.Standard14Fonts
 import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory
 import java.awt.Color
 import java.awt.image.BufferedImage
-import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import javax.imageio.ImageIO
 
@@ -23,16 +23,23 @@ object PdfFixtures {
     fun pdfWithEmbeddedFile(
         name: String,
         bytes: ByteArray,
+        nested: Boolean = false,
+        unicodeOnly: Boolean = false,
     ): ByteArray =
         PDDocument().use { doc ->
             doc.addPage(PDPage(PDRectangle.A4))
-            val embedded = PDEmbeddedFile(doc, ByteArrayInputStream(bytes)).apply { subtype = "text/xml" }
+            val embedded =
+                PDEmbeddedFile(doc).apply {
+                    subtype = "text/xml"
+                    cosObject.createOutputStream(COSName.FLATE_DECODE).use { it.write(bytes) }
+                }
             val spec =
                 PDComplexFileSpecification().apply {
                     file = name
-                    embeddedFile = embedded
+                    if (unicodeOnly) embeddedFileUnicode = embedded else embeddedFile = embedded
                 }
-            val tree = PDEmbeddedFilesNameTreeNode().apply { names = mapOf(name to spec) }
+            val leaf = PDEmbeddedFilesNameTreeNode().apply { names = mapOf(name to spec) }
+            val tree = if (nested) PDEmbeddedFilesNameTreeNode().apply { kids = listOf(leaf) } else leaf
             doc.documentCatalog.names =
                 PDDocumentNameDictionary(doc.documentCatalog).apply { embeddedFiles = tree }
             val out = ByteArrayOutputStream()

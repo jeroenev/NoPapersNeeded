@@ -192,7 +192,7 @@ class FieldRegistryTest {
             ordered.map { it.position } shouldContainExactly (0 until FieldKeys.seedDefinitions().size).toList()
 
             registry.move("docType", -1)
-            registry.move("notes", 1)
+            registry.move(ordered.last().key, 1)
             registry.move("missing", 1)
             registry.current().map { it.key } shouldContainExactly ordered.map { it.key }
         }

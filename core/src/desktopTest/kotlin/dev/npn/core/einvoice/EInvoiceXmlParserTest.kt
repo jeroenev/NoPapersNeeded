@@ -38,6 +38,23 @@ class EInvoiceXmlParserTest {
     }
 
     @Test
+    fun prepaidUblUsesInvoiceTotalAndDoesNotTreatTermsAsReference() {
+        val xml =
+            fixture("ubl.xml")
+                .decodeToString()
+                .replace("<cbc:PaymentID>PAY-REF-9</cbc:PaymentID>", "")
+                .replace(
+                    "<cac:LegalMonetaryTotal>",
+                    "<cac:PaymentTerms><cbc:Note>Pay within 30 days</cbc:Note></cac:PaymentTerms>" +
+                        "<cac:LegalMonetaryTotal><cbc:TaxInclusiveAmount currencyID=\"GBP\">300.50" +
+                        "</cbc:TaxInclusiveAmount><cbc:PrepaidAmount currencyID=\"GBP\">50</cbc:PrepaidAmount>",
+                )
+        val invoice = checkNotNull(parseEInvoiceXml(xml.encodeToByteArray()))
+        invoice.totalAmount shouldBe "300.5"
+        invoice.paymentReference shouldBe null
+    }
+
+    @Test
     fun rejectsMalformedXml() {
         assertNull(parseEInvoiceXml(fixture("malformed.xml")))
     }

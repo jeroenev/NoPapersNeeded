@@ -106,7 +106,7 @@ private fun parseCii(root: Element): EInvoiceData {
 
 private fun parseUbl(root: Element): EInvoiceData {
     val monetary = root.child("LegalMonetaryTotal")
-    val total = monetary?.child("PayableAmount") ?: monetary?.child("TaxInclusiveAmount")
+    val total = monetary?.child("TaxInclusiveAmount") ?: monetary?.child("PayableAmount")
     val means = root.child("PaymentMeans")
     return EInvoiceData(
         format = EInvoiceFormat.UBL,
@@ -121,8 +121,7 @@ private fun parseUbl(root: Element): EInvoiceData {
         sellerName = ublPartyName(root.child("AccountingSupplierParty")),
         buyerName = ublPartyName(root.child("AccountingCustomerParty")),
         paymentReference =
-            means?.descendant("PaymentID")?.textValue()
-                ?: root.child("PaymentTerms")?.descendant("Note")?.textValue(),
+            means?.descendant("PaymentID")?.textValue(),
         iban = means?.descendant("PayeeFinancialAccount")?.child("ID")?.textValue(),
     )
 }
