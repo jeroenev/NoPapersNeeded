@@ -1,5 +1,6 @@
 package dev.npn.core.ai
 
+import dev.npn.core.db.FtsDocumentEntity
 import dev.npn.core.db.MetadataEventEntity
 import dev.npn.core.db.MetadataSourceEntity
 import dev.npn.core.db.SourceFingerprint
@@ -161,10 +162,60 @@ class LibraryStatsAndLifecycleToolsTest {
             untagged shouldContain "[doc:$live2]"
             untagged shouldNotContain live1
 
-            // In inbox mode the stored marker decides: live1 is reviewed=true, live2 false.
+            // In inbox mode an unreviewed document remains in the queue.
             searchTool(ReviewMode.INBOX_WORKFLOW)
                 .execute(LibraryAiTools.SearchDocumentsTool.Args(reviewed = false))
                 .shouldContain("[doc:$live2]")
+        }
+
+    @Test
+    fun inboxReviewedAndQueueAreComplementsForBothSearchPaths() =
+        runTest {
+            seedLifecycle()
+            db.tagDao().setForDocuments(mapOf(live2 to listOf("invoice")))
+            for (id in listOf(live1, live2)) {
+                db.ftsDao().upsertContent(FtsDocumentEntity(docId = id, content = "needle"))
+            }
+            for (query in listOf("", "needle")) {
+                val tool = searchTool(ReviewMode.INBOX_WORKFLOW)
+                val reviewed = tool.execute(LibraryAiTools.SearchDocumentsTool.Args(query = query, reviewed = true))
+                val queue = tool.execute(LibraryAiTools.SearchDocumentsTool.Args(query = query, reviewed = false))
+                reviewed shouldNotContain live1 // reviewed but untagged
+                reviewed shouldNotContain live2 // tagged but unreviewed
+                queue shouldContain live1
+                queue shouldContain live2
+            }
+            db.tagDao().setForDocuments(mapOf(live1 to listOf("invoice"), live2 to listOf("invoice")))
+            for (query in listOf("", "needle")) {
+                val tool = searchTool(ReviewMode.INBOX_WORKFLOW)
+                val reviewed = tool.execute(LibraryAiTools.SearchDocumentsTool.Args(query = query, reviewed = true))
+                val queue = tool.execute(LibraryAiTools.SearchDocumentsTool.Args(query = query, reviewed = false))
+                reviewed shouldContain live1
+                queue shouldNotContain live1
+            }
+        }
+
+    @Test
+    fun filterOnlyQueryLimitsRowsAfterFilteringAndCountsAllMatches() =
+        runTest {
+            val ids = (0 until 40).map { it.toString().padStart(64, '0') }
+            db.documentDao().upsertAll(
+                ids.mapIndexed { index, id ->
+                    documentEntity(
+                        id,
+                        relPath = "doc-$index.pdf",
+                        createdAt = index.toLong(),
+                        ocrState = if (index % 2 == 0) OcrState.FAILED.column else OcrState.DONE.column,
+                    )
+                },
+            )
+            val rows = db.documentDao().aiSearchRows("live", null, null, "failed", null, false, 15)
+            rows.size shouldBe 15
+            rows.first().docId shouldBe ids[38]
+            db.documentDao().aiSearchCount("live", null, null, "failed", null, false) shouldBe 20
+            val out = searchTool().execute(LibraryAiTools.SearchDocumentsTool.Args(ocrState = "failed"))
+            out shouldContain "… and 5 more matches"
+            out shouldNotContain "[doc:${ids[39]}]"
         }
 
     @Test
@@ -177,7 +228,8 @@ class LibraryStatsAndLifecycleToolsTest {
                 it shouldContain "status=trashed"
                 it shouldNotContain live1
             }
-            searchTool().execute(LibraryAiTools.SearchDocumentsTool.Args(lifecycle = ChatTools.LIFECYCLE_MISSING))
+            searchTool()
+                .execute(LibraryAiTools.SearchDocumentsTool.Args(lifecycle = ChatTools.LIFECYCLE_MISSING))
                 .shouldContain("[doc:$missing]")
             searchTool().execute(LibraryAiTools.SearchDocumentsTool.Args(lifecycle = ChatTools.LIFECYCLE_DELETED)).let {
                 it shouldContain "[doc:$deleted]"
@@ -197,7 +249,12 @@ class LibraryStatsAndLifecycleToolsTest {
             val ids = (0 until 20).map { it.toString().padStart(64, '0') }
             db.documentDao().upsertAll(
                 ids.mapIndexed { index, id ->
-                    documentEntity(id, relPath = "doc-$index.pdf", createdAt = day("2026-01-01") + index * MILLIS_PER_DAY)
+                    documentEntity(
+                        id,
+                        relPath = "doc-$index.pdf",
+                        createdAt =
+                            day("2026-01-01") + index * MILLIS_PER_DAY,
+                    )
                 },
             )
 
@@ -212,14 +269,18 @@ class LibraryStatsAndLifecycleToolsTest {
     @Test
     fun searchRejectsFilterValuesItCannotHonour() =
         runTest {
-            searchTool().execute(LibraryAiTools.SearchDocumentsTool.Args(ocrState = "half-done")) shouldStartWith "Error:"
-            searchTool().execute(LibraryAiTools.SearchDocumentsTool.Args(addedAtFrom = "last week")) shouldStartWith "Error:"
-            searchTool().execute(LibraryAiTools.SearchDocumentsTool.Args(addedAtTo = "2026-13-01")) shouldStartWith "Error:"
+            searchTool().execute(LibraryAiTools.SearchDocumentsTool.Args(ocrState = "half-done")) shouldStartWith
+                "Error:"
+            searchTool().execute(LibraryAiTools.SearchDocumentsTool.Args(addedAtFrom = "last week")) shouldStartWith
+                "Error:"
+            searchTool().execute(LibraryAiTools.SearchDocumentsTool.Args(addedAtTo = "2026-13-01")) shouldStartWith
+                "Error:"
             searchTool()
                 .execute(
                     LibraryAiTools.SearchDocumentsTool.Args(addedAtFrom = "2026-02-01", addedAtTo = "2026-01-01"),
                 ).shouldStartWith("Error:")
-            searchTool().execute(LibraryAiTools.SearchDocumentsTool.Args(lifecycle = "archived")) shouldStartWith "Error:"
+            searchTool().execute(LibraryAiTools.SearchDocumentsTool.Args(lifecycle = "archived")) shouldStartWith
+                "Error:"
         }
 
     @Test
@@ -241,10 +302,15 @@ class LibraryStatsAndLifecycleToolsTest {
                 events,
             )
 
-            val out = LibraryAiTools.GetDocumentHistoryTool(db).execute(LibraryAiTools.GetDocumentHistoryTool.Args(live1))
+            val out =
+                LibraryAiTools
+                    .GetDocumentHistoryTool(
+                        db,
+                    ).execute(LibraryAiTools.GetDocumentHistoryTool.Args(live1))
 
             out.lines().count { it.startsWith("- [doc:$live1]") } shouldBe LibraryAiTools.MAX_HISTORY_EVENTS
-            out shouldContain "25 recorded events, newest first, showing the latest ${LibraryAiTools.MAX_HISTORY_EVENTS}:"
+            out shouldContain
+                "25 recorded events, newest first, showing the latest ${LibraryAiTools.MAX_HISTORY_EVENTS}:"
             out shouldContain "x".repeat(LibraryAiTools.MAX_HISTORY_VALUE_CHARS) + "…"
             out shouldNotContain "note 5\""
             out shouldNotContain "other-doc-secret"
@@ -255,7 +321,11 @@ class LibraryStatsAndLifecycleToolsTest {
         runTest {
             seedLifecycle()
 
-            val out = LibraryAiTools.GetDocumentHistoryTool(db).execute(LibraryAiTools.GetDocumentHistoryTool.Args(live1))
+            val out =
+                LibraryAiTools
+                    .GetDocumentHistoryTool(
+                        db,
+                    ).execute(LibraryAiTools.GetDocumentHistoryTool.Args(live1))
 
             out shouldContain "[doc:$live1]"
             out shouldContain "No recorded history"
@@ -272,7 +342,11 @@ class LibraryStatsAndLifecycleToolsTest {
                 ),
             )
 
-            val out = LibraryAiTools.GetDocumentHistoryTool(db).execute(LibraryAiTools.GetDocumentHistoryTool.Args(live1))
+            val out =
+                LibraryAiTools
+                    .GetDocumentHistoryTool(
+                        db,
+                    ).execute(LibraryAiTools.GetDocumentHistoryTool.Args(live1))
 
             out shouldContain "tag added \"invoice\""
             out shouldContain "marked reviewed"

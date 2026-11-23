@@ -136,8 +136,8 @@ internal object AiPrompts {
             To find documents by when they were added, by OCR state, by review state, or among the
             trash, the missing or the permanently deleted, call $SEARCH_DOCUMENTS with an empty
             query and the addedAtFrom/addedAtTo, ocrState, reviewed or lifecycle argument. "Added"
-            there is when the library took the document in (its PDF's creation date, else the file's
-            modification time), not the date printed on it.
+            there is the PDF's creation date, else the file's modification time, not the date printed
+            on it. The import time cannot be determined.
             Field values are also part of the full-text $SEARCH_DOCUMENTS index; field keys are not.
             """.trimIndent()
         }

@@ -23,10 +23,10 @@ import dev.npn.core.ocr.OcrEngineId
 import dev.npn.core.ocr.OcrState
 import dev.npn.core.util.NpnJson
 import dev.npn.core.util.runCatchingCancellable
+import kotlinx.coroutines.flow.first
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
-import kotlinx.coroutines.flow.first
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -424,13 +424,18 @@ internal object LibraryAiTools {
             val lifecycle: String? = null,
         )
 
+        // Validation and both search paths share the same filter contract and error messages.
+        @Suppress("LongMethod", "CyclomaticComplexMethod")
         override suspend fun execute(args: Args): String {
             val lifecycle =
                 lifecycleOf(args.lifecycle)
                     ?: return "Error: lifecycle must be one of ${ChatTools.LIFECYCLE_LIVE}, " +
                         "${ChatTools.LIFECYCLE_TRASHED}, ${ChatTools.LIFECYCLE_MISSING}, ${ChatTools.LIFECYCLE_DELETED}."
             val stateName = args.ocrState?.trim()?.takeIf { it.isNotEmpty() }
-            val state = stateName?.let { wanted -> OcrState.entries.firstOrNull { it.column.equals(wanted, ignoreCase = true) } }
+            val state =
+                stateName?.let { wanted ->
+                    OcrState.entries.firstOrNull { it.column.equals(wanted, ignoreCase = true) }
+                }
             if (stateName != null && state == null) {
                 return "Error: ocrState must be one of " +
                     OcrState.entries.joinToString(", ") { it.column } + "."
@@ -451,14 +456,39 @@ internal object LibraryAiTools {
 
             val query = args.query.trim()
             val matching =
-                candidates(query, lifecycle)
-                    .filter { doc ->
-                        lifecycle.matches(doc) &&
-                            (fromMillis == null || addedMillis(doc) >= fromMillis) &&
-                            (toExclusiveMillis == null || addedMillis(doc) < toExclusiveMillis) &&
-                            (state == null || doc.ocrState == state.column)
-                    }.let { filterReviewed(it, args.reviewed) }
+                if (query.isEmpty()) {
+                    documentDao.aiSearchRows(
+                        lifecycle.name.lowercase(),
+                        fromMillis,
+                        toExclusiveMillis,
+                        state?.column,
+                        args.reviewed,
+                        reviewMode.reviewMarkerIsAuthoritative,
+                        MAX_SEARCH_RESULTS,
+                    )
+                } else {
+                    candidates(query)
+                        .filter { doc ->
+                            lifecycle.matches(doc) &&
+                                (fromMillis == null || addedMillis(doc) >= fromMillis) &&
+                                (toExclusiveMillis == null || addedMillis(doc) < toExclusiveMillis) &&
+                                (state == null || doc.ocrState == state.column)
+                        }.let { filterReviewed(it, args.reviewed) }
+                }
             val shown = matching.take(MAX_SEARCH_RESULTS)
+            val count =
+                if (query.isEmpty()) {
+                    documentDao.aiSearchCount(
+                        lifecycle.name.lowercase(),
+                        fromMillis,
+                        toExclusiveMillis,
+                        state?.column,
+                        args.reviewed,
+                        reviewMode.reviewMarkerIsAuthoritative,
+                    )
+                } else {
+                    matching.size
+                }
             val lines =
                 if (query.isEmpty()) {
                     shown.map { docLine(it, includeAdded = true) }
@@ -478,28 +508,12 @@ internal object LibraryAiTools {
             }
             return buildString {
                 append(lines.joinToString("\n"))
-                val more = matching.size - shown.size
+                val more = count - shown.size
                 if (more > 0) append("\n… and $more more matches (showing $MAX_SEARCH_RESULTS).")
             }
         }
 
-        /**
-         * The rows to consider, in the order the answer wants them: FTS rank for a query, newest
-         * added first for a filter-only list. Hidden rows stay candidates so a lifecycle filter can
-         * find them; the lifecycle predicate drops them from a default search.
-         */
-        private suspend fun candidates(
-            query: String,
-            lifecycle: Lifecycle,
-        ): List<DocumentEntity> {
-            if (query.isEmpty()) {
-                val rows = if (lifecycle == Lifecycle.LIVE) documentDao.getAllLive() else documentDao.getAllRows()
-                return rows.sortedWith(
-                    compareByDescending<DocumentEntity> { addedMillis(it) }
-                        .thenBy { it.fileName.lowercase() }
-                        .thenBy { it.docId },
-                )
-            }
+        private suspend fun candidates(query: String): List<DocumentEntity> {
             val hits = ftsDao.search(FtsQuery.sanitize(query))
             val docs = documentDao.getByDocIds(hits).associateBy { it.docId }
             return hits.mapNotNull { docs[it] }
@@ -516,17 +530,11 @@ internal object LibraryAiTools {
             wanted: Boolean?,
         ): List<DocumentEntity> {
             if (wanted == null || docs.isEmpty()) return docs
-            if (reviewMode.reviewMarkerIsAuthoritative) {
-                val tagged =
-                    if (wanted) {
-                        emptySet()
-                    } else {
-                        tagDao.tagsForDocs(docs.map { it.docId }).mapTo(HashSet()) { it.docId }
-                    }
-                return docs.filter { if (wanted) it.reviewed else !it.reviewed || it.docId !in tagged }
-            }
             val tagged = tagDao.tagsForDocs(docs.map { it.docId }).mapTo(HashSet()) { it.docId }
-            return docs.filter { (it.docId in tagged) == wanted }
+            return docs.filter { doc ->
+                val reviewed = doc.docId in tagged && (!reviewMode.reviewMarkerIsAuthoritative || doc.reviewed)
+                reviewed == wanted
+            }
         }
     }
 
@@ -897,7 +905,12 @@ internal object LibraryAiTools {
             val recorded = maxOf(total, recent.size)
             val lines =
                 recent.map { row ->
-                    val event = runCatchingCancellable { EventDecoderRegistry.decodeStored(row.canonicalJson) }.getOrNull()
+                    val event =
+                        runCatchingCancellable {
+                            EventDecoderRegistry.decodeStored(
+                                row.canonicalJson,
+                            )
+                        }.getOrNull()
                     val entry = event?.let { HistoryEntry.of(it.op) } ?: HistoryEntry.Undecodable(row.operation)
                     "- [doc:$docId] ${isoDateTime(row.hlcPhysical)} device=${row.deviceId.take(8)}: ${describe(entry)}"
                 }
@@ -913,37 +926,85 @@ internal object LibraryAiTools {
         /** One quoted value from the journal: escaped and truncated, so it cannot forge a line. */
         private fun q(value: String): String = escapeQuoted(truncated(value))
 
+        // Each history variant needs its own description; this exhaustive mapping has no shared branches.
+
         /** One event as a short sentence; text that came from the journal is quoted and truncated. */
+        @Suppress("CyclomaticComplexMethod")
         private fun describe(entry: HistoryEntry): String =
             when (entry) {
-                is HistoryEntry.TagAdded -> "tag added \"${q(entry.tag)}\""
-                is HistoryEntry.TagRemoved -> "tag removed \"${q(entry.tag)}\""
-                is HistoryEntry.Reviewed ->
+                is HistoryEntry.TagAdded -> {
+                    "tag added \"${q(entry.tag)}\""
+                }
+
+                is HistoryEntry.TagRemoved -> {
+                    "tag removed \"${q(entry.tag)}\""
+                }
+
+                is HistoryEntry.Reviewed -> {
                     when (entry.reviewed) {
                         true -> "marked reviewed"
                         false -> "marked needing review"
                         null -> "review mark cleared"
                     }
-                is HistoryEntry.ReviewUnreadable -> "review mark set to an unreadable value \"${q(entry.value)}\""
-                is HistoryEntry.OcrEnginePinned ->
+                }
+
+                is HistoryEntry.ReviewUnreadable -> {
+                    "review mark set to an unreadable value \"${q(entry.value)}\""
+                }
+
+                is HistoryEntry.OcrEnginePinned -> {
                     entry.engine?.let { "OCR engine pinned to \"${q(it.label)}\"" } ?: "OCR engine pin cleared"
-                is HistoryEntry.StoragePathSet ->
+                }
+
+                is HistoryEntry.StoragePathSet -> {
                     entry.path?.let { "storage path set to \"${q(it)}\"" } ?: "storage path cleared"
-                is HistoryEntry.FieldSet ->
+                }
+
+                is HistoryEntry.FieldSet -> {
                     entry.value?.let { "field \"${q(entry.key)}\" set to \"${q(it)}\"" }
                         ?: "field \"${q(entry.key)}\" cleared"
-                is HistoryEntry.Trashed -> "moved to trash from \"${q(entry.path)}\""
-                HistoryEntry.Restored -> "restored"
-                HistoryEntry.Deleted -> "permanently deleted"
-                is HistoryEntry.Relinked -> "relinked to doc ${entry.newDocId}"
-                is HistoryEntry.TagRenamed -> "tag \"${q(entry.from)}\" renamed to \"${q(entry.to)}\""
-                is HistoryEntry.TagMerged -> "tag \"${q(entry.from)}\" merged into \"${q(entry.to)}\""
-                is HistoryEntry.TagStyled -> "style changed for tag \"${q(entry.tag)}\""
-                is HistoryEntry.SettingChanged -> "library setting \"${q(entry.key)}\" changed"
-                is HistoryEntry.Unknown ->
+                }
+
+                is HistoryEntry.Trashed -> {
+                    "moved to trash from \"${q(entry.path)}\""
+                }
+
+                HistoryEntry.Restored -> {
+                    "restored"
+                }
+
+                HistoryEntry.Deleted -> {
+                    "permanently deleted"
+                }
+
+                is HistoryEntry.Relinked -> {
+                    "relinked to doc ${entry.newDocId}"
+                }
+
+                is HistoryEntry.TagRenamed -> {
+                    "tag \"${q(entry.from)}\" renamed to \"${q(entry.to)}\""
+                }
+
+                is HistoryEntry.TagMerged -> {
+                    "tag \"${q(entry.from)}\" merged into \"${q(entry.to)}\""
+                }
+
+                is HistoryEntry.TagStyled -> {
+                    "style changed for tag \"${q(entry.tag)}\""
+                }
+
+                is HistoryEntry.SettingChanged -> {
+                    "library setting \"${q(entry.key)}\" changed"
+                }
+
+                is HistoryEntry.Unknown -> {
                     "unrecorded event \"${q(entry.operation)}\"" +
                         (entry.payload?.let { " payload=\"${q(it)}\"" } ?: "")
-                is HistoryEntry.Undecodable -> "unreadable event \"${q(entry.operation)}\""
+                }
+
+                is HistoryEntry.Undecodable -> {
+                    "unreadable event \"${q(entry.operation)}\""
+                }
             }
     }
 

@@ -18,6 +18,18 @@ internal const val LIVE_DOCUMENT = "d.trashed = 0 AND d.deleted = 0 AND d.missin
 /** Newest first by creation date, the way the library's default sort orders a list. */
 private const val NEWEST_FIRST = "COALESCE(d.createdAt, d.mtime) DESC, d.fileName COLLATE NOCASE, d.docId"
 
+private const val AI_SEARCH_FILTER =
+    "WHERE ((:lifecycle = 'live' AND $LIVE_DOCUMENT) " +
+        "OR (:lifecycle = 'trashed' AND d.trashed = 1 AND d.deleted = 0) " +
+        "OR (:lifecycle = 'missing' AND d.missing = 1 AND d.deleted = 0) " +
+        "OR (:lifecycle = 'deleted' AND d.deleted = 1)) " +
+        "AND (:fromMillis IS NULL OR COALESCE(d.createdAt, d.mtime) >= :fromMillis) " +
+        "AND (:toMillis IS NULL OR COALESCE(d.createdAt, d.mtime) < :toMillis) " +
+        "AND (:ocrState IS NULL OR d.ocrState = :ocrState) " +
+        "AND (:reviewed IS NULL OR :reviewed = " +
+        "(EXISTS (SELECT 1 FROM document_tags t WHERE t.docId = d.docId) " +
+        "AND (:markerAuthoritative = 0 OR d.reviewed = 1)))"
+
 /**
  * Where a row waits while its document holds no path in the library: its file was replaced in
  * place, or another document took the path. Under `.npn/`, so never indexed, and one per document,
@@ -188,6 +200,28 @@ interface DocumentDao {
         ],
     )
     fun observeLibraryRaw(query: RoomRawQuery): Flow<List<DocumentEntity>>
+
+    /** Filter-only AI search: the database applies the cap before materializing rows. */
+    @Query("SELECT d.* FROM documents d $AI_SEARCH_FILTER ORDER BY $NEWEST_FIRST LIMIT :limit")
+    suspend fun aiSearchRows(
+        lifecycle: String,
+        fromMillis: Long?,
+        toMillis: Long?,
+        ocrState: String?,
+        reviewed: Boolean?,
+        markerAuthoritative: Boolean,
+        limit: Int,
+    ): List<DocumentEntity>
+
+    @Query("SELECT COUNT(*) FROM documents d $AI_SEARCH_FILTER")
+    suspend fun aiSearchCount(
+        lifecycle: String,
+        fromMillis: Long?,
+        toMillis: Long?,
+        ocrState: String?,
+        reviewed: Boolean?,
+        markerAuthoritative: Boolean,
+    ): Int
 
     @Query("SELECT * FROM documents d WHERE $LIVE_DOCUMENT ORDER BY $NEWEST_FIRST")
     suspend fun getAllLive(): List<DocumentEntity>
