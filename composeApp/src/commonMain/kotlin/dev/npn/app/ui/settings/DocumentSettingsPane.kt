@@ -108,7 +108,7 @@ private fun RemindersSection(
     // here, so ask when the pane opens with reminders on and notifications still blocked.
     var permissionAsked by rememberSaveable { mutableStateOf(false) }
     SideEffect {
-        if (state.settings.reminderEnabled && !canShowReminderNotifications() && !permissionAsked) {
+        if (!permissionAsked && state.settings.reminderEnabled && !canShowReminderNotifications()) {
             permissionAsked = true
             requestPermission?.invoke()
         }

@@ -6,7 +6,11 @@ import androidx.room3.OnConflictStrategy
 import androidx.room3.Query
 import androidx.room3.Transaction
 
-/** The reminders this device already showed, in [DeviceDatabase]; see [ReminderNotificationEntity]. */
+/**
+ * The reminders this device already showed, in [DeviceDatabase]; see [ReminderNotificationEntity].
+ * Rows are deliberately not pruned: they grow with documents × watched dates and keep a changed
+ * due date from notifying twice, and `device.db` is never dropped.
+ */
 @Dao
 interface ReminderNotificationDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)

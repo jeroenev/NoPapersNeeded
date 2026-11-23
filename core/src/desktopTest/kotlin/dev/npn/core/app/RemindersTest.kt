@@ -6,6 +6,7 @@ import dev.npn.core.model.FieldType
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.first
 import kotlinx.datetime.DatePeriod
@@ -138,8 +139,33 @@ class RemindersTest {
                 .single()
                 .dueDate shouldBe today.plusDays(1)
             val claimed = reminders.claimDueReminders()
-            claimed.single().docId shouldBe doc
-            claimed.single().dueDate shouldBe today.plusDays(1)
+            claimed.map { it.docId } shouldContainExactlyInAnyOrder listOf(doc, doc)
+            claimed.map { it.dueDate } shouldContainExactlyInAnyOrder
+                listOf(today.plusDays(1), today.plusDays(5))
+        }
+
+    @Test
+    fun overdueDatesOutsideTheLeadWindowDoNotNotifyButStillShowUpcoming() =
+        appSessionTest { rig ->
+            val today = ReminderWindow.today(rig.clock.now, zone)
+            rig.writePdf("old.pdf", PdfFixtures.embeddedTextPdf("old"))
+            rig.session.rescan()
+            val doc = rig.docId("old.pdf")
+            rig.session.meta.setField(doc, FieldKeys.DOC_DATE, today.plusDays(-30).toString())
+
+            val reminders = rig.session.reminders
+            reminders.setFieldKeys(listOf(FieldKeys.DOC_DATE))
+            reminders.setLeadDays(3)
+            reminders.setTimeOfDay(LocalTime(0, 0))
+            reminders.setEnabled(true)
+            rig.clock.now = ReminderWindow.triggerAt(today, LocalTime(10, 0), zone)
+
+            reminders
+                .observeUpcoming()
+                .first()
+                .single()
+                .bucket shouldBe ReminderBucket.OVERDUE
+            reminders.claimDueReminders().shouldBeEmpty()
         }
 
     @Test

@@ -43,6 +43,7 @@ import java.util.concurrent.TimeUnit
 
 private const val CHANNEL_ID = "reminders"
 private const val WORK_NAME = "npn-reminders"
+private const val MAX_REMINDER_ATTEMPTS = 2
 
 /** The extra a reminder notification's launch intent carries, read by `MainActivity`. */
 const val EXTRA_OPEN_DOCUMENT = "dev.npn.openDocument"
@@ -88,10 +89,11 @@ actual suspend fun showReminderNotification(
             putExtra(EXTRA_OPEN_DOCUMENT, docId)
             flags = flags or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
+    val reminderId = "$docId:$fieldLabel:$dueDate".hashCode()
     val pending =
         PendingIntent.getActivity(
             context,
-            docId.hashCode(),
+            reminderId,
             launch,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
@@ -106,7 +108,7 @@ actual suspend fun showReminderNotification(
             .setAutoCancel(true)
             .build()
     @SuppressLint("MissingPermission") // Checked by canShowReminderNotifications above.
-    NotificationManagerCompat.from(context).notify(docId.hashCode(), notification)
+    NotificationManagerCompat.from(context).notify(reminderId, notification)
     return ReminderDelivery.NOTIFIED
 }
 
@@ -174,7 +176,9 @@ class ReminderWorker(
             },
             onFailure = {
                 AndroidLog.warn("Checking reminders failed; retrying", it)
-                Result.retry()
+                // A one-shot job has no attempt cap; do not keep waking the device forever when
+                // the library itself is gone. The next app start schedules a fresh check.
+                if (runAttemptCount >= MAX_REMINDER_ATTEMPTS) Result.success() else Result.retry()
             },
         )
     }

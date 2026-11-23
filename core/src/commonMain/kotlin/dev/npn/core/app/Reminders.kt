@@ -198,6 +198,16 @@ object ReminderWindow {
         today: LocalDate,
         leadDays: Int,
     ): LocalDate = today.plus(DatePeriod(days = leadDays.coerceIn(ReminderSettings.LEAD_DAY_RANGE)))
+
+    /**
+     * The first date a notification window covers: [today] minus [leadDays] days. Upcoming still
+     * shows every overdue date, but an archive's years-old invoices must not all notify on the day
+     * reminders are first enabled.
+     */
+    fun windowStart(
+        today: LocalDate,
+        leadDays: Int,
+    ): LocalDate = today.plus(DatePeriod(days = -leadDays.coerceIn(ReminderSettings.LEAD_DAY_RANGE)))
 }
 
 /** `HH:mm` as the settings file and journal store it. */
@@ -335,6 +345,7 @@ internal class JournalReminders(
         val now = clock.nowMillis()
         if (!ReminderWindow.checkAllowed(now, zone, current.timeOfDay)) return emptyList()
         val today = ReminderWindow.today(now, zone)
+        val start = ReminderWindow.windowStart(today, current.leadDays)
         val end = ReminderWindow.windowEnd(today, current.leadDays)
         val labels =
             log
@@ -346,15 +357,13 @@ internal class JournalReminders(
                 .runLogged("Reading the reminder dates") {
                     indexDb.documentDao().reminderRows(current.fieldKeys)
                 }.orEmpty()
-        // One reminder per document, its earliest watched date: the same rule the Upcoming list
-        // uses, so a document with several watched dates cannot post two notifications under one id.
+        // Each watched date field is its own reminder, so a document with a document date and a
+        // renewal date notifies for both. The Upcoming list still shows one row per document.
         val candidates =
             due
                 .mapNotNull { it.toDue(labels) }
-                .filter { it.dueDate <= end }
-                .groupBy { it.doc.docId }
-                .values
-                .mapNotNull { group -> group.minByOrNull { it.dueDate }?.toCandidate(today) }
+                .filter { it.dueDate in start..end }
+                .map { it.toCandidate(today) }
         if (candidates.isEmpty()) return emptyList()
         val claimed =
             log
