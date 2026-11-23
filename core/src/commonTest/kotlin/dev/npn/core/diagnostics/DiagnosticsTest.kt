@@ -105,6 +105,38 @@ class DiagnosticsTest {
     }
 
     @Test
+    fun retainedEntriesRedactCredentialsAndNamesWithSpacesAndUnicode() {
+        val text =
+            Diagnostics.sanitize(
+                """
+                2026-11-22T10:00:00Z WARN Authorization: Bearer opaqueCredential123456
+                2026-11-22T10:00:01Z WARN /home/alice/Private Records/invoice.pdf
+                2026-11-22T10:00:02Z WARN Private Records/Invoice.pdf
+                2026-11-22T10:00:03Z WARN 税务.pdf
+                2026-11-22T10:00:04Z WARN Impôts.pdf
+                    Confidential document text
+                    at confidential document text
+                    at dev.npn.Example.run(Example.kt:42)
+                """.trimIndent(),
+            )
+
+        listOf(
+            "opaqueCredential123456",
+            "alice",
+            "Private Records",
+            "invoice",
+            "Invoice",
+            "税务",
+            "Impôts",
+            "Confidential document",
+            "at confidential",
+        ).forEach {
+            text shouldNotContain it
+        }
+        text shouldContain "at dev.npn.Example.run(Example.kt:42)"
+    }
+
+    @Test
     fun issueUrlPrefillsTitleAndEnvironmentButNotTheLog() {
         val url = Diagnostics.issueUrl(report)
 

@@ -227,12 +227,13 @@ object Diagnostics {
             .sortedByDescending(String::length)
             .forEach { secret -> scrubbed = scrubbed.replace(secret, REDACTED) }
         scrubbed = replace(scrubbed, EMAIL, "<email>")
+        // Remove the whole bearer credential before matching its surrounding header.
+        scrubbed = replace(scrubbed, BEARER, "Bearer $REDACTED")
         // Tokens that carry their own name, with or without a separator.
         scrubbed =
             replace(scrubbed, NAMED_SECRET) { match ->
                 "${match.groupValues[1]}=$REDACTED"
             }
-        scrubbed = replace(scrubbed, BEARER, "Bearer $REDACTED")
         scrubbed = replace(scrubbed, JWT, REDACTED)
         scrubbed = replace(scrubbed, API_KEY_SHAPE, REDACTED)
         // URIs and paths: a log line names the library folder, watched folder or an imported file.
@@ -259,7 +260,7 @@ object Diagnostics {
                     line.startsWith("Suppressed:") ||
                     DEBUG_MORE.matches(line.trim()) ||
                     // Only a stack frame is an indented line we keep; indented prose is document text.
-                    line.trimStart().startsWith("at ")
+                    STACK_FRAME.matches(line)
             }.joinToString("\n")
 
     private fun replace(
@@ -314,6 +315,7 @@ object Diagnostics {
     /** `2026-11-22T10:00:00Z WARN message`, the shape [dev.npn.core.util.formatLogEntry] writes. */
     private val LOG_ENTRY = Regex("^\\d{4}-\\d{2}-\\d{2}T\\S+ (?:INFO|WARN|ERROR) ")
     private val DEBUG_MORE = Regex("^\\.\\.\\. \\d+ more$")
+    private val STACK_FRAME = Regex("^\\s+at [\\w.$]+\\([^\\n()]*\\)\\s*$")
     private val EXCEPTION_LINE = Regex("^[A-Za-z_$][\\w.$]*(?:Exception|Error)(?::|$)")
 
     private const val EMAIL_LOCAL = "[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+"

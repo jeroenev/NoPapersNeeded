@@ -31,6 +31,7 @@ import no_papers_needed.composeapp.generated.resources.common_folder_access_not_
 import no_papers_needed.composeapp.generated.resources.common_folder_access_not_kept_watched
 import no_papers_needed.composeapp.generated.resources.common_folder_in_library_watched
 import no_papers_needed.composeapp.generated.resources.common_save_setting_failed
+import no_papers_needed.composeapp.generated.resources.common_settings_report_problem_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_review_workflow_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_thumbnail_cache_empty
 import no_papers_needed.composeapp.generated.resources.common_settings_thumbnails_cleared
@@ -101,6 +102,25 @@ class SettingsViewModelTest : MainDispatcherTest() {
             model.problemReportHandled()
             advanceUntilIdle()
             model.paneState.value.problemReport shouldBe ProblemReportState.Idle
+        }
+
+    @Test
+    fun failedReportSaveShowsTheReasonAndAllowsRetry() =
+        runTest(dispatcher) {
+            val model = settingsVm(session = FakeLibrarySession(), compute = dispatcher)
+            collecting(model.paneState)
+            val messages = collecting(model.messages.map { it.text })
+            model.reportProblem()
+            advanceUntilIdle()
+
+            model.problemReportFailed(IllegalStateException("disk full"))
+            advanceUntilIdle()
+            model.paneState.value.problemReport shouldBe ProblemReportState.Idle
+            messages shouldContainExactly listOf(failure(Res.string.common_settings_report_problem_failed, "disk full"))
+
+            model.reportProblem()
+            advanceUntilIdle()
+            (model.paneState.value.problemReport is ProblemReportState.Ready) shouldBe true
         }
 
     @Test
