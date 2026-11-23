@@ -11,6 +11,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import dev.npn.app.EnglishLocaleTest
 import dev.npn.app.NoSettingsPaneActions
 import dev.npn.app.paneState
@@ -150,6 +152,27 @@ class AccessibilitySemanticsTest : EnglishLocaleTest() {
                 }
             }.closing { render() }
             platformOnly shouldContain true
+        }
+
+    @Test
+    fun systemMotionSettingIsReadAgainOnResume() =
+        onUiThread {
+            val owner = ScreenOwner()
+            var animationsEnabled = true
+            var observed = false
+            themedScene(WIDTH, HEIGHT, LocalLifecycleOwner provides owner) {
+                ProvideReducedMotion(preference = false, readSystemAnimations = { animationsEnabled }) {
+                    observed = reducedMotion
+                }
+            }.closing {
+                render()
+                observed shouldBe false
+                owner.lifecycle.currentState = Lifecycle.State.STARTED
+                animationsEnabled = false
+                owner.lifecycle.currentState = Lifecycle.State.RESUMED
+                render()
+                observed shouldBe true
+            }
         }
 
     /** How wide the tag chip's × is in a panel [width] wide, showing [tag]. */

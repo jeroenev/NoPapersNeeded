@@ -3,6 +3,7 @@
 package dev.npn.app.ui.detail
 
 import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -22,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import dev.npn.app.EnglishLocaleTest
 import dev.npn.app.ui.click
 import dev.npn.app.ui.closing
+import dev.npn.app.ui.common.LocalReducedMotion
 import dev.npn.app.ui.contentDescription
 import dev.npn.app.ui.nodes
 import dev.npn.app.ui.onUiThread
@@ -33,6 +35,26 @@ import kotlin.test.Test
 
 /** [PageViewer] against a real composition, with the page index fed back the way the viewmodel does. */
 class PageViewerTest : EnglishLocaleTest() {
+    @Test
+    fun wheelUsesTheUpdatedMotionPreference() =
+        onUiThread {
+            var reduceMotion by mutableStateOf(false)
+            var pageIndex by mutableIntStateOf(0)
+            themedScene(WIDTH, HEIGHT) {
+                CompositionLocalProvider(LocalReducedMotion provides reduceMotion) {
+                    PageViewer(0, PageCountState.Ready(3), { _, _ -> null }, { pageIndex = it }, {})
+                }
+            }.closing {
+                settle()
+                reduceMotion = true
+                render(clock)
+                sendPointerEvent(PointerEventType.Scroll, Offset(300f, 400f), scrollDelta = Offset(0f, 1f))
+                // An immediate jump settles without advancing the animation clock.
+                repeat(3) { render(clock) }
+                pageIndex shouldBe 1
+            }
+        }
+
     /** Paging forward and back again must leave the viewmodel on the page the viewer shows. */
     @Test
     fun everySettledPageReachesTheViewModel() =
