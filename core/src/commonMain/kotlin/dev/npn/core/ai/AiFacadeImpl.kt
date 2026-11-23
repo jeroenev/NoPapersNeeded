@@ -5,6 +5,7 @@ import ai.koog.prompt.dsl.prompt
 import dev.npn.core.db.KeyValueDao
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.defs
+import dev.npn.core.model.ReviewMode
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.ocr.OcrEngineId
 import dev.npn.core.util.EpochClock
@@ -33,6 +34,8 @@ internal class AiFacadeImpl(
     chats: KeyValueDao,
     ownWrite: suspend (suspend () -> Unit) -> Unit = { it() },
     private val clock: EpochClock = SystemEpochClock,
+    /** The library's review workflow, read per turn so a mode change applies without reopening. */
+    private val reviewModeProvider: suspend () -> ReviewMode = { ReviewMode.DEFAULT },
     private val configProvider: suspend () -> AiConfig,
 ) : AiChat,
     AiSuggest {
@@ -61,12 +64,13 @@ internal class AiFacadeImpl(
             val runtime = runtimes.runtimeFor(config)
             // The field vocabulary is read per turn so a field defined a minute ago is already known.
             val fields = db.fieldDefDao().defs()
+            val reviewMode = reviewModeProvider()
             emitAll(
                 KoogChatAgent(
                     executor = runtime.executor,
                     model = runtime.model,
                     historyProvider = chatHistoryStore,
-                    toolSet = LibraryAiTools.toolSetFor(db, fields),
+                    toolSet = LibraryAiTools.toolSetFor(db, fields, reviewMode),
                     systemPrompt = AiPrompts.chatSystem(promptContext(config), fields),
                     maxIterations = MAX_AGENT_ITERATIONS,
                     params = AiRuntime.chatParams(config),

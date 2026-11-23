@@ -1,5 +1,7 @@
 package dev.npn.core.db
 
+import dev.npn.core.ocr.OcrState
+
 /**
  * A document row for a test to insert: what the test names, and filler a fold would have written
  * for the rest. The file name follows [relPath], which follows [docId].
@@ -23,6 +25,7 @@ fun documentEntity(
     missing: Boolean = false,
     ocrEngine: String? = null,
     ocrEngineOverride: String? = null,
+    ocrState: String = OcrState.NONE.column,
 ): DocumentEntity =
     DocumentEntity(
         docId = docId,
@@ -43,4 +46,5 @@ fun documentEntity(
         missing = missing,
         ocrEngine = ocrEngine,
         ocrEngineOverride = ocrEngineOverride,
+        ocrState = ocrState,
     )

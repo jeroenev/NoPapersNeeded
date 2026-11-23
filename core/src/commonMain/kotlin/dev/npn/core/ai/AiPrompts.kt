@@ -115,7 +115,8 @@ internal object AiPrompts {
         ${LibraryAiTools.fieldVocabulary(fields)}. Documents may also carry field keys that
         have no definition yet. ${LibraryAiTools.OCR_ENGINE_FIELD} is maintained by the app rather than the user: it
         names the engine whose transcription is indexed for search, so it answers questions
-        about how a document was read, not what it says.
+        about how a document was read, not what it says. OCR state, review state and the added
+        date are app-maintained lifecycle facts too.
         """.trimIndent()
 
     // Tool names come from [ChatTools], so a renamed tool cannot leave the prompt naming the old one.
@@ -129,7 +130,14 @@ internal object AiPrompts {
             "has a field" queries like "documents with a test2 field" (call $LIST_FIELDS when unsure
             of a key; leave $SEARCH_FIELDS' value empty to match any document that has the field) and
             date or number ranges via from/to — $GET_DOCUMENT for a specific document's tags and
-            fields, and $GET_DOCUMENT_TEXT to read a specific document.
+            fields, $GET_DOCUMENT_TEXT to read a specific document, and $GET_DOCUMENT_HISTORY for
+            when and how it changed. $LIBRARY_STATS answers totals: documents, untagged, the review
+            queue, OCR coverage, added and document-date ranges, and trashed/missing/deleted counts.
+            To find documents by when they were added, by OCR state, by review state, or among the
+            trash, the missing or the permanently deleted, call $SEARCH_DOCUMENTS with an empty
+            query and the addedAtFrom/addedAtTo, ocrState, reviewed or lifecycle argument. "Added"
+            there is the PDF's creation date, else the file's modification time, not the date printed
+            on it. The import time cannot be determined.
             Field values are also part of the full-text $SEARCH_DOCUMENTS index; field keys are not.
             """.trimIndent()
         }

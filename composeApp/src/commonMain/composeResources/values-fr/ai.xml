@@ -19,6 +19,9 @@
     <string name="ai_tool_listed_tags">Liste des étiquettes</string>
     <string name="ai_tool_read_document">Lecture du document %1$s</string>
     <string name="ai_tool_read_document_text">Lecture du texte de %1$s</string>
+    <string name="ai_tool_filtered_documents">Documents recherchés par filtres</string>
+    <string name="ai_tool_read_library_stats">Statistiques de la bibliothèque lues</string>
+    <string name="ai_tool_read_document_history">Historique de %1$s lu</string>
     <string name="ai_unknown_value">(inconnu)</string>
     <string name="ai_unspecified_document">un document</string>
 

@@ -19,6 +19,9 @@
     <string name="ai_tool_listed_tags">Tags aufgelistet</string>
     <string name="ai_tool_read_document">Dokument %1$s gelesen</string>
     <string name="ai_tool_read_document_text">Text von %1$s gelesen</string>
+    <string name="ai_tool_filtered_documents">Dokumente nach Filtern durchsucht</string>
+    <string name="ai_tool_read_library_stats">Bibliotheksstatistik gelesen</string>
+    <string name="ai_tool_read_document_history">Verlauf von %1$s gelesen</string>
     <string name="ai_unknown_value">(unbekannt)</string>
     <string name="ai_unspecified_document">ein Dokument</string>
 

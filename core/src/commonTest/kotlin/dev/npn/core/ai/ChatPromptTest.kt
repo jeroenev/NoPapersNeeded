@@ -33,6 +33,13 @@ class ChatPromptTest {
     }
 
     @Test
+    fun addedDateDoesNotClaimToBeImportTime() {
+        val prompt = AiPrompts.chatSystem(dutch, fields)
+        prompt shouldContain "The import time cannot be determined."
+        prompt shouldNotContain "when the library took the document in"
+    }
+
+    @Test
     fun chatStillCarriesItsToolAndCitationContract() {
         val prompt = AiPrompts.chatSystem(dutch, fields)
         prompt shouldContain "[doc:<docId>]"
