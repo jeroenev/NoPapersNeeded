@@ -4,11 +4,18 @@ import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
 import dev.npn.core.pdf.PdfFixtures
+import dev.npn.core.util.EpochClock
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
@@ -20,6 +27,23 @@ private fun LocalDate.plusDays(days: Int): LocalDate = plus(DatePeriod(days = da
 
 class RemindersTest {
     private val zone = TimeZone.currentSystemDefault()
+
+    @Test
+    fun localDateTicksFollowMidnightAndTimeZoneChanges() =
+        runTest {
+            var now = ReminderWindow.triggerAt(LocalDate(2026, 11, 23), LocalTime(23, 59), TimeZone.UTC)
+            var currentZone: TimeZone = TimeZone.UTC
+            val ticks = async { localDateTicks(EpochClock { now }) { currentZone }.take(3).toList() }
+            runCurrent()
+            now += 60_000
+            advanceTimeBy(60_000)
+            runCurrent()
+            currentZone = TimeZone.of("America/Los_Angeles")
+            advanceTimeBy(60_000)
+            runCurrent()
+            ticks.await().map { it.first } shouldContainExactly
+                listOf(LocalDate(2026, 11, 23), LocalDate(2026, 11, 24), LocalDate(2026, 11, 23))
+        }
 
     @Test
     fun theSettingsRoundTripThroughTheJournalAndKeepOnlyDateFields() =
@@ -52,6 +76,19 @@ class RemindersTest {
             settings.enabled shouldBe true
             settings.fieldKeys shouldContainExactly listOf(FieldKeys.DOC_DATE)
             settings.isActive shouldBe true
+        }
+
+    @Test
+    fun enablingAfterSelectedFieldWasRemovedFallsBackToDocumentDate() =
+        appSessionTest { rig ->
+            val reminders = rig.session.reminders
+            rig.session.fieldRegistry.upsert(
+                FieldDef("renewal", "Renewal", FieldType.DATE, false, false, FieldDef.PLACE_LAST),
+            )
+            reminders.setFieldKeys(listOf("renewal"))
+            rig.session.fieldRegistry.remove("renewal")
+            reminders.setEnabled(true)
+            reminders.settings.first().fieldKeys shouldContainExactly listOf(FieldKeys.DOC_DATE)
         }
 
     @Test

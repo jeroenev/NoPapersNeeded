@@ -14,12 +14,12 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onStart
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
@@ -241,6 +241,7 @@ internal class JournalReminders(
     private val lifetime: SessionLifetime,
     private val clock: EpochClock,
     private val log: NpnLog,
+    private val currentZone: () -> TimeZone = TimeZone::currentSystemDefault,
 ) : RemindersFacade {
     private val raw: Flow<ReminderSettings> =
         combine(
@@ -323,7 +324,7 @@ internal class JournalReminders(
                 combine(
                     indexDb.documentDao().observeReminderRows(current.fieldKeys),
                     indexDb.fieldDefDao().observeAll(),
-                    midnightTicks(),
+                    localDateTicks(clock, currentZone),
                 ) { rows, defs, _ ->
                     val labels = defs.mapNotNull { it.toFieldDef() }.associate { it.key to it.label }
                     val today = ReminderWindow.today(clock.nowMillis(), currentZone())
@@ -388,28 +389,6 @@ internal class JournalReminders(
         }
     }
 
-    /**
-     * Emits at local midnight, so the Upcoming groups and the library's due count roll over while
-     * the app stays open. The first emission is immediate, so the combine starts at once.
-     */
-    private fun midnightTicks(): Flow<Unit> =
-        flow {
-            while (true) {
-                val now = clock.nowMillis()
-                val zone = currentZone()
-                val next =
-                    ReminderWindow.triggerAt(
-                        ReminderWindow.today(now, zone).plus(DatePeriod(days = 1)),
-                        LocalTime(0, 0),
-                        zone,
-                    )
-                delay((next - now).coerceAtLeast(1_000L))
-                emit(Unit)
-            }
-        }.onStart { emit(Unit) }
-
-    private fun currentZone(): TimeZone = TimeZone.currentSystemDefault()
-
     private fun parseFieldKeys(stored: String?): List<String> =
         stored
             .orEmpty()
@@ -462,3 +441,19 @@ private fun DueDate.toCandidate(today: LocalDate): ReminderCandidate =
         dueDate = dueDate,
         bucket = ReminderWindow.bucket(dueDate, today),
     )
+
+/** Refresh on local-date or time-zone changes, including after a suspended device resumes. */
+internal fun localDateTicks(
+    clock: EpochClock,
+    currentZone: () -> TimeZone,
+): Flow<Pair<LocalDate, TimeZone>> =
+    flow {
+        while (true) {
+            val now = clock.nowMillis()
+            val zone = currentZone()
+            val today = ReminderWindow.today(now, zone)
+            emit(today to zone)
+            val next = ReminderWindow.triggerAt(today.plus(DatePeriod(days = 1)), LocalTime(0, 0), zone)
+            delay((next - now).coerceIn(1_000L, 60_000L))
+        }
+    }.distinctUntilChanged()

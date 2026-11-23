@@ -75,6 +75,15 @@
             </intent-filter>
         </activity>
 
+        <receiver
+            android:name="dev.npn.app.platform.ReminderTimeChangedReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
+            </intent-filter>
+        </receiver>
+
         <!-- Grant temporary read access to baked copies handed to the share sheet. -->
         <provider
             android:name="androidx.core.content.FileProvider"

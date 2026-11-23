@@ -1,6 +1,7 @@
 package dev.npn.app.platform
 
 import androidx.compose.runtime.Composable
+import dev.npn.app.ui.common.OpenDocumentRequest
 import dev.npn.app.ui.common.OpenDocumentRequests
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.swing.Swing
@@ -24,7 +25,9 @@ actual fun canShowReminderNotifications(): Boolean = true
 
 actual suspend fun showReminderNotification(
     docId: String,
+    libraryLocation: String,
     documentTitle: String,
+    fieldKey: String,
     fieldLabel: String,
     dueDate: String,
     overdue: Boolean,
@@ -38,7 +41,7 @@ actual suspend fun showReminderNotification(
         )
     val tray = withContext(Dispatchers.Swing) { DesktopTray.icon() } ?: return ReminderDelivery.IN_APP
     withContext(Dispatchers.Swing) {
-        DesktopTray.lastDocument = docId
+        DesktopTray.lastDocument = OpenDocumentRequest(docId, libraryLocation)
         tray.displayMessage(title, body, TrayIcon.MessageType.INFO)
     }
     return ReminderDelivery.NOTIFIED
@@ -58,7 +61,7 @@ actual fun rememberReminderPermissionRequest(): (() -> Unit)? = null
  */
 private object DesktopTray {
     private var tray: TrayIcon? = null
-    var lastDocument: String? = null
+    var lastDocument: OpenDocumentRequest? = null
 
     fun icon(): TrayIcon? {
         tray?.let { return it }

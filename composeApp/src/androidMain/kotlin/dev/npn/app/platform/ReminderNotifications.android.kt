@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -32,6 +33,7 @@ import dev.npn.core.util.warn
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.context
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.reminders_notification_body
@@ -47,6 +49,7 @@ private const val MAX_REMINDER_ATTEMPTS = 2
 
 /** The extra a reminder notification's launch intent carries, read by `MainActivity`. */
 const val EXTRA_OPEN_DOCUMENT = "dev.npn.openDocument"
+const val EXTRA_REMINDER_LIBRARY = "dev.npn.reminderLibrary"
 
 actual fun canShowReminderNotifications(): Boolean {
     val context = FileKit.context.applicationContext
@@ -56,19 +59,26 @@ actual fun canShowReminderNotifications(): Boolean {
     ) {
         return false
     }
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        val channel =
+    val channelBlocked =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             context
                 .getSystemService(NotificationManager::class.java)
                 ?.getNotificationChannel(CHANNEL_ID)
-        if (channel?.importance == NotificationManager.IMPORTANCE_NONE) return false
-    }
-    return NotificationManagerCompat.from(context).areNotificationsEnabled()
+                ?.importance == NotificationManager.IMPORTANCE_NONE
+        } else {
+            false
+        }
+    return reminderNotificationsPermitted(
+        NotificationManagerCompat.from(context).areNotificationsEnabled(),
+        channelBlocked,
+    )
 }
 
 actual suspend fun showReminderNotification(
     docId: String,
+    libraryLocation: String,
     documentTitle: String,
+    fieldKey: String,
     fieldLabel: String,
     dueDate: String,
     overdue: Boolean,
@@ -87,9 +97,21 @@ actual suspend fun showReminderNotification(
     val launch =
         (context.packageManager.getLaunchIntentForPackage(context.packageName) ?: Intent()).apply {
             putExtra(EXTRA_OPEN_DOCUMENT, docId)
+            putExtra(EXTRA_REMINDER_LIBRARY, libraryLocation)
             flags = flags or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
-    val reminderId = "$docId:$fieldLabel:$dueDate".hashCode()
+    val reminderTag = reminderNotificationTag("$libraryLocation:$docId", fieldKey, dueDate)
+    launch.data =
+        android.net.Uri
+            .Builder()
+            .scheme("npn-reminder")
+            .authority("open")
+            .appendPath(libraryLocation)
+            .appendPath(docId)
+            .appendPath(fieldKey)
+            .appendPath(dueDate)
+            .build()
+    val reminderId = reminderTag.hashCode()
     val pending =
         PendingIntent.getActivity(
             context,
@@ -108,7 +130,7 @@ actual suspend fun showReminderNotification(
             .setAutoCancel(true)
             .build()
     @SuppressLint("MissingPermission") // Checked by canShowReminderNotifications above.
-    NotificationManagerCompat.from(context).notify(reminderId, notification)
+    NotificationManagerCompat.from(context).notify(reminderTag, 0, notification)
     return ReminderDelivery.NOTIFIED
 }
 
@@ -142,6 +164,20 @@ actual fun rememberReminderPermissionRequest(): (() -> Unit)? {
     return { launcher.launch(Manifest.permission.POST_NOTIFICATIONS) }
 }
 
+/** Recompute a pending check when the device's local clock or time zone changes. */
+class ReminderTimeChangedReceiver : BroadcastReceiver() {
+    override fun onReceive(
+        context: Context,
+        intent: Intent,
+    ) {
+        if (!isReminderTimeChange(intent.action)) return
+        val request = OneTimeWorkRequestBuilder<ReminderWorker>().build()
+        WorkManager
+            .getInstance(context.applicationContext)
+            .enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.REPLACE, request)
+    }
+}
+
 /**
  * The daily reminder check WorkManager runs while the app is not open. It opens the persisted
  * library when the process was started for this work alone, waits for its initial rescan so the
@@ -153,7 +189,6 @@ class ReminderWorker(
     params: WorkerParameters,
 ) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
-        if (!canShowReminderNotifications()) return Result.success()
         val env = ReminderRuntime.orCreate(applicationContext)
         val session =
             env.session.value
@@ -164,9 +199,23 @@ class ReminderWorker(
                     AndroidLog.warn("Opening the library for reminders failed; retrying", it)
                     return Result.retry()
                 } ?: return Result.success()
+        val location =
+            env.settings.settings
+                .first()
+                .libraryLocation ?: return Result.success()
+        if (!canShowReminderNotifications()) {
+            val next = session.reminders.nextCheckDelayMillis()
+            scheduleReminderChecks(active = next != null, delayMillis = next ?: 0L)
+            return Result.success()
+        }
         return runCatchingCancellable {
             check(session.awaitInitialRescan()) { "The initial rescan failed" }
-            deliverDueReminders(session)
+            if (env.session.value === session && env.settings.settings
+                    .first()
+                    .libraryLocation == location
+            ) {
+                deliverDueReminders(session, location)
+            }
         }.fold(
             onSuccess = {
                 // The one-shot job is consumed; the next check is the next configured local time.
@@ -177,46 +226,56 @@ class ReminderWorker(
             onFailure = {
                 AndroidLog.warn("Checking reminders failed; retrying", it)
                 // A one-shot job has no attempt cap; do not keep waking the device forever when
-                // the library itself is gone. The next app start schedules a fresh check.
-                if (runAttemptCount >= MAX_REMINDER_ATTEMPTS) Result.success() else Result.retry()
+                // the library itself is gone. Leave a fresh daily check for a later recovery.
+                if (runAttemptCount >= MAX_REMINDER_ATTEMPTS) {
+                    val next = session.reminders.nextCheckDelayMillis()
+                    scheduleReminderChecks(active = next != null, delayMillis = next ?: 0L)
+                    Result.success()
+                } else {
+                    Result.retry()
+                }
             },
         )
     }
 }
 
 /** The in-app check and the worker share this: claim, show, and release what could not be shown. */
-internal suspend fun deliverDueReminders(session: LibrarySession) =
-    withContext(NonCancellable) {
-        val due =
-            AndroidLog
-                .runLogged("Reading the reminders due now") {
-                    session.reminders.claimDueReminders()
-                }.orEmpty()
-        for (candidate in due) {
-            val delivery =
-                AndroidLog.runLogged("Showing a reminder for ${candidate.documentTitle}") {
-                    showReminderNotification(
-                        docId = candidate.docId,
-                        documentTitle = candidate.documentTitle,
-                        fieldLabel = candidate.fieldLabel,
-                        dueDate = candidate.dueDate.toString(),
-                        overdue = candidate.bucket == dev.npn.core.app.ReminderBucket.OVERDUE,
-                    )
-                }
-            when (delivery) {
-                null -> {
-                    session.reminders.releaseReminder(candidate)
-                }
-
-                ReminderDelivery.NOT_PERMITTED -> {
-                    session.reminders.releaseReminder(candidate)
-                    return@withContext
-                }
-
-                ReminderDelivery.NOTIFIED, ReminderDelivery.IN_APP -> {}
+internal suspend fun deliverDueReminders(
+    session: LibrarySession,
+    libraryLocation: String,
+) = withContext(NonCancellable) {
+    val due =
+        AndroidLog
+            .runLogged("Reading the reminders due now") {
+                session.reminders.claimDueReminders()
+            }.orEmpty()
+    for (candidate in due) {
+        val delivery =
+            AndroidLog.runLogged("Showing a reminder for ${candidate.documentTitle}") {
+                showReminderNotification(
+                    docId = candidate.docId,
+                    libraryLocation = libraryLocation,
+                    documentTitle = candidate.documentTitle,
+                    fieldKey = candidate.fieldKey,
+                    fieldLabel = candidate.fieldLabel,
+                    dueDate = candidate.dueDate.toString(),
+                    overdue = candidate.bucket == dev.npn.core.app.ReminderBucket.OVERDUE,
+                )
             }
+        when (delivery) {
+            null -> {
+                session.reminders.releaseReminder(candidate)
+            }
+
+            ReminderDelivery.NOT_PERMITTED -> {
+                session.reminders.releaseReminder(candidate)
+                return@withContext
+            }
+
+            ReminderDelivery.NOTIFIED, ReminderDelivery.IN_APP -> {}
         }
     }
+}
 
 private suspend fun ensureChannel(context: Context) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return

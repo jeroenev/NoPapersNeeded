@@ -84,11 +84,15 @@ internal fun MainNav(
     PublishWindowTitle(windowTitle(destination, topLevel, assistant))
     val syncStatus by remember(session) { session.sync.status }.collectAsStateWithLifecycle(SyncStatus())
     val upcomingBadge by library.reminderBadge.collectAsStateWithLifecycle()
-    ReminderChecks(session) { library.noteInAppReminder() }
+    val libraryLocation = remember(session) { settings.settings.value.libraryLocation }
+    libraryLocation?.let { location ->
+        ReminderChecks(session, location) { library.noteInAppReminder() }
+    }
     LaunchedEffect(session, nav) {
-        OpenDocumentRequests.documents.arrivals.collect { docId ->
+        OpenDocumentRequests.documents.arrivals.collect { request ->
+            if (!request.belongsTo(libraryLocation)) return@collect
             nav.openDoc(
-                docId,
+                request.docId,
                 library.browse,
                 options = {
                     popUpTo(Route.Library)

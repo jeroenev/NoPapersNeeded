@@ -15,7 +15,9 @@ expect fun canShowReminderNotifications(): Boolean
  */
 expect suspend fun showReminderNotification(
     docId: String,
+    libraryLocation: String,
     documentTitle: String,
+    fieldKey: String,
     fieldLabel: String,
     dueDate: String,
     overdue: Boolean,
