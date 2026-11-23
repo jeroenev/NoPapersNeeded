@@ -91,6 +91,43 @@ class DocPrintViewModelTest : MainDispatcherTest() {
             messages shouldContainExactly listOf(uiText(Res.string.detail_print_started))
         }
 
+    @Test
+    fun repeatedPrintWhileLoadingStartsOnlyOneJob() =
+        runTest(dispatcher) {
+            val entered = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            val session =
+                FakeLibrarySession().apply {
+                    documents.singleDoc.value = listItem("doc-1")
+                    content.readDocumentBytes = {
+                        entered.complete(Unit)
+                        release.await()
+                        byteArrayOf(1)
+                    }
+                }
+            var calls = 0
+            val model =
+                liveDocDetailVm(
+                    session,
+                    printer =
+                        PdfPrinter { _, _, _ ->
+                            calls++
+                            PrintOutcome.Started
+                        },
+                )
+            advanceUntilIdle()
+            model.printDocument()
+            advanceUntilIdle()
+            entered.isCompleted shouldBe true
+            model.ui.value.printing shouldBe true
+            model.printDocument()
+            advanceUntilIdle()
+            release.complete(Unit)
+            advanceUntilIdle()
+            calls shouldBe 1
+            model.ui.value.printing shouldBe false
+        }
+
     /** A document whose bytes cannot be read says so instead of opening an empty print dialog. */
     @Test
     fun printWithoutReadableBytesSaysWhy() =

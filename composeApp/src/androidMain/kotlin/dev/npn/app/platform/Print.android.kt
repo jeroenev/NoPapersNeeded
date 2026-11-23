@@ -9,11 +9,13 @@ import android.print.PrintAttributes
 import android.print.PrintDocumentAdapter
 import android.print.PrintDocumentInfo
 import android.print.PrintManager
-import io.github.vinceglb.filekit.FileKit
-import io.github.vinceglb.filekit.context
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.OutputStream
 
 /**
  * Hands the document's bytes to Android's print spooler. The system owns the print dialog from the
@@ -27,13 +29,15 @@ actual suspend fun printPdf(
 ): PrintOutcome =
     withContext(Dispatchers.Main) {
         try {
-            val context = FileKit.context
+            val context =
+                PrintActivity.current()
+                    ?: return@withContext PrintOutcome.Failed(PrintFailure.UNSUPPORTED)
             val manager =
                 context.getSystemService(Context.PRINT_SERVICE) as? PrintManager
                     ?: return@withContext PrintOutcome.Failed(PrintFailure.UNSUPPORTED)
             manager.print(
                 fileName,
-                PdfBytesPrintAdapter(fileName, bytes, pageCount),
+                PdfBytesPrintAdapter(fileName, bytes, pageCount, io),
                 PrintAttributes.Builder().build(),
             )
             PrintOutcome.Started
@@ -54,7 +58,10 @@ private class PdfBytesPrintAdapter(
     private val fileName: String,
     private val bytes: ByteArray,
     private val pageCount: Int?,
+    private val io: CoroutineDispatcher,
 ) : PrintDocumentAdapter() {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
     override fun onLayout(
         oldAttributes: PrintAttributes?,
         newAttributes: PrintAttributes?,
@@ -85,34 +92,37 @@ private class PdfBytesPrintAdapter(
             callback?.onWriteFailed(null)
             return
         }
-        if (cancellationSignal?.isCanceled == true) {
-            callback?.onWriteCancelled()
-            return
-        }
-        try {
-            ParcelFileDescriptor.AutoCloseOutputStream(destination).use { out ->
-                var offset = 0
-                while (offset < bytes.size) {
-                    if (cancellationSignal?.isCanceled == true) {
-                        callback?.onWriteCancelled()
-                        return
+        scope.launch {
+            val result =
+                withContext(io) {
+                    try {
+                        ParcelFileDescriptor.AutoCloseOutputStream(destination).use { out ->
+                            copyPrintBytes(bytes, out) { cancellationSignal?.isCanceled == true }
+                        }
+                        null
+                    } catch (failure: Exception) {
+                        failure
                     }
-                    val count = minOf(COPY_CHUNK_BYTES, bytes.size - offset)
-                    out.write(bytes, offset, count)
-                    offset += count
                 }
-            }
-            if (cancellationSignal?.isCanceled == true) {
-                callback?.onWriteCancelled()
-            } else {
-                callback?.onWriteFinished(arrayOf(PageRange.ALL_PAGES))
-            }
-        } catch (failure: Exception) {
-            if (cancellationSignal?.isCanceled == true) {
-                callback?.onWriteCancelled()
-            } else {
-                callback?.onWriteFailed(failure.message)
+            when {
+                cancellationSignal?.isCanceled == true -> callback?.onWriteCancelled()
+                result != null -> callback?.onWriteFailed(result.message)
+                else -> callback?.onWriteFinished(arrayOf(PageRange.ALL_PAGES))
             }
         }
+    }
+}
+
+/** Writes bounded chunks so a cancelled spool request stops before transferring the remaining bytes. */
+internal fun copyPrintBytes(
+    bytes: ByteArray,
+    out: OutputStream,
+    cancelled: () -> Boolean,
+) {
+    var offset = 0
+    while (offset < bytes.size && !cancelled()) {
+        val count = minOf(COPY_CHUNK_BYTES, bytes.size - offset)
+        out.write(bytes, offset, count)
+        offset += count
     }
 }

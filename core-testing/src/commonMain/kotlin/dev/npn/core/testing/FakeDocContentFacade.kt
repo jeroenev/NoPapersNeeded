@@ -13,6 +13,7 @@ class FakeDocContentFacade : DocContentFacade {
 
     /** What [documentBytes] returns; null models a document whose file could not be read. */
     var documentBytesValue: ByteArray? = null
+    var readDocumentBytes: (suspend () -> ByteArray?)? = null
     val bakedInPlace = mutableListOf<String>()
     var clearedThumbnails = 0
     var extractedTextValue: String? = null
@@ -30,7 +31,7 @@ class FakeDocContentFacade : DocContentFacade {
         maxDim: Int,
     ): ByteArray? = null
 
-    override suspend fun documentBytes(docId: String): ByteArray? = documentBytesValue
+    override suspend fun documentBytes(docId: String): ByteArray? = readDocumentBytes?.invoke() ?: documentBytesValue
 
     override suspend fun bakedCopyBytes(docId: String): ByteArray? = bakedBytes
 

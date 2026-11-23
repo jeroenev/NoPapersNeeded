@@ -638,6 +638,8 @@ class DocDetailViewModel private constructor(
         }
     }
 
+    private val printMutex = kotlinx.coroutines.sync.Mutex()
+
     /**
      * Send this document's library bytes to the platform's print service: no copy is baked and the
      * file is untouched. A document whose bytes cannot be read, or that is not a PDF, says so rather
@@ -645,33 +647,40 @@ class DocDetailViewModel private constructor(
      */
     override fun printDocument() =
         launchReporting(Res.string.detail_print_failed) {
-            val item = loadState.value.item
-            if (item == null || !item.doc.isPrintable) {
-                message(uiText(Res.string.detail_print_failed_unavailable))
-                return@launchReporting
-            }
-            val bytes = content.documentBytes(docId)
-            if (bytes == null) {
-                message(uiText(Res.string.detail_print_failed_unavailable))
-                return@launchReporting
-            }
-            val pageCount =
-                _ui.value.pageCount.count
-                    .takeIf { it > 0 } ?: item.doc.pageCount
-            val outcome = busy({ copy(printing = it) }) { printer.print(item.doc.fileName, bytes, pageCount) }
-            when (outcome) {
-                PrintOutcome.Started -> {
-                    message(uiText(Res.string.detail_print_started))
-                }
+            if (!printMutex.tryLock()) return@launchReporting
+            try {
+                busy({ copy(printing = it) }) {
+                    val item = loadState.value.item
+                    if (item == null || !item.doc.isPrintable) {
+                        message(uiText(Res.string.detail_print_failed_unavailable))
+                        return@busy
+                    }
+                    val bytes = content.documentBytes(docId)
+                    if (bytes == null) {
+                        message(uiText(Res.string.detail_print_failed_unavailable))
+                        return@busy
+                    }
+                    val pageCount =
+                        _ui.value.pageCount.count
+                            .takeIf { it > 0 } ?: item.doc.pageCount
+                    val outcome = printer.print(item.doc.fileName, bytes, pageCount)
+                    when (outcome) {
+                        PrintOutcome.Started -> {
+                            message(uiText(Res.string.detail_print_started))
+                        }
 
-                PrintOutcome.Cancelled -> {
-                    message(uiText(Res.string.detail_print_cancelled))
-                }
+                        PrintOutcome.Cancelled -> {
+                            message(uiText(Res.string.detail_print_cancelled))
+                        }
 
-                is PrintOutcome.Failed -> {
-                    outcome.cause?.let { log.warn("Printing $docId failed", it) }
-                    message(outcome.reason.text())
+                        is PrintOutcome.Failed -> {
+                            outcome.cause?.let { log.warn("Printing $docId failed", it) }
+                            message(outcome.reason.text())
+                        }
+                    }
                 }
+            } finally {
+                printMutex.unlock()
             }
         }
 
