@@ -2,6 +2,7 @@ package dev.npn.app.platform
 
 import dev.npn.core.pdf.pdfPrintJob
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import org.apache.pdfbox.pdmodel.PDDocument
@@ -26,6 +27,7 @@ class DesktopPdfPrinterTest {
         override suspend fun print(
             fileName: String,
             pages: Pageable,
+            io: CoroutineDispatcher,
         ): PrintOutcome {
             this.fileName = fileName
             this.pages = pages
@@ -80,6 +82,7 @@ class DesktopPdfPrinterTest {
                     override suspend fun print(
                         fileName: String,
                         pages: Pageable,
+                        io: CoroutineDispatcher,
                     ): PrintOutcome = throw PrinterAbortException()
                 }
 

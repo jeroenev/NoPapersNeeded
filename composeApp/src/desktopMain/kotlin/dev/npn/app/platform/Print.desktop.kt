@@ -24,6 +24,7 @@ internal interface PrinterSurface {
     suspend fun print(
         fileName: String,
         pages: Pageable,
+        io: CoroutineDispatcher,
     ): PrintOutcome
 }
 
@@ -39,6 +40,7 @@ internal object AwtPrinterSurface : PrinterSurface {
     override suspend fun print(
         fileName: String,
         pages: Pageable,
+        io: CoroutineDispatcher,
     ): PrintOutcome {
         val job = PrinterJob.getPrinterJob()
         job.jobName = fileName
@@ -46,7 +48,7 @@ internal object AwtPrinterSurface : PrinterSurface {
         // Only the dialog needs AWT's event thread; PDFBox renders and the job spools on IO.
         val accepted = withContext(Dispatchers.Swing) { job.printDialog() }
         if (!accepted) return PrintOutcome.Cancelled
-        withContext(Dispatchers.IO) { job.print() }
+        withContext(io) { job.print() }
         return PrintOutcome.Started
     }
 }
@@ -69,7 +71,7 @@ internal class DesktopPdfPrinter(
                 .getOrElse { return PrintOutcome.Failed(PrintFailure.UNREADABLE_PDF, it) }
         return job.use {
             try {
-                surface.print(fileName, it.pages)
+                surface.print(fileName, it.pages, io)
             } catch (_: PrinterAbortException) {
                 PrintOutcome.Cancelled
             } catch (failure: Exception) {
