@@ -999,7 +999,7 @@ internal object LibraryAiTools {
 
                 is HistoryEntry.Unknown -> {
                     "unrecorded event \"${q(entry.operation)}\"" +
-                        (entry.payload?.let { " payload=\"${q(it)}\"" } ?: "")
+                        entry.payload?.let { " payload=\"${q(it)}\"" }.orEmpty()
                 }
 
                 is HistoryEntry.Undecodable -> {
