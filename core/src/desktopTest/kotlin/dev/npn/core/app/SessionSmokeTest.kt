@@ -276,8 +276,20 @@ class SessionSmokeTest {
                     { rig.session.start() },
                     { rig.session.mail.checkNow() },
                     { rig.session.mail.clearPassword() },
-                    { rig.session.mail.saveAccount(dev.npn.core.mail.MailAccount(), null) },
-                    { rig.session.mail.testConnection(dev.npn.core.mail.MailAccount(), null) },
+                    {
+                        rig.session.mail.saveAccount(
+                            dev.npn.core.mail
+                                .MailAccount(),
+                            null,
+                        )
+                    },
+                    {
+                        rig.session.mail.testConnection(
+                            dev.npn.core.mail
+                                .MailAccount(),
+                            null,
+                        )
+                    },
                     { rig.session.ocr.reOcr(id) },
                     { rig.session.ocr.setOcrEngine(id, OcrEngineRef.Known(OcrEngineId.EMBEDDED)) },
                     { rig.session.ocr.ocrWithAi(id) },

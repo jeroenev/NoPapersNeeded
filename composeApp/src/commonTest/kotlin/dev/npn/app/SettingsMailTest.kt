@@ -9,20 +9,21 @@ import kotlin.test.Test
 
 class SettingsMailTest : MainDispatcherTest() {
     @Test
-    fun passwordDraftIsAcknowledgedOnlyAfterSuccess() = runTest(dispatcher) {
-        val session = FakeLibrarySession()
-        val model = settingsVm(session = session)
-        var acknowledgements = 0
-        session.mail.saveOutcome = MailSaveOutcome.AccountInvalid
-        model.saveMailAccount(MailAccount(), "draft") { acknowledgements++ }
-        model.clearMailPassword { acknowledgements++ }
-        runCurrent()
-        acknowledgements shouldBe 0
+    fun passwordDraftIsAcknowledgedOnlyAfterSuccess() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = settingsVm(session = session)
+            var acknowledgements = 0
+            session.mail.saveOutcome = MailSaveOutcome.AccountInvalid
+            model.saveMailAccount(MailAccount(), "draft") { acknowledgements++ }
+            model.clearMailPassword { acknowledgements++ }
+            runCurrent()
+            acknowledgements shouldBe 0
 
-        session.mail.saveOutcome = MailSaveOutcome.Saved
-        model.saveMailAccount(MailAccount(), "draft") { acknowledgements++ }
-        model.clearMailPassword { acknowledgements++ }
-        runCurrent()
-        acknowledgements shouldBe 2
-    }
+            session.mail.saveOutcome = MailSaveOutcome.Saved
+            model.saveMailAccount(MailAccount(), "draft") { acknowledgements++ }
+            model.clearMailPassword { acknowledgements++ }
+            runCurrent()
+            acknowledgements shouldBe 2
+        }
 }
