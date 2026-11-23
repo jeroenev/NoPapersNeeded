@@ -52,11 +52,11 @@ import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.skia.Image
 import java.awt.AWTEvent
 import java.awt.Dimension
+import java.awt.KeyEventDispatcher
 import java.awt.KeyboardFocusManager
 import java.awt.Toolkit
 import java.awt.event.AWTEventListener
 import java.awt.event.KeyEvent
-import java.awt.event.KeyEventDispatcher
 import java.awt.event.MouseEvent
 import java.awt.event.WindowAdapter
 import java.awt.event.WindowEvent

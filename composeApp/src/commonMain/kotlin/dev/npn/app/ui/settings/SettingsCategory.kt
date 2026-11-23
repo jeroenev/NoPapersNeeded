@@ -126,8 +126,8 @@ enum class SettingsCategoryId {
     CLOUD_SYNC,
     AI,
     APPEARANCE,
-    ABOUT,
     SECURITY,
+    ABOUT,
     ;
 
     val routeKey: String get() = name.lowercase()

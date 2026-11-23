@@ -1,5 +1,6 @@
 package dev.npn.app.ui.settings
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
@@ -121,7 +122,7 @@ private fun lockTimeoutLabel(timeout: LockTimeout): String =
 
 /** The set-or-change-PIN dialog. Its buffer is plain [remember]: a secret never goes in saved state. */
 @Composable
-private fun SecurityDialogContent(
+internal fun SecurityDialogContent(
     dialog: SecurityDialog,
     onDismiss: () -> Unit,
     onSave: (String) -> Unit,
@@ -149,43 +150,45 @@ private fun SecurityDialogContent(
         confirmLabel = stringResource(Res.string.common_save),
         confirmEnabled = pin.isNotEmpty() && confirmation.isNotEmpty(),
     ) {
-        OutlinedTextField(
-            value = pin,
-            onValueChange = {
-                pin = it
-                showErrors = false
-            },
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text(stringResource(Res.string.security_pin)) },
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            isError = tooShort,
-        )
-        if (tooShort) {
-            Text(
-                stringResource(Res.string.security_pin_too_short),
-                color = androidx.compose.material3.MaterialTheme.colorScheme.error,
+        Column {
+            OutlinedTextField(
+                value = pin,
+                onValueChange = {
+                    pin = it
+                    showErrors = false
+                },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text(stringResource(Res.string.security_pin)) },
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                isError = tooShort,
             )
-        }
-        OutlinedTextField(
-            value = confirmation,
-            onValueChange = {
-                confirmation = it
-                showErrors = false
-            },
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text(stringResource(Res.string.security_pin_confirm)) },
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            isError = mismatch,
-        )
-        if (mismatch) {
-            Text(
-                stringResource(Res.string.security_pin_mismatch),
-                color = androidx.compose.material3.MaterialTheme.colorScheme.error,
+            if (tooShort) {
+                Text(
+                    stringResource(Res.string.security_pin_too_short),
+                    color = androidx.compose.material3.MaterialTheme.colorScheme.error,
+                )
+            }
+            OutlinedTextField(
+                value = confirmation,
+                onValueChange = {
+                    confirmation = it
+                    showErrors = false
+                },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text(stringResource(Res.string.security_pin_confirm)) },
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                isError = mismatch,
             )
+            if (mismatch) {
+                Text(
+                    stringResource(Res.string.security_pin_mismatch),
+                    color = androidx.compose.material3.MaterialTheme.colorScheme.error,
+                )
+            }
         }
     }
 }
