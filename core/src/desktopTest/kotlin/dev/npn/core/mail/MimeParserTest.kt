@@ -7,6 +7,7 @@ import java.util.Properties
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /**
@@ -58,6 +59,21 @@ class MimeParserTest {
             Session.getInstance(Properties()),
             ByteArrayInputStream(raw().toByteArray(Charsets.UTF_8)),
         )
+
+    @Test
+    fun oversizedSupportedAttachmentFailsTheWholeMessage() {
+        val content = "x".repeat(25 * 1024 * 1024 + 1)
+        val raw =
+            listOf(
+                "MIME-Version: 1.0",
+                "Content-Type: application/pdf",
+                "Content-Disposition: attachment; filename=large.pdf",
+                "",
+                content,
+            ).joinToString("\r\n")
+        val message = MimeMessage(Session.getInstance(Properties()), ByteArrayInputStream(raw.toByteArray()))
+        assertFailsWith<Exception> { MimeParser.parse(1, message) }
+    }
 
     @Test
     fun headersTextAndOnlySupportedAttachmentsAreRead() {

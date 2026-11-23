@@ -3,6 +3,7 @@ package dev.npn.core.mail
 import kotlinx.coroutines.test.runTest
 import org.apache.pdfbox.Loader
 import org.apache.pdfbox.text.PDFTextStripper
+import java.util.TimeZone
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertNotNull
@@ -38,6 +39,14 @@ class MailPdfTest {
     fun theSameMessageAlwaysMakesTheSameBytes() =
         runTest {
             val renderer = PdfBoxMailPdfRenderer()
-            assertContentEquals(assertNotNull(renderer.render(message)), assertNotNull(renderer.render(message)))
+            val original = TimeZone.getDefault()
+            try {
+                TimeZone.setDefault(TimeZone.getTimeZone("UTC"))
+                val first = assertNotNull(renderer.render(message))
+                TimeZone.setDefault(TimeZone.getTimeZone("Pacific/Honolulu"))
+                assertContentEquals(first, assertNotNull(renderer.render(message)))
+            } finally {
+                TimeZone.setDefault(original)
+            }
         }
 }

@@ -107,9 +107,10 @@ internal open class NoSettingsPaneActions : SettingsPaneActions {
     override fun saveMailAccount(
         account: MailAccount,
         password: String?,
+        onSuccess: () -> Unit,
     ) = Unit
 
-    override fun clearMailPassword() = Unit
+    override fun clearMailPassword(onSuccess: () -> Unit) = Unit
 
     override fun testMailConnection(
         account: MailAccount,

@@ -32,11 +32,13 @@ class MailServiceTest {
         initial: MailAccount,
     ) : MailAccountStore {
         val flow = MutableStateFlow(initial)
+        var failSave = false
         override val account: Flow<MailAccount> = flow
 
         override fun current(): MailAccount = flow.value
 
         override suspend fun save(account: MailAccount) {
+            check(!failSave)
             flow.value = account
         }
     }
@@ -148,7 +150,7 @@ class MailServiceTest {
                 uidValidity = validity,
                 messages =
                     messages
-                        .filter { it.uid >= start }
+                        .filter { it.uid in start..minOf(uidNext - 1, start + MailTransport.PAGE_SIZE - 1) }
                         .sortedBy(MailMessage::uid)
                         .take(MailTransport.PAGE_SIZE),
                 uidNext = uidNext,
@@ -216,6 +218,28 @@ class MailServiceTest {
         transport: FakeTransport = FakeTransport(),
         credentials: FakeCredentials = FakeCredentials(),
     ) = Fixture(account.copy(enabled = true), transport, credentials, backgroundScope)
+
+    @Test
+    fun failedSettingsWriteLeavesThePreviousPassword() =
+        runTest {
+            val fixture = fixture()
+            fixture.store.failSave = true
+            kotlin.test.assertFailsWith<IllegalStateException> {
+                fixture.service.saveAccount(account.copy(host = "other.example.com"), "new secret")
+            }
+            assertEquals("secret", fixture.credentials.password)
+            assertEquals(account, fixture.store.current())
+        }
+
+    @Test
+    fun emptyUidWindowsEventuallyReachSparseMessages() =
+        runTest {
+            val transport = FakeTransport(messages = listOf(message(uid = 501)))
+            val fixture = fixture(transport = transport)
+            repeat(3) { fixture.service.checkNow() }
+            assertEquals(listOf(501L), transport.marked)
+            assertEquals(501, fixture.cursors.last().lastUid)
+        }
 
     @Test
     fun aPdfIsImportedOnceAndTheCursorMovesPastIt() =

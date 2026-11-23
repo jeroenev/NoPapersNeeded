@@ -222,7 +222,12 @@ internal fun EmailSettingsPane(
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
             OutlinedButton(
-                onClick = { actions.saveMailAccount(whenSaved(), password.ifBlank { null }) },
+                onClick = {
+                    val submitted = password
+                    actions.saveMailAccount(whenSaved(), submitted.ifBlank { null }) {
+                        if (password == submitted) password = ""
+                    }
+                },
                 enabled = intervalValid,
             ) { Text(stringResource(Res.string.email_save)) }
             OutlinedButton(
@@ -234,7 +239,10 @@ internal fun EmailSettingsPane(
                 enabled = !mail.checking && mail.transportAvailable,
             ) { Text(stringResource(Res.string.email_check_now)) }
             if (mail.hasPassword) {
-                OutlinedButton(onClick = actions::clearMailPassword) {
+                OutlinedButton(onClick = {
+                    val submitted = password
+                    actions.clearMailPassword { if (password == submitted) password = "" }
+                }) {
                     Text(stringResource(Res.string.email_clear_password))
                 }
             }

@@ -212,9 +212,11 @@ class SettingsViewModel(
     override fun saveMailAccount(
         account: MailAccount,
         password: String?,
+        onSuccess: () -> Unit,
     ) = launchReporting(Res.string.email_save_failed) {
         when (val outcome = mail.saveAccount(account, password)) {
             MailSaveOutcome.Saved -> {
+                onSuccess()
                 message(uiText(Res.string.email_saved))
             }
 
@@ -228,10 +230,11 @@ class SettingsViewModel(
         }
     }
 
-    override fun clearMailPassword() =
+    override fun clearMailPassword(onSuccess: () -> Unit) =
         launchReporting(Res.string.email_save_failed) {
             when (val outcome = mail.clearPassword()) {
                 MailSaveOutcome.Saved -> {
+                    onSuccess()
                     message(uiText(Res.string.email_password_removed))
                 }
 

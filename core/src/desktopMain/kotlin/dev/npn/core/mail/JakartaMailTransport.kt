@@ -16,6 +16,8 @@ import jakarta.mail.internet.InternetAddress
 import jakarta.mail.internet.MimeUtility
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.eclipse.angus.mail.imap.IMAPFolder
+import org.eclipse.angus.mail.imap.IMAPStore
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.security.cert.CertificateException
@@ -83,7 +85,7 @@ internal class JakartaMailTransport(
                         uidValidity = uidValidity,
                         messages = messages,
                         uidNext = uidFolder.uidNext,
-                        scannedThroughUid = maxOf(afterUid, last),
+                        scannedThroughUid = maxOf(start - 1, last),
                     )
                 } catch (failure: Exception) {
                     MailFetchResult.Failed(reason(failure, MailFailureReason.FETCH_FAILED))
@@ -115,11 +117,16 @@ internal class JakartaMailTransport(
                 val message = messageByUid(source, uid) ?: return@withContext MailFailureReason.FETCH_FAILED
                 val target = store.getFolder(folder)
                 if (target == null || !target.exists()) return@withContext MailFailureReason.FOLDER_NOT_FOUND
+                val imapFolder = source as? IMAPFolder ?: return@withContext MailFailureReason.POST_ACTION_FAILED
+                if (!(store as IMAPStore).hasCapability(
+                        "UIDPLUS",
+                    )
+                ) {
+                    return@withContext MailFailureReason.POST_ACTION_FAILED
+                }
                 source.copyMessages(arrayOf(message), target)
                 message.setFlag(Flags.Flag.DELETED, true)
-                // The expunge is the move's second half; a failure here is the action's failure,
-                // not a silent success with the message left pending in the source folder.
-                source.close(true)
+                imapFolder.expunge(arrayOf(message))
                 null
             } catch (failure: Exception) {
                 postActionReason(failure)
@@ -141,8 +148,15 @@ internal class JakartaMailTransport(
                 store = connect(account, password)
                 folder = openFolder(store, account, Folder.READ_WRITE)
                 val message = messageByUid(folder, uid) ?: return@withContext MailFailureReason.FETCH_FAILED
+                val imapFolder = folder as? IMAPFolder ?: return@withContext MailFailureReason.POST_ACTION_FAILED
+                if (!(store as IMAPStore).hasCapability(
+                        "UIDPLUS",
+                    )
+                ) {
+                    return@withContext MailFailureReason.POST_ACTION_FAILED
+                }
                 message.setFlag(Flags.Flag.DELETED, true)
-                folder.close(true)
+                imapFolder.expunge(arrayOf(message))
                 null
             } catch (failure: Exception) {
                 postActionReason(failure)
@@ -384,7 +398,7 @@ internal object MimeParser {
         if (isAttachment(part)) {
             val name = decode(part.fileName)?.takeIf(String::isNotBlank) ?: return
             if (!MailAttachment(name, part.contentType, ByteArray(0)).isSupported()) return
-            val bytes = readCapped(part.inputStream) ?: return
+            val bytes = readCapped(part.inputStream)
             attachments += MailAttachment(name, part.contentType, bytes)
             return
         }
@@ -401,7 +415,7 @@ internal object MimeParser {
 
     private fun MailAttachment.isSupported(): Boolean = supportedKind() != null
 
-    private fun readCapped(input: InputStream): ByteArray? =
+    private fun readCapped(input: InputStream): ByteArray =
         input.use { stream ->
             val out = ByteArrayOutputStream()
             val buffer = ByteArray(8 * 1024)
@@ -410,7 +424,7 @@ internal object MimeParser {
                 val read = stream.read(buffer)
                 if (read < 0) break
                 total += read
-                if (total > MAX_ATTACHMENT_BYTES) return@use null
+                if (total > MAX_ATTACHMENT_BYTES) throw AttachmentTooLargeException()
                 out.write(buffer, 0, read)
             }
             out.toByteArray()
@@ -431,3 +445,5 @@ internal object MimeParser {
             }
         }
 }
+
+private class AttachmentTooLargeException : Exception()

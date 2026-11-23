@@ -214,10 +214,11 @@ interface SettingsActions {
     fun saveMailAccount(
         account: MailAccount,
         password: String?,
+        onSuccess: () -> Unit,
     )
 
     /** Remove the password from the OS secret store, leaving the account configured otherwise. */
-    fun clearMailPassword()
+    fun clearMailPassword(onSuccess: () -> Unit)
 
     /** Connect with these values and report only that it worked, without importing anything. */
     fun testMailConnection(

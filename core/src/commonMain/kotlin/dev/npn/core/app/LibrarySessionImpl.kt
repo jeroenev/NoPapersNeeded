@@ -113,7 +113,24 @@ internal class LibrarySessionImpl(
             log = deps.log,
             scope = lifetime.scope,
         )
-    override val mail: MailFacade = mailService
+    override val mail: MailFacade =
+        object : MailFacade {
+            override val state = mailService.state
+
+            override suspend fun saveAccount(
+                account: dev.npn.core.mail.MailAccount,
+                password: String?,
+            ) = lifetime.owned { mailService.saveAccount(account, password) }
+
+            override suspend fun clearPassword() = lifetime.owned { mailService.clearPassword() }
+
+            override suspend fun testConnection(
+                account: dev.npn.core.mail.MailAccount,
+                password: String?,
+            ) = lifetime.owned { mailService.testConnection(account, password) }
+
+            override suspend fun checkNow() = lifetime.owned { mailService.checkNow() }
+        }
 
     private val scanReports = MutableStateFlow<ScanReport?>(null)
     override val lastScanReport: Flow<ScanReport?> = scanReports.asStateFlow()

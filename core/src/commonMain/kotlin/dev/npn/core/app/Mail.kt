@@ -28,7 +28,8 @@ interface MailFacade {
 
     /**
      * Save the account, and the password when [password] is non-null (an empty string removes it).
-     * A null password leaves the saved one alone. Nothing is saved when the secret store refuses it.
+     * A null password leaves the saved one alone. The account is saved before a secret-store
+     * failure is reported, so it remains visible and can be corrected.
      */
     suspend fun saveAccount(
         account: MailAccount,
