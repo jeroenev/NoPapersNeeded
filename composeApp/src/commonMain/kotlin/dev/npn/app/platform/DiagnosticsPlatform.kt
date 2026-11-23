@@ -1,5 +1,8 @@
 package dev.npn.app.platform
 
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+
 /**
  * The OS and device a diagnostics bundle names, in the user's terms: "Linux 6.8.0 (amd64)" or
  * "Android 14 (SDK 34) on Pixel 8". Never a hostname, account or path.
@@ -13,7 +16,10 @@ expect fun systemLocaleTag(): String
  * The recent app log, for the diagnostics bundle. Desktop reads `npn.log`; Android reads the
  * size-capped file under `filesDir`. Empty when the platform keeps none.
  */
-expect suspend fun recentLogTail(maxBytes: Long = 64L * 1024): String
+expect suspend fun recentLogTail(
+    maxBytes: Long = 64L * 1024,
+    io: CoroutineDispatcher = Dispatchers.IO,
+): String
 
 /**
  * Write the diagnostics text under Android's cache and hand it to the share sheet, returning the
@@ -23,4 +29,5 @@ expect suspend fun recentLogTail(maxBytes: Long = 64L * 1024): String
 expect suspend fun shareDiagnosticsBundle(
     fileName: String,
     content: String,
+    io: CoroutineDispatcher = Dispatchers.IO,
 ): String

@@ -7,7 +7,7 @@ import dev.npn.core.util.AndroidLog
 import dev.npn.core.util.SystemEpochClock
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.context
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -19,8 +19,11 @@ actual fun systemLocaleTag(): String =
         .getDefault()
         .toLanguageTag()
 
-actual suspend fun recentLogTail(maxBytes: Long): String =
-    withContext(Dispatchers.IO) {
+actual suspend fun recentLogTail(
+    maxBytes: Long,
+    io: CoroutineDispatcher,
+): String =
+    withContext(io) {
         AndroidLog.install(FileKit.context.applicationContext)
         AndroidLog.tail(maxBytes)
     }
@@ -28,10 +31,11 @@ actual suspend fun recentLogTail(maxBytes: Long): String =
 actual suspend fun shareDiagnosticsBundle(
     fileName: String,
     content: String,
+    io: CoroutineDispatcher,
 ): String {
     val context = FileKit.context.applicationContext
     val file =
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             writeShareCopy(
                 shareDir = File(context.cacheDir, "share"),
                 fileName = fileName,
