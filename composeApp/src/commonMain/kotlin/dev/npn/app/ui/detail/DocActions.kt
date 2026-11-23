@@ -383,10 +383,12 @@ internal fun exportName(item: DocListItem): String =
 @Composable
 internal fun AiOcrEstimate(estimate: AiRunEstimate) {
     val cost = estimate.estimatedCostUsd
-    if (estimate.priceKnown && cost != null) {
-        Text(stringResource(Res.string.ai_spend_estimate_tokens, estimate.inputTokens))
-        Text(stringResource(Res.string.ai_spend_estimate_cost, formatUsd(cost)))
-    } else {
-        Text(stringResource(Res.string.ai_spend_estimate_tokens_only, estimate.inputTokens))
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (estimate.priceKnown && cost != null) {
+            Text(stringResource(Res.string.ai_spend_estimate_tokens, estimate.inputTokens))
+            Text(stringResource(Res.string.ai_spend_estimate_cost, formatUsd(cost)))
+        } else {
+            Text(stringResource(Res.string.ai_spend_estimate_tokens_only, estimate.inputTokens))
+        }
     }
 }
