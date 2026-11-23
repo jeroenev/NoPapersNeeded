@@ -66,10 +66,10 @@ fun DocDetailScreen(
     onBack: () -> Unit,
     onNavigateToDoc: (String) -> Unit,
     modifier: Modifier = Modifier,
+    documents: ViewModelStoreLease<String> = viewModel { ViewModelStoreLease(documentStores) },
 ) {
     // Held for as long as this entry is on the back stack; shared with the library's side panel
     // when it shows the same document, so expanding the panel continues where it was.
-    val documents = viewModel { ViewModelStoreLease(documentStores) }
     // The pager's selection, not just the route's: a swiped-to document stays current across a
     // width change, and a restored process can reopen it even when its browse order is gone.
     var shownDocId by rememberSaveable(docId) { mutableStateOf(docId) }
@@ -89,18 +89,16 @@ fun DocDetailScreen(
         // keep every document it ever showed: the panel's own holder keeps its preview alive.
         SideEffect { documents.keepOnly(currentDocId) }
         DocPage(
-            docId = currentDocId,
+            state = DocPageState(currentDocId, documents.of(currentDocId), browse),
+            actions =
+                DocPageActions(
+                    onBack = onBack,
+                    onReviewNext = { browse.neighbour(currentDocId, 1)?.let(onNavigateToDoc) ?: onBack() },
+                    goPrevDoc = browse.neighbour(currentDocId, -1)?.let { { onNavigateToDoc(it) } },
+                    goNextDoc = browse.neighbour(currentDocId, 1)?.let { { onNavigateToDoc(it) } },
+                ),
             session = session,
             settings = settings,
-            viewModels = documents.of(currentDocId),
-            browse = browse,
-            onBack = onBack,
-            onReviewNext = { browse.neighbour(currentDocId, 1)?.let(onNavigateToDoc) ?: onBack() },
-            hasNext = browse.neighbour(currentDocId, 1) != null,
-            goPrevDoc = browse.neighbour(currentDocId, -1)?.let { { onNavigateToDoc(it) } },
-            goNextDoc = browse.neighbour(currentDocId, 1)?.let { { onNavigateToDoc(it) } },
-            peekSheet = null,
-            swipePreviewPages = true,
             modifier = modifier,
         )
         return
@@ -108,7 +106,7 @@ fun DocDetailScreen(
     DocumentPager(
         order = order,
         modifier = modifier,
-        onShown = {
+        onShowDocument = {
             shownDocId = it
             documents.of(it)
             documents.keepOnly(it)
@@ -116,21 +114,26 @@ fun DocDetailScreen(
     ) { _, pageDocId, isCurrent, onPrevious, onNext, whenStillSelected ->
         val pageStore = rememberPageStore(documentStores, pageDocId)
         DocPage(
-            docId = pageDocId,
+            state =
+                DocPageState(
+                    docId = pageDocId,
+                    viewModels = pageStore,
+                    browse = browse,
+                    peekSheet = rememberSaveable(pageDocId, saver = PeekSheetState.Saver) { PeekSheetState() },
+                    // The document pager owns horizontal swipes; the preview's page controls still turn pages.
+                    swipePreviewPages = order.ids.size <= 1,
+                    publishWindowTitle = isCurrent,
+                ),
+            actions =
+                DocPageActions(
+                    onBack = onBack,
+                    onReviewNext = { whenStillSelected { onNext?.invoke() ?: onBack() } },
+                    goPrevDoc = onPrevious,
+                    goNextDoc = onNext,
+                ),
             session = session,
             settings = settings,
-            viewModels = pageStore,
-            browse = browse,
-            onBack = onBack,
-            onReviewNext = { whenStillSelected { onNext?.invoke() ?: onBack() } },
-            hasNext = onNext != null,
-            goPrevDoc = onPrevious,
-            goNextDoc = onNext,
-            peekSheet = rememberSaveable(pageDocId, saver = PeekSheetState.Saver) { PeekSheetState() },
-            // The document pager owns horizontal swipes; the preview's page controls still turn pages.
-            swipePreviewPages = order.ids.size <= 1,
             modifier = Modifier.fillMaxSize(),
-            publishWindowTitle = isCurrent,
         )
     }
 }
@@ -149,27 +152,41 @@ internal fun rememberPageStore(
     return owner
 }
 
-/**
- * One document in the detail route. [peekSheet] switches the compact layout to the draggable
- * metadata sheet; without it (wide, and the library's side panel) the tabbed panel is unchanged.
- */
+private data class DocPageState(
+    val docId: String,
+    val viewModels: ViewModelStoreOwner,
+    val browse: BrowseContext,
+    val peekSheet: PeekSheetState? = null,
+    val swipePreviewPages: Boolean = true,
+    val publishWindowTitle: Boolean = true,
+)
+
+private data class DocPageActions(
+    val onBack: () -> Unit,
+    val onReviewNext: () -> Unit,
+    val goPrevDoc: (() -> Unit)?,
+    val goNextDoc: (() -> Unit)?,
+)
+
+/** One document in the detail route, with a peek sheet on compact widths. */
 @Composable
 private fun DocPage(
-    docId: String,
+    state: DocPageState,
+    actions: DocPageActions,
     session: LibrarySession,
     settings: SettingsRepository,
-    viewModels: ViewModelStoreOwner,
-    browse: BrowseContext,
-    onBack: () -> Unit,
-    onReviewNext: () -> Unit,
-    hasNext: Boolean,
-    goPrevDoc: (() -> Unit)?,
-    goNextDoc: (() -> Unit)?,
-    peekSheet: PeekSheetState?,
-    swipePreviewPages: Boolean,
     modifier: Modifier = Modifier,
-    publishWindowTitle: Boolean = true,
 ) {
+    val docId = state.docId
+    val viewModels = state.viewModels
+    val browse = state.browse
+    val peekSheet = state.peekSheet
+    val swipePreviewPages = state.swipePreviewPages
+    val publishWindowTitle = state.publishWindowTitle
+    val onBack = actions.onBack
+    val onReviewNext = actions.onReviewNext
+    val goPrevDoc = actions.goPrevDoc
+    val goNextDoc = actions.goNextDoc
     val snackbar = remember(docId) { SnackbarHostState() }
     // The viewer takes focus once the document is in, so its keyboard shortcuts work on desktop.
     val viewerFocus = remember(docId) { FocusRequester() }
@@ -186,13 +203,13 @@ private fun DocPage(
         snackbar = snackbar,
         onClose = onBack,
         onReviewNext = onReviewNext,
-        hasNext = hasNext,
+        hasNext = goNextDoc != null,
         modifier = modifier,
         viewerModifier = Modifier.focusRequester(viewerFocus).focusable(),
         searchQuery = browse.searchQuery,
         peekSheet = peekSheet,
         swipePreviewPages = swipePreviewPages,
-    ) { loadState, actions, editor ->
+    ) { loadState, topBarActions, editor ->
         // Loading and missing are distinct: a null item before the first observeDoc emission is
         // still loading, and must not flash the "unavailable" surface. Only a confirmed absence does.
         when (loadState) {
@@ -220,7 +237,7 @@ private fun DocPage(
                 LoadedDocScreen(
                     title = title,
                     snackbar = snackbar,
-                    topBarActions = actions,
+                    topBarActions = topBarActions,
                     editor = editor,
                     browsePosition = browsePosition,
                     goPrevDoc = goPrevDoc,

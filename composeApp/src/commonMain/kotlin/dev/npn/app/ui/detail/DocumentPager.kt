@@ -13,7 +13,7 @@ import kotlinx.coroutines.launch
 
 /**
  * The detail's documents as a horizontal pager on compact widths: swipe, or the caller's own
- * previous/next actions, move through the library's current order. [onShown] reports each page the
+ * previous/next actions, move through the library's current order. [onShowDocument] reports each page the
  * pager settles on, so the caller can let go of the other documents' viewmodels and remember the
  * one on screen across a width change; the starting page counts as shown.
  *
@@ -24,7 +24,7 @@ import kotlinx.coroutines.launch
 internal fun DocumentPager(
     order: DetailBrowseOrder,
     modifier: Modifier = Modifier,
-    onShown: (String) -> Unit = {},
+    onShowDocument: (String) -> Unit = {},
     page: @Composable (
         index: Int,
         docId: String,
@@ -36,10 +36,10 @@ internal fun DocumentPager(
 ) {
     val pagerState = rememberPagerState(initialPage = order.initialPage) { order.ids.size }
     val scope = rememberCoroutineScope()
-    val currentOnShown by rememberUpdatedState(onShown)
+    val currentOnShowDocument by rememberUpdatedState(onShowDocument)
     LaunchedEffect(pagerState, order) {
         snapshotFlow { pagerState.settledPage }.collect { pageIndex ->
-            order.idAt(pageIndex)?.let(currentOnShown)
+            order.idAt(pageIndex)?.let(currentOnShowDocument)
         }
     }
     HorizontalPager(

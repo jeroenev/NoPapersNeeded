@@ -116,7 +116,7 @@ class DocumentPagerTest {
                 themedScene(WIDTH, HEIGHT) {
                     DocumentPager(
                         order = DetailBrowseOrder(listOf("a", "b", "c"), "a"),
-                        onShown = { shown += it },
+                        onShowDocument = { shown += it },
                         modifier = Modifier.fillMaxSize(),
                     ) { _, docId, _, _, onNext, _ ->
                         lastNext = onNext
