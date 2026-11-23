@@ -88,9 +88,6 @@ data class LibraryVerificationProblem(
 enum class VerificationNoteKind {
     /** A document a relink superseded still has its old file; the next rescan removes it. */
     SUPERSEDED_DOCUMENT,
-
-    /** A journal object store of a version this build does not read (another build's format). */
-    UNSUPPORTED_OBJECT_STORE,
 }
 
 data class LibraryVerificationNote(

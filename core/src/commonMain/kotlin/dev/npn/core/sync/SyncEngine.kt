@@ -84,6 +84,7 @@ class SyncEngine(
         val resolver = DocumentResolver(fs, staging = staging, store = store, manifest = manifest)
         // The last plan made, for the report's pending counts; null when the pass never planned.
         var planned: SyncPlan? = null
+        var planCheckedAt: Long? = null
         try {
             val rows = db.documentDao().getAllRows()
             resolver.resolve(remote, rows, startedAt, report) { done, total ->
@@ -93,6 +94,7 @@ class SyncEngine(
             val remoteDocIds = manifest.entries.mapNotNull { it.docId }
             val plan = SyncPlanner(reader.read(startedAt, remoteDocIds), remote, manifest.entries).plan()
             planned = plan
+            planCheckedAt = clock.nowMillis()
 
             var changed = 0
             if (documentsSafe) {
@@ -120,7 +122,7 @@ class SyncEngine(
         } finally {
             withContext(NonCancellable) { resolver.cleanup() }
         }
-        return report.build(clock.nowMillis(), planned)
+        return report.build(clock.nowMillis(), planned, planCheckedAt)
     }
 
     /**

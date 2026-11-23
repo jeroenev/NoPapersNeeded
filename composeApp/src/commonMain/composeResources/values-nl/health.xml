@@ -57,7 +57,6 @@
         <item quantity="one">%1$d vervangen document heeft nog zijn oude bestand; een nieuwe scan verwijdert het.</item>
         <item quantity="other">%1$d vervangen documenten hebben nog hun oude bestanden; een nieuwe scan verwijdert ze.</item>
     </plurals>
-    <string name="common_settings_verify_note_unsupported">%1$s (journaalobjectopslag van een andere versie; deze app leest die niet)</string>
     <string name="common_settings_verify_copy">Rapport kopiëren</string>
     <string name="common_settings_verify_close">Sluiten</string>
     <string name="common_settings_verify_copied">Rapport gekopieerd.</string>

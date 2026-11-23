@@ -7,6 +7,13 @@ import dev.npn.core.app.LibraryVerificationProgress
 import dev.npn.core.app.LibraryVerificationReport
 import dev.npn.core.app.VerificationPhase
 import dev.npn.core.app.VerificationProblemKind
+import dev.npn.core.sync.ConflictKind
+import dev.npn.core.sync.SyncConflict
+import dev.npn.core.sync.SyncHealth
+import dev.npn.core.sync.SyncReport
+import dev.npn.core.sync.SyncRunSummary
+import dev.npn.core.testing.doc
+import dev.npn.core.testing.listItem
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
@@ -45,6 +52,29 @@ class SettingsViewModelVerificationTest : MainDispatcherTest() {
                     ),
                 ),
         )
+
+    @Test
+    fun conflictDocumentsFollowEditsAndRemoval() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val conflict = SyncConflict("a", "a.pdf", ConflictKind.TARGET_OCCUPIED)
+            val report = SyncReport(startedAt = 1, durationMillis = 1, conflicts = listOf(conflict))
+            session.sync.healthFlow.value = SyncHealth(lastPass = SyncRunSummary(1, 2, report))
+            session.documents.documents.value = listOf(listItem(doc("a", title = "Before")))
+            val model = vm(session)
+            advanceUntilIdle()
+            model.paneState.value.cloud.conflictDocuments["a"]
+                ?.title shouldBe "Before"
+
+            session.documents.documents.value = listOf(listItem(doc("a", title = "After")))
+            advanceUntilIdle()
+            model.paneState.value.cloud.conflictDocuments["a"]
+                ?.title shouldBe "After"
+
+            session.documents.documents.value = emptyList()
+            advanceUntilIdle()
+            model.paneState.value.cloud.conflictDocuments shouldBe emptyMap()
+        }
 
     @Test
     fun aCheckReportsProgressAndThenItsResult() =

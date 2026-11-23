@@ -73,7 +73,8 @@ internal class LibraryVerifier(
         onProgress(LibraryVerificationProgress(VerificationPhase.OBJECTS, done, objectTotal))
         for (meta in journalFiles.orEmpty()) {
             currentCoroutineContext().ensureActive()
-            if (verifyObject(meta, problems, notes)) objectsChecked++
+            verifyObject(meta, problems)
+            objectsChecked++
             done++
             onProgress(LibraryVerificationProgress(VerificationPhase.OBJECTS, done, objectTotal))
         }
@@ -207,12 +208,11 @@ internal class LibraryVerifier(
         }
     }
 
-    /** Check one object store file; true when it was a canonical object whose bytes were read. */
+    /** Check one listed journal file. */
     private suspend fun verifyObject(
         meta: FileMeta,
         problems: MutableList<LibraryVerificationProblem>,
-        notes: MutableList<LibraryVerificationNote>,
-    ): Boolean {
+    ) {
         val path = JournalPaths.classify(meta.relPath)
         val expected =
             when (path) {
@@ -227,25 +227,19 @@ internal class LibraryVerifier(
                 // Neither the app's own staging file (the temp sweep owns those) nor another
                 // tool's in-flight transfer is damage.
                 JournalPath.SyncTemp, JournalPath.Staging -> {
-                    return false
+                    return
                 }
 
                 is JournalPath.UnsupportedObjectStore -> {
-                    notes += LibraryVerificationNote(VerificationNoteKind.UNSUPPORTED_OBJECT_STORE, meta.relPath)
-                    return false
+                    problems += orphan(meta.relPath)
+                    return
                 }
 
                 JournalPath.Unknown -> {
                     problems += orphan(meta.relPath)
-                    return false
+                    return
                 }
             }
-        val snapshot = path is JournalPath.SnapshotV2
-        if (meta.relPath != JournalPaths.objectPath(expected, snapshot)) {
-            // A sync tool's conflict copy carries a hash in its name but is not the object itself.
-            problems += orphan(meta.relPath)
-            return false
-        }
         val actual =
             runCatchingCancellable { fs.sha256(meta.relPath) }
                 .onFailure {
@@ -255,7 +249,7 @@ internal class LibraryVerifier(
                             relPath = meta.relPath,
                             expectedHash = expected,
                         )
-                }.getOrNull() ?: return false
+                }.getOrNull() ?: return
         if (actual != expected) {
             problems +=
                 LibraryVerificationProblem(
@@ -265,7 +259,6 @@ internal class LibraryVerifier(
                     actualHash = actual,
                 )
         }
-        return true
     }
 
     /**

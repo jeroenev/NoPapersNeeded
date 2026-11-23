@@ -57,7 +57,6 @@
         <item quantity="one">%1$d superseded document still has its old file; a rescan removes it.</item>
         <item quantity="other">%1$d superseded documents still have their old files; a rescan removes them.</item>
     </plurals>
-    <string name="common_settings_verify_note_unsupported">%1$s (journal object store from another version; this app does not read it)</string>
     <string name="common_settings_verify_copy">Copy report</string>
     <string name="common_settings_verify_close">Close</string>
     <string name="common_settings_verify_copied">Report copied.</string>

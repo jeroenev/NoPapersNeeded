@@ -57,7 +57,6 @@
         <item quantity="one">%1$d documento substituído ainda tem seu arquivo antigo; uma nova verificação da pasta o remove.</item>
         <item quantity="other">%1$d documentos substituídos ainda têm seus arquivos antigos; uma nova verificação da pasta os remove.</item>
     </plurals>
-    <string name="common_settings_verify_note_unsupported">%1$s (armazenamento de objetos do diário de outra versão; este aplicativo não o lê)</string>
     <string name="common_settings_verify_copy">Copiar relatório</string>
     <string name="common_settings_verify_close">Fechar</string>
     <string name="common_settings_verify_copied">Relatório copiado.</string>

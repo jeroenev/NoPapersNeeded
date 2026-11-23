@@ -206,6 +206,7 @@ class SyncReportBuilder(
     fun build(
         nowMillis: Long,
         plan: SyncPlan? = null,
+        planCheckedAt: Long? = null,
     ): SyncReport {
         // What the plan found, less what this pass finished: the rest waits for the next one. A
         // count is never negative (a plan may be re-checked after a retry inside a transfer).
@@ -225,7 +226,7 @@ class SyncReportBuilder(
             appliedLocally = appliedLocally,
             pendingUploads = pendingUploads,
             pendingDownloads = pendingDownloads,
-            pendingCheckedAt = plan?.let { nowMillis },
+            pendingCheckedAt = plan?.let { planCheckedAt },
             conflicts = conflicts.toList(),
             errors = errors.toList(),
         )

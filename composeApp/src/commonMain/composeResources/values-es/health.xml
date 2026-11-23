@@ -57,7 +57,6 @@
         <item quantity="one">%1$d documento reemplazado aún conserva su archivo antiguo; un nuevo escaneo lo elimina.</item>
         <item quantity="other">%1$d documentos reemplazados aún conservan sus archivos antiguos; un nuevo escaneo los elimina.</item>
     </plurals>
-    <string name="common_settings_verify_note_unsupported">%1$s (almacén de objetos del diario de otra versión; esta aplicación no lo lee)</string>
     <string name="common_settings_verify_copy">Copiar informe</string>
     <string name="common_settings_verify_close">Cerrar</string>
     <string name="common_settings_verify_copied">Informe copiado.</string>

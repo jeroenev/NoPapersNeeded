@@ -57,7 +57,6 @@
         <item quantity="one">%1$d document remplacé conserve encore son ancien fichier ; un nouveau scan l'enlève.</item>
         <item quantity="other">%1$d documents remplacés conservent encore leurs anciens fichiers ; un nouveau scan les enlève.</item>
     </plurals>
-    <string name="common_settings_verify_note_unsupported">%1$s (stockage d'objets du journal d'une autre version ; cette application ne le lit pas)</string>
     <string name="common_settings_verify_copy">Copier le rapport</string>
     <string name="common_settings_verify_close">Fermer</string>
     <string name="common_settings_verify_copied">Rapport copié.</string>

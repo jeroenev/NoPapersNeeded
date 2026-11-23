@@ -39,11 +39,11 @@ class SyncPendingCountsTest {
         builder.downloadedDocuments = 1
         builder.downloadedTrash = 1
 
-        val report = builder.build(nowMillis = 2_000, plan = this.plan)
+        val report = builder.build(nowMillis = 2_000, plan = this.plan, planCheckedAt = 1_500)
 
         report.pendingUploads shouldBe 0
         report.pendingDownloads shouldBe 0
-        report.pendingCheckedAt shouldBe 2_000
+        report.pendingCheckedAt shouldBe 1_500
     }
 
     @Test
@@ -59,26 +59,12 @@ class SyncPendingCountsTest {
 
     @Test
     fun trashUploadsDoNotMakeABlockedDocumentsPendingCountDisappear() {
-        // Four trash markers went up, the one document did not: it is still owed.
+        // Metadata and a trash marker succeeded, but the document upload failed.
         val builder = SyncReportBuilder(startedAt = 1_000)
-        builder.uploadedObjects = 4
-        val trashHeavy =
-            SyncPlan(
-                local = emptyList(),
-                remote = listOf(SyncAction.UploadDocument("b", "b.pdf", "b.pdf")),
-                pushMetadata = emptyList(),
-                conflicts = emptyList(),
-            )
+        builder.uploadedObjects = 2
+        builder.error("b.pdf", IllegalStateException("remote closed"))
 
-        builder.build(nowMillis = 2_000, plan = trashHeavy).pendingUploads shouldBe 0
-        // The same uploads against a plan that also carried the four trash markers.
-        val withTrash =
-            trashHeavy.copy(
-                remote =
-                    trashHeavy.remote +
-                        List(4) { SyncAction.UploadTrash("trash/$it.pdf", docId = null) },
-            )
-        builder.build(nowMillis = 2_000, plan = withTrash).pendingUploads shouldBe 1
+        builder.build(nowMillis = 2_000, plan = plan).pendingUploads shouldBe 1
     }
 
     @Test

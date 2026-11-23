@@ -57,7 +57,6 @@
         <item quantity="one">%1$d ersetztes Dokument hat noch seine alte Datei; ein erneuter Scan entfernt sie.</item>
         <item quantity="other">%1$d ersetzte Dokumente haben noch ihre alten Dateien; ein erneuter Scan entfernt sie.</item>
     </plurals>
-    <string name="common_settings_verify_note_unsupported">%1$s (Journalobjektspeicher einer anderen Version; diese App liest ihn nicht)</string>
     <string name="common_settings_verify_copy">Bericht kopieren</string>
     <string name="common_settings_verify_close">Schließen</string>
     <string name="common_settings_verify_copied">Bericht kopiert.</string>

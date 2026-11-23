@@ -162,6 +162,21 @@ class LibraryVerifierTest {
         }
 
     @Test
+    fun conflictCopiesAreHashChecked() =
+        runTest {
+            val f = fixture()
+            val bytes = "{}".encodeToByteArray()
+            val canonical = objectPath(bytes)
+            val copy = canonical.removeSuffix(".jsonl") + " (conflicted copy laptop).jsonl"
+            f.fs.writeBytesOnce(copy, "bad".encodeToByteArray())
+
+            val report = f.verifier.run(rows = emptyList())
+
+            report.objectProblems.single().kind shouldBe VerificationProblemKind.OBJECT_HASH_MISMATCH
+            report.objectsChecked shouldBe 1
+        }
+
+    @Test
     fun anObjectTheIndexAppliedButTheStoreLostIsMissing() =
         runTest {
             val f = fixture()
@@ -241,6 +256,7 @@ class LibraryVerifierTest {
             val report = f.verifier.run(rows = emptyList())
 
             report.objectProblems.single().kind shouldBe VerificationProblemKind.OBJECT_UNREADABLE
+            report.objectsChecked shouldBe 1
         }
 
     @Test
@@ -257,7 +273,7 @@ class LibraryVerifierTest {
         }
 
     @Test
-    fun anObjectStoreOfAnotherVersionIsANotedLeftover() =
+    fun anObjectStoreOfAnotherVersionIsOrphaned() =
         runTest {
             val f = fixture()
             val hash = "e".repeat(64)
@@ -265,8 +281,8 @@ class LibraryVerifierTest {
 
             val report = f.verifier.run(rows = emptyList())
 
-            report.problems.shouldBeEmpty()
-            report.notes.single().kind shouldBe VerificationNoteKind.UNSUPPORTED_OBJECT_STORE
+            report.objectProblems.single().kind shouldBe VerificationProblemKind.OBJECT_ORPHANED
+            report.objectsChecked shouldBe 1
         }
 
     @Test

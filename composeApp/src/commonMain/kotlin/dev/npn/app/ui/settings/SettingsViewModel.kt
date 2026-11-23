@@ -14,7 +14,9 @@ import dev.npn.core.ai.AiModelCatalog
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiSelfTest
 import dev.npn.core.ai.AiSelfTestReport
+import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.LibraryVerificationReport
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
@@ -35,6 +37,7 @@ import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.watch.liesInLibrary
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,6 +45,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
@@ -237,16 +242,19 @@ class SettingsViewModel(
      * The documents the last pass's conflicts name, when the library still shows them: a conflict is
      * easier to act on with a title than with the remote path it kept.
      */
+    @OptIn(ExperimentalCoroutinesApi::class)
     private val conflictDocuments: Flow<Map<String, ConflictDocument>> =
         sync.health
             .map { health -> health.conflicts.mapNotNull { it.docId }.distinct() }
             .distinctUntilChanged()
-            .map { ids ->
+            .flatMapLatest { ids ->
                 if (ids.isEmpty()) {
-                    emptyMap()
+                    flowOf(emptyMap())
                 } else {
-                    documents.liveDocuments(ids).associate { item ->
-                        item.doc.docId to ConflictDocument(item.doc.displayTitle)
+                    documents.observeDocuments(LibraryFilter(docIds = ids), LibrarySort()).map { items ->
+                        items.associate { item ->
+                            item.doc.docId to ConflictDocument(item.doc.displayTitle)
+                        }
                     }
                 }
             }

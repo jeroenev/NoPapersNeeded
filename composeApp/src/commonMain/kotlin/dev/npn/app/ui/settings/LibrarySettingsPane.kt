@@ -78,7 +78,6 @@ import no_papers_needed.composeapp.generated.resources.common_settings_verify_mi
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_more
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_not_a_file
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_note_superseded
-import no_papers_needed.composeapp.generated.resources.common_settings_verify_note_unsupported
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_notes
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_orphaned
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_problem_line
@@ -345,9 +344,6 @@ private fun VerifyLibraryReportDialog(
                         ),
                     )
                 }
-                for (note in report.notes.filter { it.kind != VerificationNoteKind.SUPERSEDED_DOCUMENT }) {
-                    Text(text = verificationNoteLine(note), style = MaterialTheme.typography.bodySmall)
-                }
                 if (copied) {
                     HelpText(stringResource(Res.string.common_settings_verify_copied))
                 }
@@ -433,10 +429,6 @@ private fun verificationNoteLine(note: LibraryVerificationNote): String =
     when (note.kind) {
         VerificationNoteKind.SUPERSEDED_DOCUMENT -> {
             stringResource(Res.string.common_settings_verify_note_superseded, note.relPath)
-        }
-
-        VerificationNoteKind.UNSUPPORTED_OBJECT_STORE -> {
-            stringResource(Res.string.common_settings_verify_note_unsupported, note.relPath)
         }
     }
 
