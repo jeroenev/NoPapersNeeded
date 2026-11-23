@@ -105,7 +105,7 @@ internal fun PeekDocumentSheet(
                 draggingFraction = (from - delta / travelPx).coerceIn(0f, 1f)
             }
 
-        preview(Modifier.fillMaxSize())
+        preview(Modifier.fillMaxSize().padding(bottom = collapsedHeight))
         Surface(
             modifier =
                 Modifier
@@ -173,6 +173,7 @@ internal fun PeekDocumentSheet(
                         )
                         if (item.tags.isNotEmpty()) {
                             FlowRow(
+                                maxLines = 1,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                                 verticalArrangement = Arrangement.spacedBy(4.dp),
                             ) {

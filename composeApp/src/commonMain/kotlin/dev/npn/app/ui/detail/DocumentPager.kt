@@ -31,6 +31,7 @@ internal fun DocumentPager(
         isCurrent: Boolean,
         onPrevious: (() -> Unit)?,
         onNext: (() -> Unit)?,
+        whenStillSelected: (() -> Unit) -> Unit,
     ) -> Unit,
 ) {
     val pagerState = rememberPagerState(initialPage = order.initialPage) { order.ids.size }
@@ -59,6 +60,11 @@ internal fun DocumentPager(
                 { scope.launch { pagerState.animateScrollToPage(pageIndex + 1) } }
             } else {
                 null
+            },
+            { action ->
+                if (!pagerState.isScrollInProgress && order.idAt(pagerState.settledPage) == order.ids[pageIndex]) {
+                    action()
+                }
             },
         )
     }

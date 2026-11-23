@@ -4,6 +4,9 @@ package dev.npn.app.ui.detail
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -13,8 +16,12 @@ import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.scene.ComposeScenePointer
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.text.AnnotatedString
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.click
 import dev.npn.app.ui.closing
+import dev.npn.app.ui.common.KeyedViewModelStores
+import dev.npn.app.ui.common.ViewModelStoreLease
 import dev.npn.app.ui.editableText
 import dev.npn.app.ui.hostedScene
 import dev.npn.app.ui.nodes
@@ -35,6 +42,71 @@ import kotlin.test.assertTrue
 
 /** The compact detail's document pager: settled selection and drafts committed when a page leaves. */
 class DocumentPagerTest {
+    private class Probe : ViewModel() {
+        var cleared = false
+
+        override fun onCleared() {
+            cleared = true
+        }
+    }
+
+    @Test
+    fun composedPageKeepsItsStoreUntilItLeavesEvenWhenRouteMovesOn() =
+        onUiThread {
+            val stores = KeyedViewModelStores<String>()
+            val route = ViewModelStoreLease(stores)
+            val panel = ViewModelStoreLease(stores)
+            route.of("a")
+            panel.of("a")
+            var visible by mutableStateOf(true)
+            lateinit var probe: Probe
+            val scene =
+                themedScene(WIDTH, HEIGHT) {
+                    if (visible) {
+                        val owner = rememberPageStore(stores, "a")
+                        probe = viewModel(viewModelStoreOwner = owner) { Probe() }
+                    }
+                }
+            scene.closing {
+                render()
+                route.of("b")
+                route.keepOnly("b")
+                panel.keepOnly(null)
+                probe.cleared shouldBe false
+                visible = false
+                render()
+                probe.cleared shouldBe true
+                route.keepOnly(null)
+            }
+        }
+
+    @Test
+    fun delayedReviewCompletionDoesNotNavigateFromAnotherPage() =
+        onUiThread {
+            val completions = mutableMapOf<String, () -> Unit>()
+            var navigations = 0
+            val scene =
+                themedScene(WIDTH, HEIGHT) {
+                    DocumentPager(
+                        order = DetailBrowseOrder(listOf("a", "b"), "a"),
+                        modifier = Modifier.fillMaxSize(),
+                    ) { _, id, _, _, _, guard ->
+                        completions[id] = { guard { navigations++ } }
+                        Text(id)
+                    }
+                }
+            scene.closing {
+                settle()
+                val completion = completions.getValue("a")
+                drag(by = Offset(-320f, 0f))
+                settle()
+                completion()
+                navigations shouldBe 0
+                completions.getValue("b")()
+                navigations shouldBe 1
+            }
+        }
+
     @Test
     fun swipingReportsTheSettledDocumentAndStopsAtTheEnds() =
         onUiThread {
@@ -46,7 +118,7 @@ class DocumentPagerTest {
                         order = DetailBrowseOrder(listOf("a", "b", "c"), "a"),
                         onShown = { shown += it },
                         modifier = Modifier.fillMaxSize(),
-                    ) { _, docId, _, _, onNext ->
+                    ) { _, docId, _, _, onNext, _ ->
                         lastNext = onNext
                         Text(docId)
                     }
@@ -82,7 +154,7 @@ class DocumentPagerTest {
             val store = DocumentDrafts(writer, CoroutineScope(Dispatchers.Unconfined))
             val scene =
                 hostedScene(WIDTH, HEIGHT, LocalDocumentDrafts provides store) {
-                    DocumentPager(order = DetailBrowseOrder(listOf("a", "b"), "a")) { _, docId, _, _, _ ->
+                    DocumentPager(order = DetailBrowseOrder(listOf("a", "b"), "a")) { _, docId, _, _, _, _ ->
                         DocumentEditor(
                             state = stateFor(docId),
                             writes = NoWrites,

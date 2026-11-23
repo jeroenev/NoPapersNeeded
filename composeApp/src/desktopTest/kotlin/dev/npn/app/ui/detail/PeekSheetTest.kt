@@ -19,9 +19,41 @@ import dev.npn.core.testing.doc
 import dev.npn.core.testing.listItem
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
+import kotlin.test.assertTrue
 
 /** The compact detail's peek sheet: collapsed summary, tap to expand, and Back collapsing first. */
 class PeekSheetTest {
+    @Test
+    fun previewControlsRemainAboveSheetAndLongTagsLeaveRoomForEditor() =
+        onUiThread {
+            val state = PeekSheetState()
+            val scene =
+                ImageComposeScene(WIDTH, HEIGHT) {
+                    PeekDocumentSheet(
+                        item = listItem(doc("invoice", title = "Invoice"), (1..30).map { "Long tag number $it" }),
+                        tagColors = emptyMap(),
+                        state = state,
+                        preview = { modifier ->
+                            androidx.compose.foundation.layout.Box(modifier) {
+                                Text("Preview controls", Modifier.align(androidx.compose.ui.Alignment.BottomCenter))
+                            }
+                        },
+                        metadata = { Text("Metadata editor", modifier = it) },
+                        statusBar = {},
+                    )
+                }
+            scene.closing {
+                render()
+                val controls = nodes().first { "Preview controls" in it.texts() }
+                val title = nodes().first { "Invoice" in it.texts() }
+                assertTrue(controls.boundsInRoot.bottom <= title.boundsInRoot.top)
+                state.expand()
+                repeat(30) { render((it + 1) * 16_000_000L) }
+                val editor = nodes().first { "Metadata editor" in it.texts() }
+                assertTrue(editor.boundsInRoot.height > 100f)
+            }
+        }
+
     @Test
     fun tappingTheSummaryExpandsTheMetadataAndBackCollapsesItBeforeLeaving() =
         onUiThread {

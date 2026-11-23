@@ -12,6 +12,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -109,17 +110,19 @@ fun DocDetailScreen(
         modifier = modifier,
         onShown = {
             shownDocId = it
+            documents.of(it)
             documents.keepOnly(it)
         },
-    ) { _, pageDocId, isCurrent, onPrevious, onNext ->
+    ) { _, pageDocId, isCurrent, onPrevious, onNext, whenStillSelected ->
+        val pageStore = rememberPageStore(documentStores, pageDocId)
         DocPage(
             docId = pageDocId,
             session = session,
             settings = settings,
-            viewModels = documents.of(pageDocId),
+            viewModels = pageStore,
             browse = browse,
             onBack = onBack,
-            onReviewNext = { onNext?.invoke() ?: onBack() },
+            onReviewNext = { whenStillSelected { onNext?.invoke() ?: onBack() } },
             hasNext = onNext != null,
             goPrevDoc = onPrevious,
             goNextDoc = onNext,
@@ -130,6 +133,20 @@ fun DocDetailScreen(
             publishWindowTitle = isCurrent,
         )
     }
+}
+
+/** A composed pager page keeps its own hold until it leaves, independently of the route. */
+@Composable
+internal fun rememberPageStore(
+    stores: KeyedViewModelStores<String>,
+    docId: String,
+): ViewModelStoreOwner {
+    val holder = remember(docId, stores) { Any() }
+    val owner = remember(docId, stores) { stores.hold(docId, holder) }
+    DisposableEffect(docId, stores) {
+        onDispose { stores.release(docId, holder) }
+    }
+    return owner
 }
 
 /**
