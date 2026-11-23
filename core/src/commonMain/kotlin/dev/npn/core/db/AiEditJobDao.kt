@@ -143,4 +143,7 @@ interface AiEditJobDao {
 
     @Query("DELETE FROM ai_edit_jobs WHERE jobId = :jobId")
     suspend fun deleteJobRow(jobId: String)
+
+    @Query("SELECT COUNT(*) FROM ai_edit_jobs")
+    suspend fun countJobs(): Int
 }

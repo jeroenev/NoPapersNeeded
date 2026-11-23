@@ -4,12 +4,15 @@ import androidx.lifecycle.ViewModelStore
 import dev.npn.app.platform.FolderPick
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.settings.FieldDialog
+import dev.npn.app.ui.settings.ProblemReportState
 import dev.npn.app.ui.settings.ReviewMigration
 import dev.npn.app.ui.settings.SettingsCategoryId
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiReasoningLevel
+import dev.npn.core.app.LibraryDiagnostics
 import dev.npn.core.app.StoragePathSetting
 import dev.npn.core.app.ViewType
+import dev.npn.core.diagnostics.Diagnostics
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
@@ -17,6 +20,7 @@ import dev.npn.core.model.ReviewMode
 import dev.npn.core.rules.AutoMatchRule
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -74,6 +78,29 @@ class SettingsViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             model.paneState.value.rules shouldBe listOf(rule)
+        }
+
+    @Test
+    fun reportingAProblemBuildsAReadyBundleAndClearsItOnceHandedOff() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            session.maintenance.diagnosticsValue = LibraryDiagnostics(liveDocuments = 3, tags = 2, journalObjects = 9)
+            val model = settingsVm(session = session, compute = dispatcher)
+            collecting(model.paneState)
+            advanceUntilIdle()
+
+            model.reportProblem()
+            advanceUntilIdle()
+
+            val ready = model.paneState.value.problemReport as ProblemReportState.Ready
+            ready.fileName shouldBe "npn-diagnostics-${BuildInfo.VERSION}.txt"
+            ready.text shouldContain "Documents: 3"
+            ready.text shouldContain "Journal objects: 9"
+            ready.issueUrl shouldContain Diagnostics.ISSUE_BASE
+
+            model.problemReportHandled()
+            advanceUntilIdle()
+            model.paneState.value.problemReport shouldBe ProblemReportState.Idle
         }
 
     @Test

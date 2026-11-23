@@ -5,6 +5,7 @@ import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.AiOcrOutcome
 import dev.npn.core.app.ImportOutcome
 import dev.npn.core.app.IngestFacade
+import dev.npn.core.app.LibraryDiagnostics
 import dev.npn.core.app.MaintenanceFacade
 import dev.npn.core.app.OcrFacade
 import dev.npn.core.app.OcrStatus
@@ -218,6 +219,13 @@ class FakeMaintenanceFacade : MaintenanceFacade {
     var rebuilds = 0
     var rebuildOutcome: RebuildOutcome = RebuildOutcome.Rebuilt
     var failRebuild: (() -> Nothing)? = null
+    var diagnosticsValue = LibraryDiagnostics()
+    var failDiagnostics: (() -> Nothing)? = null
+
+    override suspend fun diagnostics(): LibraryDiagnostics {
+        failDiagnostics?.invoke()
+        return diagnosticsValue
+    }
 
     override suspend fun rebuildIndex(): RebuildOutcome {
         failRebuild?.invoke()

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="common_settings_whats_new">Wat is er nieuw</string>
+    <string name="common_settings_whats_new_load_failed">De releaseopmerkingen konden niet worden gelezen.</string>
+    <string name="common_settings_report_problem">Een probleem melden</string>
+    <string name="common_settings_report_problem_help">Verzamelt de appversie, het platform, aantallen en het recente logboek in een bestand dat je aan een GitHub-issue kunt toevoegen. Het bevat nooit documenten, documentnamen, bibliotheekpaden, e-mailadressen of API-sleutels. Er wordt niets automatisch geüpload.</string>
+    <string name="common_settings_report_problem_building">Diagnose verzamelen…</string>
+    <string name="common_settings_report_problem_failed">Diagnose verzamelen mislukte: %1$s</string>
+    <string name="common_settings_diagnostics_saved">Diagnose opgeslagen</string>
+    <string name="common_settings_diagnostics_saved_help">Voeg dit bestand toe aan de GitHub-issue. Het bevat geen documentinhoud, namen, paden, adressen of sleutels.</string>
+    <string name="common_settings_diagnostics_shared_help">Stuur dit bestand via het deelmenu naar de GitHub-issue. Het bevat geen documentinhoud, namen, paden, adressen of sleutels.</string>
+    <string name="common_settings_copy_path">Pad kopiëren</string>
+    <string name="common_settings_path_copied">Gekopieerd</string>
+    <string name="common_settings_open_issue">Issue openen</string>
+</resources>

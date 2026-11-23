@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="common_settings_whats_new">Novedades</string>
+    <string name="common_settings_whats_new_load_failed">No se pudieron leer las notas de la versión.</string>
+    <string name="common_settings_report_problem">Informar de un problema</string>
+    <string name="common_settings_report_problem_help">Reúne la versión de la app, la plataforma, los recuentos y el registro reciente en un archivo que puedes adjuntar a un issue de GitHub. Nunca incluye documentos, nombres de documentos, rutas de la biblioteca, direcciones de correo ni claves de API. Nada se sube automáticamente.</string>
+    <string name="common_settings_report_problem_building">Recopilando diagnóstico…</string>
+    <string name="common_settings_report_problem_failed">No se pudo recopilar el diagnóstico: %1$s</string>
+    <string name="common_settings_diagnostics_saved">Diagnóstico guardado</string>
+    <string name="common_settings_diagnostics_saved_help">Adjunta este archivo al issue de GitHub. No contiene contenido de documentos, nombres, rutas, direcciones ni claves.</string>
+    <string name="common_settings_diagnostics_shared_help">Envía este archivo al issue de GitHub desde el menú de compartir. No contiene contenido de documentos, nombres, rutas, direcciones ni claves.</string>
+    <string name="common_settings_copy_path">Copiar ruta</string>
+    <string name="common_settings_path_copied">Copiada</string>
+    <string name="common_settings_open_issue">Abrir issue</string>
+</resources>

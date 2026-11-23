@@ -42,7 +42,29 @@ interface MaintenanceFacade {
         docId: String,
         segments: List<IntRange>,
     ): SplitOutcome
+
+    /**
+     * Counts for a diagnostics bundle: the index's rows and journal objects, nothing that names a
+     * document. On demand only, never on a hot path.
+     */
+    suspend fun diagnostics(): LibraryDiagnostics
 }
+
+/**
+ * What a diagnostics bundle says about the open library, as counts. No titles, paths, hashes or
+ * content: those must never reach a public issue.
+ */
+data class LibraryDiagnostics(
+    val liveDocuments: Int = 0,
+    val trashedDocuments: Int = 0,
+    val missingDocuments: Int = 0,
+    val tags: Int = 0,
+    val fields: Int = 0,
+    val journalObjects: Int = 0,
+    val ocrQueue: Int = 0,
+    val enrichmentQueue: Int = 0,
+    val editRuns: Int = 0,
+)
 
 sealed interface RebuildOutcome {
     /** The index is the fold of the folder's journal again, and writes are taken. */

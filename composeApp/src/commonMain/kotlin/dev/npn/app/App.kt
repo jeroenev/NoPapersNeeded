@@ -67,6 +67,8 @@ import dev.npn.app.ui.onboarding.RestoreFailedScreen
 import dev.npn.app.ui.onboarding.rememberFirstRunHost
 import dev.npn.app.ui.settings.SettingsCategoryId
 import dev.npn.app.ui.theme.NpnTheme
+import dev.npn.app.ui.whatsnew.WhatsNewDialog
+import dev.npn.app.ui.whatsnew.WhatsNewGateViewModel
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.fs.ExternalSource
@@ -234,8 +236,10 @@ private fun AppRoot(
     env: AppEnvironment,
     modifier: Modifier = Modifier,
     vm: AppViewModel = viewModel { AppViewModel(env) },
+    whatsNew: WhatsNewGateViewModel = viewModel { WhatsNewGateViewModel(env.settings, log = env.log) },
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val showWhatsNew by whatsNew.show.collectAsStateWithLifecycle()
     val useSaf by vm.useSafStorage.collectAsStateWithLifecycle()
     val language by vm.appLanguage.collectAsStateWithLifecycle()
     // Above the language switch, which rebuilds everything below it.
@@ -349,6 +353,10 @@ private fun AppRoot(
                         // A switch to another library that failed lands back in this one; say why.
                         current.failure?.let { OpenFailedDialog(it, onDismiss = vm::dismissFailure) }
                     }
+                }
+                // A version change shows the bundled notes once, apart from the update banner.
+                if (showWhatsNew && state is AppState.Open) {
+                    WhatsNewDialog(onDismiss = whatsNew::dismiss)
                 }
                 // Files dragged over the desktop window: the whole window is the drop target.
                 val dragging by DesktopBridge.dragging.collectAsStateWithLifecycle()

@@ -26,6 +26,8 @@ internal fun settingsVm(
     session: FakeLibrarySession = FakeLibrarySession(),
     saved: SavedStateHandle = SavedStateHandle(),
     outliving: CoroutineScope? = null,
+    compute: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.Default,
+    readLog: suspend (Long) -> String = { "" },
 ) = SettingsViewModel(
     settings,
     session,
@@ -33,6 +35,8 @@ internal fun settingsVm(
     saved = saved,
     newRemoteName = { type -> "$type-1" },
     outliving = outliving,
+    compute = compute,
+    readLog = readLog,
 )
 
 /** What a settings pane shows for [snapshot], with no AI models, self-test or fields loaded. */
@@ -76,6 +80,14 @@ internal open class NoSettingsPaneActions : SettingsPaneActions {
     override fun clearThumbnailCache() = Unit
 
     override fun probeTransport() = Unit
+
+    override fun reportProblem() = Unit
+
+    override fun problemReportHandled() = Unit
+
+    override fun problemReportFailed(failure: Throwable) = Unit
+
+    override fun markWhatsNewSeen() = Unit
 
     override fun syncNow() = Unit
 
