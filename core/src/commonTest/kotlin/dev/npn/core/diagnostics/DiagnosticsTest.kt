@@ -46,7 +46,11 @@ class DiagnosticsTest {
                 Authorization: Bearer sk-live-abcdefghijklmnop
                 Authorization: Bearer generic-token-123456
                 apiKey=sk-abcdefghijklmnop
-                JWT ${listOf("eyJhbGciOiJIUzI1NiJ9", "eyJzdWIiOiIxMjM0NTY3ODkwIn0", "dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U").joinToString(".")}
+                JWT ${listOf(
+                    "eyJhbGciOiJIUzI1NiJ9",
+                    "eyJzdWIiOiIxMjM0NTY3ODkwIn0",
+                    "dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U",
+                ).joinToString(".")}
                 The quick brown fox jumps over the lazy dog.
                 """.trimIndent(),
         )
