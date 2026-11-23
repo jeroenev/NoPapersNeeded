@@ -1,9 +1,14 @@
 package dev.npn.core.pdf
 
+import org.apache.pdfbox.cos.COSName
 import org.apache.pdfbox.pdmodel.PDDocument
+import org.apache.pdfbox.pdmodel.PDDocumentNameDictionary
+import org.apache.pdfbox.pdmodel.PDEmbeddedFilesNameTreeNode
 import org.apache.pdfbox.pdmodel.PDPage
 import org.apache.pdfbox.pdmodel.PDPageContentStream
 import org.apache.pdfbox.pdmodel.common.PDRectangle
+import org.apache.pdfbox.pdmodel.common.filespecification.PDComplexFileSpecification
+import org.apache.pdfbox.pdmodel.common.filespecification.PDEmbeddedFile
 import org.apache.pdfbox.pdmodel.font.PDType1Font
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts
 import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory
@@ -14,6 +19,34 @@ import javax.imageio.ImageIO
 
 /** Test fixtures: real PDFs and images generated with PDFBox 3.x in-process. */
 object PdfFixtures {
+    /** One-page PDF carrying [bytes] as an embedded attachment named [name]. */
+    fun pdfWithEmbeddedFile(
+        name: String,
+        bytes: ByteArray,
+        nested: Boolean = false,
+        unicodeOnly: Boolean = false,
+    ): ByteArray =
+        PDDocument().use { doc ->
+            doc.addPage(PDPage(PDRectangle.A4))
+            val embedded =
+                PDEmbeddedFile(doc).apply {
+                    subtype = "text/xml"
+                    cosObject.createOutputStream(COSName.FLATE_DECODE).use { it.write(bytes) }
+                }
+            val spec =
+                PDComplexFileSpecification().apply {
+                    file = name
+                    if (unicodeOnly) embeddedFileUnicode = embedded else embeddedFile = embedded
+                }
+            val leaf = PDEmbeddedFilesNameTreeNode().apply { names = mapOf(name to spec) }
+            val tree = if (nested) PDEmbeddedFilesNameTreeNode().apply { kids = listOf(leaf) } else leaf
+            doc.documentCatalog.names =
+                PDDocumentNameDictionary(doc.documentCatalog).apply { embeddedFiles = tree }
+            val out = ByteArrayOutputStream()
+            doc.save(out)
+            out.toByteArray()
+        }
+
     /** Two-page PDF with an embedded text layer containing [lines] on each page. */
     fun embeddedTextPdf(vararg lines: String): ByteArray {
         PDDocument().use { doc ->

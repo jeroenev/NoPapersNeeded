@@ -146,6 +146,46 @@ class FieldSeedUpgradeTest {
             coordinator.setting(FieldKeys.SEEDED_SETTING) shouldBe FieldKeys.SEED_VERSION.toString()
         }
 
+    @Test
+    fun aLibrarySeededAtTwoGainsTheEInvoiceFields() =
+        runTest {
+            val coordinator = rig.coordinator()
+            coordinator.refreshState()
+            val v3Keys =
+                setOf(
+                    FieldKeys.INVOICE_NUMBER,
+                    FieldKeys.INVOICE_TOTAL,
+                    FieldKeys.INVOICE_CURRENCY,
+                    FieldKeys.INVOICE_DUE_DATE,
+                    FieldKeys.INVOICE_BUYER,
+                    FieldKeys.PAYMENT_REFERENCE,
+                    FieldKeys.IBAN,
+                    FieldKeys.EINVOICE,
+                )
+            val v2Seeds = FieldKeys.seedDefinitions().filterNot { it.key in v3Keys }
+            coordinator.seedFieldRegistryIfNeeded(v2Seeds, version = 2)
+            registry().keys shouldBe v2Seeds.map { it.key }.toSet()
+
+            coordinator.seedFieldRegistryIfNeeded(FieldKeys.seedDefinitions())
+
+            val upgraded = registry()
+            v3Keys.forEach { upgraded.containsKey(it) shouldBe true }
+            coordinator.setting(FieldKeys.SEEDED_SETTING) shouldBe FieldKeys.SEED_VERSION.toString()
+        }
+
+    @Test
+    fun aLibrarySeededAtThreeKeepsADeletedEInvoiceFieldDeleted() =
+        runTest {
+            val coordinator = rig.coordinator()
+            coordinator.refreshState()
+            coordinator.seedFieldRegistryIfNeeded(FieldKeys.seedDefinitions())
+            coordinator.commitAndApply(listOf(PendingOp.fieldDefRemove(FieldKeys.INVOICE_NUMBER)))
+
+            coordinator.seedFieldRegistryIfNeeded(FieldKeys.seedDefinitions())
+
+            registry().containsKey(FieldKeys.INVOICE_NUMBER) shouldBe false
+        }
+
     private companion object {
         const val MINUTE = 60_000L
     }

@@ -44,7 +44,7 @@ internal suspend fun JournalCoordinator.seedFieldRegistryIfNeeded(
             when {
                 seedVersion(seeded) >= version -> return@commitBuilt emptyList()
                 seeded == null -> defs
-                else -> FieldKeys.upgradeSeeded(state.effectiveFieldDefs(), defs)
+                else -> FieldKeys.upgradeSeeded(state.effectiveFieldDefs(), defs, seedVersion(seeded))
             }.map { PendingOp.fieldDefSet(it) }
         defOps + PendingOp.settingSet(FieldKeys.SEEDED_SETTING, version.toString())
     }

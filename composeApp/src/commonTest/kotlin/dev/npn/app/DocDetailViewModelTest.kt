@@ -403,6 +403,9 @@ class DocDetailViewModelTest : MainDispatcherTest() {
                 mapOf(
                     FieldKeys.CORRESPONDENT to listOf("ACME"),
                     FieldKeys.DOC_TYPE to listOf("invoice"),
+                    // A seeded vocabulary field with no values yet still joins the map; the filter
+                    // simply offers nothing for it.
+                    FieldKeys.INVOICE_CURRENCY to emptyList(),
                 )
             state.vocabulary.orphanKeys shouldContainExactly listOf("amount")
             state.vocabulary.allTagNames shouldContainExactly listOf("finance")

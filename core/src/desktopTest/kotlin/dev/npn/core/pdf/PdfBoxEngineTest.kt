@@ -17,6 +17,16 @@ class PdfBoxEngineTest {
     private val engine = PdfBoxEngine()
 
     @Test
+    fun readsNestedUnicodeAttachmentsAndRejectsOversizedDecodedStreams() =
+        runTest {
+            val xml = "<Invoice/>".encodeToByteArray()
+            val pdf = PdfFixtures.pdfWithEmbeddedFile("invoice.xml", xml, nested = true, unicodeOnly = true)
+            engine.embeddedXmlFiles(pdf).single().bytes shouldBe xml
+            val large = ByteArray(MAX_EMBEDDED_XML_BYTES + 1) { 65 }
+            engine.embeddedXmlFiles(PdfFixtures.pdfWithEmbeddedFile("invoice.xml", large)) shouldBe emptyList()
+        }
+
+    @Test
     fun pageCountReflectsDocument() =
         runTest {
             engine.open(PdfFixtures.embeddedTextPdf("invoice 42 acme corporation")).use { handle ->

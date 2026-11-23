@@ -111,6 +111,26 @@ internal class MetadataWriterImpl(
         fillOnly: Boolean,
     ) = owned { edit(docIds, addTags, fields, fillOnly, asStored = false) }
 
+    /** Fill compatible extracted values against the registry and document at commit time. */
+    internal suspend fun fillExtracted(
+        docId: String,
+        fields: Map<String, String?>,
+    ) = owned {
+        var wrote = false
+        coordinator.commitBuilt { state ->
+            val filled = state.inheritedFields(docId).keys
+            val values =
+                fields.mapNotNull { (key, raw) ->
+                    if (key in filled) return@mapNotNull null
+                    val parsed = FieldValues.canonicalize(state.effectiveFieldType(key), raw)
+                    (parsed as? FieldParse.Ok)?.canonical?.let { key to it }
+                }
+            wrote = values.isNotEmpty()
+            values.map { (key, value) -> PendingOp.fieldSet(docId, key, value) }
+        }
+        if (wrote) followUp(listOf(docId), autoMatch = true)
+    }
+
     /**
      * [applyEdits] for metadata carried from another document as it holds it (a split's parts): a
      * value that no longer fits its field's type, left by a retype, is kept as its text rather than

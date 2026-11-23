@@ -35,10 +35,12 @@ import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.ReviewedBadge
 import dev.npn.app.ui.common.SectionHeading
+import dev.npn.app.ui.common.StatusBadge
 import dev.npn.app.ui.common.TagEditor
 import dev.npn.app.ui.common.TestTags
 import dev.npn.app.ui.common.formatEpochDate
 import dev.npn.core.app.DocListItem
+import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.model.reviewMarkerIsAuthoritative
 import no_papers_needed.composeapp.generated.resources.Res
@@ -56,6 +58,7 @@ import no_papers_needed.composeapp.generated.resources.detail_tab_history
 import no_papers_needed.composeapp.generated.resources.detail_tab_preview
 import no_papers_needed.composeapp.generated.resources.detail_tab_text
 import no_papers_needed.composeapp.generated.resources.detail_tags
+import no_papers_needed.composeapp.generated.resources.einvoice_badge
 import no_papers_needed.composeapp.generated.resources.ux_discard
 import no_papers_needed.composeapp.generated.resources.ux_discard_prompt
 import org.jetbrains.compose.resources.stringResource
@@ -227,6 +230,13 @@ private fun DetailsTab(
             enabled = !writeBlocked,
             onReviewedChange = actions::setReviewed,
         )
+        if (FieldKeys.EINVOICE in doc.fields) {
+            StatusBadge(
+                label = stringResource(Res.string.einvoice_badge),
+                background = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+        }
         FieldsSection(
             doc = doc,
             refused = refused,
