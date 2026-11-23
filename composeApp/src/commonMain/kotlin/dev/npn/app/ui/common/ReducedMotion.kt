@@ -7,6 +7,7 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -44,8 +45,11 @@ fun ProvideReducedMotion(
     readSystemAnimations: () -> Boolean = ::systemAnimationsEnabled,
     content: @Composable () -> Unit,
 ) {
+    // The resume effect outlives a recomposition that hands over a different seam; it must ask the
+    // latest one, and the effect is not to be restarted for it.
+    val readAnimations = rememberUpdatedState(readSystemAnimations)
     var animationsEnabled by remember { mutableStateOf(readSystemAnimations()) }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { animationsEnabled = readSystemAnimations() }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { animationsEnabled = readAnimations.value() }
     CompositionLocalProvider(
         LocalReducedMotion provides reducesMotion(preference, animationsEnabled),
         content = content,

@@ -91,7 +91,12 @@ fun TagEditor(
                             Text(
                                 tag,
                                 style = MaterialTheme.typography.labelLarge,
-                                modifier = Modifier.padding(start = if (tagColors[tag] != null) 6.dp else 0.dp),
+                                // A long tag wraps instead of taking the width the remove button's
+                                // 48dp target needs; a short one keeps the chip's natural width.
+                                modifier =
+                                    Modifier
+                                        .weight(1f, fill = false)
+                                        .padding(start = if (tagColors[tag] != null) 6.dp else 0.dp),
                             )
                             IconButton(
                                 onClick = { onRemove(tag) },

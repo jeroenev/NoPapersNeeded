@@ -16,6 +16,7 @@ import dev.npn.app.NoSettingsPaneActions
 import dev.npn.app.paneState
 import dev.npn.app.ui.common.BackTopBar
 import dev.npn.app.ui.common.ProvideReducedMotion
+import dev.npn.app.ui.common.TagEditor
 import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.reducedMotion
 import dev.npn.app.ui.library.GridZoom
@@ -24,6 +25,7 @@ import dev.npn.app.ui.settings.AppearanceSettingsPane
 import dev.npn.core.app.ViewType
 import dev.npn.core.settings.SettingsSnapshot
 import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.comparables.shouldBeGreaterThanOrEqualTo
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 
@@ -118,6 +120,17 @@ class AccessibilitySemanticsTest : EnglishLocaleTest() {
             }
         }
 
+    /**
+     * A tag too long for a narrow panel wraps its label instead of taking the width the remove
+     * button needs: the chip's one action keeps the size it has beside a short tag.
+     */
+    @Test
+    fun aLongTagDoesNotSqueezeItsRemoveButton() =
+        onUiThread {
+            removeButtonWidth(NARROW, LONG_TAG) shouldBeGreaterThanOrEqualTo
+                removeButtonWidth(WIDTH, "invoices")
+        }
+
     /** Either source of the preference reaches a screen as one `reducedMotion` answer. */
     @Test
     fun thePreferenceReachesTheScreensThatReadIt() =
@@ -139,8 +152,32 @@ class AccessibilitySemanticsTest : EnglishLocaleTest() {
             platformOnly shouldContain true
         }
 
+    /** How wide the tag chip's × is in a panel [width] wide, showing [tag]. */
+    private fun removeButtonWidth(
+        width: Int,
+        tag: String,
+    ): Int =
+        themedScene(width, HEIGHT) {
+            TagEditor(
+                tags = listOf(tag),
+                allTagNames = emptyList(),
+                tagColors = emptyMap(),
+                onAdd = {},
+                onRemove = {},
+            )
+        }.closing {
+            render()
+            node { it.contentDescription()?.startsWith("Remove ") == true }.size.width
+        }
+
     private companion object {
         const val WIDTH = 900
         const val HEIGHT = 800
+
+        /** A detail panel's width on the narrowest layout: too narrow for a long tag and its ×. */
+        const val NARROW = 260
+
+        /** A tag name that cannot fit a narrow panel beside its chip's button. */
+        const val LONG_TAG = "finance.invoices.2026.a.very.long.tag.name.for.a.narrow.panel"
     }
 }
