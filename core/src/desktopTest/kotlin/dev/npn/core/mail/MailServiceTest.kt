@@ -234,11 +234,17 @@ class MailServiceTest {
     @Test
     fun emptyUidWindowsEventuallyReachSparseMessages() =
         runTest {
-            val transport = FakeTransport(messages = listOf(message(uid = 501)))
+            val pageSize = MailTransport.PAGE_SIZE.toLong()
+            val messageUid = 2 * pageSize + 1
+            val transport = FakeTransport(messages = listOf(message(uid = messageUid)))
             val fixture = fixture(transport = transport)
-            repeat(3) { fixture.service.checkNow() }
-            assertEquals(listOf(501L), transport.marked)
-            assertEquals(501, fixture.cursors.last().lastUid)
+            fixture.service.checkNow()
+            assertEquals(pageSize, fixture.cursors.last().lastUid)
+            fixture.service.checkNow()
+            assertEquals(2 * pageSize, fixture.cursors.last().lastUid)
+            fixture.service.checkNow()
+            assertEquals(listOf(messageUid), transport.marked)
+            assertEquals(messageUid, fixture.cursors.last().lastUid)
         }
 
     @Test
