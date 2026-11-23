@@ -33,7 +33,7 @@ class TesseractCliEngine(
     @Volatile
     private var installedLanguages: Set<String>? = null
 
-    override suspend fun available(): Boolean = detected
+    override suspend fun available(): Boolean = withContext(io) { detected }
 
     override suspend fun languagesFor(lang: String): String = withContext(io) { usableLanguages(lang) }
 

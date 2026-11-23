@@ -126,12 +126,9 @@ enum class WorkBlock {
 
 /**
  * What this device can currently do with the background queues, as the conditions [WorkBlock] names.
- * [ocrEngineAvailable] counts either engine: a local one, or the vision endpoint when it is
- * configured. Both are read when the queue emits, so a setting changed while Activity is open
- * applies to the next emission.
+ * Endpoint configuration is followed while Activity is open.
  */
 data class WorkCapabilities(
-    val ocrEngineAvailable: Boolean,
     val aiEndpointConfigured: Boolean,
 )
 
@@ -142,8 +139,9 @@ data class WorkCapabilities(
  */
 fun QueuedWork.blockedBy(capabilities: WorkCapabilities): WorkBlock? =
     when (stage) {
+        // An OCR queue row may only need embedded text extraction, even without an engine.
         WorkStage.OCR -> {
-            if (capabilities.ocrEngineAvailable) null else WorkBlock.OCR_ENGINE_MISSING
+            null
         }
 
         WorkStage.AI_ENRICHMENT -> {

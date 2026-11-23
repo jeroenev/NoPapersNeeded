@@ -188,15 +188,7 @@ internal fun diff(
         if (a != b) out += "$what differs:\n    live:    $a\n    rebuilt: $b"
     }
     same("field definitions", live.fieldDefs, rebuilt.fieldDefs)
-    // A live or trashed document keeps its tags' rows (TagDao.pruneUnreferenced), and so does a row
-    // hidden as missing that only the live index remembers: the styles of the tags the first two use
-    // compare.
-    val inUse =
-        listOf(live.live, live.trashed, rebuilt.live, rebuilt.trashed)
-            .flatMap { it.values }
-            .flatMap { it.tags }
-            .toSet()
-    same("tag styles", live.tagStyles.filterKeys(inUse::contains), rebuilt.tagStyles.filterKeys(inUse::contains))
+    same("tag styles", live.tagStyles, rebuilt.tagStyles)
     same("review mode", live.reviewMode, rebuilt.reviewMode)
     same("storage path", live.storagePath, rebuilt.storagePath)
     same("trash retention", live.trashRetentionDays, rebuilt.trashRetentionDays)

@@ -12,7 +12,7 @@
     <string name="queue_block_ocr_fix">Tekstherkenning instellen</string>
     <string name="queue_block_ai_unconfigured">Automatisch ordenen heeft geen assistent verbonden, dus dit document wacht.</string>
     <string name="queue_block_ai_fix">Assistent verbinden</string>
-    <string name="queue_problem_storage_access">Importen wachten op toestemming om de opslag van dit apparaat te lezen.</string>
+    <string name="queue_problem_storage_access">Deze bibliotheek heeft toegang tot de opslag van dit apparaat nodig.</string>
 
     <!-- The assistant screen's hint that it needs an endpoint. -->
     <string name="ai_open_settings">Assistentinstellingen openen</string>

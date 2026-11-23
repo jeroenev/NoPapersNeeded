@@ -12,7 +12,7 @@
     <string name="queue_block_ocr_fix">Texterkennung einrichten</string>
     <string name="queue_block_ai_unconfigured">Für „Automatisch ordnen“ ist kein Assistent verbunden, daher wartet dieses Dokument.</string>
     <string name="queue_block_ai_fix">Assistent verbinden</string>
-    <string name="queue_problem_storage_access">Importe warten auf die Berechtigung, auf den Speicher dieses Geräts zuzugreifen.</string>
+    <string name="queue_problem_storage_access">Diese Bibliothek benötigt Zugriff auf den Speicher dieses Geräts.</string>
 
     <!-- The assistant screen's hint that it needs an endpoint. -->
     <string name="ai_open_settings">Assistenteneinstellungen öffnen</string>

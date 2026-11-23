@@ -73,13 +73,7 @@ class QueueViewModel(
             session.work.queue,
             settings.aiConfigured(),
         ) { queue, aiConfigured ->
-            // Asked per emission rather than cached: whether a local engine exists is a device fact the
-            // user can change while the app runs, and the engine's own check is cheap.
-            val capabilities =
-                WorkCapabilities(
-                    ocrEngineAvailable = ocr.anyEngineAvailable(),
-                    aiEndpointConfigured = aiConfigured,
-                )
+            val capabilities = WorkCapabilities(aiEndpointConfigured = aiConfigured)
             queue.map { ActivityWork(it, it.blockedBy(capabilities)) }
         }.stateIn(viewModelScope, WhileSubscribedTimeout, null)
 

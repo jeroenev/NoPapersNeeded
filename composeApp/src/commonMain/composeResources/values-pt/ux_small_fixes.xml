@@ -12,7 +12,7 @@
     <string name="queue_block_ocr_fix">Configurar o reconhecimento de texto</string>
     <string name="queue_block_ai_unconfigured">A organização automática não tem um assistente ligado, por isso este documento aguarda.</string>
     <string name="queue_block_ai_fix">Ligar o assistente</string>
-    <string name="queue_problem_storage_access">As importações aguardam permissão para ler o armazenamento deste dispositivo.</string>
+    <string name="queue_problem_storage_access">Esta biblioteca precisa de permissão para aceder ao armazenamento deste dispositivo.</string>
 
     <!-- The assistant screen's hint that it needs an endpoint. -->
     <string name="ai_open_settings">Abrir as definições do assistente</string>

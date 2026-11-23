@@ -148,11 +148,7 @@ fun QueueScreen(
     // (cloud working copy) library imports fine without it.
     val settingsState by settings.settings.collectAsStateWithLifecycle()
     val location = settingsState.libraryLocation
-    val storageProblem =
-        location != null &&
-            !LibraryLocations.isContentUri(location) &&
-            !isAppPrivateLocation(location) &&
-            !storage.usable
+    val storageProblem = needsStorageGrant(location, location?.let(::isAppPrivateLocation) == true, storage.usable)
     val snackbar = rememberSnackbarMessages(vm.messages)
 
     Scaffold(
@@ -189,6 +185,13 @@ fun QueueScreen(
         }
     }
 }
+
+/** Whether this library needs direct shared-storage access. */
+internal fun needsStorageGrant(
+    location: String?,
+    appPrivate: Boolean,
+    usable: Boolean,
+): Boolean = location != null && !LibraryLocations.isContentUri(location) && !appPrivate && !usable
 
 /** Everything Activity shows, split the way the page orders it. */
 private class Activity(

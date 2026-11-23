@@ -18,7 +18,7 @@ class WorkBlockTest {
         lastError = lastError,
     )
 
-    private val ready = WorkCapabilities(ocrEngineAvailable = true, aiEndpointConfigured = true)
+    private val ready = WorkCapabilities(aiEndpointConfigured = true)
 
     @Test
     fun workWithEverythingItNeedsIsNotBlocked() {
@@ -27,10 +27,8 @@ class WorkBlockTest {
     }
 
     @Test
-    fun ocrWithoutAnEngineIsBlocked() {
-        work(WorkStage.OCR).blockedBy(ready.copy(ocrEngineAvailable = false)) shouldBe WorkBlock.OCR_ENGINE_MISSING
-        // The vision endpoint is an OCR engine too: with one configured, text recognition can run.
-        work(WorkStage.OCR).blockedBy(ready.copy(ocrEngineAvailable = true)) shouldBe null
+    fun ocrWithoutAnEngineMayStillExtractEmbeddedText() {
+        work(WorkStage.OCR).blockedBy(ready) shouldBe null
     }
 
     @Test
@@ -43,15 +41,5 @@ class WorkBlockTest {
     @Test
     fun aFailedEnrichmentRowIsNotAnEndpointVerdict() {
         work(WorkStage.AI_ENRICHMENT, lastError = "connection refused").blockedBy(ready) shouldBe null
-    }
-
-    /** An engine missing holds OCR back even after a failure: the engine is the first fix. */
-    @Test
-    fun aMissingEngineWinsOverAFailedRow() {
-        work(
-            WorkStage.OCR,
-            lastError = "no readable ocr version",
-        ).blockedBy(ready.copy(ocrEngineAvailable = false)) shouldBe
-            WorkBlock.OCR_ENGINE_MISSING
     }
 }

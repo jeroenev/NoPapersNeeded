@@ -8,8 +8,10 @@ import dev.npn.app.ui.closing
 import dev.npn.app.ui.onUiThread
 import dev.npn.app.ui.text
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlin.test.Test
 
 /**
@@ -87,6 +89,36 @@ class SnackbarMessagesTest {
 
                 firstUndone shouldBe 0
                 secondUndone shouldBe 1
+            }
+        }
+
+    @Test
+    fun newerUndoReplacesOlderEvenBehindPlainMessage() =
+        onUiThread {
+            val snackbar = SnackbarHostState()
+            var first = 0
+            var second = 0
+
+            fun undo(
+                label: String,
+                action: () -> Unit,
+            ) = UiMessage(UiText.Raw(label), UiMessage.Action(UiText.Raw("Undo")) { action() })
+            val messages = Channel<UiMessage>(Channel.UNLIMITED)
+            messages.trySend(undo("first") { first++ })
+            withScene(messages.receiveAsFlow(), snackbar) { scene ->
+                snackbar.shownMessage() shouldBe "first"
+                messages.trySend(text("failure"))
+                scene.render()
+                messages.trySend(undo("second") { second++ })
+                scene.render()
+                snackbar.shownMessage() shouldBe "failure"
+                snackbar.currentSnackbarData?.dismiss()
+                scene.render()
+                snackbar.shownMessage() shouldBe "second"
+                snackbar.currentSnackbarData?.performAction()
+                scene.render()
+                first shouldBe 0
+                second shouldBe 1
             }
         }
 

@@ -295,6 +295,7 @@ internal class FoldProjection(
         // tags of its own, so every fold takes them from the fold's own state.
         allTags.addAll(state.retainedTags())
         val existingTagRows = tagDao.all().associateBy { it.name }
+        allTags.addAll(existingTagRows.keys)
         val changed =
             allTags.mapNotNull { tag ->
                 val style = state.tagStyle(tag)

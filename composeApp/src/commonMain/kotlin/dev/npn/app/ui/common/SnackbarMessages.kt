@@ -18,9 +18,8 @@ import org.jetbrains.compose.resources.rememberResourceEnvironment
  * Shows each of [messages] as a snackbar on [snackbar], one at a time and in order. The one
  * collector of a [MessagesViewModel.messages]; a screen calls it once per viewmodel.
  *
- * A message is taken from the flow only once the previous snackbar is gone, so plain messages sent
- * together queue up rather than replace each other, and one not yet taken stays with its viewmodel
- * for the next collector. The exception is a message with an [UiMessage.Action]: the newest one
+ * Plain messages queue in order while the collector continues receiving newer actions. A message
+ * with an [UiMessage.Action] is different: the newest one
  * replaces the one on screen when it arrives instead of queueing behind it, so an Undo always acts
  * on the latest write and never on the one before it. A message's action carries its own
  * [SnackbarDuration], so an Undo does not hold the queue indefinitely.
@@ -52,7 +51,7 @@ fun SnackbarMessages(
                     if (result == SnackbarResult.ActionPerformed) message.action?.onPerform()
                 }
                 if (message.action == null) {
-                    present()
+                    launch { present() }
                 } else {
                     // Cancelling the showing one dismisses its snackbar (a host clears its data when
                     // the call ends), and the newest takes the mutex next.

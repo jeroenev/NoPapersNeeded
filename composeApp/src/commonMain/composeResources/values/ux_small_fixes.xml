@@ -12,7 +12,7 @@
     <string name="queue_block_ocr_fix">Set up text recognition</string>
     <string name="queue_block_ai_unconfigured">Auto-organize has no assistant connected, so this document waits.</string>
     <string name="queue_block_ai_fix">Connect the assistant</string>
-    <string name="queue_problem_storage_access">Imports are waiting for permission to read this device's storage.</string>
+    <string name="queue_problem_storage_access">This library needs permission to access this device’s storage.</string>
 
     <!-- The assistant screen's hint that it needs an endpoint. -->
     <string name="ai_open_settings">Open assistant settings</string>
