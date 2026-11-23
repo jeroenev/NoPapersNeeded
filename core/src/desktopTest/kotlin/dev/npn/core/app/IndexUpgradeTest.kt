@@ -213,12 +213,19 @@ class IndexUpgradeTest {
                     AiEditJobEntity("job-1", requestJson = "{}", createdAt = 1, updatedAt = 1, nextAttemptAt = 0),
                 )
                 deps.deviceDb.aiEditJobDao().upsertDocs(listOf(AiEditJobDocEntity("job-1", docId, position = 0)))
-                val queued =
-                    deps.deviceDb
-                        .ocrQueueDao()
-                        .getByDocId(docId)
-                        .shouldNotBeNull()
-                deps.deviceDb.ocrQueueDao().upsert(queued.copy(attempts = 2, aiRequested = true))
+                // Let the rescan's OCR finish before seeding an owed request. Its row may
+                // otherwise already be DONE, which a rebuild is allowed to discard.
+                session.work.drainOcr()
+                deps.deviceDb.ocrQueueDao().upsert(
+                    OcrQueueEntity(
+                        docId,
+                        QueueState.PENDING.column,
+                        attempts = 2,
+                        updatedAt = 1,
+                        aiRequested = true,
+                        nextAttemptAt = Long.MAX_VALUE,
+                    ),
+                )
             }
 
             data.listFiles { file -> file.name.startsWith("index.db") }.shouldNotBeNull().forEach { it.delete() }
@@ -238,8 +245,10 @@ class IndexUpgradeTest {
                         .ocrQueueDao()
                         .getByDocId(docId)
                         .shouldNotBeNull()
+                owed.queueState shouldBe QueueState.PENDING
                 owed.attempts shouldBe 2
                 owed.aiRequested shouldBe true
+                owed.nextAttemptAt shouldBe Long.MAX_VALUE
             }
         }
 
