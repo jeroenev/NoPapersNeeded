@@ -51,7 +51,7 @@ import kotlinx.coroutines.withContext
 class DefaultAppEnvironment(
     override val settings: SettingsRepository,
     private val watchedFolder: (location: String) -> WatchedFolder?,
-    private val log: NpnLog = NpnLog.None,
+    override val log: NpnLog = NpnLog.None,
     /** Where [appScope]'s coroutines run. */
     appDispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val cloudSetup: (() -> CloudSetupEngine)? = null,

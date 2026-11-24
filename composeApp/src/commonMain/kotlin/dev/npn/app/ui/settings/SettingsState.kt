@@ -110,6 +110,25 @@ enum class TextSetting(
 enum class ReviewMigration { MARK_ALL, MARK_TAGGED, MARK_NONE }
 
 /**
+ * A "Report a problem" bundle, from the tap that asks for one to the file the UI writes. The
+ * bundle is built on demand only; nothing leaves the device until the user saves or shares it.
+ */
+sealed interface ProblemReportState {
+    /** Nothing asked for, or the last bundle was handed to the platform. */
+    data object Idle : ProblemReportState
+
+    /** Counting the library and reading the log. */
+    data object Building : ProblemReportState
+
+    /** A scrubbed bundle, ready to write, with the issue it prefills. */
+    data class Ready(
+        val fileName: String,
+        val text: String,
+        val issueUrl: String,
+    ) : ProblemReportState
+}
+
+/**
  * What the settings panes change. [SettingsViewModel] implements it; a device setting is one
  * [edit], the library's settings and the settings that need logic around them have their own.
  */
@@ -198,6 +217,21 @@ interface SettingsActions {
      * reason to start paying per page.
      */
     fun runAiSelfTest()
+
+    /**
+     * Build a scrubbed diagnostics bundle for a problem report. The About pane then writes it
+     * (desktop save dialog, Android share sheet) and opens the prefilled issue.
+     */
+    fun reportProblem()
+
+    /** The About pane has handed the built bundle to the platform; let the next tap build a new one. */
+    fun problemReportHandled()
+
+    /** Writing or sharing the bundle failed; say why and let the next tap try again. */
+    fun problemReportFailed(failure: Throwable)
+
+    /** Record that this device has seen the current version's "What's new". */
+    fun markWhatsNewSeen()
 
     /** Drop all cached thumbnails so they regenerate at the current render quality, and say so. */
     fun clearThumbnailCache()

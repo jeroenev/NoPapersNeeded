@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="common_settings_whats_new">Nouveautés</string>
+    <string name="common_settings_whats_new_load_failed">Les notes de version n’ont pas pu être lues.</string>
+    <string name="common_settings_report_problem">Signaler un problème</string>
+    <string name="common_settings_report_problem_help">Rassemble la version de l’application, la plateforme, les compteurs et le journal récent dans un fichier à joindre à un ticket GitHub. Il ne contient jamais de documents, de noms de documents, de chemins de bibliothèque, d’adresses e-mail ni de clés d’API. Rien n’est envoyé automatiquement.</string>
+    <string name="common_settings_report_problem_building">Collecte du diagnostic…</string>
+    <string name="common_settings_report_problem_failed">Impossible de collecter le diagnostic : %1$s</string>
+    <string name="common_settings_diagnostics_saved">Diagnostic enregistré</string>
+    <string name="common_settings_diagnostics_saved_help">Joignez ce fichier au ticket GitHub. Il ne contient ni contenu de document, ni nom, ni chemin, ni adresse, ni clé.</string>
+    <string name="common_settings_diagnostics_shared_help">Envoyez ce fichier au ticket GitHub depuis le menu de partage. Il ne contient ni contenu de document, ni nom, ni chemin, ni adresse, ni clé.</string>
+    <string name="common_settings_copy_path">Copier le chemin</string>
+    <string name="common_settings_path_copied">Copié</string>
+    <string name="common_settings_open_issue">Ouvrir le ticket</string>
+</resources>

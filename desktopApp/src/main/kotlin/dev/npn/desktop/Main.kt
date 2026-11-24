@@ -39,6 +39,7 @@ import dev.npn.core.app.DesktopLog
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.settings.PlatformDirs
 import dev.npn.core.settings.SettingsRepositoryImpl
+import dev.npn.core.util.error
 import dev.npn.core.util.info
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.CoroutineDispatcher
@@ -103,7 +104,17 @@ private fun windowIcon(): Painter =
     }
 
 fun main() {
+    installCrashHandler()
     if (SingleInstance.claim(instanceLockFile(), ::log)) runApp() else showAlreadyRunning()
+}
+
+/** Put an uncaught exception in `npn.log` before the JVM dies, then let the old handler have it. */
+private fun installCrashHandler() {
+    val previous = Thread.getDefaultUncaughtExceptionHandler()
+    Thread.setDefaultUncaughtExceptionHandler { thread, failure ->
+        DesktopLog.error("Uncaught exception on ${thread.name}", failure)
+        previous?.uncaughtException(thread, failure)
+    }
 }
 
 /** The second instance's whole life: say the app is already open, then exit. */

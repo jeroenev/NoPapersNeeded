@@ -5,6 +5,7 @@ import dev.npn.app.di.CloudSetupEngine
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.security.AppLock
 import dev.npn.core.security.AppLockSettings
+import dev.npn.core.util.NpnLog
 import dev.npn.core.util.SystemMonotonicClock
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -25,6 +26,7 @@ class FakeAppEnvironment(
     /** Unlocked by default so a test that is not about the lock never meets it. */
     override val lock: AppLock = AppLock(AppLockSettings(), SystemMonotonicClock),
 ) : AppEnvironment {
+    override val log: NpnLog = NpnLog.None
     override val settings = FakeSettingsRepository()
     override val session = MutableStateFlow<LibrarySession?>(null)
     override val opening = MutableStateFlow(false)

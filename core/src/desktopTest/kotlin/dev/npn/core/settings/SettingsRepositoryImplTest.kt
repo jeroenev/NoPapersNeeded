@@ -208,6 +208,17 @@ class SettingsRepositoryImplTest {
         }
 
     @Test
+    fun lastSeenVersionDefaultsUnsetAndPersists() =
+        runTest {
+            val file = directory.resolve("settings.properties").toFile()
+            SettingsRepositoryImpl(NpnLog.None, file).settings.first().lastSeenVersion shouldBe null
+
+            SettingsRepositoryImpl(NpnLog.None, file).edit { it.copy(lastSeenVersion = "1.2.3") }
+
+            SettingsRepositoryImpl(NpnLog.None, file).settings.first().lastSeenVersion shouldBe "1.2.3"
+        }
+
+    @Test
     fun freshSettingsDefaultToFirstProvider() =
         runTest {
             val file = directory.resolve("settings.properties").toFile()

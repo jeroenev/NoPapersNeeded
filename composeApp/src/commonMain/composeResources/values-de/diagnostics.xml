@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="common_settings_whats_new">Neuigkeiten</string>
+    <string name="common_settings_whats_new_load_failed">Die Versionshinweise konnten nicht gelesen werden.</string>
+    <string name="common_settings_report_problem">Problem melden</string>
+    <string name="common_settings_report_problem_help">Sammelt App-Version, Plattform, Zähler und das aktuelle Protokoll in einer Datei, die du an ein GitHub-Issue anhängen kannst. Sie enthält niemals Dokumente, Dokumentnamen, Bibliothekspfade, E-Mail-Adressen oder API-Schlüssel. Nichts wird automatisch hochgeladen.</string>
+    <string name="common_settings_report_problem_building">Diagnose wird gesammelt…</string>
+    <string name="common_settings_report_problem_failed">Diagnose konnte nicht gesammelt werden: %1$s</string>
+    <string name="common_settings_diagnostics_saved">Diagnose gespeichert</string>
+    <string name="common_settings_diagnostics_saved_help">Hänge diese Datei an das GitHub-Issue an. Sie enthält keine Dokumentinhalte, Namen, Pfade, Adressen oder Schlüssel.</string>
+    <string name="common_settings_diagnostics_shared_help">Sende diese Datei über das Teilen-Menü an das GitHub-Issue. Sie enthält keine Dokumentinhalte, Namen, Pfade, Adressen oder Schlüssel.</string>
+    <string name="common_settings_copy_path">Pfad kopieren</string>
+    <string name="common_settings_path_copied">Kopiert</string>
+    <string name="common_settings_open_issue">Issue öffnen</string>
+</resources>

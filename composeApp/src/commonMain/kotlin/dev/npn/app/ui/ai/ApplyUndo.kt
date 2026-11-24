@@ -126,5 +126,9 @@ sealed interface UndoStep {
         val values: Map<String, String?>,
     ) : UndoStep {
         override suspend fun run(meta: MetadataWriter) = meta.applyEdits(listOf(docId), fields = values)
+
+        // A failed step is logged by its string (MessagesViewModel.forEachReporting), and the log
+        // reaches the diagnostics bundle: name the fields, never their values (titles, notes).
+        override fun toString(): String = "RestoreFields(docId=$docId, fields=${values.keys.sorted()})"
     }
 }

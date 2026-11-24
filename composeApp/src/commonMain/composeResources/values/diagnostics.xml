@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="common_settings_whats_new">What's new</string>
+    <string name="common_settings_whats_new_load_failed">The release notes could not be read.</string>
+    <string name="common_settings_whats_new_bullet" translatable="false">•</string>
+    <string name="common_settings_report_problem">Report a problem</string>
+    <string name="common_settings_report_problem_help">Collects the app version, platform, counts and recent log into a file you can attach to a GitHub issue. It never includes documents, document names, library paths, email addresses or API keys. Nothing is uploaded automatically.</string>
+    <string name="common_settings_report_problem_building">Collecting diagnostics…</string>
+    <string name="common_settings_report_problem_failed">Could not collect diagnostics: %1$s</string>
+    <string name="common_settings_diagnostics_saved">Diagnostics saved</string>
+    <string name="common_settings_diagnostics_saved_help">Attach this file to the GitHub issue. It contains no document content, names, paths, addresses or keys.</string>
+    <string name="common_settings_diagnostics_shared_help">Send this file to the GitHub issue from the share sheet. It contains no document content, names, paths, addresses or keys.</string>
+    <string name="common_settings_copy_path">Copy path</string>
+    <string name="common_settings_path_copied">Copied</string>
+    <string name="common_settings_open_issue">Open issue</string>
+</resources>

@@ -35,6 +35,18 @@ interface DocumentDao {
     @Query("SELECT EXISTS(SELECT 1 FROM documents)")
     suspend fun any(): Boolean
 
+    /** Live documents, for a diagnostics count without reading every row. */
+    @Query("SELECT COUNT(*) FROM documents d WHERE $LIVE_DOCUMENT")
+    suspend fun countLive(): Int
+
+    /** Documents in the trash, for a diagnostics count without reading every row. */
+    @Query("SELECT COUNT(*) FROM documents d WHERE d.trashed = 1 AND d.deleted = 0")
+    suspend fun countTrashed(): Int
+
+    /** Documents whose file is missing, for a diagnostics count without reading every row. */
+    @Query("SELECT COUNT(*) FROM documents d WHERE d.missing = 1 AND d.deleted = 0")
+    suspend fun countMissing(): Int
+
     /**
      * Write [docs], in order, as whole rows. relPath is unique, and this is where a path's holder is
      * decided: a hidden row (trashed, deleted or missing) gives its path up to the row written there,

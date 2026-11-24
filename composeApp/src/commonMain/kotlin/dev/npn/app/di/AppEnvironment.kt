@@ -5,6 +5,7 @@ import dev.npn.core.app.LibrarySession
 import dev.npn.core.security.AppLock
 import dev.npn.core.settings.SettingsRepository
 import dev.npn.core.sync.CloudSetup
+import dev.npn.core.util.NpnLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.StateFlow
 
@@ -23,6 +24,9 @@ interface AppEnvironment {
      * start shows it locked when the setting is on.
      */
     val lock: AppLock
+
+    /** Where app-level work that nobody awaits reports a failure. */
+    val log: NpnLog
 
     /** Currently opened library, null until onboarding completes (or while switching). */
     val session: StateFlow<LibrarySession?>

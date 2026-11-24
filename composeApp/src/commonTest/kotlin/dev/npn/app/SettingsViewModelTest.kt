@@ -4,12 +4,15 @@ import androidx.lifecycle.ViewModelStore
 import dev.npn.app.platform.FolderPick
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.settings.FieldDialog
+import dev.npn.app.ui.settings.ProblemReportState
 import dev.npn.app.ui.settings.ReviewMigration
 import dev.npn.app.ui.settings.SettingsCategoryId
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiReasoningLevel
+import dev.npn.core.app.LibraryDiagnostics
 import dev.npn.core.app.StoragePathSetting
 import dev.npn.core.app.ViewType
+import dev.npn.core.diagnostics.Diagnostics
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
@@ -17,6 +20,7 @@ import dev.npn.core.model.ReviewMode
 import dev.npn.core.rules.AutoMatchRule
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -27,6 +31,7 @@ import no_papers_needed.composeapp.generated.resources.common_folder_access_not_
 import no_papers_needed.composeapp.generated.resources.common_folder_access_not_kept_watched
 import no_papers_needed.composeapp.generated.resources.common_folder_in_library_watched
 import no_papers_needed.composeapp.generated.resources.common_save_setting_failed
+import no_papers_needed.composeapp.generated.resources.common_settings_report_problem_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_review_workflow_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_thumbnail_cache_empty
 import no_papers_needed.composeapp.generated.resources.common_settings_thumbnails_cleared
@@ -74,6 +79,48 @@ class SettingsViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             model.paneState.value.rules shouldBe listOf(rule)
+        }
+
+    @Test
+    fun reportingAProblemBuildsAReadyBundleAndClearsItOnceHandedOff() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            session.maintenance.diagnosticsValue = LibraryDiagnostics(liveDocuments = 3, tags = 2, journalObjects = 9)
+            val model = settingsVm(session = session, compute = dispatcher)
+            collecting(model.paneState)
+            advanceUntilIdle()
+
+            model.reportProblem()
+            advanceUntilIdle()
+
+            val ready = model.paneState.value.problemReport as ProblemReportState.Ready
+            ready.fileName shouldBe "npn-diagnostics-${BuildInfo.VERSION}.txt"
+            ready.text shouldContain "Documents: 3"
+            ready.text shouldContain "Journal objects: 9"
+            ready.issueUrl shouldContain Diagnostics.ISSUE_BASE
+
+            model.problemReportHandled()
+            advanceUntilIdle()
+            model.paneState.value.problemReport shouldBe ProblemReportState.Idle
+        }
+
+    @Test
+    fun failedReportSaveShowsTheReasonAndAllowsRetry() =
+        runTest(dispatcher) {
+            val model = settingsVm(session = FakeLibrarySession(), compute = dispatcher)
+            collecting(model.paneState)
+            val messages = collecting(model.messages.map { it.text })
+            model.reportProblem()
+            advanceUntilIdle()
+
+            model.problemReportFailed(IllegalStateException("disk full"))
+            advanceUntilIdle()
+            model.paneState.value.problemReport shouldBe ProblemReportState.Idle
+            messages shouldContainExactly listOf(failure(Res.string.common_settings_report_problem_failed, "disk full"))
+
+            model.reportProblem()
+            advanceUntilIdle()
+            (model.paneState.value.problemReport is ProblemReportState.Ready) shouldBe true
         }
 
     @Test

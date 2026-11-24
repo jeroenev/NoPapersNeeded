@@ -5,6 +5,7 @@ import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.AiOcrOutcome
 import dev.npn.core.app.ImportOutcome
 import dev.npn.core.app.IngestFacade
+import dev.npn.core.app.LibraryDiagnostics
 import dev.npn.core.app.LibraryVerificationProgress
 import dev.npn.core.app.LibraryVerificationReport
 import dev.npn.core.app.MailFacade
@@ -237,6 +238,13 @@ class FakeMaintenanceFacade : MaintenanceFacade {
     var rebuilds = 0
     var rebuildOutcome: RebuildOutcome = RebuildOutcome.Rebuilt
     var failRebuild: (() -> Nothing)? = null
+    var diagnosticsValue = LibraryDiagnostics()
+    var failDiagnostics: (() -> Nothing)? = null
+
+    override suspend fun diagnostics(): LibraryDiagnostics {
+        failDiagnostics?.invoke()
+        return diagnosticsValue
+    }
 
     /** What [verifyLibrary] returns; [verifyProgress] is fed as it "walks". */
     var verificationReport: LibraryVerificationReport = emptyVerificationReport()

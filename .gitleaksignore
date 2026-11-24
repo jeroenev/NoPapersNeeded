@@ -1,3 +1,4 @@
 # libsecret's and glib's versioned shared-library sonames are not credentials. Gitleaks'
-# generic-api-key rule reads a versioned `.so.0` string as one.
+# generic-api-key rule reads a versioned `.so.0` string as one. This historical finding is a
+# libsecret schema attribute named "secret-1", not a credential.
 c254f7bc0432e46762a2593ac54b9a573f89e002:core/src/desktopMain/kotlin/dev/npn/core/mail/LibsecretMailCredentialStore.kt:generic-api-key:89

@@ -1,17 +1,23 @@
 package dev.npn.core.app
 
+import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.fs.NpnPaths
 import dev.npn.core.index.DuplicateResolver
 import dev.npn.core.index.ImportResult
 import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.index.ScanReport
 import dev.npn.core.index.SplitFailure
 import dev.npn.core.index.SplitService
+import dev.npn.core.journal.JournalPath
+import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.warn
+import kotlinx.coroutines.flow.first
 
 /**
  * [MaintenanceFacade]: duplicates, relinks and splitting, each run as work the session owns. A
@@ -21,6 +27,8 @@ import dev.npn.core.util.warn
 internal class MaintenanceFacadeImpl(
     private val lifetime: SessionLifetime,
     private val db: NpnDatabase,
+    private val deviceDb: DeviceDatabase,
+    private val fs: LibraryFileSystem,
     private val duplicates: DuplicateResolver,
     private val coordinator: JournalCoordinator,
     private val splitter: SplitService,
@@ -142,4 +150,23 @@ internal class MaintenanceFacadeImpl(
         val fields = db.documentFieldDao().valuesOf(docId).filterKeys { it !in FieldKeys.NOT_INHERITED_ON_SPLIT }
         writer.copyAsStored(partIds, addTags = tags, fields = fields)
     }
+
+    override suspend fun diagnostics(): LibraryDiagnostics =
+        lifetime.owned {
+            val journalObjects =
+                fs
+                    .listAllUnder(NpnPaths.JOURNAL_DIR)
+                    .count { JournalPaths.classify(it.relPath) is JournalPath.ObjectV2 }
+            LibraryDiagnostics(
+                liveDocuments = db.documentDao().countLive(),
+                trashedDocuments = db.documentDao().countTrashed(),
+                missingDocuments = db.documentDao().countMissing(),
+                tags = db.tagDao().names().size,
+                fields = db.fieldDefDao().all().size,
+                journalObjects = journalObjects,
+                ocrQueue = deviceDb.ocrQueueDao().countActive().first(),
+                enrichmentQueue = deviceDb.aiEnrichQueueDao().count(),
+                editRuns = deviceDb.aiEditJobDao().countJobs(),
+            )
+        }
 }

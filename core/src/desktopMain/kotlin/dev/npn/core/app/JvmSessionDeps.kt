@@ -23,6 +23,7 @@ import dev.npn.core.sync.SyncTransport
 import dev.npn.core.util.EpochClock
 import dev.npn.core.util.JvmLog
 import dev.npn.core.util.NpnLog
+import dev.npn.core.util.RotatingLogFile
 import dev.npn.core.util.SystemEpochClock
 import dev.npn.core.xmp.PdfBoxXmpIO
 import kotlinx.coroutines.CoroutineScope
@@ -101,4 +102,15 @@ fun desktopRclone(): RcloneLaunch {
  * app's directory under the platform data home, beside every library's own directory, so a user
  * report has one file to attach whichever library was open.
  */
-object DesktopLog : NpnLog by JvmLog(Path.of(PlatformDirs.appDataDir(), "npn.log"))
+object DesktopLog : NpnLog {
+    private val file = JvmLog(Path.of(PlatformDirs.appDataDir(), "npn.log"))
+
+    override fun log(
+        level: NpnLog.Level,
+        message: String,
+        error: Throwable?,
+    ) = file.log(level, message, error)
+
+    /** The recent log, and the previous file when it is short, for the diagnostics bundle. */
+    fun tail(maxBytes: Long = RotatingLogFile.DEFAULT_TAIL_BYTES): String = file.tail(maxBytes)
+}

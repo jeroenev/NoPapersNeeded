@@ -298,6 +298,8 @@ internal class SessionGraph(
         MaintenanceFacadeImpl(
             lifetime = lifetime,
             db = db,
+            deviceDb = deps.deviceDb,
+            fs = deps.fs,
             duplicates =
                 DuplicateResolver(
                     fs = deps.fs,
