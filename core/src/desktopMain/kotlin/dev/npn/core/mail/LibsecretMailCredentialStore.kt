@@ -112,13 +112,14 @@ internal class LibsecretMailCredentialStore(
         private val freeFunction: Function = glib.getFunction("g_free")
         private val errorFree: Function = glib.getFunction("g_error_free")
 
+        // invokeVoid, not invoke(null, ...): JNA dereferences the return type, so a null one throws.
         fun free(pointer: Pointer) {
-            freeFunction.invoke(null, arrayOf<Any?>(pointer))
+            freeFunction.invokeVoid(arrayOf<Any?>(pointer))
         }
 
         /** Release a `GError` libsecret set: its message is not needed and may name the server. */
         fun discardError(error: PointerByReference) {
-            error.value?.let { errorFree.invoke(null, arrayOf<Any?>(it)) }
+            error.value?.let { errorFree.invokeVoid(arrayOf<Any?>(it)) }
         }
     }
 
