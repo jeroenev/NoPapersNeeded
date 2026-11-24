@@ -162,7 +162,7 @@ fun SettingsScreen(
     val currentOpenDocument by rememberUpdatedState(onOpenDocument)
     val paneActions =
         remember(vm) {
-            object : SettingsPaneActions, SettingsActions by vm {
+            object : SettingsPaneActions, SettingsActions by vm, ReminderSettingsActions by vm {
                 override fun changeLibrary() = currentChangeLibrary()
 
                 override fun openAutoMatchRules() = currentAutoMatchRules()

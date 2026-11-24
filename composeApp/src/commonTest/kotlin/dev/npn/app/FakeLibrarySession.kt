@@ -35,6 +35,7 @@ class FakeLibrarySession : LibrarySession {
     override val reviewConfig = FakeReviewConfigFacade()
     override val storagePath = FakeStoragePathFacade()
     override val trashRetention = FakeTrashRetention()
+    override val reminders = FakeRemindersFacade()
     override val maintenance = FakeMaintenanceFacade()
     override val work = FakeWorkFacade()
     override val aiEditQueue = FakeAiEditQueue()
@@ -47,7 +48,9 @@ class FakeLibrarySession : LibrarySession {
 
     override fun start() = Unit
 
-    override suspend fun awaitInitialRescan() = true
+    var initialRescanSucceeded = true
+
+    override suspend fun awaitInitialRescan() = initialRescanSucceeded
 
     override suspend fun close() = Unit
 }

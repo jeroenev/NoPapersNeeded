@@ -1,6 +1,7 @@
 package dev.npn.core.db
 
 import androidx.room3.Dao
+import androidx.room3.Embedded
 import androidx.room3.Query
 import androidx.room3.RawQuery
 import androidx.room3.RoomRawQuery
@@ -38,6 +39,13 @@ private const val AI_SEARCH_FILTER =
 internal fun missingSentinel(docId: String): String = MISSING_SENTINEL_PREFIX + docId
 
 private const val MISSING_SENTINEL_PREFIX = "${NpnPaths.NPN_DIR}/missing/"
+
+/** A live document with one of its DATE field values, for the reminder window. */
+data class ReminderFieldRow(
+    @Embedded val doc: DocumentEntity,
+    val fieldKey: String,
+    val fieldValue: String,
+)
 
 @Dao
 interface DocumentDao {
@@ -237,6 +245,22 @@ interface DocumentDao {
 
     @Query("SELECT * FROM documents d WHERE $LIVE_DOCUMENT ORDER BY $NEWEST_FIRST")
     suspend fun getAllLive(): List<DocumentEntity>
+
+    /** The watched VALUE fields of every live document, one row per date field. */
+    @Query(
+        "SELECT d.*, f.fieldKey AS fieldKey, f.fieldValue AS fieldValue " +
+            "FROM documents d INNER JOIN document_fields f ON f.docId = d.docId " +
+            "WHERE $LIVE_DOCUMENT AND f.fieldKey IN (:keys)",
+    )
+    fun observeReminderRows(keys: List<String>): Flow<List<ReminderFieldRow>>
+
+    /** [observeReminderRows] read once, for a notification check. */
+    @Query(
+        "SELECT d.*, f.fieldKey AS fieldKey, f.fieldValue AS fieldValue " +
+            "FROM documents d INNER JOIN document_fields f ON f.docId = d.docId " +
+            "WHERE $LIVE_DOCUMENT AND f.fieldKey IN (:keys)",
+    )
+    suspend fun reminderRows(keys: List<String>): List<ReminderFieldRow>
 
     /** Every row, whatever its lifecycle, for passes that must mirror trash and delete state. */
     @Query("SELECT * FROM documents")

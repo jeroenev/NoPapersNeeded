@@ -16,12 +16,16 @@ import androidx.lifecycle.lifecycleScope
 import dev.npn.app.App
 import dev.npn.app.di.AppEnvironment
 import dev.npn.app.platform.AppLockAuthenticator
+import dev.npn.app.platform.EXTRA_OPEN_DOCUMENT
+import dev.npn.app.platform.EXTRA_REMINDER_LIBRARY
 import dev.npn.app.platform.ForegroundImport
 import dev.npn.app.platform.LaunchImports
 import dev.npn.app.platform.LocalAppLockAuthenticator
 import dev.npn.app.platform.LocalDocumentScanner
 import dev.npn.app.platform.PrintActivity
 import dev.npn.app.platform.importIntoLibrary
+import dev.npn.app.ui.common.OpenDocumentRequest
+import dev.npn.app.ui.common.OpenDocumentRequests
 import dev.npn.core.app.ImportTally
 import dev.npn.core.util.AndroidLog
 import dev.npn.core.util.runLogged
@@ -85,6 +89,7 @@ class MainActivity : FragmentActivity() {
         } else {
             launchImport = unfinished?.token
         }
+        openReminderDocument(intent)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -105,6 +110,20 @@ class MainActivity : FragmentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleIntent(intent, launch = false)
+        openReminderDocument(intent)
+    }
+
+    /**
+     * A tapped reminder notification names the document to show. The extra is consumed so a
+     * recreated activity does not open it again; the shared UI's navigation takes the request
+     * wherever it is, and the notification itself is not an import.
+     */
+    private fun openReminderDocument(intent: Intent?) {
+        val docId = intent?.getStringExtra(EXTRA_OPEN_DOCUMENT) ?: return
+        val location = intent.getStringExtra(EXTRA_REMINDER_LIBRARY)
+        intent.removeExtra(EXTRA_OPEN_DOCUMENT)
+        intent.removeExtra(EXTRA_REMINDER_LIBRARY)
+        if (location != null) OpenDocumentRequests.documents.set(OpenDocumentRequest(docId, location))
     }
 
     /**

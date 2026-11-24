@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reminders_upcoming">Upcoming</string>
+    <string name="reminders_upcoming_count">Upcoming · %1$d</string>
+    <string name="reminders_upcoming_title">Upcoming</string>
+    <string name="reminders_group_overdue">Overdue</string>
+    <string name="reminders_group_today">Today</string>
+    <string name="reminders_group_next_7_days">Next 7 days</string>
+    <string name="reminders_group_later">Later</string>
+    <string name="reminders_empty_title">Nothing upcoming</string>
+    <string name="reminders_empty_subtitle">Documents with a reminder date appear here.</string>
+    <string name="reminders_disabled_title">Reminders are off</string>
+    <string name="reminders_disabled_subtitle">Choose reminder dates in Settings → Documents.</string>
+    <string name="reminders_no_fields_title">No reminder dates</string>
+    <string name="reminders_no_fields_subtitle">Choose a date field in Settings → Documents.</string>
+    <string name="reminders_row_meta">%1$s · %2$s</string>
+    <string name="reminders_notification_channel">Reminders</string>
+    <string name="reminders_notification_title">Reminder: %1$s</string>
+    <string name="reminders_notification_body">%1$s is due on %2$s.</string>
+    <string name="reminders_notification_overdue">%1$s was due on %2$s.</string>
+
+    <string name="common_settings_reminders">Reminders</string>
+    <string name="common_settings_reminders_enabled">Enable reminders</string>
+    <string name="common_settings_reminders_enabled_help">Notify you about documents whose dates are coming up.</string>
+    <string name="common_settings_reminders_fields">Reminder dates</string>
+    <string name="common_settings_reminders_fields_help">Choose the date fields to watch.</string>
+    <string name="common_settings_reminders_no_date_fields">Add a DATE field to use reminders.</string>
+    <string name="common_settings_reminders_lead_days">Notify days before</string>
+    <string name="common_settings_reminders_lead_days_help">Overdue dates are always included.</string>
+    <string name="common_settings_reminders_time">Notification time</string>
+    <string name="common_settings_reminders_time_help">Local time of the daily check, as HH:mm.</string>
+</resources>

@@ -26,6 +26,7 @@ import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.OcrStatus
+import dev.npn.core.app.ReminderBucket
 import dev.npn.core.app.SavedView
 import dev.npn.core.app.SortField
 import dev.npn.core.app.TagInfo
@@ -145,6 +146,10 @@ internal data class LibraryContentState(
     val fields: List<FieldDef> = emptyList(),
     val gridColumnWidth: Int = GridSizing.DEFAULT_COLUMN_WIDTH,
     val landscapeListColumns: Boolean = false,
+    /** Whether this library's reminders are on, which shows the Upcoming entry. */
+    val remindersEnabled: Boolean = false,
+    /** Reminders due now (overdue or today), for the Upcoming entry's count. */
+    val upcomingCount: Int = 0,
     /** The "Getting started" card, null while it is not shown. */
     val gettingStarted: GettingStarted? = null,
 )
@@ -533,6 +538,13 @@ class LibraryViewModel(
             ::LibraryBanners,
         ).stateIn(viewModelScope, WhileSubscribedTimeout, LibraryBanners())
 
+    /** Whether reminders are on and how many are due now, for the library's Upcoming entry. */
+    private val reminderSummary: Flow<Pair<Boolean, Int>> =
+        combine(session.reminders.settings, session.reminders.observeUpcoming()) { settings, items ->
+            settings.isActive to
+                items.count { it.bucket == ReminderBucket.OVERDUE || it.bucket == ReminderBucket.TODAY }
+        }
+
     /** What decorates the documents and lays them out, apart from the results themselves. */
     private val presentation: StateFlow<LibraryContentState> =
         combine(
@@ -540,7 +552,8 @@ class LibraryViewModel(
             tags.map { it.colorsByName() },
             savedViewRepository.observeSavedViews(),
             layout,
-        ) { fieldOptions, tagColors, savedViews, (gridColumnWidth, landscapeListColumns) ->
+            reminderSummary,
+        ) { fieldOptions, tagColors, savedViews, (gridColumnWidth, landscapeListColumns), reminders ->
             LibraryContentState(
                 tagColors = tagColors,
                 savedViews = savedViews,
@@ -549,6 +562,8 @@ class LibraryViewModel(
                 fields = fieldOptions.fields,
                 gridColumnWidth = gridColumnWidth,
                 landscapeListColumns = landscapeListColumns,
+                remindersEnabled = reminders.first,
+                upcomingCount = reminders.second,
             )
         }.stateIn(viewModelScope, WhileSubscribedTimeout, initialContent)
 

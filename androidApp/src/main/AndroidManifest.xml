@@ -12,6 +12,9 @@
         android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
 
+    <!-- Reminder notifications; requested when the user turns reminders on (Android 13+). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!--
         The network security config allows plain HTTP, which Android refuses by default, so an AI
         endpoint the user set up with http:// (Ollama's default, a server on the LAN) works as on
@@ -71,6 +74,15 @@
                 <data android:mimeType="application/pdf" />
             </intent-filter>
         </activity>
+
+        <receiver
+            android:name="dev.npn.app.platform.ReminderTimeChangedReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
+            </intent-filter>
+        </receiver>
 
         <!-- Grant temporary read access to baked copies handed to the share sheet. -->
         <provider

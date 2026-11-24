@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reminders_upcoming">Próximos</string>
+    <string name="reminders_upcoming_count">Próximos · %1$d</string>
+    <string name="reminders_upcoming_title">Próximos</string>
+    <string name="reminders_group_overdue">Vencido</string>
+    <string name="reminders_group_today">Hoy</string>
+    <string name="reminders_group_next_7_days">Próximos 7 días</string>
+    <string name="reminders_group_later">Más adelante</string>
+    <string name="reminders_empty_title">Nada próximo</string>
+    <string name="reminders_empty_subtitle">Los documentos con una fecha de recordatorio aparecen aquí.</string>
+    <string name="reminders_disabled_title">Los recordatorios están desactivados</string>
+    <string name="reminders_disabled_subtitle">Elige fechas de recordatorio en Ajustes → Documentos.</string>
+    <string name="reminders_no_fields_title">Sin fechas de recordatorio</string>
+    <string name="reminders_no_fields_subtitle">Elige un campo de fecha en Ajustes → Documentos.</string>
+    <string name="reminders_row_meta">%1$s · %2$s</string>
+    <string name="reminders_notification_channel">Recordatorios</string>
+    <string name="reminders_notification_title">Recordatorio: %1$s</string>
+    <string name="reminders_notification_body">%1$s vence el %2$s.</string>
+    <string name="reminders_notification_overdue">%1$s venció el %2$s.</string>
+
+    <string name="common_settings_reminders">Recordatorios</string>
+    <string name="common_settings_reminders_enabled">Activar recordatorios</string>
+    <string name="common_settings_reminders_enabled_help">Avisarte de documentos cuyas fechas se acercan.</string>
+    <string name="common_settings_reminders_fields">Fechas de recordatorio</string>
+    <string name="common_settings_reminders_fields_help">Elige los campos de fecha que vigilar.</string>
+    <string name="common_settings_reminders_no_date_fields">Añade un campo FECHA para usar recordatorios.</string>
+    <string name="common_settings_reminders_lead_days">Avisar días antes</string>
+    <string name="common_settings_reminders_lead_days_help">Las fechas vencidas siempre se incluyen.</string>
+    <string name="common_settings_reminders_time">Hora de notificación</string>
+    <string name="common_settings_reminders_time_help">Hora local de la comprobación diaria, como HH:mm.</string>
+</resources>

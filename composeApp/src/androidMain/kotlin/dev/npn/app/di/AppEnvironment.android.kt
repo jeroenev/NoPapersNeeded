@@ -1,6 +1,7 @@
 package dev.npn.app.di
 
 import android.content.Context
+import dev.npn.app.platform.ReminderRuntime
 import dev.npn.app.platform.hasDirectStorageAccess
 import dev.npn.app.platform.isAppPrivateLocation
 import dev.npn.core.app.androidRclone
@@ -22,21 +23,23 @@ import java.nio.file.Paths
  */
 fun createAppEnvironment(context: Context): AppEnvironment {
     val appContext = context.applicationContext
-    val settings = SettingsRepositoryImpl(appContext)
-    return DefaultAppEnvironment(
-        settings,
-        watchedFolder = { location -> androidWatchedFolder(appContext, location) },
-        log = AndroidLog,
-        cloudSetup = { RcloneTransport(androidRclone(appContext)).let { CloudSetupEngine(it.setup, it::close) } },
-    ) { location, scope ->
-        checkOpenable(location)
-        androidSessionDeps(
-            context = appContext,
-            location = location,
-            scope = scope,
-            settings = SessionSettings.from(settings),
-            installationId = settings.settings.first().installationId,
-        )
+    return ReminderRuntime.create {
+        val settings = SettingsRepositoryImpl(appContext)
+        DefaultAppEnvironment(
+            settings,
+            watchedFolder = { location -> androidWatchedFolder(appContext, location) },
+            log = AndroidLog,
+            cloudSetup = { RcloneTransport(androidRclone(appContext)).let { CloudSetupEngine(it.setup, it::close) } },
+        ) { location, scope ->
+            checkOpenable(location)
+            androidSessionDeps(
+                context = appContext,
+                location = location,
+                scope = scope,
+                settings = SessionSettings.from(settings),
+                installationId = settings.settings.first().installationId,
+            )
+        }
     }
 }
 
