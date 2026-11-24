@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="detail_peek_show_details">Afficher les détails</string>
+    <string name="detail_peek_hide_details">Masquer les détails</string>
+</resources>

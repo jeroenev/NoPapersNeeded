@@ -71,6 +71,11 @@ internal fun DocumentEditor(
     onReviewNext: () -> Unit,
     hasNext: Boolean,
     modifier: Modifier = Modifier,
+    /**
+     * The compact detail's peek sheet state. Null (the wide layout and the side panel) keeps the
+     * tabbed metadata panel this editor has always shown.
+     */
+    peekSheet: PeekSheetState? = null,
 ) {
     val item = state.document.item
     if (item == null) {
@@ -80,6 +85,46 @@ internal fun DocumentEditor(
         return
     }
     val editing = rememberDraftEditing(item.doc.docId, item, state.document.fieldDefs, writes)
+    if (peekSheet != null) {
+        var pickedTab by rememberSaveable { mutableStateOf<PanelTab?>(null) }
+        PeekDocumentSheet(
+            item = editing.item,
+            tagColors = state.vocabulary.tagColors,
+            state = peekSheet,
+            preview = preview,
+            metadata = { metadataModifier ->
+                MetadataTabs(
+                    state = state,
+                    item = editing.item,
+                    refused = editing.draft.refused,
+                    writeBlocked = editing.draft.saving || !editing.draft.writable,
+                    actions = editing.actions,
+                    picked = pickedTab,
+                    onPick = { pickedTab = it },
+                    previewTab = null,
+                    modifier = metadataModifier,
+                )
+            },
+            statusBar = { statusModifier ->
+                EditorStatusBar(
+                    draft = editing.draft,
+                    onRetry = editing.actions::commitDraft,
+                    onUndo = editing::undo,
+                    onDiscard = editing::discard,
+                    onReview =
+                        if (state.document.reviewMode.reviewMarkerIsAuthoritative) {
+                            { editing.markReviewed(onReviewNext) }
+                        } else {
+                            null
+                        },
+                    hasNext = hasNext,
+                    modifier = statusModifier,
+                )
+            },
+            modifier = modifier.imePadding().saveKeys(editing.actions::commitDraft),
+        )
+        return
+    }
     Column(modifier.imePadding().saveKeys(editing.actions::commitDraft)) {
         MetadataPanel(
             state = state,

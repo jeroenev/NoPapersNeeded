@@ -195,6 +195,22 @@ class DocumentLayoutTest : EnglishLocaleTest() {
             }
         }
 
+    /**
+     * The compact detail shows the peek sheet over the preview, while the wide layout keeps its
+     * side-by-side panes and tabs: the two presentations are chosen by the host, not by a second
+     * editor.
+     */
+    @Test
+    fun compactDetailShowsThePeekSheetWithoutTheDetailsTab() =
+        onUiThread {
+            scene(360, 740, peekSheet = PeekSheetState()).closing {
+                render()
+                assertNotNull(text("PDF preview"))
+                assertNotNull(text("Electricity invoice 2026"))
+                assertTrue(nodes().none { "Details" in it.texts() })
+            }
+        }
+
     private fun scene(
         width: Int,
         height: Int,
@@ -204,6 +220,8 @@ class DocumentLayoutTest : EnglishLocaleTest() {
         widthClass: State<WindowWidthClass>? = null,
         extraFields: Map<String, String> = emptyMap(),
         orphanMarker: Boolean = false,
+        /** The compact detail's peek sheet, when the scene is that presentation. */
+        peekSheet: PeekSheetState? = null,
     ): ImageComposeScene {
         val store = DocumentDrafts(FakeMetadataWriter(), CoroutineScope(Dispatchers.Unconfined))
         // An actual change, so the scene renders the save bar in its unsaved state.
@@ -246,6 +264,7 @@ class DocumentLayoutTest : EnglishLocaleTest() {
                             preview = { Text("PDF preview", modifier = it) },
                             onReviewNext = {},
                             hasNext = true,
+                            peekSheet = peekSheet,
                         )
                     }
                 }
