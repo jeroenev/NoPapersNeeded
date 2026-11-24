@@ -5,10 +5,10 @@
     <string name="common_settings_ai_spend_all_time">Gesamt</string>
     <string name="common_settings_ai_spend_empty">Noch keine Anfragen erfasst.</string>
     <string name="common_settings_ai_spend_estimated">Kosten sind Schätzungen aus Listenpreisen. Wenn ein Anbieter die Nutzung nicht meldet, sind auch die Token-Zahlen geschätzt. Nur auf diesem Gerät gespeichert.</string>
-    <string name="common_settings_ai_spend_model_line">%1$s · %2$s — %3$s Anfragen · %4$s ein / %5$s aus · %6$s</string>
-    <string name="common_settings_ai_spend_model_line_unpriced">%1$s · %2$s — %3$s Anfragen · %4$s ein / %5$s aus (Preis unbekannt)</string>
-    <string name="common_settings_ai_spend_total">Gesamt: %1$s Anfragen · %2$s ein / %3$s aus · %4$s</string>
-    <string name="common_settings_ai_spend_total_unpriced">Gesamt: %1$s Anfragen · %2$s ein / %3$s aus (für einige Modelle ist kein Preis bekannt)</string>
+    <string name="common_settings_ai_spend_model_line">%1$s · %2$s — Anfragen: %3$s · %4$s ein / %5$s aus · %6$s</string>
+    <string name="common_settings_ai_spend_model_line_unpriced">%1$s · %2$s — Anfragen: %3$s · %4$s ein / %5$s aus (Preis unbekannt)</string>
+    <string name="common_settings_ai_spend_total">Anfragen gesamt: %1$s · %2$s ein / %3$s aus · %4$s</string>
+    <string name="common_settings_ai_spend_total_unpriced">Anfragen gesamt: %1$s · %2$s ein / %3$s aus (für einige Modelle ist kein Preis bekannt)</string>
     <string name="common_settings_ai_spend_reset">Ausgabenverlauf löschen</string>
     <string name="common_settings_ai_spend_reset_title">KI-Ausgabenverlauf löschen?</string>
     <string name="common_settings_ai_spend_reset_message">Jede erfasste Anfrage wird von diesem Gerät entfernt. Das lässt sich nicht rückgängig machen.</string>
@@ -16,19 +16,17 @@
     <string name="common_settings_ai_spend_reset_done">KI-Ausgabenverlauf gelöscht.</string>
     <string name="common_settings_ai_spend_reset_failed">KI-Ausgabenverlauf konnte nicht gelöscht werden: %1$s</string>
     <string name="common_settings_max_run_requests">Anfragegrenze pro Sammellauf</string>
-    <string name="common_settings_max_run_requests_help">Ein KI-Sammellauf endet nach %1$d Modellanfragen und meldet, was übrig blieb. Erlaubter Bereich: %2$d–%3$d.</string>
+    <string name="common_settings_max_run_requests_help">Ein KI-Sammellauf endet, sobald er so viele Modellanfragen gestellt hat (derzeit %1$d), und meldet, was übrig blieb. Erlaubter Bereich: %2$d–%3$d.</string>
 
-    <string name="ai_spend_estimate_documents">%1$s Dokumente</string>
-    <string name="ai_spend_estimate_requests">%1$s Modellanfragen</string>
-    <string name="ai_spend_estimate_pages">%1$s Seiten</string>
+    <string name="ai_spend_estimate_documents">Dokumente: %1$s</string>
+    <string name="ai_spend_estimate_requests">Modellanfragen: %1$s</string>
+    <string name="ai_spend_estimate_pages">Seiten: %1$s</string>
     <string name="ai_spend_estimate_tokens">Geschätzte Eingabe: %1$s Token</string>
     <string name="ai_spend_estimate_cost">Geschätzte Kosten: %1$s</string>
     <string name="ai_spend_estimate_tokens_only">Geschätzte Eingabe: %1$s Token (Preis unbekannt)</string>
-    <string name="ai_spend_estimate_cap">Grenze pro Lauf: %1$s Anfragen</string>
+    <string name="ai_spend_estimate_cap">Anfragegrenze pro Lauf: %1$s</string>
     <string name="ai_spend_estimate_over_cap">Dieser Lauf ist größer als die Grenze pro Lauf. Erhöhe die Grenze unter Einstellungen → KI oder verkleinere den Umfang.</string>
     <string name="ai_edit_confirm_spend_title">Diesen KI-Lauf starten?</string>
     <string name="ai_edit_confirm_spend_confirm">Starten</string>
-    <string name="ai_edit_cap_reached">Bei der Grenze von %1$s Anfragen pro Lauf gestoppt; %2$s Dokumente wurden nicht gesendet.</string>
-    <string name="detail_ai_ocr_estimate">Geschätzte Eingabe: %1$s Token · geschätzte Kosten: %2$s · Grenze pro Lauf: %3$s Anfragen</string>
-    <string name="detail_ai_ocr_estimate_tokens_only">Geschätzte Eingabe: %1$s Token (Preis unbekannt) · Grenze pro Lauf: %2$s Anfragen</string>
+    <string name="ai_edit_cap_reached">An der Anfragegrenze pro Lauf (%1$s) gestoppt. Nicht gesendete Dokumente: %2$s.</string>
 </resources>

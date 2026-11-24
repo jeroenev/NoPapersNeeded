@@ -5,10 +5,10 @@
     <string name="common_settings_ai_spend_all_time">Totaal</string>
     <string name="common_settings_ai_spend_empty">Nog geen aanvragen vastgelegd.</string>
     <string name="common_settings_ai_spend_estimated">Kosten zijn schattingen op basis van lijstprijzen. Als een provider het gebruik niet meldt, zijn de tokenaantallen ook een schatting. Alleen op dit apparaat opgeslagen.</string>
-    <string name="common_settings_ai_spend_model_line">%1$s · %2$s — %3$s aanvragen · %4$s in / %5$s uit · %6$s</string>
-    <string name="common_settings_ai_spend_model_line_unpriced">%1$s · %2$s — %3$s aanvragen · %4$s in / %5$s uit (prijs onbekend)</string>
-    <string name="common_settings_ai_spend_total">Totaal: %1$s aanvragen · %2$s in / %3$s uit · %4$s</string>
-    <string name="common_settings_ai_spend_total_unpriced">Totaal: %1$s aanvragen · %2$s in / %3$s uit (voor sommige modellen is geen prijs bekend)</string>
+    <string name="common_settings_ai_spend_model_line">%1$s · %2$s — aanvragen: %3$s · %4$s in / %5$s uit · %6$s</string>
+    <string name="common_settings_ai_spend_model_line_unpriced">%1$s · %2$s — aanvragen: %3$s · %4$s in / %5$s uit (prijs onbekend)</string>
+    <string name="common_settings_ai_spend_total">Aanvragen totaal: %1$s · %2$s in / %3$s uit · %4$s</string>
+    <string name="common_settings_ai_spend_total_unpriced">Aanvragen totaal: %1$s · %2$s in / %3$s uit (voor sommige modellen is geen prijs bekend)</string>
     <string name="common_settings_ai_spend_reset">Kostengeschiedenis wissen</string>
     <string name="common_settings_ai_spend_reset_title">AI-kostengeschiedenis wissen?</string>
     <string name="common_settings_ai_spend_reset_message">Elke vastgelegde aanvraag wordt van dit apparaat verwijderd. Dit kan niet ongedaan worden gemaakt.</string>
@@ -16,19 +16,17 @@
     <string name="common_settings_ai_spend_reset_done">AI-kostengeschiedenis gewist.</string>
     <string name="common_settings_ai_spend_reset_failed">Kon de AI-kostengeschiedenis niet wissen: %1$s</string>
     <string name="common_settings_max_run_requests">Aanvraaglimiet per bulkrun</string>
-    <string name="common_settings_max_run_requests_help">Een AI-bulkrun stopt na %1$d modelaanvragen en meldt wat er overbleef. Toegestaan bereik: %2$d–%3$d.</string>
+    <string name="common_settings_max_run_requests_help">Een AI-bulkrun stopt zodra hij zoveel modelaanvragen heeft gedaan (nu %1$d) en meldt wat er overbleef. Toegestaan bereik: %2$d–%3$d.</string>
 
-    <string name="ai_spend_estimate_documents">%1$s documenten</string>
-    <string name="ai_spend_estimate_requests">%1$s modelaanvragen</string>
-    <string name="ai_spend_estimate_pages">%1$s pagina’s</string>
+    <string name="ai_spend_estimate_documents">Documenten: %1$s</string>
+    <string name="ai_spend_estimate_requests">Modelaanvragen: %1$s</string>
+    <string name="ai_spend_estimate_pages">Pagina’s: %1$s</string>
     <string name="ai_spend_estimate_tokens">Geschatte invoer: %1$s tokens</string>
     <string name="ai_spend_estimate_cost">Geschatte kosten: %1$s</string>
     <string name="ai_spend_estimate_tokens_only">Geschatte invoer: %1$s tokens (prijs onbekend)</string>
-    <string name="ai_spend_estimate_cap">Limiet per run: %1$s aanvragen</string>
+    <string name="ai_spend_estimate_cap">Aanvraaglimiet per run: %1$s</string>
     <string name="ai_spend_estimate_over_cap">Deze run is groter dan de limiet per run. Verhoog de limiet in Instellingen → AI of verklein het bereik.</string>
     <string name="ai_edit_confirm_spend_title">Deze AI-run starten?</string>
     <string name="ai_edit_confirm_spend_confirm">Starten</string>
-    <string name="ai_edit_cap_reached">Gestopt bij de limiet van %1$s aanvragen per run; %2$s documenten zijn niet verzonden.</string>
-    <string name="detail_ai_ocr_estimate">Geschatte invoer: %1$s tokens · geschatte kosten: %2$s · limiet per run: %3$s aanvragen</string>
-    <string name="detail_ai_ocr_estimate_tokens_only">Geschatte invoer: %1$s tokens (prijs onbekend) · limiet per run: %2$s aanvragen</string>
+    <string name="ai_edit_cap_reached">Gestopt bij de aanvraaglimiet per run (%1$s). Niet verzonden documenten: %2$s.</string>
 </resources>

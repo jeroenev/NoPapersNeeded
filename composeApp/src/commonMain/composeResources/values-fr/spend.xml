@@ -5,10 +5,10 @@
     <string name="common_settings_ai_spend_all_time">Total</string>
     <string name="common_settings_ai_spend_empty">Aucune requête enregistrée pour l’instant.</string>
     <string name="common_settings_ai_spend_estimated">Les coûts sont estimés à partir des tarifs publics. Quand un fournisseur ne signale pas l’usage, les jetons sont aussi une estimation. Stocké uniquement sur cet appareil.</string>
-    <string name="common_settings_ai_spend_model_line">%1$s · %2$s — %3$s requêtes · %4$s en entrée / %5$s en sortie · %6$s</string>
-    <string name="common_settings_ai_spend_model_line_unpriced">%1$s · %2$s — %3$s requêtes · %4$s en entrée / %5$s en sortie (prix inconnu)</string>
-    <string name="common_settings_ai_spend_total">Total : %1$s requêtes · %2$s en entrée / %3$s en sortie · %4$s</string>
-    <string name="common_settings_ai_spend_total_unpriced">Total : %1$s requêtes · %2$s en entrée / %3$s en sortie (certains modèles n’ont pas de prix)</string>
+    <string name="common_settings_ai_spend_model_line">%1$s · %2$s — requêtes : %3$s · %4$s en entrée / %5$s en sortie · %6$s</string>
+    <string name="common_settings_ai_spend_model_line_unpriced">%1$s · %2$s — requêtes : %3$s · %4$s en entrée / %5$s en sortie (prix inconnu)</string>
+    <string name="common_settings_ai_spend_total">Total des requêtes : %1$s · %2$s en entrée / %3$s en sortie · %4$s</string>
+    <string name="common_settings_ai_spend_total_unpriced">Total des requêtes : %1$s · %2$s en entrée / %3$s en sortie (certains modèles n’ont pas de prix)</string>
     <string name="common_settings_ai_spend_reset">Effacer l’historique des dépenses</string>
     <string name="common_settings_ai_spend_reset_title">Effacer l’historique des dépenses IA ?</string>
     <string name="common_settings_ai_spend_reset_message">Toutes les requêtes enregistrées seront supprimées de cet appareil. Cette action est irréversible.</string>
@@ -16,19 +16,17 @@
     <string name="common_settings_ai_spend_reset_done">Historique des dépenses IA effacé.</string>
     <string name="common_settings_ai_spend_reset_failed">Impossible d’effacer l’historique des dépenses IA : %1$s</string>
     <string name="common_settings_max_run_requests">Limite de requêtes par traitement groupé</string>
-    <string name="common_settings_max_run_requests_help">Un traitement groupé IA s’arrête après %1$d requêtes au modèle et indique ce qui reste. Plage autorisée : %2$d–%3$d.</string>
+    <string name="common_settings_max_run_requests_help">Un traitement groupé IA s’arrête une fois ce nombre de requêtes au modèle atteint (actuellement %1$d) et indique ce qui reste. Plage autorisée : %2$d–%3$d.</string>
 
-    <string name="ai_spend_estimate_documents">%1$s documents</string>
-    <string name="ai_spend_estimate_requests">%1$s requêtes au modèle</string>
-    <string name="ai_spend_estimate_pages">%1$s pages</string>
+    <string name="ai_spend_estimate_documents">Documents : %1$s</string>
+    <string name="ai_spend_estimate_requests">Requêtes au modèle : %1$s</string>
+    <string name="ai_spend_estimate_pages">Pages : %1$s</string>
     <string name="ai_spend_estimate_tokens">Entrée estimée : %1$s jetons</string>
     <string name="ai_spend_estimate_cost">Coût estimé : %1$s</string>
     <string name="ai_spend_estimate_tokens_only">Entrée estimée : %1$s jetons (prix inconnu)</string>
-    <string name="ai_spend_estimate_cap">Limite par traitement : %1$s requêtes</string>
+    <string name="ai_spend_estimate_cap">Limite de requêtes par traitement : %1$s</string>
     <string name="ai_spend_estimate_over_cap">Ce traitement dépasse la limite par traitement. Augmentez la limite dans Réglages → IA ou réduisez la portée.</string>
     <string name="ai_edit_confirm_spend_title">Démarrer ce traitement IA ?</string>
     <string name="ai_edit_confirm_spend_confirm">Démarrer</string>
-    <string name="ai_edit_cap_reached">Arrêt à la limite de %1$s requêtes par traitement ; %2$s documents n’ont pas été envoyés.</string>
-    <string name="detail_ai_ocr_estimate">Entrée estimée : %1$s jetons · coût estimé : %2$s · limite par traitement : %3$s requêtes</string>
-    <string name="detail_ai_ocr_estimate_tokens_only">Entrée estimée : %1$s jetons (prix inconnu) · limite par traitement : %2$s requêtes</string>
+    <string name="ai_edit_cap_reached">Arrêt à la limite de requêtes par traitement (%1$s). Documents non envoyés : %2$s.</string>
 </resources>

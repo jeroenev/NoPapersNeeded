@@ -5,10 +5,10 @@
     <string name="common_settings_ai_spend_all_time">All time</string>
     <string name="common_settings_ai_spend_empty">No requests recorded yet.</string>
     <string name="common_settings_ai_spend_estimated">Costs are estimates from list prices. Where a provider does not report usage, token counts are estimates too. Stored on this device only.</string>
-    <string name="common_settings_ai_spend_model_line">%1$s · %2$s — %3$s requests · %4$s in / %5$s out · %6$s</string>
-    <string name="common_settings_ai_spend_model_line_unpriced">%1$s · %2$s — %3$s requests · %4$s in / %5$s out (price unknown)</string>
-    <string name="common_settings_ai_spend_total">Total: %1$s requests · %2$s in / %3$s out · %4$s</string>
-    <string name="common_settings_ai_spend_total_unpriced">Total: %1$s requests · %2$s in / %3$s out (some models have no price)</string>
+    <string name="common_settings_ai_spend_model_line">%1$s · %2$s — requests: %3$s · %4$s in / %5$s out · %6$s</string>
+    <string name="common_settings_ai_spend_model_line_unpriced">%1$s · %2$s — requests: %3$s · %4$s in / %5$s out (price unknown)</string>
+    <string name="common_settings_ai_spend_total">Total requests: %1$s · %2$s in / %3$s out · %4$s</string>
+    <string name="common_settings_ai_spend_total_unpriced">Total requests: %1$s · %2$s in / %3$s out (some models have no price)</string>
     <string name="common_settings_ai_spend_reset">Reset spend history</string>
     <string name="common_settings_ai_spend_reset_title">Reset AI spend history?</string>
     <string name="common_settings_ai_spend_reset_message">Every recorded request is removed from this device. This cannot be undone.</string>
@@ -16,19 +16,17 @@
     <string name="common_settings_ai_spend_reset_done">AI spend history cleared.</string>
     <string name="common_settings_ai_spend_reset_failed">Could not clear AI spend history: %1$s</string>
     <string name="common_settings_max_run_requests">Request cap per bulk run</string>
-    <string name="common_settings_max_run_requests_help">A bulk AI run stops after %1$d model requests and reports what was left. Allowed range: %2$d–%3$d.</string>
+    <string name="common_settings_max_run_requests_help">A bulk AI run stops once it has made this many model requests (now %1$d) and reports what was left. Allowed range: %2$d–%3$d.</string>
 
-    <string name="ai_spend_estimate_documents">%1$s documents</string>
-    <string name="ai_spend_estimate_requests">%1$s model requests</string>
-    <string name="ai_spend_estimate_pages">%1$s pages</string>
+    <string name="ai_spend_estimate_documents">Documents: %1$s</string>
+    <string name="ai_spend_estimate_requests">Model requests: %1$s</string>
+    <string name="ai_spend_estimate_pages">Pages: %1$s</string>
     <string name="ai_spend_estimate_tokens">Estimated input: %1$s tokens</string>
     <string name="ai_spend_estimate_cost">Estimated cost: %1$s</string>
     <string name="ai_spend_estimate_tokens_only">Estimated input: %1$s tokens (price unknown)</string>
-    <string name="ai_spend_estimate_cap">Per-run cap: %1$s requests</string>
+    <string name="ai_spend_estimate_cap">Per-run request cap: %1$s</string>
     <string name="ai_spend_estimate_over_cap">This run is larger than the per-run cap. Raise the cap in Settings → AI or narrow the scope.</string>
     <string name="ai_edit_confirm_spend_title">Start this AI run?</string>
     <string name="ai_edit_confirm_spend_confirm">Start</string>
-    <string name="ai_edit_cap_reached">Stopped at the per-run cap of %1$s requests; %2$s documents were not sent.</string>
-    <string name="detail_ai_ocr_estimate">Estimated input: %1$s tokens · estimated cost: %2$s · per-run cap: %3$s requests</string>
-    <string name="detail_ai_ocr_estimate_tokens_only">Estimated input: %1$s tokens (price unknown) · per-run cap: %2$s requests</string>
+    <string name="ai_edit_cap_reached">Stopped at the per-run request cap (%1$s). Documents not sent: %2$s.</string>
 </resources>
