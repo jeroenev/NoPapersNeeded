@@ -3,7 +3,10 @@ package dev.npn.core.sync
 import dev.npn.core.app.AppSessionRig
 import dev.npn.core.app.LibrarySessionImpl
 import dev.npn.core.fs.sha256Bytes
+import dev.npn.core.util.runCatchingCancellable
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.awaitCancellation
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -24,6 +27,9 @@ import kotlin.io.path.relativeTo
  * [tamperDownloads] delivers the named paths with extra bytes appended (a size that no longer
  * matches the listing); [failList] makes the listing itself throw; [onceBeforeStat] runs a hook
  * right before the next `stat` of one path, to change the remote between planning and acting.
+ * [failUploads] leaves half an object at the target and throws (a connection cut mid-upload);
+ * [landThenBlockUploads] lands the whole object and blocks, so the test can cancel the pass between the
+ * upload and the manifest write does.
  */
 class DirectoryRemoteStore(
     val root: Path,
@@ -33,6 +39,9 @@ class DirectoryRemoteStore(
     var reportsDropboxHash = false
     val failDownloads = HashSet<String>()
     val tamperDownloads = HashSet<String>()
+    val failUploads = HashSet<String>()
+    val landThenBlockUploads = HashSet<String>()
+    val uploadLanded = CompletableDeferred<Unit>()
     var failList = false
 
     // A pass transfers several files at once, on more than one thread.
@@ -106,12 +115,23 @@ class DirectoryRemoteStore(
         uploadCount.incrementAndGet()
         val target = root.resolve(path)
         Files.createDirectories(target.parent)
+        if (path in failUploads) {
+            // Half a file, then the process dies or the wire drops.
+            val bytes = Files.readAllBytes(Path.of(fromLocalPath))
+            Files.write(target, bytes.copyOf(bytes.size / 2))
+            throw IOException("connection reset while uploading $path")
+        }
         Files.copy(
             Path.of(fromLocalPath),
             target,
             StandardCopyOption.REPLACE_EXISTING,
             StandardCopyOption.COPY_ATTRIBUTES,
         )
+        if (path in landThenBlockUploads) {
+            // The object is up; hold the pass before it can record the identity in its manifest.
+            uploadLanded.complete(Unit)
+            awaitCancellation()
+        }
     }
 
     override suspend fun move(
@@ -236,6 +256,100 @@ internal class SyncPair private constructor(
             return SyncPair(remote, a, b)
         }
     }
+}
+
+/**
+ * Two or more libraries in separate folders sharing one directory-backed remote, each its own
+ * device and its own manifest. [join] adds one as a fresh device does, and [retire] takes one away
+ * as a dead laptop does, for the "third replica" and "restore" scenarios.
+ */
+internal class SyncCluster private constructor(
+    private val scope: CoroutineScope,
+    val remote: DirectoryRemoteStore,
+    private val transport: DirectoryTransport,
+    private val config: CloudSyncConfig,
+) {
+    private val joined = LinkedHashMap<String, AppSessionRig>()
+
+    /** The live devices, in join order. */
+    val rigs: List<AppSessionRig> get() = joined.values.toList()
+
+    /** A new, empty library on this device, sharing the remote, as another install would be. */
+    suspend fun join(installationId: String): AppSessionRig {
+        check(installationId !in joined) { "device already joined: $installationId" }
+        return AppSessionRig
+            .create(
+                scope,
+                syncTransport = transport,
+                cloudSync = config,
+                installationId = installationId,
+            ).also { joined[installationId] = it }
+    }
+
+    /** Close and forget [rig], as a device that left for good. */
+    suspend fun retire(rig: AppSessionRig) {
+        joined.values.removeIf { it === rig }
+        rig.close()
+    }
+
+    suspend fun restart(installationId: String): AppSessionRig {
+        val rig = joined.getValue(installationId)
+        return rig.restart(transport, installationId).also { joined[installationId] = it }
+    }
+
+    // Named lookups, so retiring a device cannot silently turn one test device into another.
+    val a: AppSessionRig get() = joined.getValue("install-a")
+    val b: AppSessionRig get() = joined.getValue("install-b")
+
+    suspend fun close() {
+        for (rig in rigs) {
+            // Cleanup must not mask the test's own failure; a close that throws still leaves the
+            // next test with fresh temp directories.
+            runCatchingCancellable { rig.close() }
+        }
+        joined.clear()
+        remote.root.toFile().deleteRecursively()
+    }
+
+    companion object {
+        suspend fun open(scope: CoroutineScope): SyncCluster {
+            val remote = DirectoryRemoteStore(Files.createTempDirectory("npn-sync-remote"))
+            val cluster =
+                SyncCluster(
+                    scope,
+                    remote,
+                    DirectoryTransport(remote),
+                    CloudSyncConfig(enabled = false, remote = "test:library"),
+                )
+            cluster.join("install-a")
+            cluster.join("install-b")
+            return cluster
+        }
+    }
+}
+
+/**
+ * Run a pass on each of [members] in order, again until a whole round changes nothing. Returns the
+ * number of rounds taken. A remote-backed pass reaches quiescence once every replica has seen the
+ * others' metadata. A pass with an error, or (unless [allowConflicts]) a conflict, is not quiescent:
+ * a scenario that promises clean convergence must not pass over failed or stuck work.
+ */
+internal suspend fun SyncCluster.converge(
+    members: List<AppSessionRig> = rigs,
+    maxRounds: Int = 6,
+    allowConflicts: Boolean = false,
+): Int {
+    repeat(maxRounds) { round ->
+        var changed = false
+        for (rig in members.toList()) {
+            val report = rig.session.syncCompleted()
+            if (report.changedAnything) changed = true
+            check(report.errors.isEmpty()) { "pass failed: ${report.errors}" }
+            check(allowConflicts || report.conflicts.isEmpty()) { "unexpected conflicts: ${report.conflicts}" }
+        }
+        if (!changed) return round + 1
+    }
+    error("replicas did not converge in $maxRounds rounds")
 }
 
 /** Run a manual pass and require it to have completed; returns its report. */
