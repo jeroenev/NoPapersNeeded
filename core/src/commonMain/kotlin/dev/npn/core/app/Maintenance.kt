@@ -42,6 +42,16 @@ interface MaintenanceFacade {
         docId: String,
         segments: List<IntRange>,
     ): SplitOutcome
+
+    /**
+     * Check the library folder against itself: every live document's file is there, readable, and
+     * hashes to the document's id, and every journal object in the store holds the bytes its name
+     * claims. Reports what is missing, unreadable or changed, plus files in the object store the
+     * journal cannot read, and expected leftovers such as a superseded document as notes. Read-only:
+     * nothing is repaired, moved or deleted, and no document's content reaches the report. Main-safe
+     * and cancellable, reporting [onProgress] as it walks; throws only when the session is closed.
+     */
+    suspend fun verifyLibrary(onProgress: (LibraryVerificationProgress) -> Unit = {}): LibraryVerificationReport
 }
 
 sealed interface RebuildOutcome {

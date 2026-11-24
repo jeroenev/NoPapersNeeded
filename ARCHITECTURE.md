@@ -379,6 +379,26 @@ truth; the user just never picks it.
   documents that swapped names (or a chain of renames) can stay apart: replicas then show the same
   documents under other file names. The library simulation compares cloud replicas without paths
   for now (`KnownIssues.CLOUD_NAMES_MAY_DIFFER`).
+- The settings screen reads the pass as `SyncHealth` (`SyncService.health`, derived from the live
+  status and this library's schedule): the last success and its date, the consecutive-failure
+  streak, the next scheduled pass, the typed last failure, and the pending uploads/downloads the
+  last plan found and did not finish. The streak and last success, like the pending counts, are
+  persisted in the `sync.lastRun` record in `device.db`; a pass that ended before planning carries
+  the previous plan's counts, so a failure never claims there is nothing left. These counts are "as
+  of the last check", never a live remote reading. A conflict is explained by its `ConflictKind`
+  with the document's title where the library still shows it and the remote path the pass saw.
+
+### 5.7 Library verification
+
+`MaintenanceFacade.verifyLibrary` is the read-only check behind Library settings' "Verify library":
+`LibraryVerifier` walks the live documents (a listed regular file, the stored size, and a SHA-256
+equal to the document id) and the journal object store (each object's bytes, a recognized conflict
+copy's included, against the hash its name carries), reports missing/unreadable/size/hash problems
+and a store file this build cannot read (another store version included) as orphaned, and reports a
+superseded document still on disk as a note, not damage. It never writes, repairs
+or deletes, never puts document bytes in its report, skips symlinks with the library walk, and is
+cancellable with progress. A listing it cannot do is one `STORE_UNREADABLE` finding, not a problem
+per item.
 
 ## 6. Rules by concept
 

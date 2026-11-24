@@ -2,6 +2,7 @@ package dev.npn.app
 
 import androidx.lifecycle.SavedStateHandle
 import dev.npn.app.platform.FolderPick
+import dev.npn.app.platform.copyToClipboard
 import dev.npn.app.ui.settings.AiModelListState
 import dev.npn.app.ui.settings.AiSelfTestState
 import dev.npn.app.ui.settings.CloudSetupActions
@@ -26,6 +27,7 @@ internal fun settingsVm(
     session: FakeLibrarySession = FakeLibrarySession(),
     saved: SavedStateHandle = SavedStateHandle(),
     outliving: CoroutineScope? = null,
+    copy: suspend (String) -> Unit = ::copyToClipboard,
 ) = SettingsViewModel(
     settings,
     session,
@@ -33,6 +35,7 @@ internal fun settingsVm(
     saved = saved,
     newRemoteName = { type -> "$type-1" },
     outliving = outliving,
+    copy = copy,
 )
 
 /** What a settings pane shows for [snapshot], with no AI models, self-test or fields loaded. */
@@ -79,6 +82,14 @@ internal open class NoSettingsPaneActions : SettingsPaneActions {
 
     override fun syncNow() = Unit
 
+    override fun verifyLibrary() = Unit
+
+    override fun cancelLibraryVerification() = Unit
+
+    override fun dismissLibraryVerification() = Unit
+
+    override fun copyLibraryVerificationReport(text: String) = Unit
+
     override fun setCloudAutomatic(on: Boolean) = Unit
 
     override fun setCloudInterval(minutes: Int) = Unit
@@ -110,6 +121,8 @@ internal open class NoSettingsPaneActions : SettingsPaneActions {
     override fun openCategory(id: SettingsCategoryId) = Unit
 
     override fun openFieldDialog(dialog: FieldDialog?) = Unit
+
+    override fun openDocument(docId: String) = Unit
 }
 
 /** A setup wizard that does nothing, for a pane rendered without a view model. */

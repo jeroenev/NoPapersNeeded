@@ -2,6 +2,7 @@ package dev.npn.core.app
 
 import dev.npn.core.sync.CloudSetup
 import dev.npn.core.sync.CloudSyncConfig
+import dev.npn.core.sync.SyncHealth
 import dev.npn.core.sync.SyncOutcome
 import dev.npn.core.sync.SyncStatus
 import dev.npn.core.sync.TransportAvailability
@@ -15,6 +16,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
  */
 interface SyncFacade {
     val status: Flow<SyncStatus>
+
+    /**
+     * The same status read as the settings screen says it: the last success and failure streak, the
+     * next automatic pass, and what the last plan left pending ([SyncHealth]).
+     */
+    val health: Flow<SyncHealth>
 
     /** This library's remote and schedule on this device. */
     val config: Flow<CloudSyncConfig>
@@ -47,6 +54,8 @@ interface SyncFacade {
 /** The facade of a session whose host wired no transfer engine. */
 object NoSyncFacade : SyncFacade {
     override val status: Flow<SyncStatus> = MutableStateFlow(SyncStatus())
+
+    override val health: Flow<SyncHealth> = MutableStateFlow(SyncHealth())
 
     override val config: Flow<CloudSyncConfig> = MutableStateFlow(CloudSyncConfig.DISABLED)
 

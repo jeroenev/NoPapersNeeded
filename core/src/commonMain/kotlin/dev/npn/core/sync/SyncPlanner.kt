@@ -207,6 +207,16 @@ data class SyncPlan(
 ) {
     val isEmpty: Boolean
         get() = local.isEmpty() && remote.isEmpty() && pushMetadata.isEmpty()
+
+    /** Documents, trash entries and metadata this plan would upload. */
+    val plannedUploads: Int
+        get() =
+            remote.count { it is SyncAction.UploadDocument || it is SyncAction.UploadTrash } +
+                pushMetadata.size
+
+    /** Documents and trash copies this plan would download and install. */
+    val plannedDownloads: Int
+        get() = local.count { it is SyncAction.PublishDocument || it is SyncAction.DownloadTrash }
 }
 
 /**

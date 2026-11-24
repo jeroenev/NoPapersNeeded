@@ -81,6 +81,22 @@ internal class SyncEngineGuardTest : SyncEngineTestBase() {
         }
 
     @Test
+    fun pendingCountsKeepThePlanTimeWhenTransfersTakeTime() =
+        withPair { pair ->
+            pair.importOnA("clock.pdf", "clock")
+            var transferAt = 0L
+            pair.remote.onceBeforeStat("inbox/clock.pdf") {
+                transferAt = pair.a.clock.now
+                pair.a.clock.now += 10_000
+            }
+
+            val report = pair.a.session.syncCompleted()
+
+            (report.pendingCheckedAt!! <= transferAt).shouldBeTrue()
+            (report.startedAt + report.durationMillis >= transferAt + 10_000).shouldBeTrue()
+        }
+
+    @Test
     fun aRemotePathThatAppearsAfterPlanningIsNotOverwrittenByAnUpload() =
         withPair { pair ->
             pair.importOnA("x.pdf", "guard-upload")

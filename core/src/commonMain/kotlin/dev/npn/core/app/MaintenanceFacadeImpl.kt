@@ -24,6 +24,7 @@ internal class MaintenanceFacadeImpl(
     private val duplicates: DuplicateResolver,
     private val coordinator: JournalCoordinator,
     private val splitter: SplitService,
+    private val verifier: LibraryVerifier,
     private val writer: MetadataWriterImpl,
     private val lifecycle: DocLifecycleImpl,
     private val rescanned: (ScanReport) -> Unit,
@@ -60,6 +61,18 @@ internal class MaintenanceFacadeImpl(
         docId: String,
         segments: List<IntRange>,
     ): SplitOutcome = lifetime.owned { split(docId, segments) }
+
+    override suspend fun verifyLibrary(onProgress: (LibraryVerificationProgress) -> Unit): LibraryVerificationReport =
+        lifetime.owned {
+            // The rows are the library's documents as the index shows them; the journal view says
+            // which a relink superseded, and the metadata sources are the objects the index applied.
+            verifier.verify(
+                rows = db.documentDao().getAllRows(),
+                metadataSources = db.metadataProjectionDao().allSources().map { it.path },
+                journalView = coordinator::syncView,
+                onProgress = onProgress,
+            )
+        }
 
     private suspend fun split(
         docId: String,

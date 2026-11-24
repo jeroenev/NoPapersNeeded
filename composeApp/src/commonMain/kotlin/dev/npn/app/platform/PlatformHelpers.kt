@@ -136,3 +136,9 @@ expect suspend fun sharePdfBytes(
     bytes: ByteArray,
     io: CoroutineDispatcher = Dispatchers.IO,
 )
+
+/**
+ * Put [text] on the system clipboard, for a report the user asked to keep or pass on. Throws when
+ * the platform refuses; the caller reports that instead of claiming the copy landed.
+ */
+expect suspend fun copyToClipboard(text: String)

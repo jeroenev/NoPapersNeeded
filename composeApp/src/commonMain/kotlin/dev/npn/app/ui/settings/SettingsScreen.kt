@@ -94,6 +94,7 @@ private val PaneGroupSpacing: Dp = 24.dp
  * document with unsaved changes would go with it, so the user is sent back to it first
  * ([onResumeDraft]) rather than shown the picker.
  */
+@Suppress("LongParameterList") // A screen entrypoint's navigation callbacks are distinct intents, wired once here.
 @Composable
 fun SettingsScreen(
     settings: SettingsRepository,
@@ -104,6 +105,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onOpenLibrary: (location: String) -> Unit,
     onResumeDraft: (docId: String) -> Unit,
+    onOpenDocument: (docId: String) -> Unit,
     onAutoMatchRules: () -> Unit,
     revealAdvanced: Boolean = false,
     vm: SettingsViewModel =
@@ -155,6 +157,7 @@ fun SettingsScreen(
     val currentChangeLibrary by rememberUpdatedState(onChangeLibrary)
     val currentAutoMatchRules by rememberUpdatedState(onAutoMatchRules)
     val currentSelect by rememberUpdatedState(select)
+    val currentOpenDocument by rememberUpdatedState(onOpenDocument)
     val paneActions =
         remember(vm) {
             object : SettingsPaneActions, SettingsActions by vm {
@@ -165,6 +168,8 @@ fun SettingsScreen(
                 override fun openCategory(id: SettingsCategoryId) = currentSelect(id, false)
 
                 override fun openFieldDialog(dialog: FieldDialog?) = vm.openFieldDialog(dialog)
+
+                override fun openDocument(docId: String) = currentOpenDocument(docId)
             }
         }
 

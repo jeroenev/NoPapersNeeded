@@ -186,6 +186,9 @@ class SyncReportBuilder(
     var uploadedDocuments = 0
     var downloadedObjects = 0
     var uploadedObjects = 0
+
+    /** Trash entries downloaded by the local half, which the plan's downloads count. */
+    var downloadedTrash = 0
     var movedRemote = 0
     var deletedRemote = 0
     var appliedLocally = 0
@@ -200,8 +203,18 @@ class SyncReportBuilder(
         onError(path, cause)
     }
 
-    fun build(nowMillis: Long): SyncReport =
-        SyncReport(
+    fun build(
+        nowMillis: Long,
+        plan: SyncPlan? = null,
+        planCheckedAt: Long? = null,
+    ): SyncReport {
+        // What the plan found, less what this pass finished: the rest waits for the next one. A
+        // count is never negative (a plan may be re-checked after a retry inside a transfer).
+        val pendingUploads =
+            ((plan?.plannedUploads ?: 0) - uploadedDocuments - uploadedObjects).coerceAtLeast(0)
+        val pendingDownloads =
+            ((plan?.plannedDownloads ?: 0) - downloadedDocuments - downloadedTrash).coerceAtLeast(0)
+        return SyncReport(
             startedAt = startedAt,
             durationMillis = nowMillis - startedAt,
             downloadedDocuments = downloadedDocuments,
@@ -211,9 +224,13 @@ class SyncReportBuilder(
             movedRemote = movedRemote,
             deletedRemote = deletedRemote,
             appliedLocally = appliedLocally,
+            pendingUploads = pendingUploads,
+            pendingDownloads = pendingDownloads,
+            pendingCheckedAt = plan?.let { planCheckedAt },
             conflicts = conflicts.toList(),
             errors = errors.toList(),
         )
+    }
 }
 
 /**
