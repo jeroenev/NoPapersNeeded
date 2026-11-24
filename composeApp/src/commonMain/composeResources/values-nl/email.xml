@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="email_title">E-mail importeren</string>
+    <string name="email_intro">Importeer bijlagen uit één IMAP-postvak terwijl de app open is. Het wachtwoord staat in de sleutelhanger van het systeem, nooit in de bibliotheek.</string>
+
+    <string name="email_account">Account</string>
+    <string name="email_enabled">Dit account op nieuwe e-mail controleren</string>
+    <string name="email_enabled_help">Er wordt alleen gecontroleerd zolang No Papers Needed open is. Bij een gesloten app wordt niets opgehaald.</string>
+    <string name="email_host">IMAP-server</string>
+    <string name="email_port">Poort</string>
+    <string name="email_security">Beveiliging van de verbinding</string>
+    <string name="email_security_ssl">SSL/TLS</string>
+    <string name="email_security_starttls">STARTTLS</string>
+    <string name="email_security_plain">Onversleuteld</string>
+    <string name="email_username">Gebruikersnaam</string>
+    <string name="email_password">Wachtwoord</string>
+    <string name="email_password_saved">Er is een wachtwoord opgeslagen in de sleutelhanger van het systeem.</string>
+    <string name="email_password_help">Laat leeg om het opgeslagen wachtwoord te houden. Het staat in de sleutelhanger van het systeem, niet in de bibliotheek.</string>
+    <string name="email_folder">Map</string>
+    <string name="email_folder_help">De te lezen map in het postvak, meestal INBOX.</string>
+    <string name="email_allow_plain">Een onversleutelde verbinding toestaan</string>
+    <string name="email_allow_plain_help">Gebruik dit alleen als je server geen SSL of STARTTLS kan. Je wachtwoord zou onbeschermd reizen.</string>
+    <string name="email_interval">Controleren elke</string>
+    <string name="email_interval_help">Minimaal 5 minuten. De app controleert terwijl ze open is.</string>
+
+    <string name="email_filters">Filters</string>
+    <string name="email_filters_help">Een bericht wordt geïmporteerd zodra een filter past. Laat de lijst leeg om elk bericht met een ondersteunde bijlage te importeren.</string>
+    <string name="email_filter_from">Afzender bevat</string>
+    <string name="email_filter_subject">Onderwerp bevat</string>
+    <string name="email_filter_attachment">Naam of extensie van de bijlage</string>
+    <string name="email_add_filter">Filter toevoegen</string>
+    <string name="email_remove_filter">Filter verwijderen</string>
+
+    <string name="email_post_action">Na het importeren</string>
+    <string name="email_post_keep">Het bericht laten zoals het is</string>
+    <string name="email_post_mark_read">Als gelezen markeren</string>
+    <string name="email_post_move">Naar een map verplaatsen</string>
+    <string name="email_post_delete">Verwijderen</string>
+    <string name="email_move_folder">Naar map</string>
+    <string name="email_save_pdf">De e-mail ook als PDF opslaan</string>
+    <string name="email_save_pdf_help">Voegt een leesbare PDF met de kopregels en tekst van het bericht aan de bibliotheek toe.</string>
+
+    <string name="email_save">Account opslaan</string>
+    <string name="email_test">Verbinding testen</string>
+    <string name="email_check_now">Nu controleren</string>
+    <string name="email_clear_password">Opgeslagen wachtwoord verwijderen</string>
+    <string name="email_never_checked">Nog niet gecontroleerd</string>
+    <string name="email_last_check">Laatste controle: %1$s</string>
+    <string name="email_last_error">Laatste fout: %1$s</string>
+    <string name="email_checking">E-mail wordt gecontroleerd…</string>
+
+    <string name="email_saved">E-mailaccount opgeslagen.</string>
+    <string name="email_save_failed">E-mailaccount kon niet worden opgeslagen: %1$s</string>
+    <string name="email_account_invalid">Vul de server, gebruikersnaam en map in, en sta een onversleutelde verbinding toe als je die hebt gekozen.</string>
+    <string name="email_test_ok">De verbinding met de mailserver werkt.</string>
+    <string name="email_test_failed">Kon niet verbinden: %1$s</string>
+    <string name="email_check_report">E-mailcontrole: %1$d berichten gezien, %2$d documenten geïmporteerd, %3$d duplicaten, %4$d overgeslagen.</string>
+    <string name="email_check_failed">E-mail kon niet worden gecontroleerd: %1$s</string>
+    <string name="email_password_removed">Opgeslagen e-mailwachtwoord verwijderd.</string>
+
+    <string name="email_reason_not_configured">het account is niet volledig ingesteld</string>
+    <string name="email_reason_no_password">er is geen wachtwoord opgeslagen</string>
+    <string name="email_reason_secret_unavailable">de sleutelhanger van het systeem is niet beschikbaar</string>
+    <string name="email_reason_connection_failed">de mailserver was niet bereikbaar</string>
+    <string name="email_reason_authentication_failed">de server weigerde de gebruikersnaam of het wachtwoord</string>
+    <string name="email_reason_tls_failed">de beveiligde verbinding is mislukt</string>
+    <string name="email_reason_folder_not_found">de map is niet gevonden</string>
+    <string name="email_reason_fetch_failed">het postvak kon niet worden gelezen</string>
+    <string name="email_reason_import_failed">een bijlage kon niet worden geïmporteerd</string>
+    <string name="email_reason_post_action_failed">het bericht kon na het importeren niet worden bijgewerkt</string>
+    <string name="email_reason_plain_refused">onversleutelde verbindingen zijn niet toegestaan</string>
+    <string name="email_reason_pdf_render_failed">de PDF van de e-mail kon niet worden gemaakt</string>
+    <string name="email_reason_unsupported">e-mail importeren wordt op dit platform niet ondersteund</string>
+
+    <string name="email_secret_unsupported">de sleutelhanger van het systeem wordt op dit platform niet ondersteund</string>
+    <string name="email_secret_unavailable">de sleutelhanger van het systeem is niet beschikbaar</string>
+    <string name="email_secret_store_failed">de sleutelhanger van het systeem weigerde het wachtwoord op te slaan</string>
+</resources>

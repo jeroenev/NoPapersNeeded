@@ -109,6 +109,9 @@ actual fun supportsSafStorage(): Boolean = true
 
 actual fun ocrHasLanguageSetting(): Boolean = false
 
+/** Email import is desktop-only: there is no IMAP client or OS mail keyring on this build. */
+actual fun supportsEmailImport(): Boolean = false
+
 /**
  * Every build but the release one (debug, and the benchmark build that generates baseline profiles)
  * proposes a folder of its own, named after its applicationId suffix, so installing one next to the

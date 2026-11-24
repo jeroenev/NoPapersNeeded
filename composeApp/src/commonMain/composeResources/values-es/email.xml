@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="email_title">Importación de correo</string>
+    <string name="email_intro">Importa adjuntos de un buzón IMAP mientras la aplicación está abierta. La contraseña se guarda en el llavero del sistema, nunca en la biblioteca.</string>
+
+    <string name="email_account">Cuenta</string>
+    <string name="email_enabled">Buscar correo nuevo en esta cuenta</string>
+    <string name="email_enabled_help">Las comprobaciones solo se ejecutan mientras No Papers Needed está abierto. No se descarga nada con la aplicación cerrada.</string>
+    <string name="email_host">Servidor IMAP</string>
+    <string name="email_port">Puerto</string>
+    <string name="email_security">Seguridad de la conexión</string>
+    <string name="email_security_ssl">SSL/TLS</string>
+    <string name="email_security_starttls">STARTTLS</string>
+    <string name="email_security_plain">Sin cifrar</string>
+    <string name="email_username">Usuario</string>
+    <string name="email_password">Contraseña</string>
+    <string name="email_password_saved">Hay una contraseña guardada en el llavero del sistema.</string>
+    <string name="email_password_help">Déjalo vacío para conservar la contraseña guardada. Se almacena en el llavero del sistema, no en la biblioteca.</string>
+    <string name="email_folder">Carpeta</string>
+    <string name="email_folder_help">La carpeta del buzón que se lee, normalmente INBOX.</string>
+    <string name="email_allow_plain">Permitir una conexión sin cifrar</string>
+    <string name="email_allow_plain_help">Úsalo solo si tu servidor no admite SSL ni STARTTLS. Tu contraseña viajaría sin protección.</string>
+    <string name="email_interval">Comprobar cada</string>
+    <string name="email_interval_help">Como mínimo 5 minutos. La aplicación comprueba mientras está abierta.</string>
+
+    <string name="email_filters">Filtros</string>
+    <string name="email_filters_help">Un mensaje se importa cuando coincide algún filtro. Si la lista está vacía, se importa todo mensaje con un adjunto compatible.</string>
+    <string name="email_filter_from">El remitente contiene</string>
+    <string name="email_filter_subject">El asunto contiene</string>
+    <string name="email_filter_attachment">Nombre o extensión del adjunto</string>
+    <string name="email_add_filter">Añadir filtro</string>
+    <string name="email_remove_filter">Quitar filtro</string>
+
+    <string name="email_post_action">Después de importar</string>
+    <string name="email_post_keep">Dejar el mensaje como está</string>
+    <string name="email_post_mark_read">Marcarlo como leído</string>
+    <string name="email_post_move">Moverlo a una carpeta</string>
+    <string name="email_post_delete">Eliminarlo</string>
+    <string name="email_move_folder">Mover a la carpeta</string>
+    <string name="email_save_pdf">Guardar también el correo como PDF</string>
+    <string name="email_save_pdf_help">Añade a la biblioteca un PDF legible con las cabeceras y el texto del mensaje.</string>
+
+    <string name="email_save">Guardar cuenta</string>
+    <string name="email_test">Probar conexión</string>
+    <string name="email_check_now">Comprobar ahora</string>
+    <string name="email_clear_password">Quitar contraseña guardada</string>
+    <string name="email_never_checked">Aún no se ha comprobado</string>
+    <string name="email_last_check">Última comprobación: %1$s</string>
+    <string name="email_last_error">Último error: %1$s</string>
+    <string name="email_checking">Comprobando el correo…</string>
+
+    <string name="email_saved">Cuenta de correo guardada.</string>
+    <string name="email_save_failed">No se pudo guardar la cuenta de correo: %1$s</string>
+    <string name="email_account_invalid">Completa el servidor, el usuario y la carpeta, y permite una conexión sin cifrar si la has elegido.</string>
+    <string name="email_test_ok">La conexión con el servidor de correo funciona.</string>
+    <string name="email_test_failed">No se pudo conectar: %1$s</string>
+    <string name="email_check_report">Comprobación de correo: %1$d mensajes vistos, %2$d documentos importados, %3$d duplicados, %4$d omitidos.</string>
+    <string name="email_check_failed">No se pudo comprobar el correo: %1$s</string>
+    <string name="email_password_removed">Contraseña de correo guardada eliminada.</string>
+
+    <string name="email_reason_not_configured">la cuenta no está configurada del todo</string>
+    <string name="email_reason_no_password">no hay ninguna contraseña guardada</string>
+    <string name="email_reason_secret_unavailable">el llavero del sistema no está disponible</string>
+    <string name="email_reason_connection_failed">no se pudo alcanzar el servidor de correo</string>
+    <string name="email_reason_authentication_failed">el servidor rechazó el usuario o la contraseña</string>
+    <string name="email_reason_tls_failed">falló la conexión segura</string>
+    <string name="email_reason_folder_not_found">no se encontró la carpeta</string>
+    <string name="email_reason_fetch_failed">no se pudo leer el buzón</string>
+    <string name="email_reason_import_failed">no se pudo importar un adjunto</string>
+    <string name="email_reason_post_action_failed">no se pudo actualizar el mensaje después de importarlo</string>
+    <string name="email_reason_plain_refused">no se permiten conexiones sin cifrar</string>
+    <string name="email_reason_pdf_render_failed">no se pudo crear el PDF del correo</string>
+    <string name="email_reason_unsupported">la importación de correo no es compatible con esta plataforma</string>
+
+    <string name="email_secret_unsupported">el llavero del sistema no es compatible con esta plataforma</string>
+    <string name="email_secret_unavailable">el llavero del sistema no está disponible</string>
+    <string name="email_secret_store_failed">el llavero del sistema se negó a guardar la contraseña</string>
+</resources>

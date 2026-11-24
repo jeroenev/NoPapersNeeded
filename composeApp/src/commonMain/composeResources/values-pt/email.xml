@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="email_title">Importação de e-mail</string>
+    <string name="email_intro">Importe anexos de uma caixa IMAP enquanto a aplicação está aberta. A palavra-passe fica no cofre do sistema, nunca na biblioteca.</string>
+
+    <string name="email_account">Conta</string>
+    <string name="email_enabled">Procurar novo correio nesta conta</string>
+    <string name="email_enabled_help">As verificações só correm enquanto o No Papers Needed está aberto. Nada é obtido com a aplicação fechada.</string>
+    <string name="email_host">Servidor IMAP</string>
+    <string name="email_port">Porta</string>
+    <string name="email_security">Segurança da ligação</string>
+    <string name="email_security_ssl">SSL/TLS</string>
+    <string name="email_security_starttls">STARTTLS</string>
+    <string name="email_security_plain">Sem encriptação</string>
+    <string name="email_username">Utilizador</string>
+    <string name="email_password">Palavra-passe</string>
+    <string name="email_password_saved">Há uma palavra-passe guardada no cofre do sistema.</string>
+    <string name="email_password_help">Deixe vazio para manter a palavra-passe guardada. Fica no cofre do sistema, não na biblioteca.</string>
+    <string name="email_folder">Pasta</string>
+    <string name="email_folder_help">A pasta da caixa a ler, normalmente INBOX.</string>
+    <string name="email_allow_plain">Permitir uma ligação sem encriptação</string>
+    <string name="email_allow_plain_help">Use apenas se o seu servidor não suportar SSL nem STARTTLS. A palavra-passe viajaria sem proteção.</string>
+    <string name="email_interval">Verificar a cada</string>
+    <string name="email_interval_help">No mínimo 5 minutos. A aplicação verifica enquanto está aberta.</string>
+
+    <string name="email_filters">Filtros</string>
+    <string name="email_filters_help">Uma mensagem é importada quando algum filtro corresponde. Deixe a lista vazia para importar todas as mensagens com um anexo suportado.</string>
+    <string name="email_filter_from">O remetente contém</string>
+    <string name="email_filter_subject">O assunto contém</string>
+    <string name="email_filter_attachment">Nome ou extensão do anexo</string>
+    <string name="email_add_filter">Adicionar filtro</string>
+    <string name="email_remove_filter">Remover filtro</string>
+
+    <string name="email_post_action">Depois de importar</string>
+    <string name="email_post_keep">Deixar a mensagem como está</string>
+    <string name="email_post_mark_read">Marcar como lida</string>
+    <string name="email_post_move">Mover para uma pasta</string>
+    <string name="email_post_delete">Eliminar</string>
+    <string name="email_move_folder">Mover para a pasta</string>
+    <string name="email_save_pdf">Guardar também o e-mail como PDF</string>
+    <string name="email_save_pdf_help">Acrescenta à biblioteca um PDF legível com os cabeçalhos e o texto da mensagem.</string>
+
+    <string name="email_save">Guardar conta</string>
+    <string name="email_test">Testar ligação</string>
+    <string name="email_check_now">Verificar agora</string>
+    <string name="email_clear_password">Remover palavra-passe guardada</string>
+    <string name="email_never_checked">Ainda não verificado</string>
+    <string name="email_last_check">Última verificação: %1$s</string>
+    <string name="email_last_error">Último erro: %1$s</string>
+    <string name="email_checking">A verificar o correio…</string>
+
+    <string name="email_saved">Conta de e-mail guardada.</string>
+    <string name="email_save_failed">Não foi possível guardar a conta de e-mail: %1$s</string>
+    <string name="email_account_invalid">Preencha o servidor, o utilizador e a pasta, e permita uma ligação sem encriptação se a escolheu.</string>
+    <string name="email_test_ok">A ligação ao servidor de correio funciona.</string>
+    <string name="email_test_failed">Não foi possível ligar: %1$s</string>
+    <string name="email_check_report">Verificação de correio: %1$d mensagens vistas, %2$d documentos importados, %3$d duplicados, %4$d ignorados.</string>
+    <string name="email_check_failed">Não foi possível verificar o correio: %1$s</string>
+    <string name="email_password_removed">Palavra-passe de e-mail guardada removida.</string>
+
+    <string name="email_reason_not_configured">a conta não está totalmente configurada</string>
+    <string name="email_reason_no_password">não há palavra-passe guardada</string>
+    <string name="email_reason_secret_unavailable">o cofre do sistema não está disponível</string>
+    <string name="email_reason_connection_failed">não foi possível alcançar o servidor de correio</string>
+    <string name="email_reason_authentication_failed">o servidor rejeitou o utilizador ou a palavra-passe</string>
+    <string name="email_reason_tls_failed">a ligação segura falhou</string>
+    <string name="email_reason_folder_not_found">a pasta não foi encontrada</string>
+    <string name="email_reason_fetch_failed">não foi possível ler a caixa de correio</string>
+    <string name="email_reason_import_failed">não foi possível importar um anexo</string>
+    <string name="email_reason_post_action_failed">não foi possível atualizar a mensagem depois de importar</string>
+    <string name="email_reason_plain_refused">as ligações sem encriptação não são permitidas</string>
+    <string name="email_reason_pdf_render_failed">não foi possível criar o PDF do e-mail</string>
+    <string name="email_reason_unsupported">a importação de e-mail não é suportada nesta plataforma</string>
+
+    <string name="email_secret_unsupported">o cofre do sistema não é suportado nesta plataforma</string>
+    <string name="email_secret_unavailable">o cofre do sistema não está disponível</string>
+    <string name="email_secret_store_failed">o cofre do sistema recusou guardar a palavra-passe</string>
+</resources>

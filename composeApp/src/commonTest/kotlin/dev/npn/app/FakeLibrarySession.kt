@@ -39,6 +39,7 @@ class FakeLibrarySession : LibrarySession {
     override val work = FakeWorkFacade()
     override val aiEditQueue = FakeAiEditQueue()
     override val sync = FakeSyncFacade()
+    override val mail = FakeMailFacade()
     override var log: NpnLog = NpnLog.None
 
     /** Why writes are refused; a test sets it to show the library read-only. */

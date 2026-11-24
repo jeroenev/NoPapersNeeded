@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="email_title">E-Mail-Import</string>
+    <string name="email_intro">Importiert Anhänge aus einem IMAP-Postfach, solange die App geöffnet ist. Das Passwort liegt im Schlüsselbund des Systems, nie in der Bibliothek.</string>
+
+    <string name="email_account">Konto</string>
+    <string name="email_enabled">Dieses Konto auf neue E-Mails prüfen</string>
+    <string name="email_enabled_help">Prüfungen laufen nur, solange No Papers Needed geöffnet ist. Bei geschlossener App wird nichts abgerufen.</string>
+    <string name="email_host">IMAP-Server</string>
+    <string name="email_port">Port</string>
+    <string name="email_security">Verbindungssicherheit</string>
+    <string name="email_security_ssl">SSL/TLS</string>
+    <string name="email_security_starttls">STARTTLS</string>
+    <string name="email_security_plain">Unverschlüsselt</string>
+    <string name="email_username">Benutzername</string>
+    <string name="email_password">Passwort</string>
+    <string name="email_password_saved">Ein Passwort ist im Schlüsselbund des Systems gespeichert.</string>
+    <string name="email_password_help">Leer lassen, um das gespeicherte Passwort zu behalten. Es liegt im Schlüsselbund des Systems, nicht in der Bibliothek.</string>
+    <string name="email_folder">Ordner</string>
+    <string name="email_folder_help">Der zu lesende Ordner im Postfach, meist INBOX.</string>
+    <string name="email_allow_plain">Unverschlüsselte Verbindung erlauben</string>
+    <string name="email_allow_plain_help">Nur nutzen, wenn dein Server kein SSL oder STARTTLS kann. Dein Passwort würde ungeschützt übertragen.</string>
+    <string name="email_interval">Prüfen alle</string>
+    <string name="email_interval_help">Mindestens 5 Minuten. Die App prüft, solange sie geöffnet ist.</string>
+
+    <string name="email_filters">Filter</string>
+    <string name="email_filters_help">Eine Nachricht wird importiert, wenn ein Filter passt. Bleibt die Liste leer, wird jede Nachricht mit einem unterstützten Anhang importiert.</string>
+    <string name="email_filter_from">Absender enthält</string>
+    <string name="email_filter_subject">Betreff enthält</string>
+    <string name="email_filter_attachment">Anhangsname oder Endung</string>
+    <string name="email_add_filter">Filter hinzufügen</string>
+    <string name="email_remove_filter">Filter entfernen</string>
+
+    <string name="email_post_action">Nach dem Import</string>
+    <string name="email_post_keep">Nachricht unverändert lassen</string>
+    <string name="email_post_mark_read">Als gelesen markieren</string>
+    <string name="email_post_move">In einen Ordner verschieben</string>
+    <string name="email_post_delete">Löschen</string>
+    <string name="email_move_folder">Zielordner</string>
+    <string name="email_save_pdf">Die E-Mail zusätzlich als PDF speichern</string>
+    <string name="email_save_pdf_help">Fügt der Bibliothek ein lesbares PDF mit Kopfzeilen und Text der Nachricht hinzu.</string>
+
+    <string name="email_save">Konto speichern</string>
+    <string name="email_test">Verbindung testen</string>
+    <string name="email_check_now">Jetzt prüfen</string>
+    <string name="email_clear_password">Gespeichertes Passwort entfernen</string>
+    <string name="email_never_checked">Noch nicht geprüft</string>
+    <string name="email_last_check">Letzte Prüfung: %1$s</string>
+    <string name="email_last_error">Letzter Fehler: %1$s</string>
+    <string name="email_checking">E-Mail wird geprüft…</string>
+
+    <string name="email_saved">E-Mail-Konto gespeichert.</string>
+    <string name="email_save_failed">E-Mail-Konto konnte nicht gespeichert werden: %1$s</string>
+    <string name="email_account_invalid">Fülle Server, Benutzername und Ordner aus und erlaube eine unverschlüsselte Verbindung, wenn du sie gewählt hast.</string>
+    <string name="email_test_ok">Die Verbindung zum Mailserver funktioniert.</string>
+    <string name="email_test_failed">Verbindung fehlgeschlagen: %1$s</string>
+    <string name="email_check_report">E-Mail-Prüfung: %1$d Nachrichten gesehen, %2$d Dokumente importiert, %3$d Duplikate, %4$d übersprungen.</string>
+    <string name="email_check_failed">E-Mail-Prüfung fehlgeschlagen: %1$s</string>
+    <string name="email_password_removed">Gespeichertes E-Mail-Passwort entfernt.</string>
+
+    <string name="email_reason_not_configured">das Konto ist nicht vollständig eingerichtet</string>
+    <string name="email_reason_no_password">es ist kein Passwort gespeichert</string>
+    <string name="email_reason_secret_unavailable">der Schlüsselbund des Systems ist nicht verfügbar</string>
+    <string name="email_reason_connection_failed">der Mailserver war nicht erreichbar</string>
+    <string name="email_reason_authentication_failed">der Server hat Benutzername oder Passwort abgelehnt</string>
+    <string name="email_reason_tls_failed">die sichere Verbindung ist fehlgeschlagen</string>
+    <string name="email_reason_folder_not_found">der Ordner wurde nicht gefunden</string>
+    <string name="email_reason_fetch_failed">das Postfach konnte nicht gelesen werden</string>
+    <string name="email_reason_import_failed">ein Anhang konnte nicht importiert werden</string>
+    <string name="email_reason_post_action_failed">die Nachricht konnte nach dem Import nicht aktualisiert werden</string>
+    <string name="email_reason_plain_refused">unverschlüsselte Verbindungen sind nicht erlaubt</string>
+    <string name="email_reason_pdf_render_failed">das E-Mail-PDF konnte nicht erstellt werden</string>
+    <string name="email_reason_unsupported">der E-Mail-Import wird auf dieser Plattform nicht unterstützt</string>
+
+    <string name="email_secret_unsupported">der Schlüsselbund des Systems wird auf dieser Plattform nicht unterstützt</string>
+    <string name="email_secret_unavailable">der Schlüsselbund des Systems ist nicht verfügbar</string>
+    <string name="email_secret_store_failed">der Schlüsselbund des Systems hat das Speichern des Passworts verweigert</string>
+</resources>

@@ -23,6 +23,16 @@ interface IngestFacade {
         suggestedName: String,
     ): ImportOutcome
 
+    /**
+     * Import PDF bytes already in memory, through the same staging, hashing, duplicate and journal
+     * path as [importPdf]. Email attachments arrive this way; no file is written into the library
+     * outside the importer.
+     */
+    suspend fun importPdfBytes(
+        bytes: ByteArray,
+        suggestedName: String,
+    ): ImportOutcome
+
     suspend fun importImagesAsPdf(
         images: List<ByteArray>,
         suggestedName: String,

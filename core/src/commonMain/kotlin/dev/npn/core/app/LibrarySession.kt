@@ -33,6 +33,7 @@ interface LibrarySession {
     val work: WorkFacade
     val aiEditQueue: AiEditQueueFacade
     val sync: SyncFacade
+    val mail: MailFacade
 
     /** Where the session's failures go, for a caller reporting one of its own that nobody awaits. */
     val log: NpnLog

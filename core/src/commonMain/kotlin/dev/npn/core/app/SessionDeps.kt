@@ -3,6 +3,12 @@ package dev.npn.core.app
 import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.mail.MailCredentialStore
+import dev.npn.core.mail.MailPdfRenderer
+import dev.npn.core.mail.MailTransport
+import dev.npn.core.mail.UnsupportedMailCredentialStore
+import dev.npn.core.mail.UnsupportedMailPdfRenderer
+import dev.npn.core.mail.UnsupportedMailTransport
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.ThumbnailStore
@@ -57,6 +63,12 @@ class SessionDeps(
     val syncStaging: LocalStaging? = null,
     /** In-app remote setup over the same engine; null leaves the settings without the setup wizard. */
     val syncSetup: CloudSetup? = null,
+    /** The IMAP client; the unsupported one on a host that does not offer email import (Android). */
+    val mailTransport: MailTransport = UnsupportedMailTransport,
+    /** The OS secret store for the mail password; never a plain-text fallback. */
+    val mailCredentials: MailCredentialStore = UnsupportedMailCredentialStore,
+    /** Renders an email as a PDF; the unsupported one on a host without the desktop PDF stack. */
+    val mailPdfRenderer: MailPdfRenderer = UnsupportedMailPdfRenderer,
 ) {
     /**
      * Close the index and device databases. Exposed here so the composeApp DI layer (which does not

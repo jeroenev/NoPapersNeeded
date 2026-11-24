@@ -1,5 +1,6 @@
 package dev.npn.app
 
+import dev.npn.app.platform.supportsEmailImport
 import dev.npn.app.ui.settings.SettingsCategories
 import dev.npn.app.ui.settings.SettingsCategoryId
 import dev.npn.app.ui.settings.SettingsCategoryLabels
@@ -26,7 +27,9 @@ class SettingsCategoryTest {
 
     @Test
     fun registryCoversEveryCategoryExactlyOnce() {
-        SettingsCategories.map { it.id } shouldContainExactly SettingsCategoryId.entries.toList()
+        // Email import is desktop-only, so Android's registry deliberately leaves it out.
+        val expected = SettingsCategoryId.entries.filter { it != SettingsCategoryId.EMAIL || supportsEmailImport() }
+        SettingsCategories.map { it.id } shouldContainExactly expected
     }
 
     @Test

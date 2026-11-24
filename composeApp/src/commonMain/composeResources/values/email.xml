@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="email_title">Email import</string>
+    <string name="email_intro">Import attachments from one IMAP mailbox while the app is open. The password is kept in your system keyring, never in the library.</string>
+
+    <string name="email_account">Account</string>
+    <string name="email_enabled">Check this account for new mail</string>
+    <string name="email_enabled_help">Checks run only while No Papers Needed is open. Nothing is fetched while the app is closed.</string>
+    <string name="email_host">IMAP server</string>
+    <string name="email_port">Port</string>
+    <string name="email_security">Connection security</string>
+    <string name="email_security_ssl">SSL/TLS</string>
+    <string name="email_security_starttls">STARTTLS</string>
+    <string name="email_security_plain">Unencrypted</string>
+    <string name="email_username">Username</string>
+    <string name="email_password">Password</string>
+    <string name="email_password_saved">A password is saved in your system keyring.</string>
+    <string name="email_password_help">Leave blank to keep the saved password. It is stored in your system keyring, not in the library.</string>
+    <string name="email_folder">Folder</string>
+    <string name="email_folder_help">The mailbox folder to read, usually INBOX.</string>
+    <string name="email_allow_plain">Allow an unencrypted connection</string>
+    <string name="email_allow_plain_help">Only use this when your server cannot do SSL or STARTTLS. Your password would travel unprotected.</string>
+    <string name="email_interval">Check every</string>
+    <string name="email_interval_help">At least 5 minutes. The app checks while it is open.</string>
+
+    <string name="email_filters">Filters</string>
+    <string name="email_filters_help">A message is imported when any filter matches. Leave the list empty to import every message that has a supported attachment.</string>
+    <string name="email_filter_from">From contains</string>
+    <string name="email_filter_subject">Subject contains</string>
+    <string name="email_filter_attachment">Attachment name or extension</string>
+    <string name="email_add_filter">Add filter</string>
+    <string name="email_remove_filter">Remove filter</string>
+
+    <string name="email_post_action">After importing</string>
+    <string name="email_post_keep">Leave the message as it is</string>
+    <string name="email_post_mark_read">Mark it read</string>
+    <string name="email_post_move">Move it to a folder</string>
+    <string name="email_post_delete">Delete it</string>
+    <string name="email_move_folder">Move to folder</string>
+    <string name="email_save_pdf">Also save the email as a PDF</string>
+    <string name="email_save_pdf_help">Adds a readable PDF with the message headers and text to the library.</string>
+
+    <string name="email_save">Save account</string>
+    <string name="email_test">Test connection</string>
+    <string name="email_check_now">Check now</string>
+    <string name="email_clear_password">Remove saved password</string>
+    <string name="email_never_checked">Not checked yet</string>
+    <string name="email_last_check">Last check: %1$s</string>
+    <string name="email_last_error">Last error: %1$s</string>
+    <string name="email_checking">Checking mail…</string>
+
+    <string name="email_saved">Email account saved.</string>
+    <string name="email_save_failed">Could not save the email account: %1$s</string>
+    <string name="email_account_invalid">Fill in the server, username and folder, and allow an unencrypted connection if you chose one.</string>
+    <string name="email_test_ok">Connection to the mail server works.</string>
+    <string name="email_test_failed">Could not connect: %1$s</string>
+    <string name="email_check_report">Mail check: %1$d messages seen, %2$d documents imported, %3$d duplicates, %4$d skipped.</string>
+    <string name="email_check_failed">Could not check mail: %1$s</string>
+    <string name="email_password_removed">Saved email password removed.</string>
+
+    <string name="email_reason_not_configured">the account is not fully configured</string>
+    <string name="email_reason_no_password">no password is saved</string>
+    <string name="email_reason_secret_unavailable">the system keyring is not available</string>
+    <string name="email_reason_connection_failed">the mail server could not be reached</string>
+    <string name="email_reason_authentication_failed">the server rejected the username or password</string>
+    <string name="email_reason_tls_failed">the secure connection failed</string>
+    <string name="email_reason_folder_not_found">the folder was not found</string>
+    <string name="email_reason_fetch_failed">the mailbox could not be read</string>
+    <string name="email_reason_import_failed">an attachment could not be imported</string>
+    <string name="email_reason_post_action_failed">the message could not be updated after import</string>
+    <string name="email_reason_plain_refused">unencrypted connections are not allowed</string>
+    <string name="email_reason_pdf_render_failed">the email PDF could not be made</string>
+    <string name="email_reason_unsupported">email import is not supported on this platform</string>
+
+    <string name="email_secret_unsupported">the system keyring is not supported on this platform</string>
+    <string name="email_secret_unavailable">the system keyring is not available</string>
+    <string name="email_secret_store_failed">the system keyring refused to store the password</string>
+</resources>

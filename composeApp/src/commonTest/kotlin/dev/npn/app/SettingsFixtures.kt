@@ -14,6 +14,7 @@ import dev.npn.app.ui.settings.SettingsUiState
 import dev.npn.app.ui.settings.SettingsViewModel
 import dev.npn.app.ui.settings.TextSetting
 import dev.npn.core.ai.AiProvider
+import dev.npn.core.mail.MailAccount
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.settings.SettingsSnapshot
@@ -102,6 +103,21 @@ internal open class NoSettingsPaneActions : SettingsPaneActions {
     override fun setInboxWorkflowMode(migration: ReviewMigration) = Unit
 
     override fun watchedFolderPicked(pick: FolderPick) = Unit
+
+    override fun saveMailAccount(
+        account: MailAccount,
+        password: String?,
+        onSuccess: () -> Unit,
+    ) = Unit
+
+    override fun clearMailPassword(onSuccess: () -> Unit) = Unit
+
+    override fun testMailConnection(
+        account: MailAccount,
+        password: String?,
+    ) = Unit
+
+    override fun checkMailNow() = Unit
 
     override fun changeLibrary() = Unit
 
