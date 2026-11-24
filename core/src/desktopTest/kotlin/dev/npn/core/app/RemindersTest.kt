@@ -145,7 +145,7 @@ class RemindersTest {
         }
 
     @Test
-    fun aDocumentWithTwoWatchedDatesIsOneReminderAndOneNotification() =
+    fun aDocumentWithTwoWatchedDatesIsOneUpcomingRowAndTwoNotifications() =
         appSessionTest { rig ->
             val today = ReminderWindow.today(rig.clock.now, zone)
             rig.session.fieldRegistry.upsert(

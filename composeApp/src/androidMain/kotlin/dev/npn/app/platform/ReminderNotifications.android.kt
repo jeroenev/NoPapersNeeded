@@ -21,6 +21,7 @@ import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import dev.npn.app.di.AppEnvironment
@@ -94,12 +95,17 @@ actual suspend fun showReminderNotification(
             documentTitle,
             dueDate,
         )
+    // Explicit, and pinned to this package: the intent names a document and the library's path, so
+    // no other app may resolve it. Without a launcher activity there is nothing to open, and the
+    // throw releases the claim.
     val launch =
-        (context.packageManager.getLaunchIntentForPackage(context.packageName) ?: Intent()).apply {
-            putExtra(EXTRA_OPEN_DOCUMENT, docId)
-            putExtra(EXTRA_REMINDER_LIBRARY, libraryLocation)
-            flags = flags or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        checkNotNull(context.packageManager.getLaunchIntentForPackage(context.packageName)) {
+            "No launcher activity to open a reminder with"
         }
+    launch.setPackage(context.packageName)
+    launch.putExtra(EXTRA_OPEN_DOCUMENT, docId)
+    launch.putExtra(EXTRA_REMINDER_LIBRARY, libraryLocation)
+    launch.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
     val reminderTag = reminderNotificationTag("$libraryLocation:$docId", fieldKey, dueDate)
     launch.data =
         android.net.Uri
@@ -164,19 +170,39 @@ actual fun rememberReminderPermissionRequest(): (() -> Unit)? {
     return { launcher.launch(Manifest.permission.POST_NOTIFICATIONS) }
 }
 
-/** Recompute a pending check when the device's local clock or time zone changes. */
+/**
+ * Recompute a pending check when the device's local clock or time zone changes. Only a check that
+ * is scheduled: with reminders off (every library that never opted in) there is none, and running
+ * the worker would open the library and rescan it in the background for nothing.
+ */
 class ReminderTimeChangedReceiver : BroadcastReceiver() {
     override fun onReceive(
         context: Context,
         intent: Intent,
     ) {
         if (!isReminderTimeChange(intent.action)) return
-        val request = OneTimeWorkRequestBuilder<ReminderWorker>().build()
-        WorkManager
-            .getInstance(context.applicationContext)
-            .enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.REPLACE, request)
+        val work = WorkManager.getInstance(context.applicationContext)
+        val result = goAsync()
+        val infos = work.getWorkInfosForUniqueWork(WORK_NAME)
+        infos.addListener(
+            {
+                try {
+                    val states = runCatching { infos.get().map { it.state } }.getOrDefault(emptyList())
+                    if (reminderCheckScheduled(states)) {
+                        val request = OneTimeWorkRequestBuilder<ReminderWorker>().build()
+                        work.enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.REPLACE, request)
+                    }
+                } finally {
+                    result.finish()
+                }
+            },
+            Runnable::run,
+        )
     }
 }
+
+/** Whether the unique reminder work holds a check still to run, which a clock change must move. */
+internal fun reminderCheckScheduled(states: List<WorkInfo.State>): Boolean = WorkInfo.State.ENQUEUED in states
 
 /**
  * The daily reminder check WorkManager runs while the app is not open. It opens the persisted
