@@ -10,6 +10,7 @@ import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.DocumentHistoryRecord
 import dev.npn.core.app.HistoryEntry
+import dev.npn.core.app.HistoryOrigin
 import dev.npn.core.app.OcrVersion
 import dev.npn.core.app.TagInfo
 import dev.npn.core.index.MetadataWriteBlocked
@@ -219,7 +220,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     private fun historyRecord(
         seq: Long,
         entry: HistoryEntry,
-    ) = DocumentHistoryRecord(100 + seq, "dev-a", entry)
+    ) = DocumentHistoryRecord(100 + seq, HistoryOrigin.THIS_DEVICE, entry)
 
     @Test
     fun ocrDetailsThatCannotBeReadAreReported() =

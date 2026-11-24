@@ -269,6 +269,7 @@ class AiChatScreenTest : EnglishLocaleTest() {
                     onShowInLibrary = {},
                     onAiEditDocs = {},
                     onBulkEdit = {},
+                    onOpenSettings = {},
                 )
             }
         }

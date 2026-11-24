@@ -388,12 +388,19 @@ private fun MainNavHost(
         composable<Route.Queue> { entry ->
             QueueScreen(
                 session = session,
+                settings = settings,
                 // A queued document is a real document; open it on its own, the way the resume banner
                 // does, so Back from detail returns to Activity.
                 onOpenDoc = { docId -> nav.from(entry) { openDoc(docId, browse) } },
                 onOpenEditRun = { jobId -> nav.from(entry) { navigate(Route.AiEditReview(jobId)) } },
                 onOpenCloudSettings = {
                     nav.from(entry) { navigate(Route.Settings(SettingsCategoryId.CLOUD_SYNC.routeKey)) }
+                },
+                onOpenOcrSettings = {
+                    nav.from(entry) { navigate(Route.Settings(SettingsCategoryId.IMPORT.routeKey)) }
+                },
+                onOpenAiSettings = {
+                    nav.from(entry) { navigate(Route.Settings(SettingsCategoryId.AI.routeKey)) }
                 },
             )
         }
@@ -461,6 +468,9 @@ private fun NavGraphBuilder.aiRoutes(
             },
             onAiEditDocs = { docIds -> nav.from(entry) { openAiEdit(library, docIds) } },
             onBulkEdit = { nav.from(entry) { openAiEdit(library) } },
+            onOpenSettings = {
+                nav.from(entry) { navigate(Route.Settings(SettingsCategoryId.AI.routeKey)) }
+            },
         )
     }
     composable<Route.AiEdit> { entry ->

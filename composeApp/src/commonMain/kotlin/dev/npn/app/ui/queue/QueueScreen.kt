@@ -47,6 +47,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.npn.app.platform.isAppPrivateLocation
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.HelpText
@@ -56,23 +57,32 @@ import dev.npn.app.ui.common.StatusBadge
 import dev.npn.app.ui.common.TechnicalDetails
 import dev.npn.app.ui.common.formatEpochDateTime
 import dev.npn.app.ui.common.rememberSnackbarMessages
+import dev.npn.app.ui.common.rememberStorageAccess
 import dev.npn.app.ui.common.resolve
 import dev.npn.app.ui.library.bannerText
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.QueuedEditRun
 import dev.npn.core.app.QueuedWork
+import dev.npn.core.app.WorkBlock
 import dev.npn.core.app.WorkStage
 import dev.npn.core.app.WorkState
 import dev.npn.core.index.IndexProgress
+import dev.npn.core.settings.LibraryLocations
+import dev.npn.core.settings.SettingsRepository
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_cancel_confirm
 import no_papers_needed.composeapp.generated.resources.ai_edit_cancel_keep
 import no_papers_needed.composeapp.generated.resources.ai_edit_cancel_message
 import no_papers_needed.composeapp.generated.resources.ai_edit_cancel_title
 import no_papers_needed.composeapp.generated.resources.common_retry
+import no_papers_needed.composeapp.generated.resources.common_storage_access_grant
 import no_papers_needed.composeapp.generated.resources.queue_ai_failed_help
 import no_papers_needed.composeapp.generated.resources.queue_ai_temporary_failure
 import no_papers_needed.composeapp.generated.resources.queue_attempts
+import no_papers_needed.composeapp.generated.resources.queue_block_ai_fix
+import no_papers_needed.composeapp.generated.resources.queue_block_ai_unconfigured
+import no_papers_needed.composeapp.generated.resources.queue_block_ocr_fix
+import no_papers_needed.composeapp.generated.resources.queue_block_ocr_missing
 import no_papers_needed.composeapp.generated.resources.queue_edit_run_discard
 import no_papers_needed.composeapp.generated.resources.queue_edit_run_documents
 import no_papers_needed.composeapp.generated.resources.queue_edit_run_failures
@@ -85,6 +95,7 @@ import no_papers_needed.composeapp.generated.resources.queue_help
 import no_papers_needed.composeapp.generated.resources.queue_ocr_failed_help
 import no_papers_needed.composeapp.generated.resources.queue_ocr_temporary_failure
 import no_papers_needed.composeapp.generated.resources.queue_open_document
+import no_papers_needed.composeapp.generated.resources.queue_problem_storage_access
 import no_papers_needed.composeapp.generated.resources.queue_retry_after
 import no_papers_needed.composeapp.generated.resources.queue_section_imports
 import no_papers_needed.composeapp.generated.resources.queue_section_problems
@@ -119,16 +130,25 @@ import org.jetbrains.compose.resources.stringResource
 @Composable
 fun QueueScreen(
     session: LibrarySession,
+    settings: SettingsRepository,
     onOpenDoc: (String) -> Unit,
     onOpenEditRun: (String) -> Unit,
     onOpenCloudSettings: () -> Unit,
+    onOpenOcrSettings: () -> Unit,
+    onOpenAiSettings: () -> Unit,
     modifier: Modifier = Modifier,
-    vm: QueueViewModel = viewModel { QueueViewModel(session) },
+    vm: QueueViewModel = viewModel { QueueViewModel(session, settings) },
 ) {
     val items by vm.items.collectAsStateWithLifecycle()
     val editRuns by vm.editRuns.collectAsStateWithLifecycle()
     val scan by vm.scan.collectAsStateWithLifecycle()
     val sync by vm.sync.collectAsStateWithLifecycle()
+    val storage = rememberStorageAccess()
+    // Only a library on plain shared storage needs Android's all-files grant; a SAF or app-private
+    // (cloud working copy) library imports fine without it.
+    val settingsState by settings.settings.collectAsStateWithLifecycle()
+    val location = settingsState.libraryLocation
+    val storageProblem = needsStorageGrant(location, location?.let(::isAppPrivateLocation) == true, storage.usable)
     val snackbar = rememberSnackbarMessages(vm.messages)
 
     Scaffold(
@@ -147,6 +167,7 @@ fun QueueScreen(
         } else {
             ActivityList(
                 activity = Activity(loadedItems, loadedRuns, scan, sync),
+                storageProblem = storageProblem,
                 actions =
                     ActivityActions(
                         onOpenDoc = onOpenDoc,
@@ -155,6 +176,9 @@ fun QueueScreen(
                         onRetry = vm::retry,
                         onSyncNow = vm::syncNow,
                         onOpenCloudSettings = onOpenCloudSettings,
+                        onOpenOcrSettings = onOpenOcrSettings,
+                        onOpenAiSettings = onOpenAiSettings,
+                        onGrantStorage = storage.request,
                     ),
                 modifier = Modifier.fillMaxSize().padding(padding),
             )
@@ -162,21 +186,44 @@ fun QueueScreen(
     }
 }
 
+/** Whether this library needs direct shared-storage access. */
+internal fun needsStorageGrant(
+    location: String?,
+    appPrivate: Boolean,
+    usable: Boolean,
+): Boolean = location != null && !LibraryLocations.isContentUri(location) && !appPrivate && !usable
+
 /** Everything Activity shows, split the way the page orders it. */
 private class Activity(
-    items: List<QueuedWork>,
+    items: List<ActivityWork>,
     val editRuns: List<QueuedEditRun>,
     val scan: IndexProgress?,
     val sync: ActivitySync?,
 ) {
-    /** Work that stopped and waits for a retry. */
-    val stopped = items.filter { it.state == WorkState.FAILED }
-    val ocr = items.filter { it.stage == WorkStage.OCR && it.state != WorkState.FAILED }
-    val autoOrganize = items.filter { it.stage == WorkStage.AI_ENRICHMENT && it.state != WorkState.FAILED }
+    /** Work that needs a fix before it can go on: no engine, no endpoint, an endpoint not answering. */
+    val blocked = items.filter { it.block != null }
 
-    val hasProblems: Boolean get() = stopped.isNotEmpty() || sync?.failed == true
+    /** Work whose queue can progress. */
+    private val active = items.filter { it.block == null }
+
+    /** Work that stopped and waits for a retry. */
+    val stopped = active.filter { it.entry.state == WorkState.FAILED }
+    val ocr =
+        active
+            .filter { it.entry.stage == WorkStage.OCR && it.entry.state != WorkState.FAILED }
+            .map { it.entry }
+    val autoOrganize =
+        active
+            .filter { it.entry.stage == WorkStage.AI_ENRICHMENT && it.entry.state != WorkState.FAILED }
+            .map { it.entry }
+
+    fun hasProblems(storageProblem: Boolean): Boolean =
+        storageProblem || blocked.isNotEmpty() || stopped.isNotEmpty() || sync?.failed == true
+
     val idle: Boolean
-        get() = stopped.isEmpty() && editRuns.isEmpty() && scan == null && ocr.isEmpty() && autoOrganize.isEmpty()
+        get() =
+            blocked.isEmpty() && stopped.isEmpty() && editRuns.isEmpty() && scan == null &&
+                ocr.isEmpty() && autoOrganize.isEmpty()
 }
 
 /** What the rows of Activity can do. */
@@ -187,15 +234,20 @@ private class ActivityActions(
     val onRetry: (String) -> Unit,
     val onSyncNow: () -> Unit,
     val onOpenCloudSettings: () -> Unit,
+    val onOpenOcrSettings: () -> Unit,
+    val onOpenAiSettings: () -> Unit,
+    val onGrantStorage: () -> Unit,
 )
 
 @Composable
 private fun ActivityList(
     activity: Activity,
+    /** True when Android's storage grant is missing and imports cannot see the device's folders. */
+    storageProblem: Boolean,
     actions: ActivityActions,
     modifier: Modifier = Modifier,
 ) {
-    if (activity.idle && activity.sync == null) {
+    if (activity.idle && activity.sync == null && !storageProblem) {
         EmptyState(
             icon = Icons.Filled.DoneAll,
             title = stringResource(Res.string.queue_empty),
@@ -206,12 +258,19 @@ private fun ActivityList(
     }
     val sync = activity.sync
     LazyColumn(modifier) {
-        if (activity.hasProblems) {
+        if (activity.hasProblems(storageProblem)) {
             heading(Res.string.queue_section_problems)
+            if (storageProblem) {
+                item(key = "storage") { StorageAccessProblemRow(actions) }
+            }
             if (sync != null && sync.failed) {
                 item(key = "sync") { SyncRow(sync, actions) }
             }
-            workRows(activity.stopped, actions)
+            items(activity.blocked, key = { "blocked:${it.entry.stage}:${it.entry.docId}" }) { entry ->
+                BlockedRow(entry, actions)
+                HorizontalDivider()
+            }
+            workRows(activity.stopped.map { it.entry }, actions)
         }
         if (activity.editRuns.isNotEmpty()) {
             heading(Res.string.queue_edit_runs)
@@ -277,6 +336,74 @@ private fun LazyListScope.workRows(
         HorizontalDivider()
     }
 }
+
+/**
+ * An import that cannot see the device's folders yet: Android's all-files grant is missing, so
+ * moving a picked file in fails until it is given. The fix is a button, not a sentence.
+ */
+@Composable
+private fun StorageAccessProblemRow(actions: ActivityActions) {
+    ActivityRow(Icons.Filled.FolderOpen) {
+        Text(
+            stringResource(Res.string.queue_problem_storage_access),
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+        TextButton(onClick = actions.onGrantStorage) {
+            Text(stringResource(Res.string.common_storage_access_grant))
+        }
+    }
+}
+
+/**
+ * Work this device cannot get past: what is missing, said as a problem, and the one button that
+ * fixes it. Its queue is not in motion meanwhile, so it never shows as a spinner.
+ */
+@Composable
+private fun BlockedRow(
+    work: ActivityWork,
+    actions: ActivityActions,
+) {
+    val block = work.block ?: return
+    ActivityRow(work.entry.stage.icon) {
+        Text(
+            work.entry.displayTitle,
+            style = MaterialTheme.typography.titleSmall,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            stringResource(block.message),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+        TextButton(
+            onClick = {
+                when (block) {
+                    WorkBlock.OCR_ENGINE_MISSING -> actions.onOpenOcrSettings()
+                    WorkBlock.AI_ENDPOINT_UNCONFIGURED -> actions.onOpenAiSettings()
+                }
+            },
+        ) {
+            Text(stringResource(block.fixLabel))
+        }
+    }
+}
+
+/** What a blocked queue is waiting for, and where the user can fix it. */
+private val WorkBlock.message: StringResource
+    get() =
+        when (this) {
+            WorkBlock.OCR_ENGINE_MISSING -> Res.string.queue_block_ocr_missing
+            WorkBlock.AI_ENDPOINT_UNCONFIGURED -> Res.string.queue_block_ai_unconfigured
+        }
+
+private val WorkBlock.fixLabel: StringResource
+    get() =
+        when (this) {
+            WorkBlock.OCR_ENGINE_MISSING -> Res.string.queue_block_ocr_fix
+            WorkBlock.AI_ENDPOINT_UNCONFIGURED -> Res.string.queue_block_ai_fix
+        }
 
 /** A library scan or import in progress: what it is doing, and how far along. */
 @Composable

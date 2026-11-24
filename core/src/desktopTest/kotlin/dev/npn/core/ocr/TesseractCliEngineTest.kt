@@ -6,8 +6,12 @@ import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.longs.shouldBeLessThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assume.assumeTrue
 import java.io.File
@@ -26,6 +30,17 @@ class TesseractCliEngineTest {
             engine.available().shouldBeFalse()
             // Asked to read a page anyway, it fails rather than reporting a blank page.
             shouldThrow<IOException> { engine.recognizePng("png".encodeToByteArray(), "eng") }
+        }
+
+    @Test
+    fun availabilityProbeUsesTheInjectedDispatcher() =
+        runTest {
+            val engine =
+                TesseractCliEngine(binary = "tesseract-does-not-exist-xyz", io = StandardTestDispatcher(testScheduler))
+            val probe = async(start = CoroutineStart.UNDISPATCHED) { engine.available() }
+            probe.isCompleted.shouldBeFalse()
+            runCurrent()
+            probe.await().shouldBeFalse()
         }
 
     @Test

@@ -51,6 +51,9 @@ internal class SessionGraph(
     private val db = deps.db
     private val log = deps.log
 
+    /** The journal actors this installation published, which history labels "This device". */
+    private val localActors = LocalJournalActors(deps.deviceDb.keyValueDao())
+
     /**
      * Opened by the session's first rescan. Each drain treats a document without a row as gone and
      * drops this device's work for it, but until then an index may not know the library's documents
@@ -80,7 +83,8 @@ internal class SessionGraph(
      */
     private val endpointHealth = EndpointHealth()
 
-    val documents: DocumentRepository = DocumentRepositoryImpl(db, mapping = deps.computation)
+    val documents: DocumentRepository =
+        DocumentRepositoryImpl(db, mapping = deps.computation, localActors = localActors::among)
     val tags: TagRepository = TagRepositoryImpl(db.tagDao())
     val savedViews = SavedViewRepositoryImpl(coordinator, lifetime)
     val fieldRegistry: FieldRegistry = FieldRegistryImpl(db, coordinator, lifetime)

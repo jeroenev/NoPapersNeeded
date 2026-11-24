@@ -8,8 +8,10 @@ import dev.npn.app.ui.closing
 import dev.npn.app.ui.onUiThread
 import dev.npn.app.ui.text
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlin.test.Test
 
 /**
@@ -36,6 +38,7 @@ class SnackbarMessagesTest {
             }
         }
 
+    /** A message's action is offered and runs when tapped; the latest action is the one kept. */
     @Test
     fun aMessagesActionIsOfferedAndRunsWhenTapped() =
         onUiThread {
@@ -46,7 +49,7 @@ class SnackbarMessagesTest {
                     UiText.Raw("Moved 2 documents to trash"),
                     UiMessage.Action(UiText.Raw("Undo")) { undone++ },
                 )
-            withScene(flowOf(undo, undo), snackbar) { scene ->
+            withScene(flowOf(undo), snackbar) { scene ->
                 snackbar.currentSnackbarData
                     ?.visuals
                     ?.actionLabel shouldBe "Undo"
@@ -55,13 +58,67 @@ class SnackbarMessagesTest {
                 scene.render()
 
                 undone shouldBe 1
-                // An identical message right behind it still shows.
-                snackbar.shownMessage() shouldBe "Moved 2 documents to trash"
+                snackbar.shownMessage() shouldBe null
+            }
+        }
 
-                snackbar.currentSnackbarData?.dismiss()
+    /** A newer Undo replaces the pending one, so the bar never offers an action on an older write. */
+    @Test
+    fun aNewestUndoReplacesThePendingOne() =
+        onUiThread {
+            val snackbar = SnackbarHostState()
+            var firstUndone = 0
+            var secondUndone = 0
+
+            fun undo(
+                message: String,
+                onUndo: () -> Unit,
+            ) = UiMessage(
+                UiText.Raw(message),
+                UiMessage.Action(UiText.Raw("Undo")) { onUndo() },
+            )
+            withScene(
+                flowOf(undo("Trashed 2 documents") { firstUndone++ }, undo("Trashed 5 documents") { secondUndone++ }),
+                snackbar,
+            ) { scene ->
+                snackbar.shownMessage() shouldBe "Trashed 5 documents"
+
+                snackbar.currentSnackbarData?.visuals?.actionLabel shouldBe "Undo"
+                snackbar.currentSnackbarData?.performAction()
                 scene.render()
 
-                undone shouldBe 1
+                firstUndone shouldBe 0
+                secondUndone shouldBe 1
+            }
+        }
+
+    @Test
+    fun newerUndoReplacesOlderEvenBehindPlainMessage() =
+        onUiThread {
+            val snackbar = SnackbarHostState()
+            var first = 0
+            var second = 0
+
+            fun undo(
+                label: String,
+                action: () -> Unit,
+            ) = UiMessage(UiText.Raw(label), UiMessage.Action(UiText.Raw("Undo")) { action() })
+            val messages = Channel<UiMessage>(Channel.UNLIMITED)
+            messages.trySend(undo("first") { first++ })
+            withScene(messages.receiveAsFlow(), snackbar) { scene ->
+                snackbar.shownMessage() shouldBe "first"
+                messages.trySend(text("failure"))
+                scene.render()
+                messages.trySend(undo("second") { second++ })
+                scene.render()
+                snackbar.shownMessage() shouldBe "failure"
+                snackbar.currentSnackbarData?.dismiss()
+                scene.render()
+                snackbar.shownMessage() shouldBe "second"
+                snackbar.currentSnackbarData?.performAction()
+                scene.render()
+                first shouldBe 0
+                second shouldBe 1
             }
         }
 

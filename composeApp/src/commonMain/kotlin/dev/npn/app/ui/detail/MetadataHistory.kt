@@ -112,7 +112,7 @@ private fun HistoryRow(item: HistoryItem) {
                 stringResource(
                     Res.string.detail_history_secondary,
                     formatEpochDateTime(item.timeMillis),
-                    item.deviceId,
+                    item.origin.resolve(),
                 ),
             )
         }

@@ -4,8 +4,10 @@ import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.DocumentHistoryRecord
 import dev.npn.core.app.HistoryEntry
+import dev.npn.core.app.HistoryOrigin
 import dev.npn.core.ocr.OcrEngineRef
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.detail_history_another_device
 import no_papers_needed.composeapp.generated.resources.detail_history_document_deleted
 import no_papers_needed.composeapp.generated.resources.detail_history_document_relinked
 import no_papers_needed.composeapp.generated.resources.detail_history_document_restored
@@ -26,6 +28,7 @@ import no_papers_needed.composeapp.generated.resources.detail_history_tag_merged
 import no_papers_needed.composeapp.generated.resources.detail_history_tag_removed
 import no_papers_needed.composeapp.generated.resources.detail_history_tag_renamed
 import no_papers_needed.composeapp.generated.resources.detail_history_tag_styled
+import no_papers_needed.composeapp.generated.resources.detail_history_this_device
 
 /**
  * One human-readable entry in the document history timeline.
@@ -33,13 +36,13 @@ import no_papers_needed.composeapp.generated.resources.detail_history_tag_styled
  * @property timeMillis When the change was made, on the clock of the device that made it.
  * @property entry The change itself, which the timeline picks the row's icon from.
  * @property description Sentence describing the change, resolved in the app's language.
- * @property deviceId Authoring device for this event.
+ * @property origin Who made it, as "This device" or "Another device".
  */
 data class HistoryItem(
     val timeMillis: Long,
     val entry: HistoryEntry,
     val description: UiText,
-    val deviceId: String,
+    val origin: UiText,
 )
 
 /**
@@ -74,12 +77,19 @@ object HistoryMapper {
                         timeMillis = record.timeMillis,
                         entry = record.entry,
                         description = description,
-                        deviceId = record.deviceId,
+                        origin = originText(record.origin),
                     )
                 }
             }
         return HistoryTimeline(items, newerChanges = records.size - items.size)
     }
+
+    /** Who made a change, in the user's terms rather than as the journal's device id. */
+    private fun originText(origin: HistoryOrigin): UiText =
+        when (origin) {
+            HistoryOrigin.THIS_DEVICE -> uiText(Res.string.detail_history_this_device)
+            HistoryOrigin.ANOTHER_DEVICE -> uiText(Res.string.detail_history_another_device)
+        }
 
     /**
      * The sentence for [entry]; none for an event this build cannot read (an op it does not know, or

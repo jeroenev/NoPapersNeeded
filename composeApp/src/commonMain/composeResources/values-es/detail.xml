@@ -89,7 +89,7 @@
     <string name="detail_text_unavailable">No hay texto disponible.</string>
     <string name="detail_no_history">Aún no hay eventos en el historial.</string>
     <string name="detail_history_load_failed">No se pudo cargar el historial: %1$s</string>
-    <string name="detail_history_secondary">%1$s · Dispositivo %2$s</string>
+    <string name="detail_history_secondary">%1$s · %2$s</string>
     <string name="detail_ocr_not_processed">Sin procesar</string>
     <string name="detail_ocr_queued">En cola</string>
     <string name="detail_ocr_done">Hecho</string>
