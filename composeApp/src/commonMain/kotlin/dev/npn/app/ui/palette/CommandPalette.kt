@@ -2,7 +2,9 @@ package dev.npn.app.ui.palette
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -54,6 +56,7 @@ import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -186,7 +189,7 @@ internal fun CommandPaletteHost(
 }
 
 @Composable
-private fun PaletteDialog(
+internal fun PaletteDialog(
     state: PaletteState,
     actions: CommandPaletteActions,
     modifier: Modifier = Modifier,
@@ -195,34 +198,53 @@ private fun PaletteDialog(
         onDismissRequest = actions::close,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        BoxWithConstraints(
-            modifier.fillMaxSize().background(SCRIM).padding(horizontal = 16.dp, vertical = 24.dp),
-            contentAlignment = Alignment.TopCenter,
-        ) {
-            // A fixed share of the window, capped, so the card never jumps as results arrive and
-            // still fits a compact window.
-            val cardHeight = (maxHeight * 0.82f).coerceAtMost(560.dp)
-            Surface(
+        Box(modifier.fillMaxSize()) {
+            // The card's layout fills the dialog, so the dialog never sees a tap outside the card:
+            // the dimmed backdrop closes the palette itself. It is the card's sibling, beneath it, so
+            // a tap on the card stops there and never reaches it.
+            Box(
                 Modifier
-                    .paletteCardWidth()
-                    .height(cardHeight)
-                    .onPreviewKeyEvent { event -> handlePaletteKey(event, actions) },
-                shape = MaterialTheme.shapes.large,
-                tonalElevation = 3.dp,
-                shadowElevation = 8.dp,
-            ) {
-                Column {
-                    PaletteSearchField(state.query, actions)
-                    HorizontalDivider()
-                    PaletteResults(state, actions, Modifier.weight(1f))
-                    HorizontalDivider()
-                    Text(
-                        stringResource(Res.string.palette_hint),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                    )
-                }
+                    .matchParentSize()
+                    .background(SCRIM)
+                    .pointerInput(actions) { detectTapGestures { actions.close() } },
+            )
+            PaletteCard(state, actions)
+        }
+    }
+}
+
+@Composable
+private fun PaletteCard(
+    state: PaletteState,
+    actions: CommandPaletteActions,
+) {
+    BoxWithConstraints(
+        Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 24.dp),
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        // A fixed share of the window, capped, so the card never jumps as results arrive and
+        // still fits a compact window.
+        val cardHeight = (maxHeight * 0.82f).coerceAtMost(560.dp)
+        Surface(
+            Modifier
+                .paletteCardWidth()
+                .height(cardHeight)
+                .onPreviewKeyEvent { event -> handlePaletteKey(event, actions) },
+            shape = MaterialTheme.shapes.large,
+            tonalElevation = 3.dp,
+            shadowElevation = 8.dp,
+        ) {
+            Column {
+                PaletteSearchField(state.query, actions)
+                HorizontalDivider()
+                PaletteResults(state, actions, Modifier.weight(1f))
+                HorizontalDivider()
+                Text(
+                    stringResource(Res.string.palette_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                )
             }
         }
     }
