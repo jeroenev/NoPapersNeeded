@@ -37,6 +37,9 @@ interface AiEnrichQueueDao {
     @Query("SELECT * FROM ai_enrich_queue ORDER BY attempts, nextAttemptAt")
     fun observeQueue(): Flow<List<AiEnrichQueueEntity>>
 
+    @Query("SELECT COUNT(*) FROM ai_enrich_queue")
+    suspend fun count(): Int
+
     @Query("DELETE FROM ai_enrich_queue WHERE docId = :docId")
     suspend fun delete(docId: String)
 

@@ -4,6 +4,8 @@ import android.app.Application
 import android.content.Context
 import dev.npn.app.di.AppEnvironment
 import dev.npn.app.di.createAppEnvironment
+import dev.npn.core.util.AndroidLog
+import dev.npn.core.util.error
 
 /**
  * Holds the process-wide [AppEnvironment] singleton. Every activity (including one recreated on
@@ -19,7 +21,23 @@ class NpnApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Every later warning and error goes to logcat and to a size-capped file under filesDir,
+        // so the diagnostics bundle can show what happened before a crash.
+        AndroidLog.install(this)
+        installCrashHandler()
         NpnWork.schedulePeriodic(this)
+    }
+
+    /**
+     * Put an uncaught exception in the file log before the process dies. The previous handler still
+     * runs, so the platform's own crash reporting keeps working where it exists.
+     */
+    private fun installCrashHandler() {
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, failure ->
+            AndroidLog.error("Uncaught exception on ${thread.name}", failure)
+            previous?.uncaughtException(thread, failure)
+        }
     }
 
     companion object {

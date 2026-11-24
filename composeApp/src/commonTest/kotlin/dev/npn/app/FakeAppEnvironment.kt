@@ -3,6 +3,7 @@ package dev.npn.app
 import dev.npn.app.di.AppEnvironment
 import dev.npn.app.di.CloudSetupEngine
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.util.NpnLog
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,6 +21,7 @@ class FakeAppEnvironment(
     /** What [newCloudSetup] hands out; null is a platform without one. */
     private val cloudSetup: FakeCloudSetup? = null,
 ) : AppEnvironment {
+    override val log: NpnLog = NpnLog.None
     override val settings = FakeSettingsRepository()
     override val session = MutableStateFlow<LibrarySession?>(null)
     override val opening = MutableStateFlow(false)

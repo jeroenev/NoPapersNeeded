@@ -76,6 +76,8 @@ import no_papers_needed.composeapp.generated.resources.common_settings_reasoning
 import no_papers_needed.composeapp.generated.resources.common_settings_reasoning_edit
 import no_papers_needed.composeapp.generated.resources.common_settings_reasoning_help
 import no_papers_needed.composeapp.generated.resources.common_settings_remove_after_import
+import no_papers_needed.composeapp.generated.resources.common_settings_report_problem
+import no_papers_needed.composeapp.generated.resources.common_settings_report_problem_help
 import no_papers_needed.composeapp.generated.resources.common_settings_review_workflow
 import no_papers_needed.composeapp.generated.resources.common_settings_server_url
 import no_papers_needed.composeapp.generated.resources.common_settings_stop_watching
@@ -91,6 +93,7 @@ import no_papers_needed.composeapp.generated.resources.common_settings_update_ch
 import no_papers_needed.composeapp.generated.resources.common_settings_use_saf
 import no_papers_needed.composeapp.generated.resources.common_settings_views
 import no_papers_needed.composeapp.generated.resources.common_settings_watched_folder
+import no_papers_needed.composeapp.generated.resources.common_settings_whats_new
 import no_papers_needed.composeapp.generated.resources.detail_add_field
 import no_papers_needed.composeapp.generated.resources.onboarding_add_device
 import org.jetbrains.compose.resources.StringResource
@@ -138,6 +141,8 @@ internal data class SettingsPaneState(
     val cloud: CloudSyncState = CloudSyncState(),
     /** The library's auto-match rules in run order; null until they load. */
     val rules: List<AutoMatchRule>? = null,
+    /** A "Report a problem" bundle the About pane writes and shares. */
+    val problemReport: ProblemReportState = ProblemReportState.Idle,
 )
 
 /** What a settings pane can do: change a setting ([SettingsActions]), or open what one leads to. */
@@ -337,6 +342,9 @@ internal val SettingsCategories: List<SettingsCategory> =
                     Res.string.common_settings_support_title,
                     Res.string.common_settings_support_help,
                     Res.string.common_settings_support_sponsor,
+                    Res.string.common_settings_whats_new,
+                    Res.string.common_settings_report_problem,
+                    Res.string.common_settings_report_problem_help,
                 ),
             content = { state, actions -> AboutSettingsPane(state, actions) },
         ),

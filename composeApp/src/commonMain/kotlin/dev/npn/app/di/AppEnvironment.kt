@@ -4,6 +4,7 @@ import dev.npn.app.platform.OcrModels
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.settings.SettingsRepository
 import dev.npn.core.sync.CloudSetup
+import dev.npn.core.util.NpnLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.StateFlow
 
@@ -15,6 +16,9 @@ import kotlinx.coroutines.flow.StateFlow
 interface AppEnvironment {
     val settings: SettingsRepository
     val appScope: CoroutineScope
+
+    /** Where app-level work that nobody awaits reports a failure. */
+    val log: NpnLog
 
     /** Currently opened library, null until onboarding completes (or while switching). */
     val session: StateFlow<LibrarySession?>

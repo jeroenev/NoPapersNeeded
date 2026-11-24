@@ -103,7 +103,8 @@ One line per package. The rules each package enforces are in section 6.
 | `core.settings` | This device's own settings and directories, never per library: `Settings.kt` (`SettingsRepository`, `SettingsSnapshot`, `SettingsCodec`, `SettingsKeys`, `LegacyLibrarySettings`, `GridSizing`), `SessionSettings`, `AppDirs`, `LibraryLocations`, `PlatformDirs`. |
 | `core.sync` | Cloud sync of the library folder through a bundled rclone (section 5.6). `SyncTransport`/`RemoteStore` are the transfer seam; `RcloneTransport` (`jvmSharedMain`) owns one long-lived `rclone rcd` engine per launch configuration (`RcloneDaemon`: loopback RC, random credentials passed in its environment (never its command line), app-private config, a cancelled call closing its connection, final `close` plus a JVM shutdown hook; `RcloneCli` is the stateless `rc --loopback` fallback), so a pass never spawns a process per file and the browser sign-in can span calls. It also exposes `CloudSetup`, the in-app provider wizard: a curated catalog (`RcloneCatalog`) rendered from `config/providers` metadata, driven through rclone's non-interactive `config/create` state machine with `config/oauthstatus` for the sign-in, and `operations/list`/`operations/mkdir` for the folder picker, with no per-provider Kotlin. `SyncEngine` runs one pass: `DocumentResolver`, `SyncPlanner` (pure), `LocalApplier`, `RemotePusher`, `MetadataTransfer`. `SyncService` is the session's `SyncFacade`, and keeps the library's own `CloudSyncConfig` (remote, schedule) in its `device.db`, so each library on a device has a remote of its own; `SyncHooks` is what a pass asks of the session. Credentials stay in the app-private rclone config (Android: no-backup files), and every setup names its remote afresh (`<type>-<hex>`), which disconnecting deletes. Expected failures are typed (`SyncFailure`, `ConflictKind`, `EngineProblem`, `SetupFailure`) and mapped to strings in `composeApp`; rclone's own text travels only as a detail. Android ships the engine as `jniLibs/<abi>/librclone.so` (cross-compiled with Go and the NDK), desktop packages in their app resources, `rclone/` (`bundledRcloneBinary`). |
 | `core.update` | The update check: `AppVersions`, `LatestReleaseSource`, `GitHubLatestRelease`. |
-| `core.util` | `runCatchingCancellable`, `Throwable.reason()`, `EpochClock`, `NpnLog` and `runLogged`, `NpnJson`. |
+| `core.diagnostics` | The user-initiated diagnostics bundle: `DiagnosticsReport` (counts, platform, sync health, AI provider/model), `Diagnostics.render` and its redaction, and the prefilled issue URL. Never document content, names, paths, addresses or keys; the log tail is scrubbed. |
+| `core.util` | `runCatchingCancellable`, `Throwable.reason()`, `EpochClock`, `NpnLog`, `runLogged`, `RotatingLogFile`, `NpnJson`. |
 
 Why two things sit where they do:
 
@@ -833,8 +834,9 @@ Android's `LaunchImports`).
 ### 7.3 Screens
 
 One package per screen under `app/ui/`: `library/`, `detail/`, `tags/`, `rules/`, `settings/`,
-`trash/`, `queue/`, `onboarding/`, `ai/`, `update/`, `nav/`, `common/`, `theme/`. Viewmodels sit
-beside their screen.
+`trash/`, `queue/`, `onboarding/`, `ai/`, `update/`, `whatsnew/`, `nav/`, `common/`, `theme/`.
+Viewmodels sit beside their screen. `whatsnew/` shows the bundled `composeResources/files/whats-new.md`
+once per version; `settings/` owns the About pane's diagnostics report through `SettingsViewModel`.
 
 - Leaf composables take state plus an actions interface, never a viewmodel: a screen hands its
   viewmodel down as a small interface it implements (`LibraryActions`, `DocumentWrites`,

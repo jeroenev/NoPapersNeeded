@@ -2,7 +2,11 @@ package dev.npn.app.ui.settings
 
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
+import dev.npn.app.BuildInfo
 import dev.npn.app.platform.FolderPick
+import dev.npn.app.platform.platformDescription
+import dev.npn.app.platform.recentLogTail
+import dev.npn.app.platform.systemLocaleTag
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.reasonText
@@ -14,6 +18,11 @@ import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiSelfTest
 import dev.npn.core.ai.AiSelfTestReport
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.diagnostics.AiSummary
+import dev.npn.core.diagnostics.CloudSyncSummary
+import dev.npn.core.diagnostics.Diagnostics
+import dev.npn.core.diagnostics.DiagnosticsReport
+import dev.npn.core.diagnostics.LibrarySummary
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.pathrules.StoragePathContext
@@ -32,7 +41,9 @@ import dev.npn.core.sync.TransportAvailability
 import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.watch.liesInLibrary
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -43,6 +54,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_folder_access_not_kept_library
 import no_papers_needed.composeapp.generated.resources.common_folder_access_not_kept_watched
@@ -54,6 +66,7 @@ import no_papers_needed.composeapp.generated.resources.common_settings_clear_thu
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_disconnect_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_move_field_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_remove_field_failed
+import no_papers_needed.composeapp.generated.resources.common_settings_report_problem_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_review_workflow_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_rule_stays_off
 import no_papers_needed.composeapp.generated.resources.common_settings_thumbnail_cache_empty
@@ -72,7 +85,7 @@ import no_papers_needed.composeapp.generated.resources.common_settings_thumbnail
  */
 class SettingsViewModel(
     private val settings: SettingsRepository,
-    session: LibrarySession,
+    private val session: LibrarySession,
     /**
      * How the AI self-test is run. Injectable so [runAiSelfTest]'s consequence — switching AI page
      * reading off — is testable without an endpoint; production always uses [AiSelfTest.run].
@@ -92,9 +105,14 @@ class SettingsViewModel(
      * wizard signed in to and never finished with; none, and that is left to the next wizard run.
      */
     private val outliving: CoroutineScope? = null,
+    /** Where the diagnostics report's counts and log scrub run; a test passes its dispatcher. */
+    private val compute: CoroutineDispatcher = Dispatchers.Default,
+    /** The recent log tail; a test avoids touching the real log file. */
+    private val readLog: suspend (Long) -> String = ::recentLogTail,
 ) : MessagesViewModel(),
     SettingsActions {
     private val content = session.content
+    private val documents = session.documents
     private val reviewConfig = session.reviewConfig
     private val storagePath = session.storagePath
     private val trashRetention = session.trashRetention
@@ -194,6 +212,9 @@ class SettingsViewModel(
 
     internal fun openFieldDialog(dialog: FieldDialog?) = fieldDialog.set(dialog)
 
+    /** The bundle a "Report a problem" tap built, from building to handed-off. */
+    private val problemReport = MutableStateFlow<ProblemReportState>(ProblemReportState.Idle)
+
     /**
      * How the last manual sync ended; null while none was asked for, one is under way, or a later
      * (automatic) pass has started since — its result is what the status then shows.
@@ -257,9 +278,22 @@ class SettingsViewModel(
             aiModels,
             aiSelfTest,
             combine(reviewMode, cloudState, rules, ::Triple),
-            combine(fields, fieldUsage, fieldDialog.flow, ::Triple),
-        ) { ui, models, selfTest, (mode, cloudState, rules), (defs, usage, dialog) ->
-            SettingsPaneState(ui, models, selfTest, mode, defs, usage, dialog, cloudState, rules)
+            combine(fields, fieldUsage, fieldDialog.flow, problemReport) { defs, usage, dialog, report ->
+                PaneExtras(defs, usage, dialog, report)
+            },
+        ) { ui, models, selfTest, (mode, cloudState, rules), extras ->
+            SettingsPaneState(
+                ui,
+                models,
+                selfTest,
+                mode,
+                extras.fields,
+                extras.usage,
+                extras.dialog,
+                cloudState,
+                rules,
+                extras.problemReport,
+            )
         }.stateIn(
             viewModelScope,
             WhileSubscribedTimeout,
@@ -272,8 +306,16 @@ class SettingsViewModel(
                 fieldUsage.value,
                 fieldDialog.value,
                 rules = rules.value,
+                problemReport = problemReport.value,
             ),
         )
+
+    private class PaneExtras(
+        val fields: List<FieldDef>,
+        val usage: Map<String, Int>,
+        val dialog: FieldDialog?,
+        val problemReport: ProblemReportState,
+    )
 
     override fun saveField(def: FieldDef) =
         launchReporting(Res.string.common_save_field_failed) { fieldRegistry.upsert(def) }
@@ -425,6 +467,126 @@ class SettingsViewModel(
                 }
         }
     }
+
+    override fun reportProblem() {
+        if (problemReport.value == ProblemReportState.Building) return
+        problemReport.value = ProblemReportState.Building
+        viewModelScope.launch {
+            problemReport.value =
+                runCatchingCancellable { withContext(compute) { buildProblemReport() } }.fold(
+                    onSuccess = { ProblemReportState.Ready(it.fileName, it.text, it.issueUrl) },
+                    onFailure = { failure ->
+                        message(uiText(Res.string.common_settings_report_problem_failed, failure.reasonText()))
+                        ProblemReportState.Idle
+                    },
+                )
+        }
+    }
+
+    override fun problemReportHandled() {
+        problemReport.value = ProblemReportState.Idle
+    }
+
+    override fun problemReportFailed(failure: Throwable) {
+        problemReport.value = ProblemReportState.Idle
+        message(uiText(Res.string.common_settings_report_problem_failed, failure.reasonText()))
+    }
+
+    override fun markWhatsNewSeen() =
+        launchReporting(Res.string.common_save_setting_failed) {
+            settings.edit {
+                if (it.lastSeenVersion ==
+                    BuildInfo.VERSION
+                ) {
+                    it
+                } else {
+                    it.copy(lastSeenVersion = BuildInfo.VERSION)
+                }
+            }
+        }
+
+    /**
+     * Collect the counts and names a bundle is made of. Document content and names never enter:
+     * the session reports counts, and only the log is free-form enough to need [Diagnostics]
+     * redaction.
+     */
+    private suspend fun buildProblemReport(): ProblemReport {
+        val snapshot = shownSettings()
+        val mode = reviewConfig.reviewMode.first()
+        val counts = session.maintenance.diagnostics()
+        val syncStatus = session.sync.status.first()
+        val syncConfig = session.sync.config.first()
+        val report =
+            DiagnosticsReport(
+                appVersion = BuildInfo.VERSION,
+                platform = platformDescription(),
+                locale = snapshot.appLanguage ?: systemLocaleTag(),
+                library =
+                    LibrarySummary(
+                        liveDocuments = counts.liveDocuments,
+                        trashedDocuments = counts.trashedDocuments,
+                        missingDocuments = counts.missingDocuments,
+                        tags = counts.tags,
+                        fields = counts.fields,
+                        journalObjects = counts.journalObjects,
+                        ocrQueue = counts.ocrQueue,
+                        enrichmentQueue = counts.enrichmentQueue,
+                        editRuns = counts.editRuns,
+                        reviewQueue = documents.observeReviewQueueCount(mode).first(),
+                    ),
+                cloudSync =
+                    CloudSyncSummary(
+                        configured = syncConfig.configured,
+                        automatic = syncConfig.enabled,
+                        intervalMinutes = syncConfig.intervalMinutes,
+                        running = syncStatus.running,
+                        lastRunSucceeded = syncStatus.lastRun?.ok,
+                        lastRunFailure = syncStatus.lastRun?.failure?.name,
+                        lastRunConflicts =
+                            syncStatus.lastRun
+                                ?.report
+                                ?.conflicts
+                                ?.size ?: 0,
+                        lastRunErrors =
+                            syncStatus.lastRun
+                                ?.report
+                                ?.errors
+                                ?.size ?: 0,
+                    ),
+                ai =
+                    AiSummary(
+                        enabled = snapshot.aiEnabled,
+                        provider = snapshot.aiProvider.name,
+                        model = snapshot.aiModel,
+                    ),
+                logTail = readLog(Diagnostics.MAX_LOG_BYTES),
+            )
+        return ProblemReport(
+            fileName = Diagnostics.bundleFileName(report.appVersion),
+            text = Diagnostics.render(report, secrets = reportSecrets(snapshot, syncConfig.remote)),
+            issueUrl = Diagnostics.issueUrl(report),
+        )
+    }
+
+    /** Free-form log text may quote these; scrubbing them by value is stronger than any pattern. */
+    private fun reportSecrets(
+        snapshot: SettingsSnapshot,
+        remote: String?,
+    ): List<String> =
+        listOfNotNull(
+            snapshot.libraryLocation,
+            snapshot.watchedFolder,
+            snapshot.installationId,
+            snapshot.aiApiKey,
+            snapshot.aiBaseUrl,
+            remote,
+        )
+
+    private class ProblemReport(
+        val fileName: String,
+        val text: String,
+        val issueUrl: String,
+    )
 
     override fun clearThumbnailCache() =
         launchReporting(Res.string.common_settings_clear_thumbnails_failed) {
