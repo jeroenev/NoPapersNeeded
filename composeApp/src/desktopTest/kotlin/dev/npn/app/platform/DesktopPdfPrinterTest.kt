@@ -1,7 +1,9 @@
 package dev.npn.app.platform
 
 import dev.npn.core.pdf.pdfPrintJob
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
@@ -88,6 +90,27 @@ class DesktopPdfPrinterTest {
 
             printer(surface).print("invoice.pdf", twoPagePdf(), Dispatchers.Unconfined) shouldBe
                 PrintOutcome.Cancelled
+        }
+
+    /**
+     * A screen closed while its job spools cancels the coroutine: that is not a printer failure,
+     * so nothing logs "printing failed" for a job that printed.
+     */
+    @Test
+    fun aCancelledCallerIsNotAPrinterFailure() =
+        runTest {
+            val surface =
+                object : PrinterSurface {
+                    override suspend fun print(
+                        fileName: String,
+                        pages: Pageable,
+                        io: CoroutineDispatcher,
+                    ): PrintOutcome = throw CancellationException("screen closed")
+                }
+
+            shouldThrow<CancellationException> {
+                printer(surface).print("invoice.pdf", twoPagePdf(), Dispatchers.Unconfined)
+            }
         }
 
     @Test

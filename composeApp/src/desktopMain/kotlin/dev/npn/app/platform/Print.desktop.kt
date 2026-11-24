@@ -70,13 +70,16 @@ internal class DesktopPdfPrinter(
             withContext(io) { runCatchingCancellable { pdfPrintJob(bytes) } }
                 .getOrElse { return PrintOutcome.Failed(PrintFailure.UNREADABLE_PDF, it) }
         return job.use {
-            try {
-                surface.print(fileName, it.pages, io)
-            } catch (_: PrinterAbortException) {
-                PrintOutcome.Cancelled
-            } catch (failure: Exception) {
-                PrintOutcome.Failed(PrintFailure.PRINT_FAILED, failure)
-            }
+            // A cancelled caller (the screen closed while the job spooled) propagates; only the
+            // printer's own failures become an outcome.
+            runCatchingCancellable { surface.print(fileName, it.pages, io) }
+                .getOrElse { failure ->
+                    if (failure is PrinterAbortException) {
+                        PrintOutcome.Cancelled
+                    } else {
+                        PrintOutcome.Failed(PrintFailure.PRINT_FAILED, failure)
+                    }
+                }
         }
     }
 }
