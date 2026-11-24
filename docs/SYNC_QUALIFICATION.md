@@ -11,8 +11,8 @@ failure looks like. It has two halves:
 
 The automated suite is what CI runs; a manual run is what qualifies a provider for a release. They
 are complementary: the fake remote cannot rate-limit, expire a token, fold case on the server or
-reproduce a real process kill (the suite throws where the kill would land, and can leave a half-written
-object that way), and a real provider cannot replay a two-device interleaving on demand.
+reproduce a real process kill (the suite cancels the pass where the kill would land and reopens the
+library, or cuts an upload to leave a half-written object), and a real provider cannot replay a two-device interleaving on demand.
 
 No credential, token, account name, e-mail address or remote URL with an embedded password belongs
 in this repository. Credentials live in the app-private rclone config that the setup wizard writes;
@@ -58,7 +58,7 @@ call, no rclone process, no credentials.
 What the suite deliberately cannot prove, and a manual run must: rclone's own behaviour, the
 provider's identity/hash and case-folding rules, OAuth refresh and expiry, rate limits and their
 retries, upload sessions and their server-side behaviour, the provider's own trash/versioning,
-a real process kill (the suite throws at the same point instead), an interrupted *journal-object*
+a real process kill (the suite cancels the pass at the same point and reopens the session instead), an interrupted *journal-object*
 upload (mark that part of S7 manual; PDF uploads and downloads are automated), a real filesystem's
 locking and discard semantics, and Android's scoped storage.
 
