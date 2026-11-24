@@ -392,9 +392,10 @@ truth; the user just never picks it.
 
 `MaintenanceFacade.verifyLibrary` is the read-only check behind Library settings' "Verify library":
 `LibraryVerifier` walks the live documents (a listed regular file, the stored size, and a SHA-256
-equal to the document id) and the journal object store (each object's bytes against the hash in its
-canonical name), reports missing/unreadable/size/hash problems, and reports a superseded document
-still on disk or an object store of another version as a note, not damage. It never writes, repairs
+equal to the document id) and the journal object store (each object's bytes, a recognized conflict
+copy's included, against the hash its name carries), reports missing/unreadable/size/hash problems
+and a store file this build cannot read (another store version included) as orphaned, and reports a
+superseded document still on disk as a note, not damage. It never writes, repairs
 or deletes, never puts document bytes in its report, skips symlinks with the library walk, and is
 cancellable with progress. A listing it cannot do is one `STORE_UNREADABLE` finding, not a problem
 per item.
