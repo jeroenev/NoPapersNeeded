@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -36,6 +37,7 @@ import no_papers_needed.composeapp.generated.resources.library_conflict_file_cou
 import no_papers_needed.composeapp.generated.resources.library_dismiss
 import no_papers_needed.composeapp.generated.resources.library_duplicate_count
 import no_papers_needed.composeapp.generated.resources.library_path_conflict_count
+import no_papers_needed.composeapp.generated.resources.queue_nav_label
 import no_papers_needed.composeapp.generated.resources.queue_open_trash
 import no_papers_needed.composeapp.generated.resources.queue_processing
 import org.jetbrains.compose.resources.pluralStringResource
@@ -146,7 +148,10 @@ private fun ScanIssuesBanner(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary,
                         textDecoration = TextDecoration.Underline,
-                        modifier = Modifier.clickable(role = Role.Button, onClick = onShowPathConflicts),
+                        modifier =
+                            Modifier
+                                .heightIn(min = 48.dp)
+                                .clickable(role = Role.Button, onClick = onShowPathConflicts),
                     )
                 }
             }
@@ -168,7 +173,8 @@ private fun QueueStatusIndicator(
     Row(
         Modifier
             .clip(RoundedCornerShape(4.dp))
-            .clickable(onClick = onClick)
+            .heightIn(min = 48.dp)
+            .clickable(role = Role.Button, onClickLabel = stringResource(Res.string.queue_nav_label), onClick = onClick)
             .padding(vertical = 4.dp, horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),

@@ -46,6 +46,7 @@ import dev.npn.app.ui.common.PositionStepper
 import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.detectDragWhenZoomed
 import dev.npn.app.ui.common.detectPinchTransform
+import dev.npn.app.ui.common.reducedMotion
 import dev.npn.app.ui.common.viewerScroll
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.CoroutineDispatcher
@@ -109,6 +110,10 @@ fun PageViewer(
 
     var showGoToPage by rememberSaveable { mutableStateOf(false) }
     var containerSize by remember { mutableStateOf(Size.Zero) }
+    // Read here, where the composition can, so the paging helpers below may consult it. State, not a
+    // local: the wheel handler keeps this closure for the pointerInput's lifetime, and it must see
+    // a change to the preference made while the viewer stays composed.
+    val reduceMotion = rememberUpdatedState(reducedMotion)
 
     // The interactive page is whichever the pager currently shows; its transform is owned per-page
     // so zooming one page and swiping away resets cleanly.
@@ -121,7 +126,12 @@ fun PageViewer(
     val currentPage = rememberUpdatedState(current)
 
     fun goToPage(target: Int) {
-        scope.launch { pagerState.animateScrollToPage(target.coerceIn(0, count - 1)) }
+        val page = target.coerceIn(0, count - 1)
+        // A page slide is a transition to watch when the user asked for one, and a step to take at
+        // once when motion is reduced.
+        scope.launch {
+            if (reduceMotion.value) pagerState.scrollToPage(page) else pagerState.animateScrollToPage(page)
+        }
     }
 
     Box(

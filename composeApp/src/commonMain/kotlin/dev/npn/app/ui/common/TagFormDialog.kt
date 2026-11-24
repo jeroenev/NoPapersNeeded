@@ -25,11 +25,14 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -78,6 +81,9 @@ fun TagFormDialog(
 ) {
     var name by rememberSaveable { mutableStateOf(initialName) }
     var color by rememberSaveable { mutableStateOf(initialColor) }
+    // Typing a name is the first thing this dialog is for; give its field the keyboard on entry.
+    val nameFocus = remember { FocusRequester() }
+    if (showNameField && nameEditable) FocusOnEntry(nameFocus)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -92,7 +98,7 @@ fun TagFormDialog(
                         label = { Text(stringResource(Res.string.common_tags_name_hierarchy)) },
                         singleLine = true,
                         enabled = nameEditable,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().focusRequester(nameFocus),
                     )
                 }
                 Text(stringResource(Res.string.common_color), style = MaterialTheme.typography.labelLarge)

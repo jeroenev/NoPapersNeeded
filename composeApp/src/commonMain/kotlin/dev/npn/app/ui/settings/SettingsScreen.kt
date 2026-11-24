@@ -36,6 +36,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -331,7 +333,7 @@ private fun SettingsTopBar(
     if (onBack != null) {
         BackTopBar(title = title, onBack = onBack)
     } else {
-        TopAppBar(title = { Text(text = title) })
+        TopAppBar(title = { Text(text = title, modifier = Modifier.semantics { heading() }) })
     }
 }
 

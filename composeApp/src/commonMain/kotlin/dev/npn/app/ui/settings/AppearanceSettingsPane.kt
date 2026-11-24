@@ -9,6 +9,9 @@ import dev.npn.app.ui.common.UiLanguage
 import dev.npn.app.ui.common.appLanguageName
 import dev.npn.core.app.ViewType
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.accessibility_reduce_motion
+import no_papers_needed.composeapp.generated.resources.accessibility_reduce_motion_help
+import no_papers_needed.composeapp.generated.resources.accessibility_title
 import no_papers_needed.composeapp.generated.resources.common_settings_default_view
 import no_papers_needed.composeapp.generated.resources.common_settings_grid_size_help
 import no_papers_needed.composeapp.generated.resources.common_settings_landscape_columns
@@ -46,6 +49,15 @@ internal fun AppearanceSettingsPane(
             help = stringResource(Res.string.common_settings_landscape_columns_help),
             checked = state.settings.snapshot.landscapeListColumns,
             onCheckedChange = { on -> actions.edit { it.copy(landscapeListColumns = on) } },
+        )
+    }
+
+    SettingsSection(title = stringResource(Res.string.accessibility_title)) {
+        SwitchRow(
+            label = stringResource(Res.string.accessibility_reduce_motion),
+            help = stringResource(Res.string.accessibility_reduce_motion_help),
+            checked = state.settings.snapshot.reducedMotion,
+            onCheckedChange = { on -> actions.edit { it.copy(reducedMotion = on) } },
         )
     }
 

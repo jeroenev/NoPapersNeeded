@@ -37,6 +37,7 @@ fun SwitchRow(
     Row(
         modifier
             .fillMaxWidth()
+            .heightIn(min = 48.dp)
             .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onCheckedChange),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -104,6 +105,7 @@ fun RadioRow(
     Row(
         modifier
             .fillMaxWidth()
+            .heightIn(min = 48.dp)
             .selectable(selected = selected, role = Role.RadioButton, onClick = onSelect),
         // With supporting lines under the label, the button stays level with the label.
         verticalAlignment = if (supporting == null) Alignment.CenterVertically else Alignment.Top,

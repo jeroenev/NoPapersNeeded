@@ -1,6 +1,12 @@
 package dev.npn.app.ui.ai
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -70,6 +76,7 @@ import dev.npn.app.ui.common.ExpandIcon
 import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.expander
 import dev.npn.app.ui.common.previewKeyShortcuts
+import dev.npn.app.ui.common.reducedMotion
 import dev.npn.app.ui.common.rememberSnackbarMessages
 import dev.npn.core.ai.AiChatSession
 import dev.npn.core.ai.ChatTools
@@ -146,17 +153,23 @@ fun AiChatScreen(
     var confirmingClear by rememberSaveable { mutableStateOf(false) }
     var confirmingDelete by rememberSaveable { mutableStateOf<String?>(null) }
 
+    // Read here, where the composition can, so the effects below may consult it.
+    val reduceMotion = reducedMotion
     // Keep new output visible by following the bottom — but only while the user is already there,
     // so a position they scrolled to (or one restored by navigation/process death, which shows up
     // as a non-zero first visible index before the transcript loads) is never yanked away.
-    LaunchedEffect(items.size, lastLen) {
+    LaunchedEffect(items.size, lastLen, reduceMotion) {
         if (items.isEmpty()) return@LaunchedEffect
         val lastVisible =
             listState.layoutInfo.visibleItemsInfo
                 .lastOrNull()
                 ?.index
         val atBottom = lastVisible?.let { it >= items.size - 2 } ?: (listState.firstVisibleItemIndex == 0)
-        if (atBottom) listState.animateScrollToItem(items.size - 1)
+        if (atBottom) {
+            // Following new output is a convenience, not a transition to watch: with reduced motion
+            // the list lands on the new turn at once.
+            if (reduceMotion) listState.scrollToItem(items.size - 1) else listState.animateScrollToItem(items.size - 1)
+        }
     }
 
     Scaffold(
@@ -413,7 +426,6 @@ private fun ChatHistoryMenu(
                         Text(
                             session.title ?: stringResource(Res.string.ai_new_chat),
                             fontWeight = if (session.id == currentSessionId) FontWeight.Bold else null,
-                            maxLines = 1,
                         )
                     },
                     onClick = {
@@ -561,7 +573,11 @@ private fun ToolRow(
                 )
             }
         }
-        AnimatedVisibility(visible = expanded && !item.running) {
+        AnimatedVisibility(
+            visible = expanded && !item.running,
+            enter = if (reducedMotion) EnterTransition.None else fadeIn() + expandVertically(),
+            exit = if (reducedMotion) ExitTransition.None else fadeOut() + shrinkVertically(),
+        ) {
             val resultText =
                 if (item.result.isEmpty()) {
                     stringResource(Res.string.ai_no_output)

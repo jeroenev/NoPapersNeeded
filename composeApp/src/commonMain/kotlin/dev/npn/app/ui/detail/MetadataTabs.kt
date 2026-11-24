@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.EmptyState
@@ -121,7 +122,10 @@ internal fun MetadataTabs(
                                 PanelTab.TEXT -> stringResource(Res.string.detail_tab_text)
                                 PanelTab.HISTORY -> stringResource(Res.string.detail_tab_history)
                             },
+                            // A Material3 Tab is a fixed 48dp container that ignores its label's
+                            // height: wrapping here would draw a second line over the panel.
                             maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     },
                 )

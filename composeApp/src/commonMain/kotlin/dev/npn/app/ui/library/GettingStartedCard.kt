@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -29,6 +30,7 @@ import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.expander
+import dev.npn.app.ui.common.focusRing
 import dev.npn.app.ui.settings.SettingsCategoryId
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.library_getting_started
@@ -121,7 +123,9 @@ private fun GettingStartedStep(
     Row(
         Modifier
             .fillMaxWidth()
+            .focusRing()
             .clickable(role = Role.Button, onClick = onClick)
+            .heightIn(min = 48.dp)
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),

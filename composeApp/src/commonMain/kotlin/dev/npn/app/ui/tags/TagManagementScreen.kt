@@ -50,9 +50,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.createSavedStateHandle
@@ -68,6 +68,7 @@ import dev.npn.app.ui.common.TagPickDialog
 import dev.npn.app.ui.common.TextInputDialog
 import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.TopBarAction
+import dev.npn.app.ui.common.focusRing
 import dev.npn.app.ui.common.onSecondaryClick
 import dev.npn.app.ui.common.parseHexColor
 import dev.npn.app.ui.common.rememberSnackbarMessages
@@ -167,7 +168,12 @@ private fun TagListScaffold(
                 )
             } else {
                 TopAppBar(
-                    title = { Text(stringResource(Res.string.common_tags_title)) },
+                    title = {
+                        Text(
+                            stringResource(Res.string.common_tags_title),
+                            modifier = Modifier.semantics { heading() },
+                        )
+                    },
                     actions = {
                         TooltipIconButton(
                             Icons.Outlined.AutoMode,
@@ -417,6 +423,7 @@ private fun TagCard(
                             onPrepareMenu()
                             menu = true
                         }.semantics { this.selected = selected }
+                        .focusRing()
                         .combinedClickable(
                             role = Role.Button,
                             onClickLabel = if (selectionMode) selectionLabel else actionsLabel,
@@ -480,15 +487,11 @@ private fun TagCardLabel(
                 parentPath,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
         }
         Text(
             node.segment,
             style = MaterialTheme.typography.bodyLarge,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
         )
         val documentCount =
             pluralStringResource(

@@ -35,6 +35,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigationevent.NavigationEventInfo
@@ -376,7 +378,12 @@ private fun ColumnScope.FailureNote(failure: OpenFailure) {
 /** The title of an onboarding or first-run step. */
 @Composable
 internal fun StepTitle(text: String) {
-    Text(text = text, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
+    Text(
+        text = text,
+        style = MaterialTheme.typography.headlineSmall,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.semantics { heading() },
+    )
 }
 
 /** One of a step's choices: what it is ([title], [help]), and its [actions]. */
