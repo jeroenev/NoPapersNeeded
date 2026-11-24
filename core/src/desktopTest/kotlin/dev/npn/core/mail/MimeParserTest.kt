@@ -73,6 +73,10 @@ class MimeParserTest {
             ).joinToString("\r\n")
         val message = MimeMessage(Session.getInstance(Properties()), ByteArrayInputStream(raw.toByteArray()))
         assertFailsWith<Exception> { MimeParser.parse(1, message) }
+        // The fetch reads it as this one message's failure, so the rest of the page still arrives.
+        val read = MimeParser.parseOrFailed(1, message)
+        assertEquals(MailFailureReason.FETCH_FAILED, read.readFailure)
+        assertTrue(read.attachments.isEmpty())
     }
 
     @Test

@@ -4,6 +4,7 @@ import jakarta.mail.Address
 import jakarta.mail.AuthenticationFailedException
 import jakarta.mail.Flags
 import jakarta.mail.Folder
+import jakarta.mail.FolderClosedException
 import jakarta.mail.FolderNotFoundException
 import jakarta.mail.Message
 import jakarta.mail.MessagingException
@@ -11,6 +12,7 @@ import jakarta.mail.Multipart
 import jakarta.mail.Part
 import jakarta.mail.Session
 import jakarta.mail.Store
+import jakarta.mail.StoreClosedException
 import jakarta.mail.UIDFolder
 import jakarta.mail.internet.InternetAddress
 import jakarta.mail.internet.MimeUtility
@@ -79,7 +81,7 @@ internal class JakartaMailTransport(
                             uidFolder
                                 .getMessagesByUID(start, last)
                                 .filterNotNull()
-                                .map { MimeParser.parse(uidFolder.getUID(it), it) }
+                                .map { MimeParser.parseOrFailed(uidFolder.getUID(it), it) }
                         }
                     MailFetchResult.Success(
                         uidValidity = uidValidity,
@@ -353,6 +355,35 @@ internal object MimeParser {
     private const val MAX_BODY_CHARS = 1_000_000
     private const val MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
     private const val MAX_PART_DEPTH = 10
+
+    /**
+     * [parse], with a message that cannot be read (an attachment over the cap, a malformed part)
+     * returned as a [MailMessage.readFailure] instead of thrown, so one bad message fails alone and
+     * the service's bounded retries can pass it over. A closed folder or store is the connection's
+     * failure, not the message's, and still fails the whole fetch.
+     */
+    fun parseOrFailed(
+        uid: Long,
+        message: Message,
+    ): MailMessage =
+        try {
+            parse(uid, message)
+        } catch (closed: FolderClosedException) {
+            throw closed
+        } catch (closed: StoreClosedException) {
+            throw closed
+        } catch (_: Exception) {
+            MailMessage(
+                uid = uid,
+                from = "",
+                to = "",
+                subject = "",
+                dateMillis = null,
+                bodyText = "",
+                attachments = emptyList(),
+                readFailure = MailFailureReason.FETCH_FAILED,
+            )
+        }
 
     fun parse(
         uid: Long,

@@ -291,6 +291,30 @@ class MailServiceTest {
         }
 
     @Test
+    fun anUnreadableMessageIsRetriedThenPassedOverWithoutStallingLaterMail() =
+        runTest {
+            // An attachment over the cap: the transport reads this one message as a failure.
+            val unreadable =
+                message(uid = 1, attachments = emptyList()).copy(readFailure = MailFailureReason.FETCH_FAILED)
+            val transport = FakeTransport(messages = listOf(unreadable, message(uid = 2)))
+            val fixture = fixture(transport = transport)
+            // MailService.MAX_MESSAGE_ATTEMPTS: the fifth failed check passes the message over.
+            repeat(4) {
+                val report = fixture.service.checkNow()
+                assertEquals(MailFailureReason.FETCH_FAILED, report.errors.single().reason)
+                assertEquals(0, fixture.cursors.last().lastUid)
+            }
+            assertTrue(fixture.sink.importedNames.isEmpty())
+
+            val passed = fixture.service.checkNow()
+            assertEquals(1, passed.imported)
+            assertEquals(listOf("invoice.pdf"), fixture.sink.importedNames)
+            // The unreadable message keeps its place in the mailbox: no post-action ever touched it.
+            assertEquals(listOf(2L), transport.marked)
+            assertEquals(2, fixture.cursors.last().lastUid)
+        }
+
+    @Test
     fun aDuplicateAttachmentStillLetsThePostActionRun() =
         runTest {
             val transport = FakeTransport(messages = listOf(message()))

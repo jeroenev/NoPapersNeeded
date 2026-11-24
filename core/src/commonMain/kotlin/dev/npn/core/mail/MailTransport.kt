@@ -28,6 +28,13 @@ data class MailMessage(
     /** The plain-text body; HTML-only mail leaves this empty and imports its attachments only. */
     val bodyText: String,
     val attachments: List<MailAttachment>,
+    /**
+     * Set when the transport could not read this one message (a supported attachment over the cap,
+     * a malformed part). Its other fields may then be empty: it is never filtered, imported or given
+     * a post-action, and it fails like any other message, so it is retried and then passed over
+     * instead of failing every fetch of the folder.
+     */
+    val readFailure: MailFailureReason? = null,
 )
 
 /** Why talking to the mail server failed. Every one is mapped to a whole sentence in `composeApp`. */

@@ -373,44 +373,62 @@ internal class MailService(
             index++
             report = report.copy(messagesSeen = report.messagesSeen + 1)
             val supported = message.attachments.filter { it.supportedKind() != null }
-            if (!account.matches(message)) {
-                report = report.copy(skipped = report.skipped + 1)
-            } else {
-                report = report.copy(matched = report.matched + 1)
-                if (supported.isEmpty() && !account.saveEmailAsPdf) {
-                    report = report.copy(skipped = report.skipped + 1)
-                } else {
-                    when (val handled = handle(account, password, message, supported)) {
-                        is MessageOutcome.Handled -> {
-                            report =
-                                report.copy(
-                                    imported = report.imported + handled.imported,
-                                    duplicates = report.duplicates + handled.duplicates,
-                                )
-                        }
+            val readFailure = message.readFailure
+            val outcome: MessageOutcome? =
+                when {
+                    // A message the transport could not read fails without touching the library or
+                    // the mailbox, and takes the same bounded retries as any other failure.
+                    readFailure != null -> {
+                        MessageOutcome.Failed(readFailure, imported = 0, duplicates = 0)
+                    }
 
-                        is MessageOutcome.Failed -> {
-                            report =
-                                report.copy(
-                                    imported = report.imported + handled.imported,
-                                    duplicates = report.duplicates + handled.duplicates,
-                                    errors = report.errors + MailCheckError(handled.reason, handled.detail),
-                                )
-                            val key = "${account.accountKey}|${account.folder}|${message.uid}"
-                            val attempts = (failedAttempts[key] ?: 0) + 1
-                            if (attempts >= MAX_MESSAGE_ATTEMPTS) {
-                                // A permanently bad message (a vanished UID, an undecodable image)
-                                // is passed over after bounded retries instead of stopping the folder.
-                                failedAttempts.remove(key)
-                                log.warn(
-                                    "Skipping email UID ${message.uid} after $attempts failed attempts: " +
-                                        handled.reason.name,
-                                )
-                            } else {
-                                failedAttempts[key] = attempts
-                                error = handled.reason
-                            }
-                        }
+                    !account.matches(message) -> {
+                        report = report.copy(skipped = report.skipped + 1)
+                        null
+                    }
+
+                    supported.isEmpty() && !account.saveEmailAsPdf -> {
+                        report = report.copy(matched = report.matched + 1, skipped = report.skipped + 1)
+                        null
+                    }
+
+                    else -> {
+                        report = report.copy(matched = report.matched + 1)
+                        handle(account, password, message, supported)
+                    }
+                }
+            when (outcome) {
+                null -> {}
+
+                is MessageOutcome.Handled -> {
+                    report =
+                        report.copy(
+                            imported = report.imported + outcome.imported,
+                            duplicates = report.duplicates + outcome.duplicates,
+                        )
+                }
+
+                is MessageOutcome.Failed -> {
+                    report =
+                        report.copy(
+                            imported = report.imported + outcome.imported,
+                            duplicates = report.duplicates + outcome.duplicates,
+                            errors = report.errors + MailCheckError(outcome.reason, outcome.detail),
+                        )
+                    val key = "${account.accountKey}|${account.folder}|${message.uid}"
+                    val attempts = (failedAttempts[key] ?: 0) + 1
+                    if (attempts >= MAX_MESSAGE_ATTEMPTS) {
+                        // A permanently bad message (a vanished UID, an undecodable image, an
+                        // attachment over the cap) is passed over after bounded retries instead of
+                        // stopping the folder; it gets no post-action, so it stays in the mailbox.
+                        failedAttempts.remove(key)
+                        log.warn(
+                            "Skipping email UID ${message.uid} after $attempts failed attempts: " +
+                                outcome.reason.name,
+                        )
+                    } else {
+                        failedAttempts[key] = attempts
+                        error = outcome.reason
                     }
                 }
             }
