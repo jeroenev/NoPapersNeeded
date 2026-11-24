@@ -11,3 +11,26 @@ import androidx.compose.animation.ExitTransition
 internal expect fun defaultPageEnter(): EnterTransition
 
 internal expect fun defaultPageExit(): ExitTransition
+
+/**
+ * The navigation host's own predictive-back transition, which it plays while a back swipe is in
+ * progress instead of the pop transition: Android fades the page below in and shrinks the leaving
+ * one; desktop has none.
+ */
+internal expect fun defaultPredictivePopEnter(): EnterTransition
+
+internal expect fun defaultPredictivePopExit(): ExitTransition
+
+/**
+ * The transitions a navigation host plays: the platform's defaults, or none at all when motion is
+ * reduced. The predictive-back pair is a default of its own, apart from the pop pair, so it is
+ * replaced too: otherwise a back swipe on Android would still shrink the page.
+ */
+internal class PageTransitions(
+    reduced: Boolean,
+) {
+    val enter: EnterTransition = if (reduced) EnterTransition.None else defaultPageEnter()
+    val exit: ExitTransition = if (reduced) ExitTransition.None else defaultPageExit()
+    val predictivePopEnter: EnterTransition = if (reduced) EnterTransition.None else defaultPredictivePopEnter()
+    val predictivePopExit: ExitTransition = if (reduced) ExitTransition.None else defaultPredictivePopExit()
+}

@@ -7,3 +7,8 @@ import androidx.compose.animation.ExitTransition
 internal actual fun defaultPageEnter(): EnterTransition = EnterTransition.None
 
 internal actual fun defaultPageExit(): ExitTransition = ExitTransition.None
+
+/** Desktop has no predictive back either. */
+internal actual fun defaultPredictivePopEnter(): EnterTransition = EnterTransition.None
+
+internal actual fun defaultPredictivePopExit(): ExitTransition = ExitTransition.None

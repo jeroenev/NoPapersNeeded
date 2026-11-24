@@ -1,7 +1,5 @@
 package dev.npn.app.ui.nav
 
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -231,16 +229,20 @@ private fun MainNavHost(
 ) {
     val nav = library.nav
     val browse = library.browse
-    // Android's default navigation is a 700ms cross-fade. With reduced motion the destination is
-    // shown at once; otherwise the platform's own default stands (desktop does not fade at all).
+    // Android's default navigation is a 700ms cross-fade, and a back swipe shrinks the page. With
+    // reduced motion the destination is shown at once; otherwise the platform's own defaults stand
+    // (desktop does not animate at all).
     val reduced = reducedMotion
+    val transitions = remember(reduced) { PageTransitions(reduced) }
     NavHost(
         navController = nav,
         startDestination = Route.Library,
-        enterTransition = { if (reduced) EnterTransition.None else defaultPageEnter() },
-        exitTransition = { if (reduced) ExitTransition.None else defaultPageExit() },
-        popEnterTransition = { if (reduced) EnterTransition.None else defaultPageEnter() },
-        popExitTransition = { if (reduced) ExitTransition.None else defaultPageExit() },
+        enterTransition = { transitions.enter },
+        exitTransition = { transitions.exit },
+        popEnterTransition = { transitions.enter },
+        popExitTransition = { transitions.exit },
+        predictivePopEnterTransition = { transitions.predictivePopEnter },
+        predictivePopExitTransition = { transitions.predictivePopExit },
     ) {
         composable<Route.Library> { entry ->
             LibraryScreen(
