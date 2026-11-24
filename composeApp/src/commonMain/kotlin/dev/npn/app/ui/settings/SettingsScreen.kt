@@ -170,6 +170,8 @@ fun SettingsScreen(
                 override fun openFieldDialog(dialog: FieldDialog?) = vm.openFieldDialog(dialog)
 
                 override fun openDocument(docId: String) = currentOpenDocument(docId)
+
+                override fun openSecurityDialog(dialog: SecurityDialog?) = vm.openSecurityDialog(dialog)
             }
         }
 

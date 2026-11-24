@@ -101,6 +101,7 @@ One line per package. The rules each package enforces are in section 6.
 | `core.work` | `QueueDrainer`, `drainedQueue`, `QueueRetryPolicy`, `EndpointHealth`. |
 | `core.ai` | The AI layer: `AiChat.kt`, `AiSuggest.kt`, `AiConfig.kt`, `UnattendedAiPolicy.kt`; `AiFacadeImpl`, `KoogChatAgent`, `LibraryAiTools`, `ChatHistoryWindow`, `AiRuntime`, `AiRuntimeCache`, `AiSelfTest`, `AiModelCatalog`, `ProviderClientFactory`. |
 | `core.settings` | This device's own settings and directories, never per library: `Settings.kt` (`SettingsRepository`, `SettingsSnapshot`, `SettingsCodec`, `SettingsKeys`, `LegacyLibrarySettings`, `GridSizing`), `SessionSettings`, `AppDirs`, `LibraryLocations`, `PlatformDirs`. |
+| `core.security` | The app lock: `AppLock` (the lock/unlock state machine, timeout and retry backoff), `AppLockSettings` and `LockCredential` (the salted hash a settings file holds), `LockCrypto` (PBKDF2-HMAC-SHA256, shared by the JVM targets). Access control over the app, never encryption of the library. |
 | `core.sync` | Cloud sync of the library folder through a bundled rclone (section 5.6). `SyncTransport`/`RemoteStore` are the transfer seam; `RcloneTransport` (`jvmSharedMain`) owns one long-lived `rclone rcd` engine per launch configuration (`RcloneDaemon`: loopback RC, random credentials passed in its environment (never its command line), app-private config, a cancelled call closing its connection, final `close` plus a JVM shutdown hook; `RcloneCli` is the stateless `rc --loopback` fallback), so a pass never spawns a process per file and the browser sign-in can span calls. It also exposes `CloudSetup`, the in-app provider wizard: a curated catalog (`RcloneCatalog`) rendered from `config/providers` metadata, driven through rclone's non-interactive `config/create` state machine with `config/oauthstatus` for the sign-in, and `operations/list`/`operations/mkdir` for the folder picker, with no per-provider Kotlin. `SyncEngine` runs one pass: `DocumentResolver`, `SyncPlanner` (pure), `LocalApplier`, `RemotePusher`, `MetadataTransfer`. `SyncService` is the session's `SyncFacade`, and keeps the library's own `CloudSyncConfig` (remote, schedule) in its `device.db`, so each library on a device has a remote of its own; `SyncHooks` is what a pass asks of the session. Credentials stay in the app-private rclone config (Android: no-backup files), and every setup names its remote afresh (`<type>-<hex>`), which disconnecting deletes. Expected failures are typed (`SyncFailure`, `ConflictKind`, `EngineProblem`, `SetupFailure`) and mapped to strings in `composeApp`; rclone's own text travels only as a detail. Android ships the engine as `jniLibs/<abi>/librclone.so` (cross-compiled with Go and the NDK), desktop packages in their app resources, `rclone/` (`bundledRcloneBinary`). |
 | `core.update` | The update check: `AppVersions`, `LatestReleaseSource`, `GitHubLatestRelease`. |
 | `core.util` | `runCatchingCancellable`, `Throwable.reason()`, `EpochClock`, `NpnLog` and `runLogged`, `NpnJson`. |
@@ -773,6 +774,40 @@ Kept by `FoldedState`, `MetadataAccumulator`, `FoldProjection`, `Indexer`:
 - The AI edit queue is the pattern for deferrable work a human must confirm: persist the request
   and its subjects, buy the expensive part on a drain, store the answer verbatim, surface it on the
   processing queue. `AiAutoEnricher` is the pattern for work that writes unattended.
+
+### 6.13 App lock
+
+Kept by `core.security` (`AppLock`, `LockCrypto`), `SettingsCodec` and `composeApp`'s
+`ui/lock`:
+
+- The lock is access control over the app's UI, **not encryption**: the library folder stays
+  plain files, readable by anything that can open them, and the Settings copy says so. It is a
+  device setting (`SettingsSnapshot.appLock`), never journal data: another device opening the
+  same library has its own lock.
+- Only a salted PBKDF2-HMAC-SHA256 hash (`LockCredential`) is stored, with its iteration count
+  and a random per-credential salt; the secret itself is never persisted, logged or put in saved
+  state (`LockScreen` keeps it in an unsaved `remember`, and `LockViewModel` only receives it for
+  one check). `LockCrypto.verify` compares in constant time.
+- `AppLock` starts locked whenever the setting is on, which is what a cold start shows. Returning
+  from the background locks once the elapsed time reaches the chosen `LockTimeout`
+  (`IMMEDIATELY` = any return). Android starts the timeout in `onStop` only when the user left
+  (`onUserLeaveHint`: Home, Recents) or the screen is off, so the scanner, a picker or the share
+  sheet the app opens is not leaving it; `onStart` checks the time away. Time spent in such an
+  activity is therefore not counted, even if the user leaves from there. A configuration change is
+  not background. The locked window is kept out of screenshots with `FLAG_SECURE`. Desktop treats a minimized window as background and also
+  locks after the chosen interval without keyboard or pointer input; `IMMEDIATELY` only acts on
+  minimizing there.
+- Wrong secrets back off (`LockBackoff`: three free attempts, then 5 s, 15 s, 1 min, 5 min), and
+  the whole state is one `StateFlow`, so the shell can read it while the hash runs off the main
+  thread. Enabling the lock or setting a new secret does not lock the app that made the change;
+  disabling it clears the hash.
+- The user cannot be locked out for good. Android's `AppLockAuthenticator` offers
+  `androidx.biometric` with `DEVICE_CREDENTIAL`, so the device's own unlock always works, and the
+  app PIN remains an alternative. On desktop, closing the app and deleting the `appLock*` entries
+  from `settings.properties` (or the file) while it is closed removes the lock; the Security pane
+  and the lock screen name the path.
+- No journal op and no `device.db` change: an older build simply has no lock and opens the same
+  library.
 
 ## 7. UI architecture (`composeApp`)
 

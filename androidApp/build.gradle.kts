@@ -23,6 +23,8 @@ dependencies {
     implementation(projects.composeApp)
     implementation(projects.core)
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.biometric)
+    implementation(libs.androidx.fragment)
     implementation(libs.androidx.work.runtime)
     implementation(libs.mlkit.document.scanner)
     // Installs the baseline profile (and the ones the libraries ship) on sideloaded installs, which

@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.toComposeImageBitmap
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.LocalLibraryFolders
 import dev.npn.core.settings.PlatformDirs
+import dev.npn.core.settings.SettingsRepositoryImpl
 import io.github.vinceglb.filekit.PlatformFile
 import io.github.vinceglb.filekit.absolutePath
 import kotlinx.coroutines.CoroutineDispatcher
@@ -118,3 +119,6 @@ actual suspend fun copyToClipboard(text: String) {
     val selection = StringSelection(text)
     Toolkit.getDefaultToolkit().systemClipboard.setContents(selection, selection)
 }
+
+/** The settings file a forgotten PIN is reset from, while the app is closed. */
+actual fun appLockRecoveryFile(): String? = SettingsRepositoryImpl.defaultFile().path

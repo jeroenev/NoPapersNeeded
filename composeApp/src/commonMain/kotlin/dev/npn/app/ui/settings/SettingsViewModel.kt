@@ -30,6 +30,9 @@ import dev.npn.core.pathrules.StoragePathContext
 import dev.npn.core.pathrules.StoragePathExpansion
 import dev.npn.core.pathrules.StoragePathTemplate
 import dev.npn.core.rules.AutoMatchRule
+import dev.npn.core.security.LockCredential
+import dev.npn.core.security.LockCrypto
+import dev.npn.core.security.LockTimeout
 import dev.npn.core.settings.SettingsRepository
 import dev.npn.core.settings.SettingsSnapshot
 import dev.npn.core.settings.toAiConfig
@@ -42,7 +45,9 @@ import dev.npn.core.sync.TransportAvailability
 import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.watch.liesInLibrary
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
@@ -58,6 +63,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_folder_access_not_kept_library
 import no_papers_needed.composeapp.generated.resources.common_folder_access_not_kept_watched
@@ -85,6 +91,7 @@ import no_papers_needed.composeapp.generated.resources.email_save_failed
 import no_papers_needed.composeapp.generated.resources.email_saved
 import no_papers_needed.composeapp.generated.resources.email_test_failed
 import no_papers_needed.composeapp.generated.resources.email_test_ok
+import no_papers_needed.composeapp.generated.resources.security_pin_too_short
 
 /**
  * Settings screen view model. Device settings go through the one [SettingsRepository.edit]
@@ -121,6 +128,13 @@ class SettingsViewModel(
     private val outliving: CoroutineScope? = null,
     /** Where a copied report goes; injectable so its success and failure are testable. */
     private val copy: suspend (String) -> Unit = ::copyToClipboard,
+    /**
+     * Make the salted hash a new app-lock secret is stored as. Injected so a test need not pay the
+     * production PBKDF2 cost; production always uses [LockCrypto.create].
+     */
+    private val createLockCredential: (String) -> LockCredential = { LockCrypto.create(it) },
+    /** Where the slow hash runs, never the main thread. */
+    private val lockDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : MessagesViewModel(),
     SettingsActions {
     private val content = session.content
@@ -308,6 +322,11 @@ class SettingsViewModel(
             report.skipped,
         )
 
+    /** The app-lock set-or-change dialog, kept through recreation as the field dialog is. */
+    private val securityDialog = saved.uiState<SecurityDialog?>(SECURITY_DIALOG_KEY, null)
+
+    internal fun openSecurityDialog(dialog: SecurityDialog?) = securityDialog.set(dialog)
+
     /**
      * How the last manual sync ended; null while none was asked for, one is under way, or a later
      * (automatic) pass has started since — its result is what the status then shows.
@@ -398,12 +417,18 @@ class SettingsViewModel(
             aiSelfTest,
             combine(reviewMode, cloudState, rules, mail.state, ::SettingsCore),
             combine(
-                combine(fields, fieldUsage, fieldDialog.flow, ::Triple),
+                combine(
+                    fields,
+                    fieldUsage,
+                    combine(fieldDialog.flow, securityDialog.flow, ::Pair),
+                    ::Triple,
+                ),
                 verification,
                 ::Pair,
             ),
-        ) { ui, models, selfTest, core, (fieldsNow, verify) ->
-            val (defs, usage, dialog) = fieldsNow
+        ) { ui, models, selfTest, core, (fieldsAndDialogs, verify) ->
+            val (defs, usage, dialogs) = fieldsAndDialogs
+            val (dialog, security) = dialogs
             SettingsPaneState(
                 settings = ui,
                 aiModels = models,
@@ -416,6 +441,7 @@ class SettingsViewModel(
                 rules = core.rules,
                 verification = verify,
                 mail = core.mail,
+                securityDialog = security,
             )
         }.stateIn(
             viewModelScope,
@@ -430,6 +456,7 @@ class SettingsViewModel(
                 fieldDialog.value,
                 rules = rules.value,
                 mail = mail.state.value,
+                securityDialog = securityDialog.value,
             ),
         )
 
@@ -448,6 +475,42 @@ class SettingsViewModel(
 
     override fun edit(transform: (SettingsSnapshot) -> SettingsSnapshot) =
         launchReporting(Res.string.common_save_setting_failed) { settings.edit(transform) }
+
+    /**
+     * Turning the lock on opens the dialog that picks a secret; it is enabled by [setAppLockPin].
+     * Turning it off drops the stored hash with it.
+     */
+    override fun setAppLockEnabled(enabled: Boolean) {
+        if (enabled) {
+            openSecurityDialog(SecurityDialog.SetPin)
+            return
+        }
+        launchReporting(Res.string.common_save_setting_failed) {
+            settings.edit { it.copy(appLock = it.appLock.copy(enabled = false, credential = null)) }
+        }
+    }
+
+    override fun setAppLockTimeout(timeout: LockTimeout) =
+        launchReporting(Res.string.common_save_setting_failed) {
+            settings.edit { it.copy(appLock = it.appLock.copy(timeout = timeout)) }
+        }
+
+    override fun setAppLockPin(pin: String) {
+        if (pin.length < MIN_APP_LOCK_SECRET_LENGTH) {
+            message(uiText(Res.string.security_pin_too_short))
+            return
+        }
+        viewModelScope.launch {
+            val saved =
+                reporting(Res.string.common_save_setting_failed) {
+                    // PBKDF2 is deliberately slow; hashing on the main thread would freeze the dialog.
+                    // The hashing is inside the report so a rejected input cannot escape as a crash.
+                    val credential = withContext(lockDispatcher) { createLockCredential(pin) }
+                    settings.edit { it.copy(appLock = it.appLock.copy(enabled = true, credential = credential)) }
+                }
+            if (saved) openSecurityDialog(null)
+        }
+    }
 
     override fun setStoragePathTemplate(template: String) = typedTemplate.type(template)
 
@@ -691,6 +754,7 @@ class SettingsViewModel(
         const val PICKED_KEY = "settings.picked"
         const val CATEGORY_QUERY_KEY = "settings.categoryQuery"
         const val FIELD_DIALOG_KEY = "settings.fieldDialog"
+        const val SECURITY_DIALOG_KEY = "settings.securityDialog"
     }
 }
 

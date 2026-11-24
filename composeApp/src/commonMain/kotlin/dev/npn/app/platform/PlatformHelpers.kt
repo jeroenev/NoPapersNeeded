@@ -148,3 +148,11 @@ expect suspend fun sharePdfBytes(
  * the platform refuses; the caller reports that instead of claiming the copy landed.
  */
 expect suspend fun copyToClipboard(text: String)
+
+/**
+ * The file that holds this device's settings, for the app lock's recovery copy: a forgotten PIN is
+ * reset by deleting the app-lock entries (or the file) while the app is closed. Null where the
+ * settings are not a plain file the user can reach (Android), whose recovery is the device's own
+ * unlock or clearing the app's data.
+ */
+expect fun appLockRecoveryFile(): String?

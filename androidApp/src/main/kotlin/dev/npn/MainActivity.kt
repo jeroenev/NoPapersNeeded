@@ -4,16 +4,21 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
+import android.os.PowerManager
 import android.os.SystemClock
+import android.view.WindowManager
 import android.widget.Toast
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.lifecycleScope
 import dev.npn.app.App
 import dev.npn.app.di.AppEnvironment
+import dev.npn.app.platform.AppLockAuthenticator
 import dev.npn.app.platform.ForegroundImport
 import dev.npn.app.platform.LaunchImports
+import dev.npn.app.platform.LocalAppLockAuthenticator
 import dev.npn.app.platform.LocalDocumentScanner
 import dev.npn.app.platform.importIntoLibrary
 import dev.npn.core.app.ImportTally
@@ -21,16 +26,24 @@ import dev.npn.core.util.AndroidLog
 import dev.npn.core.util.runLogged
 import dev.npn.core.util.warn
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     private lateinit var env: AppEnvironment
+
+    /** Android's biometric-or-device-credential unlock, offered by the shared lock screen. */
+    private val appLockAuthenticator: AppLockAuthenticator by lazy { AndroidAppLockAuthenticator(this) }
 
     /** The token of this activity's launch import ([LaunchImports]), saved with its state while it runs. */
     private var launchImport: String? = null
+
+    /** Whether the user left with Home/Recents since the last stop, rather than an activity we started. */
+    private var leftByUser = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -39,9 +52,27 @@ class MainActivity : ComponentActivity() {
         env = NpnApplication.environment(this)
 
         setContent {
-            CompositionLocalProvider(LocalDocumentScanner provides MlKitDocumentScanner) {
+            CompositionLocalProvider(
+                LocalDocumentScanner provides MlKitDocumentScanner,
+                LocalAppLockAuthenticator provides appLockAuthenticator,
+            ) {
                 App(env)
             }
+        }
+
+        // Keep the locked screen out of screenshots and the recents thumbnail; the app's content
+        // comes back as soon as it is unlocked.
+        lifecycleScope.launch {
+            env.lock.state
+                .map { it.locked }
+                .distinctUntilChanged()
+                .collect { locked ->
+                    if (locked) {
+                        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                    } else {
+                        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                    }
+                }
         }
 
         // Import the share/open intent that started this activity, once (see LaunchImports): again
@@ -76,6 +107,37 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
+     * The app went to the background by the user's choice (Home, Recents, another app), which is
+     * when the lock's timeout starts. Other activities this app starts — the scanner, a folder
+     * picker, the share sheet — stop the activity without this hint, so they are an interruption,
+     * not the app being left, and must not lock the user out mid-flow. A screen turned off is
+     * covered separately, since it produces no hint.
+     */
+    override fun onUserLeaveHint() {
+        leftByUser = true
+        if (env.lock.state.value.enabled) {
+            // Taken now so the recents thumbnail is blank rather than the library.
+            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
+        super.onUserLeaveHint()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        env.lock.onForeground()
+        if (env.lock.state.value.locked) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+    }
+
+    override fun onStop() {
+        val leaving = leftByUser || !screenIsOn()
+        leftByUser = false
+        if (!isChangingConfigurations && leaving) env.lock.onBackground()
+        super.onStop()
+    }
+
+    private fun screenIsOn(): Boolean = (getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive
+
+    /**
      * Syncthing and other apps change the library while this app is in the background, and the
      * filesystem watch cannot be relied on to have seen it (the process may have been dead, and
      * inotify on the FUSE mount is best effort). A rescan on every return to the foreground is the
@@ -83,6 +145,7 @@ class MainActivity : ComponentActivity() {
      */
     override fun onResume() {
         super.onResume()
+        if (!env.lock.state.value.locked) window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         val session = env.session.value ?: return
         val now = SystemClock.elapsedRealtime()
         if (now - lastResumeRescan < RESUME_RESCAN_MIN_INTERVAL_MS) return

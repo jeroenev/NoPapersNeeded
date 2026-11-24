@@ -8,11 +8,13 @@ import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.MoveToInbox
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.vector.ImageVector
+import dev.npn.app.platform.appLockRecoveryFile
 import dev.npn.app.platform.ocrHasLanguageSetting
 import dev.npn.app.platform.supportsEmailImport
 import dev.npn.app.platform.supportsSafStorage
@@ -133,6 +135,20 @@ import no_papers_needed.composeapp.generated.resources.email_test
 import no_papers_needed.composeapp.generated.resources.email_title
 import no_papers_needed.composeapp.generated.resources.email_username
 import no_papers_needed.composeapp.generated.resources.onboarding_add_device
+import no_papers_needed.composeapp.generated.resources.security_app_lock
+import no_papers_needed.composeapp.generated.resources.security_app_lock_help
+import no_papers_needed.composeapp.generated.resources.security_change_pin
+import no_papers_needed.composeapp.generated.resources.security_lock_after
+import no_papers_needed.composeapp.generated.resources.security_lock_fifteen_minutes
+import no_papers_needed.composeapp.generated.resources.security_lock_five_minutes
+import no_papers_needed.composeapp.generated.resources.security_lock_immediately
+import no_papers_needed.composeapp.generated.resources.security_lock_one_minute
+import no_papers_needed.composeapp.generated.resources.security_not_encrypted
+import no_papers_needed.composeapp.generated.resources.security_recovery_android
+import no_papers_needed.composeapp.generated.resources.security_recovery_desktop
+import no_papers_needed.composeapp.generated.resources.security_recovery_title
+import no_papers_needed.composeapp.generated.resources.security_set_pin
+import no_papers_needed.composeapp.generated.resources.security_title
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -151,6 +167,7 @@ enum class SettingsCategoryId {
     CLOUD_SYNC,
     AI,
     APPEARANCE,
+    SECURITY,
     ABOUT,
     ;
 
@@ -183,6 +200,8 @@ internal data class SettingsPaneState(
     val verification: LibraryVerificationState = LibraryVerificationState(),
     /** The IMAP account, last check and credential state email import shows. */
     val mail: MailState = MailState(),
+    /** The app-lock dialog Settings has open, if any. */
+    val securityDialog: SecurityDialog? = null,
 )
 
 /** What a settings pane can do: change a setting ([SettingsActions]), or open what one leads to. */
@@ -200,6 +219,9 @@ internal interface SettingsPaneActions : SettingsActions {
 
     /** Open [docId]'s detail, for a conflict or check finding that still names a document. */
     fun openDocument(docId: String)
+
+    /** Open the app-lock dialog, or close the open one with null. */
+    fun openSecurityDialog(dialog: SecurityDialog?)
 }
 
 /**
@@ -424,6 +446,31 @@ internal val SettingsCategories: List<SettingsCategory> =
                     Res.string.common_settings_language_system,
                 ),
             content = { state, actions -> AppearanceSettingsPane(state, actions) },
+        ),
+        SettingsCategory(
+            id = SettingsCategoryId.SECURITY,
+            title = Res.string.security_title,
+            icon = Icons.Outlined.Lock,
+            keywords =
+                listOf(
+                    Res.string.security_app_lock,
+                    Res.string.security_app_lock_help,
+                    Res.string.security_set_pin,
+                    Res.string.security_change_pin,
+                    Res.string.security_not_encrypted,
+                    Res.string.security_lock_after,
+                    Res.string.security_lock_immediately,
+                    Res.string.security_lock_one_minute,
+                    Res.string.security_lock_five_minutes,
+                    Res.string.security_lock_fifteen_minutes,
+                    Res.string.security_recovery_title,
+                    if (appLockRecoveryFile() != null) {
+                        Res.string.security_recovery_desktop
+                    } else {
+                        Res.string.security_recovery_android
+                    },
+                ),
+            content = { state, actions -> SecuritySettingsPane(state, actions) },
         ),
         SettingsCategory(
             id = SettingsCategoryId.ABOUT,

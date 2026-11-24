@@ -3,6 +3,9 @@ package dev.npn.core.settings
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiReasoningLevel
 import dev.npn.core.ai.AiTagging
+import dev.npn.core.security.AppLockSettings
+import dev.npn.core.security.LockCrypto
+import dev.npn.core.security.LockTimeout
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.RecordingLog
 import io.kotest.matchers.shouldBe
@@ -125,6 +128,41 @@ class SettingsRepositoryImplTest {
 
         override fun close() = out.close()
     }
+
+    @Test
+    fun theAppLockPersistsOnlyASaltedHashAndOpensWithItsSecret() =
+        runTest {
+            val file = directory.resolve("settings.properties").toFile()
+            val credential =
+                LockCrypto.create(
+                    "swordfish",
+                    iterations = LockCrypto.MIN_ITERATIONS,
+                    salt = ByteArray(LockCrypto.SALT_BYTES),
+                )
+            SettingsRepositoryImpl(NpnLog.None, file).edit {
+                it.copy(
+                    appLock =
+                        AppLockSettings(
+                            enabled = true,
+                            timeout = LockTimeout.FIVE_MINUTES,
+                            credential = credential,
+                        ),
+                )
+            }
+
+            val settings = SettingsRepositoryImpl(NpnLog.None, file).settings.first()
+            val savedCredential = requireNotNull(settings.appLock.credential) { "the stored hash is missing" }
+
+            settings.appLock.enabled shouldBe true
+            settings.appLock.timeout shouldBe LockTimeout.FIVE_MINUTES
+            savedCredential shouldBe credential
+            LockCrypto.verify("swordfish", savedCredential) shouldBe true
+            LockCrypto.verify("swordfish2", savedCredential) shouldBe false
+            // The file holds the salt and hash, never the secret itself.
+            val stored = file.readText()
+            stored.contains("swordfish") shouldBe false
+            stored.contains(credential.saltHex) shouldBe true
+        }
 
     @Test
     fun aiProviderAndReasoningPersist() =

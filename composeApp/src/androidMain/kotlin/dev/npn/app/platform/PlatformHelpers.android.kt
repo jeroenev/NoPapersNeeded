@@ -238,3 +238,6 @@ actual suspend fun copyToClipboard(text: String) {
     val clipboard = context.getSystemService(ClipboardManager::class.java)
     clipboard.setPrimaryClip(ClipData.newPlainText("No Papers Needed", text))
 }
+
+/** Android's settings are shared preferences, not a file the user can reach; the device unlocks instead. */
+actual fun appLockRecoveryFile(): String? = null
