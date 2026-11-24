@@ -433,7 +433,6 @@ internal class JournalCoordinator(
         published: PublishedTransaction,
         preserveLifecycleDocs: Set<String> = emptySet(),
     ) = withDurableProjectionRecovery {
-        log.runLogged("Recording this device's journal actors") { recordPublished(published.events) }
         val local = accumulator.localSource(published)
         indexer.projection {
             recordWritten(current, local)
@@ -749,11 +748,18 @@ internal class JournalCoordinator(
      * the next one to try again the same way: a [dev.npn.core.fs.VerifiedPublicationFailedException]
      * is transient, and a [dev.npn.core.fs.VerifiedPublicationUnavailableException] means the library
      * should never have opened (the open-time check publishes through the same primitive).
+     *
+     * Every transaction this session publishes passes here (a plain commit, a lifecycle change, a
+     * relink's commit-and-rescan, a rescan's recorded moves and restores), so its authors are
+     * recorded here once it is durable ([recordPublished]).
      */
     private suspend fun writeTransaction(
         ops: List<PendingOp>,
         beneathEveryEdit: Boolean = false,
-    ): PublishedTransaction = writer.commit(ops, beneathEveryEdit)
+    ): PublishedTransaction =
+        writer.commit(ops, beneathEveryEdit).also { published ->
+            log.runLogged("Recording this device's journal actors") { recordPublished(published.events) }
+        }
 
     /** Refuse a write, with why ([MetadataWriteBlocked.block]), while a failed pass blocks them. */
     private fun ensureWritable() {

@@ -152,6 +152,27 @@ class DocumentRepositoryHistoryTest {
             record.origin shouldBe HistoryOrigin.THIS_DEVICE
         }
 
+    /**
+     * A bake publishes its relink through the commit-and-rescan path rather than the plain commit,
+     * and it is this device's change all the same.
+     */
+    @Test
+    fun aBakeInPlaceIsThisDevice() =
+        appSessionTest { rig ->
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val before = rig.docId("a.pdf")
+            rig.session.meta.addTag(listOf(before), "filed")
+
+            rig.session.content.bakeInPlace(before) shouldBe BakeOutcome.Baked
+
+            val record =
+                rig.session.documents
+                    .history(before)
+                    .first { it.entry is HistoryEntry.Relinked }
+            record.origin shouldBe HistoryOrigin.THIS_DEVICE
+        }
+
     private fun event(
         docId: String,
         seq: Long,
