@@ -254,7 +254,7 @@ private fun TriageMetadata(
     val defs = metadata.document.fieldDefs
     val doc = editing.item.doc
     Column(
-        modifier = modifier.verticalScroll(rememberScrollState()).padding(16.dp),
+        modifier = modifier.triageFieldKeys().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         ReviewedBadge(metadata.document.reviewed)
