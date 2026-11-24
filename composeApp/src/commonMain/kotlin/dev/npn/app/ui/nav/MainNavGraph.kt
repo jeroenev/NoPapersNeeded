@@ -10,7 +10,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -28,7 +27,6 @@ import dev.npn.app.ui.ai.AiChatScreen
 import dev.npn.app.ui.ai.AiEditReviewScreen
 import dev.npn.app.ui.ai.AiEditScreen
 import dev.npn.app.ui.common.PublishWindowTitle
-import dev.npn.app.ui.common.ViewModelStoreLease
 import dev.npn.app.ui.detail.BrowseContext
 import dev.npn.app.ui.detail.DocDetailScreen
 import dev.npn.app.ui.detail.WithDraftResumeBanner
@@ -249,14 +247,11 @@ private fun MainNavHost(
         }
         composable<Route.DocDetail> { entry ->
             val route = entry.toRoute<Route.DocDetail>()
-            // Held for as long as this entry is on the back stack; shared with the library's side
-            // panel when it shows the same document, so expanding the panel continues where it was.
-            val document = viewModel { ViewModelStoreLease(library.documents) }
             DocDetailScreen(
                 docId = route.docId,
                 session = session,
                 settings = settings,
-                viewModels = document.of(route.docId),
+                documentStores = library.documents,
                 browse = browse,
                 onBack = { nav.from(entry) { popBackStack() } },
                 onNavigateToDoc = { targetId ->

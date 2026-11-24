@@ -69,6 +69,11 @@ internal fun DocumentEditor(
     onReviewNext: () -> Unit,
     hasNext: Boolean,
     modifier: Modifier = Modifier,
+    /**
+     * The compact detail's peek sheet state. Null (the wide layout and the side panel) keeps the
+     * tabbed metadata panel this editor has always shown.
+     */
+    peekSheet: PeekSheetState? = null,
 ) {
     val item = state.document.item
     if (item == null) {
@@ -104,16 +109,7 @@ internal fun DocumentEditor(
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { store.commit(docId, persisted.value, title.value) }
     val actions =
         remember(writes, store, docId) { DraftedActions(writes, store, docId, persisted, types, title) }
-    Column(modifier.imePadding().saveKeys(actions::commitDraft)) {
-        MetadataPanel(
-            state = state,
-            item = edited,
-            refused = draft.refused,
-            writeBlocked = draft.saving || !draft.writable,
-            actions = actions,
-            previewTab = preview,
-            modifier = Modifier.fillMaxSize().weight(1f),
-        )
+    val statusBar: @Composable (Modifier) -> Unit = { statusModifier ->
         EditorStatusBar(
             draft = draft,
             onRetry = actions::commitDraft,
@@ -126,7 +122,45 @@ internal fun DocumentEditor(
                     null
                 },
             hasNext = hasNext,
+            modifier = statusModifier,
         )
+    }
+    if (peekSheet != null) {
+        var pickedTab by rememberSaveable { mutableStateOf<PanelTab?>(null) }
+        PeekDocumentSheet(
+            item = edited,
+            tagColors = state.vocabulary.tagColors,
+            state = peekSheet,
+            preview = preview,
+            metadata = { metadataModifier ->
+                MetadataTabs(
+                    state = state,
+                    item = edited,
+                    refused = draft.refused,
+                    writeBlocked = draft.saving || !draft.writable,
+                    actions = actions,
+                    picked = pickedTab,
+                    onPick = { pickedTab = it },
+                    previewTab = null,
+                    modifier = metadataModifier,
+                )
+            },
+            statusBar = statusBar,
+            modifier = modifier.imePadding().saveKeys(actions::commitDraft),
+        )
+        return
+    }
+    Column(modifier.imePadding().saveKeys(actions::commitDraft)) {
+        MetadataPanel(
+            state = state,
+            item = edited,
+            refused = draft.refused,
+            writeBlocked = draft.saving || !draft.writable,
+            actions = actions,
+            previewTab = preview,
+            modifier = Modifier.fillMaxSize().weight(1f),
+        )
+        statusBar(Modifier)
     }
 }
 

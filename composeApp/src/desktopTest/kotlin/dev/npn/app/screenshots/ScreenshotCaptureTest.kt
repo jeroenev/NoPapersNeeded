@@ -10,6 +10,7 @@ import androidx.compose.ui.input.pointer.PointerId
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.scene.ComposeScenePointer
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.unit.Density
@@ -148,10 +149,18 @@ class ScreenshotCaptureTest {
     private fun capturePhoneDetails() {
         scrollUntil("Account statement")
         clickText("Account statement")
+        // A phone shows the metadata in a collapsed peek sheet: expand it before its tabs exist.
+        await("the peek sheet") { scene.nodes().any { it.clickLabel() == "Show details" } }
+        onEdt {
+            scene.click { it.clickLabel() == "Show details" }
+            scene.settleFrames()
+        }
         await("the document's tabs") { scene.texts().contains("Details") }
         clickText("Details")
         settle()
     }
+
+    private fun SemanticsNode.clickLabel(): String? = config.getOrNull(SemanticsActions.OnClick)?.label
 
     private fun capturePhoneTags() {
         clickText("Tags")
