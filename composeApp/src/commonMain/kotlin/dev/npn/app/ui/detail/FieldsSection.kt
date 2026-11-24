@@ -160,7 +160,7 @@ internal fun FieldsSection(
  * when the edit is finished: focus leaves the row, or the editor says so (a date picked).
  */
 @Composable
-private fun FieldRow(
+internal fun FieldRow(
     def: FieldDef,
     value: String?,
     onCommit: (FieldParse) -> Unit,
