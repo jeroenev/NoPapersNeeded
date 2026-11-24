@@ -67,8 +67,9 @@ sealed interface BatchResult {
     /**
      * Suggestions for review: [docs] carry at least one suggestion, [emptyDocs] came back empty.
      * [failures] of [total] documents could not be suggested (they are not marked processed and
-     * will be retried by the next batch). [skipped] documents were not asked because the run's
-     * per-run request cap was reached first; [capReached] says so.
+     * will be retried by the next batch). [capReached] says the run's per-run request cap ends it
+     * with documents of the scope still unasked, whether in this batch or beyond it; [skipped]
+     * counts them.
      */
     data class Review(
         val docs: List<ReviewDoc>,
@@ -270,7 +271,7 @@ internal class AiEditRunImpl(
                 failures = 0,
                 total = batch.size,
                 capReached = true,
-                skipped = batch.size,
+                skipped = remainingDocs(key).size,
             )
         }
         val first = batch.first().doc
@@ -289,13 +290,25 @@ internal class AiEditRunImpl(
                 },
             ) { index, suggestion -> projector.project(batch[index], suggestion) }
         val answered = outcomes.outcomes.mapNotNull { it.outcome.getOrNull() }
+        // A batch that spends the last request exactly skips nothing, yet the run still ends here:
+        // [moreRemain] is false from now on. Say so now, or Done reads as "the scope is finished".
+        val beyond = if (budgetExhausted()) unaskedBeyond(key, batch) else 0
         return enterReview(
             results = answered,
             failures = outcomes.outcomes.count { it.outcome.isFailure },
             total = batch.size,
-            capReached = outcomes.capReached,
-            skipped = outcomes.skipped(batch.size),
+            capReached = outcomes.capReached || beyond > 0,
+            skipped = outcomes.skipped(batch.size) + beyond,
         )
+    }
+
+    /** Documents of the scope outside [batch] that no batch of this run will ask about. */
+    private suspend fun unaskedBeyond(
+        key: ScopeKey,
+        batch: List<DocListItem>,
+    ): Int {
+        val inBatch = batch.mapTo(HashSet()) { it.doc.docId }
+        return remainingDocs(key).count { it.doc.docId !in inBatch }
     }
 
     /** The run's one request counter, seeded from the cap read when its first call is made. */
