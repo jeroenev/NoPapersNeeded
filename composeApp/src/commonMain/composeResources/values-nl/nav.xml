@@ -49,6 +49,7 @@
     <string name="nav_shortcut_keys_arrows">← →</string>
     <string name="nav_shortcut_keys_enter">Enter</string>
     <string name="nav_shortcut_keys_shift_enter">Shift+Enter</string>
+    <string name="nav_shortcut_keys_ctrl_k">Ctrl+K</string>
 
     <!-- What each key does, one whole sentence per row. -->
     <string name="nav_shortcut_show_list">Deze lijst met sneltoetsen tonen.</string>
@@ -67,6 +68,7 @@
     <string name="nav_shortcut_doc_resize">Met de scheidingslijn geselecteerd de pagina of de gegevens breder maken.</string>
     <string name="nav_shortcut_assistant_send">De vraag versturen.</string>
     <string name="nav_shortcut_assistant_newline">Een nieuwe regel beginnen in de vraag.</string>
+    <string name="nav_shortcut_command_palette">Het opdrachtenpalet openen.</string>
 
     <string name="nav_shortcut_tip_page_counter">Klik op de paginateller om naar een paginanummer te gaan.</string>
     <string name="nav_shortcut_tip_long_press">Houd een document ingedrukt om te beginnen met selecteren; klik daarna op andere om ze toe te voegen.</string>

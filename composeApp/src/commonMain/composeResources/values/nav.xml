@@ -49,6 +49,7 @@
     <string name="nav_shortcut_keys_arrows">← →</string>
     <string name="nav_shortcut_keys_enter">Enter</string>
     <string name="nav_shortcut_keys_shift_enter">Shift+Enter</string>
+    <string name="nav_shortcut_keys_ctrl_k">Ctrl+K</string>
 
     <!-- What each key does, one whole sentence per row. -->
     <string name="nav_shortcut_show_list">Show this list of shortcuts.</string>
@@ -67,6 +68,7 @@
     <string name="nav_shortcut_doc_resize">With the divider focused, make the page or the details wider.</string>
     <string name="nav_shortcut_assistant_send">Send the question.</string>
     <string name="nav_shortcut_assistant_newline">Start a new line in the question.</string>
+    <string name="nav_shortcut_command_palette">Open the command palette.</string>
 
     <string name="nav_shortcut_tip_page_counter">Click the page counter to go to a page by number.</string>
     <string name="nav_shortcut_tip_long_press">Long-press a document to start selecting; then click others to add them.</string>

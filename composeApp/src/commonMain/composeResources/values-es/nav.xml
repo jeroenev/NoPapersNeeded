@@ -49,6 +49,7 @@
     <string name="nav_shortcut_keys_arrows">← →</string>
     <string name="nav_shortcut_keys_enter">Intro</string>
     <string name="nav_shortcut_keys_shift_enter">Mayús+Intro</string>
+    <string name="nav_shortcut_keys_ctrl_k">Ctrl+K</string>
 
     <!-- What each key does, one whole sentence per row. -->
     <string name="nav_shortcut_show_list">Mostrar esta lista de atajos.</string>
@@ -67,6 +68,7 @@
     <string name="nav_shortcut_doc_resize">Con el divisor seleccionado, ensanchar la página o los datos.</string>
     <string name="nav_shortcut_assistant_send">Enviar la pregunta.</string>
     <string name="nav_shortcut_assistant_newline">Empezar una línea nueva en la pregunta.</string>
+    <string name="nav_shortcut_command_palette">Abrir la paleta de comandos.</string>
 
     <string name="nav_shortcut_tip_page_counter">Haz clic en el contador de páginas para ir a una página por su número.</string>
     <string name="nav_shortcut_tip_long_press">Mantén pulsado un documento para empezar a seleccionar; luego haz clic en otros para añadirlos.</string>

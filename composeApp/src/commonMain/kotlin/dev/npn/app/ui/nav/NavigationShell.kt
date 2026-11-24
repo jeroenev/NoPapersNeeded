@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ManageSearch
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.outlined.Keyboard
 import androidx.compose.material.icons.outlined.MoreHoriz
@@ -52,6 +53,7 @@ import no_papers_needed.composeapp.generated.resources.nav_queue_failed
 import no_papers_needed.composeapp.generated.resources.nav_queue_pending
 import no_papers_needed.composeapp.generated.resources.nav_queue_review
 import no_papers_needed.composeapp.generated.resources.nav_shortcuts
+import no_papers_needed.composeapp.generated.resources.palette_title
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -68,8 +70,9 @@ private val RUNNING_RING_SIZE = 30.dp
  * The two surfaces offer the same destinations, but the compact bar has room for fewer of them at
  * once, so it keeps [TopLevelDestination.compactBar], the assistant and Activity, and reaches the
  * others through a "More" sheet. [queue] drives Activity's indicator: a running ring while work is
- * pending, and a badge when something waits on the user. [onShortcuts] opens the keyboard
- * shortcut list; null on a platform without one.
+ * pending, and a badge when something waits on the user. [onPalette] opens the command palette from
+ * the rail or the "More" sheet. [onShortcuts] opens the keyboard shortcut list; null on a platform
+ * without one.
  */
 @Composable
 fun NavigationShell(
@@ -79,6 +82,8 @@ fun NavigationShell(
     queue: QueueStatus,
     onNavigate: (TopLevelDestination) -> Unit,
     onAssistant: () -> Unit,
+    /** Open the command palette from the rail or the compact bar's "More" sheet. */
+    onPalette: () -> Unit,
     onShortcuts: (() -> Unit)?,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
@@ -91,6 +96,7 @@ fun NavigationShell(
             queue = queue,
             onNavigate = onNavigate,
             onAssistant = onAssistant,
+            onPalette = onPalette,
             onShortcuts = onShortcuts,
         )
     val shellShown = current != null || assistantCurrent
@@ -122,6 +128,7 @@ private class ShellItems(
     val queue: QueueStatus,
     val onNavigate: (TopLevelDestination) -> Unit,
     val onAssistant: () -> Unit,
+    val onPalette: () -> Unit,
     val onShortcuts: (() -> Unit)?,
 )
 
@@ -141,6 +148,11 @@ private fun ShellRail(items: ShellItems) {
         }
         Spacer(Modifier.weight(1f))
         RailItem(TopLevelDestination.ACTIVITY, items)
+        TooltipIconButton(
+            icon = Icons.AutoMirrored.Outlined.ManageSearch,
+            label = stringResource(Res.string.palette_title),
+            onClick = items.onPalette,
+        )
         items.onShortcuts?.let { open ->
             TooltipIconButton(
                 icon = Icons.Outlined.Keyboard,
@@ -255,6 +267,15 @@ private fun MoreSheet(
                     onClick = { pick(dest) },
                 )
             }
+            MoreSheetRow(
+                label = stringResource(Res.string.palette_title),
+                icon = Icons.AutoMirrored.Outlined.ManageSearch,
+                selected = false,
+                onClick = {
+                    onDismiss()
+                    items.onPalette()
+                },
+            )
             items.onShortcuts?.let { open ->
                 MoreSheetRow(
                     label = stringResource(Res.string.nav_shortcuts),

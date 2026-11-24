@@ -49,6 +49,7 @@
     <string name="nav_shortcut_keys_arrows">← →</string>
     <string name="nav_shortcut_keys_enter">Enter</string>
     <string name="nav_shortcut_keys_shift_enter">Shift+Enter</string>
+    <string name="nav_shortcut_keys_ctrl_k">Ctrl+K</string>
 
     <!-- What each key does, one whole sentence per row. -->
     <string name="nav_shortcut_show_list">Mostrar esta lista de atalhos.</string>
@@ -67,6 +68,7 @@
     <string name="nav_shortcut_doc_resize">Com o divisor selecionado, deixar a página ou os dados mais largos.</string>
     <string name="nav_shortcut_assistant_send">Enviar a pergunta.</string>
     <string name="nav_shortcut_assistant_newline">Começar uma nova linha na pergunta.</string>
+    <string name="nav_shortcut_command_palette">Abrir a paleta de comandos.</string>
 
     <string name="nav_shortcut_tip_page_counter">Clique no contador de páginas para ir a uma página pelo número.</string>
     <string name="nav_shortcut_tip_long_press">Mantenha um documento pressionado para começar a selecionar; depois clique em outros para adicioná-los.</string>

@@ -1,12 +1,18 @@
 package dev.npn.app.ui.nav
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -29,10 +35,16 @@ import dev.npn.app.ui.ai.AiEditReviewScreen
 import dev.npn.app.ui.ai.AiEditScreen
 import dev.npn.app.ui.common.PublishWindowTitle
 import dev.npn.app.ui.common.ViewModelStoreLease
+import dev.npn.app.ui.common.rememberSnackbarMessages
 import dev.npn.app.ui.detail.BrowseContext
 import dev.npn.app.ui.detail.DocDetailScreen
 import dev.npn.app.ui.detail.WithDraftResumeBanner
+import dev.npn.app.ui.library.LibraryHandoffs
 import dev.npn.app.ui.library.LibraryScreen
+import dev.npn.app.ui.palette.CommandPaletteActions
+import dev.npn.app.ui.palette.CommandPaletteHost
+import dev.npn.app.ui.palette.CommandPaletteViewModel
+import dev.npn.app.ui.palette.PaletteNavigation
 import dev.npn.app.ui.queue.QueueScreen
 import dev.npn.app.ui.rules.AutoMatchRulesScreen
 import dev.npn.app.ui.settings.SettingsCategoryId
@@ -42,6 +54,7 @@ import dev.npn.app.ui.trash.TrashScreen
 import dev.npn.app.ui.update.WithUpdateBanner
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.app.SavedView
 import dev.npn.core.index.WriteBlock
 import dev.npn.core.settings.SettingsRepository
 import dev.npn.core.sync.SyncStatus
@@ -55,7 +68,8 @@ import org.jetbrains.compose.resources.stringResource
  * banners that sit above every screen. [queue] is the shell's Activity indicator; [snackbar] is the
  * shell's own, for what is reported outside any one screen. [writeBlock] is why the library refuses
  * writes now, if it does, and [writeBlockActions] the ways out of it. Where the platform offers it,
- * `?` and Ctrl+/ open the keyboard shortcut list from anywhere in the shell.
+ * `?` and Ctrl+/ open the keyboard shortcut list from anywhere in the shell, and Ctrl/Cmd+K (or the
+ * rail's search button) opens the command palette.
  */
 @Composable
 internal fun MainNav(
@@ -69,6 +83,10 @@ internal fun MainNav(
     snackbar: SnackbarHostState,
     onOpenLibrary: (location: String) -> Unit,
     writeBlockActions: WriteBlockActions,
+    palette: CommandPaletteViewModel =
+        viewModel(viewModelStoreOwner = library.viewModels) {
+            CommandPaletteViewModel(session, settings, ShellPaletteNavigation(library))
+        },
 ) {
     val nav = library.nav
     val entry by nav.currentBackStackEntryAsState()
@@ -82,7 +100,6 @@ internal fun MainNav(
     val openShortcuts: (() -> Unit)? = if (offersKeyboardShortcutList()) ({ shortcutsOpen = true }) else null
     val shellFocus = remember { FocusRequester() }
     var shellFocusHeld by remember { mutableStateOf(false) }
-    if (openShortcuts != null) KeepShellFocus(shellFocus, shellFocusHeld)
     WithUpdateBanner(settings, snackbar) {
         WithWriteBlockBanner(writeBlock, writeBlockActions) {
             WithCloudSyncBanner(
@@ -90,27 +107,57 @@ internal fun MainNav(
                 onOpenSettings = { nav.navigate(Route.Settings(SettingsCategoryId.CLOUD_SYNC.routeKey)) },
             ) {
                 WithDraftResumeBanner(snackbar, onOpen = { docId -> nav.resumeDraft(docId, library.browse) }) {
-                    NavigationShell(
-                        current = topLevel,
-                        assistantCurrent = assistant,
-                        aiConfigured = aiConfigured,
-                        queue = queue,
-                        onNavigate = { dest -> nav.navigateTopLevel(dest) },
-                        // The item opens the chat; bulk edit is one segment away on its screen.
-                        onAssistant = { if (!assistant) nav.navigateAi(Route.AiChat, restoreState = true) },
-                        onShortcuts = openShortcuts,
-                        modifier =
-                            openShortcuts?.let { open ->
-                                Modifier.shellShortcutKeys(shellFocus, { shellFocusHeld = it }, open)
-                            } ?: Modifier,
-                    ) {
-                        LibraryViewModelHost(library) {
-                            MainNavHost(
-                                settings = settings,
-                                session = session,
-                                library = library,
+                    LibraryViewModelHost(library) {
+                        // The palette's viewmodel lives in the library's own store, so its recents
+                        // and query survive a recreated window.
+                        val paletteNavigation = remember(library) { ShellPaletteNavigation(library) }
+                        SideEffect { palette.bindNavigation(paletteNavigation) }
+                        val paletteState by palette.state.collectAsStateWithLifecycle()
+                        // Not while the palette's own window is open: the two must not fight over
+                        // focus as the dialog appears.
+                        KeepShellFocus(shellFocus, shellFocusHeld || paletteState.open)
+                        val paletteSnackbar = rememberSnackbarMessages(palette.messages)
+                        Box(Modifier.fillMaxSize()) {
+                            NavigationShell(
+                                current = topLevel,
+                                assistantCurrent = assistant,
                                 aiConfigured = aiConfigured,
-                                onOpenLibrary = onOpenLibrary,
+                                queue = queue,
+                                onNavigate = { dest -> nav.navigateTopLevel(dest) },
+                                // The item opens the chat; bulk edit is one segment away on its screen.
+                                onAssistant = { if (!assistant) nav.navigateAi(Route.AiChat, restoreState = true) },
+                                onPalette = palette::open,
+                                onShortcuts = openShortcuts,
+                                modifier =
+                                    Modifier.shellShortcutKeys(
+                                        shellFocus,
+                                        { shellFocusHeld = it },
+                                        openShortcuts,
+                                        palette::toggle,
+                                    ),
+                            ) {
+                                MainNavHost(
+                                    settings = settings,
+                                    session = session,
+                                    library = library,
+                                    aiConfigured = aiConfigured,
+                                    onOpenLibrary = onOpenLibrary,
+                                )
+                            }
+                            val paletteActions: CommandPaletteActions = palette
+                            CommandPaletteHost(
+                                session = session,
+                                aiConfigured = aiConfigured,
+                                state = paletteState,
+                                actions = paletteActions,
+                                requests = palette.requests,
+                                onSetSources = palette::setSources,
+                                onImportFiles = palette::importFiles,
+                                onImportScan = palette::importScan,
+                            )
+                            SnackbarHost(
+                                paletteSnackbar,
+                                Modifier.align(Alignment.BottomCenter).navigationBarsPadding(),
                             )
                         }
                     }
@@ -218,6 +265,64 @@ private fun NavHostController.openAiEdit(
     navigateAi(Route.AiEdit)
 }
 
+/**
+ * What a palette result does: the same navigation and hand-offs the screens use, so the palette
+ * never reimplements a screen's behaviour. A saved view and the review preset are handed to the
+ * library's viewmodel, which applies them exactly as picking them on that screen does.
+ */
+internal class ShellPaletteNavigation(
+    private val library: LibraryUi,
+) : PaletteNavigation {
+    private val nav = library.nav
+    private val browse = library.browse
+
+    override fun openDocument(docId: String) {
+        // Library first, so Back from the document returns to it rather than to wherever the
+        // palette was opened from.
+        nav.dropAiEdit()
+        nav.openDoc(docId, browse) {
+            popUpTo(Route.Library) { saveState = true }
+            launchSingleTop = true
+        }
+    }
+
+    override fun openLibrary(filter: LibraryFilter) {
+        library.libraryFilter.set(filter)
+        nav.navigateTopLevel(TopLevelDestination.LIBRARY)
+    }
+
+    override fun openSavedView(view: SavedView) {
+        library.savedView.set(view)
+        nav.navigateTopLevel(TopLevelDestination.LIBRARY)
+    }
+
+    override fun openReviewQueue() {
+        library.reviewQueue.set(Unit)
+        nav.navigateTopLevel(TopLevelDestination.LIBRARY)
+    }
+
+    override fun openTags() {
+        nav.navigateTopLevel(TopLevelDestination.TAGS)
+    }
+
+    override fun openSettings(
+        category: SettingsCategoryId?,
+        revealAdvanced: Boolean,
+    ) {
+        nav.dropAiEdit()
+        nav.navigate(Route.Settings(category?.routeKey, revealAdvanced)) {
+            popUpTo(Route.Library) { saveState = true }
+            launchSingleTop = true
+        }
+    }
+
+    override fun openAssistant() {
+        if (nav.currentBackStackEntry?.destination?.isAssistant() != true) {
+            nav.navigateAi(Route.AiChat, restoreState = true)
+        }
+    }
+}
+
 @Composable
 private fun MainNavHost(
     settings: SettingsRepository,
@@ -242,7 +347,10 @@ private fun MainNavHost(
                     } else {
                         null
                     },
-                filterHandoff = library.libraryFilter,
+                handoffs =
+                    remember(library) {
+                        LibraryHandoffs(library.libraryFilter, library.savedView, library.reviewQueue)
+                    },
                 onOpenSettings = { id -> nav.from(entry) { navigate(Route.Settings(id.routeKey)) } },
                 documents = library.documents,
             )

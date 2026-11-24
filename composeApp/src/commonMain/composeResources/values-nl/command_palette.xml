@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The command palette: a searchable overlay opened from any screen with Ctrl/Cmd+K. -->
+    <string name="palette_title">Opdrachtenpalet</string>
+    <string name="palette_search_hint">Zoek documenten, tags, weergaven, instellingen en acties</string>
+    <string name="palette_hint">↑↓ om te bewegen · Enter om uit te voeren · Esc om te sluiten</string>
+    <string name="palette_no_matches_title">Geen resultaten</string>
+    <string name="palette_no_matches_body">Probeer een ander woord of een opdracht zoals ‘synchroniseren’.</string>
+
+    <string name="palette_group_recent">Recent</string>
+    <string name="palette_group_documents">Documenten</string>
+    <string name="palette_group_tags">Tags</string>
+    <string name="palette_group_views">Opgeslagen weergaven</string>
+    <string name="palette_group_settings">Instellingen</string>
+    <string name="palette_group_actions">Acties</string>
+
+    <string name="palette_action_import">Pdf’s importeren…</string>
+    <string name="palette_action_scan">Een document scannen</string>
+    <string name="palette_action_watch_folder">Een bewaakte map instellen</string>
+    <string name="palette_action_sync_now">Nu synchroniseren</string>
+    <string name="palette_action_assistant">Assistent openen</string>
+    <string name="palette_action_inbox">Postvak in openen</string>
+    <string name="palette_action_untagged">Documenten zonder tag tonen</string>
+    <string name="palette_action_tags">Naar Tags</string>
+    <string name="palette_action_settings">Naar Instellingen</string>
+
+    <string name="palette_import_failed">De bestanden konden niet worden geïmporteerd: %1$s</string>
+    <string name="palette_sync_failed">Synchroniseren is mislukt: %1$s</string>
+    <plurals name="palette_tag_documents">
+        <item quantity="one">%1$d document</item>
+        <item quantity="other">%1$d documenten</item>
+    </plurals>
+</resources>

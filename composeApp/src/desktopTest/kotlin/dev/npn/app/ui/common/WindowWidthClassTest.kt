@@ -104,6 +104,7 @@ class WindowWidthClassTest {
             queue = QueueStatus.None,
             onNavigate = {},
             onAssistant = {},
+            onPalette = {},
             onShortcuts = null,
             content = content,
         )
