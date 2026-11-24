@@ -5,6 +5,7 @@ import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.AutoMode
 import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.MoveToInbox
@@ -13,8 +14,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.vector.ImageVector
 import dev.npn.app.platform.ocrHasLanguageSetting
+import dev.npn.app.platform.supportsEmailImport
 import dev.npn.app.platform.supportsSafStorage
 import dev.npn.app.ui.automation.AutomationSettingsPane
+import dev.npn.core.mail.MailState
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.rules.AutoMatchRule
@@ -95,6 +98,40 @@ import no_papers_needed.composeapp.generated.resources.common_settings_watched_f
 import no_papers_needed.composeapp.generated.resources.common_sync_health_retry
 import no_papers_needed.composeapp.generated.resources.common_sync_health_title
 import no_papers_needed.composeapp.generated.resources.detail_add_field
+import no_papers_needed.composeapp.generated.resources.email_account
+import no_papers_needed.composeapp.generated.resources.email_add_filter
+import no_papers_needed.composeapp.generated.resources.email_allow_plain
+import no_papers_needed.composeapp.generated.resources.email_check_now
+import no_papers_needed.composeapp.generated.resources.email_clear_password
+import no_papers_needed.composeapp.generated.resources.email_enabled
+import no_papers_needed.composeapp.generated.resources.email_filter_attachment
+import no_papers_needed.composeapp.generated.resources.email_filter_from
+import no_papers_needed.composeapp.generated.resources.email_filter_subject
+import no_papers_needed.composeapp.generated.resources.email_filters
+import no_papers_needed.composeapp.generated.resources.email_folder
+import no_papers_needed.composeapp.generated.resources.email_host
+import no_papers_needed.composeapp.generated.resources.email_interval
+import no_papers_needed.composeapp.generated.resources.email_last_check
+import no_papers_needed.composeapp.generated.resources.email_last_error
+import no_papers_needed.composeapp.generated.resources.email_move_folder
+import no_papers_needed.composeapp.generated.resources.email_never_checked
+import no_papers_needed.composeapp.generated.resources.email_password
+import no_papers_needed.composeapp.generated.resources.email_port
+import no_papers_needed.composeapp.generated.resources.email_post_action
+import no_papers_needed.composeapp.generated.resources.email_post_delete
+import no_papers_needed.composeapp.generated.resources.email_post_keep
+import no_papers_needed.composeapp.generated.resources.email_post_mark_read
+import no_papers_needed.composeapp.generated.resources.email_post_move
+import no_papers_needed.composeapp.generated.resources.email_remove_filter
+import no_papers_needed.composeapp.generated.resources.email_save
+import no_papers_needed.composeapp.generated.resources.email_save_pdf
+import no_papers_needed.composeapp.generated.resources.email_security
+import no_papers_needed.composeapp.generated.resources.email_security_plain
+import no_papers_needed.composeapp.generated.resources.email_security_ssl
+import no_papers_needed.composeapp.generated.resources.email_security_starttls
+import no_papers_needed.composeapp.generated.resources.email_test
+import no_papers_needed.composeapp.generated.resources.email_title
+import no_papers_needed.composeapp.generated.resources.email_username
 import no_papers_needed.composeapp.generated.resources.onboarding_add_device
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
@@ -108,6 +145,7 @@ import org.jetbrains.compose.resources.stringResource
 enum class SettingsCategoryId {
     LIBRARY,
     IMPORT,
+    EMAIL,
     AUTOMATION,
     DOCUMENTS,
     CLOUD_SYNC,
@@ -143,6 +181,8 @@ internal data class SettingsPaneState(
     val rules: List<AutoMatchRule>? = null,
     /** The library check's live state, and its last result. */
     val verification: LibraryVerificationState = LibraryVerificationState(),
+    /** The IMAP account, last check and credential state email import shows. */
+    val mail: MailState = MailState(),
 )
 
 /** What a settings pane can do: change a setting ([SettingsActions]), or open what one leads to. */
@@ -190,7 +230,7 @@ internal class SettingsCategory(
  * are all derived from it, so a new category is one entry plus one pane file.
  */
 internal val SettingsCategories: List<SettingsCategory> =
-    listOf(
+    listOfNotNull(
         SettingsCategory(
             id = SettingsCategoryId.LIBRARY,
             title = Res.string.common_settings_library,
@@ -233,6 +273,54 @@ internal val SettingsCategories: List<SettingsCategory> =
                 ),
             content = { state, actions -> ImportSettingsPane(state, actions) },
         ),
+        // Email import is a desktop feature; Android has neither the IMAP client nor the keyring,
+        // so the category is absent there rather than a pane of dead controls.
+        if (supportsEmailImport()) {
+            SettingsCategory(
+                id = SettingsCategoryId.EMAIL,
+                title = Res.string.email_title,
+                icon = Icons.Outlined.Email,
+                keywords =
+                    listOf(
+                        Res.string.email_account,
+                        Res.string.email_enabled,
+                        Res.string.email_host,
+                        Res.string.email_port,
+                        Res.string.email_security,
+                        Res.string.email_security_ssl,
+                        Res.string.email_security_starttls,
+                        Res.string.email_security_plain,
+                        Res.string.email_username,
+                        Res.string.email_password,
+                        Res.string.email_folder,
+                        Res.string.email_allow_plain,
+                        Res.string.email_interval,
+                        Res.string.email_filters,
+                        Res.string.email_filter_from,
+                        Res.string.email_filter_subject,
+                        Res.string.email_filter_attachment,
+                        Res.string.email_add_filter,
+                        Res.string.email_remove_filter,
+                        Res.string.email_post_action,
+                        Res.string.email_post_keep,
+                        Res.string.email_post_mark_read,
+                        Res.string.email_post_move,
+                        Res.string.email_post_delete,
+                        Res.string.email_move_folder,
+                        Res.string.email_save_pdf,
+                        Res.string.email_save,
+                        Res.string.email_test,
+                        Res.string.email_check_now,
+                        Res.string.email_clear_password,
+                        Res.string.email_last_check,
+                        Res.string.email_never_checked,
+                        Res.string.email_last_error,
+                    ),
+                content = { state, actions -> EmailSettingsPane(state, actions) },
+            )
+        } else {
+            null
+        },
         SettingsCategory(
             id = SettingsCategoryId.AUTOMATION,
             title = Res.string.automation_title,

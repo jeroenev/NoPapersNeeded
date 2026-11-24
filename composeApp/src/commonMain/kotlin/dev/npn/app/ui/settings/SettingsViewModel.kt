@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import dev.npn.app.platform.FolderPick
 import dev.npn.app.platform.copyToClipboard
 import dev.npn.app.ui.common.MessagesViewModel
+import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.reasonText
 import dev.npn.app.ui.common.uiState
@@ -18,6 +19,11 @@ import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.LibraryVerificationReport
+import dev.npn.core.mail.MailAccount
+import dev.npn.core.mail.MailCheckReport
+import dev.npn.core.mail.MailSaveOutcome
+import dev.npn.core.mail.MailState
+import dev.npn.core.mail.MailTestOutcome
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.pathrules.StoragePathContext
@@ -71,6 +77,14 @@ import no_papers_needed.composeapp.generated.resources.common_settings_verify_ca
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_copied
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_copy_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_failed
+import no_papers_needed.composeapp.generated.resources.email_account_invalid
+import no_papers_needed.composeapp.generated.resources.email_check_failed
+import no_papers_needed.composeapp.generated.resources.email_check_report
+import no_papers_needed.composeapp.generated.resources.email_password_removed
+import no_papers_needed.composeapp.generated.resources.email_save_failed
+import no_papers_needed.composeapp.generated.resources.email_saved
+import no_papers_needed.composeapp.generated.resources.email_test_failed
+import no_papers_needed.composeapp.generated.resources.email_test_ok
 
 /**
  * Settings screen view model. Device settings go through the one [SettingsRepository.edit]
@@ -117,6 +131,7 @@ class SettingsViewModel(
     private val sync = session.sync
     private val maintenance = session.maintenance
     private val documents = session.documents
+    private val mail = session.mail
 
     private val typedTemplate =
         TypedSetting<String>(viewModelScope) { template ->
@@ -211,6 +226,88 @@ class SettingsViewModel(
 
     internal fun openFieldDialog(dialog: FieldDialog?) = fieldDialog.set(dialog)
 
+    override fun saveMailAccount(
+        account: MailAccount,
+        password: String?,
+        onSuccess: () -> Unit,
+    ) = launchReporting(Res.string.email_save_failed) {
+        when (val outcome = mail.saveAccount(account, password)) {
+            MailSaveOutcome.Saved -> {
+                onSuccess()
+                message(uiText(Res.string.email_saved))
+            }
+
+            MailSaveOutcome.AccountInvalid -> {
+                message(uiText(Res.string.email_account_invalid))
+            }
+
+            is MailSaveOutcome.CredentialFailed -> {
+                message(uiText(Res.string.email_save_failed, uiText(outcome.reason.textRes())))
+            }
+        }
+    }
+
+    override fun clearMailPassword(onSuccess: () -> Unit) =
+        launchReporting(Res.string.email_save_failed) {
+            when (val outcome = mail.clearPassword()) {
+                MailSaveOutcome.Saved -> {
+                    onSuccess()
+                    message(uiText(Res.string.email_password_removed))
+                }
+
+                MailSaveOutcome.AccountInvalid -> {
+                    message(uiText(Res.string.email_account_invalid))
+                }
+
+                is MailSaveOutcome.CredentialFailed -> {
+                    message(uiText(Res.string.email_save_failed, uiText(outcome.reason.textRes())))
+                }
+            }
+        }
+
+    override fun testMailConnection(
+        account: MailAccount,
+        password: String?,
+    ) {
+        viewModelScope.launch {
+            val outcome =
+                runCatchingCancellable { mail.testConnection(account, password) }.getOrElse {
+                    message(uiText(Res.string.email_test_failed, it.reasonText()))
+                    return@launch
+                }
+            when (outcome) {
+                MailTestOutcome.Ok -> {
+                    message(uiText(Res.string.email_test_ok))
+                }
+
+                is MailTestOutcome.Failed -> {
+                    message(uiText(Res.string.email_test_failed, uiText(outcome.reason.textRes())))
+                }
+            }
+        }
+    }
+
+    override fun checkMailNow() {
+        viewModelScope.launch {
+            runCatchingCancellable { mail.checkNow() }.fold(
+                onSuccess = { report -> message(checkReportText(report)) },
+                onFailure = { message(uiText(Res.string.email_check_failed, it.reasonText())) },
+            )
+        }
+    }
+
+    /** What a check did: its counts when clean, or the first typed reason it stopped on. */
+    private fun checkReportText(report: MailCheckReport): UiText =
+        report.errors.firstOrNull()?.let { error ->
+            uiText(Res.string.email_check_failed, uiText(error.reason.textRes()))
+        } ?: uiText(
+            Res.string.email_check_report,
+            report.messagesSeen,
+            report.imported,
+            report.duplicates,
+            report.skipped,
+        )
+
     /**
      * How the last manual sync ended; null while none was asked for, one is under way, or a later
      * (automatic) pass has started since — its result is what the status then shows.
@@ -299,15 +396,27 @@ class SettingsViewModel(
             state,
             aiModels,
             aiSelfTest,
-            combine(reviewMode, cloudState, rules, ::Triple),
+            combine(reviewMode, cloudState, rules, mail.state, ::SettingsCore),
             combine(
                 combine(fields, fieldUsage, fieldDialog.flow, ::Triple),
                 verification,
                 ::Pair,
             ),
-        ) { ui, models, selfTest, (mode, cloudState, rules), (fieldsNow, verify) ->
+        ) { ui, models, selfTest, core, (fieldsNow, verify) ->
             val (defs, usage, dialog) = fieldsNow
-            SettingsPaneState(ui, models, selfTest, mode, defs, usage, dialog, cloudState, rules, verify)
+            SettingsPaneState(
+                settings = ui,
+                aiModels = models,
+                aiSelfTest = selfTest,
+                reviewMode = core.reviewMode,
+                fields = defs,
+                fieldUsage = usage,
+                fieldDialog = dialog,
+                cloud = core.cloud,
+                rules = core.rules,
+                verification = verify,
+                mail = core.mail,
+            )
         }.stateIn(
             viewModelScope,
             WhileSubscribedTimeout,
@@ -320,6 +429,7 @@ class SettingsViewModel(
                 fieldUsage.value,
                 fieldDialog.value,
                 rules = rules.value,
+                mail = mail.state.value,
             ),
         )
 
@@ -587,3 +697,11 @@ class SettingsViewModel(
 /** This snapshot with each typed value of [drafts] in place of the saved one. */
 private fun SettingsSnapshot.withTyped(drafts: List<Pair<TextSetting, String?>>): SettingsSnapshot =
     drafts.fold(this) { snapshot, (setting, typed) -> typed?.let { setting.with(snapshot, it) } ?: snapshot }
+
+/** The library's settings and mail state combined for the pane registry. */
+private data class SettingsCore(
+    val reviewMode: ReviewMode,
+    val cloud: CloudSyncState,
+    val rules: List<AutoMatchRule>?,
+    val mail: MailState,
+)

@@ -68,6 +68,13 @@ internal object LibrarySettingKeys {
 
     /** Days the trash keeps a document, as a decimal number. */
     const val TRASH_RETENTION_DAYS = "trashRetentionDays"
+
+    /**
+     * The one IMAP account email import reads, as [dev.npn.core.mail.MailAccountJson]. This is a
+     * new key under the existing `setting-set` op, not a new journal op: a build that does not know
+     * it folds every other setting and leaves this one alone.
+     */
+    const val MAIL_ACCOUNT = "mailAccount"
 }
 
 /** Library-wide review workflow, synced via the journal. */

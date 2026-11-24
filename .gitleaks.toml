@@ -1,0 +1,5 @@
+# libsecret's shared-library soname is not a secret. Gitleaks' generic-api-key rule
+# sees the versioned name as a high-entropy token; allow only that library name.
+[allowlist]
+description = "Native library sonames, not credentials"
+regexes = ['''libsecret-1\.so(\.0)?''']

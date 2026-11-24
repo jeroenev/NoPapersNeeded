@@ -236,3 +236,23 @@ data class SyncRemoteEntryEntity(
      */
     val localPath: String? = null,
 )
+
+/**
+ * How far this device has read one mail folder, in [DeviceDatabase]: the mailbox generation
+ * ([uidValidity]) and the last UID fully handled or deliberately skipped. Device-local by nature —
+ * another device has its own IMAP session and may have read further — and never rebuildable from
+ * the library, so it lives beside the index with real migrations.
+ *
+ * A failed message stays before [lastUid], so the next check sees it again; [lastError] is the last
+ * typed reason, kept for the settings pane after a restart. No message content or password is here.
+ */
+@Entity(tableName = "mail_cursor", primaryKeys = ["accountKey", "folder"])
+data class MailCursorEntity(
+    val accountKey: String,
+    val folder: String,
+    val uidValidity: Long? = null,
+    val lastUid: Long = 0,
+    val lastCheckedAt: Long? = null,
+    /** A [dev.npn.core.mail.MailFailureReason.name], or null after a clean check. */
+    val lastError: String? = null,
+)

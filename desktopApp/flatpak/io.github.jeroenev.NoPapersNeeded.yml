@@ -17,6 +17,8 @@ finish-args:
   - --device=dri
   # AI endpoints, and the cloud sync the bundled rclone runs.
   - --share=network
+  # The mail password lives in the host's secret service; the sandbox cannot reach D-Bus names by default.
+  - --talk-name=org.freedesktop.secrets
   # The library is a user-chosen folder that the app reads and writes directly, by path, across
   # restarts, so it has to live under ~/Documents. A folder picked elsewhere comes back through the
   # document portal as a /run/user/... path instead, which the journal's atomic publication is not

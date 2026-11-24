@@ -7,6 +7,7 @@ import dev.npn.core.app.ImportOutcome
 import dev.npn.core.app.IngestFacade
 import dev.npn.core.app.LibraryVerificationProgress
 import dev.npn.core.app.LibraryVerificationReport
+import dev.npn.core.app.MailFacade
 import dev.npn.core.app.MaintenanceFacade
 import dev.npn.core.app.OcrFacade
 import dev.npn.core.app.OcrStatus
@@ -27,6 +28,11 @@ import dev.npn.core.app.aiedit.EditRunReview
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.index.IndexProgress
 import dev.npn.core.index.ScanReport
+import dev.npn.core.mail.MailAccount
+import dev.npn.core.mail.MailCheckReport
+import dev.npn.core.mail.MailSaveOutcome
+import dev.npn.core.mail.MailState
+import dev.npn.core.mail.MailTestOutcome
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.ocr.OcrEngineRef
 import dev.npn.core.sync.CloudSetup
@@ -84,6 +90,11 @@ class FakeIngestFacade : IngestFacade {
 
     override suspend fun importPdf(
         source: ExternalSource,
+        suggestedName: String,
+    ): ImportOutcome = nextOutcome()
+
+    override suspend fun importPdfBytes(
+        bytes: ByteArray,
         suggestedName: String,
     ): ImportOutcome = nextOutcome()
 
@@ -509,6 +520,42 @@ class FakeCloudSetup : CloudSetup {
 
     override suspend fun deleteRemote(name: String) {
         deletedRemotes += name
+    }
+}
+
+/** The email import facet: records what the pane asked for and returns configured outcomes. */
+class FakeMailFacade : MailFacade {
+    override val state = MutableStateFlow(MailState())
+    val savedAccounts = mutableListOf<Pair<MailAccount, String?>>()
+    var saveOutcome: MailSaveOutcome = MailSaveOutcome.Saved
+    var testOutcome: MailTestOutcome = MailTestOutcome.Ok
+    var report: MailCheckReport = MailCheckReport()
+    var clears = 0
+        private set
+    var checks = 0
+        private set
+
+    override suspend fun saveAccount(
+        account: MailAccount,
+        password: String?,
+    ): MailSaveOutcome {
+        savedAccounts += account to password
+        return saveOutcome
+    }
+
+    override suspend fun clearPassword(): MailSaveOutcome {
+        clears++
+        return saveOutcome
+    }
+
+    override suspend fun testConnection(
+        account: MailAccount,
+        password: String?,
+    ): MailTestOutcome = testOutcome
+
+    override suspend fun checkNow(): MailCheckReport {
+        checks++
+        return report
     }
 }
 

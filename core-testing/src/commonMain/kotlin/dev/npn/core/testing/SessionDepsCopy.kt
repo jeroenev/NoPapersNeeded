@@ -30,4 +30,7 @@ fun SessionDeps.copy(
         syncTransport = syncTransport,
         syncStaging = syncStaging,
         syncSetup = syncSetup,
+        mailTransport = mailTransport,
+        mailCredentials = mailCredentials,
+        mailPdfRenderer = mailPdfRenderer,
     )

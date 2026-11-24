@@ -71,6 +71,8 @@ kotlin {
                 implementation(libs.pdfbox)
                 implementation(libs.pdfbox.xmpbox)
                 implementation(libs.ktor.client.cio)
+                // Email import is desktop-only: Android never sees Jakarta Mail on its classpath.
+                implementation(libs.angus.mail)
             }
         }
     }
