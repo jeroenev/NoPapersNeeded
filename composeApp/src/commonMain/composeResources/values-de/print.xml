@@ -1,0 +1,10 @@
+<resources>
+    <string name="detail_print">Drucken</string>
+    <string name="detail_print_started">Druckvorgang gestartet</string>
+    <string name="detail_print_cancelled">Druckvorgang abgebrochen</string>
+    <string name="detail_print_failed">Das Dokument konnte nicht gedruckt werden: %1$s</string>
+    <string name="detail_print_failed_unavailable">Das Dokument konnte zum Drucken nicht gelesen werden</string>
+    <string name="detail_print_failed_unsupported">Drucken ist auf diesem Gerät nicht verfügbar</string>
+    <string name="detail_print_failed_unreadable">Das Dokument ist keine lesbare PDF-Datei</string>
+    <string name="detail_print_failed_job">Der Drucker hat den Auftrag abgelehnt</string>
+</resources>

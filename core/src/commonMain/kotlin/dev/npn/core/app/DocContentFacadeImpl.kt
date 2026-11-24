@@ -16,6 +16,8 @@ import dev.npn.core.util.warn
 import dev.npn.core.xmp.BakeRefusedException
 import dev.npn.core.xmp.BakeService
 import dev.npn.core.xmp.NpnXmpData
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.withContext
 
 /**
  * Document-as-bytes facade: thumbnails, page rendering, and XMP baking.
@@ -50,6 +52,7 @@ internal class DocContentFacadeImpl(
      */
     private val bakes: BakeLock,
     private val log: NpnLog,
+    private val computation: CoroutineDispatcher,
 ) : DocContentFacade {
     private val documentDao get() = db.documentDao()
 
@@ -91,6 +94,14 @@ internal class DocContentFacadeImpl(
 
     override suspend fun extractedText(docId: String): String? =
         log.runLogged("Reading the text of $docId") { db.ftsDao().textOf(docId) }
+
+    override suspend fun documentBytes(docId: String): ByteArray? =
+        log.runLogged("Reading the bytes of $docId") {
+            val doc = documentDao.getByDocId(docId) ?: return@runLogged null
+            // The read switches to IO itself; keep the full-file SHA-256 check off the caller's
+            // thread, which for a print is the UI's.
+            withContext(computation) { fs.readDocument(doc.relPath, docId) }
+        }
 
     override suspend fun bakedCopyBytes(docId: String): ByteArray? =
         log.runLogged("Baking a copy of $docId") {

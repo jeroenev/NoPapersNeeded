@@ -243,6 +243,7 @@ internal class SessionGraph(
             renderGate,
             bakes,
             log,
+            deps.computation,
         )
 
     val imports =

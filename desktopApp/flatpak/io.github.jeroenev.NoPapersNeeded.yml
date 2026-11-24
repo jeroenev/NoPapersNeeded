@@ -26,6 +26,8 @@ finish-args:
   - --filesystem=xdg-documents
   # Tesseract's CMake build compiles in no data dir and would look in the working directory.
   - --env=TESSDATA_PREFIX=/app/share/tessdata
+  # AWT's PrinterJob reaches the host's CUPS server through the sandbox's print socket.
+  - --socket=cups
 
 cleanup:
   - /include
