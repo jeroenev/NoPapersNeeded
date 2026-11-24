@@ -1,5 +1,7 @@
 package dev.npn.app.platform
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -226,4 +228,10 @@ internal fun shareFile(
     val file = File(dir, NpnPaths.sanitizeFileName(fileName))
     require(file.canonicalFile.parentFile == dir.canonicalFile) { "Not a file name: $fileName" }
     return file
+}
+
+actual suspend fun copyToClipboard(text: String) {
+    val context = FileKit.context.applicationContext
+    val clipboard = context.getSystemService(ClipboardManager::class.java)
+    clipboard.setPrimaryClip(ClipData.newPlainText("No Papers Needed", text))
 }

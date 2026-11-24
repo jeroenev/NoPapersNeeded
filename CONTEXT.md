@@ -129,6 +129,17 @@ the domain vocabulary.
 - `EditPhase`-style presentation state stays out of `ChatTranscript` — the
   reducer is pure, with no snackbar/message/effect logic.
 
+## Library integrity
+
+- **Verify library** — the read-only check behind Library settings' action of that name:
+  `MaintenanceFacade.verifyLibrary` walks every live document (file present, readable, stored size,
+  SHA-256 equal to its id) and every journal object (bytes against the hash in its name). It reports
+  problems and expected leftovers, changes nothing, and its pending-progress state is `composeApp`
+  presentation, not domain state.
+- **Sync health** — how cloud sync is doing without a live remote reading: the last success and its
+  date, the consecutive-failure streak, the next scheduled pass, the typed last failure, and the
+  pending uploads/downloads the last plan found and did not finish ("as of the last check").
+
 ## Library session facets
 
 `LibrarySession` (core.app) is a pure aggregate of narrow facets plus lifecycle

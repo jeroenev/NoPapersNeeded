@@ -57,6 +57,7 @@ class SettingsScreenTest : EnglishLocaleTest() {
                             onBack = { leftSettings = true },
                             onOpenLibrary = {},
                             onResumeDraft = {},
+                            onOpenDocument = {},
                             onAutoMatchRules = {},
                         )
                     }
@@ -103,6 +104,7 @@ class SettingsScreenTest : EnglishLocaleTest() {
                                 onBack = {},
                                 onOpenLibrary = {},
                                 onResumeDraft = {},
+                                onOpenDocument = {},
                                 onAutoMatchRules = {},
                             )
                         }
@@ -150,6 +152,7 @@ class SettingsScreenTest : EnglishLocaleTest() {
                             onBack = {},
                             onOpenLibrary = {},
                             onResumeDraft = {},
+                            onOpenDocument = {},
                             onAutoMatchRules = {},
                             vm = vm,
                         )

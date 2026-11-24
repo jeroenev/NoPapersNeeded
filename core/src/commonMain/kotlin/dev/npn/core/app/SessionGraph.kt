@@ -307,6 +307,7 @@ internal class SessionGraph(
                 ),
             coordinator = coordinator,
             splitter = SplitService(deps.fs, deps.pdfEngine, imports, db.documentDao(), log),
+            verifier = LibraryVerifier(deps.fs, deps.clock, log),
             writer = writer,
             lifecycle = lifecycle,
             rescanned = { rescans.trySend(it) },

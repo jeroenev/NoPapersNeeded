@@ -88,7 +88,9 @@ class LocalApplier(
             }
 
             is SyncAction.DownloadTrash -> {
-                downloadTrash(action)
+                val downloaded = downloadTrash(action)
+                if (downloaded) report.downloadedTrash++
+                downloaded
             }
         }
 

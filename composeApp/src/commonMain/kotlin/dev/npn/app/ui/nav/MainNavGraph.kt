@@ -319,6 +319,7 @@ private fun NavGraphBuilder.settingsRoutes(
             onBack = { nav.from(entry) { popBackStack() } },
             onOpenLibrary = onOpenLibrary,
             onResumeDraft = { docId -> nav.from(entry) { resumeDraft(docId, browse) } },
+            onOpenDocument = { docId -> nav.from(entry) { openDoc(docId, browse) } },
             onAutoMatchRules = { nav.from(entry) { navigate(Route.AutoMatchRules) } },
         )
     }

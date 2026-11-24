@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Cloud sync: how the last passes went, beyond the one-line status. -->
+    <string name="common_sync_health_title">État de la synchronisation</string>
+    <string name="common_sync_health_working">Synchronisation en cours…</string>
+    <string name="common_sync_health_healthy">Tout est synchronisé.</string>
+    <plurals name="common_sync_health_attention">
+        <item quantity="one">%1$d élément demande votre attention.</item>
+        <item quantity="other">%1$d éléments demandent votre attention.</item>
+    </plurals>
+    <string name="common_sync_health_last_success">Dernière synchronisation réussie : %1$s</string>
+    <string name="common_sync_health_never_success">Aucune synchronisation n'a encore abouti pour cette bibliothèque.</string>
+    <plurals name="common_sync_health_streak">
+        <item quantity="one">%1$d synchronisation consécutive a échoué.</item>
+        <item quantity="other">%1$d synchronisations consécutives ont échoué.</item>
+    </plurals>
+    <string name="common_sync_health_next">La synchronisation automatique est prévue au plus tard le %1$s.</string>
+    <string name="common_sync_health_pending">Dernière vérification : %1$d à envoyer, %2$d à recevoir (au %3$s).</string>
+    <string name="common_sync_health_pending_none">Rien ne restait à transférer lors de la dernière vérification (%1$s).</string>
+    <string name="common_sync_health_never_checked">Aucune synchronisation n'a encore vérifié cette bibliothèque.</string>
+    <string name="common_sync_health_retry">Réessayer</string>
+    <string name="common_sync_health_open_document">Ouvrir le document</string>
+    <string name="common_sync_health_more">%1$d autres non affichés.</string>
+
+    <!-- Library settings: the read-only check of every document and journal file. -->
+    <string name="common_settings_verify_library">Vérifier la bibliothèque</string>
+    <string name="common_settings_verify_help">Vérifie que chaque document et chaque fichier du journal contient toujours les octets attendus. Rien n'est modifié.</string>
+    <string name="common_settings_verify_checking_documents">Vérification des documents : %1$d sur %2$d…</string>
+    <string name="common_settings_verify_checking_journal">Vérification des fichiers du journal : %1$d sur %2$d…</string>
+    <string name="common_settings_verify_cancel">Annuler</string>
+    <string name="common_settings_verify_cancelled">Vérification de la bibliothèque annulée.</string>
+    <string name="common_settings_verify_failed">Impossible de vérifier la bibliothèque : %1$s</string>
+    <string name="common_settings_verify_title">Vérification de la bibliothèque</string>
+    <plurals name="common_settings_verify_count_documents">
+        <item quantity="one">%1$d document vérifié.</item>
+        <item quantity="other">%1$d documents vérifiés.</item>
+    </plurals>
+    <plurals name="common_settings_verify_count_journal">
+        <item quantity="one">%1$d fichier du journal vérifié.</item>
+        <item quantity="other">%1$d fichiers du journal vérifiés.</item>
+    </plurals>
+    <string name="common_settings_verify_clean">Aucun problème détecté.</string>
+    <plurals name="common_settings_verify_count_problems">
+        <item quantity="one">%1$d problème détecté.</item>
+        <item quantity="other">%1$d problèmes détectés.</item>
+    </plurals>
+    <string name="common_settings_verify_group_documents">Documents</string>
+    <string name="common_settings_verify_group_journal">Fichiers du journal</string>
+    <string name="common_settings_verify_missing">Le fichier est absent.</string>
+    <string name="common_settings_verify_unreadable">Le fichier n'a pas pu être lu.</string>
+    <string name="common_settings_verify_not_a_file">Ce n'est pas un fichier ordinaire.</string>
+    <string name="common_settings_verify_size">Le fichier fait %2$d octets ; %1$d étaient attendus.</string>
+    <string name="common_settings_verify_hash">Le contenu ne correspond plus.</string>
+    <string name="common_settings_verify_orphaned">Ce n'est pas un fichier du journal que cette application peut lire.</string>
+    <string name="common_settings_verify_store_unreadable">Cette partie de la bibliothèque n'a pas pu être lue.</string>
+    <plurals name="common_settings_verify_notes">
+        <item quantity="one">%1$d document remplacé conserve encore son ancien fichier ; un nouveau scan l'enlève.</item>
+        <item quantity="other">%1$d documents remplacés conservent encore leurs anciens fichiers ; un nouveau scan les enlève.</item>
+    </plurals>
+    <string name="common_settings_verify_copy">Copier le rapport</string>
+    <string name="common_settings_verify_close">Fermer</string>
+    <string name="common_settings_verify_copied">Rapport copié.</string>
+    <string name="common_settings_verify_copy_failed">Impossible de copier le rapport : %1$s</string>
+    <string name="common_settings_verify_more">%1$d autres non affichés.</string>
+    <string name="common_settings_verify_report_title">Rapport de vérification de la bibliothèque</string>
+    <string name="common_settings_verify_problem_line">%1$s : %2$s</string>
+    <string name="common_settings_verify_note_superseded">%1$s (document remplacé ; attendu)</string>
+</resources>
