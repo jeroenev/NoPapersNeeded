@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The command palette: a searchable overlay opened from any screen with Ctrl/Cmd+K. -->
+    <string name="palette_title">Befehlspalette</string>
+    <string name="palette_search_hint">Dokumente, Tags, Ansichten, Einstellungen und Aktionen durchsuchen</string>
+    <string name="palette_hint">↑↓ zum Bewegen · Enter zum Ausführen · Esc zum Schließen</string>
+    <string name="palette_no_matches_title">Keine Treffer</string>
+    <string name="palette_no_matches_body">Versuch ein anderes Wort oder einen Befehl wie „synchronisieren“.</string>
+
+    <string name="palette_group_recent">Zuletzt verwendet</string>
+    <string name="palette_group_documents">Dokumente</string>
+    <string name="palette_group_tags">Tags</string>
+    <string name="palette_group_views">Gespeicherte Ansichten</string>
+    <string name="palette_group_settings">Einstellungen</string>
+    <string name="palette_group_actions">Aktionen</string>
+
+    <string name="palette_action_import">PDFs importieren…</string>
+    <string name="palette_action_scan">Dokument scannen</string>
+    <string name="palette_action_watch_folder">Überwachten Ordner einrichten</string>
+    <string name="palette_action_sync_now">Jetzt synchronisieren</string>
+    <string name="palette_action_assistant">Assistent öffnen</string>
+    <string name="palette_action_inbox">Posteingang öffnen</string>
+    <string name="palette_action_untagged">Ungetaggte Dokumente anzeigen</string>
+    <string name="palette_action_tags">Zu Tags</string>
+    <string name="palette_action_settings">Zu Einstellungen</string>
+
+    <string name="palette_import_failed">Die Dateien konnten nicht importiert werden: %1$s</string>
+    <string name="palette_sync_failed">Die Synchronisierung ist fehlgeschlagen: %1$s</string>
+    <plurals name="palette_tag_documents">
+        <item quantity="one">%1$d Dokument</item>
+        <item quantity="other">%1$d Dokumente</item>
+    </plurals>
+</resources>

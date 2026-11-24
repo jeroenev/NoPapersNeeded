@@ -70,6 +70,7 @@ import dev.npn.app.ui.settings.SettingsCategoryId
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.app.SavedView
 import dev.npn.core.app.ViewType
 import dev.npn.core.model.reviewMarkerIsAuthoritative
 import dev.npn.core.settings.SettingsRepository
@@ -102,10 +103,17 @@ private const val SIDE_PANEL_FRACTION = 0.5f
 private val SidePanelMinWidth = 420.dp
 private val SidePanelMaxWidth = 800.dp
 
+/** Requests handed to the library by other screens. */
+internal class LibraryHandoffs(
+    val filter: Handoff<LibraryFilter>,
+    val savedView: Handoff<SavedView>,
+    val reviewQueue: Handoff<Unit>,
+)
+
 // The list gets the viewmodel only as its LibraryActions interface, the hand-down the conventions prescribe.
 @Suppress("ViewModelForwarding")
 @Composable
-fun LibraryScreen(
+internal fun LibraryScreen(
     session: LibrarySession,
     settings: SettingsRepository,
     onOpenDoc: (docId: String, order: List<String>, searchQuery: String?) -> Unit,
@@ -117,8 +125,7 @@ fun LibraryScreen(
      * null while no AI endpoint is configured.
      */
     onAiEdit: ((List<String>) -> Unit)?,
-    /** A filter another screen hands the library to apply when it shows, or while it shows. */
-    filterHandoff: Handoff<LibraryFilter>,
+    handoffs: LibraryHandoffs,
     /** Opens one settings pane, where the "Getting started" card's steps are set. */
     onOpenSettings: (SettingsCategoryId) -> Unit,
     /** Each document's viewmodel store, shared with the detail screen; the side panel holds the previewed one's. */
@@ -162,10 +169,14 @@ fun LibraryScreen(
     // One handed over before the library showed applies at once; one handed over while it shows
     // (the "Show" of a drop's import message) as it arrives.
     DisposableEffect(Unit) {
-        filterHandoff.consume()?.let(vm::setFilter)
+        handoffs.filter.consume()?.let(vm::setFilter)
+        handoffs.savedView.consume()?.let(vm::applySavedView)
+        if (handoffs.reviewQueue.consume() != null) vm.applyReviewPreset()
         onDispose {}
     }
-    LaunchedEffect(filterHandoff) { filterHandoff.arrivals.collect(vm::setFilter) }
+    LaunchedEffect(handoffs.filter) { handoffs.filter.arrivals.collect(vm::setFilter) }
+    LaunchedEffect(handoffs.savedView) { handoffs.savedView.arrivals.collect(vm::applySavedView) }
+    LaunchedEffect(handoffs.reviewQueue) { handoffs.reviewQueue.arrivals.collect { vm.applyReviewPreset() } }
 
     // Opening a doc records the current sorted+filtered order so the detail screen can page between
     // documents; ids are stable so the order stays valid across navigation. The originating search

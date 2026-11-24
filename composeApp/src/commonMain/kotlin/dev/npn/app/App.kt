@@ -69,6 +69,7 @@ import dev.npn.app.ui.settings.SettingsCategoryId
 import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.app.SavedView
 import dev.npn.core.fs.ExternalSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -105,6 +106,8 @@ internal class LibraryUi(
     val documents = held.documents
     val browse = held.handover.browse
     val libraryFilter = held.handover.libraryFilter
+    val savedView = held.handover.savedView
+    val reviewQueue = held.handover.reviewQueue
     val aiEditSelection = held.handover.aiEditSelection
 
     /** Show the library narrowed to [docIds], from whatever screen is showing (a drop's "Show"). */
@@ -125,6 +128,12 @@ internal class LibraryHandover {
 
     /** A filter for the library to apply when it shows (the assistant's "show in library"). */
     val libraryFilter = Handoff<LibraryFilter>()
+
+    /** A saved view the command palette opens on the library, applied as picking it there does. */
+    val savedView = Handoff<SavedView>()
+
+    /** The library's review preset, applied by picking the Inbox (or untagged documents). */
+    val reviewQueue = Handoff<Unit>()
 
     /** Documents handed from the library's selection mode (or the assistant) to the AI-edit page. */
     val aiEditSelection = Handoff<List<String>>()

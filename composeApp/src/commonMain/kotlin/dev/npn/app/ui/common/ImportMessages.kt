@@ -1,5 +1,6 @@
 package dev.npn.app.ui.common
 
+import dev.npn.app.platform.ScanResult
 import dev.npn.core.app.DocumentRepository
 import dev.npn.core.app.ImportFailure
 import dev.npn.core.app.ImportOutcome
@@ -22,6 +23,10 @@ import no_papers_needed.composeapp.generated.resources.common_import_failure_ima
 import no_papers_needed.composeapp.generated.resources.common_import_failure_superseded
 import no_papers_needed.composeapp.generated.resources.common_imported_count
 import no_papers_needed.composeapp.generated.resources.common_join_items
+import no_papers_needed.composeapp.generated.resources.common_scan_already_in_library
+import no_papers_needed.composeapp.generated.resources.common_scan_capture_failed
+import no_papers_needed.composeapp.generated.resources.common_scan_import_failed
+import no_papers_needed.composeapp.generated.resources.common_scan_imported
 import no_papers_needed.composeapp.generated.resources.library_import_reading_text
 import no_papers_needed.composeapp.generated.resources.library_search_tip
 import kotlin.time.Duration.Companion.minutes
@@ -99,6 +104,30 @@ private fun imagesPdfName(firstImage: String): String = firstImage.substringBefo
  */
 fun ImportBatch.asUiText(): UiText =
     if (imported.isEmpty()) tally.asUiText() else uiText(Res.string.library_import_reading_text, tally.asUiText())
+
+/**
+ * Import what a platform scan came to and say what became of it through [show]: the imported
+ * document, a scanner failure, or nothing for a cancelled scan. Shared by the library screen and
+ * the command palette so both say the same thing.
+ */
+suspend fun IngestFacade.importScanned(
+    result: ScanResult,
+    show: (UiText) -> Unit,
+) {
+    when (result) {
+        is ScanResult.Scanned -> show(importPdf(result.pdf.source, result.pdf.suggestedName).asScanUiText())
+        ScanResult.Failed -> show(uiText(Res.string.common_scan_capture_failed))
+        ScanResult.Cancelled -> Unit
+    }
+}
+
+/** What an import made from a platform scan came to, in the snackbar's words. */
+private fun ImportOutcome.asScanUiText(): UiText =
+    when (this) {
+        is ImportOutcome.Imported -> uiText(Res.string.common_scan_imported)
+        is ImportOutcome.Duplicate -> uiText(Res.string.common_scan_already_in_library)
+        is ImportOutcome.Failed -> uiText(Res.string.common_scan_import_failed, reason.text())
+    }
 
 /** How long [offerSearchTip] waits for an import's text to be read. */
 private val SearchTipWait = 30.minutes

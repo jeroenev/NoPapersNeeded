@@ -75,6 +75,10 @@ class FakeIngestFacade : IngestFacade {
     private var importIdx = 0
     var failImport: (() -> Nothing)? = null
 
+    /** How many imports were asked for, failed ones included. */
+    var imports = 0
+        private set
+
     override suspend fun rescan(): ScanReport {
         rescans++
         failRescan?.invoke()
@@ -83,6 +87,7 @@ class FakeIngestFacade : IngestFacade {
 
     private fun nextOutcome(): ImportOutcome {
         failImport?.invoke()
+        imports++
         val o = importOutcomes.getOrElse(importIdx) { importOutcomes.last() }
         importIdx++
         return o
