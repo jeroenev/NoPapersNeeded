@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="security_title">Sécurité</string>
+    <string name="security_app_lock">Verrouillage de l’application</string>
+    <string name="security_app_lock_help">Demande un code à l’ouverture de l’application et après le délai ci-dessous en arrière-plan. Un code oublié peut être réinitialisé hors de l’application.</string>
+    <string name="security_set_pin">Définir un code</string>
+    <string name="security_change_pin">Changer le code</string>
+    <string name="security_lock_after">Verrouiller après</string>
+    <string name="security_lock_immediately">Immédiatement</string>
+    <string name="security_lock_one_minute">Après 1 minute</string>
+    <string name="security_lock_five_minutes">Après 5 minutes</string>
+    <string name="security_lock_fifteen_minutes">Après 15 minutes</string>
+    <string name="security_not_encrypted">Le verrouillage masque l’application, mais ne chiffre pas le dossier de la bibliothèque. Toute personne pouvant ouvrir les fichiers peut les lire.</string>
+    <string name="security_recovery_title">Si tu oublies ton code</string>
+    <string name="security_recovery_desktop">Ferme l’application et supprime les entrées de verrouillage de %1$s, ou supprime ce fichier pour réinitialiser tous les réglages.</string>
+    <string name="security_recovery_android">Si tu oublies ton code, déverrouille avec la biométrie ou le verrouillage d’écran de l’appareil. Si aucun n’est disponible, effacer les données de l’application supprime le verrouillage, et avec lui tout ce que l’application garde uniquement sur cet appareil : les réglages, les conversations avec l’assistant, la connexion au cloud et les modifications pas encore synchronisées avec le cloud. Un dossier de bibliothèque dans le stockage de l’appareil est conservé.</string>
+    <string name="security_device_help">Tu peux aussi déverrouiller avec la biométrie ou le verrouillage d’écran de cet appareil.</string>
+    <string name="security_pin">Code</string>
+    <string name="security_pin_confirm">Confirmer le code</string>
+    <string name="security_pin_too_short">Le code doit comporter au moins 4 caractères.</string>
+    <string name="security_pin_mismatch">Les codes ne correspondent pas.</string>
+    <string name="security_locked_title">Application verrouillée</string>
+    <string name="security_locked_help">Saisis ton code pour continuer.</string>
+    <string name="security_unlock">Déverrouiller</string>
+    <string name="security_unlock_device">Déverrouiller avec l’appareil</string>
+    <string name="security_wrong_pin">Ce code n’est pas correct.</string>
+    <string name="security_too_many">Trop de tentatives. Réessaie dans %1$d s.</string>
+    <string name="security_device_prompt_subtitle">Déverrouiller No Papers Needed</string>
+</resources>

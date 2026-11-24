@@ -8,6 +8,9 @@ import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.SortField
 import dev.npn.core.app.ViewType
 import dev.npn.core.ocr.OcrLanguages
+import dev.npn.core.security.AppLockSettings
+import dev.npn.core.security.LockCredential
+import dev.npn.core.security.LockTimeout
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -62,6 +65,11 @@ data class SettingsSnapshot(
     val searchTried: Boolean = false,
     /** The tip to search a word of a page just read was shown once on this device. */
     val searchTipShown: Boolean = false,
+    /**
+     * This device's app lock: whether it is on, after how long in the background it asks again,
+     * and the salted hash of the unlock secret. It never holds the secret itself.
+     */
+    val appLock: AppLockSettings = AppLockSettings(),
 )
 
 /**
@@ -211,6 +219,7 @@ object SettingsCodec {
                 snapshot.gridColumnWidth.coerceIn(GridSizing.MIN_COLUMN_WIDTH, GridSizing.MAX_COLUMN_WIDTH),
             aiMaxTagsPerDoc = snapshot.aiMaxTagsPerDoc.coerceIn(AiTagging.RANGE),
             aiMaxNewTagsPerDoc = snapshot.aiMaxNewTagsPerDoc.coerceIn(AiTagging.NEW_TAGS_RANGE),
+            appLock = snapshot.appLock.normalised(),
         )
 
     /**
@@ -266,6 +275,12 @@ object SettingsCodec {
                     reader.flag(SettingsKeys.GETTING_STARTED_DISMISSED, DEFAULTS.gettingStartedDismissed),
                 searchTried = reader.flag(SettingsKeys.SEARCH_TRIED, DEFAULTS.searchTried),
                 searchTipShown = reader.flag(SettingsKeys.SEARCH_TIP_SHOWN, DEFAULTS.searchTipShown),
+                appLock =
+                    AppLockSettings(
+                        enabled = reader.boolean(SettingsKeys.APP_LOCK_ENABLED) ?: false,
+                        timeout = LockTimeout.fromWire(reader.string(SettingsKeys.APP_LOCK_TIMEOUT)),
+                        credential = LockCredential.decode(reader.string(SettingsKeys.APP_LOCK_CREDENTIAL)),
+                    ),
             ),
         )
 
@@ -308,6 +323,9 @@ object SettingsCodec {
         writer.putBoolean(SettingsKeys.GETTING_STARTED_DISMISSED, s.gettingStartedDismissed)
         writer.putBoolean(SettingsKeys.SEARCH_TRIED, s.searchTried)
         writer.putBoolean(SettingsKeys.SEARCH_TIP_SHOWN, s.searchTipShown)
+        writer.putBoolean(SettingsKeys.APP_LOCK_ENABLED, s.appLock.enabled)
+        writer.putString(SettingsKeys.APP_LOCK_TIMEOUT, s.appLock.timeout.name)
+        writer.putOptional(SettingsKeys.APP_LOCK_CREDENTIAL, s.appLock.credential?.encode())
     }
 
     /**
@@ -404,6 +422,11 @@ internal object SettingsKeys {
     const val GETTING_STARTED_DISMISSED = "gettingStartedDismissed"
     const val SEARCH_TRIED = "searchTried"
     const val SEARCH_TIP_SHOWN = "searchTipShown"
+
+    // The app lock. The credential is a salted hash, never the secret.
+    const val APP_LOCK_ENABLED = "appLockEnabled"
+    const val APP_LOCK_TIMEOUT = "appLockTimeout"
+    const val APP_LOCK_CREDENTIAL = "appLockCredential"
 }
 
 /** Bounds for the user-adjustable grid cell width (dp). */

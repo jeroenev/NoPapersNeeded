@@ -7,6 +7,7 @@ import dev.npn.app.ui.settings.AiSelfTestState
 import dev.npn.app.ui.settings.CloudSetupActions
 import dev.npn.app.ui.settings.FieldDialog
 import dev.npn.app.ui.settings.ReviewMigration
+import dev.npn.app.ui.settings.SecurityDialog
 import dev.npn.app.ui.settings.SettingsCategoryId
 import dev.npn.app.ui.settings.SettingsPaneActions
 import dev.npn.app.ui.settings.SettingsPaneState
@@ -16,6 +17,7 @@ import dev.npn.app.ui.settings.TextSetting
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.security.LockTimeout
 import dev.npn.core.settings.SettingsSnapshot
 import dev.npn.core.sync.RcloneProvider
 import kotlinx.coroutines.CoroutineScope
@@ -51,6 +53,12 @@ internal fun paneState(
 /** Settings pane actions that do nothing; a test overrides the ones it watches. */
 internal open class NoSettingsPaneActions : SettingsPaneActions {
     override fun edit(transform: (SettingsSnapshot) -> SettingsSnapshot) = Unit
+
+    override fun setAppLockEnabled(enabled: Boolean) = Unit
+
+    override fun setAppLockTimeout(timeout: LockTimeout) = Unit
+
+    override fun setAppLockPin(pin: String) = Unit
 
     override fun setStoragePathTemplate(template: String) = Unit
 
@@ -110,6 +118,8 @@ internal open class NoSettingsPaneActions : SettingsPaneActions {
     override fun openCategory(id: SettingsCategoryId) = Unit
 
     override fun openFieldDialog(dialog: FieldDialog?) = Unit
+
+    override fun openSecurityDialog(dialog: SecurityDialog?) = Unit
 }
 
 /** A setup wizard that does nothing, for a pane rendered without a view model. */

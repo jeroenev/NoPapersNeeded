@@ -52,6 +52,8 @@ import dev.npn.app.ui.detail.BrowseContext
 import dev.npn.app.ui.detail.DocumentDraftHost
 import dev.npn.app.ui.detail.DocumentDrafts
 import dev.npn.app.ui.library.DropOverlay
+import dev.npn.app.ui.lock.LockScreen
+import dev.npn.app.ui.lock.LockViewModel
 import dev.npn.app.ui.nav.MainNav
 import dev.npn.app.ui.nav.Route
 import dev.npn.app.ui.nav.TopLevelDestination
@@ -229,15 +231,18 @@ internal fun LibraryViewModelHost(
     CompositionLocalProvider(LocalViewModelStoreOwner provides library.viewModels, content = content)
 }
 
+@Suppress("ViewModelForwarding") // LockScreen receives the viewmodel only as LockActions and state.
 @Composable
 private fun AppRoot(
     env: AppEnvironment,
     modifier: Modifier = Modifier,
     vm: AppViewModel = viewModel { AppViewModel(env) },
+    lockVm: LockViewModel = viewModel { LockViewModel(env.lock) },
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val useSaf by vm.useSafStorage.collectAsStateWithLifecycle()
     val language by vm.appLanguage.collectAsStateWithLifecycle()
+    val lockState by env.lock.state.collectAsStateWithLifecycle()
     // Above the language switch, which rebuilds everything below it.
     val firstRun = rememberFirstRunHost()
     // Who takes files dropped on the window instead of the open library's import: first run, while
@@ -245,6 +250,14 @@ private fun AppRoot(
     var dropTarget by remember { mutableStateOf<((List<Pair<ExternalSource, String>>) -> Unit)?>(null) }
     LocalizedApp(language, (state as? AppState.Open)?.session, env.appScope) { library ->
         AppSurface {
+            if (lockState.locked) {
+                // Behind the lock there is no library screen to title the window; the app's own
+                // name is all the lock may say.
+                PublishWindowTitle(stringResource(Res.string.common_app_name))
+                val lockUi by lockVm.state.collectAsStateWithLifecycle()
+                LockScreen(state = lockUi, actions = lockVm)
+                return@AppSurface
+            }
             val snackbar = rememberSnackbarMessages(vm.messages)
             // Files dropped on the desktop window import into whichever library is open, from any screen;
             // the message's Show opens the library on the new documents. While first run asks for the

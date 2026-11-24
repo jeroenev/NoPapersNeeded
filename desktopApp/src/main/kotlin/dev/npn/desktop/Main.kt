@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,13 +43,23 @@ import dev.npn.core.util.info
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_app_name
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.skia.Image
+import java.awt.AWTEvent
 import java.awt.Dimension
+import java.awt.KeyEventDispatcher
+import java.awt.KeyboardFocusManager
+import java.awt.Toolkit
+import java.awt.event.AWTEventListener
+import java.awt.event.KeyEvent
+import java.awt.event.MouseEvent
+import java.awt.event.WindowAdapter
+import java.awt.event.WindowEvent
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
@@ -68,6 +79,9 @@ private const val WINDOW_ICON = "icon.png"
 
 /** How long closing the window waits for the library session to shut down before exiting anyway. */
 private val SESSION_CLOSE_TIMEOUT = 10.seconds
+
+/** How often the desktop app checks whether it has sat idle long enough to lock. */
+private const val LOCK_IDLE_TICK_MILLIS = 5_000L
 
 private fun log(message: String) = DesktopLog.info(message)
 
@@ -148,6 +162,45 @@ private fun runApp() =
                 window.minimumSize = Dimension(800, 600)
                 val monitorMoveWorkaround = MonitorMoveSurfaceWorkaround.install(window)
                 onDispose(monitorMoveWorkaround::close)
+            }
+
+            // The app lock's desktop half: input keeps it awake, minimizing is its background, and
+            // a long enough silence locks it. Android gets the same rules from its activity lifecycle.
+            DisposableEffect(window, env.lock) {
+                val lock = env.lock
+                val focusManager = KeyboardFocusManager.getCurrentKeyboardFocusManager()
+                val keys =
+                    KeyEventDispatcher { event ->
+                        if (event.id == KeyEvent.KEY_PRESSED) lock.onInteraction()
+                        false
+                    }
+                focusManager.addKeyEventDispatcher(keys)
+                // A window listener never sees pointer events Compose consumes; the toolkit listener
+                // sees every mouse event in the process, whatever component it lands on.
+                val toolkit = Toolkit.getDefaultToolkit()
+                val mouse = AWTEventListener { event -> if (event is MouseEvent) lock.onInteraction() }
+                toolkit.addAWTEventListener(
+                    mouse,
+                    AWTEvent.MOUSE_EVENT_MASK or AWTEvent.MOUSE_MOTION_EVENT_MASK or AWTEvent.MOUSE_WHEEL_EVENT_MASK,
+                )
+                val windowEvents =
+                    object : WindowAdapter() {
+                        override fun windowIconified(event: WindowEvent) = lock.onBackground()
+
+                        override fun windowDeiconified(event: WindowEvent) = lock.onForeground()
+                    }
+                window.addWindowListener(windowEvents)
+                onDispose {
+                    focusManager.removeKeyEventDispatcher(keys)
+                    toolkit.removeAWTEventListener(mouse)
+                    window.removeWindowListener(windowEvents)
+                }
+            }
+            LaunchedEffect(env.lock) {
+                while (true) {
+                    delay(LOCK_IDLE_TICK_MILLIS)
+                    env.lock.checkIdle()
+                }
             }
 
             val dropTarget = remember { importDropTarget() }

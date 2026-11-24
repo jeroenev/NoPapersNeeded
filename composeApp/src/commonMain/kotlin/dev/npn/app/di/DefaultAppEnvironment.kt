@@ -4,8 +4,11 @@ import dev.npn.app.platform.OcrModels
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.SessionDeps
 import dev.npn.core.app.openSession
+import dev.npn.core.security.AppLock
 import dev.npn.core.settings.SettingsRepository
+import dev.npn.core.util.MonotonicClock
 import dev.npn.core.util.NpnLog
+import dev.npn.core.util.SystemMonotonicClock
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
 import dev.npn.core.util.warn
@@ -53,9 +56,18 @@ class DefaultAppEnvironment(
     appDispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val cloudSetup: (() -> CloudSetupEngine)? = null,
     private val readOcrModels: (suspend () -> OcrModels)? = null,
+    /** The monotonic clock the app lock measures background and idle time with. */
+    clock: MonotonicClock = SystemMonotonicClock,
     private val factory: suspend (location: String, scope: CoroutineScope) -> SessionDeps,
 ) : AppEnvironment {
     override val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + appDispatcher)
+
+    /**
+     * The app lock, process-wide: an activity recreated for a configuration change keeps the state
+     * it had, and every screen is behind the same lock. It starts locked when the saved setting is
+     * on, which is what a cold start shows.
+     */
+    override val lock: AppLock = AppLock(settings.settings.value.appLock, clock)
 
     private val _session = MutableStateFlow<LibrarySession?>(null)
 
@@ -92,6 +104,14 @@ class DefaultAppEnvironment(
         log.runLogged("Opening the watched folder") { watchedFolder(location) }
 
     init {
+        // The app lock follows the saved setting: enabling it, changing its secret or its timeout
+        // applies without reopening the app, and disabling it unlocks and forgets the hash.
+        appScope.launch {
+            settings.settings
+                .map { it.appLock }
+                .distinctUntilChanged()
+                .collect { lock.updateSettings(it) }
+        }
         // Watched-folder auto-import: (re)start an importer whenever the open session or the
         // configured folder changes; collectLatest cancels the previous importer's loop.
         appScope.launch {

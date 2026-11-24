@@ -165,6 +165,8 @@ fun SettingsScreen(
                 override fun openCategory(id: SettingsCategoryId) = currentSelect(id, false)
 
                 override fun openFieldDialog(dialog: FieldDialog?) = vm.openFieldDialog(dialog)
+
+                override fun openSecurityDialog(dialog: SecurityDialog?) = vm.openSecurityDialog(dialog)
             }
         }
 
