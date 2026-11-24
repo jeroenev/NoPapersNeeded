@@ -114,14 +114,29 @@ internal class AppSessionRig private constructor(
         }
     }
 
-    suspend fun close() {
+    private suspend fun closeSessions() {
         otherSessions.forEach { it.close() }
         otherDeps.forEach { it.closeDb() }
         session.close()
         db.close()
         deviceDb.close()
+    }
+
+    suspend fun close() {
+        closeSessions()
         libRoot.toFile().deleteRecursively()
         dbDir.deleteRecursively()
+    }
+
+    /** Reopen the same library and device database after an interrupted session. */
+    suspend fun restart(
+        syncTransport: SyncTransport,
+        installationId: String,
+    ): AppSessionRig {
+        closeSessions()
+        val base =
+            testSessionDeps(scope, libRoot, File(dbDir, "first"), installationId, clock, syncTransport = syncTransport)
+        return AppSessionRig(libRoot, dbDir, base, clock, scope, openSession(base, JournalOp.DocUndelete.WRITTEN))
     }
 
     companion object {

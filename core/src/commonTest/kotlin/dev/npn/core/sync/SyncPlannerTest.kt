@@ -85,6 +85,14 @@ class SyncPlannerTest {
     // ---- metadata ---------------------------------------------------------------------------
 
     @Test
+    fun manifestIdentityCannotDetectASameSizeOverwriteWithTheSameTimestamp() {
+        val cached = known("inbox/a.pdf", docA)
+        cached.matches(entry("inbox/a.pdf")) shouldBe true
+        cached.matches(entry("inbox/a.pdf", mtime = now)) shouldBe false
+        cached.matches(entry("inbox/a.pdf", size = 11)) shouldBe false
+    }
+
+    @Test
     fun metadataIsASetUnion() {
         val otherPath = ".npn/journal/objects-v2-ee/${"e".repeat(64)}.jsonl"
         val sidecar = ".npn/ocr/$docA.dev.json"
