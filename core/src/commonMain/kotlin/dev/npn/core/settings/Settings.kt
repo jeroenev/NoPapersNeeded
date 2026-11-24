@@ -3,6 +3,7 @@ package dev.npn.core.settings
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiReasoningLevel
+import dev.npn.core.ai.AiRunCap
 import dev.npn.core.ai.AiTagging
 import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.SortField
@@ -50,6 +51,8 @@ data class SettingsSnapshot(
     val aiReasoningEdit: AiReasoningLevel = AiReasoningLevel.LOW,
     val aiMaxTagsPerDoc: Int = AiTagging.DEFAULT_TAGS_PER_DOC,
     val aiMaxNewTagsPerDoc: Int = AiTagging.DEFAULT_NEW_TAGS_PER_DOC,
+    /** The most model calls one bulk AI run may make; see [dev.npn.core.ai.AiRunCap]. */
+    val aiMaxRunRequests: Int = AiRunCap.DEFAULT,
     val aiAutoOnOcr: Boolean = false,
     val aiOcrAuto: Boolean = false,
     /** Look up the latest published release once per start and offer it when newer. */
@@ -84,6 +87,7 @@ fun SettingsSnapshot.toAiConfig(systemLanguage: String? = null): AiConfig =
         reasoningEdit = aiReasoningEdit,
         maxTagsPerDoc = aiMaxTagsPerDoc,
         maxNewTagsPerDoc = aiMaxNewTagsPerDoc,
+        maxRunRequests = aiMaxRunRequests,
         autoOnOcr = aiAutoOnOcr,
         ocrAuto = aiOcrAuto,
         appLanguage = appLanguage ?: systemLanguage,
@@ -211,6 +215,7 @@ object SettingsCodec {
                 snapshot.gridColumnWidth.coerceIn(GridSizing.MIN_COLUMN_WIDTH, GridSizing.MAX_COLUMN_WIDTH),
             aiMaxTagsPerDoc = snapshot.aiMaxTagsPerDoc.coerceIn(AiTagging.RANGE),
             aiMaxNewTagsPerDoc = snapshot.aiMaxNewTagsPerDoc.coerceIn(AiTagging.NEW_TAGS_RANGE),
+            aiMaxRunRequests = snapshot.aiMaxRunRequests.coerceIn(AiRunCap.RANGE),
         )
 
     /**
@@ -258,6 +263,7 @@ object SettingsCodec {
                     enumOr(reader.string(SettingsKeys.AI_REASONING_EDIT), AiReasoningLevel.LOW),
                 aiMaxTagsPerDoc = reader.int(SettingsKeys.AI_MAX_TAGS_PER_DOC) ?: DEFAULTS.aiMaxTagsPerDoc,
                 aiMaxNewTagsPerDoc = reader.int(SettingsKeys.AI_MAX_NEW_TAGS_PER_DOC) ?: DEFAULTS.aiMaxNewTagsPerDoc,
+                aiMaxRunRequests = reader.int(SettingsKeys.AI_MAX_RUN_REQUESTS) ?: DEFAULTS.aiMaxRunRequests,
                 aiAutoOnOcr = reader.boolean(SettingsKeys.AI_AUTO_ON_OCR) ?: DEFAULTS.aiAutoOnOcr,
                 aiOcrAuto = reader.boolean(SettingsKeys.AI_OCR_AUTO) ?: DEFAULTS.aiOcrAuto,
                 updateCheckEnabled = reader.boolean(SettingsKeys.UPDATE_CHECK_ENABLED) ?: DEFAULTS.updateCheckEnabled,
@@ -301,6 +307,7 @@ object SettingsCodec {
         writer.putString(SettingsKeys.AI_REASONING_EDIT, s.aiReasoningEdit.name)
         writer.putInt(SettingsKeys.AI_MAX_TAGS_PER_DOC, s.aiMaxTagsPerDoc)
         writer.putInt(SettingsKeys.AI_MAX_NEW_TAGS_PER_DOC, s.aiMaxNewTagsPerDoc)
+        writer.putInt(SettingsKeys.AI_MAX_RUN_REQUESTS, s.aiMaxRunRequests)
         writer.putBoolean(SettingsKeys.AI_AUTO_ON_OCR, s.aiAutoOnOcr)
         writer.putBoolean(SettingsKeys.AI_OCR_AUTO, s.aiOcrAuto)
         writer.putBoolean(SettingsKeys.UPDATE_CHECK_ENABLED, s.updateCheckEnabled)
@@ -397,6 +404,7 @@ internal object SettingsKeys {
     const val AI_REASONING_EDIT = "aiReasoningEdit"
     const val AI_MAX_TAGS_PER_DOC = "aiMaxTagsPerDoc"
     const val AI_MAX_NEW_TAGS_PER_DOC = "aiMaxNewTagsPerDoc"
+    const val AI_MAX_RUN_REQUESTS = "aiMaxRunRequests"
     const val AI_AUTO_ON_OCR = "aiAutoOnOcr"
     const val AI_OCR_AUTO = "aiOcrAuto"
     const val UPDATE_CHECK_ENABLED = "updateCheckEnabled"

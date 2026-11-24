@@ -137,5 +137,9 @@ interface AiSuggest {
     suspend fun suggestEdits(
         docId: String,
         request: AiEditRequest,
+        /** The bulk run this request belongs to, for the spend ledger; null for a one-off. */
+        runId: String? = null,
+        /** What kind of work this request is, for the ledger's per-kind rows. */
+        kind: AiUsageKind = AiUsageKind.SUGGEST,
     ): AiEditSuggestion
 }

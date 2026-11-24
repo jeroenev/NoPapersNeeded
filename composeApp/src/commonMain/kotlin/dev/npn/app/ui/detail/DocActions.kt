@@ -1,5 +1,7 @@
 package dev.npn.app.ui.detail
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ContentCut
@@ -9,12 +11,14 @@ import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.unit.dp
 import dev.npn.app.platform.sharePdfBytes
 import dev.npn.app.platform.supportsSharing
 import dev.npn.app.ui.common.ConfirmDialog
@@ -22,7 +26,9 @@ import dev.npn.app.ui.common.TextInputDialog
 import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.TopBarAction
 import dev.npn.app.ui.common.TopBarActions
+import dev.npn.app.ui.common.formatUsd
 import dev.npn.app.ui.common.uiText
+import dev.npn.core.ai.AiRunEstimate
 import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.DocListItem
 import dev.npn.core.fs.NpnPaths
@@ -31,6 +37,9 @@ import io.github.vinceglb.filekit.dialogs.FileKitDialogSettings
 import io.github.vinceglb.filekit.dialogs.compose.rememberFileSaverLauncher
 import io.github.vinceglb.filekit.write
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.ai_spend_estimate_cost
+import no_papers_needed.composeapp.generated.resources.ai_spend_estimate_tokens
+import no_papers_needed.composeapp.generated.resources.ai_spend_estimate_tokens_only
 import no_papers_needed.composeapp.generated.resources.detail_action_needs_saved_draft
 import no_papers_needed.composeapp.generated.resources.detail_ai_ocr
 import no_papers_needed.composeapp.generated.resources.detail_ai_ocr_confirm
@@ -324,17 +333,27 @@ private fun DocActionDialogs(
 
         DocActionDialog.AI_OCR -> {
             // Only reachable for a long document; a plain one runs straight off the menu item.
-            val pages = (aiOcr as? AiOcrOffer.Large)?.pages ?: pageCount
+            val large = aiOcr as? AiOcrOffer.Large
+            val pages = large?.pages ?: pageCount
+            val estimate = large?.estimate
             ConfirmDialog(
                 title = stringResource(Res.string.detail_ai_ocr),
-                message = stringResource(Res.string.detail_ai_ocr_large_prompt, pages),
                 confirmLabel = stringResource(Res.string.detail_ai_ocr_confirm),
                 onConfirm = {
                     onDismiss()
                     actions.ocrWithAi()
                 },
                 onDismiss = onDismiss,
-            )
+            ) {
+                androidx.compose.foundation.layout.Column(
+                    verticalArrangement =
+                        androidx.compose.foundation.layout.Arrangement
+                            .spacedBy(4.dp),
+                ) {
+                    androidx.compose.material3.Text(stringResource(Res.string.detail_ai_ocr_large_prompt, pages))
+                    if (estimate != null) AiOcrEstimate(estimate)
+                }
+            }
         }
 
         DocActionDialog.SPLIT -> {
@@ -359,3 +378,17 @@ private fun DocActionDialogs(
  */
 internal fun exportName(item: DocListItem): String =
     NpnPaths.sanitizeSegment(NpnPaths.stripPdfExtension(item.doc.displayTitle)).ifBlank { "document" }
+
+/** The OCR estimate does not promise a cap: page processing is not bounded by the edit-run cap. */
+@Composable
+internal fun AiOcrEstimate(estimate: AiRunEstimate) {
+    val cost = estimate.estimatedCostUsd
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (estimate.priceKnown && cost != null) {
+            Text(stringResource(Res.string.ai_spend_estimate_tokens, estimate.inputTokens))
+            Text(stringResource(Res.string.ai_spend_estimate_cost, formatUsd(cost)))
+        } else {
+            Text(stringResource(Res.string.ai_spend_estimate_tokens_only, estimate.inputTokens))
+        }
+    }
+}

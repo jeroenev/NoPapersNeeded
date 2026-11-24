@@ -23,11 +23,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.Dropdown
 import dev.npn.app.ui.common.ExpanderRow
 import dev.npn.app.ui.common.HelpText
@@ -35,13 +37,18 @@ import dev.npn.app.ui.common.NumericField
 import dev.npn.app.ui.common.SettingsSection
 import dev.npn.app.ui.common.SwitchRow
 import dev.npn.app.ui.common.TypedTextField
+import dev.npn.app.ui.common.formatUsd
 import dev.npn.app.ui.common.resolve
 import dev.npn.core.ai.AiCheck
 import dev.npn.core.ai.AiCheckOutcome
 import dev.npn.core.ai.AiCheckStatus
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiReasoningLevel
+import dev.npn.core.ai.AiRunCap
+import dev.npn.core.ai.AiSpendSummary
 import dev.npn.core.ai.AiTagging
+import dev.npn.core.ai.AiUsageTotals
+import dev.npn.core.ai.completeCostUsd
 import dev.npn.core.ocr.OcrEngineSelector
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_settings_advanced
@@ -62,6 +69,19 @@ import no_papers_needed.composeapp.generated.resources.common_settings_ai_ocr_au
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_provider
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_provider_help
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_request_help
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_spend
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_spend_all_time
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_spend_empty
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_spend_estimated
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_spend_last30
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_spend_model_line
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_spend_model_line_unpriced
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_spend_reset
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_spend_reset_confirm
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_spend_reset_message
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_spend_reset_title
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_spend_total
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_spend_total_unpriced
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_test
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_test_again
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_test_help
@@ -74,6 +94,8 @@ import no_papers_needed.composeapp.generated.resources.common_settings_enable_ai
 import no_papers_needed.composeapp.generated.resources.common_settings_load_models
 import no_papers_needed.composeapp.generated.resources.common_settings_max_new_tags
 import no_papers_needed.composeapp.generated.resources.common_settings_max_new_tags_help
+import no_papers_needed.composeapp.generated.resources.common_settings_max_run_requests
+import no_papers_needed.composeapp.generated.resources.common_settings_max_run_requests_help
 import no_papers_needed.composeapp.generated.resources.common_settings_max_suggested_tags
 import no_papers_needed.composeapp.generated.resources.common_settings_max_suggested_tags_help
 import no_papers_needed.composeapp.generated.resources.common_settings_model
@@ -126,6 +148,7 @@ internal fun AiSettingsPane(
             AiBehaviourSettings(state = settings, actions = actions)
             // Last, because it is a verdict on everything above it.
             AiSelfTestSection(state = settings, selfTest = state.aiSelfTest, onRun = actions::runAiSelfTest)
+            AiSpendSection(spend = settings.aiSpend, onReset = actions::resetAiSpend)
         }
     }
 }
@@ -225,6 +248,19 @@ private fun AiBehaviourSettings(
             onSetMaxTagsPerDoc = { value -> actions.edit { it.copy(aiMaxTagsPerDoc = value) } },
             maxNewTagsPerDoc = state.snapshot.aiMaxNewTagsPerDoc,
             onSetMaxNewTagsPerDoc = { value -> actions.edit { it.copy(aiMaxNewTagsPerDoc = value) } },
+        )
+        NumericField(
+            value = state.snapshot.aiMaxRunRequests,
+            onValueChange = { value -> actions.edit { it.copy(aiMaxRunRequests = value) } },
+            range = AiRunCap.RANGE,
+            label = stringResource(Res.string.common_settings_max_run_requests),
+            supportingText =
+                stringResource(
+                    Res.string.common_settings_max_run_requests_help,
+                    state.snapshot.aiMaxRunRequests,
+                    AiRunCap.MIN_REQUESTS,
+                    AiRunCap.MAX_REQUESTS,
+                ),
         )
     }
     HelpText(stringResource(Res.string.common_settings_ai_request_help))
@@ -530,4 +566,106 @@ private fun AiTagCapDefaults(
                 AiTagging.MAX_NEW_TAGS_PER_DOC,
             ),
     )
+}
+
+/**
+ * The device-local spend ledger, as two windows: the rolling last 30 days and everything ever
+ * recorded here. Per provider and model, so a switch of model is visible, with tokens only where a
+ * model has no list price. Reset asks first; the ledger is not synced and cannot be recovered.
+ */
+@Composable
+private fun AiSpendSection(
+    spend: AiSpendSummary,
+    onReset: () -> Unit,
+) {
+    var confirming by rememberSaveable { mutableStateOf(false) }
+    Column {
+        SettingsSection(title = stringResource(Res.string.common_settings_ai_spend)) {
+            SpendWindow(stringResource(Res.string.common_settings_ai_spend_last30), spend.last30Days)
+            SpendWindow(stringResource(Res.string.common_settings_ai_spend_all_time), spend.allTime)
+            HelpText(stringResource(Res.string.common_settings_ai_spend_estimated))
+            OutlinedButton(onClick = { confirming = true }) {
+                Text(stringResource(Res.string.common_settings_ai_spend_reset))
+            }
+        }
+        if (confirming) {
+            ConfirmDialog(
+                title = stringResource(Res.string.common_settings_ai_spend_reset_title),
+                message = stringResource(Res.string.common_settings_ai_spend_reset_message),
+                confirmLabel = stringResource(Res.string.common_settings_ai_spend_reset_confirm),
+                destructive = true,
+                onConfirm = {
+                    confirming = false
+                    onReset()
+                },
+                onDismiss = { confirming = false },
+            )
+        }
+    }
+}
+
+@Composable
+private fun SpendWindow(
+    title: String,
+    totals: List<AiUsageTotals>,
+) {
+    Column {
+        Text(title, style = MaterialTheme.typography.titleSmall)
+        if (totals.isEmpty()) {
+            HelpText(stringResource(Res.string.common_settings_ai_spend_empty))
+            return@Column
+        }
+        totals.forEach { line -> Text(spendLine(line), style = MaterialTheme.typography.bodyMedium) }
+        Text(totalLine(totals), style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@Composable
+private fun spendLine(totals: AiUsageTotals): String {
+    val provider = AiProvider.entries.firstOrNull { it.name == totals.provider }?.displayName ?: totals.provider
+    val cost = totals.estimatedCostUsd
+    return if (cost == null || totals.unpricedRequests > 0) {
+        stringResource(
+            Res.string.common_settings_ai_spend_model_line_unpriced,
+            provider,
+            totals.model,
+            totals.requests,
+            totals.inputTokens,
+            totals.outputTokens,
+        )
+    } else {
+        stringResource(
+            Res.string.common_settings_ai_spend_model_line,
+            provider,
+            totals.model,
+            totals.requests,
+            totals.inputTokens,
+            totals.outputTokens,
+            formatUsd(cost),
+        )
+    }
+}
+
+@Composable
+private fun totalLine(totals: List<AiUsageTotals>): String {
+    val requests = totals.sumOf { it.requests }
+    val input = totals.sumOf { it.inputTokens }
+    val output = totals.sumOf { it.outputTokens }
+    val cost = totals.completeCostUsd()
+    return if (cost == null) {
+        stringResource(
+            Res.string.common_settings_ai_spend_total_unpriced,
+            requests,
+            input,
+            output,
+        )
+    } else {
+        stringResource(
+            Res.string.common_settings_ai_spend_total,
+            requests,
+            input,
+            output,
+            formatUsd(cost),
+        )
+    }
 }

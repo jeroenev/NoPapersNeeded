@@ -24,16 +24,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.HelpText
+import dev.npn.app.ui.common.formatUsd
 import dev.npn.core.ai.AiEditRequest.Companion.MAX_FIELDS_PER_RUN
+import dev.npn.core.ai.AiRunEstimate
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_blocked_loading
 import no_papers_needed.composeapp.generated.resources.ai_edit_blocked_no_documents
 import no_papers_needed.composeapp.generated.resources.ai_edit_blocked_no_saved_view
 import no_papers_needed.composeapp.generated.resources.ai_edit_blocked_no_task
 import no_papers_needed.composeapp.generated.resources.ai_edit_blocked_nothing
-import no_papers_needed.composeapp.generated.resources.ai_edit_confirm_large_confirm
-import no_papers_needed.composeapp.generated.resources.ai_edit_confirm_large_message
-import no_papers_needed.composeapp.generated.resources.ai_edit_confirm_large_title
+import no_papers_needed.composeapp.generated.resources.ai_edit_confirm_spend_confirm
+import no_papers_needed.composeapp.generated.resources.ai_edit_confirm_spend_title
 import no_papers_needed.composeapp.generated.resources.ai_edit_start
 import no_papers_needed.composeapp.generated.resources.ai_edit_start_background
 import no_papers_needed.composeapp.generated.resources.ai_edit_summary_fields
@@ -44,6 +45,14 @@ import no_papers_needed.composeapp.generated.resources.ai_edit_summary_requests
 import no_papers_needed.composeapp.generated.resources.ai_edit_summary_tag_removals
 import no_papers_needed.composeapp.generated.resources.ai_edit_summary_tags
 import no_papers_needed.composeapp.generated.resources.ai_edit_too_many_fields
+import no_papers_needed.composeapp.generated.resources.ai_spend_estimate_cap
+import no_papers_needed.composeapp.generated.resources.ai_spend_estimate_cost
+import no_papers_needed.composeapp.generated.resources.ai_spend_estimate_documents
+import no_papers_needed.composeapp.generated.resources.ai_spend_estimate_over_cap
+import no_papers_needed.composeapp.generated.resources.ai_spend_estimate_pages
+import no_papers_needed.composeapp.generated.resources.ai_spend_estimate_requests
+import no_papers_needed.composeapp.generated.resources.ai_spend_estimate_tokens
+import no_papers_needed.composeapp.generated.resources.ai_spend_estimate_tokens_only
 import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.common_join_items
 import org.jetbrains.compose.resources.pluralStringResource
@@ -63,6 +72,7 @@ private val RunBarSingleRowWidth = 620.dp
 internal fun RunBar(
     ui: AiEditUiState,
     plan: RunPlan,
+    estimate: AiRunEstimate?,
     blocker: StartBlocker?,
     onStart: () -> Unit,
 ) {
@@ -98,16 +108,53 @@ internal fun RunBar(
     }
     if (confirming) {
         ConfirmDialog(
-            title = stringResource(Res.string.ai_edit_confirm_large_title, plan.requests),
-            message = stringResource(Res.string.ai_edit_confirm_large_message),
-            confirmLabel = stringResource(Res.string.ai_edit_confirm_large_confirm),
+            title = stringResource(Res.string.ai_edit_confirm_spend_title),
+            confirmLabel = stringResource(Res.string.ai_edit_confirm_spend_confirm),
             dismissLabel = stringResource(Res.string.common_cancel),
             onConfirm = {
                 confirming = false
                 onStart()
             },
             onDismiss = { confirming = false },
-        )
+        ) {
+            RunEstimateBody(plan, estimate)
+        }
+    }
+}
+
+/**
+ * What one Start would buy, as whole-sentence lines rather than a stitched paragraph: the scope,
+ * the requests, the pages when the vision model is involved, estimated tokens and cost, and the
+ * cap. The estimate line says "price unknown" instead of inventing money for a gateway or local
+ * model.
+ */
+@Composable
+private fun RunEstimateBody(
+    plan: RunPlan,
+    estimate: AiRunEstimate?,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(stringResource(Res.string.ai_spend_estimate_documents, estimate?.documents ?: plan.documents))
+        Text(stringResource(Res.string.ai_spend_estimate_requests, estimate?.requests ?: plan.requests))
+        if (estimate != null && estimate.pages > 0) {
+            Text(stringResource(Res.string.ai_spend_estimate_pages, estimate.pages))
+        }
+        if (estimate != null) {
+            val cost = estimate.estimatedCostUsd
+            if (estimate.priceKnown && cost != null) {
+                Text(stringResource(Res.string.ai_spend_estimate_tokens, estimate.inputTokens))
+                Text(stringResource(Res.string.ai_spend_estimate_cost, formatUsd(cost)))
+            } else {
+                Text(stringResource(Res.string.ai_spend_estimate_tokens_only, estimate.inputTokens))
+            }
+        }
+        Text(stringResource(Res.string.ai_spend_estimate_cap, estimate?.requestCap ?: plan.requestCap))
+        if (estimate?.exceedsCap == true) {
+            Text(
+                stringResource(Res.string.ai_spend_estimate_over_cap),
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
     }
 }
 

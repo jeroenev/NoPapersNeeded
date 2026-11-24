@@ -2,13 +2,16 @@ package dev.npn.core.ai
 
 import ai.koog.prompt.Prompt
 import ai.koog.prompt.dsl.prompt
+import ai.koog.prompt.message.ResponseMetaInfo
 import dev.npn.core.db.KeyValueDao
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.defs
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.ocr.OcrEngineId
 import dev.npn.core.util.EpochClock
+import dev.npn.core.util.NpnLog
 import dev.npn.core.util.SystemEpochClock
+import dev.npn.core.util.runLogged
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
@@ -33,6 +36,9 @@ internal class AiFacadeImpl(
     chats: KeyValueDao,
     ownWrite: suspend (suspend () -> Unit) -> Unit = { it() },
     private val clock: EpochClock = SystemEpochClock,
+    /** Where every paid request is recorded; the device-local ledger, or [AiLedger.None] in tests. */
+    private val ledger: AiLedger = AiLedger.None,
+    private val log: NpnLog = NpnLog.None,
     private val configProvider: suspend () -> AiConfig,
 ) : AiChat,
     AiSuggest {
@@ -70,7 +76,16 @@ internal class AiFacadeImpl(
                     systemPrompt = AiPrompts.chatSystem(promptContext(config), fields),
                     maxIterations = MAX_AGENT_ITERATIONS,
                     params = AiRuntime.chatParams(config),
-                ).run(question, sessionId),
+                ).run(question, sessionId, onUsage = { usage ->
+                    record(
+                        config = config,
+                        kind = AiUsageKind.CHAT,
+                        runId = sessionId,
+                        reported = usage.metaInfo,
+                        estimatedInput = usage.promptChars / CHARS_PER_TOKEN.toLong(),
+                        estimatedOutput = usage.answerChars / CHARS_PER_TOKEN.toLong(),
+                    )
+                }),
             )
             // Endpoints that want a conversation id per request (the OpenCode Go gateway's
             // x-opencode-session header) read it off the coroutine context, since Koog exposes no
@@ -92,6 +107,8 @@ internal class AiFacadeImpl(
     override suspend fun suggestEdits(
         docId: String,
         request: AiEditRequest,
+        runId: String?,
+        kind: AiUsageKind,
     ): AiEditSuggestion {
         val doc = db.documentDao().getByDocId(docId) ?: return AiEditSuggestion.EMPTY
         val text = db.ftsDao().textOf(docId)
@@ -120,6 +137,14 @@ internal class AiFacadeImpl(
                 user(AiPrompts.editUser(doc.fileName, currentFields, fields, request, currentTags, text))
             }
         val response = suggesting.withPermit { runtime.executor.execute(thePrompt, runtime.model) }
+        record(
+            config = config,
+            kind = kind,
+            runId = runId,
+            reported = response.metaInfo,
+            estimatedInput = promptChars(thePrompt) / CHARS_PER_TOKEN.toLong(),
+            estimatedOutput = response.textContent().length / CHARS_PER_TOKEN.toLong(),
+        )
         return AiText.parseEditSuggestion(
             response.textContent(),
             request = request,
@@ -178,19 +203,34 @@ internal class AiFacadeImpl(
             override suspend fun recognizePng(
                 png: ByteArray,
                 lang: String,
+                runId: String?,
             ): String {
                 // One config read for the page, so its prompt and the client that sends it agree.
                 val config = configProvider()
                 val thePrompt = pagePrompt(png, lang, config)
                 val runtime = runtimes.runtimeFor(config)
-                return transcribeWithRetry(PAGE_ATTEMPTS) { executePage(runtime, thePrompt) }
+                return transcribeWithRetry(PAGE_ATTEMPTS) { executePage(runtime, thePrompt, config, runId) }
             }
         }
 
     private suspend fun executePage(
         runtime: AiRuntime,
         thePrompt: Prompt,
-    ): String? = AiText.parseTranscription(runtime.executor.execute(thePrompt, runtime.model).textContent())
+        config: AiConfig,
+        runId: String?,
+    ): String? {
+        val response = runtime.executor.execute(thePrompt, runtime.model)
+        record(
+            config = config,
+            kind = AiUsageKind.OCR,
+            runId = runId,
+            reported = response.metaInfo,
+            estimatedInput =
+                AiEstimator.OCR_INPUT_TOKENS_PER_PAGE + promptChars(thePrompt) / CHARS_PER_TOKEN.toLong(),
+            estimatedOutput = AiEstimator.OCR_OUTPUT_TOKENS_PER_PAGE.toLong(),
+        )
+        return AiText.parseTranscription(response.textContent())
+    }
 
     private fun pagePrompt(
         png: ByteArray,
@@ -209,6 +249,42 @@ internal class AiFacadeImpl(
     suspend fun close() = runtimes.close()
 
     /**
+     * Record one request in the device-local ledger. Best effort: the call has already been paid
+     * for, and a ledger write that fails must not turn a successful answer into an error.
+     */
+    private suspend fun record(
+        config: AiConfig,
+        kind: AiUsageKind,
+        runId: String?,
+        reported: ResponseMetaInfo?,
+        estimatedInput: Long,
+        estimatedOutput: Long,
+    ) {
+        val reportedInput = reported?.inputTokensCount?.toLong()
+        val reportedOutput = reported?.outputTokensCount?.toLong()
+        val input = reportedInput ?: estimatedInput
+        val output = reportedOutput ?: estimatedOutput
+        val price = AiPricing.of(config.provider, config.model)
+        val record =
+            AiUsageRecord(
+                provider = config.provider.name,
+                model = config.model,
+                kind = kind,
+                inputTokens = input,
+                outputTokens = output,
+                estimatedCostUsd = AiPricing.cost(price, input, output),
+                estimated = reportedInput == null || reportedOutput == null,
+                recordedAt = clock.nowMillis(),
+                runId = runId,
+            )
+        log.runLogged("record AI usage") { ledger.record(record) }
+    }
+
+    /** The text a prompt carries, for an estimate when the provider reports no usage. */
+    private fun promptChars(prompt: Prompt): Long =
+        prompt.messages.sumOf { message -> message.textContent().length.toLong() }
+
+    /**
      * The language + date facts the prompts need (see [AiPromptContext]). Derived from the live
      * config on every call for the same reason the runtime is: the user can switch the app's
      * language between two calls, and a run started yesterday must not keep yesterday's date.
@@ -222,6 +298,9 @@ internal class AiFacadeImpl(
          * ceiling bounds the load on the endpoint.
          */
         const val MAX_CONCURRENT_SUGGESTIONS = 12
+
+        /** The same rough characters-per-token ratio [AiEstimator] uses for pre-flight estimates. */
+        private const val CHARS_PER_TOKEN = 4
 
         private const val MAX_AGENT_ITERATIONS = 15
 

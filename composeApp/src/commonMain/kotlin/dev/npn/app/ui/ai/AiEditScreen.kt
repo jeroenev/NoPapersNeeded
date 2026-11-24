@@ -105,8 +105,9 @@ fun AiEditScreen(
                     // runs only while the setup form is on screen.
                     val preview by vm.preview.collectAsStateWithLifecycle()
                     val plan by vm.plan.collectAsStateWithLifecycle()
+                    val estimate by vm.estimate.collectAsStateWithLifecycle()
                     val blocker by vm.startBlocker.collectAsStateWithLifecycle()
-                    AiEditSetup(ui, preview, plan, blocker, setup = vm, content = session.content)
+                    AiEditSetup(ui, preview, plan, estimate, blocker, setup = vm, content = session.content)
                 }
 
                 is EditPhase.Suggesting -> {

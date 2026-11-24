@@ -262,6 +262,7 @@ class AutoMatchRuleApplicationTest {
         override suspend fun recognizePng(
             png: ByteArray,
             lang: String,
+            runId: String?,
         ): String {
             started.complete(Unit)
             release.await()

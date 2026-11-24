@@ -35,6 +35,8 @@ import no_papers_needed.composeapp.generated.resources.common_settings_ai_auto_o
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_ocr_auto
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_provider
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_provider_help
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_spend
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_spend_reset
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_test
 import no_papers_needed.composeapp.generated.resources.common_settings_api_key
 import no_papers_needed.composeapp.generated.resources.common_settings_auto_matching_rules
@@ -67,6 +69,7 @@ import no_papers_needed.composeapp.generated.resources.common_settings_language_
 import no_papers_needed.composeapp.generated.resources.common_settings_library
 import no_papers_needed.composeapp.generated.resources.common_settings_load_models
 import no_papers_needed.composeapp.generated.resources.common_settings_max_new_tags
+import no_papers_needed.composeapp.generated.resources.common_settings_max_run_requests
 import no_papers_needed.composeapp.generated.resources.common_settings_max_suggested_tags
 import no_papers_needed.composeapp.generated.resources.common_settings_model
 import no_papers_needed.composeapp.generated.resources.common_settings_ocr
@@ -294,9 +297,12 @@ internal val SettingsCategories: List<SettingsCategory> =
                     Res.string.common_settings_reasoning_help,
                     Res.string.common_settings_max_suggested_tags,
                     Res.string.common_settings_max_new_tags,
+                    Res.string.common_settings_max_run_requests,
                     Res.string.common_settings_ai_auto_on_ocr,
                     Res.string.common_settings_ai_ocr_auto,
                     Res.string.common_settings_ai_test,
+                    Res.string.common_settings_ai_spend,
+                    Res.string.common_settings_ai_spend_reset,
                     // The reasoning and tag-limit controls sit behind this disclosure.
                     Res.string.common_settings_advanced,
                 ),
@@ -309,6 +315,7 @@ internal val SettingsCategories: List<SettingsCategory> =
                     Res.string.common_settings_reasoning_help,
                     Res.string.common_settings_max_suggested_tags,
                     Res.string.common_settings_max_new_tags,
+                    Res.string.common_settings_max_run_requests,
                 ),
         ),
         SettingsCategory(

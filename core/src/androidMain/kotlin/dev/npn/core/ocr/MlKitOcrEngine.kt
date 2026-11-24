@@ -27,6 +27,7 @@ internal class MlKitOcrEngine : OcrEngine {
     override suspend fun recognizePng(
         png: ByteArray,
         lang: String,
+        runId: String?,
     ): String {
         val bitmap =
             BitmapFactory.decodeByteArray(png, 0, png.size)

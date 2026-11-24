@@ -29,6 +29,7 @@ import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.NumericField
 import dev.npn.app.ui.common.RadioRow
 import dev.npn.app.ui.common.SwitchRow
+import dev.npn.core.ai.AiRunEstimate
 import dev.npn.core.ai.AiTagging
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.aiedit.EditScope
@@ -92,6 +93,7 @@ internal fun AiEditSetup(
     ui: AiEditUiState,
     preview: ScopePreview,
     plan: RunPlan,
+    estimate: AiRunEstimate?,
     blocker: StartBlocker?,
     setup: AiEditSetupActions,
     content: DocContentFacade,
@@ -126,7 +128,7 @@ internal fun AiEditSetup(
                 }
             }
         }
-        RunBar(ui = ui, plan = plan, blocker = blocker, onStart = setup::start)
+        RunBar(ui = ui, plan = plan, estimate = estimate, blocker = blocker, onStart = setup::start)
     }
 }
 
