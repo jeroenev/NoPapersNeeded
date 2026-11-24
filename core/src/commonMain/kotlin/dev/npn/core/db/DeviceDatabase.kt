@@ -5,7 +5,10 @@ import androidx.room3.ConstructedBy
 import androidx.room3.Database
 import androidx.room3.RoomDatabase
 import androidx.room3.RoomDatabaseConstructor
+import androidx.room3.migration.AutoMigrationSpec
+import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import androidx.sqlite.execSQL
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 
@@ -24,19 +27,21 @@ import kotlinx.coroutines.Dispatchers
  *   for ([OcrQueueDao]);
  * - what the cloud sync last established about each file on its remote ([SyncRemoteDao]);
  * - how far this device has read each mail folder ([MailCursorDao]);
- * - the reminders this device already showed ([ReminderNotificationDao]).
+ * - the reminders this device already showed ([ReminderNotificationDao]);
+ * - the AI spend ledger, never synced and never carrying a prompt ([AiUsageDao]).
  *
  * Rows are keyed by document hash, which a rebuilt index gives the same documents again.
  */
 @Database(
     // v2: adds sync_remote_entries (what the cloud sync engine last knew about each remote file).
-    // v3: adds mail_cursor (how far this device has read each IMAP folder) and
-    // reminder_notifications (the reminders this device already showed).
+    // v3: adds mail_cursor (how far this device has read each IMAP folder),
+    // reminder_notifications (the reminders this device already showed) and ai_usage (the
+    // device-local AI spend ledger), plus queued edit request reservations across restarts.
     version = 3,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
-        AutoMigration(from = 2, to = 3),
+        AutoMigration(from = 2, to = 3, spec = DeviceDatabase.BackfillRequestReservations::class),
     ],
     entities = [
         KeyValueEntity::class,
@@ -49,6 +54,7 @@ import kotlinx.coroutines.Dispatchers
         SyncRemoteEntryEntity::class,
         MailCursorEntity::class,
         ReminderNotificationEntity::class,
+        AiUsageEntity::class,
     ],
 )
 @ConstructedBy(DeviceDatabaseConstructor::class)
@@ -66,6 +72,18 @@ abstract class DeviceDatabase : RoomDatabase() {
     abstract fun mailCursorDao(): MailCursorDao
 
     abstract fun reminderNotificationDao(): ReminderNotificationDao
+
+    abstract fun aiUsageDao(): AiUsageDao
+
+    /** Preserve the calls still visible in the old ledger when upgrading an unfinished run. */
+    class BackfillRequestReservations : AutoMigrationSpec {
+        override suspend fun onPostMigrate(connection: SQLiteConnection) {
+            connection.execSQL(
+                "UPDATE ai_edit_jobs SET requestsUsed = " +
+                    "(SELECT COUNT(*) FROM ai_usage WHERE ai_usage.runId = ai_edit_jobs.jobId)",
+            )
+        }
+    }
 
     companion object {
         /**

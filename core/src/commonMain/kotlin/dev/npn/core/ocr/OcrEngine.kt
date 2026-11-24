@@ -29,9 +29,15 @@ interface OcrEngine {
      */
     suspend fun languagesFor(lang: String): String = lang
 
-    /** Recognize text in a PNG image for [lang] (e.g. "eng"). Returns the recognized text. */
+    /**
+     * Recognize text in a PNG image for [lang] (e.g. "eng"). Returns the recognized text.
+     *
+     * [runId] names the run this page belongs to for the spend ledger, when the caller has one (the
+     * OCR pipeline passes the document hash). A plain local engine ignores it.
+     */
     suspend fun recognizePng(
         png: ByteArray,
         lang: String,
+        runId: String? = null,
     ): String
 }

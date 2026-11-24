@@ -178,6 +178,8 @@ data class AiEditJobEntity(
     /** Epoch millis before which this job must not be worked on again (exponential backoff). */
     val nextAttemptAt: Long,
     val lastError: String? = null,
+    /** Requests reserved before dispatch, independent of the resettable spend ledger. */
+    @androidx.room3.ColumnInfo(defaultValue = "0") val requestsUsed: Int = 0,
 )
 
 /**
@@ -221,6 +223,37 @@ data class ReminderNotificationEntity(
     /** The due date the reminder was for, canonical `yyyy-MM-dd`. */
     val dueDate: String,
     val notifiedAt: Long,
+)
+
+/**
+ * One AI request this device paid for, in [DeviceDatabase]. Device-local by nature: another
+ * replica's endpoint, prices and currency are its own, so the ledger is never synced. It carries no
+ * prompt or document text, only which provider and model answered, what kind of work it was, the
+ * token usage (reported or estimated), the estimated cost and the run it belonged to.
+ */
+@Entity(
+    tableName = "ai_usage",
+    indices = [
+        Index(value = ["recordedAt"]),
+        Index(value = ["runId"]),
+    ],
+)
+data class AiUsageEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    /** The [dev.npn.core.ai.AiProvider] name, so a renamed product still reads back. */
+    val provider: String,
+    val model: String,
+    /** An [dev.npn.core.ai.AiUsageKind] name. */
+    val kind: String,
+    val inputTokens: Long? = null,
+    val outputTokens: Long? = null,
+    /** US dollars from [dev.npn.core.ai.AiPricing]; null when the model has no known price. */
+    val estimatedCostUsd: Double? = null,
+    /** True when a token count is this device's estimate, not the provider's usage report. */
+    val estimated: Boolean = false,
+    val recordedAt: Long,
+    /** The bulk run, queued job or other run id this request belongs to; null for a one-off. */
+    val runId: String? = null,
 )
 
 /**

@@ -39,6 +39,7 @@ class FakeLibrarySession : LibrarySession {
     override val maintenance = FakeMaintenanceFacade()
     override val work = FakeWorkFacade()
     override val aiEditQueue = FakeAiEditQueue()
+    override val aiSpend = FakeAiSpendFacade()
     override val sync = FakeSyncFacade()
     override val mail = FakeMailFacade()
     override var log: NpnLog = NpnLog.None

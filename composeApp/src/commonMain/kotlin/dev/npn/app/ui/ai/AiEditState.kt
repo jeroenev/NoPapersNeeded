@@ -2,6 +2,7 @@ package dev.npn.app.ui.ai
 
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiFieldMode
+import dev.npn.core.ai.AiRunCap
 import dev.npn.core.ai.AiTagging
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.SavedView
@@ -40,23 +41,21 @@ data class RunPlan(
     val requests: Int,
     val background: Boolean,
     val loaded: Boolean,
+    /** The configured per-run request cap the confirmation shows. */
+    val requestCap: Int = AiRunCap.DEFAULT,
 ) {
-    /** Whether the run is big enough that Start should ask first. */
-    val needsConfirmation: Boolean get() = requests > CONFIRM_ABOVE_REQUESTS
+    /** Whether Start should ask first: a run of more than one request, or one over its cap. */
+    val needsConfirmation: Boolean get() = requests > CONFIRM_ABOVE_REQUESTS || requests > requestCap
 
     companion object {
         val EMPTY = RunPlan(documents = 0, requests = 0, background = false, loaded = false)
 
         /**
-         * Above this many model calls, Start asks for confirmation.
-         *
-         * Deliberately well above [AiEditLimits.BACKGROUND_THRESHOLD_DOCS]: that threshold answers
-         * "should a person wait for this", which is true of runs far too small to be worth a
-         * dialog. This one answers "is this a bulk commitment of the user's money" — a scope
-         * picked by filter can be the whole library, and "All documents" is one tap away from the
-         * scope they meant.
+         * Above this many model calls, Start asks for confirmation before spending. One request is
+         * a single-document run whose cost the user just chose; anything larger is a bulk
+         * commitment, and the dialog spells out the scope, tokens, cost and cap.
          */
-        const val CONFIRM_ABOVE_REQUESTS = 50
+        const val CONFIRM_ABOVE_REQUESTS = 1
     }
 }
 

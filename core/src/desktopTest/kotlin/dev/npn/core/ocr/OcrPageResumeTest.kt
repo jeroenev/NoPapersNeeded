@@ -167,6 +167,7 @@ private class PageCountingEngine(
     override suspend fun recognizePng(
         png: ByteArray,
         lang: String,
+        runId: String?,
     ): String {
         calls++
         if (calls == failOnCall) throw IOException("429 Too Many Requests")

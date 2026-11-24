@@ -1,5 +1,6 @@
 package dev.npn.core.db
 
+import androidx.sqlite.execSQL
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
@@ -43,6 +44,27 @@ class DeviceDatabaseSchemaTest {
                 } finally {
                     db.close()
                 }
+            }
+        }
+
+    @Test
+    fun migrationPreservesKnownQueuedRequestCount() =
+        runTest {
+            val file = File(dir, "device-v3.db")
+            createFromSchema(file, 3, database = DATABASE) { connection ->
+                connection.execSQL(
+                    "INSERT INTO ai_edit_jobs VALUES ('job', '{}', 0, 0, 0, 0, NULL)",
+                )
+                connection.execSQL(
+                    "INSERT INTO ai_usage (provider, model, kind, estimated, recordedAt, runId) " +
+                        "VALUES ('p', 'm', 'SUGGEST', 1, 0, 'job')",
+                )
+            }
+            val db = deviceDatabase(file)
+            try {
+                db.aiEditJobDao().job("job")?.requestsUsed shouldBe 1
+            } finally {
+                db.close()
             }
         }
 

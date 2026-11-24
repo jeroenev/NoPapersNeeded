@@ -451,6 +451,7 @@ private fun OcrPipelineRig.askingForAiOnItsFirstPage(
         override suspend fun recognizePng(
             png: ByteArray,
             lang: String,
+            runId: String?,
         ): String {
             if (engine.calls == 0) askForAi(docId)
             return engine.recognizePng(png, lang)

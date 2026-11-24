@@ -14,6 +14,25 @@ import kotlin.test.Test
 
 class AiEditQueueFailureTest {
     @Test
+    fun failedCallConsumesBudgetAcrossRestartAndLedgerReset() =
+        runTest {
+            withQueue { rig ->
+                rig.config = rig.config.copy(maxRunRequests = 1)
+                rig.ai.failWith = { error("endpoint down") }
+                val jobId = rig.enqueue("a", "b")
+                rig.queue.processNext() shouldBe false
+                rig.job(jobId).shouldNotBeNull().requestsUsed shouldBe 1
+                rig.db.aiUsageDao().deleteAll()
+                rig.clock.advance(OUTAGE_STEP_MS)
+                val restarted = rig.newQueue()
+                restarted.processNext() shouldBe true
+                restarted.processNext() shouldBe false
+                rig.ai.suggestEditsCalls shouldHaveSize 1
+                rig.rows(jobId).all { it.failed } shouldBe true
+            }
+        }
+
+    @Test
     fun aWholeFailedChunkIsSystemicTheRunBacksOffAndNoDocumentIsCharged() =
         runTest {
             withQueue { rig ->

@@ -11,6 +11,7 @@ import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiFieldConfig
 import dev.npn.core.ai.AiFieldMode
+import dev.npn.core.ai.AiRunEstimate
 import dev.npn.core.ai.AiTagging
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.aiedit.AiEditRun
@@ -23,6 +24,7 @@ import dev.npn.core.app.aiedit.ScopeKey
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.settings.SettingsRepository
+import dev.npn.core.settings.toAiConfig
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -34,6 +36,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.updateAndGet
@@ -47,6 +51,7 @@ import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_fields_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_tags_failed
+import no_papers_needed.composeapp.generated.resources.ai_edit_cap_reached
 import no_papers_needed.composeapp.generated.resources.ai_edit_more_remain_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_queue_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_setup_load_failed
@@ -162,7 +167,9 @@ class AiEditViewModel(
     /** What the screen's back-stack entry saves for a restored process; a new one opens it afresh. */
     private val saved: SavedStateHandle = SavedStateHandle(),
     /** The run this page drives, over the documents handed to it. */
-    editRun: (handedOver: List<String>) -> AiEditRun = { AiEditRun(session, it) },
+    editRun: (handedOver: List<String>) -> AiEditRun = {
+        AiEditRun(session, it, readConfig = { settings.settings.value.toAiConfig() })
+    },
 ) : ReviewViewModel(session.meta, session.documents),
     AiEditSetupActions {
     private val editQueue = session.aiEditQueue
@@ -170,6 +177,8 @@ class AiEditViewModel(
     private val fieldRegistry = session.fieldRegistry
     private val reviewConfig = session.reviewConfig
     private val savedViewRepository = session.savedViews
+    private val spend = session.aiSpend
+    private val deviceSettings = settings
 
     private val handed = handedOver(saved, selection)
     private val edit = editRun(handed)
@@ -260,7 +269,7 @@ class AiEditViewModel(
      * count when the run actually begins.
      */
     val plan: StateFlow<RunPlan> =
-        combine(_ui, preview) { state, p ->
+        combine(_ui, preview, deviceSettings.settings) { state, p, snapshot ->
             val background = state.runsInBackground(p.total)
             RunPlan(
                 documents = p.total,
@@ -268,8 +277,27 @@ class AiEditViewModel(
                 requests = if (background) p.total else minOf(p.total, state.batchSize),
                 background = background,
                 loaded = p.loaded,
+                requestCap = snapshot.toAiConfig().maxRunRequests,
             )
         }.stateIn(viewModelScope, WhileSubscribedTimeout, RunPlan.EMPTY)
+
+    /**
+     * What the confirmation shows for the current scope's next Start. Read from the preview batch
+     * and scaled to the whole scope for a background run, so opening the page never reads text of
+     * a library-wide scope. Null until a batch is known.
+     */
+    val estimate: StateFlow<AiRunEstimate?> =
+        combine(_ui, preview, plan) { state, p, plan -> Triple(state, p, plan) }
+            .flatMapLatest { (state, p, plan) ->
+                if (p.batch.isEmpty()) {
+                    flowOf<AiRunEstimate?>(null)
+                } else {
+                    flow<AiRunEstimate?> {
+                        val base = spend.estimateSuggest(p.batch.map { it.doc.docId }, buildRequest(state))
+                        emit(if (plan.background) base.scaledTo(plan.requests) else base)
+                    }
+                }
+            }.stateIn(viewModelScope, WhileSubscribedTimeout, null)
 
     /** Why Start is inert, or null when the run is ready; see [AiEditUiState.startBlocker]. */
     val startBlocker: StateFlow<StartBlocker?> =
@@ -506,14 +534,20 @@ class AiEditViewModel(
                         uiText(Res.plurals.ai_edit_suggest_failed, result.total, result.failures, result.total),
                     )
                 }
-                updateUi { it.copy(phase = EditPhase.Review(ReviewBatchState(result.docs, result.emptyDocs))) }
+                if (result.capReached) {
+                    message(uiText(Res.string.ai_edit_cap_reached, plan.value.requestCap, result.skipped))
+                }
+                if (result.capReached && result.docs.isEmpty() && result.emptyDocs.isEmpty()) {
+                    updateUi { it.copy(phase = EditPhase.Done(ApplyResult(0, 0, moreRemain = false))) }
+                } else {
+                    updateUi { it.copy(phase = EditPhase.Review(ReviewBatchState(result.docs, result.emptyDocs))) }
+                }
             }
         }
     }
 
-    private fun buildRequest(): AiEditRequest {
-        val state = _ui.value
-        return AiEditRequest(
+    private fun buildRequest(state: AiEditUiState = _ui.value): AiEditRequest =
+        AiEditRequest(
             fields = state.enabledFieldKeys().map { key -> AiFieldConfig(key, state.fieldOptions.getValue(key).mode) },
             tags = state.includeTags,
             tagRemovals = state.includeTagRemovals,
@@ -522,7 +556,6 @@ class AiEditViewModel(
             maxNewTags = if (state.allowNewTags) state.maxNewTags else 0,
             customPrompt = state.customPrompt.ifBlank { null },
         )
-    }
 
     /**
      * Leave Review without writing anything more: jump straight to Done with what earlier Apply

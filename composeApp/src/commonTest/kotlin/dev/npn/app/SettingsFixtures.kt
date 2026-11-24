@@ -91,6 +91,8 @@ internal open class NoSettingsPaneActions : SettingsPaneActions {
 
     override fun clearThumbnailCache() = Unit
 
+    override fun resetAiSpend() = Unit
+
     override fun probeTransport() = Unit
 
     override fun reportProblem() = Unit

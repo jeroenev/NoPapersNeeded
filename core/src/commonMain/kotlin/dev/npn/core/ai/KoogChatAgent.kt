@@ -11,6 +11,7 @@ import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.executor.model.PromptExecutor
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.message.Message
+import ai.koog.prompt.message.ResponseMetaInfo
 import ai.koog.prompt.params.LLMParams
 import ai.koog.prompt.streaming.StreamFrame
 import ai.koog.prompt.streaming.toMessageResponse
@@ -23,6 +24,13 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.serialization.json.JsonObject
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
+
+/** One streamed chat turn's usage: the provider's report plus prompt/answer sizes for an estimate. */
+internal data class ChatUsageInfo(
+    val metaInfo: ResponseMetaInfo,
+    val promptChars: Int,
+    val answerChars: Int,
+)
 
 /** Koog-backed streaming chat agent. The functional strategy keeps the app's plain-text answers. */
 internal class KoogChatAgent(
@@ -37,9 +45,11 @@ internal class KoogChatAgent(
 ) {
     private val toolRegistry = ToolRegistry { toolSet.tools.forEach(::tool) }
 
+    @Suppress("LongMethod") // The turn loop's mutable state (answer, frames, calls) is shared by every branch.
     fun run(
         question: String,
         conversationId: String,
+        onUsage: suspend (ChatUsageInfo) -> Unit = {},
     ): Flow<AiChatEvent> =
         channelFlow {
             val basePrompt = prompt("npn-chat", params ?: LLMParams()) { system(systemPrompt) }
@@ -81,6 +91,17 @@ internal class KoogChatAgent(
                                             responseFrames += frame.withSafeArguments(call)
                                             calls += call
                                         }
+                                    }
+
+                                    is StreamFrame.End -> {
+                                        onUsage(
+                                            ChatUsageInfo(
+                                                metaInfo = frame.metaInfo,
+                                                promptChars = prompt.messages.sumOf { it.textContent().length },
+                                                answerChars = turnText.length,
+                                            ),
+                                        )
+                                        responseFrames += frame
                                     }
 
                                     else -> {

@@ -156,7 +156,14 @@ internal class AiAutoEnricher(
         request: AiEditRequest,
     ): Boolean {
         val suggestion =
-            runCatchingCancellable { ai.suggestEdits(entry.docId, request) }.getOrElse { cause ->
+            runCatchingCancellable {
+                ai.suggestEdits(
+                    entry.docId,
+                    request,
+                    runId = "enrich:${entry.docId}",
+                    kind = dev.npn.core.ai.AiUsageKind.ENRICHMENT,
+                )
+            }.getOrElse { cause ->
                 reschedule(entry, cause)
                 health.failed(clock.nowMillis())
                 return false

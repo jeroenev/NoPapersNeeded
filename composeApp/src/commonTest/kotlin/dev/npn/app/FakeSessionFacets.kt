@@ -1,8 +1,11 @@
 package dev.npn.app
 
 import dev.npn.core.ai.AiEditRequest
+import dev.npn.core.ai.AiRunEstimate
+import dev.npn.core.ai.AiSpendSummary
 import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.AiOcrOutcome
+import dev.npn.core.app.AiSpendFacade
 import dev.npn.core.app.ImportOutcome
 import dev.npn.core.app.IngestFacade
 import dev.npn.core.app.LibraryDiagnostics
@@ -59,6 +62,44 @@ import kotlinx.datetime.LocalTime
 // Test doubles for the session's own facets: ingest, OCR ops, review config, storage path,
 // maintenance and work.
 // Flows are public MutableStateFlows so tests can push emissions; calls are recorded in lists.
+
+/** The device-local spend ledger and run estimates; defaults to empty totals and a tiny estimate. */
+class FakeAiSpendFacade : AiSpendFacade {
+    val summaryFlow = MutableStateFlow(AiSpendSummary.EMPTY)
+    override val summary: Flow<AiSpendSummary> get() = summaryFlow
+
+    /** What [estimateSuggest] and [estimateOcr] answer, scaled per request by the caller. */
+    var estimate: AiRunEstimate =
+        AiRunEstimate(
+            documents = 1,
+            requests = 1,
+            pages = 0,
+            inputTokens = 1_000,
+            outputTokens = 200,
+            estimatedCostUsd = 0.001,
+            priceKnown = true,
+            requestCap = 200,
+        )
+
+    var resets = 0
+        private set
+
+    override suspend fun reset() {
+        resets++
+        summaryFlow.value = AiSpendSummary.EMPTY
+    }
+
+    override suspend fun estimateSuggest(
+        docIds: List<String>,
+        request: AiEditRequest,
+    ): AiRunEstimate = estimate.copy(documents = docIds.size, requests = docIds.size)
+
+    override suspend fun estimateOcrForPages(pages: Int): AiRunEstimate =
+        estimate.copy(documents = 1, requests = pages, pages = pages)
+
+    override suspend fun estimateOcr(docIds: List<String>): AiRunEstimate =
+        estimate.copy(documents = docIds.size, requests = docIds.size)
+}
 
 /** Imports and rescans. [FakeIngestFacade.importOutcomes] is consumed in order, repeating the last. */
 class FakeIngestFacade : IngestFacade {

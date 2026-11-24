@@ -387,10 +387,11 @@ internal class OcrPipeline(
                     pages.add(embedded)
                 } else {
                     val text =
-                        read[i] ?: engine.recognizePng(handle.renderPagePng(i, RENDER_DIM), lang).also {
-                            // Kept until the run publishes: a later page failing must not cost this one again.
-                            ocrQueueDao.cachePage(OcrPageCacheEntity(doc.docId, engine.name, lang, i, it))
-                        }
+                        read[i]
+                            ?: engine.recognizePng(handle.renderPagePng(i, RENDER_DIM), lang, runId = doc.docId).also {
+                                // Kept until the run publishes: a later page failing must not cost this one again.
+                                ocrQueueDao.cachePage(OcrPageCacheEntity(doc.docId, engine.name, lang, i, it))
+                            }
                     pages.add(text)
                     usedOcr = true
                 }

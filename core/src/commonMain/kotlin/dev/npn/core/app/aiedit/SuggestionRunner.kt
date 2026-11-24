@@ -3,6 +3,7 @@ package dev.npn.core.app.aiedit
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiEditSuggestion
 import dev.npn.core.ai.AiFacadeImpl
+import dev.npn.core.ai.AiRunBudget
 import dev.npn.core.ai.AiSuggest
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.async
@@ -13,6 +14,27 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 
+/** One document that was actually asked about, and what came back. */
+data class SuggestedOutcome<R>(
+    val index: Int,
+    val outcome: Result<R>,
+)
+
+/**
+ * What a runner's call bought. [outcomes] covers only the documents that were asked about;
+ * [capReached] says the run's [AiRunBudget] stopped the rest, and [requests] is how many calls were
+ * made (equal to [outcomes]' size).
+ */
+data class SuggestionOutcomes<R>(
+    val outcomes: List<SuggestedOutcome<R>>,
+    val capReached: Boolean,
+) {
+    val requests: Int get() = outcomes.size
+
+    /** Documents the budget left unasked. */
+    fun skipped(documents: Int): Int = documents - outcomes.size
+}
+
 /**
  * One [AiSuggest.suggestEdits] call per document, at most [CONCURRENCY] of one run's documents at
  * once. Used by the interactive [AiEditRun] and the queued [AiEditQueue].
@@ -22,6 +44,10 @@ import kotlinx.coroutines.sync.withPermit
  * endpoint; the AI facade does that, for every asking path together
  * ([AiFacadeImpl.MAX_CONCURRENT_SUGGESTIONS]). The queue asks about chunks of exactly
  * [CONCURRENCY] documents, so on its path the slots never make a call wait.
+ *
+ * [budget] is the run's per-run request cap. A slot is taken before each call, so concurrent calls
+ * cannot overshoot it; the documents it leaves unasked are reported through
+ * [SuggestionOutcomes.capReached] rather than as failures.
  */
 internal class SuggestionRunner(
     private val ai: AiSuggest,
@@ -35,23 +61,36 @@ internal class SuggestionRunner(
     suspend fun <R> suggest(
         docIds: List<String>,
         request: AiEditRequest,
+        runId: String? = null,
+        budget: AiRunBudget? = null,
         onEach: (index: Int, outcome: Result<R>) -> Unit = { _, _ -> },
         then: suspend (index: Int, suggestion: AiEditSuggestion) -> R,
-    ): List<Result<R>> {
+    ): SuggestionOutcomes<R> {
         val slots = Semaphore(CONCURRENCY)
         val finishing = Mutex()
-        return coroutineScope {
-            docIds
-                .mapIndexed { index, docId ->
-                    async {
-                        slots.withPermit {
-                            val outcome = runCatchingCancellable { then(index, ai.suggestEdits(docId, request)) }
-                            finishing.withLock { onEach(index, outcome) }
-                            outcome
+        var skipped = 0
+        val outcomes =
+            coroutineScope {
+                docIds
+                    .mapIndexed { index, docId ->
+                        async {
+                            slots.withPermit {
+                                if (budget != null && !budget.tryAcquire()) {
+                                    finishing.withLock { skipped++ }
+                                    return@withPermit null
+                                }
+                                val outcome =
+                                    runCatchingCancellable {
+                                        then(index, ai.suggestEdits(docId, request, runId))
+                                    }
+                                finishing.withLock { onEach(index, outcome) }
+                                SuggestedOutcome(index, outcome)
+                            }
                         }
-                    }
-                }.awaitAll()
-        }
+                    }.awaitAll()
+                    .filterNotNull()
+            }
+        return SuggestionOutcomes(outcomes, capReached = skipped > 0)
     }
 
     companion object {

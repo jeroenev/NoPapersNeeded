@@ -33,6 +33,7 @@ interface LibrarySession {
     val maintenance: MaintenanceFacade
     val work: WorkFacade
     val aiEditQueue: AiEditQueueFacade
+    val aiSpend: AiSpendFacade
     val sync: SyncFacade
     val mail: MailFacade
 

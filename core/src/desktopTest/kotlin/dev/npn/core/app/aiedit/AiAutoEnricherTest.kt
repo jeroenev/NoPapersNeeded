@@ -212,6 +212,7 @@ class AiAutoEnricherTest {
                 rig.drain()
 
                 rig.ai.suggestEditsCalls shouldContainExactly listOf("d1")
+                rig.ai.suggestEditsKinds shouldContainExactly listOf(dev.npn.core.ai.AiUsageKind.ENRICHMENT)
                 val request = rig.ai.suggestEditsRequests.single()
                 request.tags shouldBe true
                 // No removals: nothing reviews this pass, so it must not undo a rule or a user.

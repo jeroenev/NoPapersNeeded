@@ -88,6 +88,7 @@ internal class LibrarySessionImpl(
     override val reminders: RemindersFacade = graph.reminders
     override val maintenance: MaintenanceFacade = graph.maintenance
     override val aiEditQueue: AiEditQueueFacade = graph.edits.queue
+    override val aiSpend: AiSpendFacade = graph.aiSpend
 
     /** The trash auto-purge, run after each [backgroundRescan]. */
     internal val trashPurge: TrashPurge = graph.trashPurge

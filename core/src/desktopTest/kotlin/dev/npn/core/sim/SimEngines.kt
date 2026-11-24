@@ -168,6 +168,7 @@ class GatedOcrEngine(
     override suspend fun recognizePng(
         png: ByteArray,
         lang: String,
+        runId: String?,
     ): String {
         if (!gateOpen) {
             val turn = CompletableDeferred<Unit>()

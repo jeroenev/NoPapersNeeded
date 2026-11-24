@@ -1,5 +1,6 @@
 package dev.npn.core.app
 
+import dev.npn.core.ai.AiRunEstimate
 import dev.npn.core.ocr.OcrEngineRef
 import kotlinx.coroutines.flow.Flow
 
@@ -105,6 +106,8 @@ sealed interface AiOcrOffer {
      */
     data class Large(
         val pages: Int,
+        /** What the pages would cost, when the caller wants to show it (null if unknown). */
+        val estimate: AiRunEstimate? = null,
     ) : AiOcrOffer
 }
 
