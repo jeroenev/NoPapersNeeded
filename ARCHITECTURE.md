@@ -770,9 +770,11 @@ Kept by `core.security` (`AppLock`, `LockCrypto`), `SettingsCodec` and `composeA
   one check). `LockCrypto.verify` compares in constant time.
 - `AppLock` starts locked whenever the setting is on, which is what a cold start shows. Returning
   from the background locks once the elapsed time reaches the chosen `LockTimeout`
-  (`IMMEDIATELY` = any return). Android drives background/foreground from the activity's
-  `onStart`/`onStop` (a configuration change is not background), and keeps the locked window out
-  of screenshots with `FLAG_SECURE`. Desktop treats a minimized window as background and also
+  (`IMMEDIATELY` = any return). Android starts the timeout in `onStop` only when the user left
+  (`onUserLeaveHint`: Home, Recents) or the screen is off, so the scanner, a picker or the share
+  sheet the app opens is not leaving it; `onStart` checks the time away. Time spent in such an
+  activity is therefore not counted, even if the user leaves from there. A configuration change is
+  not background. The locked window is kept out of screenshots with `FLAG_SECURE`. Desktop treats a minimized window as background and also
   locks after the chosen interval without keyboard or pointer input; `IMMEDIATELY` only acts on
   minimizing there.
 - Wrong secrets back off (`LockBackoff`: three free attempts, then 5 s, 15 s, 1 min, 5 min), and

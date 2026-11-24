@@ -13,7 +13,7 @@
     <string name="security_not_encrypted">The app lock hides the app, but it does not encrypt the library folder. Anyone who can open the files can read them.</string>
     <string name="security_recovery_title">If you forget your PIN</string>
     <string name="security_recovery_desktop">Close the app and delete the app-lock entries from %1$s, or delete that file to reset all settings.</string>
-    <string name="security_recovery_android">If you forget your PIN, unlock with this device’s biometrics or screen lock. If neither is available, clearing the app’s data removes the lock, along with this device’s settings.</string>
+    <string name="security_recovery_android">If you forget your PIN, unlock with this device’s biometrics or screen lock. If neither is available, clearing the app’s data removes the lock, and with it everything the app keeps only on this device: its settings, assistant chats, cloud connection and changes not yet synced to the cloud. A library folder in this device’s storage is kept.</string>
     <string name="security_device_help">You can also unlock with this device’s biometrics or screen lock.</string>
     <string name="security_pin">PIN</string>
     <string name="security_pin_confirm">Confirm PIN</string>

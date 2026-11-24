@@ -13,7 +13,7 @@
     <string name="security_not_encrypted">O bloqueio oculta a aplicação, mas não cifra a pasta da biblioteca. Quem conseguir abrir os ficheiros pode lê-los.</string>
     <string name="security_recovery_title">Se esqueceres o PIN</string>
     <string name="security_recovery_desktop">Fecha a aplicação e apaga as entradas do bloqueio em %1$s, ou apaga esse ficheiro para repor todas as definições.</string>
-    <string name="security_recovery_android">Se esqueceres o PIN, desbloqueia com a biometria ou o bloqueio de ecrã do dispositivo. Se nenhum estiver disponível, limpar os dados da aplicação remove o bloqueio, juntamente com as definições deste dispositivo.</string>
+    <string name="security_recovery_android">Se esqueceres o PIN, desbloqueia com a biometria ou o bloqueio de ecrã do dispositivo. Se nenhum estiver disponível, limpar os dados da aplicação remove o bloqueio e, com ele, tudo o que a aplicação guarda apenas neste dispositivo: as definições, as conversas com o assistente, a ligação à nuvem e as alterações ainda não sincronizadas com a nuvem. Uma pasta de biblioteca no armazenamento do dispositivo é mantida.</string>
     <string name="security_device_help">Também podes desbloquear com a biometria ou o bloqueio de ecrã deste dispositivo.</string>
     <string name="security_pin">PIN</string>
     <string name="security_pin_confirm">Confirmar PIN</string>

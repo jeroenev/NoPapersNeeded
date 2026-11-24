@@ -38,5 +38,7 @@ Recovery, so a forgotten PIN never locks a user out of their own files:
   among the allowed authenticators.
 - On desktop, close the app and delete the `appLock*` entries from `settings.properties` (or the
   file, which resets every device setting), as the Security pane and the lock screen say.
-- On Android, clearing the app's data removes the lock along with this device's settings; the
-  library folder and its journal are untouched.
+- On Android, clearing the app's data removes the lock along with everything the app keeps only
+  on this device: its settings, `device.db` (assistant chats, queues), the cloud connection, and a
+  cloud library's working copy, so changes not yet synced are lost. A library folder in shared
+  storage, and its journal, are untouched.
