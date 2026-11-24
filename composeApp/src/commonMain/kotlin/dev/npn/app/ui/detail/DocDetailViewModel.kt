@@ -1,6 +1,10 @@
 package dev.npn.app.ui.detail
 
 import androidx.lifecycle.viewModelScope
+import dev.npn.app.platform.PdfPrinter
+import dev.npn.app.platform.PrintFailure
+import dev.npn.app.platform.PrintOutcome
+import dev.npn.app.platform.printPdf
 import dev.npn.app.ui.common.MessageSink
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiMessage
@@ -29,8 +33,10 @@ import dev.npn.core.ocr.OcrEngineRef
 import dev.npn.core.ocr.OcrState
 import dev.npn.core.settings.SettingsRepository
 import dev.npn.core.settings.aiConfigured
+import dev.npn.core.util.NpnLog
 import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
+import dev.npn.core.util.warn
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -71,6 +77,13 @@ import no_papers_needed.composeapp.generated.resources.detail_moved_to_trash
 import no_papers_needed.composeapp.generated.resources.detail_moved_to_trash_untitled
 import no_papers_needed.composeapp.generated.resources.detail_ocr_details_failed
 import no_papers_needed.composeapp.generated.resources.detail_ocr_engine_failed
+import no_papers_needed.composeapp.generated.resources.detail_print_cancelled
+import no_papers_needed.composeapp.generated.resources.detail_print_failed
+import no_papers_needed.composeapp.generated.resources.detail_print_failed_job
+import no_papers_needed.composeapp.generated.resources.detail_print_failed_unavailable
+import no_papers_needed.composeapp.generated.resources.detail_print_failed_unreadable
+import no_papers_needed.composeapp.generated.resources.detail_print_failed_unsupported
+import no_papers_needed.composeapp.generated.resources.detail_print_started
 import no_papers_needed.composeapp.generated.resources.detail_remove_tag_failed
 import no_papers_needed.composeapp.generated.resources.detail_rename_failed
 import no_papers_needed.composeapp.generated.resources.detail_rename_invalid
@@ -104,6 +117,8 @@ data class DetailUiState(
      * its length first. See [AiOcrOffer].
      */
     val aiOcr: AiOcrOffer = AiOcrOffer.Unavailable,
+    /** A print job is being prepared or handed to the platform's print service. */
+    val printing: Boolean = false,
     /** The document left the library from here (trashed, or split into new documents): the host closes. */
     val left: Boolean = false,
 )
@@ -159,6 +174,8 @@ class DocDetailViewModel private constructor(
     /** Where a result that outlives this document's screen is reported. */
     notices: DocumentNotices?,
     private val aiSuggestions: DocAiSuggestions = DocAiSuggestions(docId, session, scope, sink, metadataMutex),
+    /** How a print job reaches the platform; tests inject a recording fake. */
+    private val printer: PdfPrinter = PdfPrinter { fileName, bytes, pageCount -> printPdf(fileName, bytes, pageCount) },
 ) : MessagesViewModel(scope, sink),
     DocumentWrites,
     AiSuggestionActions by aiSuggestions,
@@ -186,6 +203,8 @@ class DocDetailViewModel private constructor(
          * and its Undo) once the screen is gone. Null reports it through this viewmodel's own messages.
          */
         notices: DocumentNotices? = null,
+        /** How a print job reaches the platform; tests inject a recording fake. */
+        printer: PdfPrinter = PdfPrinter { fileName, bytes, pageCount -> printPdf(fileName, bytes, pageCount) },
     ) : this(
         docId,
         session,
@@ -199,10 +218,16 @@ class DocDetailViewModel private constructor(
         initialPage,
         Mutex(),
         notices,
+        printer = printer,
     )
 
     /** The library's notices when given one, else this viewmodel's own messages. */
     private val notices: DocumentNotices = notices ?: DocumentNotices(scope, sink)
+
+    private val sessionLog: NpnLog = session.log
+
+    /** Refused writes and print failures leave their technical cause here, not in the sentence. */
+    override val log: NpnLog get() = sessionLog
 
     private val documents = session.documents
     private val meta = session.meta
@@ -613,6 +638,52 @@ class DocDetailViewModel private constructor(
         }
     }
 
+    private val printMutex = kotlinx.coroutines.sync.Mutex()
+
+    /**
+     * Send this document's library bytes to the platform's print service: no copy is baked and the
+     * file is untouched. A document whose bytes cannot be read, or that is not a PDF, says so rather
+     * than opening an empty print dialog; the menu disables the action in that case.
+     */
+    override fun printDocument() =
+        launchReporting(Res.string.detail_print_failed) {
+            if (!printMutex.tryLock()) return@launchReporting
+            try {
+                busy({ copy(printing = it) }) {
+                    val item = loadState.value.item
+                    if (item == null || !item.doc.isPrintable) {
+                        message(uiText(Res.string.detail_print_failed_unavailable))
+                        return@busy
+                    }
+                    val bytes = content.documentBytes(docId)
+                    if (bytes == null) {
+                        message(uiText(Res.string.detail_print_failed_unavailable))
+                        return@busy
+                    }
+                    val pageCount =
+                        _ui.value.pageCount.count
+                            .takeIf { it > 0 } ?: item.doc.pageCount
+                    val outcome = printer.print(item.doc.fileName, bytes, pageCount)
+                    when (outcome) {
+                        PrintOutcome.Started -> {
+                            message(uiText(Res.string.detail_print_started))
+                        }
+
+                        PrintOutcome.Cancelled -> {
+                            message(uiText(Res.string.detail_print_cancelled))
+                        }
+
+                        is PrintOutcome.Failed -> {
+                            outcome.cause?.let { log.warn("Printing $docId failed", it) }
+                            message(outcome.reason.text())
+                        }
+                    }
+                }
+            } finally {
+                printMutex.unlock()
+            }
+        }
+
     suspend fun renderPage(
         pageIndex: Int,
         maxDim: Int,
@@ -636,4 +707,11 @@ private fun SplitFailure.text(): UiText =
         SplitFailure.INVALID_PARTS -> uiText(Res.string.detail_split_failed_invalid_parts)
         SplitFailure.UNREADABLE_PDF -> uiText(Res.string.detail_split_failed_unreadable)
         SplitFailure.NOT_COMPLETED -> uiText(Res.string.detail_split_failed_not_completed)
+    }
+
+private fun PrintFailure.text(): UiText =
+    when (this) {
+        PrintFailure.UNSUPPORTED -> uiText(Res.string.detail_print_failed_unsupported)
+        PrintFailure.UNREADABLE_PDF -> uiText(Res.string.detail_print_failed_unreadable)
+        PrintFailure.PRINT_FAILED -> uiText(Res.string.detail_print_failed_job)
     }

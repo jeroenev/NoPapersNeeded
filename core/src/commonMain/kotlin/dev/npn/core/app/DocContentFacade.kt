@@ -16,6 +16,9 @@ interface DocContentFacade {
 
     suspend fun renderPage(docId: String, pageIndex: Int, maxDim: Int): ByteArray? // png
 
+    /** The document's library bytes, exactly as stored (never baked): what a print job sends. */
+    suspend fun documentBytes(docId: String): ByteArray?
+
     suspend fun bakedCopyBytes(docId: String): ByteArray? // export/share with XMP baked
 
     suspend fun bakeInPlace(docId: String): BakeOutcome // explicit user action; emits relink

@@ -1,0 +1,10 @@
+<resources>
+    <string name="detail_print">Print</string>
+    <string name="detail_print_started">Printing started</string>
+    <string name="detail_print_cancelled">Printing cancelled</string>
+    <string name="detail_print_failed">Could not print the document: %1$s</string>
+    <string name="detail_print_failed_unavailable">The document could not be read for printing</string>
+    <string name="detail_print_failed_unsupported">Printing is not available on this device</string>
+    <string name="detail_print_failed_unreadable">The document is not a readable PDF</string>
+    <string name="detail_print_failed_job">The printer refused the job</string>
+</resources>

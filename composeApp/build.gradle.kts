@@ -80,6 +80,8 @@ kotlin {
                 implementation(compose.desktop.currentOs)
                 // The environment tests query a library's databases to see that a swap closed them.
                 implementation(libs.room3.runtime)
+                // Generates the small PDF the desktop print tests turn into a printable.
+                implementation(libs.pdfbox)
             }
         }
         getByName("androidHostTest") {

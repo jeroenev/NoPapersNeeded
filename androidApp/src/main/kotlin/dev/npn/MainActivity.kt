@@ -15,6 +15,7 @@ import dev.npn.app.di.AppEnvironment
 import dev.npn.app.platform.ForegroundImport
 import dev.npn.app.platform.LaunchImports
 import dev.npn.app.platform.LocalDocumentScanner
+import dev.npn.app.platform.PrintActivity
 import dev.npn.app.platform.importIntoLibrary
 import dev.npn.core.app.ImportTally
 import dev.npn.core.util.AndroidLog
@@ -83,6 +84,7 @@ class MainActivity : ComponentActivity() {
      */
     override fun onResume() {
         super.onResume()
+        PrintActivity.resumed(this)
         val session = env.session.value ?: return
         val now = SystemClock.elapsedRealtime()
         if (now - lastResumeRescan < RESUME_RESCAN_MIN_INTERVAL_MS) return
@@ -114,6 +116,11 @@ class MainActivity : ComponentActivity() {
             // The import is reported; the OCR and enrichment it queued finish in the background.
             if (outcome is ForegroundImport.Done && outcome.result.imported > 0) NpnWork.drainQueues(app)
         }
+    }
+
+    override fun onPause() {
+        PrintActivity.paused(this)
+        super.onPause()
     }
 
     /**

@@ -1,5 +1,7 @@
 package dev.npn.app
 
+import dev.npn.app.platform.PdfPrinter
+import dev.npn.app.platform.PrintOutcome
 import dev.npn.app.ui.detail.DocDetailViewModel
 import kotlinx.coroutines.test.TestScope
 
@@ -10,7 +12,8 @@ internal fun docDetailVm(
     session: FakeLibrarySession = FakeLibrarySession(),
     docId: String = "doc-1",
     settings: FakeSettingsRepository = aiConfiguredSettings(),
-): DocDetailViewModel = DocDetailViewModel(docId, session, settings)
+    printer: PdfPrinter = PdfPrinter { _, _, _ -> PrintOutcome.Started },
+): DocDetailViewModel = DocDetailViewModel(docId, session, settings, printer = printer)
 
 /**
  * A [docDetailVm] with its panel state kept live for the whole test: [DocDetailViewModel.metadata]
@@ -20,7 +23,8 @@ internal fun TestScope.liveDocDetailVm(
     session: FakeLibrarySession = FakeLibrarySession(),
     docId: String = "doc-1",
     settings: FakeSettingsRepository = aiConfiguredSettings(),
+    printer: PdfPrinter = PdfPrinter { _, _, _ -> PrintOutcome.Started },
 ): DocDetailViewModel =
-    docDetailVm(session, docId, settings).also { model ->
+    docDetailVm(session, docId, settings, printer).also { model ->
         collecting(model.metadata)
     }

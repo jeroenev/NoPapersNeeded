@@ -1,0 +1,10 @@
+<resources>
+    <string name="detail_print">Imprimer</string>
+    <string name="detail_print_started">Impression lancée</string>
+    <string name="detail_print_cancelled">Impression annulée</string>
+    <string name="detail_print_failed">Impossible d’imprimer le document : %1$s</string>
+    <string name="detail_print_failed_unavailable">Impossible de lire le document pour l’impression</string>
+    <string name="detail_print_failed_unsupported">L’impression n’est pas disponible sur cet appareil</string>
+    <string name="detail_print_failed_unreadable">Le document n’est pas un PDF lisible</string>
+    <string name="detail_print_failed_job">L’imprimante a refusé le travail</string>
+</resources>

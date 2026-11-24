@@ -1,0 +1,10 @@
+<resources>
+    <string name="detail_print">Afdrukken</string>
+    <string name="detail_print_started">Afdrukken gestart</string>
+    <string name="detail_print_cancelled">Afdrukken geannuleerd</string>
+    <string name="detail_print_failed">Kan het document niet afdrukken: %1$s</string>
+    <string name="detail_print_failed_unavailable">Het document kon niet worden gelezen om af te drukken</string>
+    <string name="detail_print_failed_unsupported">Afdrukken is niet beschikbaar op dit apparaat</string>
+    <string name="detail_print_failed_unreadable">Het document is geen leesbare pdf</string>
+    <string name="detail_print_failed_job">De printer weigerde de opdracht</string>
+</resources>
