@@ -48,8 +48,8 @@ import org.jetbrains.compose.resources.stringResource
  *
  * Tags are created here, on the document, simply by typing a new name. When [onAddWithStyle] is
  * provided, a brand-new name additionally offers a "create with color" path so the style can be
- * chosen in the same gesture. There is no separate create-tag flow: unused tags are pruned
- * automatically, so a tag only exists while a document carries it.
+ * chosen in the same gesture. The Tags screen's "new tag" creates one no document carries yet; a
+ * tag nothing carries is pruned unless it has a style (see `TagAdmin.createTag`).
  */
 @Composable
 fun TagEditor(

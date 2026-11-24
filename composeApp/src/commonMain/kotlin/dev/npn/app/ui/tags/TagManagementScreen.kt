@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CallMerge
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
@@ -75,6 +76,7 @@ import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.TagInfo
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.automation_title
+import no_papers_needed.composeapp.generated.resources.common_create
 import no_papers_needed.composeapp.generated.resources.common_delete
 import no_papers_needed.composeapp.generated.resources.common_document_count
 import no_papers_needed.composeapp.generated.resources.common_rename
@@ -94,6 +96,7 @@ import no_papers_needed.composeapp.generated.resources.common_tags_merge_keep_me
 import no_papers_needed.composeapp.generated.resources.common_tags_merge_many_title
 import no_papers_needed.composeapp.generated.resources.common_tags_merge_title
 import no_papers_needed.composeapp.generated.resources.common_tags_namespace_only
+import no_papers_needed.composeapp.generated.resources.common_tags_new
 import no_papers_needed.composeapp.generated.resources.common_tags_new_name
 import no_papers_needed.composeapp.generated.resources.common_tags_rename_title
 import no_papers_needed.composeapp.generated.resources.common_tags_style_title
@@ -169,6 +172,11 @@ private fun TagListScaffold(
                 TopAppBar(
                     title = { Text(stringResource(Res.string.common_tags_title)) },
                     actions = {
+                        TooltipIconButton(
+                            Icons.Filled.Add,
+                            stringResource(Res.string.common_tags_new),
+                            onClick = { onOpen(TagDialog.Create) },
+                        )
                         TooltipIconButton(
                             Icons.Outlined.AutoMode,
                             stringResource(Res.string.automation_title),
@@ -273,6 +281,22 @@ private fun TagDialogHost(
     onDone: () -> Unit,
 ) {
     when (dialog) {
+        TagDialog.Create -> {
+            TagFormDialog(
+                title = stringResource(Res.string.common_tags_new),
+                initialName = "",
+                initialColor = null,
+                confirmLabel = stringResource(Res.string.common_create),
+                onConfirm = { name, color ->
+                    writes.create(name, color)
+                    onDone()
+                },
+                onDismiss = onClose,
+                // The style is what keeps a tag no document carries yet, so a new tag needs one.
+                requireColor = true,
+            )
+        }
+
         is TagDialog.Rename -> {
             TextInputDialog(
                 title = stringResource(Res.string.common_tags_rename_title),

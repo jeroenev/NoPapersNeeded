@@ -78,6 +78,8 @@ internal class OcrFacadeImpl(
             AiOcrOutcome.QUEUED
         }
 
+    override suspend fun anyEngineAvailable(): Boolean = engines.anyAvailable()
+
     override suspend fun ocrVersions(docId: String): List<OcrVersion> {
         val doc = documentDao.getByDocId(docId)
         return pipeline.listVersions(docId).map {

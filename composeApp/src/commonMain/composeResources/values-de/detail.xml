@@ -89,7 +89,7 @@
     <string name="detail_text_unavailable">Kein Text verfügbar.</string>
     <string name="detail_no_history">Noch keine Verlaufseinträge.</string>
     <string name="detail_history_load_failed">Der Verlauf konnte nicht geladen werden: %1$s</string>
-    <string name="detail_history_secondary">%1$s · Gerät %2$s</string>
+    <string name="detail_history_secondary">%1$s · %2$s</string>
     <string name="detail_ocr_not_processed">Nicht verarbeitet</string>
     <string name="detail_ocr_queued">In der Warteschlange</string>
     <string name="detail_ocr_done">Fertig</string>

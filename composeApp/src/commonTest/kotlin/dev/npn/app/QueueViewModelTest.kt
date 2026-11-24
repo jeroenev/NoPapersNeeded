@@ -28,7 +28,7 @@ class QueueViewModelTest : MainDispatcherTest() {
     fun retryRequeuesTheFailedDocumentThroughOcrFacade() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
-            val vm = QueueViewModel(session)
+            val vm = QueueViewModel(session, FakeSettingsRepository())
 
             vm.retry("failed-doc")
             advanceUntilIdle()
@@ -40,7 +40,7 @@ class QueueViewModelTest : MainDispatcherTest() {
     fun discardingAnEditRunDropsItQuietly() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
-            val vm = QueueViewModel(session)
+            val vm = QueueViewModel(session, FakeSettingsRepository())
             val messages = collecting(vm.messages.map { it.text })
 
             vm.discardEditRun("run")
@@ -56,7 +56,7 @@ class QueueViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             session.aiEditQueue.discardFailure = IllegalStateException("database is locked")
-            val vm = QueueViewModel(session)
+            val vm = QueueViewModel(session, FakeSettingsRepository())
             val messages = collecting(vm.messages.map { it.text })
 
             vm.discardEditRun("run")
@@ -71,7 +71,7 @@ class QueueViewModelTest : MainDispatcherTest() {
     fun theSyncRowShowsOnlyForALibraryWithACloudFolder() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
-            val vm = QueueViewModel(session)
+            val vm = QueueViewModel(session, FakeSettingsRepository())
             collecting(vm.sync)
             advanceUntilIdle()
             vm.sync.value shouldBe null
@@ -90,7 +90,7 @@ class QueueViewModelTest : MainDispatcherTest() {
     fun syncNowSaysOnlyWhyAPassCouldNotStart() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
-            val vm = QueueViewModel(session)
+            val vm = QueueViewModel(session, FakeSettingsRepository())
             val messages = collecting(vm.messages.map { it.text })
 
             session.sync.outcome = SyncOutcome.Failed(SyncFailure.REMOTE_UNREACHABLE)

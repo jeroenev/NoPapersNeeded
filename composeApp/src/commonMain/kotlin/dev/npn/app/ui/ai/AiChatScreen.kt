@@ -43,6 +43,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -96,6 +97,7 @@ import no_papers_needed.composeapp.generated.resources.ai_edit_with_assistant
 import no_papers_needed.composeapp.generated.resources.ai_new_chat
 import no_papers_needed.composeapp.generated.resources.ai_no_output
 import no_papers_needed.composeapp.generated.resources.ai_open_all_documents
+import no_papers_needed.composeapp.generated.resources.ai_open_settings
 import no_papers_needed.composeapp.generated.resources.ai_send
 import no_papers_needed.composeapp.generated.resources.ai_stop
 import no_papers_needed.composeapp.generated.resources.ai_tool_field_range
@@ -129,6 +131,8 @@ fun AiChatScreen(
     onAiEditDocs: (List<String>) -> Unit,
     /** Switches the assistant to bulk edit, with no documents handed over. */
     onBulkEdit: () -> Unit,
+    /** Opens the assistant's settings, where a missing endpoint is configured. */
+    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
     vm: AiChatViewModel = viewModel { AiChatViewModel(session, createSavedStateHandle()) },
 ) {
@@ -223,7 +227,7 @@ fun AiChatScreen(
                     onStop = vm::stop,
                 )
             } else {
-                ConfigureHint()
+                ConfigureHint(onOpenSettings)
             }
         }
     }
@@ -634,14 +638,20 @@ private fun InputRow(
 }
 
 @Composable
-private fun ConfigureHint() {
+private fun ConfigureHint(onOpenSettings: () -> Unit) {
     Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-        Text(
-            stringResource(Res.string.ai_configure_in_settings),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                stringResource(Res.string.ai_configure_in_settings),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            // The sentence names where to go; this takes the user there.
+            TextButton(onClick = onOpenSettings) {
+                Text(stringResource(Res.string.ai_open_settings))
+            }
+        }
     }
 }
 

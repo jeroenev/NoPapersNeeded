@@ -111,6 +111,44 @@ data class QueuedEditRun(
     val lastError: String? = null,
 )
 
+/**
+ * Something this device cannot get past before it can make progress on queued work. A blocked entry
+ * is not waiting for its turn: it is waiting for a fix, so Activity shows it as a problem with a way
+ * out, never as work in motion.
+ */
+enum class WorkBlock {
+    /** Text recognition is owed, but this device has neither a local engine nor a vision endpoint. */
+    OCR_ENGINE_MISSING,
+
+    /** Auto-organize is owed, but no assistant endpoint is configured on this device. */
+    AI_ENDPOINT_UNCONFIGURED,
+}
+
+/**
+ * What this device can currently do with the background queues, as the conditions [WorkBlock] names.
+ * Endpoint configuration is followed while Activity is open.
+ */
+data class WorkCapabilities(
+    val aiEndpointConfigured: Boolean,
+)
+
+/**
+ * Why [entry] cannot make progress right now, or null when it can. A row that failed at its own
+ * document's expense (an unreadable file) is not blocked: it has a retry or a retry time, which the
+ * row itself says.
+ */
+fun QueuedWork.blockedBy(capabilities: WorkCapabilities): WorkBlock? =
+    when (stage) {
+        // An OCR queue row may only need embedded text extraction, even without an engine.
+        WorkStage.OCR -> {
+            null
+        }
+
+        WorkStage.AI_ENRICHMENT -> {
+            if (capabilities.aiEndpointConfigured) null else WorkBlock.AI_ENDPOINT_UNCONFIGURED
+        }
+    }
+
 /** One document waiting on one background pass. */
 data class QueuedWork(
     val docId: String,

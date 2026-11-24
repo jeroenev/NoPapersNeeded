@@ -13,6 +13,7 @@ import dev.npn.core.journal.JournalOp
 import dev.npn.core.model.SystemProperty
 import dev.npn.core.ocr.OcrEngineId
 import dev.npn.core.ocr.OcrEngineRef
+import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
@@ -55,7 +56,7 @@ class DocumentRepositoryHistoryTest {
                 )
             dao.ingest(source, events)
 
-            val repo = DocumentRepositoryImpl(db)
+            val repo = DocumentRepositoryImpl(db, localActors = { actors -> actors intersect setOf("dev-a") })
             val history = repo.history(docId)
 
             history.map { it.entry } shouldContainExactly
@@ -95,9 +96,11 @@ class DocumentRepositoryHistoryTest {
                 listOf(valid, broken),
             )
 
-            val history = DocumentRepositoryImpl(db).history(docId)
+            val history =
+                DocumentRepositoryImpl(db, localActors = { actors -> actors intersect setOf("dev-a") }).history(docId)
 
-            history.map { it.deviceId } shouldContainExactly listOf("dev-a", "dev-z")
+            history.map { it.origin } shouldContainExactly
+                listOf(HistoryOrigin.THIS_DEVICE, HistoryOrigin.ANOTHER_DEVICE)
             history.first().entry shouldBe HistoryEntry.Undecodable("future-op")
         }
 
@@ -128,6 +131,47 @@ class DocumentRepositoryHistoryTest {
             JournalOp.Unknown("future-op") to HistoryEntry.Unknown("future-op", null),
         ).forEach { (op, entry) -> HistoryEntry.of(op) shouldBe entry }
     }
+
+    /**
+     * A write through this session is labelled this device: journal events carry a fresh actor per
+     * transaction, and the commit records that actor in `device.db` for this lookup.
+     */
+    @Test
+    fun aWriteThroughTheSessionIsThisDevice() =
+        appSessionTest { rig ->
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+
+            rig.session.meta.addTag(listOf(id), "invoice")
+
+            val record =
+                rig.session.documents
+                    .history(id)
+                    .first { it.entry == HistoryEntry.TagAdded("invoice") }
+            record.origin shouldBe HistoryOrigin.THIS_DEVICE
+        }
+
+    /**
+     * A bake publishes its relink through the commit-and-rescan path rather than the plain commit,
+     * and it is this device's change all the same.
+     */
+    @Test
+    fun aBakeInPlaceIsThisDevice() =
+        appSessionTest { rig ->
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val before = rig.docId("a.pdf")
+            rig.session.meta.addTag(listOf(before), "filed")
+
+            rig.session.content.bakeInPlace(before) shouldBe BakeOutcome.Baked
+
+            val record =
+                rig.session.documents
+                    .history(before)
+                    .first { it.entry is HistoryEntry.Relinked }
+            record.origin shouldBe HistoryOrigin.THIS_DEVICE
+        }
 
     private fun event(
         docId: String,

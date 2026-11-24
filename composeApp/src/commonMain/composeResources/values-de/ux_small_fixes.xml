@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- A tag the user creates on the Tags screen, which no document carries yet. -->
+    <string name="common_tags_create_failed">Der Tag konnte nicht angelegt werden: %1$s</string>
+
+    <!-- Who made a change in a document's history. -->
+    <string name="detail_history_this_device">Dieses Gerät</string>
+    <string name="detail_history_another_device">Anderes Gerät</string>
+
+    <!-- Activity: queued work that cannot progress until something is fixed. -->
+    <string name="queue_block_ocr_missing">Die Texterkennung ist auf diesem Gerät nicht eingerichtet, daher wartet dieses Dokument.</string>
+    <string name="queue_block_ocr_fix">Texterkennung einrichten</string>
+    <string name="queue_block_ai_unconfigured">Für „Automatisch ordnen“ ist kein Assistent verbunden, daher wartet dieses Dokument.</string>
+    <string name="queue_block_ai_fix">Assistent verbinden</string>
+    <string name="queue_problem_storage_access">Diese Bibliothek benötigt Zugriff auf den Speicher dieses Geräts.</string>
+
+    <!-- The assistant screen's hint that it needs an endpoint. -->
+    <string name="ai_open_settings">Assistenteneinstellungen öffnen</string>
+</resources>

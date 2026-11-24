@@ -42,6 +42,8 @@ enum class OpKind(
     SET_FIELD(6),
     ADD_TAG(4),
     REMOVE_TAG(3),
+    CREATE_EMPTY_TAG(2),
+    DELETE_EMPTY_TAG(2),
     DEFINE_FIELD(1),
     CUSTOMIZE_SEEDED_FIELD(1),
     LIBRARY_SETTING(2),
@@ -218,6 +220,8 @@ internal class SimGenerator(
             OpKind.SET_FIELD -> s.live.pickOrNull()?.let { setField(it, s.fields) }
             OpKind.ADD_TAG -> s.live.pickOrNull()?.let(::addTag)
             OpKind.REMOVE_TAG -> s.live.pickOrNull()?.let { removeTag(it, s.tags) }
+            OpKind.CREATE_EMPTY_TAG -> emptyTag(random, create = true)
+            OpKind.DELETE_EMPTY_TAG -> emptyTag(random, create = false)
             OpKind.DEFINE_FIELD -> defineField()
             OpKind.CUSTOMIZE_SEEDED_FIELD -> customizeSeededField(s)
             OpKind.LIBRARY_SETTING -> librarySetting()
@@ -947,3 +951,14 @@ private val WATCHED_KINDS =
         OpKind.WATCHED_REMOVE,
         OpKind.WATCHED_SWEEP,
     )
+
+private fun emptyTag(
+    random: Random,
+    create: Boolean,
+): Planned.Act {
+    val tag = "empty-${random.nextInt(3)}"
+    return Planned.Act("${if (create) "create" else "delete"} empty tag $tag") { session ->
+        if (create) session.tagAdmin.createTag(tag, color = "#123456") else session.tagAdmin.deleteTag(tag)
+        "updated $tag"
+    }
+}

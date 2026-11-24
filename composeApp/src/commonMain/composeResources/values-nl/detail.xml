@@ -89,7 +89,7 @@
     <string name="detail_text_unavailable">Geen tekst beschikbaar.</string>
     <string name="detail_no_history">Nog geen geschiedenis.</string>
     <string name="detail_history_load_failed">De geschiedenis kon niet worden geladen: %1$s</string>
-    <string name="detail_history_secondary">%1$s · Apparaat %2$s</string>
+    <string name="detail_history_secondary">%1$s · %2$s</string>
     <string name="detail_ocr_not_processed">Niet verwerkt</string>
     <string name="detail_ocr_queued">In wachtrij</string>
     <string name="detail_ocr_done">Voltooid</string>

@@ -15,6 +15,7 @@ import kotlinx.coroutines.CompletableDeferred
 
 /** Vocabulary-level tag administration. */
 class FakeTagAdmin : TagAdmin {
+    val createdTags = mutableListOf<Triple<String, String?, String?>>()
     val renamedTags = mutableListOf<Pair<String, String>>()
     val mergedTags = mutableListOf<Pair<String, String>>()
     val deletedTags = mutableListOf<String>()
@@ -29,6 +30,15 @@ class FakeTagAdmin : TagAdmin {
     private fun failFor(tag: String) {
         failTagAdmin?.invoke()
         if (tag in failTags) error("cannot write tag $tag")
+    }
+
+    override suspend fun createTag(
+        name: String,
+        color: String?,
+        icon: String?,
+    ) {
+        failFor(name)
+        createdTags += Triple(name, color, icon)
     }
 
     override suspend fun renameTag(

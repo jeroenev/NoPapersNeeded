@@ -89,7 +89,7 @@
     <string name="detail_text_unavailable">Aucun texte disponible.</string>
     <string name="detail_no_history">Aucun événement dans l’historique pour l’instant.</string>
     <string name="detail_history_load_failed">Impossible de charger l’historique : %1$s</string>
-    <string name="detail_history_secondary">%1$s · Appareil %2$s</string>
+    <string name="detail_history_secondary">%1$s · %2$s</string>
     <string name="detail_ocr_not_processed">Non traité</string>
     <string name="detail_ocr_queued">En file d’attente</string>
     <string name="detail_ocr_done">Terminé</string>
