@@ -31,6 +31,7 @@ import dev.npn.core.work.drainedQueue
 import dev.npn.core.xmp.BakeService
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.first
 
 /**
  * Every part of one open session, each built once, in dependency order, over the journal
@@ -65,12 +66,15 @@ internal class SessionGraph(
      * Chat, suggestions and the AI OCR engine: one facade, so the vision calls share the cached
      * endpoint client with chat and edits.
      */
+    val reviewConfig: ReviewConfigFacade = JournalReviewConfig(coordinator, db.documentDao(), lifetime)
+
     val ai =
         AiFacadeImpl(
             db,
             chats = deps.deviceDb.keyValueDao(),
             ownWrite = { lifetime.owned(it) },
             clock = deps.clock,
+            reviewModeProvider = { reviewConfig.reviewMode.first() },
             configProvider = deps.settings.aiConfig,
         ).also { lifetime.releaseOnClose(it::close) }
 
@@ -88,7 +92,6 @@ internal class SessionGraph(
     val tags: TagRepository = TagRepositoryImpl(db.tagDao())
     val savedViews = SavedViewRepositoryImpl(coordinator, lifetime)
     val fieldRegistry: FieldRegistry = FieldRegistryImpl(db, coordinator, lifetime)
-    val reviewConfig: ReviewConfigFacade = JournalReviewConfig(coordinator, db.documentDao(), lifetime)
     val storagePath = JournalStoragePath(coordinator, lifetime)
 
     private val pathRules =

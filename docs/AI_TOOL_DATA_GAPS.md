@@ -6,14 +6,14 @@ Audit, not a plan. Records which indexed data the chat assistant's tools expose 
 they do not, so the gaps are a deliberate list rather than a rediscovery every time someone asks
 the assistant a question it cannot answer.
 
-Checked against `main` on 2026-11-03.
+Checked against `main` on 2026-11-22. Gaps 2–6 and 10 are now covered; the rest are still open.
 
 Nothing here is committed to. Each entry says what it would make answerable, so the decision to add
 one is a decision about value, not a fresh investigation.
 
 ## Where the whitelist lives
 
-`dev.npn.core.ai.LibraryAiTools` is the chat assistant's whole library-data surface: eight read-only
+`dev.npn.core.ai.LibraryAiTools` is the chat assistant's whole library-data surface: ten read-only
 tools over the Room index, plus the field vocabulary they advertise. Every registered field is
 shown by `list_fields`, and so is every stored key without a definition, as an orphan.
 `search_fields` and `get_document` read `document_fields` directly, so they handle registered and
@@ -59,61 +59,39 @@ document types needs a grouped live-document count, not just that wrapper.
 
 ### 2. No library or match totals, and no pagination
 
-There is no tool that answers "how many documents do I have?" Search tools return at most 15
-(`search_documents`) or 50 (the document-listing tools) results and provide neither a total nor a
-continuation token. `list_tags` returns a live-document count per tag, and `list_fields` a
-live-document usage count per field key, but neither is the library total. The model therefore
-cannot reliably count all documents or all matches.
-
-A `library_stats` tool could answer the live-document total, untagged/review-queue totals, OCR
-coverage, and added/document-date ranges in one call. `DocumentDao.countUntagged()` and
-`countUnreviewedOrUntagged()` already provide two of those values; nothing counts an arbitrary
-`LibraryFilter`.
+**Covered.** `library_stats` reports the live-document total, the untagged count, the review-queue
+count for the library's review mode, OCR coverage per state, the added and document-date ranges,
+and the trashed/missing/deleted totals. `search_documents` says how many matches it left out beyond
+its 15. There is still no continuation token: a question that needs the 16th match has to narrow
+its filters instead of paging.
 
 ### 3. Trashed, missing, and deleted documents cannot be discovered
 
-Every search and document-listing tool excludes rows that are trashed, missing, or tombstoned as
-deleted, either through a DAO query or `DocumentEntity.isLive` (the `LIVE_DOCUMENT` predicate).
-Consequently, "did I throw away the Vattenfall invoice?" and "which files went missing?" have no
-answer. There are two narrow exceptions for a docId obtained earlier: `get_document` can fetch any
-row and reports `status: in trash`, `status: file missing` and `status: permanently deleted`, while
-`get_document_text` can still return retained FTS text.
-
-Discovery needs lifecycle arguments on the search tools or separate lifecycle tools.
-`DocumentDao.observeTrashed()` and `observeMissing()` already provide the dedicated lists; deleted
-rows would need an additional query. Trash reporting should also decide whether to expose
-`trashedOrigPath`, which `get_document` currently omits.
+**Covered.** `search_documents` takes a `lifecycle` argument (`live` by default, else `trashed`,
+`missing` or `deleted`), so "did I throw away the Vattenfall invoice?" and "which files went
+missing?" are answerable, with each result carrying its docId and status. `library_stats` gives the
+same totals. Trash discovery deliberately does not expose `trashedOrigPath`.
 
 ### 4. No import-time search
 
-`addedAt` is an indexed `documents` column but no assistant tool accepts or returns it, so "what did
-I add last week?" fails. This is not `docDate`, the date printed *on* the document; using that field
-would answer a different question.
-
-Unlike most field searches, this needs an epoch-millisecond range. `search_fields` has `from`/`to`
-for date and number *fields*, but `addedAt` is a document column, not a field.
-`LibraryFilter.addedFrom`/`addedTo` and the corresponding SQL in `DocumentRepositoryImpl` already
-implement the live-document range semantics outside the assistant.
+**Covered, with the honest limit the schema now has.** `search_documents` takes `addedAtFrom` /
+`addedAtTo` and results carry their added date. Note that `documents.addedAt` was dropped in index
+v28: import time is no longer stored. "Added" therefore means what the library's own `added` sort
+means — the PDF's own creation date, or the file's modification time when the PDF names none — not
+the date printed on the document. It is distinct from `docDate`, but it is not a record of the
+import.
 
 ### 5. `ocrState`
 
-`none | pending | done | failed | adopted` (`OcrState`). Exposing it would answer "which documents failed OCR?"
-and "what is still not OCRed?". It could use plumbing like `ocrEngine`: another app-maintained
-document column, searchable by name and kept out of `"any"`.
-
-Partially covered already: `ocrEngine` identifies the engine recorded for the indexed sidecar,
-including `embedded`, but it does not distinguish `none`, `pending`, or `failed`. In the current
-pipeline, a null `ocrEngine` does mean that no OCR/embedded sidecar text has been indexed yet; it
-does not explain why or whether work is pending.
+**Covered.** `search_documents` takes `ocrState` (`none | pending | done | failed | adopted`), and
+`library_stats` reports live counts per state. `ocrEngine` remains the separate question of which
+engine's text is indexed.
 
 ### 6. `reviewed`
 
-The manual marker behind the `INBOX_WORKFLOW` review mode is not exposed. "What still needs
-reviewing?" is therefore unanswerable. The configured `reviewMode` is also absent from the tool
-surface. This matters because the stored marker is ignored in `UNTAGGED_ONLY` mode, where reviewed
-is derived as "has any tag"; a review tool must read the mode and apply the same queue predicate as
-the app. In `INBOX_WORKFLOW`, that predicate is **unreviewed or untagged**, not merely
-`reviewed = false`.
+**Covered.** `search_documents` takes `reviewed`, interpreted the way the review screens interpret
+it: the stored marker in INBOX_WORKFLOW, "has any tag" in UNTAGGED_ONLY. `library_stats` reports the
+review queue with the mode named, so the model sees which predicate produced the count.
 
 ### 7. Consistency gaps in result lines
 
@@ -151,11 +129,11 @@ definition metadata.
 
 ### 10. No document history
 
-The app's `DocumentRepository.history(docId)` exposes a document's history (domain
-`HistoryEntry`s decoded from its journal events, in HLC order), but no assistant tool does.
-Questions such as "when was this tagged?" or "what changed on this document?" are therefore
-unanswerable. This is user-facing history, unlike projection-source
-bookkeeping; exposing it would need careful output bounds because the event list grows over time.
+**Covered.** `get_document_history` returns the newest 20 journal events recorded against one
+docId — tag changes, field edits, review marks, OCR engine pin, trash/restore/delete — with values
+truncated and older events only counted. It reads only that document's events, so another
+document's content cannot appear. An import itself leaves no journal event, so the tool says so
+rather than inventing one.
 
 ## Deliberately excluded
 
@@ -185,5 +163,7 @@ plumbing instead of documents:
   — user-field behaviour.
 - [`OcrEngineFieldToolsTest.kt`](../core/src/desktopTest/kotlin/dev/npn/core/ai/OcrEngineFieldToolsTest.kt)
   — how a system column differs, including its exclusion from `"any"`.
+- [`LibraryStatsAndLifecycleToolsTest.kt`](../core/src/desktopTest/kotlin/dev/npn/core/ai/LibraryStatsAndLifecycleToolsTest.kt)
+  — the stats, filter and bounded-history tools.
 - [ARCHITECTURE.md](../ARCHITECTURE.md) §6.8, "Fields are data, not code" — the field registry the
   tools read.

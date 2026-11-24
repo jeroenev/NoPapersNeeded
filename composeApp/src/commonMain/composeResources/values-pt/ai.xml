@@ -19,6 +19,9 @@
     <string name="ai_tool_listed_tags">Etiquetas listadas</string>
     <string name="ai_tool_read_document">Documento lido: %1$s</string>
     <string name="ai_tool_read_document_text">Texto lido de %1$s</string>
+    <string name="ai_tool_filtered_documents">Documentos pesquisados por filtros</string>
+    <string name="ai_tool_read_library_stats">Estatísticas da biblioteca lidas</string>
+    <string name="ai_tool_read_document_history">Histórico de %1$s lido</string>
     <string name="ai_unknown_value">(desconhecido)</string>
     <string name="ai_unspecified_document">um documento</string>
 

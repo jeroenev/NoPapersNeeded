@@ -19,6 +19,9 @@
     <string name="ai_tool_listed_tags">Listed tags</string>
     <string name="ai_tool_read_document">Read document %1$s</string>
     <string name="ai_tool_read_document_text">Read text of %1$s</string>
+    <string name="ai_tool_filtered_documents">Searched documents by filters</string>
+    <string name="ai_tool_read_library_stats">Read library statistics</string>
+    <string name="ai_tool_read_document_history">Read history of %1$s</string>
     <string name="ai_unknown_value">(unknown)</string>
     <string name="ai_unspecified_document">a document</string>
 

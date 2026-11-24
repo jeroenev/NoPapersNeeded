@@ -45,3 +45,21 @@ data class FtsHit(
     val docId: String,
     val snippet: String,
 )
+
+/** How many live documents carry one `documents.ocrState` value. */
+data class OcrStateCount(
+    val ocrState: String,
+    val count: Int,
+)
+
+/** The oldest and newest epoch-millisecond value of a range; both null on an empty library. */
+data class EpochRange(
+    val oldest: Long?,
+    val newest: Long?,
+)
+
+/** The earliest and latest values of a text range (an ISO date field); both null when none exist. */
+data class DateRange(
+    val oldest: String?,
+    val newest: String?,
+)

@@ -31,6 +31,7 @@ import androidx.compose.material.icons.automirrored.outlined.ManageSearch
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Assessment
 import androidx.compose.material.icons.outlined.AutoFixHigh
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Description
@@ -108,12 +109,15 @@ import no_papers_needed.composeapp.generated.resources.ai_open_settings
 import no_papers_needed.composeapp.generated.resources.ai_send
 import no_papers_needed.composeapp.generated.resources.ai_stop
 import no_papers_needed.composeapp.generated.resources.ai_tool_field_range
+import no_papers_needed.composeapp.generated.resources.ai_tool_filtered_documents
 import no_papers_needed.composeapp.generated.resources.ai_tool_listed_field_set
 import no_papers_needed.composeapp.generated.resources.ai_tool_listed_fields
 import no_papers_needed.composeapp.generated.resources.ai_tool_listed_tagged_documents
 import no_papers_needed.composeapp.generated.resources.ai_tool_listed_tags
 import no_papers_needed.composeapp.generated.resources.ai_tool_read_document
+import no_papers_needed.composeapp.generated.resources.ai_tool_read_document_history
 import no_papers_needed.composeapp.generated.resources.ai_tool_read_document_text
+import no_papers_needed.composeapp.generated.resources.ai_tool_read_library_stats
 import no_papers_needed.composeapp.generated.resources.ai_tool_searched_all_fields
 import no_papers_needed.composeapp.generated.resources.ai_tool_searched_documents
 import no_papers_needed.composeapp.generated.resources.ai_tool_searched_field
@@ -675,8 +679,10 @@ private fun toolIcon(name: String): ImageVector =
     when (name) {
         ChatTools.SEARCH_DOCUMENTS, ChatTools.SEARCH_FILENAMES -> Icons.Outlined.Search
         ChatTools.GET_DOCUMENT, ChatTools.GET_DOCUMENT_TEXT -> Icons.Outlined.Description
+        ChatTools.GET_DOCUMENT_HISTORY -> Icons.Outlined.History
         ChatTools.LIST_TAGS, ChatTools.DOCUMENTS_WITH_TAG -> Icons.AutoMirrored.Outlined.Label
         ChatTools.LIST_FIELDS, ChatTools.SEARCH_FIELDS -> Icons.AutoMirrored.Outlined.ManageSearch
+        ChatTools.LIBRARY_STATS -> Icons.Outlined.Assessment
         else -> Icons.Outlined.Info
     }
 
@@ -695,10 +701,12 @@ internal fun toolLabel(
 ): String =
     when (name) {
         ChatTools.SEARCH_DOCUMENTS -> {
-            stringResource(
-                Res.string.ai_tool_searched_documents,
-                argument(args[ChatTools.ARG_QUERY]),
-            )
+            val query = args[ChatTools.ARG_QUERY]
+            if (query.isNullOrBlank()) {
+                stringResource(Res.string.ai_tool_filtered_documents)
+            } else {
+                stringResource(Res.string.ai_tool_searched_documents, query)
+            }
         }
 
         ChatTools.SEARCH_FILENAMES -> {
@@ -739,6 +747,17 @@ internal fun toolLabel(
                 Res.string.ai_tool_read_document_text,
                 documentName(args[ChatTools.ARG_DOC_ID], docTitles),
             )
+        }
+
+        ChatTools.GET_DOCUMENT_HISTORY -> {
+            stringResource(
+                Res.string.ai_tool_read_document_history,
+                documentName(args[ChatTools.ARG_DOC_ID], docTitles),
+            )
+        }
+
+        ChatTools.LIBRARY_STATS -> {
+            stringResource(Res.string.ai_tool_read_library_stats)
         }
 
         else -> {
