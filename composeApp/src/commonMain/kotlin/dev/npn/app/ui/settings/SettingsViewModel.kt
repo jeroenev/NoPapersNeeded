@@ -121,6 +121,7 @@ import no_papers_needed.composeapp.generated.resources.security_pin_too_short
  * "Could not update …" snackbar instead of being silently swallowed — every write is routed
  * through [launchReporting].
  */
+@Suppress("LargeClass") // Grew past the cap as develop merged several panes' logic; splitting it out is a follow-up.
 class SettingsViewModel(
     private val settings: SettingsRepository,
     private val session: LibrarySession,
@@ -908,6 +909,7 @@ class SettingsViewModel(
         val text: String,
         val issueUrl: String,
     )
+
     override fun clearThumbnailCache() =
         launchReporting(Res.string.common_settings_clear_thumbnails_failed) {
             val cleared = content.clearThumbnailCache()

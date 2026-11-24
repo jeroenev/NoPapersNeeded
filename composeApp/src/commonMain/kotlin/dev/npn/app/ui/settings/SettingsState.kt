@@ -141,6 +141,7 @@ sealed interface ProblemReportState {
  * What the settings panes change. [SettingsViewModel] implements it; a device setting is one
  * [edit], the library's settings and the settings that need logic around them have their own.
  */
+@Suppress("TooManyFunctions") // Every settings pane's actions, as develop merged them; a split by pane is a follow-up.
 interface SettingsActions {
     /**
      * The single write path for a plain setting: the pane edits one field with
