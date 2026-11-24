@@ -903,7 +903,8 @@ once per version; `settings/` owns the About pane's diagnostics report through `
 - Shared pieces live in `ui/common`, one per UI concept: the form blocks (`SettingsSection`,
   `SwitchRow`, `HelpText`, `Dropdown`, `ExpanderRow`), `SuggestField` (the one autocomplete),
   `TypedTextField`, `rememberNumberInput`, `BackTopBar`, `TooltipIconButton`, `TopBarActions`,
-  `ActionMenuItems`, `keyShortcuts` (the one way a screen binds keys), `EmptyState`, `TagEditor`,
+  `ActionMenuItems`, `keyShortcuts` (the one way a screen binds keys), `FocusOnEntry`, `FocusRing`,
+  `ReducedMotion` (the one reduced-motion answer), `EmptyState`, `TagEditor`,
   `TagFormDialog`, `TagPickDialog`, `DocThumbnail`, `ConfirmDialog`, `LoadingIndicator`,
   `UiLanguage`, `WhileSubscribedTimeout`.
 

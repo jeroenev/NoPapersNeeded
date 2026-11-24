@@ -10,7 +10,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextOverflow
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.common_more_actions
@@ -47,8 +46,6 @@ fun SelectionTopBar(
         title = {
             Text(
                 pluralStringResource(Res.plurals.library_selected_count, count, count),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
         },
         modifier = modifier,

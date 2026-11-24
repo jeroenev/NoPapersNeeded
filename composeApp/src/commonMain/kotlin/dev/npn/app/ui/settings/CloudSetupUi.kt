@@ -36,12 +36,12 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.Dropdown
 import dev.npn.app.ui.common.ExpandIcon
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.expander
+import dev.npn.app.ui.common.focusRing
 import dev.npn.core.sync.RcloneOption
 import dev.npn.core.sync.RcloneProvider
 import dev.npn.core.sync.SetupFailure
@@ -225,7 +225,7 @@ private fun ProviderRow(
         headlineContent = { Text(provider.name) },
         supportingContent =
             detail?.let {
-                { Text(it, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+                { Text(it) }
             },
         leadingContent = {
             Icon(
@@ -235,7 +235,7 @@ private fun ProviderRow(
         },
         trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null) },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        modifier = Modifier.clickable(role = Role.Button, onClick = onChoose),
+        modifier = Modifier.focusRing().clickable(role = Role.Button, onClick = onChoose),
     )
 }
 

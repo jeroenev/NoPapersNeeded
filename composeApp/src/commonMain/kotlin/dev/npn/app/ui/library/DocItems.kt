@@ -60,6 +60,7 @@ import dev.npn.app.ui.common.HighlightText
 import dev.npn.app.ui.common.ReviewedBadge
 import dev.npn.app.ui.common.TagChip
 import dev.npn.app.ui.common.TopBarAction
+import dev.npn.app.ui.common.focusRing
 import dev.npn.app.ui.common.formatEpochDate
 import dev.npn.app.ui.common.formatSize
 import dev.npn.app.ui.common.onSecondaryClick
@@ -233,6 +234,7 @@ private fun SelectableDocItem(
                     onSelectRange = { wiring.onSelectRange(docId) },
                 ).onSecondaryClick { menuAt = it }
                 .semantics { this.selected = selected }
+                .focusRing()
                 .combinedClickable(
                     onClickLabel = if (selectionMode) selectionLabel else openLabel,
                     role = Role.Button,

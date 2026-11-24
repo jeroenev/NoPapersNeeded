@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Accessibility: motion preferences and the labels the semantics audit added. -->
+<resources>
+    <string name="accessibility_title">Toegankelijkheid</string>
+    <string name="accessibility_reduce_motion">Beweging beperken</string>
+    <string name="accessibility_reduce_motion_help">Sla pagina- en lijstovergangen over en klap details meteen open.</string>
+</resources>

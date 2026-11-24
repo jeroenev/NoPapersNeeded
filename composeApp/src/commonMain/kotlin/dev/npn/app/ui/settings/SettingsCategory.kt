@@ -25,6 +25,8 @@ import dev.npn.core.model.ReviewMode
 import dev.npn.core.rules.AutoMatchRule
 import kotlinx.serialization.Serializable
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.accessibility_reduce_motion
+import no_papers_needed.composeapp.generated.resources.accessibility_title
 import no_papers_needed.composeapp.generated.resources.automation_ai_open
 import no_papers_needed.composeapp.generated.resources.automation_ai_title
 import no_papers_needed.composeapp.generated.resources.automation_inbox_open
@@ -447,6 +449,8 @@ internal val SettingsCategories: List<SettingsCategory> =
                     Res.string.common_settings_default_view,
                     Res.string.common_settings_grid_size_help,
                     Res.string.common_settings_landscape_columns,
+                    Res.string.accessibility_title,
+                    Res.string.accessibility_reduce_motion,
                     Res.string.common_settings_language,
                     Res.string.common_settings_language_system,
                 ),

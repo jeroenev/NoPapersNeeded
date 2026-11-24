@@ -45,6 +45,12 @@ actual fun persistDirectoryAccess(
 
 actual fun supportsSafStorage(): Boolean = false
 
+/**
+ * Desktop has no system-level animation preference of its own: the app's Appearance setting is the
+ * only way to reduce motion there.
+ */
+actual fun systemAnimationsEnabled(): Boolean = true
+
 actual fun ocrHasLanguageSetting(): Boolean = true
 
 /** Email import needs libsecret, which this build wires on Linux only; Windows gets no dead pane. */

@@ -34,6 +34,7 @@ import dev.npn.app.ui.ai.AiEditReviewScreen
 import dev.npn.app.ui.ai.AiEditScreen
 import dev.npn.app.ui.common.PublishWindowTitle
 import dev.npn.app.ui.common.ViewModelStoreLease
+import dev.npn.app.ui.common.reducedMotion
 import dev.npn.app.ui.common.rememberSnackbarMessages
 import dev.npn.app.ui.detail.BrowseContext
 import dev.npn.app.ui.detail.DocDetailScreen
@@ -332,7 +333,21 @@ private fun MainNavHost(
 ) {
     val nav = library.nav
     val browse = library.browse
-    NavHost(navController = nav, startDestination = Route.Library) {
+    // Android's default navigation is a 700ms cross-fade, and a back swipe shrinks the page. With
+    // reduced motion the destination is shown at once; otherwise the platform's own defaults stand
+    // (desktop does not animate at all).
+    val reduced = reducedMotion
+    val transitions = remember(reduced) { PageTransitions(reduced) }
+    NavHost(
+        navController = nav,
+        startDestination = Route.Library,
+        enterTransition = { transitions.enter },
+        exitTransition = { transitions.exit },
+        popEnterTransition = { transitions.enter },
+        popExitTransition = { transitions.exit },
+        predictivePopEnterTransition = { transitions.predictivePopEnter },
+        predictivePopExitTransition = { transitions.predictivePopExit },
+    ) {
         composable<Route.Library> { entry ->
             LibraryScreen(
                 session = session,

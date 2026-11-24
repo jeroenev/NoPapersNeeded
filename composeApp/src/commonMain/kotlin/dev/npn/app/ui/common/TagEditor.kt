@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -81,17 +82,26 @@ fun TagEditor(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(start = 10.dp, end = 2.dp, top = 2.dp, bottom = 2.dp),
+                            modifier =
+                                Modifier
+                                    .heightIn(min = 48.dp)
+                                    .padding(start = 10.dp, end = 2.dp, top = 2.dp, bottom = 2.dp),
                         ) {
                             TagColorDot(tagColors[tag])
                             Text(
                                 tag,
                                 style = MaterialTheme.typography.labelLarge,
-                                modifier = Modifier.padding(start = if (tagColors[tag] != null) 6.dp else 0.dp),
+                                // A long tag wraps instead of taking the width the remove button's
+                                // 48dp target needs; a short one keeps the chip's natural width.
+                                modifier =
+                                    Modifier
+                                        .weight(1f, fill = false)
+                                        .padding(start = if (tagColors[tag] != null) 6.dp else 0.dp),
                             )
                             IconButton(
                                 onClick = { onRemove(tag) },
-                                modifier = Modifier.size(28.dp),
+                                // No fixed size: IconButton keeps a 48dp touch target even though the
+                                // icon itself stays small beside the chip's label.
                             ) {
                                 Icon(
                                     Icons.Filled.Clear,

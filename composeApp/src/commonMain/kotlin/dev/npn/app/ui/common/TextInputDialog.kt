@@ -8,9 +8,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.common_save
@@ -33,6 +36,10 @@ fun TextInputDialog(
     confirmEnabled: (String) -> Boolean = { it.isNotBlank() },
 ) {
     var text by rememberSaveable { mutableStateOf(initial) }
+    // A dialog opened to type a name puts the caret in its field, so the keyboard is ready and the
+    // first Tab reaches the buttons rather than the field the user is already looking at.
+    val fieldFocus = remember { FocusRequester() }
+    FocusOnEntry(fieldFocus)
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
@@ -42,7 +49,7 @@ fun TextInputDialog(
                 onValueChange = { text = it },
                 label = { Text(label) },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().focusRequester(fieldFocus),
             )
         },
         confirmButton = {

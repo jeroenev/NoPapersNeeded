@@ -35,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -100,7 +101,14 @@ internal fun LibraryTopBar(
             TopBarAction(Icons.Filled.Refresh, stringResource(Res.string.library_refresh), onRefresh),
         )
     TopAppBar(
-        title = { Text(stringResource(Res.string.library_documents), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        title = {
+            Text(
+                stringResource(Res.string.library_documents),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.semantics { heading() },
+            )
+        },
         actions = {
             extras()
             TooltipIconButton(Icons.Filled.FilterList, stringResource(Res.string.library_filters), onOpenFilter)
@@ -300,8 +308,6 @@ internal fun SortSummary(
                     count,
                     sortLabel(sort.field, sortableFields),
                 ),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
             // Names the action: the summary text says what the order is now.
             Icon(

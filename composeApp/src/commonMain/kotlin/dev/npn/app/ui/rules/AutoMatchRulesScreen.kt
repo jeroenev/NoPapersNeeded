@@ -32,7 +32,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.createSavedStateHandle
@@ -526,7 +525,7 @@ private fun RulePreviewText(preview: RulePreview?) {
             is RulePreview.Matches -> {
                 Text(preview.summary.resolve(), style = MaterialTheme.typography.bodyMedium)
                 for (title in preview.titles) {
-                    HelpText(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    HelpText(title)
                 }
                 preview.more?.let { HelpText(it.resolve()) }
                 if (preview.count > 0) HelpText(stringResource(Res.string.automation_rule_preview_fills_in))

@@ -1,5 +1,6 @@
 package dev.npn.app.platform
 
+import android.animation.ValueAnimator
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
@@ -108,6 +109,12 @@ internal fun keepTreeAccess(
     }
 
 actual fun supportsSafStorage(): Boolean = true
+
+/**
+ * Android's animator duration scale: "Remove animations" (Accessibility settings, and battery saver
+ * on some builds) zeroes it, which this asks about rather than guessing from a setting.
+ */
+actual fun systemAnimationsEnabled(): Boolean = ValueAnimator.areAnimatorsEnabled()
 
 actual fun ocrHasLanguageSetting(): Boolean = false
 

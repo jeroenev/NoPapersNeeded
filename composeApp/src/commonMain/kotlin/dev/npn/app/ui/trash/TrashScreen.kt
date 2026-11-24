@@ -38,6 +38,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -241,7 +243,12 @@ private fun TrashScaffold(
             // overflow menu so the bar stays uncrowded.
             val wide = LocalWindowWidthClass.current.isWide
             TopAppBar(
-                title = { Text(stringResource(Res.string.common_trash_maintenance_title)) },
+                title = {
+                    Text(
+                        stringResource(Res.string.common_trash_maintenance_title),
+                        modifier = Modifier.semantics { heading() },
+                    )
+                },
                 // No back arrow: Trash is a top-level rail destination reached from navigation, not a
                 // pushed screen, so a back arrow would misrepresent it and crowd the bar.
                 actions = {
@@ -406,8 +413,6 @@ private fun TrashList(
                         item.doc.trashedOrigPath?.let {
                             HelpText(
                                 stringResource(Res.string.common_trash_was_path, it),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }

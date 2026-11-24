@@ -44,6 +44,7 @@ import dev.npn.app.ui.common.DesktopBridge
 import dev.npn.app.ui.common.Handoff
 import dev.npn.app.ui.common.KeyedViewModelStores
 import dev.npn.app.ui.common.LocaleProvider
+import dev.npn.app.ui.common.ProvideReducedMotion
 import dev.npn.app.ui.common.ProvideWindowWidthClass
 import dev.npn.app.ui.common.PublishWindowTitle
 import dev.npn.app.ui.common.rememberSnackbarMessages
@@ -256,13 +257,14 @@ private fun AppRoot(
     val useSaf by vm.useSafStorage.collectAsStateWithLifecycle()
     val language by vm.appLanguage.collectAsStateWithLifecycle()
     val lockState by env.lock.state.collectAsStateWithLifecycle()
+    val reducedMotion by vm.reducedMotion.collectAsStateWithLifecycle()
     // Above the language switch, which rebuilds everything below it.
     val firstRun = rememberFirstRunHost()
     // Who takes files dropped on the window instead of the open library's import: first run, while
     // it asks for the first document.
     var dropTarget by remember { mutableStateOf<((List<Pair<ExternalSource, String>>) -> Unit)?>(null) }
     LocalizedApp(language, (state as? AppState.Open)?.session, env.appScope) { library ->
-        AppSurface {
+        AppSurface(reducedMotion) {
             if (lockState.locked) {
                 // Behind the lock there is no library screen to title the window; the app's own
                 // name is all the lock may say.
@@ -438,14 +440,19 @@ private fun LibraryUi.landOn(exit: FirstRunExit) {
 
 /** The app's theme, window-width class and background around [content]. */
 @Composable
-private fun AppSurface(content: @Composable () -> Unit) {
+private fun AppSurface(
+    reducedMotion: Boolean,
+    content: @Composable () -> Unit,
+) {
     NpnTheme {
-        ProvideWindowWidthClass {
-            Surface(
-                Modifier.fillMaxSize().testTagsAsResourceIds(),
-                color = MaterialTheme.colorScheme.background,
-                content = content,
-            )
+        ProvideReducedMotion(reducedMotion) {
+            ProvideWindowWidthClass {
+                Surface(
+                    Modifier.fillMaxSize().testTagsAsResourceIds(),
+                    color = MaterialTheme.colorScheme.background,
+                    content = content,
+                )
+            }
         }
     }
 }

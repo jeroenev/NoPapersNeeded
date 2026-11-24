@@ -626,6 +626,20 @@ class AppViewModelTest : MainDispatcherTest() {
             vm.appLanguage.value shouldBe null
         }
 
+    /** The reduced-motion preference reaches the shell from its first frame and follows later edits. */
+    @Test
+    fun reducedMotionIsTheSettingsFromTheStartAndFollowsThem() =
+        runTest(dispatcher) {
+            val env = env().apply { settings.updateSettings { it.copy(reducedMotion = true) } }
+            val vm = model(env)
+            vm.reducedMotion.value shouldBe true
+
+            collecting(vm.reducedMotion)
+            env.settings.edit { it.copy(reducedMotion = false) }
+            runCurrent()
+            vm.reducedMotion.value shouldBe false
+        }
+
     @Test
     fun aiConfiguredFollowsSettingsFromTheStart() =
         runTest(dispatcher) {

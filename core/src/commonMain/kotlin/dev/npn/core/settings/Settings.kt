@@ -36,6 +36,13 @@ data class SettingsSnapshot(
     val librarySort: LibrarySort = LibrarySort(),
     val gridColumnWidth: Int = GridSizing.DEFAULT_COLUMN_WIDTH,
     val landscapeListColumns: Boolean = false,
+    /**
+     * The user asked for less motion: the app's non-essential transitions (paging, expanding a
+     * transcript row, scrolling a list into view) happen at once instead of animating. The
+     * platform's own animation setting reduces motion as well, without changing this one
+     * ([dev.npn.core.settings.reducesMotion]).
+     */
+    val reducedMotion: Boolean = false,
     val watchedFolder: String? = null,
     val watchedFolderDeleteAfterImport: Boolean = false,
     /**
@@ -254,6 +261,7 @@ object SettingsCodec {
                 gridColumnWidth = reader.int(SettingsKeys.GRID_COLUMN_WIDTH) ?: DEFAULTS.gridColumnWidth,
                 landscapeListColumns =
                     reader.boolean(SettingsKeys.LANDSCAPE_LIST_COLUMNS) ?: DEFAULTS.landscapeListColumns,
+                reducedMotion = reader.flag(SettingsKeys.REDUCED_MOTION, DEFAULTS.reducedMotion),
                 watchedFolder = reader.string(SettingsKeys.WATCHED_FOLDER),
                 watchedFolderDeleteAfterImport =
                     reader.boolean(SettingsKeys.WATCHED_FOLDER_DELETE_AFTER_IMPORT)
@@ -310,6 +318,7 @@ object SettingsCodec {
         writer.putBoolean(SettingsKeys.LIBRARY_SORT_ASCENDING, s.librarySort.ascending)
         writer.putInt(SettingsKeys.GRID_COLUMN_WIDTH, s.gridColumnWidth)
         writer.putBoolean(SettingsKeys.LANDSCAPE_LIST_COLUMNS, s.landscapeListColumns)
+        writer.putBoolean(SettingsKeys.REDUCED_MOTION, s.reducedMotion)
         writer.putOptional(SettingsKeys.WATCHED_FOLDER, s.watchedFolder)
         writer.putBoolean(SettingsKeys.WATCHED_FOLDER_DELETE_AFTER_IMPORT, s.watchedFolderDeleteAfterImport)
         writer.putBoolean(SettingsKeys.USE_SAF_STORAGE, s.useSafStorage)
@@ -402,6 +411,7 @@ internal object SettingsKeys {
     const val LIBRARY_SORT_ASCENDING = "librarySortAscending"
     const val GRID_COLUMN_WIDTH = "gridColumnWidth"
     const val LANDSCAPE_LIST_COLUMNS = "landscapeListColumns"
+    const val REDUCED_MOTION = "reducedMotion"
     const val INSTALLATION_ID = "installationId"
     const val WATCHED_FOLDER = "watchedFolder"
     const val WATCHED_FOLDER_DELETE_AFTER_IMPORT = "watchedFolderDeleteAfterImport"
@@ -443,3 +453,14 @@ object GridSizing {
     const val MAX_COLUMN_WIDTH = 480
     const val DEFAULT_COLUMN_WIDTH = 160
 }
+
+/**
+ * Whether the app should reduce motion: the user asked for it in Settings, or the platform turns its
+ * animations off ("Remove animations" on Android, which zeroes the animator duration scale and reads
+ * as `ValueAnimator.areAnimatorsEnabled()` there). Both are reasons to skip a non-essential
+ * transition, so the app's choice only ever adds to the platform's.
+ */
+fun reducesMotion(
+    preference: Boolean,
+    systemAnimationsEnabled: Boolean,
+): Boolean = preference || !systemAnimationsEnabled
