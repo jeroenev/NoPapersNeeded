@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="triage_title">Beoordelen</string>
+    <string name="triage_progress">%1$d van %2$d · %3$d nog te beoordelen</string>
+    <string name="triage_previous_document">Naar het vorige document</string>
+    <string name="triage_next_document">Naar het volgende document</string>
+</resources>

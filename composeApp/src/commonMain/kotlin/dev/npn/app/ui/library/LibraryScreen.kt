@@ -1,14 +1,18 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 
 package dev.npn.app.ui.library
 
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -23,6 +27,7 @@ import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -40,6 +45,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -81,6 +87,7 @@ import no_papers_needed.composeapp.generated.resources.library_no_documents_titl
 import no_papers_needed.composeapp.generated.resources.library_no_matches_subtitle
 import no_papers_needed.composeapp.generated.resources.library_no_matches_title
 import no_papers_needed.composeapp.generated.resources.library_scan_document
+import no_papers_needed.composeapp.generated.resources.triage_title
 import no_papers_needed.composeapp.generated.resources.ux_review_count
 import org.jetbrains.compose.resources.stringResource
 
@@ -119,14 +126,38 @@ fun LibraryScreen(
     modifier: Modifier = Modifier,
     vm: LibraryViewModel = viewModel { LibraryViewModel(session, settings, createSavedStateHandle()) },
     previewed: ViewModelStoreLease<String> = viewModel { ViewModelStoreLease(documents) },
+    triageViewModels: ViewModelStoreLease<String> = rememberTriageLease(documents),
 ) {
     val state by vm.content.collectAsStateWithLifecycle()
+    val triage by vm.triage.collectAsStateWithLifecycle()
     // The filter sheet's vocabulary, which the list itself does not show.
     val tags by vm.tags.collectAsStateWithLifecycle()
     val fieldFilters by vm.fieldFilters.collectAsStateWithLifecycle()
     val tagNames = remember(tags) { tags.map { it.name } }
     val ui = state.ui
     val docs = state.results?.items
+    val wide = LocalWindowWidthClass.current.isWide
+    val previewDocId by vm.preview.collectAsStateWithLifecycle()
+    val snackbar = rememberSnackbarMessages(vm.messages)
+    // A document's viewmodel is held only while a host on screen shows it: the side panel while it
+    // previews the document, the triage mode while it is on that document.
+    SideEffect {
+        previewed.keepOnly(previewDocId.takeIf { wide && triage == null })
+        triageViewModels.keepOnly(triage?.currentId)
+    }
+    val activeTriage = triage
+    if (activeTriage != null) {
+        TriageScreen(
+            state = activeTriage,
+            session = session,
+            settings = settings,
+            viewModels = triageViewModels.of(activeTriage.currentId),
+            snackbar = snackbar,
+            actions = vm,
+            modifier = modifier,
+        )
+        return
+    }
 
     // One handed over before the library showed applies at once; one handed over while it shows
     // (the "Show" of a drop's import message) as it arrives.
@@ -149,19 +180,11 @@ fun LibraryScreen(
             { docId -> currentOnOpenDoc(docId, currentDocs.orEmpty().map { it.doc.docId }, currentQuery) }
         }
 
-    val snackbar = rememberSnackbarMessages(vm.messages)
-
     val dialog by vm.dialog.collectAsStateWithLifecycle()
 
-    val wide = LocalWindowWidthClass.current.isWide
     // Measured for the side panel's width only; whether there is a side panel is the window's call.
     BoxWithConstraints(modifier.fillMaxSize()) {
         // Wide layouts preview a tapped document in the side panel; compact ones open it directly.
-        val previewDocId by vm.preview.collectAsStateWithLifecycle()
-        // The previewed document keeps its viewmodel while the panel is there to show it (and the
-        // detail screen, sharing it, for as long as that is open); another document, a closed panel
-        // or a compact window lets go of it once the composition has.
-        SideEffect { previewed.keepOnly(previewDocId.takeIf { wide }) }
         val onDocClick: (String) -> Unit =
             remember(wide) { { docId -> if (wide) vm.preview(docId) else openDoc(docId) } }
 
@@ -442,8 +465,23 @@ private fun LibraryContent(
                 focusRequester = searchFocus,
                 onFocusChange = { searchFocused = it },
             )
-            if (reviewMode.reviewMarkerIsAuthoritative && !ui.selectionMode && state.reviewCount > 0) {
-                ReviewChip(count = state.reviewCount, filter = ui.filter, actions = actions)
+            if (reviewMode.reviewMarkerIsAuthoritative && !ui.selectionMode) {
+                FlowRow(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    itemVerticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (state.reviewCount > 0) {
+                        ReviewChip(count = state.reviewCount, filter = ui.filter, actions = actions)
+                    }
+                    FilledTonalButton(
+                        onClick = actions::startTriage,
+                        enabled = !results?.items.isNullOrEmpty(),
+                    ) {
+                        Text(stringResource(Res.string.triage_title))
+                    }
+                }
             }
             ActiveFilters(
                 filter = ui.filter,
@@ -583,7 +621,6 @@ private fun ReviewChip(
                 modifier = Modifier.size(FilterChipDefaults.IconSize),
             )
         },
-        modifier = Modifier.padding(horizontal = 16.dp),
     )
 }
 
@@ -624,3 +661,7 @@ private fun LibraryFab(
         }
     }
 }
+
+@Composable
+internal fun rememberTriageLease(documents: KeyedViewModelStores<String>): ViewModelStoreLease<String> =
+    viewModel(key = "triage") { ViewModelStoreLease(documents) }

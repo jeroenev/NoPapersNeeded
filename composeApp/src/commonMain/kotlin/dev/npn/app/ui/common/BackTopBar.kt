@@ -27,6 +27,7 @@ fun BackTopBar(
     title: String,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    subtitleModifier: Modifier = Modifier,
     subtitle: String? = null,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
@@ -39,6 +40,7 @@ fun BackTopBar(
                         subtitle,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = subtitleModifier,
                     )
                 }
             }

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="triage_title">Sichten</string>
+    <string name="triage_progress">%1$d von %2$d · %3$d noch ungeprüft</string>
+    <string name="triage_previous_document">Zum vorherigen Dokument springen</string>
+    <string name="triage_next_document">Zum nächsten Dokument springen</string>
+</resources>

@@ -32,6 +32,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.TechnicalDetails
+import dev.npn.core.app.DocListItem
+import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldParse
 import dev.npn.core.model.FieldType
 import dev.npn.core.model.reviewMarkerIsAuthoritative
@@ -77,7 +79,80 @@ internal fun DocumentEditor(
         DocumentUnavailable(modifier)
         return
     }
-    val docId = item.doc.docId
+    val editing = rememberDraftEditing(item.doc.docId, item, state.document.fieldDefs, writes)
+    Column(modifier.imePadding().saveKeys(editing.actions::commitDraft)) {
+        MetadataPanel(
+            state = state,
+            item = editing.item,
+            refused = editing.draft.refused,
+            writeBlocked = editing.draft.saving || !editing.draft.writable,
+            actions = editing.actions,
+            previewTab = preview,
+            modifier = Modifier.fillMaxSize().weight(1f),
+        )
+        EditorStatusBar(
+            draft = editing.draft,
+            onRetry = editing.actions::commitDraft,
+            onUndo = editing::undo,
+            onDiscard = editing::discard,
+            onReview =
+                if (state.document.reviewMode.reviewMarkerIsAuthoritative) {
+                    { editing.markReviewed(onReviewNext) }
+                } else {
+                    null
+                },
+            hasNext = hasNext,
+        )
+    }
+}
+
+/**
+ * One document's draft editing, with the autosave, undo and review rules the detail editor and the
+ * Inbox triage mode share. [item] is the document as its draft shows it; [actions] routes field
+ * edits into the draft and everything else straight to [writes].
+ */
+internal class DraftEditing(
+    internal val docId: String,
+    internal val draft: DocumentDraft,
+    internal val item: DocListItem,
+    internal val actions: MetadataActions,
+    private val store: DocumentDrafts,
+    private val persisted: State<Map<String, String>>,
+    private val title: State<String>,
+) {
+    fun undo() = store.undo(docId)
+
+    fun discard() = store.discard(docId)
+
+    /** Save the draft and the reviewed marker together, then run [onSaved]: the status bar's button. */
+    fun markReviewed(onSaved: () -> Unit) = store.commitTriageReview(docId, persisted.value, title.value, onSaved)
+}
+
+/**
+ * The detail editor's and the triage mode's "mark reviewed" action: one save of the draft and the
+ * marker, then [onSaved] once both landed. A draft that cannot be written, or a save already
+ * running, makes this the same no-op or queued save as any other commit.
+ */
+internal fun DocumentDrafts.commitTriageReview(
+    docId: String,
+    persisted: Map<String, String>,
+    title: String,
+    onSaved: () -> Unit,
+) = commit(docId, persisted, title, reviewed = true, onSaved = onSaved)
+
+/**
+ * The one place a document enters the drafts' "being edited" state: while it is on screen the resume
+ * banner leaves its draft alone, and when the last editor showing it goes, the draft is saved (or a
+ * failure kept for the banner). Every editor of a document uses this, so the detail screen, the wide
+ * preview panel and the triage mode share one autosave and one undo story.
+ */
+@Composable
+internal fun rememberDraftEditing(
+    docId: String,
+    item: DocListItem,
+    fieldDefs: List<FieldDef>,
+    writes: DocumentWrites,
+): DraftEditing {
     val store = LocalDocumentDrafts.current
     // Snapshot state, read directly: a keystroke committed through [store] must be visible to the
     // very next composition, which a flow's later dispatch cannot guarantee.
@@ -87,11 +162,11 @@ internal fun DocumentEditor(
     // title, kept per document: leaving one for the next disposes the old document's effect after
     // this composition moved on, and it must still save the old document with the old values.
     val persisted = key(docId) { rememberUpdatedState(item.doc.fields) }
-    val types = key(docId) { rememberUpdatedState(state.document.fieldDefs.associate { it.key to it.type }) }
+    val types = key(docId) { rememberUpdatedState(fieldDefs.associate { it.key to it.type }) }
     val title = key(docId) { rememberUpdatedState(edited.doc.displayTitle) }
     // Tell the store this document is on screen while the editor is composed, so the resume banner
-    // never offers to open a draft that is already in front of the user (detail route or preview),
-    // and that the user left it once the last editor showing it goes.
+    // never offers to open a draft that is already in front of the user (detail route, preview panel
+    // or triage), and that the user left it once the last editor showing it goes.
     DisposableEffect(docId) {
         store.registerEditing(docId)
         onDispose {
@@ -104,30 +179,7 @@ internal fun DocumentEditor(
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { store.commit(docId, persisted.value, title.value) }
     val actions =
         remember(writes, store, docId) { DraftedActions(writes, store, docId, persisted, types, title) }
-    Column(modifier.imePadding().saveKeys(actions::commitDraft)) {
-        MetadataPanel(
-            state = state,
-            item = edited,
-            refused = draft.refused,
-            writeBlocked = draft.saving || !draft.writable,
-            actions = actions,
-            previewTab = preview,
-            modifier = Modifier.fillMaxSize().weight(1f),
-        )
-        EditorStatusBar(
-            draft = draft,
-            onRetry = actions::commitDraft,
-            onUndo = { store.undo(docId) },
-            onDiscard = { store.discard(docId) },
-            onReview =
-                if (state.document.reviewMode.reviewMarkerIsAuthoritative) {
-                    { store.commit(docId, persisted.value, title.value, reviewed = true, onSaved = onReviewNext) }
-                } else {
-                    null
-                },
-            hasNext = hasNext,
-        )
-    }
+    return DraftEditing(docId, draft, edited, actions, store, persisted, title)
 }
 
 /**
@@ -190,7 +242,7 @@ internal class DraftedActions(
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun EditorStatusBar(
+internal fun EditorStatusBar(
     draft: DocumentDraft,
     onRetry: () -> Unit,
     onUndo: () -> Unit,
