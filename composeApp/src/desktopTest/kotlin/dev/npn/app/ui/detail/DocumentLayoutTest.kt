@@ -175,6 +175,26 @@ class DocumentLayoutTest : EnglishLocaleTest() {
             }
         }
 
+    @Test
+    fun anEInvoiceMarkerShowsABadgeRatherThanAFieldRow() =
+        onUiThread {
+            scene(1280, 800, extraFields = mapOf(FieldKeys.EINVOICE to "cii")).closing {
+                render()
+                assertNotNull(text("From e-invoice"))
+                assertTrue(nodes().none { "E-invoice" in it.texts() })
+            }
+        }
+
+    @Test
+    fun anOrphanEInvoiceMarkerStillOnlyShowsABadge() =
+        onUiThread {
+            scene(1280, 800, extraFields = mapOf(FieldKeys.EINVOICE to "cii"), orphanMarker = true).closing {
+                render()
+                assertNotNull(text("From e-invoice"))
+                assertTrue(nodes().none { "eInvoice" in it.texts() || "cii" in it.texts() })
+            }
+        }
+
     private fun scene(
         width: Int,
         height: Int,
@@ -182,6 +202,8 @@ class DocumentLayoutTest : EnglishLocaleTest() {
         ai: AiPanelState = AiPanelState(),
         /** The window's width class, when the test changes it; else the scene's width decides. */
         widthClass: State<WindowWidthClass>? = null,
+        extraFields: Map<String, String> = emptyMap(),
+        orphanMarker: Boolean = false,
     ): ImageComposeScene {
         val store = DocumentDrafts(FakeMetadataWriter(), CoroutineScope(Dispatchers.Unconfined))
         // An actual change, so the scene renders the save bar in its unsaved state.
@@ -199,7 +221,11 @@ class DocumentLayoutTest : EnglishLocaleTest() {
                                             loadState =
                                                 DocLoadState.Present(
                                                     listItem(
-                                                        doc("invoice", title = "Electricity invoice"),
+                                                        doc(
+                                                            "invoice",
+                                                            title = "Electricity invoice",
+                                                            fields = extraFields,
+                                                        ),
                                                         listOf("Utilities"),
                                                     ),
                                                 ),
@@ -207,11 +233,12 @@ class DocumentLayoutTest : EnglishLocaleTest() {
                                             // The panel renders fields from the registry; seed it as a
                                             // library would.
                                             fieldDefs =
-                                                FieldKeys.seedDefinitions {
-                                                    FieldKeys.SEED_LABELS.getValue(
-                                                        it,
-                                                    )
-                                                },
+                                                FieldKeys
+                                                    .seedDefinitions {
+                                                        FieldKeys.SEED_LABELS.getValue(
+                                                            it,
+                                                        )
+                                                    }.filterNot { orphanMarker && it.key == FieldKeys.EINVOICE },
                                         ),
                                     ai = ai,
                                 ),

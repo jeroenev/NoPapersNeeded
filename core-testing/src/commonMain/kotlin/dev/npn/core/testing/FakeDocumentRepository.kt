@@ -33,6 +33,8 @@ fun doc(
     ocrState: OcrState = OcrState.NONE,
     ocrEngine: OcrEngineRef? = null,
     ocrSource: String? = null,
+    /** Extra field values, for keys [doc] does not name itself. */
+    fields: Map<String, String> = emptyMap(),
 ): Doc =
     Doc(
         docId = docId,
@@ -50,6 +52,7 @@ fun doc(
                 docType?.let { put(FieldKeys.DOC_TYPE, it) }
                 docDate?.let { put(FieldKeys.DOC_DATE, it) }
                 notes?.let { put(FieldKeys.NOTES, it) }
+                putAll(fields)
             },
         trashed = trashed,
         trashedOrigPath = null,

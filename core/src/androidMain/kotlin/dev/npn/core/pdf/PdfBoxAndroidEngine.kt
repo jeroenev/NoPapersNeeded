@@ -14,7 +14,10 @@ import com.tom_roush.pdfbox.cos.COSString
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.pdmodel.PDPage
 import com.tom_roush.pdfbox.pdmodel.PDPageContentStream
+import com.tom_roush.pdfbox.pdmodel.common.PDNameTreeNode
 import com.tom_roush.pdfbox.pdmodel.common.PDRectangle
+import com.tom_roush.pdfbox.pdmodel.common.filespecification.PDComplexFileSpecification
+import com.tom_roush.pdfbox.pdmodel.common.filespecification.PDEmbeddedFile
 import com.tom_roush.pdfbox.pdmodel.graphics.image.JPEGFactory
 import com.tom_roush.pdfbox.pdmodel.graphics.image.LosslessFactory
 import com.tom_roush.pdfbox.pdmodel.graphics.image.PDImageXObject
@@ -24,6 +27,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.util.zip.InflaterInputStream
 
 /**
  * Android [PdfEngine]. Text extraction and image->PDF use pdfbox-android (2.x API:
@@ -42,6 +46,32 @@ internal class PdfBoxAndroidEngine(
 ) : PdfEngine {
     override suspend fun open(bytes: ByteArray): PdfDocumentHandle =
         LazyPdfDocumentHandle(openText = { openText(bytes) }, openPages = { openPages(bytes) })
+
+    override suspend fun embeddedXmlFiles(bytes: ByteArray): List<EmbeddedXmlFile> =
+        withContext(io) {
+            loadOrThrow(bytes).use { doc ->
+                val tree = doc.documentCatalog.names?.embeddedFiles ?: return@use emptyList()
+                val result = mutableListOf<EmbeddedXmlFile>()
+                val seen = mutableSetOf<com.tom_roush.pdfbox.cos.COSDictionary>()
+
+                fun visit(
+                    node: PDNameTreeNode<PDComplexFileSpecification>,
+                    depth: Int,
+                ) {
+                    if (depth > MAX_NAME_TREE_DEPTH || !seen.add(node.cosObject)) return
+                    node.names.orEmpty().forEach { (key, spec) ->
+                        val name = spec.filename ?: key
+                        if (name.lowercase().endsWith(".xml")) {
+                            val file = spec.embeddedFileUnicode ?: spec.embeddedFile
+                            file?.readSafeXml()?.let { result.add(EmbeddedXmlFile(name, it)) }
+                        }
+                    }
+                    node.kids.orEmpty().forEach { visit(it, depth + 1) }
+                }
+                visit(tree, 0)
+                result
+            }
+        }
 
     private fun openText(bytes: ByteArray): PdfTextBackend = PdfBoxTextBackend(loadOrThrow(bytes))
 
@@ -199,5 +229,23 @@ private class RendererPageBackend(
         } catch (_: Exception) {
         }
         tempFile.delete()
+    }
+}
+
+private const val MAX_NAME_TREE_DEPTH = 32
+
+/** Decode only unfiltered or Flate streams, incrementally, without PDFBox's eager filter buffers. */
+private fun PDEmbeddedFile.readSafeXml(): ByteArray? {
+    val stream = cosObject
+    if (stream.getDictionaryObject(COSName.DECODE_PARMS) != null) return null
+    val filters = stream.filters
+    val filter = if (filters is COSArray && filters.size() == 1) filters.getObject(0) else filters
+    if (filter != null && filter != COSName.FLATE_DECODE && filter != COSName.FL) return null
+    return stream.createRawInputStream().use { raw ->
+        if (filter == null) {
+            raw.readCapped(MAX_EMBEDDED_XML_BYTES)
+        } else {
+            InflaterInputStream(raw).use { it.readCapped(MAX_EMBEDDED_XML_BYTES) }
+        }
     }
 }

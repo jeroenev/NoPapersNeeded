@@ -163,11 +163,45 @@ class FieldKeysTest {
     @Test
     fun seedMatchesThePlanTable() {
         val seed = FieldKeys.seedDefinitions()
-        assertEquals(listOf("title", "correspondent", "docType", "docDate", "notes"), seed.map { it.key })
+        assertEquals(
+            listOf(
+                "title",
+                "correspondent",
+                "docType",
+                "docDate",
+                "notes",
+                "invoiceNumber",
+                "invoiceTotal",
+                "invoiceCurrency",
+                "invoiceDueDate",
+                "invoiceBuyer",
+                "paymentReference",
+                "iban",
+                "eInvoice",
+            ),
+            seed.map { it.key },
+        )
         assertEquals(FieldType.DATE, seed.single { it.key == FieldKeys.DOC_DATE }.type)
         assertEquals(FieldType.LONG_TEXT, seed.single { it.key == FieldKeys.NOTES }.type)
-        assertTrue(seed.all { it.showByDefault })
-        assertEquals(setOf("notes"), seed.filterNot { it.aiEnabled }.map { it.key }.toSet())
-        assertEquals((0 until 5).toList(), seed.map { it.position })
+        assertEquals(FieldType.DECIMAL, seed.single { it.key == FieldKeys.INVOICE_TOTAL }.type)
+        assertEquals(FieldType.DATE, seed.single { it.key == FieldKeys.INVOICE_DUE_DATE }.type)
+        // The five well-known fields show on every document; the e-invoice fields appear with a value.
+        assertTrue(seed.take(5).all { it.showByDefault })
+        assertTrue(seed.drop(5).none { it.showByDefault })
+        assertEquals(
+            setOf(
+                "notes",
+                "invoiceNumber",
+                "invoiceTotal",
+                "invoiceCurrency",
+                "invoiceDueDate",
+                "invoiceBuyer",
+                "paymentReference",
+                "iban",
+                "eInvoice",
+            ),
+            seed.filterNot { it.aiEnabled }.map { it.key }.toSet(),
+        )
+        assertEquals((0 until seed.size).toList(), seed.map { it.position })
     }
 }
