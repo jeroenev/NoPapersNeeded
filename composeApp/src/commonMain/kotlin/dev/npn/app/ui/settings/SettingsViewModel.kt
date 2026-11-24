@@ -160,7 +160,6 @@ class SettingsViewModel(
     SettingsActions,
     ReminderSettingsActions {
     private val content = session.content
-    private val documents = session.documents
     private val aiSpend = session.aiSpend
     private val reviewConfig = session.reviewConfig
     private val storagePath = session.storagePath

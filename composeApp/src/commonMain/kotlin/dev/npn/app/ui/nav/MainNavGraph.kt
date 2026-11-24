@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -151,8 +152,6 @@ internal fun MainNav(
                                 onAssistant = { if (!assistant) nav.navigateAi(Route.AiChat, restoreState = true) },
                                 onPalette = palette::open,
                                 onShortcuts = openShortcuts,
-                                onOpenLibrary = onOpenLibrary,
-                                upcomingBadge = upcomingBadge,
                                 modifier =
                                     Modifier.shellShortcutKeys(
                                         shellFocus,
@@ -167,6 +166,7 @@ internal fun MainNav(
                                     library = library,
                                     aiConfigured = aiConfigured,
                                     onOpenLibrary = onOpenLibrary,
+                                    upcomingBadge = upcomingBadge,
                                 )
                             }
                             val paletteActions: CommandPaletteActions = palette
