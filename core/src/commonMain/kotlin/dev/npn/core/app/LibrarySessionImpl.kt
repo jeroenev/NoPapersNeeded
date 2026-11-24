@@ -110,7 +110,7 @@ internal class LibrarySessionImpl(
         MailService(
             store = JournalMailAccount(coordinator, lifetime),
             credentials = deps.mailCredentials,
-            cursors = DeviceMailCursors(deps.deviceDb.mailCursorDao()),
+            cursors = DeviceMailCursors(deps.deviceDb.mailCursorDao(), deps.deviceDb.keyValueDao()),
             transport = deps.mailTransport,
             sink = IngestMailSink(this),
             pdfRenderer = deps.mailPdfRenderer,
@@ -135,6 +135,10 @@ internal class LibrarySessionImpl(
             ) = lifetime.owned { mailService.testConnection(account, password) }
 
             override suspend fun checkNow() = lifetime.owned { mailService.checkNow() }
+
+            override fun cancelCheck() = mailService.cancelCheck()
+
+            override val importedDocuments = mailService.importedDocuments
         }
 
     private val scanReports = MutableStateFlow<ScanReport?>(null)

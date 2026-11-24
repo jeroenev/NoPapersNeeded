@@ -55,6 +55,7 @@ import dev.npn.core.sync.SyncStatus
 import dev.npn.core.sync.TransportAvailability
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.datetime.LocalTime
@@ -675,9 +676,20 @@ class FakeMailFacade : MailFacade {
         password: String?,
     ): MailTestOutcome = testOutcome
 
+    var cancels = 0
+        private set
+
+    /** What [checkNow] emits on [importedDocuments], as the service does after a check that imported. */
+    override val importedDocuments = MutableSharedFlow<List<String>>(extraBufferCapacity = 8)
+
     override suspend fun checkNow(): MailCheckReport {
         checks++
+        if (report.importedDocIds.isNotEmpty()) importedDocuments.emit(report.importedDocIds)
         return report
+    }
+
+    override fun cancelCheck() {
+        cancels++
     }
 }
 

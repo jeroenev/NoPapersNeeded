@@ -45,8 +45,21 @@ interface MailFacade {
         password: String?,
     ): MailTestOutcome
 
-    /** Check now, regardless of the enabled switch or the poll interval. */
+    /**
+     * Check now, regardless of the enabled switch or the poll interval, and read until the folder
+     * is exhausted. The check outlives a caller that stops waiting; [cancelCheck] stops it.
+     */
     suspend fun checkNow(): MailCheckReport
+
+    /**
+     * Ask the running check, a poll or a Check now, to stop after the message in hand. Everything
+     * it handled stays handled and the cursor keeps its place, so the next check goes on from
+     * there. Does nothing while no check runs.
+     */
+    fun cancelCheck()
+
+    /** The documents each check imported, one event per check that imported any. */
+    val importedDocuments: Flow<List<String>>
 }
 
 /** [MailAccountStore] over the journal's synced setting; writes run through [SessionLifetime.owned]. */
@@ -85,7 +98,7 @@ internal class IngestMailSink(
 
 private fun ImportOutcome.toMailResult(): MailImportResult =
     when (this) {
-        is ImportOutcome.Imported -> MailImportResult.IMPORTED
-        is ImportOutcome.Duplicate -> MailImportResult.DUPLICATE
-        is ImportOutcome.Failed -> MailImportResult.FAILED
+        is ImportOutcome.Imported -> MailImportResult.Imported(docId)
+        is ImportOutcome.Duplicate -> MailImportResult.Duplicate
+        is ImportOutcome.Failed -> MailImportResult.Failed
     }

@@ -4,11 +4,16 @@ import dev.npn.core.util.EpochClock
 import dev.npn.core.util.NpnLog
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+
+private const val NOW = 1_000L * MailStartPoint.DAY_MILLIS
 
 class MailServiceTest {
     private val account =
@@ -17,6 +22,8 @@ class MailServiceTest {
             username = "someone@example.com",
             enabled = true,
             postAction = MailPostAction.MARK_READ,
+            // Most tests read the whole fake folder; the start-point tests set their own.
+            startFrom = MailStartPoint.EVERYTHING,
         )
 
     private val pdf = MailAttachment("invoice.pdf", "application/pdf", byteArrayOf(1, 2, 3))
@@ -26,7 +33,18 @@ class MailServiceTest {
         attachments: List<MailAttachment> = listOf(pdf),
         from: String = "sender@example.com",
         subject: String = "Invoice",
-    ) = MailMessage(uid, from, "me@example.com", subject, 0, "body", attachments)
+        dateMillis: Long = 0,
+    ) = MailMessage(uid, from, "me@example.com", subject, dateMillis, "body", attachments)
+
+    /** A message per UID in [uids], each with its own attachment name, sent a day apart ending today. */
+    private fun backlog(uids: LongRange): List<MailMessage> =
+        uids.map { uid ->
+            message(
+                uid = uid,
+                attachments = listOf(pdf.copy(fileName = "invoice-$uid.pdf")),
+                dateMillis = NOW - (uids.last - uid) * MailStartPoint.DAY_MILLIS,
+            )
+        }
 
     private class FakeAccountStore(
         initial: MailAccount,
@@ -87,7 +105,7 @@ class MailServiceTest {
 
     private class FakeSink : MailDocumentSink {
         val importedNames = mutableListOf<String>()
-        var onImport: (String) -> MailImportResult = { MailImportResult.IMPORTED }
+        var onImport: (String) -> MailImportResult = { MailImportResult.Imported("doc:$it") }
 
         override suspend fun importPdf(
             bytes: ByteArray,
@@ -117,73 +135,108 @@ class MailServiceTest {
         }
     }
 
+    /**
+     * An in-memory folder. Each [open] snapshots UIDNEXT, as an IMAP SELECT does, and counts the
+     * connection, so a test can tell one check made exactly one.
+     */
     private class FakeTransport(
         var messages: List<MailMessage> = emptyList(),
         var validity: Long = 7,
         var fetchFailure: MailFailureReason? = null,
         var postFailure: MailFailureReason? = null,
         var testFailure: MailFailureReason? = null,
+        var openFailure: MailFailureReason? = null,
+        var searchFails: Boolean = false,
     ) : MailTransport {
         override val available: Boolean = true
+        var opens = 0
+        var closes = 0
         var fetches = 0
+        val searchedSince = mutableListOf<Long>()
         val marked = mutableListOf<Long>()
         val moved = mutableListOf<Pair<Long, String>>()
         val deleted = mutableListOf<Long>()
+
+        /** Calls made on a connection after it was closed; a correct check makes none. */
+        var callsAfterClose = 0
 
         override suspend fun testConnection(
             account: MailAccount,
             password: String,
         ): MailFailureReason? = testFailure
 
-        override suspend fun fetchMessages(
+        override suspend fun open(
             account: MailAccount,
             password: String,
-            knownUidValidity: Long?,
-            afterUid: Long,
-        ): MailFetchResult {
-            fetches++
-            fetchFailure?.let { return MailFetchResult.Failed(it) }
-            val start = if (knownUidValidity == validity) afterUid + 1 else 1
-            val maxUid = messages.maxOfOrNull(MailMessage::uid) ?: 0
-            val uidNext = maxUid + 1
-            return MailFetchResult.Success(
-                uidValidity = validity,
-                messages =
-                    messages
-                        .filter { it.uid in start..minOf(uidNext - 1, start + MailTransport.PAGE_SIZE - 1) }
-                        .sortedBy(MailMessage::uid)
-                        .take(MailTransport.PAGE_SIZE),
-                uidNext = uidNext,
-                scannedThroughUid = maxOf(start - 1, minOf(uidNext - 1, start + MailTransport.PAGE_SIZE - 1)),
-            )
+        ): MailOpenResult {
+            opens++
+            openFailure?.let { return MailOpenResult.Failed(it) }
+            return MailOpenResult.Opened(Connection(validity, (messages.maxOfOrNull(MailMessage::uid) ?: 0) + 1))
         }
 
-        override suspend fun markRead(
-            account: MailAccount,
-            password: String,
-            uid: Long,
-        ): MailFailureReason? {
-            marked += uid
-            return postFailure
-        }
+        inner class Connection(
+            override val uidValidity: Long,
+            override val uidNext: Long,
+        ) : MailConnection {
+            private var closed = false
 
-        override suspend fun moveTo(
-            account: MailAccount,
-            password: String,
-            uid: Long,
-            folder: String,
-        ): MailFailureReason? {
-            moved += uid to folder
-            return postFailure
-        }
+            private fun touch() {
+                if (closed) callsAfterClose++
+            }
 
-        override suspend fun delete(
-            account: MailAccount,
-            password: String,
-            uid: Long,
-        ): MailFailureReason? {
-            deleted += uid
-            return postFailure
+            override suspend fun firstUidSince(sinceMillis: Long): Long? {
+                touch()
+                searchedSince += sinceMillis
+                if (searchFails) return null
+                return messages.filter { (it.dateMillis ?: 0) >= sinceMillis }.minOfOrNull(MailMessage::uid) ?: uidNext
+            }
+
+            override suspend fun countAfter(uid: Long): Int? {
+                touch()
+                return messages.count { it.uid in (uid + 1) until uidNext }
+            }
+
+            override suspend fun fetchAfter(afterUid: Long): MailFetchResult {
+                touch()
+                fetches++
+                fetchFailure?.let { return MailFetchResult.Failed(it) }
+                val start = afterUid + 1
+                val windowEnd = minOf(uidNext - 1, start + MailTransport.SCAN_WINDOW - 1)
+                val listed = messages.filter { it.uid in start..windowEnd }.sortedBy(MailMessage::uid)
+                val taken = listed.take(MailTransport.PAGE_SIZE)
+                return MailFetchResult.Success(
+                    messages = taken,
+                    uidNext = uidNext,
+                    scannedThroughUid =
+                        if (listed.size > MailTransport.PAGE_SIZE) taken.last().uid else maxOf(afterUid, windowEnd),
+                )
+            }
+
+            override suspend fun markRead(uid: Long): MailFailureReason? {
+                touch()
+                marked += uid
+                return postFailure
+            }
+
+            override suspend fun moveTo(
+                uid: Long,
+                folder: String,
+            ): MailFailureReason? {
+                touch()
+                moved += uid to folder
+                return postFailure
+            }
+
+            override suspend fun delete(uid: Long): MailFailureReason? {
+                touch()
+                deleted += uid
+                return postFailure
+            }
+
+            override suspend fun close() {
+                if (!closed) closes++
+                closed = true
+            }
         }
     }
 
@@ -193,6 +246,7 @@ class MailServiceTest {
         credentials: FakeCredentials = FakeCredentials(),
         scope: kotlinx.coroutines.CoroutineScope,
     ) {
+        var now = NOW
         val store = FakeAccountStore(account)
         val cursors = FakeCursors()
         val sink = FakeSink()
@@ -207,7 +261,7 @@ class MailServiceTest {
                 transport = transport,
                 sink = sink,
                 pdfRenderer = renderer,
-                clock = EpochClock { 1_000 },
+                clock = EpochClock { now },
                 log = NpnLog.None,
                 scope = scope,
             )
@@ -232,19 +286,16 @@ class MailServiceTest {
         }
 
     @Test
-    fun emptyUidWindowsEventuallyReachSparseMessages() =
+    fun emptyUidWindowsAreCrossedWithinOneCheck() =
         runTest {
-            val pageSize = MailTransport.PAGE_SIZE.toLong()
-            val messageUid = 2 * pageSize + 1
+            // A mailbox whose early mail was deleted: two whole scan windows hold nothing.
+            val messageUid = 2 * MailTransport.SCAN_WINDOW + 1
             val transport = FakeTransport(messages = listOf(message(uid = messageUid)))
             val fixture = fixture(transport = transport)
             fixture.service.checkNow()
-            assertEquals(pageSize, fixture.cursors.last().lastUid)
-            fixture.service.checkNow()
-            assertEquals(2 * pageSize, fixture.cursors.last().lastUid)
-            fixture.service.checkNow()
             assertEquals(listOf(messageUid), transport.marked)
             assertEquals(messageUid, fixture.cursors.last().lastUid)
+            assertEquals(3, transport.fetches)
         }
 
     @Test
@@ -275,14 +326,14 @@ class MailServiceTest {
         runTest {
             val transport = FakeTransport(messages = listOf(message()))
             val fixture = fixture(transport = transport)
-            fixture.sink.onImport = { MailImportResult.FAILED }
+            fixture.sink.onImport = { MailImportResult.Failed }
             val failed = fixture.service.checkNow()
             assertEquals(MailFailureReason.IMPORT_FAILED, failed.errors.single().reason)
             assertTrue(transport.marked.isEmpty())
             assertEquals(0, fixture.cursors.last().lastUid)
             assertEquals(MailFailureReason.IMPORT_FAILED, fixture.cursors.last().lastError)
 
-            fixture.sink.onImport = { MailImportResult.IMPORTED }
+            fixture.sink.onImport = { MailImportResult.Imported("doc:$it") }
             val retried = fixture.service.checkNow()
             assertTrue(retried.errors.isEmpty())
             assertEquals(1, retried.imported)
@@ -319,7 +370,7 @@ class MailServiceTest {
         runTest {
             val transport = FakeTransport(messages = listOf(message()))
             val fixture = fixture(transport = transport)
-            fixture.sink.onImport = { MailImportResult.DUPLICATE }
+            fixture.sink.onImport = { MailImportResult.Duplicate }
             val report = fixture.service.checkNow()
             assertEquals(1, report.duplicates)
             assertEquals(0, report.imported)
@@ -340,7 +391,7 @@ class MailServiceTest {
             assertEquals(listOf(1L), transport.marked)
 
             transport.postFailure = null
-            fixture.sink.onImport = { MailImportResult.DUPLICATE }
+            fixture.sink.onImport = { MailImportResult.Duplicate }
             val retried = fixture.service.checkNow()
             assertTrue(retried.errors.isEmpty())
             assertEquals(1, retried.duplicates)
@@ -405,7 +456,7 @@ class MailServiceTest {
             val fixture = fixture(transport = transport, credentials = FakeCredentials(password = null))
             val report = fixture.service.checkNow()
             assertEquals(MailFailureReason.NO_PASSWORD, report.errors.single().reason)
-            assertEquals(0, transport.fetches)
+            assertEquals(0, transport.opens)
             assertEquals(MailFailureReason.NO_PASSWORD, fixture.cursors.last().lastError)
         }
 
@@ -420,7 +471,7 @@ class MailServiceTest {
                 )
             val report = fixture.service.checkNow()
             assertEquals(MailFailureReason.SECRET_UNAVAILABLE, report.errors.single().reason)
-            assertEquals(0, transport.fetches)
+            assertEquals(0, transport.opens)
         }
 
     @Test
@@ -431,7 +482,7 @@ class MailServiceTest {
             val fixture = fixture(account = plain, transport = transport)
             val report = fixture.service.checkNow()
             assertEquals(MailFailureReason.PLAIN_REFUSED, report.errors.single().reason)
-            assertEquals(0, transport.fetches)
+            assertEquals(0, transport.opens)
         }
 
     @Test
@@ -468,5 +519,219 @@ class MailServiceTest {
             fixture.service.saveAccount(account.copy(pollIntervalMinutes = 30), null)
             assertEquals(30, fixture.store.current().pollIntervalMinutes)
             assertEquals("secret", fixture.credentials.password)
+        }
+
+    @Test
+    fun newMailOnlyStartsAtTheNextUidAndReadsNothingOlder() =
+        runTest {
+            val transport = FakeTransport(messages = backlog(1L..20L))
+            val fixture = fixture(account = account.copy(startFrom = MailStartPoint.NEW_ONLY), transport = transport)
+            val report = fixture.service.checkNow()
+            assertEquals(0, report.messagesSeen)
+            assertEquals(20, fixture.cursors.last().lastUid)
+            assertTrue(transport.searchedSince.isEmpty())
+
+            transport.messages = backlog(1L..22L)
+            val next = fixture.service.checkNow()
+            assertEquals(listOf("invoice-21.pdf", "invoice-22.pdf"), fixture.sink.importedNames)
+            assertEquals(2, next.imported)
+        }
+
+    @Test
+    fun theLastThirtyDaysAreFoundBySearchAndReadFromThere() =
+        runTest {
+            // One message a day for 100 days: the last 30 days hold the newest 31 (day granularity).
+            val transport = FakeTransport(messages = backlog(1L..100L))
+            val fixture =
+                fixture(account = account.copy(startFrom = MailStartPoint.LAST_30_DAYS), transport = transport)
+            fixture.service.checkNow()
+            assertEquals(listOf(NOW - 30 * MailStartPoint.DAY_MILLIS), transport.searchedSince)
+            assertEquals((70L..100L).map { "invoice-$it.pdf" }, fixture.sink.importedNames)
+            val cursor = fixture.cursors.last()
+            assertEquals(MailStartPoint.LAST_30_DAYS, cursor.startFrom)
+            assertEquals(false, cursor.catchingUp)
+        }
+
+    @Test
+    fun aFirstPollCatchesUpThroughTheWholeBacklogOverOneConnection() =
+        runTest {
+            val transport = FakeTransport(messages = backlog(1L..120L))
+            val fixture = fixture(transport = transport)
+            fixture.service.pollIfDue()
+            // Far more than a routine poll's five pages, in one check and one login.
+            assertEquals(120, fixture.sink.importedNames.size)
+            assertEquals((1L..120L).toList(), transport.marked)
+            assertEquals(1, transport.opens)
+            assertEquals(1, transport.closes)
+            assertEquals(0, transport.callsAfterClose)
+            val cursor = fixture.cursors.last()
+            assertEquals(120, cursor.lastUid)
+            assertEquals(false, cursor.catchingUp)
+            assertEquals(0, cursor.remaining)
+            assertEquals(NOW, cursor.throughMillis)
+        }
+
+    @Test
+    fun routinePollsAfterACatchUpReadAFewPagesAtATime() =
+        runTest {
+            val transport = FakeTransport(messages = backlog(1L..5L))
+            val fixture = fixture(transport = transport)
+            fixture.service.pollIfDue()
+            assertEquals(5, fixture.sink.importedNames.size)
+
+            transport.messages = backlog(1L..85L)
+            fixture.now += account.pollIntervalMinutes * 60_000L
+            fixture.service.pollIfDue()
+            // MAX_PAGES_PER_CHECK pages of PAGE_SIZE: the rest waits for the next poll.
+            assertEquals(5 + 5 * MailTransport.PAGE_SIZE, fixture.sink.importedNames.size)
+            assertEquals(2, transport.opens)
+
+            fixture.now += account.pollIntervalMinutes * 60_000L
+            fixture.service.pollIfDue()
+            assertEquals(85, fixture.sink.importedNames.size)
+            assertEquals((1L..85L).map { "invoice-$it.pdf" }, fixture.sink.importedNames)
+        }
+
+    @Test
+    fun aCheckCancelledMidBacklogResumesWhereItStoppedWithoutSkipping() =
+        runTest {
+            val transport = FakeTransport(messages = backlog(1L..40L))
+            val fixture = fixture(transport = transport)
+            fixture.sink.onImport = { name ->
+                if (name == "invoice-15.pdf") fixture.service.cancelCheck()
+                MailImportResult.Imported("doc:$name")
+            }
+            val cancelled = fixture.service.checkNow()
+            assertTrue(cancelled.cancelled)
+            assertTrue(cancelled.errors.isEmpty())
+            assertEquals(15, cancelled.imported)
+            val stopped = fixture.cursors.last()
+            assertEquals(15, stopped.lastUid)
+            assertEquals(true, stopped.catchingUp)
+            assertEquals(1, transport.closes)
+
+            // A routine poll after the cancel still reads every page: the catch-up is not over.
+            fixture.now += account.pollIntervalMinutes * 60_000L
+            fixture.service.pollIfDue()
+            assertEquals((1L..40L).map { "invoice-$it.pdf" }, fixture.sink.importedNames)
+            assertEquals((1L..40L).toList(), transport.marked)
+            assertEquals(false, fixture.cursors.last().catchingUp)
+        }
+
+    @Test
+    fun movingTheStartFurtherBackReadsTheOlderMailAgain() =
+        runTest {
+            val transport = FakeTransport(messages = backlog(1L..100L))
+            val fixture =
+                fixture(account = account.copy(startFrom = MailStartPoint.LAST_30_DAYS), transport = transport)
+            fixture.service.checkNow()
+            assertEquals(31, fixture.sink.importedNames.size)
+
+            fixture.store.flow.value = fixture.store.current().copy(startFrom = MailStartPoint.EVERYTHING)
+            fixture.sink.onImport = { name ->
+                val older = name.removePrefix("invoice-").removeSuffix(".pdf").toLong() < 70
+                if (older) MailImportResult.Imported("doc:$name") else MailImportResult.Duplicate
+            }
+            val report = fixture.service.checkNow()
+            assertEquals(69, report.imported)
+            assertEquals(31, report.duplicates)
+            assertEquals(100, fixture.cursors.last().lastUid)
+            assertEquals(MailStartPoint.EVERYTHING, fixture.cursors.last().startFrom)
+        }
+
+    @Test
+    fun movingTheStartLaterSkipsOnlyMailTheCursorHasNotReached() =
+        runTest {
+            val transport = FakeTransport(messages = backlog(1L..100L))
+            val fixture = fixture(transport = transport)
+            fixture.sink.onImport = { name ->
+                if (name == "invoice-10.pdf") fixture.service.cancelCheck()
+                MailImportResult.Imported("doc:$name")
+            }
+            fixture.service.checkNow()
+            assertEquals(10, fixture.cursors.last().lastUid)
+
+            fixture.store.flow.value = fixture.store.current().copy(startFrom = MailStartPoint.LAST_30_DAYS)
+            fixture.sink.onImport = { MailImportResult.Imported("doc:$it") }
+            fixture.service.checkNow()
+            assertEquals(
+                (1L..10L).map { "invoice-$it.pdf" } + (70L..100L).map { "invoice-$it.pdf" },
+                fixture.sink.importedNames,
+            )
+        }
+
+    @Test
+    fun aCursorFromBeforeStartPointsIsNeverMovedBack() =
+        runTest {
+            val transport = FakeTransport(messages = backlog(1L..100L))
+            val fixture =
+                fixture(account = account.copy(startFrom = MailStartPoint.LAST_30_DAYS), transport = transport)
+            fixture.cursors.save(MailCursor(account.accountKey, account.folder, uidValidity = 7, lastUid = 80))
+            fixture.service.checkNow()
+            assertEquals((81L..100L).map { "invoice-$it.pdf" }, fixture.sink.importedNames)
+            assertEquals(MailStartPoint.LAST_30_DAYS, fixture.cursors.last().startFrom)
+        }
+
+    @Test
+    fun aRenumberedFolderIsReadFromADayBeforeTheLastCheck() =
+        runTest {
+            val transport = FakeTransport(messages = backlog(1L..10L))
+            val fixture = fixture(account = account.copy(startFrom = MailStartPoint.NEW_ONLY), transport = transport)
+            fixture.service.checkNow()
+            assertTrue(fixture.sink.importedNames.isEmpty())
+
+            // The server renumbers, and two messages arrived since the last check: "new mail only"
+            // alone would start past them.
+            fixture.now += MailStartPoint.DAY_MILLIS
+            transport.validity = 8
+            transport.messages =
+                backlog(1L..12L).map { it.copy(dateMillis = it.dateMillis!! + MailStartPoint.DAY_MILLIS) }
+            fixture.service.checkNow()
+            assertEquals(listOf(NOW - MailStartPoint.DAY_MILLIS), transport.searchedSince)
+            assertEquals((10L..12L).map { "invoice-$it.pdf" }, fixture.sink.importedNames)
+            assertEquals(8, fixture.cursors.last().uidValidity)
+        }
+
+    @Test
+    fun aStartTheServerCannotFindLeavesTheCursorUnplaced() =
+        runTest {
+            val transport = FakeTransport(messages = backlog(1L..10L), searchFails = true)
+            val fixture = fixture(account = account.copy(startFrom = MailStartPoint.LAST_YEAR), transport = transport)
+            val report = fixture.service.checkNow()
+            assertEquals(MailFailureReason.FETCH_FAILED, report.errors.single().reason)
+            assertEquals(null, fixture.cursors.last().uidValidity)
+            assertEquals(1, transport.closes)
+            assertTrue(fixture.sink.importedNames.isEmpty())
+        }
+
+    @Test
+    fun aConnectionThatCannotOpenIsTyped() =
+        runTest {
+            val transport =
+                FakeTransport(messages = backlog(1L..3L), openFailure = MailFailureReason.AUTHENTICATION_FAILED)
+            val fixture = fixture(transport = transport)
+            val report = fixture.service.checkNow()
+            assertEquals(MailFailureReason.AUTHENTICATION_FAILED, report.errors.single().reason)
+            assertEquals(MailFailureReason.AUTHENTICATION_FAILED, fixture.cursors.last().lastError)
+            runCurrent()
+            assertEquals(MailFailureReason.AUTHENTICATION_FAILED, fixture.service.state.value.problem)
+        }
+
+    @Test
+    fun aCheckThatImportedAnnouncesItsDocuments() =
+        runTest {
+            val transport = FakeTransport(messages = backlog(1L..3L))
+            val fixture = fixture(transport = transport)
+            val events = mutableListOf<List<String>>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                fixture.service.importedDocuments.collect { events += it }
+            }
+            val report = fixture.service.checkNow()
+            assertEquals((1..3).map { "doc:invoice-$it.pdf" }, report.importedDocIds)
+            assertEquals(listOf(report.importedDocIds), events)
+
+            // A check that imported nothing says nothing.
+            fixture.service.checkNow()
+            assertEquals(1, events.size)
         }
 }

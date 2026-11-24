@@ -34,6 +34,12 @@ data class MailAccount(
      * unencrypted, which is never a silent fallback.
      */
     val allowPlain: Boolean = false,
+    /**
+     * How far back a device that has not read this folder yet starts. A build that does not know
+     * this key ignores it (the setting's JSON is decoded leniently), and a key from a later build
+     * this one does not know reads as the default.
+     */
+    val startFrom: MailStartPoint = MailStartPoint.LAST_30_DAYS,
 ) {
     /** The keyring entry and device cursor this account uses, derived from its connection identity. */
     val accountKey: String
@@ -80,6 +86,41 @@ data class MailAccount(
         const val MAX_POLL_MINUTES = 24 * 60
 
         const val MAX_PORT = 65_535
+    }
+}
+
+/**
+ * Where reading a folder starts the first time, so a mailbox with years of mail is not read from
+ * its oldest message unless that is asked for. Declared from the latest start to the earliest:
+ * [reachesFurtherBackThan] is the order.
+ */
+@Serializable
+enum class MailStartPoint {
+    /** Only mail that arrives after the first check. */
+    NEW_ONLY,
+    LAST_30_DAYS,
+    LAST_YEAR,
+
+    /** The whole folder, oldest first. */
+    EVERYTHING,
+    ;
+
+    /** Whether this start reads older mail than [other] does. */
+    fun reachesFurtherBackThan(other: MailStartPoint): Boolean = ordinal > other.ordinal
+
+    /**
+     * The earliest arrival this start reads, relative to [nowMillis]; null for [EVERYTHING], which
+     * has no bound, and for [NEW_ONLY], which starts at the folder's next UID instead of a date.
+     */
+    fun sinceMillis(nowMillis: Long): Long? =
+        when (this) {
+            NEW_ONLY, EVERYTHING -> null
+            LAST_30_DAYS -> nowMillis - 30 * DAY_MILLIS
+            LAST_YEAR -> nowMillis - 365 * DAY_MILLIS
+        }
+
+    companion object {
+        const val DAY_MILLIS = 24 * 60 * 60 * 1000L
     }
 }
 

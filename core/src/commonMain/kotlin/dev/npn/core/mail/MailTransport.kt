@@ -55,19 +55,18 @@ enum class MailFailureReason {
 }
 
 /**
- * What the IMAP client returns. [uidValidity] names the mailbox generation: when it changes, the
- * UIDs in [messages] are from a new sequence and a stored cursor must start again at the top.
+ * One page of a folder read from a cursor. [uidNext] is the UID the mailbox would give its next
+ * message when the folder was opened, so a page can say whether the folder is exhausted.
  */
 sealed interface MailFetchResult {
     data class Success(
-        val uidValidity: Long,
         val messages: List<MailMessage>,
-        /** The highest UID the mailbox held when listed, so an empty page can still move the cursor. */
+        /** The UID the mailbox's next message gets; everything below it existed when it was opened. */
         val uidNext: Long,
         /**
          * The last UID this fetch examined, whether or not a message held it. A page can be empty
-         * because the whole UID window was deleted; advancing to this end is what lets the next
-         * check look at the following window instead of retrying the same empty one forever.
+         * because a whole UID window was deleted; advancing to this end is what lets the next page
+         * look at the following window instead of retrying the same empty one forever.
          */
         val scannedThroughUid: Long,
     ) : MailFetchResult
@@ -76,6 +75,18 @@ sealed interface MailFetchResult {
         val reason: MailFailureReason,
         val detail: String? = null,
     ) : MailFetchResult
+}
+
+/** What opening the account's folder for one check came to. */
+sealed interface MailOpenResult {
+    data class Opened(
+        val connection: MailConnection,
+    ) : MailOpenResult
+
+    data class Failed(
+        val reason: MailFailureReason,
+        val detail: String? = null,
+    ) : MailOpenResult
 }
 
 /**
@@ -96,40 +107,65 @@ interface MailTransport {
     ): MailFailureReason?
 
     /**
-     * Read messages whose UID is greater than [afterUid], or every message of the folder when
-     * [knownUidValidity] is null or no longer matches the mailbox's. Attachments are capped, and
-     * only supported ones need be returned.
+     * Connect and open the account's folder for one whole check: every page and every post-action
+     * of the check goes over the returned connection, which the caller closes.
      */
-    suspend fun fetchMessages(
+    suspend fun open(
         account: MailAccount,
         password: String,
-        knownUidValidity: Long?,
-        afterUid: Long,
-    ): MailFetchResult
-
-    suspend fun markRead(
-        account: MailAccount,
-        password: String,
-        uid: Long,
-    ): MailFailureReason?
-
-    suspend fun moveTo(
-        account: MailAccount,
-        password: String,
-        uid: Long,
-        folder: String,
-    ): MailFailureReason?
-
-    suspend fun delete(
-        account: MailAccount,
-        password: String,
-        uid: Long,
-    ): MailFailureReason?
+    ): MailOpenResult
 
     companion object {
         /** The most messages one fetch returns; a check pages on from the cursor after these. */
         const val PAGE_SIZE = 10
+
+        /**
+         * The most UIDs one fetch looks across for [PAGE_SIZE] messages. A mailbox whose old mail
+         * was deleted has long runs of unused UIDs; a wide window crosses them in few round trips,
+         * while listing a window is only a UID list, never a message body.
+         */
+        const val SCAN_WINDOW = 500L
     }
+}
+
+/**
+ * One open folder, held for one check. UIDs are this folder's, under [uidValidity]; the folder
+ * cannot change generation while it is open (a server that renumbers closes it, and the next
+ * call fails).
+ */
+interface MailConnection {
+    /** The mailbox generation; a stored cursor of another generation is no longer meaningful. */
+    val uidValidity: Long
+
+    /** The UID the mailbox's next message gets, as of opening: "new mail only" starts here. */
+    val uidNext: Long
+
+    /**
+     * The UID of the first message that arrived on or after the day of [sinceMillis] (IMAP
+     * `SEARCH SINCE`), [uidNext] when none did, or null when the server could not answer.
+     */
+    suspend fun firstUidSince(sinceMillis: Long): Long?
+
+    /** How many messages the folder holds after [uid], or null when the server could not say. */
+    suspend fun countAfter(uid: Long): Int?
+
+    /**
+     * Read up to [MailTransport.PAGE_SIZE] messages whose UID is greater than [afterUid]. Attachments
+     * are capped, and only supported ones need be returned.
+     */
+    suspend fun fetchAfter(afterUid: Long): MailFetchResult
+
+    suspend fun markRead(uid: Long): MailFailureReason?
+
+    suspend fun moveTo(
+        uid: Long,
+        folder: String,
+    ): MailFailureReason?
+
+    suspend fun delete(uid: Long): MailFailureReason?
+
+    /** Close the folder and the connection; never throws, and is safe to call twice. */
+    suspend fun close()
 }
 
 /** A transport for a host that does not offer email import (Android): every call fails typed. */
@@ -141,31 +177,10 @@ object UnsupportedMailTransport : MailTransport {
         password: String,
     ): MailFailureReason = MailFailureReason.UNSUPPORTED
 
-    override suspend fun fetchMessages(
+    override suspend fun open(
         account: MailAccount,
         password: String,
-        knownUidValidity: Long?,
-        afterUid: Long,
-    ): MailFetchResult = MailFetchResult.Failed(MailFailureReason.UNSUPPORTED)
-
-    override suspend fun markRead(
-        account: MailAccount,
-        password: String,
-        uid: Long,
-    ): MailFailureReason = MailFailureReason.UNSUPPORTED
-
-    override suspend fun moveTo(
-        account: MailAccount,
-        password: String,
-        uid: Long,
-        folder: String,
-    ): MailFailureReason = MailFailureReason.UNSUPPORTED
-
-    override suspend fun delete(
-        account: MailAccount,
-        password: String,
-        uid: Long,
-    ): MailFailureReason = MailFailureReason.UNSUPPORTED
+    ): MailOpenResult = MailOpenResult.Failed(MailFailureReason.UNSUPPORTED)
 }
 
 /** Why the OS secret store could not be used. Mapped to a whole sentence in `composeApp`. */
@@ -234,6 +249,20 @@ data class MailCursor(
     val lastCheckedAtMillis: Long? = null,
     /** The last typed failure, for the settings pane after a restart; null after a clean check. */
     val lastError: MailFailureReason? = null,
+    /**
+     * The start point [lastUid] was placed for. Null for a cursor placed before start points
+     * existed; a cursor whose start point differs from the account's is placed again.
+     */
+    val startFrom: MailStartPoint? = null,
+    /**
+     * Set from placing the cursor at a start point until a check reaches the end of the folder:
+     * while it is set, a check reads every page instead of a routine poll's few.
+     */
+    val catchingUp: Boolean = false,
+    /** When the last message the cursor passed was sent, for "imported through". */
+    val throughMillis: Long? = null,
+    /** How many messages were left after the cursor when it was last saved, when known. */
+    val remaining: Int? = null,
 )
 
 /** Device-local cursor storage (`device.db`): never synced, because it describes this device's reads. */
@@ -260,7 +289,16 @@ interface MailDocumentSink {
 }
 
 /** The three things one attachment can be to the library, in the terms the email report counts. */
-enum class MailImportResult { IMPORTED, DUPLICATE, FAILED }
+sealed interface MailImportResult {
+    /** A new document (or a hidden one brought back): [docId] is what "Show" opens. */
+    data class Imported(
+        val docId: String,
+    ) : MailImportResult
+
+    data object Duplicate : MailImportResult
+
+    data object Failed : MailImportResult
+}
 
 /** Renders one email as a readable PDF; null when the host has no PDF stack for it. */
 interface MailPdfRenderer {

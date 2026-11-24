@@ -141,4 +141,34 @@ class MailAccountTest {
         assertTrue(name.endsWith(".pdf"))
         assertTrue(name.length <= 124)
     }
+
+    @Test
+    fun anAccountSavedBeforeStartPointsReadsWithTheDefaultStart() {
+        val stored = """{"host":"mail.example.com","username":"someone@example.com","enabled":true}"""
+        val decoded = MailAccountJson.decode(stored)
+        assertEquals("mail.example.com", decoded.host)
+        assertEquals(MailStartPoint.LAST_30_DAYS, decoded.startFrom)
+    }
+
+    @Test
+    fun aStartPointFromALaterBuildKeepsTheRestOfTheAccount() {
+        val stored = """{"host":"mail.example.com","username":"someone@example.com","startFrom":"LAST_DECADE"}"""
+        val decoded = MailAccountJson.decode(stored)
+        assertEquals("mail.example.com", decoded.host)
+        assertEquals(MailStartPoint.LAST_30_DAYS, decoded.startFrom)
+    }
+
+    @Test
+    fun theStartPointRoundTripsThroughTheSetting() {
+        val account = account().copy(startFrom = MailStartPoint.EVERYTHING)
+        assertEquals(MailStartPoint.EVERYTHING, MailAccountJson.decode(MailAccountJson.encode(account)).startFrom)
+    }
+
+    @Test
+    fun startPointsAreOrderedByHowFarBackTheyRead() {
+        assertTrue(MailStartPoint.EVERYTHING.reachesFurtherBackThan(MailStartPoint.LAST_YEAR))
+        assertTrue(MailStartPoint.LAST_YEAR.reachesFurtherBackThan(MailStartPoint.LAST_30_DAYS))
+        assertTrue(MailStartPoint.LAST_30_DAYS.reachesFurtherBackThan(MailStartPoint.NEW_ONLY))
+        assertFalse(MailStartPoint.NEW_ONLY.reachesFurtherBackThan(MailStartPoint.NEW_ONLY))
+    }
 }

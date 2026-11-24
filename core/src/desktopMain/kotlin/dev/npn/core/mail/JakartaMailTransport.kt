@@ -16,6 +16,9 @@ import jakarta.mail.StoreClosedException
 import jakarta.mail.UIDFolder
 import jakarta.mail.internet.InternetAddress
 import jakarta.mail.internet.MimeUtility
+import jakarta.mail.search.ComparisonTerm
+import jakarta.mail.search.ReceivedDateTerm
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.eclipse.angus.mail.imap.IMAPFolder
@@ -23,6 +26,7 @@ import org.eclipse.angus.mail.imap.IMAPStore
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.security.cert.CertificateException
+import java.util.Date
 import java.util.Properties
 import javax.net.ssl.SSLException
 
@@ -33,7 +37,7 @@ import javax.net.ssl.SSLException
  * to the store's `connect` and never appears in a log line or a detail.
  */
 internal class JakartaMailTransport(
-    private val io: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO,
+    private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : MailTransport {
     override val available: Boolean = true
 
@@ -45,149 +49,31 @@ internal class JakartaMailTransport(
             withFolder(account, password, Folder.READ_ONLY) { reason -> reason }
         }
 
-    override suspend fun fetchMessages(
+    override suspend fun open(
         account: MailAccount,
         password: String,
-        knownUidValidity: Long?,
-        afterUid: Long,
-    ): MailFetchResult =
+    ): MailOpenResult =
         withContext(io) {
-            var store: Store? = null
-            var folder: Folder? = null
-            try {
-                store =
-                    try {
-                        connect(account, password)
-                    } catch (failure: Exception) {
-                        return@withContext MailFetchResult.Failed(connectReason(failure))
-                    }
-                folder =
-                    try {
-                        openFolder(store, account, Folder.READ_WRITE)
-                    } catch (failure: Exception) {
-                        return@withContext MailFetchResult.Failed(connectReason(failure))
-                    }
+            val store =
                 try {
-                    val uidFolder =
-                        folder as? UIDFolder
-                            ?: return@withContext MailFetchResult.Failed(MailFailureReason.FETCH_FAILED)
-                    val uidValidity = uidFolder.uidValidity
-                    val start = if (knownUidValidity == uidValidity) afterUid + 1 else 1
-                    val last = minOf(uidFolder.uidNext - 1, start + MailTransport.PAGE_SIZE - 1)
-                    val messages =
-                        if (last < start) {
-                            emptyList()
-                        } else {
-                            uidFolder
-                                .getMessagesByUID(start, last)
-                                .filterNotNull()
-                                .map { MimeParser.parseOrFailed(uidFolder.getUID(it), it) }
-                        }
-                    MailFetchResult.Success(
-                        uidValidity = uidValidity,
-                        messages = messages,
-                        uidNext = uidFolder.uidNext,
-                        scannedThroughUid = maxOf(start - 1, last),
-                    )
+                    connect(account, password)
                 } catch (failure: Exception) {
-                    MailFetchResult.Failed(reason(failure, MailFailureReason.FETCH_FAILED))
+                    return@withContext MailOpenResult.Failed(connectReason(failure))
                 }
-            } finally {
-                close(folder, expunge = false)
-                close(store)
-            }
-        }
-
-    override suspend fun markRead(
-        account: MailAccount,
-        password: String,
-        uid: Long,
-    ): MailFailureReason? = withMessage(account, password, uid) { message -> message.setFlag(Flags.Flag.SEEN, true) }
-
-    override suspend fun moveTo(
-        account: MailAccount,
-        password: String,
-        uid: Long,
-        folder: String,
-    ): MailFailureReason? =
-        withContext(io) {
-            var store: Store? = null
-            var source: Folder? = null
             try {
-                store = connect(account, password)
-                source = openFolder(store, account, Folder.READ_WRITE)
-                val message = messageByUid(source, uid) ?: return@withContext MailFailureReason.FETCH_FAILED
-                val target = store.getFolder(folder)
-                if (target == null || !target.exists()) return@withContext MailFailureReason.FOLDER_NOT_FOUND
-                val imapFolder = source as? IMAPFolder ?: return@withContext MailFailureReason.POST_ACTION_FAILED
-                if (!(store as IMAPStore).hasCapability(
-                        "UIDPLUS",
-                    )
-                ) {
-                    return@withContext MailFailureReason.POST_ACTION_FAILED
+                val folder = openFolder(store, account, Folder.READ_WRITE)
+                val uidFolder = folder as? UIDFolder
+                if (uidFolder == null) {
+                    close(folder, expunge = false)
+                    close(store)
+                    return@withContext MailOpenResult.Failed(MailFailureReason.FETCH_FAILED)
                 }
-                source.copyMessages(arrayOf(message), target)
-                message.setFlag(Flags.Flag.DELETED, true)
-                imapFolder.expunge(arrayOf(message))
-                null
+                MailOpenResult.Opened(
+                    JakartaMailConnection(store, folder, uidFolder.uidValidity, uidNext(folder, uidFolder), io),
+                )
             } catch (failure: Exception) {
-                postActionReason(failure)
-            } finally {
-                close(source, expunge = false)
                 close(store)
-            }
-        }
-
-    override suspend fun delete(
-        account: MailAccount,
-        password: String,
-        uid: Long,
-    ): MailFailureReason? =
-        withContext(io) {
-            var store: Store? = null
-            var folder: Folder? = null
-            try {
-                store = connect(account, password)
-                folder = openFolder(store, account, Folder.READ_WRITE)
-                val message = messageByUid(folder, uid) ?: return@withContext MailFailureReason.FETCH_FAILED
-                val imapFolder = folder as? IMAPFolder ?: return@withContext MailFailureReason.POST_ACTION_FAILED
-                if (!(store as IMAPStore).hasCapability(
-                        "UIDPLUS",
-                    )
-                ) {
-                    return@withContext MailFailureReason.POST_ACTION_FAILED
-                }
-                message.setFlag(Flags.Flag.DELETED, true)
-                imapFolder.expunge(arrayOf(message))
-                null
-            } catch (failure: Exception) {
-                postActionReason(failure)
-            } finally {
-                close(folder, expunge = false)
-                close(store)
-            }
-        }
-
-    private suspend fun withMessage(
-        account: MailAccount,
-        password: String,
-        uid: Long,
-        action: (Message) -> Unit,
-    ): MailFailureReason? =
-        withContext(io) {
-            var store: Store? = null
-            var folder: Folder? = null
-            try {
-                store = connect(account, password)
-                folder = openFolder(store, account, Folder.READ_WRITE)
-                val message = messageByUid(folder, uid) ?: return@withContext MailFailureReason.FETCH_FAILED
-                action(message)
-                null
-            } catch (failure: Exception) {
-                postActionReason(failure)
-            } finally {
-                close(folder, expunge = false)
-                close(store)
+                MailOpenResult.Failed(connectReason(failure))
             }
         }
 
@@ -260,6 +146,20 @@ internal class JakartaMailTransport(
             }
         }
 
+    /**
+     * The folder's UIDNEXT, or one past its last message's UID for a server that does not report
+     * it, so the end of the folder is always known.
+     */
+    private fun uidNext(
+        folder: Folder,
+        uids: UIDFolder,
+    ): Long {
+        val reported = uids.uidNext
+        if (reported > 0) return reported
+        val count = folder.messageCount
+        return if (count <= 0) 1 else uids.getUID(folder.getMessage(count)) + 1
+    }
+
     private fun openFolder(
         store: Store,
         account: MailAccount,
@@ -275,64 +175,179 @@ internal class JakartaMailTransport(
         folder.open(mode)
         return folder
     }
+}
 
-    private fun messageByUid(
-        folder: Folder,
+/**
+ * One open folder for one check: every page and post-action reuses the same IMAP connection, so a
+ * catch-up over thousands of messages logs in once. Blocking calls run on [io]; a call that fails
+ * returns its typed reason, and a dropped connection fails every later call until the check ends.
+ */
+private class JakartaMailConnection(
+    private val store: Store,
+    private val folder: Folder,
+    override val uidValidity: Long,
+    override val uidNext: Long,
+    private val io: CoroutineDispatcher,
+) : MailConnection {
+    private val uids = folder as UIDFolder
+
+    override suspend fun firstUidSince(sinceMillis: Long): Long? =
+        withContext(io) {
+            try {
+                // IMAP SEARCH SINCE: the server compares the arrival date by day, which is as fine as
+                // "the last 30 days" needs. UIDs rise with sequence numbers, so the lowest sequence
+                // number found is the lowest UID.
+                val found = folder.search(ReceivedDateTerm(ComparisonTerm.GE, Date(sinceMillis)))
+                val first = found.minByOrNull(Message::getMessageNumber)
+                if (first == null) uidNext else uids.getUID(first)
+            } catch (_: MessagingException) {
+                null
+            }
+        }
+
+    override suspend fun countAfter(uid: Long): Int? =
+        withContext(io) {
+            try {
+                if (uid + 1 > uidNext - 1) {
+                    0
+                } else {
+                    // A UID list only (UID FETCH n:m (UID)), never a body: cheap even for thousands.
+                    uids.getMessagesByUID(uid + 1, uidNext - 1).count { it != null && uids.getUID(it) > uid }
+                }
+            } catch (_: MessagingException) {
+                null
+            }
+        }
+
+    override suspend fun fetchAfter(afterUid: Long): MailFetchResult =
+        withContext(io) {
+            try {
+                val start = afterUid + 1
+                val windowEnd = minOf(uidNext - 1, start + MailTransport.SCAN_WINDOW - 1)
+                val listed =
+                    if (windowEnd < start) {
+                        emptyList()
+                    } else {
+                        uids.getMessagesByUID(start, windowEnd).filterNotNull()
+                    }
+                val taken = listed.take(MailTransport.PAGE_SIZE)
+                val messages = taken.map { MimeParser.parseOrFailed(uids.getUID(it), it) }
+                // A full page stops at its last message; a short one has seen the whole window.
+                val scannedThrough =
+                    if (listed.size > MailTransport.PAGE_SIZE) messages.last().uid else maxOf(afterUid, windowEnd)
+                MailFetchResult.Success(messages = messages, uidNext = uidNext, scannedThroughUid = scannedThrough)
+            } catch (failure: Exception) {
+                MailFetchResult.Failed(reason(failure, MailFailureReason.FETCH_FAILED))
+            }
+        }
+
+    override suspend fun markRead(uid: Long): MailFailureReason? =
+        withMessage(uid) { message -> message.setFlag(Flags.Flag.SEEN, true) }
+
+    override suspend fun moveTo(
         uid: Long,
-    ): Message? {
-        val uidFolder = folder as? UIDFolder ?: return null
-        return uidFolder.getMessageByUID(uid)
+        folder: String,
+    ): MailFailureReason? =
+        withContext(io) {
+            try {
+                val message = uids.getMessageByUID(uid) ?: return@withContext MailFailureReason.FETCH_FAILED
+                val target = store.getFolder(folder)
+                if (target == null || !target.exists()) return@withContext MailFailureReason.FOLDER_NOT_FOUND
+                val imapFolder = this@JakartaMailConnection.folder as? IMAPFolder
+                if (imapFolder == null || !(store as IMAPStore).hasCapability("UIDPLUS")) {
+                    return@withContext MailFailureReason.POST_ACTION_FAILED
+                }
+                imapFolder.copyMessages(arrayOf(message), target)
+                message.setFlag(Flags.Flag.DELETED, true)
+                imapFolder.expunge(arrayOf(message))
+                null
+            } catch (failure: Exception) {
+                reason(failure, MailFailureReason.POST_ACTION_FAILED)
+            }
+        }
+
+    override suspend fun delete(uid: Long): MailFailureReason? =
+        withContext(io) {
+            try {
+                val message = uids.getMessageByUID(uid) ?: return@withContext MailFailureReason.FETCH_FAILED
+                val imapFolder = folder as? IMAPFolder
+                if (imapFolder == null || !(store as IMAPStore).hasCapability("UIDPLUS")) {
+                    return@withContext MailFailureReason.POST_ACTION_FAILED
+                }
+                message.setFlag(Flags.Flag.DELETED, true)
+                imapFolder.expunge(arrayOf(message))
+                null
+            } catch (failure: Exception) {
+                reason(failure, MailFailureReason.POST_ACTION_FAILED)
+            }
+        }
+
+    private suspend fun withMessage(
+        uid: Long,
+        action: (Message) -> Unit,
+    ): MailFailureReason? =
+        withContext(io) {
+            try {
+                val message = uids.getMessageByUID(uid) ?: return@withContext MailFailureReason.FETCH_FAILED
+                action(message)
+                null
+            } catch (failure: Exception) {
+                reason(failure, MailFailureReason.POST_ACTION_FAILED)
+            }
+        }
+
+    override suspend fun close() {
+        withContext(io) {
+            close(folder, expunge = false)
+            close(store)
+        }
+    }
+}
+
+private fun connectReason(failure: Exception): MailFailureReason = reason(failure, MailFailureReason.CONNECTION_FAILED)
+
+private fun reason(
+    failure: Exception,
+    otherwise: MailFailureReason,
+): MailFailureReason =
+    when {
+        failure is AuthenticationFailedException || failure.hasCause<AuthenticationFailedException>() -> {
+            MailFailureReason.AUTHENTICATION_FAILED
+        }
+
+        failure is FolderNotFoundException || failure.hasCause<FolderNotFoundException>() ||
+            failure is MissingFolderException -> {
+            MailFailureReason.FOLDER_NOT_FOUND
+        }
+
+        failure.hasCause<SSLException>() || failure.hasCause<CertificateException>() -> {
+            MailFailureReason.TLS_FAILED
+        }
+
+        else -> {
+            otherwise
+        }
     }
 
-    private fun connectReason(failure: Exception): MailFailureReason =
-        reason(failure, MailFailureReason.CONNECTION_FAILED)
+private inline fun <reified T : Throwable> Throwable.hasCause(): Boolean =
+    generateSequence(this as Throwable?) { it.cause }.any { it is T }
 
-    private fun postActionReason(failure: Exception): MailFailureReason =
-        reason(failure, MailFailureReason.POST_ACTION_FAILED)
-
-    private fun reason(
-        failure: Exception,
-        otherwise: MailFailureReason,
-    ): MailFailureReason =
-        when {
-            failure is AuthenticationFailedException || failure.hasCause<AuthenticationFailedException>() -> {
-                MailFailureReason.AUTHENTICATION_FAILED
-            }
-
-            failure is FolderNotFoundException || failure.hasCause<FolderNotFoundException>() ||
-                failure is MissingFolderException -> {
-                MailFailureReason.FOLDER_NOT_FOUND
-            }
-
-            failure.hasCause<SSLException>() || failure.hasCause<CertificateException>() -> {
-                MailFailureReason.TLS_FAILED
-            }
-
-            else -> {
-                otherwise
-            }
-        }
-
-    private inline fun <reified T : Throwable> Throwable.hasCause(): Boolean =
-        generateSequence(this as Throwable?) { it.cause }.any { it is T }
-
-    private fun close(
-        folder: Folder?,
-        expunge: Boolean,
-    ) {
-        try {
-            if (folder?.isOpen == true) folder.close(expunge)
-        } catch (_: MessagingException) {
-            // The store is about to close; a failed expunge is reported by the action that asked for it.
-        }
+private fun close(
+    folder: Folder?,
+    expunge: Boolean,
+) {
+    try {
+        if (folder?.isOpen == true) folder.close(expunge)
+    } catch (_: MessagingException) {
+        // The store is about to close; a failed expunge is reported by the action that asked for it.
     }
+}
 
-    private fun close(store: Store?) {
-        try {
-            store?.close()
-        } catch (_: MessagingException) {
-            // Nothing left to do with a connection the server already ended.
-        }
+private fun close(store: Store?) {
+    try {
+        store?.close()
+    } catch (_: MessagingException) {
+        // Nothing left to do with a connection the server already ended.
     }
 }
 
