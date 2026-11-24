@@ -14,6 +14,9 @@ import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiSelfTest
 import dev.npn.core.ai.AiSelfTestReport
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.app.ReminderSettings
+import dev.npn.core.app.formatReminderTime
+import dev.npn.core.app.parseReminderTime
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.pathrules.StoragePathContext
@@ -43,6 +46,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_folder_access_not_kept_library
 import no_papers_needed.composeapp.generated.resources.common_folder_access_not_kept_watched
@@ -93,11 +98,13 @@ class SettingsViewModel(
      */
     private val outliving: CoroutineScope? = null,
 ) : MessagesViewModel(),
-    SettingsActions {
+    SettingsActions,
+    ReminderSettingsActions {
     private val content = session.content
     private val reviewConfig = session.reviewConfig
     private val storagePath = session.storagePath
     private val trashRetention = session.trashRetention
+    private val reminders = session.reminders
     private val fieldRegistry = session.fieldRegistry
     private val sync = session.sync
 
@@ -109,6 +116,24 @@ class SettingsViewModel(
     private val typedRetention =
         TypedSetting<Int>(viewModelScope, savesOnPause = false) { days ->
             reporting(Res.string.common_save_setting_failed) { trashRetention.setTrashRetentionDays(days) }
+        }
+
+    /** Serializes the read-modify-write of the watched field set, so two quick ticks cannot lose one. */
+    private val reminderFieldWrites = Mutex()
+
+    private val typedReminderLead =
+        TypedSetting<Int>(viewModelScope, savesOnPause = false) { days ->
+            reporting(Res.string.common_save_setting_failed) { reminders.setLeadDays(days) }
+        }
+
+    private val typedReminderTime =
+        TypedSetting<String>(viewModelScope) { text ->
+            val time = parseReminderTime(text)
+            if (time == null) {
+                false
+            } else {
+                reporting(Res.string.common_save_setting_failed) { reminders.setTimeOfDay(time) }
+            }
         }
 
     private val typedText: Map<TextSetting, TypedSetting<String>> =
@@ -129,19 +154,34 @@ class SettingsViewModel(
     private fun withTypedNow(snapshot: SettingsSnapshot): SettingsSnapshot =
         snapshot.withTyped(typedText.map { (setting, typed) -> setting to typed.draft.value })
 
+    private data class ReminderDraft(
+        val settings: ReminderSettings,
+        val leadDays: Int?,
+        val time: String?,
+    )
+
+    private val reminderDraft: Flow<ReminderDraft> =
+        combine(reminders.settings, typedReminderLead.draft, typedReminderTime.draft) { current, lead, time ->
+            ReminderDraft(current, lead, time)
+        }
+
     private val state: StateFlow<SettingsUiState> =
         combine(
-            typedSettings,
-            storagePath.storagePath,
-            typedTemplate.draft,
-            trashRetention.trashRetentionDays,
-            typedRetention.draft,
-        ) { snapshot, path, template, days, typedDays ->
+            combine(typedSettings, storagePath.storagePath, typedTemplate.draft) { snapshot, path, template ->
+                Triple(snapshot, path, template)
+            },
+            combine(trashRetention.trashRetentionDays, typedRetention.draft) { days, typedDays -> days to typedDays },
+            reminderDraft,
+        ) { (snapshot, path, template), (days, typedDays), reminder ->
             SettingsUiState(
                 snapshot = snapshot,
                 storagePathTemplate = template ?: path.template ?: DEFAULT_STORAGE_PATH_TEMPLATE,
                 storagePathEnabled = path.enabled,
                 trashRetentionDays = typedDays ?: days,
+                reminderEnabled = reminder.settings.enabled,
+                reminderFieldKeys = reminder.settings.fieldKeys.toSet(),
+                reminderLeadDays = reminder.leadDays ?: reminder.settings.leadDays,
+                reminderTime = reminder.time ?: formatReminderTime(reminder.settings.timeOfDay),
             )
         }.stateIn(viewModelScope, WhileSubscribedTimeout, SettingsUiState(snapshot = settings.settings.value))
 
@@ -326,6 +366,36 @@ class SettingsViewModel(
         }
 
     override fun doneTypingTrashRetention() = typedRetention.flush()
+
+    override fun setRemindersEnabled(enabled: Boolean) =
+        launchReporting(Res.string.common_save_setting_failed) { reminders.setEnabled(enabled) }
+
+    override fun setReminderField(
+        key: String,
+        selected: Boolean,
+    ) {
+        viewModelScope.launch {
+            reminderFieldWrites.withLock {
+                reporting(Res.string.common_save_setting_failed) {
+                    val current = reminders.settings.first().fieldKeys
+                    reminders.setFieldKeys(if (selected) current + key else current - key)
+                }
+            }
+        }
+    }
+
+    override fun setReminderLeadDays(days: Int?) =
+        if (days == null) {
+            typedReminderLead.withhold()
+        } else {
+            typedReminderLead.type(days)
+        }
+
+    override fun doneTypingReminderLead() = typedReminderLead.flush()
+
+    override fun setReminderTime(text: String) = typedReminderTime.type(text)
+
+    override fun doneTypingReminderTime() = typedReminderTime.flush()
 
     override fun type(
         setting: TextSetting,

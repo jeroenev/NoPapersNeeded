@@ -157,7 +157,7 @@ fun SettingsScreen(
     val currentSelect by rememberUpdatedState(select)
     val paneActions =
         remember(vm) {
-            object : SettingsPaneActions, SettingsActions by vm {
+            object : SettingsPaneActions, SettingsActions by vm, ReminderSettingsActions by vm {
                 override fun changeLibrary() = currentChangeLibrary()
 
                 override fun openAutoMatchRules() = currentAutoMatchRules()

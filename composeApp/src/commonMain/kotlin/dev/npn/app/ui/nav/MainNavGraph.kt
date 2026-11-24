@@ -2,6 +2,7 @@ package dev.npn.app.ui.nav
 
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,6 +28,7 @@ import dev.npn.app.platform.offersKeyboardShortcutList
 import dev.npn.app.ui.ai.AiChatScreen
 import dev.npn.app.ui.ai.AiEditReviewScreen
 import dev.npn.app.ui.ai.AiEditScreen
+import dev.npn.app.ui.common.OpenDocumentRequests
 import dev.npn.app.ui.common.PublishWindowTitle
 import dev.npn.app.ui.common.ViewModelStoreLease
 import dev.npn.app.ui.detail.BrowseContext
@@ -34,6 +36,8 @@ import dev.npn.app.ui.detail.DocDetailScreen
 import dev.npn.app.ui.detail.WithDraftResumeBanner
 import dev.npn.app.ui.library.LibraryScreen
 import dev.npn.app.ui.queue.QueueScreen
+import dev.npn.app.ui.reminders.ReminderChecks
+import dev.npn.app.ui.reminders.UpcomingScreen
 import dev.npn.app.ui.rules.AutoMatchRulesScreen
 import dev.npn.app.ui.settings.SettingsCategoryId
 import dev.npn.app.ui.settings.SettingsScreen
@@ -48,6 +52,7 @@ import dev.npn.core.sync.SyncStatus
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_app_name
 import no_papers_needed.composeapp.generated.resources.common_rules_title
+import no_papers_needed.composeapp.generated.resources.reminders_upcoming_title
 import org.jetbrains.compose.resources.stringResource
 
 /**
@@ -78,6 +83,24 @@ internal fun MainNav(
 
     PublishWindowTitle(windowTitle(destination, topLevel, assistant))
     val syncStatus by remember(session) { session.sync.status }.collectAsStateWithLifecycle(SyncStatus())
+    val upcomingBadge by library.reminderBadge.collectAsStateWithLifecycle()
+    val libraryLocation = remember(session) { settings.settings.value.libraryLocation }
+    libraryLocation?.let { location ->
+        ReminderChecks(session, location) { library.noteInAppReminder() }
+    }
+    LaunchedEffect(session, nav) {
+        OpenDocumentRequests.documents.arrivals.collect { request ->
+            if (!request.belongsTo(libraryLocation)) return@collect
+            nav.openDoc(
+                request.docId,
+                library.browse,
+                options = {
+                    popUpTo(Route.Library)
+                    launchSingleTop = true
+                },
+            )
+        }
+    }
     var shortcutsOpen by rememberSaveable { mutableStateOf(false) }
     val openShortcuts: (() -> Unit)? = if (offersKeyboardShortcutList()) ({ shortcutsOpen = true }) else null
     val shellFocus = remember { FocusRequester() }
@@ -111,6 +134,7 @@ internal fun MainNav(
                                 library = library,
                                 aiConfigured = aiConfigured,
                                 onOpenLibrary = onOpenLibrary,
+                                upcomingBadge = upcomingBadge,
                             )
                         }
                     }
@@ -153,6 +177,8 @@ private fun windowTitle(
             destination?.hasRoute<Route.DocDetail>() == true -> return null
 
             destination?.hasRoute<Route.AutoMatchRules>() == true -> Res.string.common_rules_title
+
+            destination?.hasRoute<Route.Upcoming>() == true -> Res.string.reminders_upcoming_title
 
             // The review of a background bulk edit is the assistant's, opened from Activity.
             assistant || destination?.hasRoute<Route.AiEditReview>() == true -> AssistantDestination.label
@@ -225,6 +251,7 @@ private fun MainNavHost(
     library: LibraryUi,
     aiConfigured: Boolean,
     onOpenLibrary: (location: String) -> Unit,
+    upcomingBadge: Int,
 ) {
     val nav = library.nav
     val browse = library.browse
@@ -244,7 +271,21 @@ private fun MainNavHost(
                     },
                 filterHandoff = library.libraryFilter,
                 onOpenSettings = { id -> nav.from(entry) { navigate(Route.Settings(id.routeKey)) } },
+                onOpenUpcoming = {
+                    nav.from(entry) {
+                        library.clearReminderBadge()
+                        navigate(Route.Upcoming)
+                    }
+                },
+                upcomingBadge = upcomingBadge,
                 documents = library.documents,
+            )
+        }
+        composable<Route.Upcoming> { entry ->
+            UpcomingScreen(
+                session = session,
+                onBack = { nav.from(entry) { popBackStack() } },
+                onOpenDoc = { docId -> nav.from(entry) { openDoc(docId, browse) } },
             )
         }
         composable<Route.DocDetail> { entry ->

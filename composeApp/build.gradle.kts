@@ -66,6 +66,8 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)
             implementation(libs.androidx.core.ktx)
+            // The daily reminder check runs as WorkManager work, so it survives the app closing.
+            implementation(libs.androidx.work.runtime)
         }
         getByName("desktopMain") {
             dependencies {

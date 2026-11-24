@@ -119,6 +119,17 @@ internal class SessionGraph(
     private val trash = TrashOps(deps.fs)
     val trashRetention = JournalTrashRetention(coordinator, lifetime)
 
+    /** The library's reminder dates and the daily check built on them; the device's claims in `device.db`. */
+    val reminders =
+        JournalReminders(
+            coordinator = coordinator,
+            indexDb = db,
+            notifications = deps.deviceDb.reminderNotificationDao(),
+            lifetime = lifetime,
+            clock = deps.clock,
+            log = log,
+        )
+
     /** The trash auto-purge by [trashRetention], run after each watch-triggered rescan. */
     val trashPurge = TrashPurge(coordinator, db, trash, trashRetention, deps.clock, log)
 

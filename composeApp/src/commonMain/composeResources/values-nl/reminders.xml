@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reminders_upcoming">Aankomend</string>
+    <string name="reminders_upcoming_count">Aankomend · %1$d</string>
+    <string name="reminders_upcoming_title">Aankomend</string>
+    <string name="reminders_group_overdue">Te laat</string>
+    <string name="reminders_group_today">Vandaag</string>
+    <string name="reminders_group_next_7_days">Komende 7 dagen</string>
+    <string name="reminders_group_later">Later</string>
+    <string name="reminders_empty_title">Niets gepland</string>
+    <string name="reminders_empty_subtitle">Documenten met een herinneringsdatum verschijnen hier.</string>
+    <string name="reminders_disabled_title">Herinneringen staan uit</string>
+    <string name="reminders_disabled_subtitle">Kies herinneringsdatums in Instellingen → Documenten.</string>
+    <string name="reminders_no_fields_title">Geen herinneringsdatums</string>
+    <string name="reminders_no_fields_subtitle">Kies een datumveld in Instellingen → Documenten.</string>
+    <string name="reminders_row_meta">%1$s · %2$s</string>
+    <string name="reminders_notification_channel">Herinneringen</string>
+    <string name="reminders_notification_title">Herinnering: %1$s</string>
+    <string name="reminders_notification_body">%1$s vervalt op %2$s.</string>
+    <string name="reminders_notification_overdue">%1$s is vervallen op %2$s.</string>
+
+    <string name="common_settings_reminders">Herinneringen</string>
+    <string name="common_settings_reminders_enabled">Herinneringen inschakelen</string>
+    <string name="common_settings_reminders_enabled_help">Breng je op de hoogte van documenten waarvan de datum nadert.</string>
+    <string name="common_settings_reminders_fields">Herinneringsdatums</string>
+    <string name="common_settings_reminders_fields_help">Kies de datumvelden om te volgen.</string>
+    <string name="common_settings_reminders_no_date_fields">Voeg een DATUM-veld toe om herinneringen te gebruiken.</string>
+    <string name="common_settings_reminders_lead_days">Dagen vooraf melden</string>
+    <string name="common_settings_reminders_lead_days_help">Verlopen datums worden altijd meegenomen.</string>
+    <string name="common_settings_reminders_time">Tijdstip van melding</string>
+    <string name="common_settings_reminders_time_help">Lokale tijd van de dagelijkse controle, als HH:mm.</string>
+</resources>
