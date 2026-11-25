@@ -403,10 +403,33 @@ internal class Simulation(
         checkTrashEntries()
         world.read("the fold") { lingeringOriginals(fs, replica.indexDb.fold(), live) }?.let { fail(it) }
         checkRowStats()
+        checkVerificationOfKnownMissing()
         rebuildOracle(live)
         replica.ocr.closeGate()
         trace += "   -- ${label}quiescent: ${live.live.size} live, ${live.hidden.size} hidden"
         return live
+    }
+
+    /** Verification must not rediscover rows the index already knows are missing. */
+    private fun checkVerificationOfKnownMissing() {
+        val (missing, report) =
+            world.read("verify known missing") {
+                val ids =
+                    replica.indexDb
+                        .rows("SELECT docId FROM documents WHERE missing = 1")
+                        .map { it[0]!! }
+                        .toSet()
+                ids to session.maintenance.verifyLibrary()
+            }
+        report.documentProblems.firstOrNull { it.docId in missing }?.let {
+            fail("verification reported known missing document ${it.docId} at '${it.relPath}'")
+        }
+        val sentinel = "${NpnPaths.NPN_DIR}/missing/"
+        if (report.problems.any { it.relPath.startsWith(sentinel) } ||
+            report.notes.any { it.relPath.startsWith(sentinel) }
+        ) {
+            fail("verification exposed an internal missing-document path")
+        }
     }
 
     private fun checkFilesHoldTheirHashes(view: LibraryView) {

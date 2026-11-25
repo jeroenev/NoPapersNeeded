@@ -125,6 +125,7 @@ internal class LibraryVerifier(
     private fun DocumentEntity.shows(view: JournalDocView?): Boolean =
         !trashed &&
             !deleted &&
+            !missing &&
             view?.deleted != true &&
             view?.trashed != true &&
             view?.supersededBy == null

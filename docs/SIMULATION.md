@@ -247,6 +247,8 @@ after six rounds do not converge, which fails the run. Then:
   a live document, a known duplicate, or bytes a relink superseded (or, while doc-undelete is not
   written, a document deleted for good). A trashed document's own bytes back at its path is no
   exception: past the window, the rescan has recorded its restore.
+- Verification does not report an already-missing row as new damage or expose its internal sentinel
+  path in any problem or note, including after a synced deletion.
 - Every file in the trash holds the bytes of the document its name names (the hash prefix
   `NpnPaths.trashPath` gives it): one holding other bytes is a file the trash took under a
   document's name, hidden from the library for good, since no rescan indexes the trash and neither

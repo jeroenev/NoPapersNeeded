@@ -1,6 +1,7 @@
 package dev.npn.core.app
 
 import dev.npn.core.db.DocumentEntity
+import dev.npn.core.db.missingSentinel
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.journal.JournalPaths
@@ -83,6 +84,26 @@ class LibraryVerifierTest {
             report.documentProblems.single().kind shouldBe VerificationProblemKind.DOCUMENT_MISSING
             report.documentProblems.single().docId shouldBe sha256Bytes(bytes)
             report.documentProblems.single().fileName shouldBe "Invoice.pdf"
+        }
+
+    @Test
+    fun knownMissingDocumentsAreNotReportedAsNewDamage() =
+        runTest {
+            val f = fixture()
+            val known = row("known missing".encodeToByteArray()).copy(missing = true)
+            val parked =
+                row("parked missing".encodeToByteArray()).let {
+                    it.copy(relPath = missingSentinel(it.docId), missing = true)
+                }
+            val newlyMissing = row("newly missing".encodeToByteArray(), relPath = "New.pdf")
+
+            val progress = mutableListOf<LibraryVerificationProgress>()
+            val report = f.verifier.run(listOf(known, parked, newlyMissing), onProgress = progress::add)
+
+            report.documentsChecked shouldBe 1
+            report.documentProblems.map { it.docId } shouldContainExactly listOf(newlyMissing.docId)
+            report.documentProblems.single().kind shouldBe VerificationProblemKind.DOCUMENT_MISSING
+            progress.first() shouldBe LibraryVerificationProgress(VerificationPhase.DOCUMENTS, 0, 1)
         }
 
     @Test
