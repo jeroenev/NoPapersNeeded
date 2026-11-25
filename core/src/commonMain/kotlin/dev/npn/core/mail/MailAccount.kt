@@ -71,7 +71,7 @@ data class MailAccount(
         )
 
     /** Whether [message] is one this account asks for; see [MailFilter.matches]. */
-    fun matches(message: MailMessage): Boolean = filters.isEmpty() || filters.any { it.matches(message) }
+    fun matches(message: MailEnvelope): Boolean = filters.isEmpty() || filters.any { it.matches(message) }
 
     companion object {
         const val DEFAULT_FOLDER = "INBOX"
@@ -164,7 +164,7 @@ data class MailFilter(
     val isBlank: Boolean get() = from == null && subject == null && attachment == null
 
     /** Whether this filter's conditions all hold for [message]. */
-    fun matches(message: MailMessage): Boolean {
+    fun matches(message: MailEnvelope): Boolean {
         from?.let { if (!message.from.contains(it, ignoreCase = true)) return false }
         subject?.let { if (!message.subject.contains(it, ignoreCase = true)) return false }
         attachment?.let { pattern ->
@@ -187,7 +187,16 @@ data class MailFilter(
 enum class MailAttachmentKind { PDF, IMAGE }
 
 /** The importer's kind for this attachment, or null when the library cannot take it. */
-fun MailAttachment.supportedKind(): MailAttachmentKind? {
+fun MailAttachment.supportedKind(): MailAttachmentKind? = attachmentKind(fileName, contentType)
+
+/** The importer's kind for an attachment the message offers, before it is downloaded. */
+fun MailAttachmentInfo.supportedKind(): MailAttachmentKind? = attachmentKind(fileName, contentType)
+
+/** What the library can make of a part named [fileName] of [contentType]: a PDF, an image, or nothing. */
+fun attachmentKind(
+    fileName: String,
+    contentType: String?,
+): MailAttachmentKind? {
     val type = contentType?.substringBefore(';')?.trim()?.lowercase()
     val name = fileName.lowercase()
     return when {

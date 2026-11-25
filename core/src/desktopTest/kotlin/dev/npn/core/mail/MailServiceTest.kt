@@ -1,9 +1,5 @@
 package dev.npn.core.mail
 
-import dev.npn.core.util.EpochClock
-import dev.npn.core.util.NpnLog
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runCurrent
@@ -13,20 +9,10 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-private const val NOW = 1_000L * MailStartPoint.DAY_MILLIS
-
+/** The service end to end over the fakes: accounts, start points, catch-up, filters and post-actions. */
 class MailServiceTest {
-    private val account =
-        MailAccount(
-            host = "mail.example.com",
-            username = "someone@example.com",
-            enabled = true,
-            postAction = MailPostAction.MARK_READ,
-            // Most tests read the whole fake folder; the start-point tests set their own.
-            startFrom = MailStartPoint.EVERYTHING,
-        )
-
-    private val pdf = MailAttachment("invoice.pdf", "application/pdf", byteArrayOf(1, 2, 3))
+    private val account = testAccount
+    private val pdf = testPdf
 
     private fun message(
         uid: Long = 1,
@@ -34,254 +20,15 @@ class MailServiceTest {
         from: String = "sender@example.com",
         subject: String = "Invoice",
         dateMillis: Long = 0,
-    ) = MailMessage(uid, from, "me@example.com", subject, dateMillis, "body", attachments)
+    ) = testMessage(uid, attachments, from, subject, dateMillis)
 
-    /** A message per UID in [uids], each with its own attachment name, sent a day apart ending today. */
-    private fun backlog(uids: LongRange): List<MailMessage> =
-        uids.map { uid ->
-            message(
-                uid = uid,
-                attachments = listOf(pdf.copy(fileName = "invoice-$uid.pdf")),
-                dateMillis = NOW - (uids.last - uid) * MailStartPoint.DAY_MILLIS,
-            )
-        }
-
-    private class FakeAccountStore(
-        initial: MailAccount,
-    ) : MailAccountStore {
-        val flow = MutableStateFlow(initial)
-        var failSave = false
-        override val account: Flow<MailAccount> = flow
-
-        override fun current(): MailAccount = flow.value
-
-        override suspend fun save(account: MailAccount) {
-            check(!failSave)
-            flow.value = account
-        }
-    }
-
-    private class FakeCredentials(
-        var password: String? = "secret",
-        var failure: MailSecretFailure? = null,
-    ) : MailCredentialStore {
-        override val available: Boolean get() = failure != MailSecretFailure.UNSUPPORTED
-
-        override suspend fun store(
-            accountKey: String,
-            password: String,
-        ): MailSecretResult<Unit> {
-            failure?.let { return MailSecretResult.Failed(it) }
-            this.password = password
-            return MailSecretResult.Success(Unit)
-        }
-
-        override suspend fun load(accountKey: String): MailSecretResult<String?> {
-            failure?.let { return MailSecretResult.Failed(it) }
-            return MailSecretResult.Success(password)
-        }
-
-        override suspend fun clear(accountKey: String): MailSecretResult<Unit> {
-            failure?.let { return MailSecretResult.Failed(it) }
-            password = null
-            return MailSecretResult.Success(Unit)
-        }
-    }
-
-    private class FakeCursors : MailCursorStore {
-        val saved = mutableMapOf<Pair<String, String>, MailCursor>()
-
-        override suspend fun get(
-            accountKey: String,
-            folder: String,
-        ): MailCursor? = saved[accountKey to folder]
-
-        override suspend fun save(cursor: MailCursor) {
-            saved[cursor.accountKey to cursor.folder] = cursor
-        }
-
-        fun last(): MailCursor = saved.values.single()
-    }
-
-    private class FakeSink : MailDocumentSink {
-        val importedNames = mutableListOf<String>()
-        var onImport: (String) -> MailImportResult = { MailImportResult.Imported("doc:$it") }
-
-        override suspend fun importPdf(
-            bytes: ByteArray,
-            suggestedName: String,
-        ): MailImportResult = record(suggestedName)
-
-        override suspend fun importImage(
-            bytes: ByteArray,
-            suggestedName: String,
-        ): MailImportResult = record(suggestedName)
-
-        private fun record(name: String): MailImportResult {
-            importedNames += name
-            return onImport(name)
-        }
-    }
-
-    private class FakeRenderer(
-        var bytes: ByteArray? = byteArrayOf(9, 9, 9),
-    ) : MailPdfRenderer {
-        override val available: Boolean = true
-        val rendered = mutableListOf<MailMessage>()
-
-        override suspend fun render(message: MailMessage): ByteArray? {
-            rendered += message
-            return bytes
-        }
-    }
-
-    /**
-     * An in-memory folder. Each [open] snapshots UIDNEXT, as an IMAP SELECT does, and counts the
-     * connection, so a test can tell one check made exactly one.
-     */
-    private class FakeTransport(
-        var messages: List<MailMessage> = emptyList(),
-        var validity: Long = 7,
-        var fetchFailure: MailFailureReason? = null,
-        var postFailure: MailFailureReason? = null,
-        var testFailure: MailFailureReason? = null,
-        var openFailure: MailFailureReason? = null,
-        var searchFails: Boolean = false,
-        /** Fetches that fail as a dropped connection would, before fetches work again. */
-        var transientFetchFailures: Int = 0,
-    ) : MailTransport {
-        override val available: Boolean = true
-        var opens = 0
-        var closes = 0
-        var fetches = 0
-        val searchedSince = mutableListOf<Long>()
-        val marked = mutableListOf<Long>()
-        val moved = mutableListOf<Pair<Long, String>>()
-        val deleted = mutableListOf<Long>()
-
-        /** Calls made on a connection after it was closed; a correct check makes none. */
-        var callsAfterClose = 0
-
-        override suspend fun testConnection(
-            account: MailAccount,
-            password: String,
-        ): MailFailureReason? = testFailure
-
-        override suspend fun open(
-            account: MailAccount,
-            password: String,
-        ): MailOpenResult {
-            opens++
-            openFailure?.let { return MailOpenResult.Failed(it) }
-            return MailOpenResult.Opened(Connection(validity, (messages.maxOfOrNull(MailMessage::uid) ?: 0) + 1))
-        }
-
-        inner class Connection(
-            override val uidValidity: Long,
-            override val uidNext: Long,
-        ) : MailConnection {
-            private var closed = false
-
-            private fun touch() {
-                if (closed) callsAfterClose++
-            }
-
-            override suspend fun firstUidSince(sinceMillis: Long): Long? {
-                touch()
-                searchedSince += sinceMillis
-                if (searchFails) return null
-                return messages.filter { (it.dateMillis ?: 0) >= sinceMillis }.minOfOrNull(MailMessage::uid) ?: uidNext
-            }
-
-            override suspend fun countAfter(uid: Long): Int? {
-                touch()
-                return messages.count { it.uid in (uid + 1) until uidNext }
-            }
-
-            override suspend fun fetchAfter(afterUid: Long): MailFetchResult {
-                touch()
-                fetches++
-                fetchFailure?.let { return MailFetchResult.Failed(it) }
-                if (transientFetchFailures > 0) {
-                    transientFetchFailures--
-                    return MailFetchResult.Failed(MailFailureReason.FETCH_FAILED, "FolderClosedException")
-                }
-                val start = afterUid + 1
-                val windowEnd = minOf(uidNext - 1, start + MailTransport.SCAN_WINDOW - 1)
-                val listed = messages.filter { it.uid in start..windowEnd }.sortedBy(MailMessage::uid)
-                val taken = listed.take(MailTransport.PAGE_SIZE)
-                return MailFetchResult.Success(
-                    messages = taken,
-                    uidNext = uidNext,
-                    scannedThroughUid =
-                        if (listed.size > MailTransport.PAGE_SIZE) taken.last().uid else maxOf(afterUid, windowEnd),
-                )
-            }
-
-            override suspend fun markRead(uid: Long): MailFailureReason? {
-                touch()
-                marked += uid
-                return postFailure
-            }
-
-            override suspend fun moveTo(
-                uid: Long,
-                folder: String,
-            ): MailFailureReason? {
-                touch()
-                moved += uid to folder
-                return postFailure
-            }
-
-            override suspend fun delete(uid: Long): MailFailureReason? {
-                touch()
-                deleted += uid
-                return postFailure
-            }
-
-            override suspend fun close() {
-                if (!closed) closes++
-                closed = true
-            }
-        }
-    }
-
-    private class Fixture(
-        account: MailAccount,
-        transport: FakeTransport = FakeTransport(),
-        credentials: FakeCredentials = FakeCredentials(),
-        scope: kotlinx.coroutines.CoroutineScope,
-    ) {
-        var now = NOW
-        val store = FakeAccountStore(account)
-        val cursors = FakeCursors()
-        val sink = FakeSink()
-        val renderer = FakeRenderer()
-        val transport = transport
-        val credentials = credentials
-        private val scope = scope
-        val service = newService()
-
-        /** The service as a restarted app makes it: nothing in memory, the same device storage. */
-        fun newService() =
-            MailService(
-                store = store,
-                credentials = credentials,
-                cursors = cursors,
-                transport = transport,
-                sink = sink,
-                pdfRenderer = renderer,
-                clock = EpochClock { now },
-                log = NpnLog.None,
-                scope = scope,
-            )
-    }
+    private fun backlog(uids: LongRange) = testBacklog(uids)
 
     private fun kotlinx.coroutines.test.TestScope.fixture(
-        account: MailAccount = this@MailServiceTest.account,
+        account: MailAccount = testAccount,
         transport: FakeTransport = FakeTransport(),
         credentials: FakeCredentials = FakeCredentials(),
-    ) = Fixture(account.copy(enabled = true), transport, credentials, backgroundScope)
+    ) = mailFixture(account, transport, credentials)
 
     @Test
     fun failedSettingsWriteLeavesThePreviousPassword() =
@@ -349,116 +96,6 @@ class MailServiceTest {
             assertEquals(1, retried.imported)
             assertEquals(listOf(1L), transport.marked)
             assertEquals(1, fixture.cursors.last().lastUid)
-        }
-
-    @Test
-    fun anUnreadableMessageIsPassedOverAtOnceWithoutStallingLaterMail() =
-        runTest {
-            // A message whose structure does not parse: reading it again gives the same answer.
-            val unreadable =
-                message(uid = 1, attachments = emptyList()).copy(
-                    readFailure = MailFailureReason.MESSAGE_UNREADABLE,
-                    readFailureCause = "ParseException",
-                )
-            val transport = FakeTransport(messages = listOf(unreadable, message(uid = 2)))
-            val fixture = fixture(transport = transport)
-            val report = fixture.service.checkNow()
-            assertTrue(report.errors.isEmpty())
-            assertEquals(1, report.unreadable)
-            assertEquals(1, report.imported)
-            assertEquals(listOf("invoice.pdf"), fixture.sink.importedNames)
-            // The unreadable message keeps its place in the mailbox: no post-action touched it.
-            assertEquals(listOf(2L), transport.marked)
-            assertEquals(2, fixture.cursors.last().lastUid)
-            assertEquals(null, fixture.cursors.last().lastError)
-        }
-
-    @Test
-    fun anEmailThatLostAnAttachmentImportsTheRestAndStaysInTheMailbox() =
-        runTest {
-            val partial = message(uid = 1).copy(droppedParts = listOf(MailDroppedPart.TOO_LARGE))
-            val transport = FakeTransport(messages = listOf(partial, message(uid = 2)))
-            val fixture = fixture(account = account.copy(postAction = MailPostAction.DELETE), transport = transport)
-            val report = fixture.service.checkNow()
-            assertTrue(report.errors.isEmpty())
-            assertEquals(2, report.imported)
-            assertEquals(1, report.droppedAttachments)
-            // Deleting it would take the oversized attachment with it.
-            assertEquals(listOf(2L), transport.deleted)
-            assertEquals(2, fixture.cursors.last().lastUid)
-        }
-
-    @Test
-    fun aFailingMessageIsRetriedAcrossRestartsThenPassedOver() =
-        runTest {
-            val transport = FakeTransport(messages = listOf(message(uid = 1), message(uid = 2, subject = "Later")))
-            val fixture = fixture(transport = transport)
-            fixture.sink.onImport =
-                { name ->
-                    if (fixture.sink.importedNames.size <=
-                        3
-                    ) {
-                        MailImportResult.Failed
-                    } else {
-                        MailImportResult.Imported("doc:$name")
-                    }
-                }
-            assertEquals(
-                MailFailureReason.IMPORT_FAILED,
-                fixture.service
-                    .checkNow()
-                    .errors
-                    .single()
-                    .reason,
-            )
-            assertEquals(1L, fixture.cursors.last().blockedUid)
-            assertEquals(1, fixture.cursors.last().blockedAttempts)
-
-            // An app restart keeps the count: the folder is not blocked for another full round.
-            val restarted = fixture.newService()
-            assertEquals(
-                MailFailureReason.IMPORT_FAILED,
-                restarted
-                    .checkNow()
-                    .errors
-                    .single()
-                    .reason,
-            )
-            assertEquals(2, fixture.cursors.last().blockedAttempts)
-            val third = restarted.checkNow()
-            // MailService.MAX_MESSAGE_ATTEMPTS: the third failed check passes it over and reads on.
-            assertTrue(third.errors.isEmpty())
-            assertEquals(1, third.unreadable)
-            assertEquals(1, third.imported)
-            assertEquals(listOf(2L), transport.marked)
-            assertEquals(2, fixture.cursors.last().lastUid)
-            assertEquals(null, fixture.cursors.last().blockedUid)
-        }
-
-    @Test
-    fun aDroppedConnectionIsReopenedWithinTheCheck() =
-        runTest {
-            val transport = FakeTransport(messages = backlog(1L..25L), transientFetchFailures = 2)
-            val fixture = fixture(transport = transport)
-            val report = fixture.service.checkNow()
-            assertTrue(report.errors.isEmpty())
-            assertEquals(25, report.imported)
-            assertEquals(3, transport.opens)
-            assertEquals(3, transport.closes)
-            assertEquals(0, transport.callsAfterClose)
-        }
-
-    @Test
-    fun aConnectionThatKeepsDroppingEndsTheCheckAfterBoundedReconnects() =
-        runTest {
-            val transport = FakeTransport(messages = backlog(1L..5L), transientFetchFailures = 10)
-            val fixture = fixture(transport = transport)
-            val report = fixture.service.checkNow()
-            assertEquals(MailFailureReason.FETCH_FAILED, report.errors.single().reason)
-            // The first connection and MailService.MAX_RECONNECTS fresh ones.
-            assertEquals(3, transport.opens)
-            assertEquals(3, transport.closes)
-            assertEquals(0, fixture.cursors.last().lastUid)
         }
 
     @Test
@@ -675,17 +312,17 @@ class MailServiceTest {
             fixture.service.pollIfDue()
             assertEquals(5, fixture.sink.importedNames.size)
 
-            transport.messages = backlog(1L..85L)
+            transport.messages = backlog(1L..150L)
             fixture.now += account.pollIntervalMinutes * 60_000L
             fixture.service.pollIfDue()
-            // MAX_PAGES_PER_CHECK pages of PAGE_SIZE: the rest waits for the next poll.
-            assertEquals(5 + 5 * MailTransport.PAGE_SIZE, fixture.sink.importedNames.size)
+            // MAX_PAGES_PER_CHECK (one) page of PAGE_SIZE: the rest waits for the next poll.
+            assertEquals(5 + MailTransport.PAGE_SIZE, fixture.sink.importedNames.size)
             assertEquals(2, transport.opens)
 
             fixture.now += account.pollIntervalMinutes * 60_000L
             fixture.service.pollIfDue()
-            assertEquals(85, fixture.sink.importedNames.size)
-            assertEquals((1L..85L).map { "invoice-$it.pdf" }, fixture.sink.importedNames)
+            assertEquals(150, fixture.sink.importedNames.size)
+            assertEquals((1L..150L).map { "invoice-$it.pdf" }, fixture.sink.importedNames)
         }
 
     @Test

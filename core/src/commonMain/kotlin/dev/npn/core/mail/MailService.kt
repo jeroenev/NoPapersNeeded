@@ -161,8 +161,8 @@ internal class MailService(
     private val credentials: MailCredentialStore,
     private val cursors: MailCursorStore,
     private val transport: MailTransport,
-    private val sink: MailDocumentSink,
-    private val pdfRenderer: MailPdfRenderer,
+    sink: MailDocumentSink,
+    pdfRenderer: MailPdfRenderer,
     private val clock: EpochClock,
     private val log: NpnLog,
     private val scope: CoroutineScope,
@@ -177,6 +177,7 @@ internal class MailService(
         val cancelRequested: Boolean = false,
     )
 
+    private val importer = MailMessageImporter(sink, pdfRenderer, log)
     private val runtime = MutableStateFlow(Runtime())
     private val checkMutex = Mutex()
     private val imports = MutableSharedFlow<List<String>>(extraBufferCapacity = IMPORT_EVENT_BUFFER)
@@ -430,7 +431,7 @@ internal class MailService(
     ): MailCheckReport {
         val stored = cursors.get(account.accountKey, account.folder)
         var cursor =
-            place(account, stored, link.current, now)
+            MailCursorPlacement.place(account, stored, link.current, now)
                 ?: return stop(
                     account,
                     MailCheckReport(checkedAtMillis = now),
@@ -447,42 +448,38 @@ internal class MailService(
         // Set once no further page may be read: the folder is exhausted, a page failed or stalled.
         var done = false
         var pages = 0
+        // Reconnects since the last page that moved the cursor: a connection the server drops every
+        // few minutes of a long catch-up is reopened every time, while a dead server ends the check.
         var reconnects = 0
         while (!done && pages < pageLimit && !cancelRequested()) {
             pages++
-            when (val fetched = link.current.fetchAfter(cursor.lastUid)) {
+            val previous = cursor.lastUid
+            var lost: MailCheckError? = null
+            when (val fetched = link.current.fetchAfter(previous)) {
                 is MailFetchResult.Failed -> {
-                    log.warn(
-                        "Email fetch after UID ${cursor.lastUid} failed: ${fetched.reason.name} " +
-                            "(${fetched.detail ?: "no cause"})",
-                    )
-                    val retry = fetched.reason in RECONNECTABLE && reconnects < MAX_RECONNECTS
-                    if (retry && reconnect(link, cursor, ++reconnects)) {
-                        pages--
-                    } else {
-                        error = MailCheckError(fetched.reason, fetched.detail)
-                        done = true
-                    }
+                    lost = MailCheckError(fetched.reason, fetched.detail)
                 }
 
                 is MailFetchResult.Success -> {
-                    val previous = cursor.lastUid
-                    val messages = fetched.messages.filter { it.uid > previous }.sortedBy(MailMessage::uid)
-                    val page = processMessages(account, link.current, messages, report, cursor, remainingAtStart)
+                    val page = readPage(account, link.current, fetched, report, cursor, remainingAtStart)
                     report = page.report
                     cursor = page.cursor
                     error = page.error
-                    done = error != null
-                    if (error == null && !page.interrupted) {
-                        // An empty or short window still moves the cursor to what it scanned, so a
-                        // run of deleted UIDs is crossed instead of being read again forever.
-                        cursor = cursor.copy(lastUid = maxOf(cursor.lastUid, fetched.scannedThroughUid))
-                        exhausted = fetched.scannedThroughUid >= fetched.uidNext - 1
-                        // A page that moved nothing would be read again forever: stop, still catching up.
-                        done = exhausted || cursor.lastUid <= previous
-                    }
-                    if (exhausted) cursor = cursor.copy(catchingUp = false, remaining = 0)
-                    save(cursor)
+                    lost = page.lost
+                    exhausted = page.exhausted
+                    done = page.done
+                }
+            }
+            if (cursor.lastUid > previous) reconnects = 0
+            if (lost != null) {
+                val cause = lost.detail ?: "no cause"
+                log.warn("Email fetch after UID ${cursor.lastUid} failed: ${lost.reason.name} ($cause)")
+                val retry = lost.reason in RECONNECTABLE && reconnects < MAX_RECONNECTS
+                if (retry && reconnect(link, cursor, ++reconnects)) {
+                    pages--
+                } else {
+                    error = lost
+                    done = true
                 }
             }
         }
@@ -520,87 +517,6 @@ internal class MailService(
         }
     }
 
-    /**
-     * The cursor this check reads from: the stored one, or one placed at the account's start point
-     * when this device has not read the folder yet, the server renumbered it, or the start point
-     * changed. Null when the server could not say where the start point is.
-     *
-     * A start moved further back moves the cursor back (the older mail is read again; dedupe by
-     * hash keeps documents already in the library from being added twice); one moved later only
-     * moves a cursor that is still behind it forward, past mail the user chose not to import.
-     */
-    private suspend fun place(
-        account: MailAccount,
-        stored: MailCursor?,
-        connection: MailConnection,
-        now: Long,
-    ): MailCursor? {
-        val start = account.startFrom
-        val validity = connection.uidValidity
-        return when {
-            stored?.uidValidity == null -> {
-                val first = firstUid(connection, start, now) ?: return null
-                (stored ?: MailCursor(account.accountKey, account.folder)).copy(
-                    uidValidity = validity,
-                    lastUid = first - 1,
-                    startFrom = start,
-                    catchingUp = true,
-                    throughMillis = null,
-                )
-            }
-
-            stored.uidValidity != validity -> {
-                // A renumbered folder: the old UIDs mean nothing. Read from the start point, or from
-                // a day before the last check when that is earlier, so mail that arrived since the
-                // last check is not lost with the old numbering.
-                val sinceLastCheck = stored.lastCheckedAtMillis?.minus(MailStartPoint.DAY_MILLIS)
-                val first = firstUid(connection, start, now, sinceLastCheck) ?: return null
-                stored.copy(
-                    uidValidity = validity,
-                    lastUid = first - 1,
-                    startFrom = start,
-                    catchingUp = true,
-                    throughMillis = null,
-                )
-            }
-
-            stored.startFrom != start -> {
-                val placed = (firstUid(connection, start, now) ?: return null) - 1
-                val previous = stored.startFrom
-                val lastUid =
-                    if (previous != null && start.reachesFurtherBackThan(previous)) {
-                        minOf(stored.lastUid, placed)
-                    } else {
-                        // A cursor from before start points is treated like a later start: it never
-                        // reads back past where it already was.
-                        maxOf(stored.lastUid, placed)
-                    }
-                stored.copy(
-                    lastUid = lastUid,
-                    startFrom = start,
-                    catchingUp = true,
-                    throughMillis = stored.throughMillis.takeIf { lastUid == stored.lastUid },
-                )
-            }
-
-            else -> {
-                stored
-            }
-        }
-    }
-
-    /** The first UID [start] reads, or the earlier one [alsoSince] reaches; null when the server failed. */
-    private suspend fun firstUid(
-        connection: MailConnection,
-        start: MailStartPoint,
-        now: Long,
-        alsoSince: Long? = null,
-    ): Long? {
-        if (start == MailStartPoint.EVERYTHING) return 1
-        val since = listOfNotNull(start.sinceMillis(now), alsoSince).minOrNull() ?: return connection.uidNext
-        return connection.firstUidSince(since)
-    }
-
     private fun cancelRequested(): Boolean = runtime.value.cancelRequested
 
     private data class PageOutcome(
@@ -609,7 +525,45 @@ internal class MailService(
         val error: MailCheckError?,
         /** A cancel stopped the page before its last message. */
         val interrupted: Boolean,
+        /** The connection failed under a download: the page stops before that message, to reconnect. */
+        val lost: MailCheckError? = null,
+        /** The page reached the end of the folder. */
+        val exhausted: Boolean = false,
+        /** No further page may be read: the folder is exhausted, a message failed, or the page stalled. */
+        val done: Boolean = false,
     )
+
+    /**
+     * Handle one fetched page and move the cursor past it: to its last handled message, or past
+     * the whole scanned window when every message in it was handled. Saves the cursor.
+     */
+    @Suppress("LongParameterList") // The page's inputs: account, connection, the fetch, and the running tallies.
+    private suspend fun readPage(
+        account: MailAccount,
+        connection: MailConnection,
+        fetched: MailFetchResult.Success,
+        report: MailCheckReport,
+        cursor: MailCursor,
+        remainingAtStart: Int?,
+    ): PageOutcome {
+        val previous = cursor.lastUid
+        val messages = fetched.messages.filter { it.uid > previous }.sortedBy(MailEnvelope::uid)
+        val page = processMessages(account, connection, messages, report, cursor, remainingAtStart)
+        var moved = page.cursor
+        var exhausted = false
+        var done = page.error != null
+        if (page.error == null && page.lost == null && !page.interrupted) {
+            // An empty or short window still moves the cursor to what it scanned, so a run of
+            // deleted UIDs is crossed instead of being read again forever.
+            moved = moved.copy(lastUid = maxOf(moved.lastUid, fetched.scannedThroughUid))
+            exhausted = fetched.scannedThroughUid >= fetched.uidNext - 1
+            // A page that moved nothing would be read again forever: stop, still catching up.
+            done = exhausted || moved.lastUid <= previous
+        }
+        if (exhausted) moved = moved.copy(catchingUp = false, remaining = 0)
+        save(moved)
+        return page.copy(cursor = moved, exhausted = exhausted, done = done)
+    }
 
     /**
      * One page of messages: each skipped or fully handled message advances the cursor. A message
@@ -623,7 +577,7 @@ internal class MailService(
     private suspend fun processMessages(
         account: MailAccount,
         connection: MailConnection,
-        messages: List<MailMessage>,
+        messages: List<MailEnvelope>,
         startReport: MailCheckReport,
         startCursor: MailCursor,
         remainingAtStart: Int?,
@@ -636,58 +590,42 @@ internal class MailService(
             if (cancelRequested()) return PageOutcome(report, cursor, null, interrupted = true)
             val message = messages[index]
             index++
-            report = report.copy(messagesSeen = report.messagesSeen + 1)
-            val outcome = consider(account, connection, message)
-            report = report.copy(droppedAttachments = report.droppedAttachments + message.droppedParts.size)
-            if (message.droppedParts.isNotEmpty()) {
+            val considered = importer.consider(account, connection, message)
+            val outcome = considered.outcome
+            if (outcome is MessageOutcome.Lost) {
+                return PageOutcome(report, cursor, null, interrupted = false, lost = outcome.error)
+            }
+            val dropped = considered.dropped
+            report =
+                report
+                    .copy(
+                        messagesSeen = report.messagesSeen + 1,
+                        droppedAttachments =
+                            report.droppedAttachments + dropped.size,
+                    ).tallied(outcome)
+            if (dropped.isNotEmpty()) {
                 log.warn(
-                    "Email UID ${message.uid}: left out ${message.droppedParts.joinToString { it.name }}; " +
-                        "the email stays in the mailbox",
+                    "Email UID ${message.uid}: left out ${dropped.joinToString { it.name }}; it stays in the mailbox",
                 )
             }
-            when (outcome) {
-                MessageOutcome.Skipped -> {
-                    report = report.copy(skipped = report.skipped + 1)
-                }
-
-                MessageOutcome.SkippedMatched -> {
-                    report = report.copy(matched = report.matched + 1, skipped = report.skipped + 1)
-                }
-
-                is MessageOutcome.Unreadable -> {
+            if (outcome is MessageOutcome.Unreadable) {
+                log.warn(
+                    "Email UID ${message.uid} could not be read (${outcome.cause ?: "no cause"}); left in the mailbox",
+                )
+            }
+            if (outcome is MessageOutcome.Failed) {
+                val attempts = if (cursor.blockedUid == message.uid) cursor.blockedAttempts + 1 else 1
+                if (attempts >= MAX_MESSAGE_ATTEMPTS) {
+                    // A message that keeps failing (a vanished UID, an undecodable image, a post-
+                    // action the server refuses) is passed over instead of stopping the folder.
                     log.warn(
-                        "Email UID ${message.uid} could not be read (${outcome.cause ?: "no cause"}); " +
-                            "passed over and left in the mailbox",
+                        "Email UID ${message.uid} passed over after $attempts failed checks: ${outcome.reason.name}",
                     )
                     report = report.copy(unreadable = report.unreadable + 1)
-                }
-
-                is MessageOutcome.Handled -> {
-                    report =
-                        report
-                            .copy(matched = report.matched + 1)
-                            .counting(outcome.importedDocIds, outcome.duplicates)
-                }
-
-                is MessageOutcome.Failed -> {
-                    report =
-                        report
-                            .copy(matched = report.matched + 1)
-                            .counting(outcome.importedDocIds, outcome.duplicates)
-                    val attempts = if (cursor.blockedUid == message.uid) cursor.blockedAttempts + 1 else 1
-                    if (attempts >= MAX_MESSAGE_ATTEMPTS) {
-                        // A message that keeps failing (a vanished UID, an undecodable image, a post-
-                        // action the server refuses) is passed over instead of stopping the folder.
-                        log.warn(
-                            "Email UID ${message.uid} passed over after $attempts failed checks: " +
-                                outcome.reason.name,
-                        )
-                        report = report.copy(unreadable = report.unreadable + 1)
-                    } else {
-                        log.warn("Email UID ${message.uid} failed (${outcome.reason.name}); retried next check")
-                        cursor = cursor.copy(blockedUid = message.uid, blockedAttempts = attempts)
-                        error = MailCheckError(outcome.reason, outcome.detail)
-                    }
+                } else {
+                    log.warn("Email UID ${message.uid} failed (${outcome.reason.name}); retried next check")
+                    cursor = cursor.copy(blockedUid = message.uid, blockedAttempts = attempts)
+                    error = MailCheckError(outcome.reason, outcome.detail)
                 }
             }
             if (error == null) {
@@ -708,103 +646,6 @@ internal class MailService(
             }
         }
         return PageOutcome(report, cursor, error, interrupted = false)
-    }
-
-    /** What one message comes to: passed over, unreadable, or imported (or failing to be). */
-    private suspend fun consider(
-        account: MailAccount,
-        connection: MailConnection,
-        message: MailMessage,
-    ): MessageOutcome {
-        val supported = message.attachments.filter { it.supportedKind() != null }
-        return when {
-            // Never filtered, imported or given a post-action: what it holds is unknown.
-            message.readFailure != null -> MessageOutcome.Unreadable(message.readFailureCause)
-
-            !account.matches(message) -> MessageOutcome.Skipped
-
-            supported.isEmpty() && !account.saveEmailAsPdf -> MessageOutcome.SkippedMatched
-
-            else -> handle(account, connection, message, supported)
-        }
-    }
-
-    private fun MailCheckReport.counting(
-        docIds: List<String>,
-        duplicates: Int,
-    ): MailCheckReport =
-        copy(
-            imported = imported + docIds.size,
-            importedDocIds = importedDocIds + docIds,
-            duplicates = this.duplicates + duplicates,
-        )
-
-    private suspend fun handle(
-        account: MailAccount,
-        connection: MailConnection,
-        message: MailMessage,
-        supported: List<MailAttachment>,
-    ): MessageOutcome {
-        val imported = mutableListOf<String>()
-        var duplicates = 0
-        var failure: MailFailureReason? = null
-
-        fun record(result: MailImportResult) {
-            when (result) {
-                is MailImportResult.Imported -> imported += result.docId
-                MailImportResult.Duplicate -> duplicates++
-                MailImportResult.Failed -> failure = MailFailureReason.IMPORT_FAILED
-            }
-        }
-
-        var index = 0
-        while (index < supported.size && failure == null) {
-            val attachment = supported[index]
-            index++
-            when (attachment.supportedKind()) {
-                MailAttachmentKind.PDF -> {
-                    record(sink.importPdf(attachment.bytes, attachment.fileName))
-                    if (failure == null) log.info("Imported a PDF attachment of email UID ${message.uid}")
-                }
-
-                MailAttachmentKind.IMAGE -> {
-                    record(sink.importImage(attachment.bytes, imageAttachmentPdfName(attachment.fileName)))
-                }
-
-                null -> {}
-            }
-        }
-        if (failure == null && account.saveEmailAsPdf) {
-            val pdf =
-                runCatchingCancellable { pdfRenderer.render(message) }.getOrElse { thrown ->
-                    log.warn("Rendering an email as a PDF failed", thrown)
-                    null
-                }
-            if (pdf == null) {
-                failure = MailFailureReason.PDF_RENDER_FAILED
-            } else {
-                record(sink.importPdf(pdf, emailPdfFileName(message)))
-            }
-        }
-        // A message that lost an attachment keeps its place in the mailbox: moving or deleting it
-        // would take the part the library could not take with it.
-        if (failure == null && message.droppedParts.isEmpty()) {
-            failure =
-                when (account.postAction) {
-                    MailPostAction.KEEP -> null
-                    MailPostAction.MARK_READ -> connection.markRead(message.uid)
-                    MailPostAction.MOVE -> connection.moveTo(message.uid, account.moveToFolder)
-                    MailPostAction.DELETE -> connection.delete(message.uid)
-                }
-        }
-        val reason = failure
-        return if (reason == null) {
-            MessageOutcome.Handled(imported, duplicates)
-        } else {
-            // The attachments are in the library; only the message action is left. The cursor stays
-            // before this message, so the retry sees duplicates and tries the action again.
-            MessageOutcome.Failed(reason, importedDocIds = imported, duplicates = duplicates)
-        }
     }
 
     /** End a check that could not read the folder: the stored cursor keeps its place and takes [error]. */
@@ -887,30 +728,6 @@ internal class MailService(
         }
     }
 
-    private sealed interface MessageOutcome {
-        /** Not one the account asks for. */
-        data object Skipped : MessageOutcome
-
-        /** Asked for, but nothing in it the library can take. */
-        data object SkippedMatched : MessageOutcome
-
-        data class Unreadable(
-            val cause: String?,
-        ) : MessageOutcome
-
-        data class Handled(
-            val importedDocIds: List<String>,
-            val duplicates: Int,
-        ) : MessageOutcome
-
-        data class Failed(
-            val reason: MailFailureReason,
-            val importedDocIds: List<String>,
-            val duplicates: Int,
-            val detail: String? = null,
-        ) : MessageOutcome
-    }
-
     private companion object {
         /** How often the poller wakes to see whether an account is due; not the account's interval. */
         const val POLL_TICK_MILLIS = 30_000L
@@ -919,13 +736,16 @@ internal class MailService(
          * A routine poll's cap on pages; the cursor resumes from where it stopped. A catch-up and a
          * check the user asked for read until the folder is exhausted instead.
          */
-        const val MAX_PAGES_PER_CHECK = 5
+        const val MAX_PAGES_PER_CHECK = 1
 
         /** After this many failed checks, a message is passed over rather than stopping the folder. */
         const val MAX_MESSAGE_ATTEMPTS = 3
 
-        /** Fresh connections one check may open after a fetch failed, before it gives up. */
-        const val MAX_RECONNECTS = 2
+        /**
+         * Fresh connections a check may open in a row without the cursor moving in between, before
+         * it gives up until the next poll. Any page that makes progress resets the count.
+         */
+        const val MAX_RECONNECTS = 3
 
         /** The pause before a reconnect, so a server that just dropped us is not hit at once. */
         const val RECONNECT_DELAY_MILLIS = 2_000L

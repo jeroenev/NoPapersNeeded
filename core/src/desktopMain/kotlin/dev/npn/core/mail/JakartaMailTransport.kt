@@ -2,6 +2,7 @@ package dev.npn.core.mail
 
 import jakarta.mail.Address
 import jakarta.mail.AuthenticationFailedException
+import jakarta.mail.FetchProfile
 import jakarta.mail.Flags
 import jakarta.mail.Folder
 import jakarta.mail.FolderClosedException
@@ -199,6 +200,14 @@ private class JakartaMailConnection(
 ) : MailConnection {
     private val uids = folder as UIDFolder
 
+    /**
+     * The last fetch's messages by UID, their envelopes and structures already loaded: a download
+     * or post-action of one of them needs no further lookup, and reads only the parts it asks for.
+     */
+    private var batch: Map<Long, Message> = emptyMap()
+
+    private fun message(uid: Long): Message? = batch[uid] ?: uids.getMessageByUID(uid)
+
     override suspend fun firstUidSince(sinceMillis: Long): Long? =
         withContext(io) {
             try {
@@ -239,13 +248,32 @@ private class JakartaMailConnection(
                         uids.getMessagesByUID(start, windowEnd).filterNotNull()
                     }
                 val taken = listed.take(MailTransport.PAGE_SIZE)
-                val messages = taken.map { MimeParser.parseOrFailed(uids.getUID(it), it) }
+                // One request for the whole batch's UIDs, envelopes and structures. Without it each
+                // message costs a round trip for its envelope, another for its structure, and one per
+                // part, every one of them before the filters could say it was not wanted.
+                folder.fetch(taken.toTypedArray(), BATCH_PROFILE)
+                batch = taken.associateBy(uids::getUID)
+                val messages = taken.map { MimeParser.envelopeOrFailed(uids.getUID(it), it) }
                 // A full page stops at its last message; a short one has seen the whole window.
                 val scannedThrough =
                     if (listed.size > MailTransport.PAGE_SIZE) messages.last().uid else maxOf(afterUid, windowEnd)
                 MailFetchResult.Success(messages = messages, uidNext = uidNext, scannedThroughUid = scannedThrough)
             } catch (failure: Exception) {
                 MailFetchResult.Failed(reason(failure, MailFailureReason.FETCH_FAILED), causeChain(failure))
+            }
+        }
+
+    override suspend fun download(
+        uid: Long,
+        withBody: Boolean,
+    ): MailDownloadResult =
+        withContext(io) {
+            try {
+                val message =
+                    message(uid) ?: return@withContext MailDownloadResult.Failed(MailFailureReason.FETCH_FAILED)
+                MailDownloadResult.Success(MimeParser.downloadOrFailed(uid, message, withBody))
+            } catch (failure: Exception) {
+                MailDownloadResult.Failed(reason(failure, MailFailureReason.FETCH_FAILED), causeChain(failure))
             }
         }
 
@@ -258,7 +286,7 @@ private class JakartaMailConnection(
     ): MailFailureReason? =
         withContext(io) {
             try {
-                val message = uids.getMessageByUID(uid) ?: return@withContext MailFailureReason.FETCH_FAILED
+                val message = message(uid) ?: return@withContext MailFailureReason.FETCH_FAILED
                 val target = store.getFolder(folder)
                 if (target == null || !target.exists()) return@withContext MailFailureReason.FOLDER_NOT_FOUND
                 val imapFolder = this@JakartaMailConnection.folder as? IMAPFolder
@@ -277,7 +305,7 @@ private class JakartaMailConnection(
     override suspend fun delete(uid: Long): MailFailureReason? =
         withContext(io) {
             try {
-                val message = uids.getMessageByUID(uid) ?: return@withContext MailFailureReason.FETCH_FAILED
+                val message = message(uid) ?: return@withContext MailFailureReason.FETCH_FAILED
                 val imapFolder = folder as? IMAPFolder
                 if (imapFolder == null || !(store as IMAPStore).hasCapability("UIDPLUS")) {
                     return@withContext MailFailureReason.POST_ACTION_FAILED
@@ -296,7 +324,7 @@ private class JakartaMailConnection(
     ): MailFailureReason? =
         withContext(io) {
             try {
-                val message = uids.getMessageByUID(uid) ?: return@withContext MailFailureReason.FETCH_FAILED
+                val message = message(uid) ?: return@withContext MailFailureReason.FETCH_FAILED
                 action(message)
                 null
             } catch (failure: Exception) {
@@ -311,6 +339,14 @@ private class JakartaMailConnection(
         }
     }
 }
+
+/** What a batch fetch asks for in one request: UIDs, envelopes (with the arrival date) and structures. */
+private val BATCH_PROFILE =
+    FetchProfile().apply {
+        add(UIDFolder.FetchProfileItem.UID)
+        add(FetchProfile.Item.ENVELOPE)
+        add(FetchProfile.Item.CONTENT_INFO)
+    }
 
 private fun connectReason(failure: Exception): MailFailureReason = reason(failure, MailFailureReason.CONNECTION_FAILED)
 
@@ -394,16 +430,22 @@ private const val READ_TIMEOUT_MILLIS = 60_000
 private const val WRITE_TIMEOUT_MILLIS = 60_000
 
 /**
- * Walks a Jakarta Mail message into the small model the importer needs. Pure and testable without
- * a server: a test builds a [jakarta.mail.internet.MimeMessage] in memory. The body is capped, and
- * only attachments the library can import are read into memory; everything else is passed over.
+ * Walks a Jakarta Mail message into the small models the importer needs. Pure and testable without
+ * a server: a test builds a [jakarta.mail.internet.MimeMessage] in memory.
+ *
+ * Two passes, so a mailbox is read at the cost of what it holds for the library. [envelopeOrFailed]
+ * reads only headers and structure: Content-Type, file name, disposition and Content-ID are all part
+ * of an IMAP BODYSTRUCTURE, which a batch fetch loads for a whole page at once, so it downloads
+ * nothing. [downloadOrFailed] then downloads, for one message, only the parts worth importing; the
+ * HTML only when an image's Content-ID needs checking against it, and the plain text only when
+ * asked for (the email PDF). The body is capped, as is every attachment.
  *
  * An image is a document only when it is an attachment rather than part of the message's look. It
  * is passed over when the HTML body shows it (its Content-ID is referenced as `cid:`), when it is a
  * resource of the HTML (inside a `multipart/related`) without an explicit `Content-Disposition:
  * attachment`, or when it measures under [MIN_IMAGE_SIDE_PX] on its shorter side, the size of a
- * logo, a social icon or a tracking pixel. An image that cannot be measured is kept, and PDFs are
- * kept by name as before.
+ * logo, a social icon or a tracking pixel. An image that cannot be measured is kept. A named PDF is
+ * always kept, whatever its disposition: Apple Mail sends one as `inline; filename=…`.
  */
 internal object MimeParser {
     private const val MAX_BODY_CHARS = 1_000_000
@@ -415,26 +457,63 @@ internal object MimeParser {
 
     private val CID_REFERENCE = Regex("""cid:([^"'\s>)]+)""", RegexOption.IGNORE_CASE)
 
-    /** What one walk of a message gathers, and the Content-IDs its HTML body shows. */
-    private class Walk(
-        val shownByHtml: Set<String>,
-    ) {
-        val body = StringBuilder()
-        val attachments = mutableListOf<MailAttachment>()
-        val dropped = mutableListOf<MailDroppedPart>()
-    }
+    /** One leaf of a message's structure, and whether it sits among an HTML body's related parts. */
+    private class Leaf(
+        val part: Part,
+        val inRelated: Boolean,
+    )
+
+    /** A leaf the library could import, as the structure names it. */
+    private class Candidate(
+        val leaf: Leaf,
+        val name: String,
+        val kind: MailAttachmentKind,
+        /** The normalized Content-ID of an image, checked against the HTML's `cid:` references. */
+        val contentId: String?,
+    )
 
     /**
-     * [parse], with a message that cannot be read at all (a structure that does not parse) returned
-     * as a [MailMessage.readFailure] instead of thrown, so one bad message is passed over alone. A
-     * lost connection is the fetch's failure, not the message's, and still fails the whole fetch.
+     * The message's envelope and the attachments its structure offers, or a [MailEnvelope.readFailure]
+     * when even that cannot be read. A lost connection is the fetch's failure, and is rethrown.
      */
-    fun parseOrFailed(
+    fun envelopeOrFailed(
         uid: Long,
         message: Message,
+    ): MailEnvelope =
+        try {
+            MailEnvelope(
+                uid = uid,
+                from = addresses { message.from },
+                to = addresses { message.getRecipients(Message.RecipientType.TO) },
+                subject = decode(message.subject).orEmpty(),
+                dateMillis = message.sentDate?.time ?: message.receivedDate?.time,
+                attachments = candidates(leaves(message)).map { MailAttachmentInfo(it.name, it.leaf.part.contentType) },
+            )
+        } catch (failure: Exception) {
+            if (isConnectionLoss(failure)) throw failure
+            MailEnvelope(
+                uid = uid,
+                from = "",
+                to = "",
+                subject = "",
+                dateMillis = null,
+                attachments = emptyList(),
+                readFailure = MailFailureReason.MESSAGE_UNREADABLE,
+                readFailureCause = causeChain(failure),
+            )
+        }
+
+    /**
+     * [download], with a message that cannot be read at all returned as a [MailMessage.readFailure]
+     * instead of thrown, so one bad message is passed over alone. A lost connection is rethrown.
+     */
+    fun downloadOrFailed(
+        uid: Long,
+        message: Message,
+        withBody: Boolean,
     ): MailMessage =
         try {
-            parse(uid, message)
+            download(uid, message, withBody)
         } catch (failure: Exception) {
             if (isConnectionLoss(failure)) throw failure
             MailMessage(
@@ -450,138 +529,169 @@ internal object MimeParser {
             )
         }
 
+    /** Everything of [message] at once, its text included: what a test of the two passes reads. */
+    fun parseOrFailed(
+        uid: Long,
+        message: Message,
+    ): MailMessage = downloadOrFailed(uid, message, withBody = true)
+
     fun parse(
         uid: Long,
         message: Message,
+    ): MailMessage = download(uid, message, withBody = true)
+
+    private fun download(
+        uid: Long,
+        message: Message,
+        withBody: Boolean,
     ): MailMessage {
-        val shown = mutableSetOf<String>()
-        collectHtmlReferences(message, shown, depth = 0)
-        val walk = Walk(shown)
-        walk(message, walk, depth = 0, inRelated = false)
-        val body = walk.body
-        val attachments = walk.attachments
+        val leaves = leaves(message)
+        val candidates = candidates(leaves)
+        // The HTML is downloaded only when it can change the answer: an image it may be showing.
+        val shown =
+            if (candidates.any { it.kind == MailAttachmentKind.IMAGE && it.contentId != null }) {
+                htmlReferences(leaves)
+            } else {
+                emptySet()
+            }
+        val attachments = mutableListOf<MailAttachment>()
+        val dropped = mutableListOf<MailDroppedPart>()
+        for (candidate in candidates) {
+            if (candidate.contentId != null && candidate.contentId in shown) continue
+            when (val read = readAttachment(candidate)) {
+                is PartRead.Read -> {
+                    attachments += read.attachment
+                }
+
+                is PartRead.Dropped -> {
+                    dropped += read.reason
+                }
+
+                PartRead.Decoration -> {}
+            }
+        }
         return MailMessage(
-            droppedParts = walk.dropped,
             uid = uid,
             from = addresses { message.from },
             to = addresses { message.getRecipients(Message.RecipientType.TO) },
             subject = decode(message.subject).orEmpty(),
             dateMillis = message.sentDate?.time ?: message.receivedDate?.time,
-            bodyText =
-                body
-                    .toString()
-                    .replace("\r\n", "\n")
-                    .replace('\r', '\n')
-                    .trim(),
+            bodyText = if (withBody) plainText(leaves) else "",
             attachments = attachments,
+            droppedParts = dropped,
         )
     }
 
-    private fun walk(
-        part: Part,
-        walk: Walk,
-        depth: Int,
-        inRelated: Boolean,
-    ) {
-        if (depth > MAX_PART_DEPTH) return
-        if (part.isMimeType("message/rfc822")) {
-            (part.content as? Message)?.let { walk(it, walk, depth + 1, inRelated = false) }
-            return
-        }
-        if (part.isMimeType("multipart/*")) {
-            val multipart = part.content as? Multipart ?: return
-            val related = inRelated || part.isMimeType("multipart/related")
-            for (index in 0 until multipart.count) {
-                multipart.getBodyPart(index)?.let { walk(it, walk, depth + 1, related) }
-            }
-            return
-        }
-        val name = decode(part.fileName)?.takeIf(String::isNotBlank)
-        val kind = name?.let { MailAttachment(it, part.contentType, ByteArray(0)).supportedKind() }
-        if (name != null && kind != null) {
-            // Whatever its disposition: Apple Mail sends a PDF as "inline; filename=…", and an
-            // inline image is a photo unless the body shows it or it is decoration-sized.
-            readAttachment(part, name, kind, inRelated, walk)
-            return
-        }
-        // A named part the library cannot take is an attachment, not text of the body.
-        if (isAttachment(part)) return
-        val body = walk.body
-        if (part.isMimeType("text/plain") && body.length < MAX_BODY_CHARS) {
-            val text = part.content as? String ?: return
-            body.append(text.take(MAX_BODY_CHARS - body.length))
-        }
-    }
-
     /**
-     * Read one supported attachment into [walk]: an image the HTML body owns or one too small to be
-     * a document is passed over, and one over the size cap or that cannot be decoded is recorded
-     * as dropped while the rest of the message is still read.
+     * The leaves of [part]'s structure, in order. Walking it reads multipart and nested-message
+     * structure only, which an IMAP message has from its BODYSTRUCTURE: no leaf is downloaded.
      */
-    private fun readAttachment(
-        part: Part,
-        name: String,
-        kind: MailAttachmentKind,
-        inRelated: Boolean,
-        walk: Walk,
-    ) {
-        val image = kind == MailAttachmentKind.IMAGE
-        if (image && partOfTheBody(part, inRelated, walk.shownByHtml)) return
-        val bytes =
-            try {
-                readCapped(part.inputStream)
-            } catch (_: AttachmentTooLargeException) {
-                walk.dropped += MailDroppedPart.TOO_LARGE
-                return
-            } catch (failure: Exception) {
-                if (isConnectionLoss(failure)) throw failure
-                walk.dropped += MailDroppedPart.UNREADABLE
-                return
-            }
-        if (image && (shorterSide(bytes) ?: Int.MAX_VALUE) < MIN_IMAGE_SIDE_PX) return
-        walk.attachments += MailAttachment(name, part.contentType, bytes)
-    }
+    private fun leaves(part: Part): List<Leaf> = mutableListOf<Leaf>().also { collectLeaves(part, it, 0, false) }
 
-    /** Every Content-ID an HTML part of [part] shows (`cid:` references), normalized as [contentId] is. */
-    private fun collectHtmlReferences(
+    private fun collectLeaves(
         part: Part,
-        into: MutableSet<String>,
+        into: MutableList<Leaf>,
         depth: Int,
+        inRelated: Boolean,
     ) {
         if (depth > MAX_PART_DEPTH) return
         when {
             part.isMimeType("message/rfc822") -> {
-                (part.content as? Message)?.let { collectHtmlReferences(it, into, depth + 1) }
+                (part.content as? Message)?.let { collectLeaves(it, into, depth + 1, inRelated = false) }
             }
 
             part.isMimeType("multipart/*") -> {
                 val multipart = part.content as? Multipart ?: return
+                val related = inRelated || part.isMimeType("multipart/related")
                 for (index in 0 until multipart.count) {
-                    multipart.getBodyPart(index)?.let { collectHtmlReferences(it, into, depth + 1) }
+                    multipart.getBodyPart(index)?.let { collectLeaves(it, into, depth + 1, related) }
                 }
             }
 
-            part.isMimeType("text/html") && !isAttachment(part) -> {
-                val html = part.content as? String ?: return
-                CID_REFERENCE.findAll(html.take(MAX_BODY_CHARS)).forEach { match ->
-                    into += normalizedId(URLDecoder.decode(match.groupValues[1], Charsets.UTF_8))
-                }
+            else -> {
+                into += Leaf(part, inRelated)
             }
         }
     }
 
     /**
-     * Whether an image part belongs to the HTML body rather than to the mail's attachments: the
-     * body shows it, or it is one of the body's related resources and not explicitly attached.
+     * The leaves the library could import, judged from the structure alone: every named PDF, and
+     * every named image except the HTML body's own related resources (no explicit attachment
+     * disposition). An image with a Content-ID may still be one the HTML shows, checked on download.
      */
-    private fun partOfTheBody(
-        part: Part,
-        inRelated: Boolean,
-        shownByHtml: Set<String>,
-    ): Boolean {
-        val id = (part as? MimePart)?.contentID?.let(::normalizedId)
-        if (id != null && id in shownByHtml) return true
-        return inRelated && !Part.ATTACHMENT.equals(part.disposition, ignoreCase = true)
+    private fun candidates(leaves: List<Leaf>): List<Candidate> =
+        leaves.mapNotNull { leaf ->
+            val part = leaf.part
+            val name = decode(part.fileName)?.takeIf(String::isNotBlank) ?: return@mapNotNull null
+            val kind = attachmentKind(name, part.contentType) ?: return@mapNotNull null
+            val image = kind == MailAttachmentKind.IMAGE
+            val attached = Part.ATTACHMENT.equals(part.disposition, ignoreCase = true)
+            if (image && leaf.inRelated && !attached) return@mapNotNull null
+            val contentId = if (image) (part as? MimePart)?.contentID?.let(::normalizedId) else null
+            Candidate(leaf, name, kind, contentId)
+        }
+
+    private sealed interface PartRead {
+        class Read(
+            val attachment: MailAttachment,
+        ) : PartRead
+
+        class Dropped(
+            val reason: MailDroppedPart,
+        ) : PartRead
+
+        /** An image too small to be a document. */
+        data object Decoration : PartRead
+    }
+
+    /**
+     * Download one candidate: one over the size cap or that cannot be decoded is dropped while the
+     * rest of the message is still read, and an image too small to be a document is decoration.
+     */
+    private fun readAttachment(candidate: Candidate): PartRead {
+        val part = candidate.leaf.part
+        val bytes =
+            try {
+                readCapped(part.inputStream)
+            } catch (_: AttachmentTooLargeException) {
+                return PartRead.Dropped(MailDroppedPart.TOO_LARGE)
+            } catch (failure: Exception) {
+                if (isConnectionLoss(failure)) throw failure
+                return PartRead.Dropped(MailDroppedPart.UNREADABLE)
+            }
+        val image = candidate.kind == MailAttachmentKind.IMAGE
+        if (image && (shorterSide(bytes) ?: Int.MAX_VALUE) < MIN_IMAGE_SIDE_PX) return PartRead.Decoration
+        return PartRead.Read(MailAttachment(candidate.name, part.contentType, bytes))
+    }
+
+    /** The text of the body's plain-text leaves, capped; a named part is an attachment, not text. */
+    private fun plainText(leaves: List<Leaf>): String {
+        val body = StringBuilder()
+        val textParts =
+            leaves.map(Leaf::part).filter { part ->
+                part.isMimeType("text/plain") &&
+                    !isAttachment(part) &&
+                    decode(part.fileName)?.let { attachmentKind(it, part.contentType) } == null
+            }
+        for (part in textParts) {
+            if (body.length >= MAX_BODY_CHARS) break
+            (part.content as? String)?.let { body.append(it.take(MAX_BODY_CHARS - body.length)) }
+        }
+        return body
+            .toString()
+            .replace("\r\n", "\n")
+            .replace('\r', '\n')
+            .trim()
+    }
+
+    /** Every Content-ID the HTML leaves show (`cid:` references), normalized as [normalizedId] does. */
+    private fun htmlReferences(leaves: List<Leaf>): Set<String> {
+        val htmlParts = leaves.map(Leaf::part).filter { it.isMimeType("text/html") && !isAttachment(it) }
+        return htmlParts
+            .mapNotNull { it.content as? String }
+            .flatMap { html -> CID_REFERENCE.findAll(html.take(MAX_BODY_CHARS)).toList() }
+            .map { match -> normalizedId(URLDecoder.decode(match.groupValues[1], Charsets.UTF_8)) }
+            .toSet()
     }
 
     private fun normalizedId(raw: String): String =
@@ -607,6 +717,7 @@ internal object MimeParser {
             null
         }
 
+    /** A named part not shown inline: an attachment, whether or not the library can take it. */
     private fun isAttachment(part: Part): Boolean {
         if (part.fileName == null) return false
         return !Part.INLINE.equals(part.disposition, ignoreCase = true)

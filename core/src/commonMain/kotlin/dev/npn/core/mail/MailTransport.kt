@@ -18,6 +18,30 @@ data class MailAttachment(
         31 * (31 * fileName.hashCode() + (contentType?.hashCode() ?: 0)) + bytes.contentHashCode()
 }
 
+/** One attachment a message offers, as its structure names it: nothing of it is downloaded yet. */
+data class MailAttachmentInfo(
+    val fileName: String,
+    val contentType: String?,
+)
+
+/**
+ * A message as a batch fetch describes it, from its envelope and structure alone: enough to filter
+ * it and to know whether it offers anything to import, before a byte of its body is downloaded.
+ * [attachments] are the parts the library could take, less the images the structure already shows
+ * to be the HTML body's own; one may still turn out to be decoration once downloaded.
+ */
+data class MailEnvelope(
+    val uid: Long,
+    val from: String,
+    val to: String,
+    val subject: String,
+    val dateMillis: Long?,
+    val attachments: List<MailAttachmentInfo>,
+    /** Set when even the envelope or structure could not be read; see [MailMessage.readFailure]. */
+    val readFailure: MailFailureReason? = null,
+    val readFailureCause: String? = null,
+)
+
 /** One message the transport read, reduced to what filtering, importing and the email PDF need. */
 data class MailMessage(
     val uid: Long,
@@ -25,7 +49,10 @@ data class MailMessage(
     val to: String,
     val subject: String,
     val dateMillis: Long?,
-    /** The plain-text body; HTML-only mail leaves this empty and imports its attachments only. */
+    /**
+     * The plain-text body, downloaded only for the email PDF; HTML-only mail, and a download that
+     * did not ask for it, leave this empty.
+     */
     val bodyText: String,
     val attachments: List<MailAttachment>,
     /**
@@ -85,7 +112,7 @@ enum class MailFailureReason {
  */
 sealed interface MailFetchResult {
     data class Success(
-        val messages: List<MailMessage>,
+        val messages: List<MailEnvelope>,
         /** The UID the mailbox's next message gets; everything below it existed when it was opened. */
         val uidNext: Long,
         /**
@@ -100,6 +127,19 @@ sealed interface MailFetchResult {
         val reason: MailFailureReason,
         val detail: String? = null,
     ) : MailFetchResult
+}
+
+/** What downloading one message's parts came to. */
+sealed interface MailDownloadResult {
+    data class Success(
+        val message: MailMessage,
+    ) : MailDownloadResult
+
+    /** The connection failed under the download; a fresh one may succeed. */
+    data class Failed(
+        val reason: MailFailureReason,
+        val detail: String? = null,
+    ) : MailDownloadResult
 }
 
 /** What opening the account's folder for one check came to. */
@@ -141,15 +181,19 @@ interface MailTransport {
     ): MailOpenResult
 
     companion object {
-        /** The most messages one fetch returns; a check pages on from the cursor after these. */
-        const val PAGE_SIZE = 10
+        /**
+         * The most messages one fetch describes, in one bulk request for their envelopes and
+         * structures; a check pages on from the cursor after these. Only descriptions: a message's
+         * parts are downloaded one message at a time, and only the parts worth importing.
+         */
+        const val PAGE_SIZE = 100
 
         /**
          * The most UIDs one fetch looks across for [PAGE_SIZE] messages. A mailbox whose old mail
          * was deleted has long runs of unused UIDs; a wide window crosses them in few round trips,
          * while listing a window is only a UID list, never a message body.
          */
-        const val SCAN_WINDOW = 500L
+        const val SCAN_WINDOW = 1_000L
     }
 }
 
@@ -175,10 +219,21 @@ interface MailConnection {
     suspend fun countAfter(uid: Long): Int?
 
     /**
-     * Read up to [MailTransport.PAGE_SIZE] messages whose UID is greater than [afterUid]. Attachments
-     * are capped, and only supported ones need be returned.
+     * Describe up to [MailTransport.PAGE_SIZE] messages whose UID is greater than [afterUid], from
+     * their envelopes and structures only: no body or attachment is downloaded.
      */
     suspend fun fetchAfter(afterUid: Long): MailFetchResult
+
+    /**
+     * Download the parts of [uid], one of the last fetch's messages, that the library could import
+     * (capped; a part over the cap or that cannot be decoded is reported as dropped), and its
+     * plain-text body only when [withBody] asks for it, for the email PDF. A message that cannot
+     * be read comes back as a [MailMessage.readFailure]; a lost connection as [MailDownloadResult.Failed].
+     */
+    suspend fun download(
+        uid: Long,
+        withBody: Boolean,
+    ): MailDownloadResult
 
     suspend fun markRead(uid: Long): MailFailureReason?
 

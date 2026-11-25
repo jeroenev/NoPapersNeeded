@@ -24,14 +24,13 @@ class MailAccountTest {
         from: String = "sender@example.com",
         subject: String = "Invoice",
         attachments: List<MailAttachment> = emptyList(),
-    ) = MailMessage(
+    ) = MailEnvelope(
         uid = 1,
         from = from,
         to = "me@example.com",
         subject = subject,
         dateMillis = 0,
-        bodyText = "",
-        attachments = attachments,
+        attachments = attachments.map { MailAttachmentInfo(it.fileName, it.contentType) },
     )
 
     @Test
@@ -132,7 +131,16 @@ class MailAccountTest {
 
     @Test
     fun theEmailPdfNameIsStableAndSafe() {
-        val message = message(subject = "../../March/Invoice \u0000 " + "x".repeat(300))
+        val message =
+            MailMessage(
+                uid = 1,
+                from = "sender@example.com",
+                to = "me@example.com",
+                subject = "../../March/Invoice \u0000 " + "x".repeat(300),
+                dateMillis = 0,
+                bodyText = "",
+                attachments = emptyList(),
+            )
         val name = emailPdfFileName(message)
         assertEquals(name, emailPdfFileName(message))
         assertFalse(name.contains('\\'))
