@@ -5,8 +5,8 @@ import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.PathExternalIo
 import dev.npn.core.mail.JakartaMailTransport
-import dev.npn.core.mail.LibsecretMailCredentialStore
 import dev.npn.core.mail.PdfBoxMailPdfRenderer
+import dev.npn.core.mail.desktopMailCredentials
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.ocr.TesseractCliEngine
 import dev.npn.core.pdf.DirThumbnailStore
@@ -78,7 +78,7 @@ fun jvmSessionDeps(
         syncSetup = syncSetup,
         syncStaging = DirectoryStaging(Path.of(dirs.syncDir)),
         mailTransport = JakartaMailTransport(),
-        mailCredentials = LibsecretMailCredentialStore(),
+        mailCredentials = desktopMailCredentials(),
         mailPdfRenderer = PdfBoxMailPdfRenderer(),
     )
 

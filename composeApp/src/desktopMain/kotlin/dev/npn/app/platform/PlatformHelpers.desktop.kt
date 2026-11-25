@@ -53,8 +53,12 @@ actual fun systemAnimationsEnabled(): Boolean = true
 
 actual fun ocrHasLanguageSetting(): Boolean = true
 
-/** Email import needs libsecret, which this build wires on Linux only; Windows gets no dead pane. */
-actual fun supportsEmailImport(): Boolean = System.getProperty("os.name").lowercase().contains("linux")
+/**
+ * Email import needs a keyring for the password: the secret service on Linux, the Credential
+ * Manager on Windows. Other desktops get no dead pane.
+ */
+actual fun supportsEmailImport(): Boolean =
+    System.getProperty("os.name").lowercase().let { it.contains("linux") || it.startsWith("windows") }
 
 /**
  * `NoPapersNeeded` in the user's documents folder (XDG's, on Linux): where file managers and sync

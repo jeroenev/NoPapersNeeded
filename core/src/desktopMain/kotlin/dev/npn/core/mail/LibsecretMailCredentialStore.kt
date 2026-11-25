@@ -92,10 +92,10 @@ internal class LibsecretMailCredentialStore(
                     Integer.TYPE,
                     arrayOf<Any?>(lib.schema.memory, null, error, attribute, account, null),
                 ) as Int
+            val failed = error.value != null
             lib.discardError(error)
-            if (cleared !=
-                0
-            ) {
+            // FALSE without an error is "there was nothing to remove": what clearing asked for.
+            if (cleared != 0 || !failed) {
                 MailSecretResult.Success(Unit)
             } else {
                 MailSecretResult.Failed(MailSecretFailure.STORE_FAILED)
@@ -124,10 +124,13 @@ internal class LibsecretMailCredentialStore(
     }
 
     /**
-     * The `SecretSchema` C struct: the schema name, flags, then a NULL-terminated array of
-     * `{ const gchar *name; SecretSchemaAttributeType type; }` entries. Laid out by hand so JNA
-     * needs no structure definitions; all pointer targets stay in [name] and [attribute] so they
-     * outlive every call.
+     * The `SecretSchema` C struct: the schema name, flags, then a NULL-terminated array of 32
+     * `{ const gchar *name; SecretSchemaAttributeType type; }` entries, then its private fields: a
+     * `gint reserved` libsecret reads as the schema's reference count (zero, as here, marks a static
+     * schema it never refs or frees) and seven reserved pointers. All of it is allocated and zeroed:
+     * a struct cut short after the attributes would have libsecret read, and for a non-zero value
+     * there increment, memory past the end. Laid out by hand so JNA needs no structure definitions;
+     * all pointer targets stay in [name] and [attribute] so they outlive every call.
      */
     private class Schema {
         private val name = cString(SCHEMA_NAME)
@@ -159,8 +162,12 @@ internal class LibsecretMailCredentialStore(
         /** `SECRET_SCHEMA_ATTRIBUTE_STRING`. */
         const val ATTRIBUTE_STRING = 0
 
-        /** Name, flags, and 32 attribute slots of 16 bytes each; the first slot is ours. */
-        const val SCHEMA_BYTES = 16L + 32 * 16
+        /**
+         * Name and flags (16), 32 attribute slots of 16 bytes each (the first is ours), the `gint
+         * reserved` padded to 8, and `reserved1` to `reserved7`: `sizeof(SecretSchema)` on a 64-bit
+         * host, 592.
+         */
+        const val SCHEMA_BYTES = 16L + 32 * 16 + 8 + 7 * 8
 
         fun cString(value: String): Memory {
             val bytes = value.toByteArray(Charsets.UTF_8)
