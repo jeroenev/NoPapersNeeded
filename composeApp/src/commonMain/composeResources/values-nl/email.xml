@@ -17,6 +17,7 @@
     <string name="email_password">Wachtwoord</string>
     <string name="email_password_saved">Er is een wachtwoord opgeslagen in de sleutelhanger van het systeem.</string>
     <string name="email_password_help">Laat leeg om het opgeslagen wachtwoord te houden. Het staat in de sleutelhanger van het systeem, niet in de bibliotheek.</string>
+    <string name="email_password_needed">Op dit apparaat is geen wachtwoord voor dit account bewaard. Vul het in en sla het account op.</string>
     <string name="email_folder">Map</string>
     <string name="email_folder_help">De te lezen map in het postvak, meestal INBOX.</string>
     <string name="email_allow_plain">Een onversleutelde verbinding toestaan</string>

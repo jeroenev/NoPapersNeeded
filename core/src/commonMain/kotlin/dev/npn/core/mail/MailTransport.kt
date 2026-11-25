@@ -419,6 +419,15 @@ interface MailCursorStore {
     suspend fun enabledHere(): Boolean
 
     suspend fun setEnabledHere(enabled: Boolean)
+
+    /**
+     * The account key this device last kept its password and cursor under; null before any. A synced
+     * change of host, username or port gives the account a new key, and this is how the device finds
+     * what to carry over, even when the change arrived while the app was closed.
+     */
+    suspend fun followedKey(): String?
+
+    suspend fun setFollowedKey(accountKey: String)
 }
 
 /** What the import path offers email import: the session's own ingest façade, narrowed. */

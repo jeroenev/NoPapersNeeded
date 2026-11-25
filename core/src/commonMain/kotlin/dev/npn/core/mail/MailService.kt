@@ -190,6 +190,7 @@ internal class MailService(
     private val importer = MailMessageImporter(sink, pdfRenderer, log)
     private val runtime = MutableStateFlow(Runtime())
     private val checkMutex = Mutex()
+    private val rekeyMutex = Mutex()
     private val imports = MutableSharedFlow<List<String>>(extraBufferCapacity = IMPORT_EVENT_BUFFER)
 
     private var started = false
@@ -237,6 +238,7 @@ internal class MailService(
                 val enabled = cursors.enabledHere()
                 runtime.update { it.copy(enabledHere = enabled) }
                 store.account.collect { account ->
+                    followKey(account)
                     refreshCredentials(account)
                     reloadCursor(account)
                 }
@@ -257,27 +259,80 @@ internal class MailService(
     ): MailSaveOutcome {
         val normalized = account.normalized()
         if (!normalized.isConfigured) return MailSaveOutcome.AccountInvalid
-        val oldKey = store.current().accountKey
         // Save the account first: a keyring failure then leaves the account visible and fixable,
         // rather than a password stored for a host the journal never accepted.
         store.save(normalized)
         cursors.setEnabledHere(enabledHere)
         runtime.update { it.copy(enabledHere = enabledHere) }
-        if (password != null) {
-            val result =
-                if (password.isEmpty()) {
-                    credentials.clear(normalized.accountKey)
-                } else {
-                    credentials.store(normalized.accountKey, password)
+        // A changed host, username or port is a new key: the saved password and the place in the
+        // folder move to it, so a blank password field keeps the password, as the form says.
+        val moved = followKey(normalized)
+        val failure =
+            when {
+                password == null -> {
+                    moved
                 }
-            if (result is MailSecretResult.Failed) return MailSaveOutcome.CredentialFailed(result.reason)
-        }
-        // A changed host or username makes a new key; forget the old password rather than leave it
-        // in the keyring under an account nothing reads.
-        if (oldKey.isNotBlank() && oldKey != normalized.accountKey) clearQuietly(oldKey)
+
+                password.isEmpty() -> {
+                    (credentials.clear(normalized.accountKey) as? MailSecretResult.Failed)?.reason
+                }
+
+                else -> {
+                    (credentials.store(normalized.accountKey, password) as? MailSecretResult.Failed)?.reason
+                }
+            }
         refreshCredentials(normalized)
         reloadCursor(normalized)
-        return MailSaveOutcome.Saved
+        return if (failure != null) MailSaveOutcome.CredentialFailed(failure) else MailSaveOutcome.Saved
+    }
+
+    /**
+     * Carry this device's password and cursor from the key it last kept them under to [account]'s,
+     * when a changed host, username or port (here or on another device) gave the account a new key.
+     * Idempotent: what the new key already has wins, and the old password is removed only once the
+     * new key holds one. A keyring failure leaves the followed key where it was, so the next account
+     * change or start tries again; it is returned.
+     */
+    private suspend fun followKey(account: MailAccount): MailSecretFailure? =
+        rekeyMutex.withLock {
+            if (!account.isConfigured) return@withLock null
+            val newKey = account.accountKey
+            val oldKey = cursors.followedKey()
+            if (oldKey == newKey) return@withLock null
+            if (oldKey != null) {
+                cursors.get(oldKey, account.folder)?.let { old ->
+                    if (cursors.get(newKey, account.folder) == null) cursors.save(old.copy(accountKey = newKey))
+                }
+                val failure = movePassword(oldKey, newKey)
+                if (failure != null) return@withLock failure
+            }
+            cursors.setFollowedKey(newKey)
+            null
+        }
+
+    private suspend fun movePassword(
+        oldKey: String,
+        newKey: String,
+    ): MailSecretFailure? {
+        val present =
+            when (val loaded = credentials.load(newKey)) {
+                is MailSecretResult.Failed -> return loaded.reason
+                is MailSecretResult.Success -> !loaded.value.isNullOrBlank()
+            }
+        if (!present) {
+            val old =
+                when (val loaded = credentials.load(oldKey)) {
+                    is MailSecretResult.Failed -> return loaded.reason
+                    is MailSecretResult.Success -> loaded.value?.takeIf(String::isNotBlank)
+                }
+            if (old != null) {
+                val stored = credentials.store(newKey, old)
+                if (stored is MailSecretResult.Failed) return stored.reason
+            }
+        }
+        // The old key's password now lives under the new one (or never existed); nothing reads it.
+        clearQuietly(oldKey)
+        return null
     }
 
     override suspend fun clearPassword(): MailSaveOutcome {
@@ -305,8 +360,12 @@ internal class MailService(
         }
         if (!normalized.isConfigured) return MailTestOutcome.Failed(MailFailureReason.NOT_CONFIGURED)
         if (!supported) return MailTestOutcome.Failed(MailFailureReason.UNSUPPORTED)
+        // A draft whose host, username or port changed keeps the saved password, as saving it would.
+        val saved = store.current().takeIf { it.isConfigured && it.accountKey != normalized.accountKey }
         val secret =
-            password?.takeIf(String::isNotEmpty) ?: storedPassword(normalized)
+            password?.takeIf(String::isNotEmpty)
+                ?: storedPassword(normalized)
+                ?: saved?.let { storedPassword(it) }
                 ?: return MailTestOutcome.Failed(MailFailureReason.NO_PASSWORD)
         return when (val reason = transport.testConnection(normalized, secret)) {
             null -> MailTestOutcome.Ok

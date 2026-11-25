@@ -91,4 +91,12 @@ class DeviceMailCursorsTest {
             cursors.setEnabledHere(false)
             cursors.enabledHere() shouldBe false
         }
+
+    @Test
+    fun theFollowedAccountKeyIsKeptAcrossRestarts() =
+        runTest {
+            cursors.followedKey() shouldBe null
+            cursors.setFollowedKey("me@mail.example.com:993")
+            DeviceMailCursors(db.mailCursorDao(), db.keyValueDao()).followedKey() shouldBe "me@mail.example.com:993"
+        }
 }

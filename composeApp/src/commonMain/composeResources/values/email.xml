@@ -17,6 +17,7 @@
     <string name="email_password">Password</string>
     <string name="email_password_saved">A password is saved in your system keyring.</string>
     <string name="email_password_help">Leave blank to keep the saved password. It is stored in your system keyring, not in the library.</string>
+    <string name="email_password_needed">No password for this account is saved on this device. Enter it and save the account.</string>
     <string name="email_folder">Folder</string>
     <string name="email_folder_help">The mailbox folder to read, usually INBOX.</string>
     <string name="email_allow_plain">Allow an unencrypted connection</string>

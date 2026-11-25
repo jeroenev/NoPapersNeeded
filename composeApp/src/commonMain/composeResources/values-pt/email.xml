@@ -17,6 +17,7 @@
     <string name="email_password">Palavra-passe</string>
     <string name="email_password_saved">Há uma palavra-passe guardada no cofre do sistema.</string>
     <string name="email_password_help">Deixe vazio para manter a palavra-passe guardada. Fica no cofre do sistema, não na biblioteca.</string>
+    <string name="email_password_needed">Não há nenhuma palavra-passe desta conta guardada neste dispositivo. Introduza-a e guarde a conta.</string>
     <string name="email_folder">Pasta</string>
     <string name="email_folder_help">A pasta da caixa a ler, normalmente INBOX.</string>
     <string name="email_allow_plain">Permitir uma ligação sem encriptação</string>

@@ -69,10 +69,23 @@ internal class FakeAccountStore(
     }
 }
 
+/** A keyring of one password per account key; [password] is the one of [testAccount]'s key. */
 internal class FakeCredentials(
-    var password: String? = "secret",
+    password: String? = "secret",
     var failure: MailSecretFailure? = null,
 ) : MailCredentialStore {
+    val passwords = mutableMapOf<String, String>()
+
+    init {
+        if (password != null) passwords[testAccount.accountKey] = password
+    }
+
+    var password: String?
+        get() = passwords[testAccount.accountKey]
+        set(value) {
+            if (value == null) passwords.remove(testAccount.accountKey) else passwords[testAccount.accountKey] = value
+        }
+
     override val available: Boolean get() = failure != MailSecretFailure.UNSUPPORTED
 
     override suspend fun store(
@@ -80,18 +93,18 @@ internal class FakeCredentials(
         password: String,
     ): MailSecretResult<Unit> {
         failure?.let { return MailSecretResult.Failed(it) }
-        this.password = password
+        passwords[accountKey] = password
         return MailSecretResult.Success(Unit)
     }
 
     override suspend fun load(accountKey: String): MailSecretResult<String?> {
         failure?.let { return MailSecretResult.Failed(it) }
-        return MailSecretResult.Success(password)
+        return MailSecretResult.Success(passwords[accountKey])
     }
 
     override suspend fun clear(accountKey: String): MailSecretResult<Unit> {
         failure?.let { return MailSecretResult.Failed(it) }
-        password = null
+        passwords.remove(accountKey)
         return MailSecretResult.Success(Unit)
     }
 }
@@ -100,11 +113,18 @@ internal class FakeCursors(
     var enabled: Boolean = true,
 ) : MailCursorStore {
     val saved = mutableMapOf<Pair<String, String>, MailCursor>()
+    var followed: String? = null
 
     override suspend fun enabledHere(): Boolean = enabled
 
     override suspend fun setEnabledHere(enabled: Boolean) {
         this.enabled = enabled
+    }
+
+    override suspend fun followedKey(): String? = followed
+
+    override suspend fun setFollowedKey(accountKey: String) {
+        followed = accountKey
     }
 
     override suspend fun get(
@@ -117,6 +137,8 @@ internal class FakeCursors(
     }
 
     fun last(): MailCursor = saved.values.single()
+
+    fun of(account: MailAccount): MailCursor? = saved[account.accountKey to account.folder]
 }
 
 internal class FakeSink : MailDocumentSink {

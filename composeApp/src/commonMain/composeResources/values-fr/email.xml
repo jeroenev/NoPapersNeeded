@@ -17,6 +17,7 @@
     <string name="email_password">Mot de passe</string>
     <string name="email_password_saved">Un mot de passe est enregistré dans le trousseau du système.</string>
     <string name="email_password_help">Laissez vide pour garder le mot de passe enregistré. Il est stocké dans le trousseau du système, pas dans la bibliothèque.</string>
+    <string name="email_password_needed">Aucun mot de passe n’est enregistré pour ce compte sur cet appareil. Saisissez-le et enregistrez le compte.</string>
     <string name="email_folder">Dossier</string>
     <string name="email_folder_help">Le dossier de la boîte à lire, généralement INBOX.</string>
     <string name="email_allow_plain">Autoriser une connexion non chiffrée</string>

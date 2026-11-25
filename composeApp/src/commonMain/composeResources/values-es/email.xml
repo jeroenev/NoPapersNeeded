@@ -17,6 +17,7 @@
     <string name="email_password">Contraseña</string>
     <string name="email_password_saved">Hay una contraseña guardada en el llavero del sistema.</string>
     <string name="email_password_help">Déjalo vacío para conservar la contraseña guardada. Se almacena en el llavero del sistema, no en la biblioteca.</string>
+    <string name="email_password_needed">No hay ninguna contraseña de esta cuenta guardada en este dispositivo. Escríbela y guarda la cuenta.</string>
     <string name="email_folder">Carpeta</string>
     <string name="email_folder_help">La carpeta del buzón que se lee, normalmente INBOX.</string>
     <string name="email_allow_plain">Permitir una conexión sin cifrar</string>

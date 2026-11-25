@@ -133,19 +133,23 @@ internal class MailMessageImporter(
                 }
 
                 MailImportResult.Failed -> {
-                    failure = MailFailureReason.IMPORT_FAILED
+                    failure = failure ?: MailFailureReason.IMPORT_FAILED
                 }
             }
         }
 
-        var index = 0
-        while (index < supported.size && failure == null) {
-            val attachment = supported[index]
-            index++
+        // Every part is tried, whatever an earlier one came to: one that cannot be imported (an empty
+        // file, an image that does not decode) must not keep the email's invoice out of the library.
+        for (attachment in supported) {
             when (attachment.supportedKind()) {
                 MailAttachmentKind.PDF -> {
-                    record(sink.importPdf(attachment.bytes, attachment.fileName))
-                    if (failure == null) log.info("Imported a PDF attachment of email UID ${message.uid}")
+                    val result = sink.importPdf(attachment.bytes, attachment.fileName)
+                    record(result)
+                    if (result is MailImportResult.Imported) {
+                        log.info(
+                            "Imported a PDF attachment of email UID ${message.uid}",
+                        )
+                    }
                 }
 
                 MailAttachmentKind.IMAGE -> {
@@ -155,14 +159,14 @@ internal class MailMessageImporter(
                 null -> {}
             }
         }
-        if (failure == null && account.saveEmailAsPdf) {
+        if (account.saveEmailAsPdf) {
             val pdf =
                 runCatchingCancellable { pdfRenderer.render(message) }.getOrElse { thrown ->
                     log.warn("Rendering an email as a PDF failed", thrown)
                     null
                 }
             if (pdf == null) {
-                failure = MailFailureReason.PDF_RENDER_FAILED
+                failure = failure ?: MailFailureReason.PDF_RENDER_FAILED
             } else {
                 record(sink.importPdf(pdf, emailPdfFileName(message)))
             }
@@ -177,8 +181,8 @@ internal class MailMessageImporter(
         return if (reason == null) {
             MessageOutcome.Handled(imported, duplicates)
         } else {
-            // The attachments are in the library; only the message action is left. The cursor stays
-            // before this message, so the retry sees duplicates and tries the action again.
+            // What did import is in the library. The cursor stays before this message, so the retry
+            // sees those as duplicates, tries the failed parts again, and only then the action.
             MessageOutcome.Failed(reason, importedDocIds = imported, duplicates = duplicates)
         }
     }

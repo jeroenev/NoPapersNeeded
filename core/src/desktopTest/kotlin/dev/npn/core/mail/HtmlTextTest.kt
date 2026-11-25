@@ -2,6 +2,7 @@ package dev.npn.core.mail
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /** The text an HTML-only email's PDF shows: what a reader sees, laid out in lines. */
 class HtmlTextTest {
@@ -42,5 +43,37 @@ class HtmlTextTest {
             ),
         )
         assertEquals("ÿ ×", HtmlText.toPlainText("&yuml; &times;"))
+    }
+
+    @Test
+    fun anUnclosedCommentOrHiddenBlockDropsTheRestAndAStrayBracketIsText() {
+        assertEquals("Before", HtmlText.toPlainText("<p>Before</p><!-- never closed <p>After</p>"))
+        assertEquals("Before", HtmlText.toPlainText("<p>Before</p><style>p { color: red }<p>After</p>"))
+        assertEquals("5 < 6 and 7 > 3", HtmlText.toPlainText("5 < 6 and 7 > 3"))
+        assertEquals("Encoded <p> stays text", HtmlText.toPlainText("Encoded &lt;p&gt; stays text"))
+    }
+
+    /**
+     * Markup a sender controls is read in time proportional to its length: an unclosed comment, a
+     * run of unclosed tags or of spacing entities must not cost each character a scan of the rest.
+     */
+    @Test
+    fun pathologicalMarkupIsReadInLinearTime() {
+        val size = 120_000
+        val inputs =
+            mapOf(
+                "unclosed comments" to "<!--x".repeat(size / 5),
+                "unclosed tags" to "<p".repeat(size / 2),
+                "unclosed styles" to "<style>".repeat(size / 7),
+                "stray brackets" to "<".repeat(size),
+                "spacing entities" to "&nbsp; ".repeat(size / 7),
+                "spacing between blocks" to "<div> &nbsp; </div>".repeat(size / 19),
+            )
+        for ((name, html) in inputs) {
+            val started = System.nanoTime()
+            HtmlText.toPlainText(html)
+            val seconds = (System.nanoTime() - started) / 1e9
+            assertTrue(seconds < 2, "$name took $seconds s")
+        }
     }
 }

@@ -98,6 +98,27 @@ class MailServiceTest {
             assertEquals(1, fixture.cursors.last().lastUid)
         }
 
+    /** One attachment that fails to import never keeps the others of its email out of the library. */
+    @Test
+    fun anAttachmentThatFailsStillLetsTheOthersImport() =
+        runTest {
+            val broken = pdf.copy(fileName = "broken.pdf")
+            val transport = FakeTransport(messages = listOf(message(attachments = listOf(broken, pdf))))
+            val fixture = fixture(account = account.copy(saveEmailAsPdf = true), transport = transport)
+            fixture.sink.onImport = { name ->
+                if (name == "broken.pdf") MailImportResult.Failed else MailImportResult.Imported("doc:$name")
+            }
+            val report = fixture.service.checkNow()
+
+            assertEquals(3, fixture.sink.importedNames.size)
+            assertEquals(listOf("broken.pdf", "invoice.pdf"), fixture.sink.importedNames.take(2))
+            assertEquals(2, report.imported)
+            assertEquals(MailFailureReason.IMPORT_FAILED, report.errors.single().reason)
+            // The failure keeps the email where it is, for the next check to try again.
+            assertTrue(transport.marked.isEmpty())
+            assertEquals(0, fixture.cursors.last().lastUid)
+        }
+
     @Test
     fun aDuplicateAttachmentStillLetsThePostActionRun() =
         runTest {

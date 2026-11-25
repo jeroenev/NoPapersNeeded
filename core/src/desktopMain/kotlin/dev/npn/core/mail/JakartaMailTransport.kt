@@ -30,11 +30,9 @@ import org.eclipse.angus.mail.imap.IMAPFolder
 import org.eclipse.angus.mail.imap.IMAPStore
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
-import java.io.IOException
 import java.io.InputStream
 import java.net.SocketException
 import java.net.SocketTimeoutException
-import java.net.URLDecoder
 import java.security.cert.CertificateException
 import java.util.Date
 import java.util.Properties
@@ -576,6 +574,9 @@ internal object MimeParser {
     private const val MAX_BODY_CHARS = 1_000_000
     private const val MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
     private const val MAX_PART_DEPTH = 10
+    private const val UTF8_MAX_BYTES = 4
+    private const val HEX = 16
+    private const val ESCAPE_LENGTH = 3
 
     /** The shorter side below which an image is decoration, not a photographed or scanned page. */
     const val MIN_IMAGE_SIDE_PX = 200
@@ -809,7 +810,7 @@ internal object MimeParser {
         val plain = bodyParts("text/plain")
         val textParts = plain.ifEmpty { bodyParts("text/html") }
         for (part in textParts.takeWhile { body.length < MAX_BODY_CHARS }) {
-            val content = part.content as? String
+            val content = textOf(part)
             if (content != null) {
                 val text = if (plain.isEmpty()) HtmlText.toPlainText(content.take(MAX_BODY_CHARS)) else content
                 if (body.isNotEmpty()) body.append("\n\n")
@@ -827,10 +828,53 @@ internal object MimeParser {
     private fun htmlReferences(leaves: List<Leaf>): Set<String> {
         val htmlParts = leaves.map(Leaf::part).filter { it.isMimeType("text/html") && !isAttachment(it) }
         return htmlParts
-            .mapNotNull { it.content as? String }
+            .mapNotNull(::textOf)
             .flatMap { html -> CID_REFERENCE.findAll(html.take(MAX_BODY_CHARS)).toList() }
-            .map { match -> normalizedId(URLDecoder.decode(match.groupValues[1], Charsets.UTF_8)) }
+            .map { match -> normalizedId(percentDecoded(match.groupValues[1])) }
             .toSet()
+    }
+
+    /**
+     * A text part's content. One in a charset Java does not know (`unknown-8bit`, `utf-7`) is read
+     * as UTF-8 instead, and one that cannot be read at all is no text: the part costs its own text,
+     * never the message's attachments. A lost connection or a refusal is the check's, and rethrown.
+     */
+    private fun textOf(part: Part): String? =
+        try {
+            part.content as? String
+        } catch (failure: Exception) {
+            if (isConnectionLoss(failure) || isServerRefusal(failure)) throw failure
+            try {
+                part.inputStream.use { input ->
+                    String(input.readNBytes(MAX_BODY_CHARS * UTF8_MAX_BYTES), Charsets.UTF_8)
+                }
+            } catch (unreadable: Exception) {
+                if (isConnectionLoss(unreadable) || isServerRefusal(unreadable)) throw unreadable
+                null
+            }
+        }
+
+    /**
+     * A `cid:` URL's `%XX` escapes decoded, as RFC 2392 writes them; anything else, a `+` or a
+     * malformed escape, is kept as written rather than failing the message.
+     */
+    private fun percentDecoded(raw: String): String {
+        if ('%' !in raw) return raw
+        val bytes = ByteArrayOutputStream(raw.length)
+        var index = 0
+        while (index < raw.length) {
+            val char = raw[index]
+            val high = raw.getOrNull(index + 1)?.digitToIntOrNull(HEX)
+            val low = raw.getOrNull(index + 2)?.digitToIntOrNull(HEX)
+            if (char == '%' && high != null && low != null) {
+                bytes.write(high * HEX + low)
+                index += ESCAPE_LENGTH
+            } else {
+                bytes.write(char.toString().toByteArray(Charsets.UTF_8))
+                index++
+            }
+        }
+        return bytes.toString(Charsets.UTF_8)
     }
 
     private fun normalizedId(raw: String): String =
@@ -840,7 +884,11 @@ internal object MimeParser {
             .removeSuffix(">")
             .lowercase()
 
-    /** The shorter side of an image in pixels, read from its header only; null when unreadable. */
+    /**
+     * The shorter side of an image in pixels, read from its header only; null when unreadable. A
+     * decoder fails on a corrupt header with runtime exceptions as well as I/O ones; either way the
+     * image is kept, unmeasured.
+     */
     private fun shorterSide(bytes: ByteArray): Int? =
         try {
             ImageIO.createImageInputStream(ByteArrayInputStream(bytes))?.use { input ->
@@ -852,7 +900,7 @@ internal object MimeParser {
                     reader.dispose()
                 }
             }
-        } catch (_: IOException) {
+        } catch (_: Exception) {
             null
         }
 

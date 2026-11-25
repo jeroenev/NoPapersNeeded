@@ -66,6 +66,12 @@ internal class DeviceMailCursors(
         kv.put(ENABLED_KEY, enabled.toString())
     }
 
+    override suspend fun followedKey(): String? = kv.get(FOLLOWED_KEY)
+
+    override suspend fun setFollowedKey(accountKey: String) {
+        kv.put(FOLLOWED_KEY, accountKey)
+    }
+
     private fun MailCursorEntity.toModel(progress: StoredProgress?): MailCursor =
         MailCursor(
             accountKey = accountKey,
@@ -101,6 +107,9 @@ internal class DeviceMailCursors(
     private companion object {
         /** Whether this device checks the account: its own choice, never the library's. */
         const val ENABLED_KEY = "mail.enabledHere"
+
+        /** The account key this device's password and cursor were last kept under. */
+        const val FOLLOWED_KEY = "mail.followedKey"
 
         /** The account key and folder joined by a character neither can hold. */
         fun progressKey(

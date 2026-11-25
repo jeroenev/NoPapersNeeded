@@ -17,6 +17,7 @@
     <string name="email_password">Passwort</string>
     <string name="email_password_saved">Ein Passwort ist im Schlüsselbund des Systems gespeichert.</string>
     <string name="email_password_help">Leer lassen, um das gespeicherte Passwort zu behalten. Es liegt im Schlüsselbund des Systems, nicht in der Bibliothek.</string>
+    <string name="email_password_needed">Auf diesem Gerät ist kein Passwort für dieses Konto gespeichert. Gib es ein und speichere das Konto.</string>
     <string name="email_folder">Ordner</string>
     <string name="email_folder_help">Der zu lesende Ordner im Postfach, meist INBOX.</string>
     <string name="email_allow_plain">Unverschlüsselte Verbindung erlauben</string>

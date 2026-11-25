@@ -5,80 +5,193 @@ package dev.npn.core.mail
  * part. Not a renderer: blocks become lines, table cells are spaced apart, list items get a
  * bullet, links keep only their text, and what a reader never sees (head, styles, scripts,
  * comments) is dropped. Entities are decoded; whitespace is collapsed as a browser would.
+ *
+ * The markup is the sender's, so it is read in one pass, in time proportional to its length: no
+ * backtracking pattern, and no search that each of a run of unclosed tags would repeat. A comment,
+ * tag or hidden block that is never closed ends the text there; a `<` that starts no tag is text.
  */
 internal object HtmlText {
-    private val INVISIBLE =
-        Regex(
-            """<!--.*?-->|<(head|style|script|title|template)\b[^>]*>.*?</\1\s*>""",
-            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
-        )
-    private val LINE_BREAK = Regex("""<br\b[^>]*>""", RegexOption.IGNORE_CASE)
+    /** Elements whose content a reader never sees. */
+    private val INVISIBLE = setOf("head", "style", "script", "title", "template")
 
     /** Tags that set a paragraph apart: a blank line around them. */
     private val PARAGRAPH =
-        Regex("""</?(p|h[1-6]|table|ul|ol|blockquote|pre|hr)\b[^>]*>""", RegexOption.IGNORE_CASE)
+        setOf("p", "h1", "h2", "h3", "h4", "h5", "h6", "table", "ul", "ol", "blockquote", "pre", "hr")
 
     /** Tags that only start a new line. */
     private val LINE =
-        Regex(
-            """</?(div|tr|thead|tbody|tfoot|section|article|header|footer|center|address|dl|dt|dd)\b[^>]*>""",
-            RegexOption.IGNORE_CASE,
+        setOf(
+            "div",
+            "tr",
+            "thead",
+            "tbody",
+            "tfoot",
+            "section",
+            "article",
+            "header",
+            "footer",
+            "center",
+            "address",
+            "dl",
+            "dt",
+            "dd",
         )
-    private val LIST_ITEM = Regex("""<li\b[^>]*>""", RegexOption.IGNORE_CASE)
-    private val CELL_END = Regex("""</t[dh]\s*>""", RegexOption.IGNORE_CASE)
-    private val TAG = Regex("""<[^>]*>""")
-    private val ENTITY = Regex("""&(#[0-9]{1,7}|#[xX][0-9a-fA-F]{1,6}|[a-zA-Z][a-zA-Z0-9]{1,31});""")
+    private val ENTITY_NAME = Regex("""#[0-9]{1,7}|#[xX][0-9a-fA-F]{1,6}|[a-zA-Z][a-zA-Z0-9]{1,31}""")
 
-    /** A run of block edges and the blanks between them, which becomes one break. */
-    private val EDGES = Regex("""[\s\u00A0$SOFT$HARD]*[$SOFT$HARD][\s\u00A0$SOFT$HARD]*""")
-    private val SPACES = Regex("""[ \t\u000B\f\u00A0]+""")
+    /** The longest entity [ENTITY_NAME] accepts, with its `;`: how far a `&` looks ahead. */
+    private const val MAX_ENTITY_CHARS = 33
+    private val SPACES = Regex("""[ \t\u000B\f ]+""")
     private val BLANK_LINES = Regex("""\n{3,}""")
-
-    fun toPlainText(html: String): String {
-        val marked =
-            html
-                .replace(INVISIBLE, " ")
-                // Source line breaks are spaces in HTML; only tags break lines.
-                .replace(Regex("""\s+"""), " ")
-                .replace(LINE_BREAK, BREAK.toString())
-                .replace(LIST_ITEM, "$SOFT• ")
-                .replace(PARAGRAPH, HARD.toString())
-                .replace(LINE, SOFT.toString())
-                .replace(CELL_END, " ")
-                .replace(TAG, "")
-        // Adjacent block edges (a closing div and an opening one) make one break, not one each.
-        val broken =
-            decodeEntities(marked)
-                .replace(EDGES) { run -> if (HARD in run.value) "\n\n" else "\n" }
-                .replace(BREAK, '\n')
-        return broken
-            .lineSequence()
-            .map { line -> line.replace(SPACES, " ").trim() }
-            .joinToString("\n")
-            .replace(BLANK_LINES, "\n\n")
-            .trim()
-    }
 
     /** Placeholders while tags are stripped: a line break, a paragraph break, and a `<br>`. */
     private const val SOFT = '\u0001'
     private const val HARD = '\u0002'
     private const val BREAK = '\u0003'
+    private const val NBSP = ' '
 
-    private fun decodeEntities(text: String): String =
-        ENTITY.replace(text) { match ->
-            val name = match.groupValues[1]
-            val codePoint =
+    fun toPlainText(html: String): String =
+        breaks(Marker(html).marked())
+            .lineSequence()
+            .map { line -> line.replace(SPACES, " ").trim() }
+            .joinToString("\n")
+            .replace(BLANK_LINES, "\n\n")
+            .trim()
+
+    /**
+     * The text with tags replaced by the placeholders, hidden content dropped, entities decoded,
+     * and every source line break or other control character a space (only tags break lines).
+     */
+    private class Marker(
+        private val html: String,
+    ) {
+        private val out = StringBuilder(html.length)
+        private var index = 0
+
+        fun marked(): String {
+            while (index < html.length) {
+                val char = html[index]
                 when {
-                    name.startsWith("#x") || name.startsWith("#X") -> name.drop(2).toIntOrNull(16)
-                    name.startsWith("#") -> name.drop(1).toIntOrNull()
-                    else -> NAMED[name] ?: NAMED[name.lowercase()]
+                    html.startsWith("<!--", index) -> comment()
+                    char == '<' && startsTag(index + 1) -> tag()
+                    char == '&' -> entity()
+                    else -> text(char)
                 }
-            if (codePoint == null || codePoint !in 1..Character.MAX_CODE_POINT || codePoint in 0xD800..0xDFFF) {
-                match.value
-            } else {
-                String(Character.toChars(codePoint))
+            }
+            return out.toString()
+        }
+
+        private fun text(char: Char) {
+            out.append(if (char < ' ') ' ' else char)
+            index++
+        }
+
+        private fun startsTag(at: Int): Boolean {
+            val next = html.getOrNull(at) ?: return false
+            return next.isLetter() || next == '/' || next == '!' || next == '?'
+        }
+
+        private fun comment() {
+            val end = html.indexOf("-->", index + "<!--".length)
+            out.append(' ')
+            index = if (end < 0) html.length else end + "-->".length
+        }
+
+        private fun tag() {
+            val close = html.indexOf('>', index + 1)
+            if (close < 0) {
+                index = html.length
+                return
+            }
+            val closing = html[index + 1] == '/'
+            val nameStart = if (closing) index + 2 else index + 1
+            var nameEnd = nameStart
+            while (nameEnd < close && html[nameEnd].isLetterOrDigit()) nameEnd++
+            val name = html.substring(nameStart, nameEnd).lowercase()
+            index = close + 1
+            when {
+                !closing && name in INVISIBLE -> skipPast("</$name")
+                closing && (name == "td" || name == "th") -> out.append(' ')
+                !closing && name == "br" -> out.append(BREAK)
+                !closing && name == "li" -> out.append(SOFT).append("• ")
+                name in PARAGRAPH -> out.append(HARD)
+                name in LINE -> out.append(SOFT)
             }
         }
+
+        /** Drop everything through the tag that starts with [end]; never closed, the rest of the text. */
+        private fun skipPast(end: String) {
+            out.append(' ')
+            val at = html.indexOf(end, index, ignoreCase = true)
+            val close = if (at < 0) -1 else html.indexOf('>', at)
+            index = if (close < 0) html.length else close + 1
+        }
+
+        private fun entity() {
+            var end = index + 1
+            while (end < html.length && end - index <= MAX_ENTITY_CHARS && html[end] != ';') end++
+            val decoded = if (end < html.length && html[end] == ';') decode(html.substring(index + 1, end)) else null
+            if (decoded == null) {
+                out.append('&')
+                index++
+            } else {
+                out.append(decoded)
+                index = end + 1
+            }
+        }
+    }
+
+    /**
+     * Each run of block edges and the blanks around them made one break (a closing div and an
+     * opening one make one, not one each), and every `<br>` a line break.
+     */
+    private fun breaks(marked: String): String {
+        val out = StringBuilder(marked.length)
+        var index = 0
+        while (index < marked.length) {
+            val char = marked[index]
+            if (!isBlankOrEdge(char)) {
+                out.append(if (char == BREAK) '\n' else char)
+                index++
+                continue
+            }
+            var end = index
+            var hard = false
+            var soft = false
+            while (end < marked.length && isBlankOrEdge(marked[end])) {
+                hard = hard || marked[end] == HARD
+                soft = soft || marked[end] == SOFT
+                end++
+            }
+            when {
+                hard -> out.append("\n\n")
+                soft -> out.append('\n')
+                else -> out.append(marked, index, end)
+            }
+            index = end
+        }
+        return out.toString()
+    }
+
+    private fun isBlankOrEdge(char: Char): Boolean = char == ' ' || char == NBSP || char == SOFT || char == HARD
+
+    /** The text of the entity [name] (what stands between `&` and `;`), or null for one it does not know. */
+    private fun decode(name: String): String? {
+        if (!ENTITY_NAME.matches(name)) return null
+        val codePoint =
+            when {
+                name.startsWith("#x") || name.startsWith("#X") -> name.drop(2).toIntOrNull(16)
+                name.startsWith("#") -> name.drop(1).toIntOrNull()
+                else -> NAMED[name] ?: NAMED[name.lowercase()]
+            }
+        return when {
+            codePoint == null || codePoint !in 1..Character.MAX_CODE_POINT || codePoint in 0xD800..0xDFFF -> null
+
+            // A control character is a space, as in the source; it must never pass for a placeholder.
+            codePoint < ' '.code -> " "
+
+            else -> String(Character.toChars(codePoint))
+        }
+    }
 
     /** The named entities mail uses: markup, typography, and the Latin-1 letters and signs. */
     private val NAMED: Map<String, Int> =

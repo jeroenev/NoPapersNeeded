@@ -14,12 +14,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.Saver
-import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -33,7 +30,6 @@ import dev.npn.app.ui.common.SettingsSection
 import dev.npn.app.ui.common.SwitchRow
 import dev.npn.app.ui.common.formatEpochDateTime
 import dev.npn.core.mail.MailAccount
-import dev.npn.core.mail.MailAccountJson
 import dev.npn.core.mail.MailFilter
 import dev.npn.core.mail.MailPostAction
 import dev.npn.core.mail.MailSecurity
@@ -71,6 +67,7 @@ import no_papers_needed.composeapp.generated.resources.email_never_checked
 import no_papers_needed.composeapp.generated.resources.email_no_keyring
 import no_papers_needed.composeapp.generated.resources.email_password
 import no_papers_needed.composeapp.generated.resources.email_password_help
+import no_papers_needed.composeapp.generated.resources.email_password_needed
 import no_papers_needed.composeapp.generated.resources.email_password_saved
 import no_papers_needed.composeapp.generated.resources.email_port
 import no_papers_needed.composeapp.generated.resources.email_post_action
@@ -98,89 +95,6 @@ import no_papers_needed.composeapp.generated.resources.email_start_new_only
 import no_papers_needed.composeapp.generated.resources.email_test
 import no_papers_needed.composeapp.generated.resources.email_username
 import org.jetbrains.compose.resources.stringResource
-
-/**
- * The pane's draft of the account, apart from the saved one until Save. [seed] is the saved account
- * the draft started from: when another device changes the account, an untouched draft follows it,
- * while one the user is editing keeps their edits. The same for this device's own switch.
- */
-@Stable
-private class MailForm(
-    seed: MailAccount,
-    savedEnabledHere: Boolean,
-    draft: MailAccount = seed,
-    enabledHere: Boolean = savedEnabledHere,
-    intervalText: String = seed.pollIntervalMinutes.toString(),
-    portText: String = seed.port.toString(),
-) {
-    var seed by mutableStateOf(seed)
-        private set
-    var savedEnabledHere by mutableStateOf(savedEnabledHere)
-        private set
-    var draft by mutableStateOf(draft)
-    var enabledHere by mutableStateOf(enabledHere)
-    var intervalText by mutableStateOf(intervalText)
-    var portText by mutableStateOf(portText)
-
-    val interval: Int?
-        get() = intervalText.toIntOrNull()?.takeIf { it in MailAccount.MIN_POLL_MINUTES..MailAccount.MAX_POLL_MINUTES }
-
-    val port: Int? get() = portText.toIntOrNull()?.takeIf { it in 1..MailAccount.MAX_PORT }
-
-    val valid: Boolean get() = interval != null && port != null
-
-    fun whenSaved(): MailAccount =
-        draft
-            .copy(
-                pollIntervalMinutes = interval ?: draft.pollIntervalMinutes,
-                port = port ?: draft.port,
-            ).normalized()
-
-    /** Take in the saved account and switch, unless the user has changed them here since. */
-    fun follow(
-        account: MailAccount,
-        enabled: Boolean,
-    ) {
-        if (account != seed) {
-            if (draft == seed) {
-                draft = account
-                intervalText = account.pollIntervalMinutes.toString()
-                portText = account.port.toString()
-            }
-            seed = account
-        }
-        if (enabled != savedEnabledHere) {
-            if (enabledHere == savedEnabledHere) enabledHere = enabled
-            savedEnabledHere = enabled
-        }
-    }
-
-    companion object {
-        val Saver: Saver<MailForm, Any> =
-            listSaver(
-                save = {
-                    listOf(
-                        MailAccountJson.encode(it.seed),
-                        it.savedEnabledHere,
-                        MailAccountJson.encode(it.draft),
-                        it.enabledHere,
-                        it.intervalText,
-                        it.portText,
-                    )
-                },
-                restore = {
-                    MailForm(
-                        seed = MailAccountJson.decode(it[0] as String),
-                        savedEnabledHere = it[1] as Boolean,
-                        draft = MailAccountJson.decode(it[2] as String),
-                        enabledHere = it[3] as Boolean,
-                        intervalText = it[4] as String,
-                        portText = it[5] as String,
-                    )
-                },
-            )
-    }
-}
 
 /** Section headings' labels are the accessors (the section title), so search finds them by name. */
 @Composable
@@ -255,6 +169,11 @@ internal fun EmailSettingsPane(
                 placeholder = stringResource(Res.string.email_password_saved).takeIf { mail.hasPassword },
             )
             HelpText(stringResource(Res.string.email_password_help))
+            // A saved account this device has no password for: set up elsewhere, or moved to a new
+            // server or port while the keyring could not take the password over.
+            if (mail.account.isConfigured && mail.transportAvailable && !mail.hasPassword) {
+                HelpText(stringResource(Res.string.email_password_needed))
+            }
             TextField(
                 value = draft.folder,
                 label = stringResource(Res.string.email_folder),
@@ -330,8 +249,12 @@ internal fun EmailSettingsPane(
             OutlinedButton(
                 onClick = {
                     val submitted = password
-                    actions.saveMailAccount(whenSaved(), submitted.ifBlank { null }, form.enabledHere) {
+                    val account = whenSaved()
+                    val enabled = form.enabledHere
+                    actions.saveMailAccount(account, submitted.ifBlank { null }, enabled) {
                         if (password == submitted) password = ""
+                        // Edits made while the save ran are the user's newer intent; keep them.
+                        if (form.whenSaved() == account && form.enabledHere == enabled) form.saved(account, enabled)
                     }
                 },
                 enabled = formValid,
