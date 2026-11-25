@@ -15,6 +15,27 @@ import kotlin.test.Test
  */
 class EInvoiceImportTest {
     @Test
+    fun importingDoesNotFillDeletedFields() =
+        appSessionTest { rig ->
+            val keys = setOf(FieldKeys.IBAN, FieldKeys.PAYMENT_REFERENCE)
+            val deleted =
+                rig.session.fieldRegistry
+                    .current()
+                    .filter { it.key in keys }
+            deleted.size shouldBe 2
+            deleted.forEach { rig.session.fieldRegistry.remove(it.key) }
+
+            val imported = importInvoice(rig, "factur-x.xml", "cii.xml")
+            val fields = rig.db.documentFieldDao().valuesOf(imported.docId)
+            keys.forEach { fields[it].shouldBeNull() }
+            fields[FieldKeys.INVOICE_NUMBER] shouldBe "INV-2024-0042"
+
+            deleted.forEach { rig.session.fieldRegistry.upsert(it) }
+            val restored = rig.db.documentFieldDao().valuesOf(imported.docId)
+            keys.forEach { restored[it].shouldBeNull() }
+        }
+
+    @Test
     fun importingACiiInvoiceFillsBlankFields() =
         appSessionTest { rig ->
             val imported = importInvoice(rig, "factur-x.xml", "cii.xml")

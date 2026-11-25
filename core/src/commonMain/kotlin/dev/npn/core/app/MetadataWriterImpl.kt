@@ -122,7 +122,8 @@ internal class MetadataWriterImpl(
             val values =
                 fields.mapNotNull { (key, raw) ->
                     if (key in filled) return@mapNotNull null
-                    val parsed = FieldValues.canonicalize(state.effectiveFieldType(key), raw)
+                    val def = state.effectiveFieldDef(key) ?: return@mapNotNull null
+                    val parsed = FieldValues.canonicalize(def.type, raw)
                     (parsed as? FieldParse.Ok)?.canonical?.let { key to it }
                 }
             wrote = values.isNotEmpty()
