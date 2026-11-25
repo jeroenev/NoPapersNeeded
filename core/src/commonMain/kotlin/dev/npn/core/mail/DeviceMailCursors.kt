@@ -48,6 +48,8 @@ internal class DeviceMailCursors(
                 catchingUp = cursor.catchingUp,
                 throughMillis = cursor.throughMillis,
                 remaining = cursor.remaining,
+                blockedUid = cursor.blockedUid,
+                blockedAttempts = cursor.blockedAttempts,
             )
         kv.put(
             progressKey(cursor.accountKey, cursor.folder),
@@ -67,6 +69,8 @@ internal class DeviceMailCursors(
             catchingUp = progress?.catchingUp ?: false,
             throughMillis = progress?.throughMillis,
             remaining = progress?.remaining,
+            blockedUid = progress?.blockedUid,
+            blockedAttempts = progress?.blockedAttempts ?: 0,
         )
 
     /**
@@ -79,6 +83,8 @@ internal class DeviceMailCursors(
         val catchingUp: Boolean = false,
         val throughMillis: Long? = null,
         val remaining: Int? = null,
+        val blockedUid: Long? = null,
+        val blockedAttempts: Int = 0,
     )
 
     private companion object {

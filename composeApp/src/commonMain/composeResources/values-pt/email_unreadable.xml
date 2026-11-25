@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="email_reason_message_unreadable">não foi possível ler um e-mail</string>
+    <plurals name="email_left_in_mailbox">
+        <item quantity="one">%1$d e-mail não pôde ser importado e ficou na caixa de correio.</item>
+        <item quantity="other">%1$d e-mails não puderam ser importados e ficaram na caixa de correio.</item>
+    </plurals>
+    <plurals name="email_attachments_dropped">
+        <item quantity="one">%1$d anexo era demasiado grande ou ilegível; o seu e-mail ficou na caixa de correio.</item>
+        <item quantity="other">%1$d anexos eram demasiado grandes ou ilegíveis; os seus e-mails ficaram na caixa de correio.</item>
+    </plurals>
+</resources>

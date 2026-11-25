@@ -55,6 +55,9 @@ data class ActivityMail(
     val lastCheckedAtMillis: Long?,
     val lastImported: Int?,
     val problem: MailFailureReason?,
+    /** Emails the last check left in the mailbox unimported, and attachments it left out. */
+    val lastUnreadable: Int = 0,
+    val lastDroppedAttachments: Int = 0,
 ) {
     /** The last check failed, or the password cannot be read: a problem, shown first. */
     val failed: Boolean get() = problem != null
@@ -127,6 +130,8 @@ class QueueViewModel(
                         lastCheckedAtMillis = state.lastCheckedAtMillis,
                         lastImported = state.lastReport?.imported,
                         problem = state.problem,
+                        lastUnreadable = state.lastReport?.unreadable ?: 0,
+                        lastDroppedAttachments = state.lastReport?.droppedAttachments ?: 0,
                     )
                 } else {
                     null

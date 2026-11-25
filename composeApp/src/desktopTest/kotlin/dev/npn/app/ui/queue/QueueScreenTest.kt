@@ -102,7 +102,7 @@ class QueueScreenTest : EnglishLocaleTest() {
             }
         }
 
-    /** After a check, the row says when it ran and what it imported, with its own Check now. */
+    /** After a check, the row says when it ran, what it imported and what it left behind, with its own Check now. */
     @Test
     fun aFinishedEmailCheckSaysWhatItImported() =
         onUiThread {
@@ -111,12 +111,13 @@ class QueueScreenTest : EnglishLocaleTest() {
                     MailState(
                         account = configured,
                         lastCheckedAtMillis = 1L,
-                        lastReport = MailCheckReport(imported = 2),
+                        lastReport = MailCheckReport(imported = 2, unreadable = 2),
                     ),
                 )
             scene(session).closing {
                 render()
                 has { it.text()?.endsWith("· 2 documents imported") == true } shouldBe true
+                has { it.text() == "2 emails could not be imported and were left in the mailbox." } shouldBe true
                 click { it.text() == "Check now" }
                 render()
                 session.mail.checks shouldBe 1

@@ -367,6 +367,7 @@ private fun CheckedStatus(mail: MailState) {
                 style = MaterialTheme.typography.bodySmall,
             )
         }
+        mail.lastReport?.let { MailLeftBehind(it.unreadable, it.droppedAttachments) }
         if (mail.catchingUp) {
             mailPositionText(mail.throughMillis, mail.remaining)?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall)

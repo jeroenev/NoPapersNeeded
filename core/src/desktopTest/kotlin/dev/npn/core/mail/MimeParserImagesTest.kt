@@ -138,4 +138,37 @@ class MimeParserImagesTest {
             )
         assertEquals(listOf("fax.tif"), MimeParser.parse(1, message).attachments.map { it.fileName })
     }
+
+    @Test
+    fun anInlineImageIsAPhotoUnlessTheBodyShowsItOrItIsDecorationSized() {
+        val html = """<html><body><img src="cid:banner@news.example"></body></html>"""
+        val lines =
+            listOf(
+                "MIME-Version: 1.0",
+                "Content-Type: multipart/mixed; boundary=\"M\"",
+                "",
+                "--M",
+                "Content-Type: text/html; charset=UTF-8",
+                "",
+                html,
+                "--M",
+            ) + part("image/jpeg", "IMG_0042.jpg", image(1200, 1600, "jpg"), disposition = "inline") +
+                listOf("--M") +
+                part(
+                    "image/png",
+                    "banner.png",
+                    image(800, 300),
+                    disposition = "inline",
+                    contentId = "banner@news.example",
+                ) +
+                listOf("--M") +
+                part("image/png", "spacer.png", image(1, 1), disposition = "inline") +
+                listOf("--M--", "")
+        val message =
+            MimeMessage(
+                Session.getInstance(Properties()),
+                ByteArrayInputStream(lines.joinToString("\r\n").toByteArray()),
+            )
+        assertEquals(listOf("IMG_0042.jpg"), MimeParser.parse(1, message).attachments.map { it.fileName })
+    }
 }

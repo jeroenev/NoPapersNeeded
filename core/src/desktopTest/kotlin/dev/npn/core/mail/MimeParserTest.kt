@@ -1,5 +1,6 @@
 package dev.npn.core.mail
 
+import jakarta.mail.FolderClosedException
 import jakarta.mail.Session
 import jakarta.mail.internet.MimeMessage
 import java.io.ByteArrayInputStream
@@ -8,6 +9,8 @@ import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
@@ -49,7 +52,8 @@ class MimeParserTest {
             "Content-Disposition: inline; filename=\"logo.png\"",
             "Content-Transfer-Encoding: base64",
             "",
-            "CQ==",
+            // A 1x1 PNG: an inline image too small to be a document.
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
             "--BOUND--",
             "",
         ).joinToString("\r\n")
@@ -60,23 +64,86 @@ class MimeParserTest {
             ByteArrayInputStream(raw().toByteArray(Charsets.UTF_8)),
         )
 
+    private fun mixed(vararg parts: List<String>): MimeMessage {
+        val lines =
+            listOf(
+                "Subject: Secret subject",
+                "MIME-Version: 1.0",
+                "Content-Type: multipart/mixed; boundary=\"B\"",
+                "",
+            ) +
+                parts.flatMap { listOf("--B") + it } + listOf("--B--", "")
+        return MimeMessage(
+            Session.getInstance(Properties()),
+            ByteArrayInputStream(lines.joinToString("\r\n").toByteArray()),
+        )
+    }
+
+    private fun pdfPart(
+        name: String,
+        body: String = "AQIDBA==",
+        disposition: String = "attachment",
+        encoding: String = "base64",
+    ) = listOf(
+        "Content-Type: application/pdf",
+        "Content-Disposition: $disposition; filename=\"$name\"",
+        "Content-Transfer-Encoding: $encoding",
+        "",
+        body,
+    )
+
     @Test
-    fun oversizedSupportedAttachmentFailsTheWholeMessage() {
-        val content = "x".repeat(25 * 1024 * 1024 + 1)
+    fun anAttachmentOverTheCapIsLeftOutAndTheRestOfTheMessageIsRead() {
+        val message =
+            mixed(pdfPart("large.pdf", "x".repeat(25 * 1024 * 1024 + 1), encoding = "7bit"), pdfPart("small.pdf"))
+        val read = MimeParser.parseOrFailed(1, message)
+        assertEquals(null, read.readFailure)
+        assertEquals(listOf("small.pdf"), read.attachments.map { it.fileName })
+        assertEquals(listOf(MailDroppedPart.TOO_LARGE), read.droppedParts)
+    }
+
+    @Test
+    fun aPartThatCannotBeDecodedIsLeftOutAndTheRestOfTheMessageIsRead() {
+        val message = mixed(pdfPart("broken.pdf", encoding = "x-unknown"), pdfPart("good.pdf"))
+        val read = MimeParser.parseOrFailed(1, message)
+        assertEquals(listOf("good.pdf"), read.attachments.map { it.fileName })
+        assertEquals(listOf(MailDroppedPart.UNREADABLE), read.droppedParts)
+    }
+
+    @Test
+    fun aMessageThatCannotBeParsedIsUnreadableWithItsCauseNamedButNothingOfItsContent() {
         val raw =
             listOf(
+                "Subject: Secret subject",
                 "MIME-Version: 1.0",
-                "Content-Type: application/pdf",
-                "Content-Disposition: attachment; filename=large.pdf",
+                "Content-Type: multipart/mixed; boundary=\"B\"",
+                "Content-Transfer-Encoding: x-unknown",
                 "",
-                content,
+                "--B--",
             ).joinToString("\r\n")
         val message = MimeMessage(Session.getInstance(Properties()), ByteArrayInputStream(raw.toByteArray()))
-        assertFailsWith<Exception> { MimeParser.parse(1, message) }
-        // The fetch reads it as this one message's failure, so the rest of the page still arrives.
-        val read = MimeParser.parseOrFailed(1, message)
-        assertEquals(MailFailureReason.FETCH_FAILED, read.readFailure)
-        assertTrue(read.attachments.isEmpty())
+        val read = MimeParser.parseOrFailed(7, message)
+        assertEquals(MailFailureReason.MESSAGE_UNREADABLE, read.readFailure)
+        val cause = assertNotNull(read.readFailureCause)
+        assertTrue(cause.isNotBlank())
+        assertFalse(cause.contains("Secret"))
+        assertTrue(cause.split(" <- ").all { name -> name.all { it.isLetterOrDigit() } })
+    }
+
+    @Test
+    fun aLostConnectionFailsTheFetchInsteadOfMarkingTheMessageUnreadable() {
+        val message =
+            object : MimeMessage(Session.getInstance(Properties())) {
+                override fun getContent(): Any = throw FolderClosedException(null)
+            }
+        assertFailsWith<FolderClosedException> { MimeParser.parseOrFailed(1, message) }
+    }
+
+    @Test
+    fun aPdfSentInlineIsImported() {
+        // Apple Mail and iOS Mail send attachments as "inline; filename=…".
+        val read = MimeParser.parse(1, mixed(pdfPart("Invoice.pdf", disposition = "inline")))
+        assertEquals(listOf("Invoice.pdf"), read.attachments.map { it.fileName })
     }
 
     @Test

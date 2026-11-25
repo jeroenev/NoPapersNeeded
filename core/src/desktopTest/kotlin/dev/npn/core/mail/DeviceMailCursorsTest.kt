@@ -35,6 +35,8 @@ class DeviceMailCursorsTest {
                     catchingUp = true,
                     throughMillis = 12_345,
                     remaining = 7,
+                    blockedUid = 43,
+                    blockedAttempts = 2,
                 )
             cursors.save(cursor)
             cursors.get(cursor.accountKey, cursor.folder) shouldBe cursor

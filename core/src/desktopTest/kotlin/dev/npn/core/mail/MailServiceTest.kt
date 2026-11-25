@@ -147,6 +147,8 @@ class MailServiceTest {
         var testFailure: MailFailureReason? = null,
         var openFailure: MailFailureReason? = null,
         var searchFails: Boolean = false,
+        /** Fetches that fail as a dropped connection would, before fetches work again. */
+        var transientFetchFailures: Int = 0,
     ) : MailTransport {
         override val available: Boolean = true
         var opens = 0
@@ -200,6 +202,10 @@ class MailServiceTest {
                 touch()
                 fetches++
                 fetchFailure?.let { return MailFetchResult.Failed(it) }
+                if (transientFetchFailures > 0) {
+                    transientFetchFailures--
+                    return MailFetchResult.Failed(MailFailureReason.FETCH_FAILED, "FolderClosedException")
+                }
                 val start = afterUid + 1
                 val windowEnd = minOf(uidNext - 1, start + MailTransport.SCAN_WINDOW - 1)
                 val listed = messages.filter { it.uid in start..windowEnd }.sortedBy(MailMessage::uid)
@@ -253,7 +259,11 @@ class MailServiceTest {
         val renderer = FakeRenderer()
         val transport = transport
         val credentials = credentials
-        val service =
+        private val scope = scope
+        val service = newService()
+
+        /** The service as a restarted app makes it: nothing in memory, the same device storage. */
+        fun newService() =
             MailService(
                 store = store,
                 credentials = credentials,
@@ -342,27 +352,113 @@ class MailServiceTest {
         }
 
     @Test
-    fun anUnreadableMessageIsRetriedThenPassedOverWithoutStallingLaterMail() =
+    fun anUnreadableMessageIsPassedOverAtOnceWithoutStallingLaterMail() =
         runTest {
-            // An attachment over the cap: the transport reads this one message as a failure.
+            // A message whose structure does not parse: reading it again gives the same answer.
             val unreadable =
-                message(uid = 1, attachments = emptyList()).copy(readFailure = MailFailureReason.FETCH_FAILED)
+                message(uid = 1, attachments = emptyList()).copy(
+                    readFailure = MailFailureReason.MESSAGE_UNREADABLE,
+                    readFailureCause = "ParseException",
+                )
             val transport = FakeTransport(messages = listOf(unreadable, message(uid = 2)))
             val fixture = fixture(transport = transport)
-            // MailService.MAX_MESSAGE_ATTEMPTS: the fifth failed check passes the message over.
-            repeat(4) {
-                val report = fixture.service.checkNow()
-                assertEquals(MailFailureReason.FETCH_FAILED, report.errors.single().reason)
-                assertEquals(0, fixture.cursors.last().lastUid)
-            }
-            assertTrue(fixture.sink.importedNames.isEmpty())
-
-            val passed = fixture.service.checkNow()
-            assertEquals(1, passed.imported)
+            val report = fixture.service.checkNow()
+            assertTrue(report.errors.isEmpty())
+            assertEquals(1, report.unreadable)
+            assertEquals(1, report.imported)
             assertEquals(listOf("invoice.pdf"), fixture.sink.importedNames)
-            // The unreadable message keeps its place in the mailbox: no post-action ever touched it.
+            // The unreadable message keeps its place in the mailbox: no post-action touched it.
             assertEquals(listOf(2L), transport.marked)
             assertEquals(2, fixture.cursors.last().lastUid)
+            assertEquals(null, fixture.cursors.last().lastError)
+        }
+
+    @Test
+    fun anEmailThatLostAnAttachmentImportsTheRestAndStaysInTheMailbox() =
+        runTest {
+            val partial = message(uid = 1).copy(droppedParts = listOf(MailDroppedPart.TOO_LARGE))
+            val transport = FakeTransport(messages = listOf(partial, message(uid = 2)))
+            val fixture = fixture(account = account.copy(postAction = MailPostAction.DELETE), transport = transport)
+            val report = fixture.service.checkNow()
+            assertTrue(report.errors.isEmpty())
+            assertEquals(2, report.imported)
+            assertEquals(1, report.droppedAttachments)
+            // Deleting it would take the oversized attachment with it.
+            assertEquals(listOf(2L), transport.deleted)
+            assertEquals(2, fixture.cursors.last().lastUid)
+        }
+
+    @Test
+    fun aFailingMessageIsRetriedAcrossRestartsThenPassedOver() =
+        runTest {
+            val transport = FakeTransport(messages = listOf(message(uid = 1), message(uid = 2, subject = "Later")))
+            val fixture = fixture(transport = transport)
+            fixture.sink.onImport =
+                { name ->
+                    if (fixture.sink.importedNames.size <=
+                        3
+                    ) {
+                        MailImportResult.Failed
+                    } else {
+                        MailImportResult.Imported("doc:$name")
+                    }
+                }
+            assertEquals(
+                MailFailureReason.IMPORT_FAILED,
+                fixture.service
+                    .checkNow()
+                    .errors
+                    .single()
+                    .reason,
+            )
+            assertEquals(1L, fixture.cursors.last().blockedUid)
+            assertEquals(1, fixture.cursors.last().blockedAttempts)
+
+            // An app restart keeps the count: the folder is not blocked for another full round.
+            val restarted = fixture.newService()
+            assertEquals(
+                MailFailureReason.IMPORT_FAILED,
+                restarted
+                    .checkNow()
+                    .errors
+                    .single()
+                    .reason,
+            )
+            assertEquals(2, fixture.cursors.last().blockedAttempts)
+            val third = restarted.checkNow()
+            // MailService.MAX_MESSAGE_ATTEMPTS: the third failed check passes it over and reads on.
+            assertTrue(third.errors.isEmpty())
+            assertEquals(1, third.unreadable)
+            assertEquals(1, third.imported)
+            assertEquals(listOf(2L), transport.marked)
+            assertEquals(2, fixture.cursors.last().lastUid)
+            assertEquals(null, fixture.cursors.last().blockedUid)
+        }
+
+    @Test
+    fun aDroppedConnectionIsReopenedWithinTheCheck() =
+        runTest {
+            val transport = FakeTransport(messages = backlog(1L..25L), transientFetchFailures = 2)
+            val fixture = fixture(transport = transport)
+            val report = fixture.service.checkNow()
+            assertTrue(report.errors.isEmpty())
+            assertEquals(25, report.imported)
+            assertEquals(3, transport.opens)
+            assertEquals(3, transport.closes)
+            assertEquals(0, transport.callsAfterClose)
+        }
+
+    @Test
+    fun aConnectionThatKeepsDroppingEndsTheCheckAfterBoundedReconnects() =
+        runTest {
+            val transport = FakeTransport(messages = backlog(1L..5L), transientFetchFailures = 10)
+            val fixture = fixture(transport = transport)
+            val report = fixture.service.checkNow()
+            assertEquals(MailFailureReason.FETCH_FAILED, report.errors.single().reason)
+            // The first connection and MailService.MAX_RECONNECTS fresh ones.
+            assertEquals(3, transport.opens)
+            assertEquals(3, transport.closes)
+            assertEquals(0, fixture.cursors.last().lastUid)
         }
 
     @Test

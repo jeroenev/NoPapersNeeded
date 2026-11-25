@@ -22,12 +22,15 @@ import jakarta.mail.search.ReceivedDateTerm
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.eclipse.angus.mail.iap.ConnectionException
 import org.eclipse.angus.mail.imap.IMAPFolder
 import org.eclipse.angus.mail.imap.IMAPStore
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
+import java.net.SocketException
+import java.net.SocketTimeoutException
 import java.net.URLDecoder
 import java.security.cert.CertificateException
 import java.util.Date
@@ -63,7 +66,7 @@ internal class JakartaMailTransport(
                 try {
                     connect(account, password)
                 } catch (failure: Exception) {
-                    return@withContext MailOpenResult.Failed(connectReason(failure))
+                    return@withContext MailOpenResult.Failed(connectReason(failure), causeChain(failure))
                 }
             try {
                 val folder = openFolder(store, account, Folder.READ_WRITE)
@@ -78,7 +81,7 @@ internal class JakartaMailTransport(
                 )
             } catch (failure: Exception) {
                 close(store)
-                MailOpenResult.Failed(connectReason(failure))
+                MailOpenResult.Failed(connectReason(failure), causeChain(failure))
             }
         }
 
@@ -242,7 +245,7 @@ private class JakartaMailConnection(
                     if (listed.size > MailTransport.PAGE_SIZE) messages.last().uid else maxOf(afterUid, windowEnd)
                 MailFetchResult.Success(messages = messages, uidNext = uidNext, scannedThroughUid = scannedThrough)
             } catch (failure: Exception) {
-                MailFetchResult.Failed(reason(failure, MailFailureReason.FETCH_FAILED))
+                MailFetchResult.Failed(reason(failure, MailFailureReason.FETCH_FAILED), causeChain(failure))
             }
         }
 
@@ -337,6 +340,30 @@ private fun reason(
 private inline fun <reified T : Throwable> Throwable.hasCause(): Boolean =
     generateSequence(this as Throwable?) { it.cause }.any { it is T }
 
+/**
+ * What went wrong, as the exception class names along the cause chain (`FolderClosedException <-
+ * SocketTimeoutException`). A failure's message can quote a subject, an address or a file name,
+ * and the log this goes to may be attached to a public issue; the class names cannot.
+ */
+internal fun causeChain(failure: Throwable): String =
+    generateSequence(failure) { it.cause }
+        .take(MAX_CAUSES)
+        .joinToString(" <- ") { it::class.simpleName ?: "Throwable" }
+
+private const val MAX_CAUSES = 4
+
+/**
+ * Whether [failure] is the connection's rather than one message's: the folder or store closed,
+ * or the socket failed or timed out. Reading the message again over a new connection may work, so
+ * it fails the fetch (which reconnects) instead of marking the message unreadable.
+ */
+internal fun isConnectionLoss(failure: Throwable): Boolean =
+    failure.hasCause<FolderClosedException>() ||
+        failure.hasCause<StoreClosedException>() ||
+        failure.hasCause<SocketException>() ||
+        failure.hasCause<SocketTimeoutException>() ||
+        failure.hasCause<ConnectionException>()
+
 private fun close(
     folder: Folder?,
     expunge: Boolean,
@@ -394,13 +421,13 @@ internal object MimeParser {
     ) {
         val body = StringBuilder()
         val attachments = mutableListOf<MailAttachment>()
+        val dropped = mutableListOf<MailDroppedPart>()
     }
 
     /**
-     * [parse], with a message that cannot be read (an attachment over the cap, a malformed part)
-     * returned as a [MailMessage.readFailure] instead of thrown, so one bad message fails alone and
-     * the service's bounded retries can pass it over. A closed folder or store is the connection's
-     * failure, not the message's, and still fails the whole fetch.
+     * [parse], with a message that cannot be read at all (a structure that does not parse) returned
+     * as a [MailMessage.readFailure] instead of thrown, so one bad message is passed over alone. A
+     * lost connection is the fetch's failure, not the message's, and still fails the whole fetch.
      */
     fun parseOrFailed(
         uid: Long,
@@ -408,11 +435,8 @@ internal object MimeParser {
     ): MailMessage =
         try {
             parse(uid, message)
-        } catch (closed: FolderClosedException) {
-            throw closed
-        } catch (closed: StoreClosedException) {
-            throw closed
-        } catch (_: Exception) {
+        } catch (failure: Exception) {
+            if (isConnectionLoss(failure)) throw failure
             MailMessage(
                 uid = uid,
                 from = "",
@@ -421,7 +445,8 @@ internal object MimeParser {
                 dateMillis = null,
                 bodyText = "",
                 attachments = emptyList(),
-                readFailure = MailFailureReason.FETCH_FAILED,
+                readFailure = MailFailureReason.MESSAGE_UNREADABLE,
+                readFailureCause = causeChain(failure),
             )
         }
 
@@ -436,9 +461,10 @@ internal object MimeParser {
         val body = walk.body
         val attachments = walk.attachments
         return MailMessage(
+            droppedParts = walk.dropped,
             uid = uid,
-            from = addresses(message.from),
-            to = addresses(message.getRecipients(Message.RecipientType.TO)),
+            from = addresses { message.from },
+            to = addresses { message.getRecipients(Message.RecipientType.TO) },
             subject = decode(message.subject).orEmpty(),
             dateMillis = message.sentDate?.time ?: message.receivedDate?.time,
             bodyText =
@@ -470,21 +496,50 @@ internal object MimeParser {
             }
             return
         }
-        if (isAttachment(part)) {
-            val name = decode(part.fileName)?.takeIf(String::isNotBlank) ?: return
-            val kind = MailAttachment(name, part.contentType, ByteArray(0)).supportedKind() ?: return
-            val image = kind == MailAttachmentKind.IMAGE
-            if (image && partOfTheBody(part, inRelated, walk.shownByHtml)) return
-            val bytes = readCapped(part.inputStream)
-            if (image && (shorterSide(bytes) ?: Int.MAX_VALUE) < MIN_IMAGE_SIDE_PX) return
-            walk.attachments += MailAttachment(name, part.contentType, bytes)
+        val name = decode(part.fileName)?.takeIf(String::isNotBlank)
+        val kind = name?.let { MailAttachment(it, part.contentType, ByteArray(0)).supportedKind() }
+        if (name != null && kind != null) {
+            // Whatever its disposition: Apple Mail sends a PDF as "inline; filename=…", and an
+            // inline image is a photo unless the body shows it or it is decoration-sized.
+            readAttachment(part, name, kind, inRelated, walk)
             return
         }
+        // A named part the library cannot take is an attachment, not text of the body.
+        if (isAttachment(part)) return
         val body = walk.body
         if (part.isMimeType("text/plain") && body.length < MAX_BODY_CHARS) {
             val text = part.content as? String ?: return
             body.append(text.take(MAX_BODY_CHARS - body.length))
         }
+    }
+
+    /**
+     * Read one supported attachment into [walk]: an image the HTML body owns or one too small to be
+     * a document is passed over, and one over the size cap or that cannot be decoded is recorded
+     * as dropped while the rest of the message is still read.
+     */
+    private fun readAttachment(
+        part: Part,
+        name: String,
+        kind: MailAttachmentKind,
+        inRelated: Boolean,
+        walk: Walk,
+    ) {
+        val image = kind == MailAttachmentKind.IMAGE
+        if (image && partOfTheBody(part, inRelated, walk.shownByHtml)) return
+        val bytes =
+            try {
+                readCapped(part.inputStream)
+            } catch (_: AttachmentTooLargeException) {
+                walk.dropped += MailDroppedPart.TOO_LARGE
+                return
+            } catch (failure: Exception) {
+                if (isConnectionLoss(failure)) throw failure
+                walk.dropped += MailDroppedPart.UNREADABLE
+                return
+            }
+        if (image && (shorterSide(bytes) ?: Int.MAX_VALUE) < MIN_IMAGE_SIDE_PX) return
+        walk.attachments += MailAttachment(name, part.contentType, bytes)
     }
 
     /** Every Content-ID an HTML part of [part] shows (`cid:` references), normalized as [contentId] is. */
@@ -572,11 +627,16 @@ internal object MimeParser {
             out.toByteArray()
         }
 
-    private fun addresses(addresses: Array<Address>?): String =
-        addresses
-            ?.joinToString(", ") { address ->
-                (address as? InternetAddress)?.toUnicodeString() ?: decode(address.toString()).orEmpty()
-            }.orEmpty()
+    /** The [read] header's addresses, or blank when the header does not parse: a filter then sees none. */
+    private fun addresses(read: () -> Array<Address>?): String =
+        try {
+            read()
+                ?.joinToString(", ") { address ->
+                    (address as? InternetAddress)?.toUnicodeString() ?: decode(address.toString()).orEmpty()
+                }.orEmpty()
+        } catch (_: MessagingException) {
+            ""
+        }
 
     private fun decode(value: String?): String? =
         value?.let {

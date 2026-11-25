@@ -37,7 +37,10 @@ data class MailCheckError(
  * What one check did. Counts are for messages this device considered; [imported] and [duplicates]
  * count documents (attachments and the optional email PDF together), and [importedDocIds] names
  * the imported ones. [errors] carries the first reason a message or the connection stopped the
- * check; [cancelled] is a check the user stopped, which kept everything it had done.
+ * check; [cancelled] is a check the user stopped, which kept everything it had done. [unreadable]
+ * counts emails passed over and left in the mailbox (unreadable, or still failing after
+ * [MailService]'s bounded retries), [droppedAttachments] attachments left out of an email that was
+ * otherwise imported.
  */
 data class MailCheckReport(
     val messagesSeen: Int = 0,
@@ -49,6 +52,8 @@ data class MailCheckReport(
     val checkedAtMillis: Long = 0,
     val importedDocIds: List<String> = emptyList(),
     val cancelled: Boolean = false,
+    val unreadable: Int = 0,
+    val droppedAttachments: Int = 0,
 ) {
     val succeeded: Boolean get() = errors.isEmpty()
 }
@@ -176,8 +181,6 @@ internal class MailService(
     private val checkMutex = Mutex()
     private val imports = MutableSharedFlow<List<String>>(extraBufferCapacity = IMPORT_EVENT_BUFFER)
 
-    /** Failed attempts per message this session, so one bad mail cannot wedge the whole folder. */
-    private val failedAttempts = mutableMapOf<String, Int>()
     private var started = false
 
     override val state: StateFlow<MailState> =
@@ -335,24 +338,35 @@ internal class MailService(
         routine: Boolean,
     ): MailCheckReport {
         val now = clock.nowMillis()
-        val opened = preflight(account)?.let { MailOpenResult.Failed(it) } ?: openWithPassword(account)
-        return when (opened) {
-            is MailOpenResult.Failed -> {
-                stop(account, MailCheckReport(checkedAtMillis = now), MailCheckError(opened.reason, opened.detail), now)
+        val empty = MailCheckReport(checkedAtMillis = now)
+        val password =
+            when (val loaded = preflight(account)?.let(PasswordLoad::Refused) ?: loadPassword(account)) {
+                is PasswordLoad.Refused -> return stop(account, empty, MailCheckError(loaded.reason), now)
+                is PasswordLoad.Loaded -> loaded.password
             }
-
-            is MailOpenResult.Opened -> {
-                try {
-                    read(account, opened.connection, routine, now)
-                } finally {
-                    withContext(NonCancellable) { opened.connection.close() }
-                }
+        val link = Link(account, password)
+        return try {
+            when (val opened = link.open()) {
+                is MailOpenResult.Failed -> stop(account, empty, MailCheckError(opened.reason, opened.detail), now)
+                is MailOpenResult.Opened -> read(account, link, routine, now)
             }
+        } finally {
+            withContext(NonCancellable) { link.close() }
         }
     }
 
-    /** Load the password from the secret store and open the folder with it; a refusal is typed. */
-    private suspend fun openWithPassword(account: MailAccount): MailOpenResult {
+    private sealed interface PasswordLoad {
+        data class Loaded(
+            val password: String,
+        ) : PasswordLoad
+
+        data class Refused(
+            val reason: MailFailureReason,
+        ) : PasswordLoad
+    }
+
+    /** Load the password from the secret store; a missing one or an unusable store is typed. */
+    private suspend fun loadPassword(account: MailAccount): PasswordLoad {
         val password =
             when (val stored = credentials.load(account.accountKey)) {
                 is MailSecretResult.Success -> {
@@ -361,15 +375,38 @@ internal class MailService(
 
                 is MailSecretResult.Failed -> {
                     runtime.update { it.copy(hasPassword = false, credentialProblem = stored.reason) }
-                    return MailOpenResult.Failed(MailFailureReason.SECRET_UNAVAILABLE)
+                    return PasswordLoad.Refused(MailFailureReason.SECRET_UNAVAILABLE)
                 }
             }
         if (password == null) {
             runtime.update { it.copy(hasPassword = false) }
-            return MailOpenResult.Failed(MailFailureReason.NO_PASSWORD)
+            return PasswordLoad.Refused(MailFailureReason.NO_PASSWORD)
         }
         runtime.update { it.copy(hasPassword = true, credentialProblem = null) }
-        return transport.open(account, password)
+        return PasswordLoad.Loaded(password)
+    }
+
+    /**
+     * The check's one connection, and the way to a fresh one when it drops: a reconnect replaces
+     * [current], and closing closes whichever is open.
+     */
+    private inner class Link(
+        private val account: MailAccount,
+        private val password: String,
+    ) {
+        private var connection: MailConnection? = null
+
+        val current: MailConnection get() = checkNotNull(connection) { "Read before the folder was opened" }
+
+        suspend fun open(): MailOpenResult =
+            transport.open(account, password).also { opened ->
+                if (opened is MailOpenResult.Opened) connection = opened.connection
+            }
+
+        suspend fun close() {
+            connection?.close()
+            connection = null
+        }
     }
 
     /** The checks that need no secret store and no network, in the order their refusals matter. */
@@ -387,20 +424,20 @@ internal class MailService(
      */
     private suspend fun read(
         account: MailAccount,
-        connection: MailConnection,
+        link: Link,
         routine: Boolean,
         now: Long,
     ): MailCheckReport {
         val stored = cursors.get(account.accountKey, account.folder)
         var cursor =
-            place(account, stored, connection, now)
+            place(account, stored, link.current, now)
                 ?: return stop(
                     account,
                     MailCheckReport(checkedAtMillis = now),
                     MailCheckError(MailFailureReason.FETCH_FAILED),
                     now,
                 )
-        val remainingAtStart = connection.countAfter(cursor.lastUid)
+        val remainingAtStart = link.current.countAfter(cursor.lastUid)
         cursor = cursor.copy(remaining = remainingAtStart)
         if (cursor != stored) save(cursor)
         val pageLimit = if (routine && !cursor.catchingUp) MAX_PAGES_PER_CHECK else Int.MAX_VALUE
@@ -410,18 +447,28 @@ internal class MailService(
         // Set once no further page may be read: the folder is exhausted, a page failed or stalled.
         var done = false
         var pages = 0
+        var reconnects = 0
         while (!done && pages < pageLimit && !cancelRequested()) {
             pages++
-            when (val fetched = connection.fetchAfter(cursor.lastUid)) {
+            when (val fetched = link.current.fetchAfter(cursor.lastUid)) {
                 is MailFetchResult.Failed -> {
-                    error = MailCheckError(fetched.reason, fetched.detail)
-                    done = true
+                    log.warn(
+                        "Email fetch after UID ${cursor.lastUid} failed: ${fetched.reason.name} " +
+                            "(${fetched.detail ?: "no cause"})",
+                    )
+                    val retry = fetched.reason in RECONNECTABLE && reconnects < MAX_RECONNECTS
+                    if (retry && reconnect(link, cursor, ++reconnects)) {
+                        pages--
+                    } else {
+                        error = MailCheckError(fetched.reason, fetched.detail)
+                        done = true
+                    }
                 }
 
                 is MailFetchResult.Success -> {
                     val previous = cursor.lastUid
                     val messages = fetched.messages.filter { it.uid > previous }.sortedBy(MailMessage::uid)
-                    val page = processMessages(account, connection, messages, report, cursor, remainingAtStart)
+                    val page = processMessages(account, link.current, messages, report, cursor, remainingAtStart)
                     report = page.report
                     cursor = page.cursor
                     error = page.error
@@ -444,6 +491,33 @@ internal class MailService(
             cursor.copy(lastCheckedAtMillis = now, lastError = error?.reason),
             report.copy(errors = listOfNotNull(error), cancelled = cancelled),
         )
+    }
+
+    /**
+     * Replace a connection that failed a fetch with a fresh one, after a short pause. False when no
+     * new connection opens, or the folder came back renumbered: the check then ends, and the next
+     * one places the cursor again.
+     */
+    private suspend fun reconnect(
+        link: Link,
+        cursor: MailCursor,
+        attempt: Int,
+    ): Boolean {
+        log.info("Reconnecting to the mail server ($attempt of $MAX_RECONNECTS)")
+        delay(RECONNECT_DELAY_MILLIS)
+        withContext(NonCancellable) { link.close() }
+        return when (val opened = link.open()) {
+            is MailOpenResult.Failed -> {
+                log.warn(
+                    "Reconnecting to the mail server failed: ${opened.reason.name} (${opened.detail ?: "no cause"})",
+                )
+                false
+            }
+
+            is MailOpenResult.Opened -> {
+                opened.connection.uidValidity == cursor.uidValidity
+            }
+        }
     }
 
     /**
@@ -538,9 +612,12 @@ internal class MailService(
     )
 
     /**
-     * One page of messages: each skipped or fully handled message advances the cursor; the first
-     * failure stops at the message before it, so the next check retries that one and nothing
-     * earlier. A cancel stops before the next message.
+     * One page of messages: each skipped or fully handled message advances the cursor. A message
+     * that cannot be read is passed over at once, as reading it again gives the same answer. Any
+     * other failure stops at the message before it, so the next check retries that one and nothing
+     * earlier, until [MAX_MESSAGE_ATTEMPTS] checks (counted in the cursor, across restarts) have
+     * failed on it. A passed-over message gets no post-action and stays in the mailbox. A cancel
+     * stops before the next message.
      */
     @Suppress("LongParameterList") // The page's inputs: account, connection, messages, and the running tallies.
     private suspend fun processMessages(
@@ -560,59 +637,67 @@ internal class MailService(
             val message = messages[index]
             index++
             report = report.copy(messagesSeen = report.messagesSeen + 1)
-            val supported = message.attachments.filter { it.supportedKind() != null }
-            val readFailure = message.readFailure
-            val outcome: MessageOutcome? =
-                when {
-                    // A message the transport could not read fails without touching the library or
-                    // the mailbox, and takes the same bounded retries as any other failure.
-                    readFailure != null -> {
-                        MessageOutcome.Failed(readFailure, importedDocIds = emptyList(), duplicates = 0)
-                    }
-
-                    !account.matches(message) -> {
-                        report = report.copy(skipped = report.skipped + 1)
-                        null
-                    }
-
-                    supported.isEmpty() && !account.saveEmailAsPdf -> {
-                        report = report.copy(matched = report.matched + 1, skipped = report.skipped + 1)
-                        null
-                    }
-
-                    else -> {
-                        report = report.copy(matched = report.matched + 1)
-                        handle(account, connection, message, supported)
-                    }
-                }
+            val outcome = consider(account, connection, message)
+            report = report.copy(droppedAttachments = report.droppedAttachments + message.droppedParts.size)
+            if (message.droppedParts.isNotEmpty()) {
+                log.warn(
+                    "Email UID ${message.uid}: left out ${message.droppedParts.joinToString { it.name }}; " +
+                        "the email stays in the mailbox",
+                )
+            }
             when (outcome) {
-                null -> {}
+                MessageOutcome.Skipped -> {
+                    report = report.copy(skipped = report.skipped + 1)
+                }
+
+                MessageOutcome.SkippedMatched -> {
+                    report = report.copy(matched = report.matched + 1, skipped = report.skipped + 1)
+                }
+
+                is MessageOutcome.Unreadable -> {
+                    log.warn(
+                        "Email UID ${message.uid} could not be read (${outcome.cause ?: "no cause"}); " +
+                            "passed over and left in the mailbox",
+                    )
+                    report = report.copy(unreadable = report.unreadable + 1)
+                }
 
                 is MessageOutcome.Handled -> {
-                    report = report.counting(outcome.importedDocIds, outcome.duplicates)
+                    report =
+                        report
+                            .copy(matched = report.matched + 1)
+                            .counting(outcome.importedDocIds, outcome.duplicates)
                 }
 
                 is MessageOutcome.Failed -> {
-                    report = report.counting(outcome.importedDocIds, outcome.duplicates)
-                    val key = "${account.accountKey}|${account.folder}|${message.uid}"
-                    val attempts = (failedAttempts[key] ?: 0) + 1
+                    report =
+                        report
+                            .copy(matched = report.matched + 1)
+                            .counting(outcome.importedDocIds, outcome.duplicates)
+                    val attempts = if (cursor.blockedUid == message.uid) cursor.blockedAttempts + 1 else 1
                     if (attempts >= MAX_MESSAGE_ATTEMPTS) {
-                        // A permanently bad message (a vanished UID, an undecodable image, an
-                        // attachment over the cap) is passed over after bounded retries instead of
-                        // stopping the folder; it gets no post-action, so it stays in the mailbox.
-                        failedAttempts.remove(key)
+                        // A message that keeps failing (a vanished UID, an undecodable image, a post-
+                        // action the server refuses) is passed over instead of stopping the folder.
                         log.warn(
-                            "Skipping email UID ${message.uid} after $attempts failed attempts: " +
+                            "Email UID ${message.uid} passed over after $attempts failed checks: " +
                                 outcome.reason.name,
                         )
+                        report = report.copy(unreadable = report.unreadable + 1)
                     } else {
-                        failedAttempts[key] = attempts
+                        log.warn("Email UID ${message.uid} failed (${outcome.reason.name}); retried next check")
+                        cursor = cursor.copy(blockedUid = message.uid, blockedAttempts = attempts)
                         error = MailCheckError(outcome.reason, outcome.detail)
                     }
                 }
             }
             if (error == null) {
-                cursor = cursor.copy(lastUid = message.uid, throughMillis = message.dateMillis ?: cursor.throughMillis)
+                cursor =
+                    cursor.copy(
+                        lastUid = message.uid,
+                        throughMillis = message.dateMillis ?: cursor.throughMillis,
+                        blockedUid = null,
+                        blockedAttempts = 0,
+                    )
             }
             val remaining = remainingAtStart?.let { (it - report.messagesSeen).coerceAtLeast(0) }
             cursor = cursor.copy(remaining = remaining)
@@ -623,6 +708,25 @@ internal class MailService(
             }
         }
         return PageOutcome(report, cursor, error, interrupted = false)
+    }
+
+    /** What one message comes to: passed over, unreadable, or imported (or failing to be). */
+    private suspend fun consider(
+        account: MailAccount,
+        connection: MailConnection,
+        message: MailMessage,
+    ): MessageOutcome {
+        val supported = message.attachments.filter { it.supportedKind() != null }
+        return when {
+            // Never filtered, imported or given a post-action: what it holds is unknown.
+            message.readFailure != null -> MessageOutcome.Unreadable(message.readFailureCause)
+
+            !account.matches(message) -> MessageOutcome.Skipped
+
+            supported.isEmpty() && !account.saveEmailAsPdf -> MessageOutcome.SkippedMatched
+
+            else -> handle(account, connection, message, supported)
+        }
     }
 
     private fun MailCheckReport.counting(
@@ -660,7 +764,7 @@ internal class MailService(
             when (attachment.supportedKind()) {
                 MailAttachmentKind.PDF -> {
                     record(sink.importPdf(attachment.bytes, attachment.fileName))
-                    if (failure == null) log.info("Imported an email attachment as ${attachment.fileName}")
+                    if (failure == null) log.info("Imported a PDF attachment of email UID ${message.uid}")
                 }
 
                 MailAttachmentKind.IMAGE -> {
@@ -682,7 +786,9 @@ internal class MailService(
                 record(sink.importPdf(pdf, emailPdfFileName(message)))
             }
         }
-        if (failure == null) {
+        // A message that lost an attachment keeps its place in the mailbox: moving or deleting it
+        // would take the part the library could not take with it.
+        if (failure == null && message.droppedParts.isEmpty()) {
             failure =
                 when (account.postAction) {
                     MailPostAction.KEEP -> null
@@ -782,6 +888,16 @@ internal class MailService(
     }
 
     private sealed interface MessageOutcome {
+        /** Not one the account asks for. */
+        data object Skipped : MessageOutcome
+
+        /** Asked for, but nothing in it the library can take. */
+        data object SkippedMatched : MessageOutcome
+
+        data class Unreadable(
+            val cause: String?,
+        ) : MessageOutcome
+
         data class Handled(
             val importedDocIds: List<String>,
             val duplicates: Int,
@@ -805,8 +921,17 @@ internal class MailService(
          */
         const val MAX_PAGES_PER_CHECK = 5
 
-        /** After this many failed tries, a message is passed over rather than stopping the folder. */
-        const val MAX_MESSAGE_ATTEMPTS = 5
+        /** After this many failed checks, a message is passed over rather than stopping the folder. */
+        const val MAX_MESSAGE_ATTEMPTS = 3
+
+        /** Fresh connections one check may open after a fetch failed, before it gives up. */
+        const val MAX_RECONNECTS = 2
+
+        /** The pause before a reconnect, so a server that just dropped us is not hit at once. */
+        const val RECONNECT_DELAY_MILLIS = 2_000L
+
+        /** Fetch failures a fresh connection can cure; a refused login or a missing folder it cannot. */
+        val RECONNECTABLE = setOf(MailFailureReason.FETCH_FAILED, MailFailureReason.CONNECTION_FAILED)
 
         /** Unread import events kept for a slow collector; a check is minutes apart. */
         const val IMPORT_EVENT_BUFFER = 8

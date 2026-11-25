@@ -1,10 +1,17 @@
 package dev.npn.app.ui.settings
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.formatEpochDate
 import dev.npn.core.mail.MailFailureReason
 import dev.npn.core.mail.MailSecretFailure
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.email_attachments_dropped
+import no_papers_needed.composeapp.generated.resources.email_left_in_mailbox
 import no_papers_needed.composeapp.generated.resources.email_progress_left
 import no_papers_needed.composeapp.generated.resources.email_progress_through
 import no_papers_needed.composeapp.generated.resources.email_progress_through_only
@@ -13,6 +20,7 @@ import no_papers_needed.composeapp.generated.resources.email_reason_connection_f
 import no_papers_needed.composeapp.generated.resources.email_reason_fetch_failed
 import no_papers_needed.composeapp.generated.resources.email_reason_folder_not_found
 import no_papers_needed.composeapp.generated.resources.email_reason_import_failed
+import no_papers_needed.composeapp.generated.resources.email_reason_message_unreadable
 import no_papers_needed.composeapp.generated.resources.email_reason_no_password
 import no_papers_needed.composeapp.generated.resources.email_reason_not_configured
 import no_papers_needed.composeapp.generated.resources.email_reason_pdf_render_failed
@@ -39,6 +47,7 @@ internal fun MailFailureReason.textRes(): StringResource =
         MailFailureReason.TLS_FAILED -> Res.string.email_reason_tls_failed
         MailFailureReason.FOLDER_NOT_FOUND -> Res.string.email_reason_folder_not_found
         MailFailureReason.FETCH_FAILED -> Res.string.email_reason_fetch_failed
+        MailFailureReason.MESSAGE_UNREADABLE -> Res.string.email_reason_message_unreadable
         MailFailureReason.IMPORT_FAILED -> Res.string.email_reason_import_failed
         MailFailureReason.POST_ACTION_FAILED -> Res.string.email_reason_post_action_failed
         MailFailureReason.PLAIN_REFUSED -> Res.string.email_reason_plain_refused
@@ -89,3 +98,26 @@ internal fun mailPositionText(
             null
         }
     }
+
+/**
+ * What the last check left in the mailbox, one sentence per kind: emails it could not import, and
+ * attachments it had to leave out of emails it did. Nothing when it left nothing.
+ */
+@Composable
+internal fun MailLeftBehind(
+    unreadable: Int,
+    droppedAttachments: Int,
+    modifier: Modifier = Modifier,
+) {
+    if (unreadable == 0 && droppedAttachments == 0) return
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (unreadable > 0) {
+            HelpText(pluralStringResource(Res.plurals.email_left_in_mailbox, unreadable, unreadable))
+        }
+        if (droppedAttachments > 0) {
+            HelpText(
+                pluralStringResource(Res.plurals.email_attachments_dropped, droppedAttachments, droppedAttachments),
+            )
+        }
+    }
+}

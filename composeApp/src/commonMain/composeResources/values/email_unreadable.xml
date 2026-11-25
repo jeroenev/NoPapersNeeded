@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Completes "Could not check mail: %1$s" when one message, not the mailbox, could not be read. -->
+    <string name="email_reason_message_unreadable">an email could not be read</string>
+    <!-- What the last check left behind, in the email settings and on the Activity email row. -->
+    <plurals name="email_left_in_mailbox">
+        <item quantity="one">%1$d email could not be imported and was left in the mailbox.</item>
+        <item quantity="other">%1$d emails could not be imported and were left in the mailbox.</item>
+    </plurals>
+    <plurals name="email_attachments_dropped">
+        <item quantity="one">%1$d attachment was too large or unreadable; its email was left in the mailbox.</item>
+        <item quantity="other">%1$d attachments were too large or unreadable; their emails were left in the mailbox.</item>
+    </plurals>
+</resources>

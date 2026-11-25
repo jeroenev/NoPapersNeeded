@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="email_reason_message_unreadable">no se pudo leer un correo</string>
+    <plurals name="email_left_in_mailbox">
+        <item quantity="one">%1$d correo no se pudo importar y se quedó en el buzón.</item>
+        <item quantity="other">%1$d correos no se pudieron importar y se quedaron en el buzón.</item>
+    </plurals>
+    <plurals name="email_attachments_dropped">
+        <item quantity="one">%1$d adjunto era demasiado grande o ilegible; su correo se quedó en el buzón.</item>
+        <item quantity="other">%1$d adjuntos eran demasiado grandes o ilegibles; sus correos se quedaron en el buzón.</item>
+    </plurals>
+</resources>

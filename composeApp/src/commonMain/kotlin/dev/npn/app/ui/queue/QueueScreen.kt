@@ -64,6 +64,7 @@ import dev.npn.app.ui.common.rememberSnackbarMessages
 import dev.npn.app.ui.common.rememberStorageAccess
 import dev.npn.app.ui.common.resolve
 import dev.npn.app.ui.library.bannerText
+import dev.npn.app.ui.settings.MailLeftBehind
 import dev.npn.app.ui.settings.mailPositionText
 import dev.npn.app.ui.settings.text
 import dev.npn.core.app.LibrarySession
@@ -564,6 +565,7 @@ private fun MailRow(
                 )
             }
         }
+        if (!mail.checking) MailLeftBehind(mail.lastUnreadable, mail.lastDroppedAttachments)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (mail.checking) {
                 OutlinedButton(onClick = actions.onCancelMailCheck, enabled = !mail.cancelling) {

@@ -29,13 +29,33 @@ data class MailMessage(
     val bodyText: String,
     val attachments: List<MailAttachment>,
     /**
-     * Set when the transport could not read this one message (a supported attachment over the cap,
-     * a malformed part). Its other fields may then be empty: it is never filtered, imported or given
-     * a post-action, and it fails like any other message, so it is retried and then passed over
-     * instead of failing every fetch of the folder.
+     * Set when the transport could not read this one message at all (a structure it cannot parse).
+     * Its other fields may then be empty. Reading it again gives the same answer, so it is passed
+     * over at once: never filtered, imported or given a post-action, and left in the mailbox.
      */
     val readFailure: MailFailureReason? = null,
+    /**
+     * Why [readFailure] happened, as exception class names only (`ParseException <- IOException`):
+     * enough to tell a parse error from a decoding one in a log that may reach a public issue,
+     * without a subject, an address or a file name.
+     */
+    val readFailureCause: String? = null,
+    /**
+     * Supported attachments the transport had to leave out (over the size cap, or a part it could
+     * not decode). The rest of the message is still read; a message that lost a part keeps its
+     * place in the mailbox, as no post-action runs on it.
+     */
+    val droppedParts: List<MailDroppedPart> = emptyList(),
 )
+
+/** Why one attachment of an otherwise readable message was left out. */
+enum class MailDroppedPart {
+    /** Over the transport's per-attachment size cap. */
+    TOO_LARGE,
+
+    /** Its bytes could not be decoded (an unknown transfer encoding, a broken part). */
+    UNREADABLE,
+}
 
 /** Why talking to the mail server failed. Every one is mapped to a whole sentence in `composeApp`. */
 enum class MailFailureReason {
@@ -46,7 +66,12 @@ enum class MailFailureReason {
     AUTHENTICATION_FAILED,
     TLS_FAILED,
     FOLDER_NOT_FOUND,
+
+    /** Reading the folder failed: the connection dropped, timed out, or the server refused a fetch. */
     FETCH_FAILED,
+
+    /** One message could not be read, while the folder could. */
+    MESSAGE_UNREADABLE,
     IMPORT_FAILED,
     POST_ACTION_FAILED,
     PLAIN_REFUSED,
@@ -263,6 +288,12 @@ data class MailCursor(
     val throughMillis: Long? = null,
     /** How many messages were left after the cursor when it was last saved, when known. */
     val remaining: Int? = null,
+    /**
+     * The message the cursor is stuck before ([lastUid]'s next) and how many checks have failed on
+     * it so far. Kept with the cursor, so restarting the app does not start the count over.
+     */
+    val blockedUid: Long? = null,
+    val blockedAttempts: Int = 0,
 )
 
 /** Device-local cursor storage (`device.db`): never synced, because it describes this device's reads. */
