@@ -101,6 +101,7 @@ import no_papers_needed.composeapp.generated.resources.common_settings_verify_co
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_copy_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_verify_failed
 import no_papers_needed.composeapp.generated.resources.email_account_invalid
+import no_papers_needed.composeapp.generated.resources.email_check_cancelled
 import no_papers_needed.composeapp.generated.resources.email_check_failed
 import no_papers_needed.composeapp.generated.resources.email_check_report
 import no_papers_needed.composeapp.generated.resources.email_password_removed
@@ -364,23 +365,44 @@ class SettingsViewModel(
     override fun checkMailNow() {
         viewModelScope.launch {
             runCatchingCancellable { mail.checkNow() }.fold(
-                onSuccess = { report -> message(checkReportText(report)) },
+                onSuccess = { report -> checkReportText(report)?.let(::message) },
                 onFailure = { message(uiText(Res.string.email_check_failed, it.reasonText())) },
             )
         }
     }
 
-    /** What a check did: its counts when clean, or the first typed reason it stopped on. */
-    private fun checkReportText(report: MailCheckReport): UiText =
-        report.errors.firstOrNull()?.let { error ->
-            uiText(Res.string.email_check_failed, uiText(error.reason.textRes()))
-        } ?: uiText(
-            Res.string.email_check_report,
-            report.messagesSeen,
-            report.imported,
-            report.duplicates,
-            report.skipped,
-        )
+    override fun cancelMailCheck() = mail.cancelCheck()
+
+    /**
+     * What a check did: the first typed reason it stopped on, that it was cancelled, or its counts.
+     * Null when it imported documents: the app says so itself, with the way to them.
+     */
+    private fun checkReportText(report: MailCheckReport): UiText? {
+        val error = report.errors.firstOrNull()
+        return when {
+            error != null -> {
+                uiText(Res.string.email_check_failed, uiText(error.reason.textRes()))
+            }
+
+            report.cancelled -> {
+                uiText(Res.string.email_check_cancelled)
+            }
+
+            report.importedDocIds.isNotEmpty() -> {
+                null
+            }
+
+            else -> {
+                uiText(
+                    Res.string.email_check_report,
+                    report.messagesSeen,
+                    report.imported,
+                    report.duplicates,
+                    report.skipped,
+                )
+            }
+        }
+    }
 
     /** The app-lock set-or-change dialog, kept through recreation as the field dialog is. */
     private val securityDialog = saved.uiState<SecurityDialog?>(SECURITY_DIALOG_KEY, null)

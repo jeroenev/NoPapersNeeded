@@ -326,6 +326,9 @@ interface SettingsActions {
 
     /** Check the saved account now, whatever the switch and interval say. */
     fun checkMailNow()
+
+    /** Stop the running mail check after the message in hand; the next check goes on from there. */
+    fun cancelMailCheck()
 }
 
 /** The library's reminder settings, split from [SettingsActions] because that interface is already large. */

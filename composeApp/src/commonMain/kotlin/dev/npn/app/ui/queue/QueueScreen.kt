@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -63,6 +64,8 @@ import dev.npn.app.ui.common.rememberSnackbarMessages
 import dev.npn.app.ui.common.rememberStorageAccess
 import dev.npn.app.ui.common.resolve
 import dev.npn.app.ui.library.bannerText
+import dev.npn.app.ui.settings.mailPositionText
+import dev.npn.app.ui.settings.text
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.QueuedEditRun
 import dev.npn.core.app.QueuedWork
@@ -79,6 +82,8 @@ import no_papers_needed.composeapp.generated.resources.ai_edit_cancel_message
 import no_papers_needed.composeapp.generated.resources.ai_edit_cancel_title
 import no_papers_needed.composeapp.generated.resources.common_retry
 import no_papers_needed.composeapp.generated.resources.common_storage_access_grant
+import no_papers_needed.composeapp.generated.resources.email_cancel_check
+import no_papers_needed.composeapp.generated.resources.email_check_now
 import no_papers_needed.composeapp.generated.resources.queue_ai_failed_help
 import no_papers_needed.composeapp.generated.resources.queue_ai_temporary_failure
 import no_papers_needed.composeapp.generated.resources.queue_attempts
@@ -92,6 +97,12 @@ import no_papers_needed.composeapp.generated.resources.queue_edit_run_failures
 import no_papers_needed.composeapp.generated.resources.queue_edit_run_progress
 import no_papers_needed.composeapp.generated.resources.queue_edit_run_review
 import no_papers_needed.composeapp.generated.resources.queue_edit_runs
+import no_papers_needed.composeapp.generated.resources.queue_email_failed
+import no_papers_needed.composeapp.generated.resources.queue_email_last
+import no_papers_needed.composeapp.generated.resources.queue_email_last_time
+import no_papers_needed.composeapp.generated.resources.queue_email_never
+import no_papers_needed.composeapp.generated.resources.queue_email_running
+import no_papers_needed.composeapp.generated.resources.queue_email_settings
 import no_papers_needed.composeapp.generated.resources.queue_empty
 import no_papers_needed.composeapp.generated.resources.queue_empty_subtitle
 import no_papers_needed.composeapp.generated.resources.queue_help
@@ -100,6 +111,7 @@ import no_papers_needed.composeapp.generated.resources.queue_ocr_temporary_failu
 import no_papers_needed.composeapp.generated.resources.queue_open_document
 import no_papers_needed.composeapp.generated.resources.queue_problem_storage_access
 import no_papers_needed.composeapp.generated.resources.queue_retry_after
+import no_papers_needed.composeapp.generated.resources.queue_section_email
 import no_papers_needed.composeapp.generated.resources.queue_section_imports
 import no_papers_needed.composeapp.generated.resources.queue_section_problems
 import no_papers_needed.composeapp.generated.resources.queue_section_sync
@@ -139,6 +151,7 @@ fun QueueScreen(
     onOpenCloudSettings: () -> Unit,
     onOpenOcrSettings: () -> Unit,
     onOpenAiSettings: () -> Unit,
+    onOpenEmailSettings: () -> Unit,
     modifier: Modifier = Modifier,
     vm: QueueViewModel = viewModel { QueueViewModel(session, settings) },
 ) {
@@ -146,6 +159,7 @@ fun QueueScreen(
     val editRuns by vm.editRuns.collectAsStateWithLifecycle()
     val scan by vm.scan.collectAsStateWithLifecycle()
     val sync by vm.sync.collectAsStateWithLifecycle()
+    val mail by vm.mail.collectAsStateWithLifecycle()
     val storage = rememberStorageAccess()
     // Only a library on plain shared storage needs Android's all-files grant; a SAF or app-private
     // (cloud working copy) library imports fine without it.
@@ -169,7 +183,7 @@ fun QueueScreen(
             LoadingIndicator(Modifier.padding(padding))
         } else {
             ActivityList(
-                activity = Activity(loadedItems, loadedRuns, scan, sync),
+                activity = Activity(loadedItems, loadedRuns, scan, sync, mail),
                 storageProblem = storageProblem,
                 actions =
                     ActivityActions(
@@ -182,6 +196,9 @@ fun QueueScreen(
                         onOpenOcrSettings = onOpenOcrSettings,
                         onOpenAiSettings = onOpenAiSettings,
                         onGrantStorage = storage.request,
+                        onCheckMailNow = vm::checkMailNow,
+                        onCancelMailCheck = vm::cancelMailCheck,
+                        onOpenEmailSettings = onOpenEmailSettings,
                     ),
                 modifier = Modifier.fillMaxSize().padding(padding),
             )
@@ -202,6 +219,7 @@ private class Activity(
     val editRuns: List<QueuedEditRun>,
     val scan: IndexProgress?,
     val sync: ActivitySync?,
+    val mail: ActivityMail?,
 ) {
     /** Work that needs a fix before it can go on: no engine, no endpoint, an endpoint not answering. */
     val blocked = items.filter { it.block != null }
@@ -221,7 +239,11 @@ private class Activity(
             .map { it.entry }
 
     fun hasProblems(storageProblem: Boolean): Boolean =
-        storageProblem || blocked.isNotEmpty() || stopped.isNotEmpty() || sync?.failed == true
+        storageProblem || blocked.isNotEmpty() || stopped.isNotEmpty() || sync?.failed == true ||
+            mail?.failed == true
+
+    /** Nothing queued, no problem, and neither the cloud sync nor email import set up: the empty page. */
+    fun nothingToShow(storageProblem: Boolean): Boolean = idle && sync == null && mail == null && !storageProblem
 
     val idle: Boolean
         get() =
@@ -240,6 +262,9 @@ private class ActivityActions(
     val onOpenOcrSettings: () -> Unit,
     val onOpenAiSettings: () -> Unit,
     val onGrantStorage: () -> Unit,
+    val onCheckMailNow: () -> Unit,
+    val onCancelMailCheck: () -> Unit,
+    val onOpenEmailSettings: () -> Unit,
 )
 
 @Composable
@@ -250,7 +275,7 @@ private fun ActivityList(
     actions: ActivityActions,
     modifier: Modifier = Modifier,
 ) {
-    if (activity.idle && activity.sync == null && !storageProblem) {
+    if (activity.nothingToShow(storageProblem)) {
         EmptyState(
             icon = Icons.Filled.DoneAll,
             title = stringResource(Res.string.queue_empty),
@@ -259,22 +284,8 @@ private fun ActivityList(
         )
         return
     }
-    val sync = activity.sync
     LazyColumn(modifier) {
-        if (activity.hasProblems(storageProblem)) {
-            heading(Res.string.queue_section_problems)
-            if (storageProblem) {
-                item(key = "storage") { StorageAccessProblemRow(actions) }
-            }
-            if (sync != null && sync.failed) {
-                item(key = "sync") { SyncRow(sync, actions) }
-            }
-            items(activity.blocked, key = { "blocked:${it.entry.stage}:${it.entry.docId}" }) { entry ->
-                BlockedRow(entry, actions)
-                HorizontalDivider()
-            }
-            workRows(activity.stopped.map { it.entry }, actions)
-        }
+        if (activity.hasProblems(storageProblem)) problemRows(activity, storageProblem, actions)
         if (activity.editRuns.isNotEmpty()) {
             heading(Res.string.queue_edit_runs)
             items(activity.editRuns, key = { "run:${it.jobId}" }) { run ->
@@ -312,10 +323,49 @@ private fun ActivityList(
                 )
             }
         }
-        if (sync != null && !sync.failed) {
-            heading(Res.string.queue_section_sync)
-            item(key = "sync") { SyncRow(sync, actions) }
-        }
+        serviceRows(activity, actions)
+    }
+}
+
+/** What needs a fix before it can go on, led by what blocks the most. */
+private fun LazyListScope.problemRows(
+    activity: Activity,
+    storageProblem: Boolean,
+    actions: ActivityActions,
+) {
+    val sync = activity.sync
+    val mail = activity.mail
+    heading(Res.string.queue_section_problems)
+    if (storageProblem) {
+        item(key = "storage") { StorageAccessProblemRow(actions) }
+    }
+    if (sync != null && sync.failed) {
+        item(key = "sync") { SyncRow(sync, actions) }
+    }
+    if (mail != null && mail.failed) {
+        item(key = "mail") { MailRow(mail, actions) }
+    }
+    items(activity.blocked, key = { "blocked:${it.entry.stage}:${it.entry.docId}" }) { entry ->
+        BlockedRow(entry, actions)
+        HorizontalDivider()
+    }
+    workRows(activity.stopped.map { it.entry }, actions)
+}
+
+/** The cloud sync and email import when they are well: last, as status rather than work. */
+private fun LazyListScope.serviceRows(
+    activity: Activity,
+    actions: ActivityActions,
+) {
+    val sync = activity.sync
+    val mail = activity.mail
+    if (sync != null && !sync.failed) {
+        heading(Res.string.queue_section_sync)
+        item(key = "sync") { SyncRow(sync, actions) }
+    }
+    if (mail != null && !mail.failed) {
+        heading(Res.string.queue_section_email)
+        item(key = "mail") { MailRow(mail, actions) }
     }
 }
 
@@ -460,6 +510,72 @@ private fun SyncRow(
             }
             TextButton(onClick = actions.onOpenCloudSettings) {
                 Text(stringResource(Res.string.queue_sync_settings))
+            }
+        }
+    }
+}
+
+/**
+ * Email import as one row, as the cloud sync's: a check running (how far it has come, and Cancel),
+ * why checks are failing, or when the last one ran and what it imported; Check now, and the way to
+ * the email settings, where a failure is fixed.
+ */
+@Composable
+private fun MailRow(
+    mail: ActivityMail,
+    actions: ActivityActions,
+) {
+    ActivityRow(Icons.Filled.Email) {
+        val problem = mail.problem
+        val last = mail.lastCheckedAtMillis
+        val imported = mail.lastImported
+        when {
+            mail.checking -> {
+                Text(stringResource(Res.string.queue_email_running), style = MaterialTheme.typography.titleSmall)
+                LinearProgressIndicator(Modifier.fillMaxWidth())
+                mail.progress?.let { progress ->
+                    mailPositionText(progress.throughMillis, progress.remaining)?.let { HelpText(it) }
+                }
+            }
+
+            problem != null -> {
+                Text(
+                    stringResource(Res.string.queue_email_failed, problem.text()),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+
+            last == null -> {
+                Text(stringResource(Res.string.queue_email_never), style = MaterialTheme.typography.titleSmall)
+            }
+
+            imported != null -> {
+                Text(
+                    pluralStringResource(Res.plurals.queue_email_last, imported, formatEpochDateTime(last), imported),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+            }
+
+            else -> {
+                Text(
+                    stringResource(Res.string.queue_email_last_time, formatEpochDateTime(last)),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+            }
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (mail.checking) {
+                OutlinedButton(onClick = actions.onCancelMailCheck, enabled = !mail.cancelling) {
+                    Text(stringResource(Res.string.email_cancel_check))
+                }
+            } else {
+                OutlinedButton(onClick = actions.onCheckMailNow) {
+                    Text(stringResource(Res.string.email_check_now))
+                }
+            }
+            TextButton(onClick = actions.onOpenEmailSettings) {
+                Text(stringResource(Res.string.queue_email_settings))
             }
         }
     }

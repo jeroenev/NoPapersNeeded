@@ -458,6 +458,9 @@ private fun MainNavHost(
                 onOpenAiSettings = {
                     nav.from(entry) { navigate(Route.Settings(SettingsCategoryId.AI.routeKey)) }
                 },
+                onOpenEmailSettings = {
+                    nav.from(entry) { navigate(Route.Settings(SettingsCategoryId.EMAIL.routeKey)) }
+                },
             )
         }
         settingsRoutes(nav, settings, session, library, onOpenLibrary)

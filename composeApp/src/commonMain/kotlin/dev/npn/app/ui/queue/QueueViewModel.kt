@@ -12,15 +12,19 @@ import dev.npn.core.app.WorkCapabilities
 import dev.npn.core.app.WorkFacade
 import dev.npn.core.app.blockedBy
 import dev.npn.core.index.IndexProgress
+import dev.npn.core.mail.MailFailureReason
+import dev.npn.core.mail.MailProgress
 import dev.npn.core.settings.SettingsRepository
 import dev.npn.core.settings.aiConfigured
 import dev.npn.core.sync.SyncOutcome
 import dev.npn.core.sync.SyncRunSummary
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_rerun_ocr_failed
+import no_papers_needed.composeapp.generated.resources.email_check_failed
 import no_papers_needed.composeapp.generated.resources.queue_edit_run_discard_failed
 import no_papers_needed.composeapp.generated.resources.queue_sync_not_configured
 import no_papers_needed.composeapp.generated.resources.queue_sync_now_failed
@@ -39,6 +43,24 @@ data class ActivitySync(
 }
 
 /**
+ * Email import as Activity shows it: a check [checking] now (and its [progress]), when the last
+ * one ran and how many documents it imported ([lastImported], null when this session has not
+ * checked yet), and [problem], why checks are not going through. Shown only for a configured
+ * account on a device that can import email.
+ */
+data class ActivityMail(
+    val checking: Boolean,
+    val cancelling: Boolean,
+    val progress: MailProgress?,
+    val lastCheckedAtMillis: Long?,
+    val lastImported: Int?,
+    val problem: MailFailureReason?,
+) {
+    /** The last check failed, or the password cannot be read: a problem, shown first. */
+    val failed: Boolean get() = problem != null
+}
+
+/**
  * One entry of Activity's queue with [block], what keeps it from making progress on this device.
  * A blocked entry is not waiting for its turn: it needs a fix, and Activity shows it as a problem
  * with the way there rather than as work in motion.
@@ -51,12 +73,13 @@ data class ActivityWork(
 /**
  * Activity, the processing queue's page: what the text recognition and Auto-organize passes still
  * owe ([items]), the bulk edits handed to the background ([editRuns]), a library scan or import in
- * progress ([scan]) and the cloud sync ([sync]).
+ * progress ([scan]), the cloud sync ([sync]) and email import ([mail]).
  *
  * Almost read-only — the queues run themselves and nothing here can hurry them. The exceptions are
  * [retry] for a document whose text recognition stopped, [discardEditRun]: a bulk edit is work the
  * user chose to start, and one over the wrong scope or against a dead endpoint must be abandonable
- * without waiting for it to finish first; and [syncNow]. Each reports a failure through [messages].
+ * without waiting for it to finish first; [syncNow]; and [checkMailNow] with [cancelMailCheck]. Each
+ * reports a failure through [messages].
  */
 class QueueViewModel(
     session: LibrarySession,
@@ -66,6 +89,7 @@ class QueueViewModel(
     private val editQueue = session.aiEditQueue
     private val ocr = session.ocr
     private val cloud = session.sync
+    private val mailImport = session.mail
 
     /** Null until the first load, so the screen does not flash "nothing queued" before it. */
     val items: StateFlow<List<ActivityWork>?> =
@@ -90,6 +114,33 @@ class QueueViewModel(
         combine(cloud.config, cloud.status) { config, status ->
             if (config.configured) ActivitySync(status.running, status.lastRun) else null
         }.stateIn(viewModelScope, WhileSubscribedTimeout, null)
+
+    /** Email import, or null while no account is configured or this device cannot import email. */
+    val mail: StateFlow<ActivityMail?> =
+        mailImport.state
+            .map { state ->
+                if (state.transportAvailable && state.account.isConfigured) {
+                    ActivityMail(
+                        checking = state.checking,
+                        cancelling = state.cancelling,
+                        progress = state.progress,
+                        lastCheckedAtMillis = state.lastCheckedAtMillis,
+                        lastImported = state.lastReport?.imported,
+                        problem = state.problem,
+                    )
+                } else {
+                    null
+                }
+            }.stateIn(viewModelScope, WhileSubscribedTimeout, null)
+
+    /**
+     * Check the mailbox now. How it went shows on the email row, and the documents it imported in
+     * the app's own message; only a check that broke is said here. The check outlives this page.
+     */
+    fun checkMailNow() = launchReporting(Res.string.email_check_failed) { mailImport.checkNow() }
+
+    /** Stop the running check after the message in hand; the next one goes on from there. */
+    fun cancelMailCheck() = mailImport.cancelCheck()
 
     /** Abandon a queued bulk edit and the suggestions it has bought so far. */
     fun discardEditRun(jobId: String) =

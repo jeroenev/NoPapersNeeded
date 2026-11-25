@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="email_start_from">Commencer à</string>
+    <string name="email_start_new_only">Nouveaux e-mails uniquement</string>
+    <string name="email_start_last_30_days">Les 30 derniers jours</string>
+    <string name="email_start_last_year">La dernière année</string>
+    <string name="email_start_everything">Tout le dossier</string>
+    <string name="email_start_help">L’endroit où cet appareil commence à lire le dossier la première fois. La première vérification lit d’un coup tous les e-mails à partir de là ; les suivantes récupèrent les nouveaux.</string>
+    <string name="email_start_change_back">Après l’enregistrement, la prochaine vérification lit aussi les e-mails plus anciens jusqu’à ce point de départ. Les documents déjà dans la bibliothèque sont reconnus et ne sont pas ajoutés deux fois.</string>
+    <string name="email_start_change_forward">Après l’enregistrement, les e-mails plus anciens que cet appareil n’a pas encore lus sont ignorés.</string>
+
+    <plurals name="email_progress_through">
+        <item quantity="one">Importé jusqu’au %1$s · environ %2$d message restant</item>
+        <item quantity="other">Importé jusqu’au %1$s · environ %2$d messages restants</item>
+    </plurals>
+    <plurals name="email_progress_left">
+        <item quantity="one">Environ %1$d message restant</item>
+        <item quantity="other">Environ %1$d messages restants</item>
+    </plurals>
+    <string name="email_progress_through_only">Importé jusqu’au %1$s</string>
+    <string name="email_catch_up_paused">Les e-mails plus anciens sont encore en cours de lecture. La prochaine vérification reprendra là où la dernière s’est arrêtée.</string>
+    <string name="email_cancel_check">Annuler</string>
+    <string name="email_cancelling">Arrêt après le message en cours…</string>
+    <string name="email_check_cancelled">Vérification des e-mails arrêtée. La prochaine reprendra là où elle s’est arrêtée.</string>
+
+    <plurals name="email_imported_documents">
+        <item quantity="one">%1$d document importé depuis les e-mails</item>
+        <item quantity="other">%1$d documents importés depuis les e-mails</item>
+    </plurals>
+
+    <string name="queue_section_email">Import d’e-mails</string>
+    <string name="queue_email_running">Vérification des e-mails…</string>
+    <string name="queue_email_never">E-mails pas encore vérifiés</string>
+    <plurals name="queue_email_last">
+        <item quantity="one">Dernière vérification %1$s · %2$d document importé</item>
+        <item quantity="other">Dernière vérification %1$s · %2$d documents importés</item>
+    </plurals>
+    <string name="queue_email_last_time">Dernière vérification %1$s</string>
+    <string name="queue_email_settings">Paramètres e-mail</string>
+    <string name="queue_email_failed">Impossible de vérifier les e-mails : %1$s</string>
+</resources>

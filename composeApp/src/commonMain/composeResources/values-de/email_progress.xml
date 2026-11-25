@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="email_start_from">Beginnen ab</string>
+    <string name="email_start_new_only">Nur neue E-Mails</string>
+    <string name="email_start_last_30_days">Die letzten 30 Tage</string>
+    <string name="email_start_last_year">Das letzte Jahr</string>
+    <string name="email_start_everything">Alles im Ordner</string>
+    <string name="email_start_help">Wo dieses Gerät den Ordner beim ersten Mal zu lesen beginnt. Die erste Prüfung liest alle E-Mails ab dort in einem Durchgang; spätere Prüfungen holen, was neu ist.</string>
+    <string name="email_start_change_back">Nach dem Speichern liest die nächste Prüfung auch die älteren E-Mails bis zu diesem Beginn. Dokumente, die schon in der Bibliothek sind, werden erkannt und nicht doppelt hinzugefügt.</string>
+    <string name="email_start_change_forward">Nach dem Speichern werden ältere E-Mails, die dieses Gerät noch nicht gelesen hat, übersprungen.</string>
+
+    <plurals name="email_progress_through">
+        <item quantity="one">Importiert bis %1$s · noch etwa %2$d Nachricht</item>
+        <item quantity="other">Importiert bis %1$s · noch etwa %2$d Nachrichten</item>
+    </plurals>
+    <plurals name="email_progress_left">
+        <item quantity="one">Noch etwa %1$d Nachricht</item>
+        <item quantity="other">Noch etwa %1$d Nachrichten</item>
+    </plurals>
+    <string name="email_progress_through_only">Importiert bis %1$s</string>
+    <string name="email_catch_up_paused">Ältere E-Mails werden noch gelesen. Die nächste Prüfung macht dort weiter, wo die letzte aufgehört hat.</string>
+    <string name="email_cancel_check">Abbrechen</string>
+    <string name="email_cancelling">Stoppt nach der aktuellen Nachricht…</string>
+    <string name="email_check_cancelled">E-Mail-Prüfung gestoppt. Die nächste Prüfung macht dort weiter, wo sie aufgehört hat.</string>
+
+    <plurals name="email_imported_documents">
+        <item quantity="one">%1$d Dokument aus E-Mails importiert</item>
+        <item quantity="other">%1$d Dokumente aus E-Mails importiert</item>
+    </plurals>
+
+    <string name="queue_section_email">E-Mail-Import</string>
+    <string name="queue_email_running">E-Mails werden geprüft…</string>
+    <string name="queue_email_never">E-Mails noch nicht geprüft</string>
+    <plurals name="queue_email_last">
+        <item quantity="one">Zuletzt geprüft %1$s · %2$d Dokument importiert</item>
+        <item quantity="other">Zuletzt geprüft %1$s · %2$d Dokumente importiert</item>
+    </plurals>
+    <string name="queue_email_last_time">Zuletzt geprüft %1$s</string>
+    <string name="queue_email_settings">E-Mail-Einstellungen</string>
+    <string name="queue_email_failed">E-Mails konnten nicht geprüft werden: %1$s</string>
+</resources>

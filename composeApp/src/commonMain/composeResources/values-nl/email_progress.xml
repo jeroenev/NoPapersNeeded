@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="email_start_from">Beginnen bij</string>
+    <string name="email_start_new_only">Alleen nieuwe e-mail</string>
+    <string name="email_start_last_30_days">De laatste 30 dagen</string>
+    <string name="email_start_last_year">Het laatste jaar</string>
+    <string name="email_start_everything">Alles in de map</string>
+    <string name="email_start_help">Waar dit apparaat de map de eerste keer begint te lezen. De eerste controle leest alle e-mail vanaf daar in één keer; latere controles halen op wat nieuw is.</string>
+    <string name="email_start_change_back">Na het opslaan leest de volgende controle ook de oudere e-mail tot dit beginpunt. Documenten die al in de bibliotheek staan, worden herkend en niet dubbel toegevoegd.</string>
+    <string name="email_start_change_forward">Na het opslaan wordt oudere e-mail die dit apparaat nog niet las, overgeslagen.</string>
+
+    <plurals name="email_progress_through">
+        <item quantity="one">Geïmporteerd tot en met %1$s · nog ongeveer %2$d bericht</item>
+        <item quantity="other">Geïmporteerd tot en met %1$s · nog ongeveer %2$d berichten</item>
+    </plurals>
+    <plurals name="email_progress_left">
+        <item quantity="one">Nog ongeveer %1$d bericht</item>
+        <item quantity="other">Nog ongeveer %1$d berichten</item>
+    </plurals>
+    <string name="email_progress_through_only">Geïmporteerd tot en met %1$s</string>
+    <string name="email_catch_up_paused">Oudere e-mail wordt nog gelezen. De volgende controle gaat verder waar de vorige stopte.</string>
+    <string name="email_cancel_check">Annuleren</string>
+    <string name="email_cancelling">Stopt na het huidige bericht…</string>
+    <string name="email_check_cancelled">E-mailcontrole gestopt. De volgende controle gaat verder waar deze stopte.</string>
+
+    <plurals name="email_imported_documents">
+        <item quantity="one">%1$d document uit e-mail geïmporteerd</item>
+        <item quantity="other">%1$d documenten uit e-mail geïmporteerd</item>
+    </plurals>
+
+    <string name="queue_section_email">E-mailimport</string>
+    <string name="queue_email_running">E-mail controleren…</string>
+    <string name="queue_email_never">E-mail nog niet gecontroleerd</string>
+    <plurals name="queue_email_last">
+        <item quantity="one">Laatst gecontroleerd %1$s · %2$d document geïmporteerd</item>
+        <item quantity="other">Laatst gecontroleerd %1$s · %2$d documenten geïmporteerd</item>
+    </plurals>
+    <string name="queue_email_last_time">Laatst gecontroleerd %1$s</string>
+    <string name="queue_email_settings">E-mailinstellingen</string>
+    <string name="queue_email_failed">Kon e-mail niet controleren: %1$s</string>
+</resources>

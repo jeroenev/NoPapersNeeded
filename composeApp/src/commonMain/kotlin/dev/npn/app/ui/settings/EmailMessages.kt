@@ -1,9 +1,13 @@
 package dev.npn.app.ui.settings
 
 import androidx.compose.runtime.Composable
+import dev.npn.app.ui.common.formatEpochDate
 import dev.npn.core.mail.MailFailureReason
 import dev.npn.core.mail.MailSecretFailure
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.email_progress_left
+import no_papers_needed.composeapp.generated.resources.email_progress_through
+import no_papers_needed.composeapp.generated.resources.email_progress_through_only
 import no_papers_needed.composeapp.generated.resources.email_reason_authentication_failed
 import no_papers_needed.composeapp.generated.resources.email_reason_connection_failed
 import no_papers_needed.composeapp.generated.resources.email_reason_fetch_failed
@@ -21,6 +25,7 @@ import no_papers_needed.composeapp.generated.resources.email_secret_store_failed
 import no_papers_needed.composeapp.generated.resources.email_secret_unavailable
 import no_papers_needed.composeapp.generated.resources.email_secret_unsupported
 import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
 /** The whole-sentence resource for a mail failure; `core` never builds the English itself. */
@@ -52,3 +57,35 @@ internal fun MailSecretFailure.textRes(): StringResource =
 /** The resolved sentence for a mail failure, in the composition's language. */
 @Composable
 internal fun MailFailureReason.text(): String = stringResource(textRes())
+
+/**
+ * Where a device stands in the folder, as one sentence: the date it has imported through and about
+ * how many messages are left after it, whichever of the two is known; null when neither is.
+ */
+@Composable
+internal fun mailPositionText(
+    throughMillis: Long?,
+    remaining: Int?,
+): String? =
+    when {
+        throughMillis != null && remaining != null -> {
+            pluralStringResource(
+                Res.plurals.email_progress_through,
+                remaining,
+                formatEpochDate(throughMillis),
+                remaining,
+            )
+        }
+
+        remaining != null -> {
+            pluralStringResource(Res.plurals.email_progress_left, remaining, remaining)
+        }
+
+        throughMillis != null -> {
+            stringResource(Res.string.email_progress_through_only, formatEpochDate(throughMillis))
+        }
+
+        else -> {
+            null
+        }
+    }

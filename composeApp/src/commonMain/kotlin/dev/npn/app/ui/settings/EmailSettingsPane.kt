@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -33,12 +34,18 @@ import dev.npn.core.mail.MailAccountJson
 import dev.npn.core.mail.MailFilter
 import dev.npn.core.mail.MailPostAction
 import dev.npn.core.mail.MailSecurity
+import dev.npn.core.mail.MailStartPoint
+import dev.npn.core.mail.MailState
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.email_account
 import no_papers_needed.composeapp.generated.resources.email_add_filter
 import no_papers_needed.composeapp.generated.resources.email_allow_plain
 import no_papers_needed.composeapp.generated.resources.email_allow_plain_help
+import no_papers_needed.composeapp.generated.resources.email_cancel_check
+import no_papers_needed.composeapp.generated.resources.email_cancelling
+import no_papers_needed.composeapp.generated.resources.email_catch_up_paused
 import no_papers_needed.composeapp.generated.resources.email_check_now
+import no_papers_needed.composeapp.generated.resources.email_check_report
 import no_papers_needed.composeapp.generated.resources.email_checking
 import no_papers_needed.composeapp.generated.resources.email_clear_password
 import no_papers_needed.composeapp.generated.resources.email_enabled
@@ -75,6 +82,14 @@ import no_papers_needed.composeapp.generated.resources.email_security
 import no_papers_needed.composeapp.generated.resources.email_security_plain
 import no_papers_needed.composeapp.generated.resources.email_security_ssl
 import no_papers_needed.composeapp.generated.resources.email_security_starttls
+import no_papers_needed.composeapp.generated.resources.email_start_change_back
+import no_papers_needed.composeapp.generated.resources.email_start_change_forward
+import no_papers_needed.composeapp.generated.resources.email_start_everything
+import no_papers_needed.composeapp.generated.resources.email_start_from
+import no_papers_needed.composeapp.generated.resources.email_start_help
+import no_papers_needed.composeapp.generated.resources.email_start_last_30_days
+import no_papers_needed.composeapp.generated.resources.email_start_last_year
+import no_papers_needed.composeapp.generated.resources.email_start_new_only
 import no_papers_needed.composeapp.generated.resources.email_test
 import no_papers_needed.composeapp.generated.resources.email_username
 import org.jetbrains.compose.resources.stringResource
@@ -170,6 +185,27 @@ internal fun EmailSettingsPane(
                 number = true,
             )
             HelpText(stringResource(Res.string.email_interval_help))
+            Dropdown(
+                selected = draft.startFrom.label(),
+                options = MailStartPoint.entries,
+                optionLabel = { it.label() },
+                onSelect = { draft = draft.copy(startFrom = it) },
+                label = stringResource(Res.string.email_start_from),
+            )
+            HelpText(stringResource(Res.string.email_start_help))
+            val saved = mail.account.startFrom
+            if (draft.startFrom != saved) {
+                // What saving the change does to this device's place in the folder, said before Save.
+                HelpText(
+                    stringResource(
+                        if (draft.startFrom.reachesFurtherBackThan(saved)) {
+                            Res.string.email_start_change_back
+                        } else {
+                            Res.string.email_start_change_forward
+                        },
+                    ),
+                )
+            }
             if (draft.security == MailSecurity.PLAIN) {
                 SwitchRow(
                     label = stringResource(Res.string.email_allow_plain),
@@ -234,10 +270,17 @@ internal fun EmailSettingsPane(
                 onClick = { actions.testMailConnection(whenSaved(), password.ifBlank { null }) },
                 enabled = intervalValid,
             ) { Text(stringResource(Res.string.email_test)) }
-            OutlinedButton(
-                onClick = actions::checkMailNow,
-                enabled = !mail.checking && mail.transportAvailable,
-            ) { Text(stringResource(Res.string.email_check_now)) }
+            if (mail.checking) {
+                OutlinedButton(
+                    onClick = actions::cancelMailCheck,
+                    enabled = !mail.cancelling,
+                ) { Text(stringResource(Res.string.email_cancel_check)) }
+            } else {
+                OutlinedButton(
+                    onClick = actions::checkMailNow,
+                    enabled = mail.transportAvailable,
+                ) { Text(stringResource(Res.string.email_check_now)) }
+            }
             if (mail.hasPassword) {
                 OutlinedButton(onClick = {
                     val submitted = password
@@ -249,17 +292,7 @@ internal fun EmailSettingsPane(
         }
 
         Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            if (mail.checking) {
-                Text(stringResource(Res.string.email_checking), style = MaterialTheme.typography.bodySmall)
-            } else {
-                Text(
-                    text =
-                        mail.lastCheckedAtMillis?.let {
-                            stringResource(Res.string.email_last_check, formatEpochDateTime(it))
-                        } ?: stringResource(Res.string.email_never_checked),
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
+            MailCheckStatus(mail)
             mail.lastError?.let {
                 Text(
                     text = stringResource(Res.string.email_last_error, it.text()),
@@ -274,6 +307,70 @@ internal fun EmailSettingsPane(
                     color = MaterialTheme.colorScheme.error,
                 )
             }
+        }
+    }
+}
+
+/**
+ * Where this device stands in the folder: a running check's progress, with a bar while the count of
+ * what is left is known; otherwise the last check and what it did, and a catch-up still under way.
+ */
+@Composable
+private fun MailCheckStatus(mail: MailState) {
+    if (mail.checking) RunningCheck(mail) else CheckedStatus(mail)
+}
+
+@Composable
+private fun RunningCheck(mail: MailState) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        val progress = mail.progress
+        Text(stringResource(Res.string.email_checking), style = MaterialTheme.typography.bodySmall)
+        val remaining = progress?.remaining
+        val seen = progress?.messagesSeen ?: 0
+        if (remaining != null && seen + remaining > 0) {
+            LinearProgressIndicator(
+                progress = { seen.toFloat() / (seen + remaining) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        } else {
+            LinearProgressIndicator(Modifier.fillMaxWidth())
+        }
+        mailPositionText(progress?.throughMillis, remaining)?.let {
+            Text(it, style = MaterialTheme.typography.bodySmall)
+        }
+        if (mail.cancelling) {
+            Text(stringResource(Res.string.email_cancelling), style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@Composable
+private fun CheckedStatus(mail: MailState) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text =
+                mail.lastCheckedAtMillis?.let {
+                    stringResource(Res.string.email_last_check, formatEpochDateTime(it))
+                } ?: stringResource(Res.string.email_never_checked),
+            style = MaterialTheme.typography.bodySmall,
+        )
+        mail.lastReport?.let { report ->
+            Text(
+                stringResource(
+                    Res.string.email_check_report,
+                    report.messagesSeen,
+                    report.imported,
+                    report.duplicates,
+                    report.skipped,
+                ),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        if (mail.catchingUp) {
+            mailPositionText(mail.throughMillis, mail.remaining)?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall)
+            }
+            HelpText(stringResource(Res.string.email_catch_up_paused))
         }
     }
 }
@@ -341,6 +438,17 @@ private fun MailSecurity.defaultPort(): Int =
         MailSecurity.SSL -> MailAccount.DEFAULT_IMAPS_PORT
         MailSecurity.STARTTLS, MailSecurity.PLAIN -> MailAccount.DEFAULT_STARTTLS_PORT
     }
+
+@Composable
+private fun MailStartPoint.label(): String =
+    stringResource(
+        when (this) {
+            MailStartPoint.NEW_ONLY -> Res.string.email_start_new_only
+            MailStartPoint.LAST_30_DAYS -> Res.string.email_start_last_30_days
+            MailStartPoint.LAST_YEAR -> Res.string.email_start_last_year
+            MailStartPoint.EVERYTHING -> Res.string.email_start_everything
+        },
+    )
 
 @Composable
 private fun MailPostAction.label(): String =

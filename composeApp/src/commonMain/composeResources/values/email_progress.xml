@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Where a device starts reading the mail folder the first time; a setting of the email account. -->
+    <string name="email_start_from">Start from</string>
+    <string name="email_start_new_only">New mail only</string>
+    <string name="email_start_last_30_days">The last 30 days</string>
+    <string name="email_start_last_year">The last year</string>
+    <string name="email_start_everything">Everything in the folder</string>
+    <string name="email_start_help">Where this device starts reading the folder the first time. The first check reads all mail from there in one go; later checks pick up what is new.</string>
+    <string name="email_start_change_back">When you save, the next check also reads the older mail back to this start. Documents already in the library are recognized and not added twice.</string>
+    <string name="email_start_change_forward">When you save, older mail this device has not read yet is skipped.</string>
+
+    <!-- How far a check has come: the date of the last message passed, and how many are left after it. -->
+    <plurals name="email_progress_through">
+        <item quantity="one">Imported through %1$s · about %2$d message left</item>
+        <item quantity="other">Imported through %1$s · about %2$d messages left</item>
+    </plurals>
+    <plurals name="email_progress_left">
+        <item quantity="one">About %1$d message left</item>
+        <item quantity="other">About %1$d messages left</item>
+    </plurals>
+    <string name="email_progress_through_only">Imported through %1$s</string>
+    <string name="email_catch_up_paused">Older mail is still being read. The next check goes on from where the last one stopped.</string>
+    <string name="email_cancel_check">Cancel</string>
+    <string name="email_cancelling">Stopping after the current message…</string>
+    <string name="email_check_cancelled">Mail check stopped. The next check goes on from where it stopped.</string>
+
+    <!-- The app-wide message after a check imported documents; its action shows them in the library. -->
+    <plurals name="email_imported_documents">
+        <item quantity="one">%1$d document imported from email</item>
+        <item quantity="other">%1$d documents imported from email</item>
+    </plurals>
+
+    <!-- The email import row on Activity, beside the cloud sync row. -->
+    <string name="queue_section_email">Email import</string>
+    <string name="queue_email_running">Checking email…</string>
+    <string name="queue_email_never">Email not checked yet</string>
+    <plurals name="queue_email_last">
+        <item quantity="one">Last checked %1$s · %2$d document imported</item>
+        <item quantity="other">Last checked %1$s · %2$d documents imported</item>
+    </plurals>
+    <string name="queue_email_last_time">Last checked %1$s</string>
+    <string name="queue_email_settings">Email settings</string>
+    <string name="queue_email_failed">Could not check email: %1$s</string>
+</resources>

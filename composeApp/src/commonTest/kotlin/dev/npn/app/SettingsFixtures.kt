@@ -152,6 +152,8 @@ internal open class NoSettingsPaneActions : SettingsPaneActions {
 
     override fun checkMailNow() = Unit
 
+    override fun cancelMailCheck() = Unit
+
     override fun changeLibrary() = Unit
 
     override fun openAutoMatchRules() = Unit

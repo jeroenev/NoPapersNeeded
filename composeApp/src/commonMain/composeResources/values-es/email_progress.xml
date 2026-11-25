@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="email_start_from">Empezar desde</string>
+    <string name="email_start_new_only">Solo correo nuevo</string>
+    <string name="email_start_last_30_days">Los últimos 30 días</string>
+    <string name="email_start_last_year">El último año</string>
+    <string name="email_start_everything">Todo lo de la carpeta</string>
+    <string name="email_start_help">Dónde empieza este dispositivo a leer la carpeta la primera vez. La primera comprobación lee de una vez todo el correo desde ahí; las siguientes recogen lo nuevo.</string>
+    <string name="email_start_change_back">Al guardar, la próxima comprobación también lee el correo más antiguo hasta este inicio. Los documentos que ya están en la biblioteca se reconocen y no se añaden dos veces.</string>
+    <string name="email_start_change_forward">Al guardar, se omite el correo más antiguo que este dispositivo aún no ha leído.</string>
+
+    <plurals name="email_progress_through">
+        <item quantity="one">Importado hasta el %1$s · queda aproximadamente %2$d mensaje</item>
+        <item quantity="other">Importado hasta el %1$s · quedan aproximadamente %2$d mensajes</item>
+    </plurals>
+    <plurals name="email_progress_left">
+        <item quantity="one">Queda aproximadamente %1$d mensaje</item>
+        <item quantity="other">Quedan aproximadamente %1$d mensajes</item>
+    </plurals>
+    <string name="email_progress_through_only">Importado hasta el %1$s</string>
+    <string name="email_catch_up_paused">Todavía se está leyendo el correo más antiguo. La próxima comprobación sigue donde se detuvo la anterior.</string>
+    <string name="email_cancel_check">Cancelar</string>
+    <string name="email_cancelling">Se detendrá tras el mensaje actual…</string>
+    <string name="email_check_cancelled">Comprobación del correo detenida. La próxima sigue donde se detuvo.</string>
+
+    <plurals name="email_imported_documents">
+        <item quantity="one">%1$d documento importado del correo</item>
+        <item quantity="other">%1$d documentos importados del correo</item>
+    </plurals>
+
+    <string name="queue_section_email">Importación de correo</string>
+    <string name="queue_email_running">Comprobando el correo…</string>
+    <string name="queue_email_never">Correo aún no comprobado</string>
+    <plurals name="queue_email_last">
+        <item quantity="one">Última comprobación %1$s · %2$d documento importado</item>
+        <item quantity="other">Última comprobación %1$s · %2$d documentos importados</item>
+    </plurals>
+    <string name="queue_email_last_time">Última comprobación %1$s</string>
+    <string name="queue_email_settings">Ajustes de correo</string>
+    <string name="queue_email_failed">No se pudo comprobar el correo: %1$s</string>
+</resources>
