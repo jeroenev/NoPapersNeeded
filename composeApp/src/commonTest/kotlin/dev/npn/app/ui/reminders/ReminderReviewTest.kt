@@ -1,20 +1,52 @@
 package dev.npn.app.ui.reminders
 
 import dev.npn.app.FakeLibrarySession
+import dev.npn.app.platform.ReminderDelivery
 import dev.npn.app.platform.isReminderTimeChange
 import dev.npn.app.platform.reminderNotificationTag
 import dev.npn.app.platform.reminderNotificationsPermitted
 import dev.npn.app.ui.common.OpenDocumentRequest
+import dev.npn.core.app.ReminderBucket
+import dev.npn.core.app.ReminderCandidate
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.datetime.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 
 class ReminderReviewTest {
+    @Test
+    fun sharedDeliveryHandlesInAppAndReleasesFailedClaims() =
+        runTest {
+            val session = FakeLibrarySession()
+            val candidates =
+                (1..3).map {
+                    ReminderCandidate(
+                        "doc$it",
+                        "Private title",
+                        "due",
+                        "Due",
+                        LocalDate(2026, 11, 25),
+                        ReminderBucket.TODAY,
+                    )
+                }
+            session.reminders.due = candidates
+            var inApp = 0
+            deliverReminders(session, { inApp++ }) { candidate ->
+                when (candidate.docId) {
+                    "doc1" -> ReminderDelivery.IN_APP
+                    "doc2" -> ReminderDelivery.NOT_PERMITTED
+                    else -> error("Delivery must stop after permission is denied")
+                }
+            }
+            assertEquals(1, inApp)
+            assertEquals(candidates.drop(1), session.reminders.released)
+        }
+
     @Test
     fun clockAndZoneBroadcastsRescheduleReminderWork() {
         assertEquals(true, isReminderTimeChange("android.intent.action.TIMEZONE_CHANGED"))

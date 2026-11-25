@@ -10,6 +10,7 @@ import dev.npn.app.platform.scheduleReminderChecks
 import dev.npn.app.platform.showReminderNotification
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.ReminderBucket
+import dev.npn.core.app.ReminderCandidate
 import dev.npn.core.util.runLogged
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
@@ -40,7 +41,7 @@ internal fun ReminderChecks(
             // Waiting here also covers a second device that syncs reminders on: its user grants
             // the permission from the system prompt and the next check is not lost.
             awaitReminderPermission(::canShowReminderNotifications) { delay(PERMISSION_RECHECK_MS) }
-            deliverAfterRescan(session) { deliver(session, libraryLocation, inApp) }
+            deliverAfterRescan(session) { deliverDueReminders(session, libraryLocation, inApp) }
             var zone = TimeZone.currentSystemDefault()
             while (true) {
                 val next = session.reminders.nextCheckDelayMillis() ?: break
@@ -51,39 +52,47 @@ internal fun ReminderChecks(
                     zone = currentZone
                     val updated = session.reminders.nextCheckDelayMillis()
                     scheduleReminderChecks(updated != null, updated ?: 0L)
-                    deliverAfterRescan(session) { deliver(session, libraryLocation, inApp) }
+                    deliverAfterRescan(session) { deliverDueReminders(session, libraryLocation, inApp) }
                 } else if (next <= ZONE_RECHECK_MS ||
                     (session.reminders.nextCheckDelayMillis() ?: 0L) > next
                 ) {
-                    deliverAfterRescan(session) { deliver(session, libraryLocation, inApp) }
+                    deliverAfterRescan(session) { deliverDueReminders(session, libraryLocation, inApp) }
                 }
             }
         }
     }
 }
 
-private suspend fun deliver(
+internal suspend fun deliverDueReminders(
     session: LibrarySession,
     libraryLocation: String,
     onInAppNotification: () -> Unit,
+) = deliverReminders(session, onInAppNotification) { candidate ->
+    showReminderNotification(
+        docId = candidate.docId,
+        libraryLocation = libraryLocation,
+        documentTitle = candidate.documentTitle,
+        fieldKey = candidate.fieldKey,
+        fieldLabel = candidate.fieldLabel,
+        dueDate = candidate.dueDate.toString(),
+        overdue = candidate.bucket == ReminderBucket.OVERDUE,
+    )
+}
+
+internal suspend fun deliverReminders(
+    session: LibrarySession,
+    onInAppNotification: () -> Unit,
+    show: suspend (ReminderCandidate) -> ReminderDelivery,
 ) = withContext(NonCancellable) {
     val due =
         session.log
             .runLogged("Reading the reminders due now") {
                 session.reminders.claimDueReminders()
             }.orEmpty()
-    for (candidate in due) {
+    for ((index, candidate) in due.withIndex()) {
         val delivery =
-            session.log.runLogged("Showing a reminder for ${candidate.documentTitle}") {
-                showReminderNotification(
-                    docId = candidate.docId,
-                    libraryLocation = libraryLocation,
-                    documentTitle = candidate.documentTitle,
-                    fieldKey = candidate.fieldKey,
-                    fieldLabel = candidate.fieldLabel,
-                    dueDate = candidate.dueDate.toString(),
-                    overdue = candidate.bucket == ReminderBucket.OVERDUE,
-                )
+            session.log.runLogged("Showing a reminder") {
+                show(candidate)
             }
         when (delivery) {
             null -> {
@@ -95,7 +104,7 @@ private suspend fun deliver(
             }
 
             ReminderDelivery.NOT_PERMITTED -> {
-                session.reminders.releaseReminder(candidate)
+                due.drop(index).forEach { session.reminders.releaseReminder(it) }
                 return@withContext
             }
 

@@ -29,4 +29,5 @@
     <string name="common_settings_reminders_lead_days_help">As datas atrasadas são sempre incluídas.</string>
     <string name="common_settings_reminders_time">Hora da notificação</string>
     <string name="common_settings_reminders_time_help">Hora local da verificação diária, como HH:mm.</string>
+    <string name="common_settings_reminders_no_fields_selected">Escolha um campo de data para receber lembretes.</string>
 </resources>

@@ -66,7 +66,7 @@ class RemindersTest {
         }
 
     @Test
-    fun enablingWithNoFieldChosenStartsFromTheSeededDocumentDate() =
+    fun enablingWithNoFieldChosenStartsFromTheSeededDueDate() =
         appSessionTest { rig ->
             rig.session.reminders.setEnabled(true)
 
@@ -74,12 +74,12 @@ class RemindersTest {
                 rig.session.reminders.settings
                     .first()
             settings.enabled shouldBe true
-            settings.fieldKeys shouldContainExactly listOf(FieldKeys.DOC_DATE)
+            settings.fieldKeys shouldContainExactly listOf(FieldKeys.INVOICE_DUE_DATE)
             settings.isActive shouldBe true
         }
 
     @Test
-    fun enablingAfterSelectedFieldWasRemovedFallsBackToDocumentDate() =
+    fun enablingAfterSelectedFieldWasRemovedFallsBackToDueDate() =
         appSessionTest { rig ->
             val reminders = rig.session.reminders
             rig.session.fieldRegistry.upsert(
@@ -88,7 +88,28 @@ class RemindersTest {
             reminders.setFieldKeys(listOf("renewal"))
             rig.session.fieldRegistry.remove("renewal")
             reminders.setEnabled(true)
-            reminders.settings.first().fieldKeys shouldContainExactly listOf(FieldKeys.DOC_DATE)
+            reminders.settings.first().fieldKeys shouldContainExactly listOf(FieldKeys.INVOICE_DUE_DATE)
+        }
+
+    @Test
+    fun enablingWithoutDueDateKeepsPickerEmptyAndDoesNotNotify() =
+        appSessionTest { rig ->
+            rig.session.fieldRegistry.remove(FieldKeys.INVOICE_DUE_DATE)
+            val reminders = rig.session.reminders
+            val today = ReminderWindow.today(rig.clock.now, zone)
+            rig.writePdf("dated.pdf", PdfFixtures.embeddedTextPdf("dated"))
+            rig.session.rescan()
+            rig.session.meta.setField(rig.docId("dated.pdf"), FieldKeys.DOC_DATE, today.toString())
+            reminders.setTimeOfDay(LocalTime(0, 0))
+            reminders.setEnabled(true)
+
+            reminders.settings.first().enabled shouldBe true
+            reminders.settings
+                .first()
+                .fieldKeys
+                .shouldBeEmpty()
+            reminders.observeUpcoming().first().shouldBeEmpty()
+            reminders.claimDueReminders().shouldBeEmpty()
         }
 
     @Test

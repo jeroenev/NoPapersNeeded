@@ -38,6 +38,7 @@ import no_papers_needed.composeapp.generated.resources.common_settings_reminders
 import no_papers_needed.composeapp.generated.resources.common_settings_reminders_lead_days
 import no_papers_needed.composeapp.generated.resources.common_settings_reminders_lead_days_help
 import no_papers_needed.composeapp.generated.resources.common_settings_reminders_no_date_fields
+import no_papers_needed.composeapp.generated.resources.common_settings_reminders_no_fields_selected
 import no_papers_needed.composeapp.generated.resources.common_settings_reminders_time
 import no_papers_needed.composeapp.generated.resources.common_settings_reminders_time_help
 import no_papers_needed.composeapp.generated.resources.common_settings_review_workflow
@@ -125,6 +126,9 @@ private fun RemindersSection(
                 HelpText(stringResource(Res.string.common_settings_reminders_no_date_fields))
             } else {
                 HelpText(stringResource(Res.string.common_settings_reminders_fields_help))
+                if (state.settings.reminderFieldKeys.isEmpty()) {
+                    HelpText(stringResource(Res.string.common_settings_reminders_no_fields_selected))
+                }
                 dateFields.forEach { field ->
                     CheckboxRow(
                         label = field.label,

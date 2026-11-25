@@ -29,4 +29,5 @@
     <string name="common_settings_reminders_lead_days_help">Verlopen datums worden altijd meegenomen.</string>
     <string name="common_settings_reminders_time">Tijdstip van melding</string>
     <string name="common_settings_reminders_time_help">Lokale tijd van de dagelijkse controle, als HH:mm.</string>
+    <string name="common_settings_reminders_no_fields_selected">Kies een datumveld om herinneringen te ontvangen.</string>
 </resources>

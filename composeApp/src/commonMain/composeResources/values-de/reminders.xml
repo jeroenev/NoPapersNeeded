@@ -29,4 +29,5 @@
     <string name="common_settings_reminders_lead_days_help">Überfällige Daten sind immer enthalten.</string>
     <string name="common_settings_reminders_time">Benachrichtigungszeit</string>
     <string name="common_settings_reminders_time_help">Lokale Zeit der täglichen Prüfung, als HH:mm.</string>
+    <string name="common_settings_reminders_no_fields_selected">Wähle ein Datumsfeld, um Erinnerungen zu erhalten.</string>
 </resources>

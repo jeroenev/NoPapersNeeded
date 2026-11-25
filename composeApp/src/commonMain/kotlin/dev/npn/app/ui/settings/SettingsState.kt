@@ -333,7 +333,7 @@ interface SettingsActions {
 
 /** The library's reminder settings, split from [SettingsActions] because that interface is already large. */
 interface ReminderSettingsActions {
-    /** Turn the library's reminders on or off; turning them on chooses a date field when none is chosen. */
+    /** Turn the library's reminders on or off; turning them on chooses the seeded due date when available. */
     fun setRemindersEnabled(enabled: Boolean) = Unit
 
     /** Watch or stop watching the DATE field [key] for reminders. */

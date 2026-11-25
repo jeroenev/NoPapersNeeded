@@ -29,4 +29,5 @@
     <string name="common_settings_reminders_lead_days_help">Les dates en retard sont toujours incluses.</string>
     <string name="common_settings_reminders_time">Heure de notification</string>
     <string name="common_settings_reminders_time_help">Heure locale de la vérification quotidienne, au format HH:mm.</string>
+    <string name="common_settings_reminders_no_fields_selected">Choisissez un champ de date pour recevoir des rappels.</string>
 </resources>

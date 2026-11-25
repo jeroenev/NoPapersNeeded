@@ -26,16 +26,13 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import dev.npn.app.di.AppEnvironment
 import dev.npn.app.di.createAppEnvironment
-import dev.npn.core.app.LibrarySession
+import dev.npn.app.ui.reminders.deliverDueReminders
 import dev.npn.core.util.AndroidLog
 import dev.npn.core.util.runCatchingCancellable
-import dev.npn.core.util.runLogged
 import dev.npn.core.util.warn
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.context
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withContext
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.reminders_notification_body
 import no_papers_needed.composeapp.generated.resources.reminders_notification_channel
@@ -240,7 +237,7 @@ class ReminderWorker(
                     .first()
                     .libraryLocation == location
             ) {
-                deliverDueReminders(session, location)
+                deliverDueReminders(session, location) {}
             }
         }.fold(
             onSuccess = {
@@ -262,44 +259,6 @@ class ReminderWorker(
                 }
             },
         )
-    }
-}
-
-/** The in-app check and the worker share this: claim, show, and release what could not be shown. */
-internal suspend fun deliverDueReminders(
-    session: LibrarySession,
-    libraryLocation: String,
-) = withContext(NonCancellable) {
-    val due =
-        AndroidLog
-            .runLogged("Reading the reminders due now") {
-                session.reminders.claimDueReminders()
-            }.orEmpty()
-    for (candidate in due) {
-        val delivery =
-            AndroidLog.runLogged("Showing a reminder for ${candidate.documentTitle}") {
-                showReminderNotification(
-                    docId = candidate.docId,
-                    libraryLocation = libraryLocation,
-                    documentTitle = candidate.documentTitle,
-                    fieldKey = candidate.fieldKey,
-                    fieldLabel = candidate.fieldLabel,
-                    dueDate = candidate.dueDate.toString(),
-                    overdue = candidate.bucket == dev.npn.core.app.ReminderBucket.OVERDUE,
-                )
-            }
-        when (delivery) {
-            null -> {
-                session.reminders.releaseReminder(candidate)
-            }
-
-            ReminderDelivery.NOT_PERMITTED -> {
-                session.reminders.releaseReminder(candidate)
-                return@withContext
-            }
-
-            ReminderDelivery.NOTIFIED, ReminderDelivery.IN_APP -> {}
-        }
     }
 }
 

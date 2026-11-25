@@ -29,4 +29,5 @@
     <string name="common_settings_reminders_lead_days_help">Overdue dates are always included.</string>
     <string name="common_settings_reminders_time">Notification time</string>
     <string name="common_settings_reminders_time_help">Local time of the daily check, as HH:mm.</string>
+    <string name="common_settings_reminders_no_fields_selected">Choose a date field to start receiving reminders.</string>
 </resources>

@@ -277,15 +277,15 @@ internal class JournalReminders(
         // The filtered set, not the raw stored list: a watched field removed or retyped away from
         // DATE leaves the raw list looking non-empty while reminders can do nothing.
         if (enabled && settings.first().fieldKeys.isEmpty()) {
-            // Turning reminders on with nothing chosen would do nothing: start from the seeded
-            // document date, as the settings pane's first suggestion would.
+            // Only the seeded due date is a safe default. Other date fields may describe
+            // when a document was issued, so leave them for the user to choose.
             val dateFields =
                 indexDb
                     .fieldDefDao()
                     .defs()
                     .filter { it.type.isDate }
                     .map { it.key }
-            val seeded = FieldKeys.DOC_DATE.takeIf { it in dateFields } ?: dateFields.firstOrNull()
+            val seeded = FieldKeys.INVOICE_DUE_DATE.takeIf { it in dateFields }
             if (seeded != null) {
                 lifetime.owned<Unit> { coordinator.putSetting(LibrarySettingKeys.REMINDER_FIELDS, seeded) }
             }

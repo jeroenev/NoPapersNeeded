@@ -29,4 +29,5 @@
     <string name="common_settings_reminders_lead_days_help">Las fechas vencidas siempre se incluyen.</string>
     <string name="common_settings_reminders_time">Hora de notificación</string>
     <string name="common_settings_reminders_time_help">Hora local de la comprobación diaria, como HH:mm.</string>
+    <string name="common_settings_reminders_no_fields_selected">Elige un campo de fecha para recibir recordatorios.</string>
 </resources>
