@@ -49,4 +49,29 @@ class MailPdfTest {
                 TimeZone.setDefault(original)
             }
         }
+
+    @Test
+    fun textBeyondLatinIsKeptAndWhatTheFontLacksIsMarked() =
+        runTest {
+            val greek = message.copy(subject = "Τιμολόγιο", bodyText = "Счёт № 42 · Zürich 12,50 € · 請求書")
+            val bytes = assertNotNull(PdfBoxMailPdfRenderer().render(greek))
+            Loader.loadPDF(bytes).use { document ->
+                val text = PDFTextStripper().getText(document)
+                assertTrue(text.contains("Subject: Τιμολόγιο"), text)
+                assertTrue(text.contains("Счёт № 42 · Zürich 12,50 €"), text)
+                assertTrue(text.contains("???"), text)
+            }
+        }
+
+    /** A body that is one long unbroken token (an encoded blob in a text part) is cut into lines at once. */
+    @Test
+    fun aVeryLongWordIsWrappedInLinearTime() =
+        runTest {
+            val blob = "A".repeat(400_000)
+            val started = System.nanoTime()
+            val bytes = assertNotNull(PdfBoxMailPdfRenderer().render(message.copy(bodyText = blob)))
+            val seconds = (System.nanoTime() - started) / 1e9
+            assertTrue(seconds < 20, "took $seconds s")
+            Loader.loadPDF(bytes).use { document -> assertTrue(document.numberOfPages > 10) }
+        }
 }

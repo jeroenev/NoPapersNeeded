@@ -11,8 +11,8 @@ import org.apache.pdfbox.pdmodel.PDPage
 import org.apache.pdfbox.pdmodel.PDPageContentStream
 import org.apache.pdfbox.pdmodel.common.PDRectangle
 import org.apache.pdfbox.pdmodel.font.PDFont
-import org.apache.pdfbox.pdmodel.font.PDType1Font
-import org.apache.pdfbox.pdmodel.font.Standard14Fonts
+import org.apache.pdfbox.pdmodel.font.PDType0Font
+import java.io.ByteArrayInputStream
 import java.nio.ByteBuffer
 import java.security.MessageDigest
 import java.time.Instant
@@ -22,10 +22,12 @@ import java.util.GregorianCalendar
 import java.util.TimeZone
 
 /**
- * A plain, readable PDF of one email: From, To, Date and Subject, then its plain-text body, wrapped
- * onto A4 pages. It is deliberately simple — no HTML, no inline images — so the document is text a
- * person can read and OCR can index. The bytes depend only on the message, so saving the same email
- * again is an import duplicate, not a second document.
+ * A plain, readable PDF of one email: From, To, Date and Subject, then its body as text (the text
+ * of its HTML when it has no plain text), wrapped onto A4 pages. It is deliberately simple, with no
+ * layout and no inline images, so the document is text a person can read and search can index.
+ * The text is set in the bundled Noto Sans (Latin, Greek and Cyrillic), embedded as a subset; a
+ * character it has no glyph for (CJK, emoji) shows as `?`. The bytes depend only on the message and
+ * the bundled font, so saving the same email again is an import duplicate, not a new document.
  */
 internal class PdfBoxMailPdfRenderer(
     private val io: CoroutineDispatcher = Dispatchers.IO,
@@ -35,14 +37,14 @@ internal class PdfBoxMailPdfRenderer(
     override suspend fun render(message: MailMessage): ByteArray? =
         withContext(io) {
             PDDocument().use { document ->
-                val regular = PDType1Font(Standard14Fonts.FontName.HELVETICA)
-                val bold = PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD)
+                val regular = Typeface(PDType0Font.load(document, ByteArrayInputStream(REGULAR), true))
+                val bold = Typeface(PDType0Font.load(document, ByteArrayInputStream(BOLD), true))
                 val writer = PageWriter(document, regular)
                 writer.line("From: ${message.from}", bold, SIZE + 1, GAP)
                 writer.line("To: ${message.to}", regular, SIZE, GAP)
                 writer.line("Date: ${formatDate(message.dateMillis)}", regular, SIZE, GAP)
                 writer.line("Subject: ${message.subject}", bold, SIZE + 1, GAP * 1.5f)
-                writer.paragraphs(message.bodyText.ifBlank { "(no plain-text body)" })
+                writer.paragraphs(message.bodyText.ifBlank { "(no text)" })
                 writer.close()
                 // A deterministic identity and metadata: saving the same email again must be an
                 // import duplicate, not a new document seeded from the clock and a random /ID.
@@ -90,10 +92,54 @@ internal class PdfBoxMailPdfRenderer(
     /** The fixed timestamp the PDF's metadata carries, so a retried save has the same bytes. */
     private fun epoch(): Calendar = GregorianCalendar(TimeZone.getTimeZone("UTC")).apply { timeInMillis = 0 }
 
+    /**
+     * A font and what it can show. Each code point is asked once: a font refuses one it has no glyph
+     * for by throwing, which over a long body in another script would be slow. Widths come per code
+     * point, so a line is measured in one pass whatever its length.
+     */
+    private class Typeface(
+        val font: PDFont,
+    ) {
+        private val widths = HashMap<Int, Float>()
+
+        /** [text] with every character the font cannot show as `?`. */
+        fun safe(text: String): String =
+            buildString(text.length) {
+                text.codePoints().forEach { codePoint ->
+                    if (width(codePoint) != null) appendCodePoint(codePoint) else append('?')
+                }
+            }
+
+        /** One code point's width in thousandths of the font size; null when the font cannot show it. */
+        fun width(codePoint: Int): Float? {
+            widths[codePoint]?.let { known -> return known.takeIf { it >= 0f } }
+            val char = String(Character.toChars(codePoint))
+            val width =
+                try {
+                    font.encode(char)
+                    font.getStringWidth(char)
+                } catch (_: Exception) {
+                    -1f
+                }
+            widths[codePoint] = width
+            return width.takeIf { it >= 0f }
+        }
+
+        /** The width of text [safe] already passed, at [size] points. */
+        fun width(
+            text: String,
+            size: Float,
+        ): Float {
+            var total = 0f
+            text.codePoints().forEach { total += width(it) ?: 0f }
+            return total / 1000f * size
+        }
+    }
+
     /** One page's content stream, replaced with a new page whenever the next line would not fit. */
     private class PageWriter(
         private val document: PDDocument,
-        private val regular: PDFont,
+        private val regular: Typeface,
     ) {
         private var page: PDPage = newPage()
         private var stream = PDPageContentStream(document, page)
@@ -101,16 +147,16 @@ internal class PdfBoxMailPdfRenderer(
 
         fun line(
             text: String,
-            font: PDFont,
+            face: Typeface,
             size: Float,
             gap: Float,
         ) {
-            wrap(text, font, size).forEach { part ->
+            wrap(face.safe(text), face, size).forEach { part ->
                 if (y - size < MARGIN) turnPage()
                 stream.beginText()
-                stream.setFont(font, size)
+                stream.setFont(face.font, size)
                 stream.newLineAtOffset(MARGIN, y - size)
-                stream.showText(safe(part, font))
+                stream.showText(part)
                 stream.endText()
                 y -= gap
             }
@@ -146,81 +192,65 @@ internal class PdfBoxMailPdfRenderer(
         const val GAP = 15f
         const val MAX_WIDTH = 595f - 2 * MARGIN
 
-        /** Break [text] into lines that fit [MAX_WIDTH]; a word too long for a line is split. */
+        /** The bundled Noto Sans, read once; each PDF embeds the subset it uses. */
+        val REGULAR: ByteArray by lazy { font("NotoSans-Regular.ttf") }
+        val BOLD: ByteArray by lazy { font("NotoSans-Bold.ttf") }
+
+        fun font(name: String): ByteArray =
+            checkNotNull(PdfBoxMailPdfRenderer::class.java.getResourceAsStream("fonts/$name")) {
+                "The bundled font $name is missing"
+            }.use { it.readBytes() }
+
+        /**
+         * Break [text] into lines that fit [MAX_WIDTH], at spaces where it can, and inside a word too
+         * long for a line. One pass over the text: each code point is measured once.
+         */
         fun wrap(
             text: String,
-            font: PDFont,
+            face: Typeface,
             size: Float,
         ): List<String> {
             if (text.isEmpty()) return listOf("")
             val lines = mutableListOf<String>()
-            val current = StringBuilder()
+            val line = StringBuilder()
+            var lineWidth = 0f
+            val space = face.width(" ", size)
+
+            fun breakLine() {
+                lines += line.toString()
+                line.setLength(0)
+                lineWidth = 0f
+            }
             for (word in text.split(' ')) {
-                val candidate = if (current.isEmpty()) word else "$current $word"
-                if (width(candidate, font, size) <= MAX_WIDTH) {
-                    current.setLength(0)
-                    current.append(candidate)
-                    continue
-                }
-                if (current.isNotEmpty()) {
-                    lines += current.toString()
-                    current.setLength(0)
-                }
-                if (width(word, font, size) <= MAX_WIDTH) {
-                    current.append(word)
-                } else {
-                    var rest = word
-                    while (width(rest, font, size) > MAX_WIDTH) {
-                        var low = 1
-                        var high = rest.length
-                        var best = 1
-                        while (low <= high) {
-                            val middle = (low + high) / 2
-                            if (width(rest.take(middle), font, size) <= MAX_WIDTH) {
-                                best = middle
-                                low = middle + 1
-                            } else {
-                                high = middle - 1
-                            }
-                        }
-                        lines += rest.take(best)
-                        rest = rest.drop(best)
+                val wordWidth = face.width(word, size)
+                val joined = if (line.isEmpty()) wordWidth else lineWidth + space + wordWidth
+                when {
+                    joined <= MAX_WIDTH -> {
+                        if (line.isNotEmpty()) line.append(' ')
+                        line.append(word)
+                        lineWidth = joined
                     }
-                    current.append(rest)
+
+                    wordWidth <= MAX_WIDTH -> {
+                        breakLine()
+                        line.append(word)
+                        lineWidth = wordWidth
+                    }
+
+                    else -> {
+                        if (line.isNotEmpty()) breakLine()
+                        // A word wider than a line (a long link, an encoded blob): cut it where a line is full.
+                        word.codePoints().forEach { codePoint ->
+                            val width = (face.width(codePoint) ?: 0f) / 1000f * size
+                            if (line.isNotEmpty() && lineWidth + width > MAX_WIDTH) breakLine()
+                            line.appendCodePoint(codePoint)
+                            lineWidth += width
+                        }
+                    }
                 }
             }
-            if (current.isNotEmpty() || lines.isEmpty()) lines += current.toString()
+            if (line.isNotEmpty() || lines.isEmpty()) lines += line.toString()
             return lines
         }
-
-        fun width(
-            text: String,
-            font: PDFont,
-            size: Float,
-        ): Float {
-            val safe = safe(text, font)
-            return try {
-                font.getStringWidth(safe) / 1000f * size
-            } catch (_: Exception) {
-                // A character the font cannot measure makes the line as wide as its character count.
-                safe.length * size * 0.6f
-            }
-        }
-
-        /** Replace characters the standard font cannot encode with `?`; the body stays readable. */
-        fun safe(
-            text: String,
-            font: PDFont,
-        ): String =
-            buildString(text.length) {
-                for (char in text) {
-                    try {
-                        font.encode(char.toString())
-                        append(char)
-                    } catch (_: Exception) {
-                        append('?')
-                    }
-                }
-            }
     }
 }
