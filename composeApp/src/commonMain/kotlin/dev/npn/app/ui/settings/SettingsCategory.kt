@@ -144,6 +144,11 @@ import no_papers_needed.composeapp.generated.resources.email_security
 import no_papers_needed.composeapp.generated.resources.email_security_plain
 import no_papers_needed.composeapp.generated.resources.email_security_ssl
 import no_papers_needed.composeapp.generated.resources.email_security_starttls
+import no_papers_needed.composeapp.generated.resources.email_start_everything
+import no_papers_needed.composeapp.generated.resources.email_start_from
+import no_papers_needed.composeapp.generated.resources.email_start_last_30_days
+import no_papers_needed.composeapp.generated.resources.email_start_last_year
+import no_papers_needed.composeapp.generated.resources.email_start_new_only
 import no_papers_needed.composeapp.generated.resources.email_test
 import no_papers_needed.composeapp.generated.resources.email_title
 import no_papers_needed.composeapp.generated.resources.email_username
@@ -334,6 +339,11 @@ internal val SettingsCategories: List<SettingsCategory> =
                         Res.string.email_folder,
                         Res.string.email_allow_plain,
                         Res.string.email_interval,
+                        Res.string.email_start_from,
+                        Res.string.email_start_new_only,
+                        Res.string.email_start_last_30_days,
+                        Res.string.email_start_last_year,
+                        Res.string.email_start_everything,
                         Res.string.email_filters,
                         Res.string.email_filter_from,
                         Res.string.email_filter_subject,
