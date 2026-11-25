@@ -46,7 +46,7 @@ data class ActivitySync(
  * Email import as Activity shows it: a check [checking] now (and its [progress]), when the last
  * one ran and how many documents it imported ([lastImported], null when this session has not
  * checked yet), and [problem], why checks are not going through. Shown only for a configured
- * account on a device that can import email.
+ * account on a device that can import email and either checks it or has checked it.
  */
 data class ActivityMail(
     val checking: Boolean,
@@ -55,9 +55,8 @@ data class ActivityMail(
     val lastCheckedAtMillis: Long?,
     val lastImported: Int?,
     val problem: MailFailureReason?,
-    /** Emails the last check left in the mailbox unimported, and attachments it left out. */
-    val lastUnreadable: Int = 0,
-    val lastDroppedAttachments: Int = 0,
+    /** Emails checks have left in the mailbox without importing them fully, over every check. */
+    val passedOver: Int = 0,
 ) {
     /** The last check failed, or the password cannot be read: a problem, shown first. */
     val failed: Boolean get() = problem != null
@@ -122,7 +121,10 @@ class QueueViewModel(
     val mail: StateFlow<ActivityMail?> =
         mailImport.state
             .map { state ->
-                if (state.transportAvailable && state.account.isConfigured) {
+                // A device that leaves email to another one shows nothing, not "never checked" or a
+                // missing password it was never meant to have.
+                val involved = state.enabledHere || state.lastCheckedAtMillis != null || state.checking
+                if (state.transportAvailable && state.account.isConfigured && involved) {
                     ActivityMail(
                         checking = state.checking,
                         cancelling = state.cancelling,
@@ -130,8 +132,7 @@ class QueueViewModel(
                         lastCheckedAtMillis = state.lastCheckedAtMillis,
                         lastImported = state.lastReport?.imported,
                         problem = state.problem,
-                        lastUnreadable = state.lastReport?.unreadable ?: 0,
-                        lastDroppedAttachments = state.lastReport?.droppedAttachments ?: 0,
+                        passedOver = state.passedOver,
                     )
                 } else {
                     null

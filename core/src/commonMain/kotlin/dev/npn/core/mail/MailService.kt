@@ -40,7 +40,8 @@ data class MailCheckError(
  * check; [cancelled] is a check the user stopped, which kept everything it had done. [unreadable]
  * counts emails passed over and left in the mailbox (unreadable, or still failing after
  * [MailService]'s bounded retries), [droppedAttachments] attachments left out of an email that was
- * otherwise imported.
+ * otherwise imported. Both are this check's; what is still left behind over every check is
+ * [MailState.passedOver].
  */
 data class MailCheckReport(
     val messagesSeen: Int = 0,
@@ -73,11 +74,14 @@ data class MailProgress(
 /** What the settings pane shows for the one account, and what the last check came to. */
 data class MailState(
     val account: MailAccount = MailAccount(),
+    /** Whether this device checks the account; each device of the library chooses for itself. */
+    val enabledHere: Boolean = false,
     val hasPassword: Boolean = false,
     val checking: Boolean = false,
     val lastCheckedAtMillis: Long? = null,
     val lastError: MailFailureReason? = null,
     val lastReport: MailCheckReport? = null,
+    /** Whether this device can import email at all: an IMAP transport and a keyring to hold the password. */
     val transportAvailable: Boolean = true,
     val pdfAvailable: Boolean = true,
     /** Set when a password was asked for but the OS secret store could not be used. */
@@ -95,6 +99,11 @@ data class MailState(
     val throughMillis: Long? = null,
     /** How many messages were left after the cursor when it was last saved, when known. */
     val remaining: Int? = null,
+    /**
+     * Emails behind the cursor left in the mailbox without being fully imported, over every check
+     * so far ([MailCursor.passedOver]); [MailFacade.retryPassedOver] tries them again.
+     */
+    val passedOver: Int = 0,
 ) {
     /**
      * Why checks of a configured account are not going through, for Activity's problems: the last
@@ -168,6 +177,7 @@ internal class MailService(
     private val scope: CoroutineScope,
 ) : MailFacade {
     private data class Runtime(
+        val enabledHere: Boolean = false,
         val hasPassword: Boolean = false,
         val checking: Boolean = false,
         val cursor: MailCursor? = null,
@@ -184,16 +194,20 @@ internal class MailService(
 
     private var started = false
 
+    /** Whether this device can import at all: IMAP, and a keyring for the password. */
+    private val supported: Boolean get() = transport.available && credentials.available
+
     override val state: StateFlow<MailState> =
         combine(store.account, runtime) { account, run ->
             MailState(
                 account = account,
+                enabledHere = run.enabledHere,
                 hasPassword = run.hasPassword,
                 checking = run.checking,
                 lastCheckedAtMillis = run.cursor?.lastCheckedAtMillis,
                 lastError = run.cursor?.lastError,
                 lastReport = run.lastReport,
-                transportAvailable = transport.available,
+                transportAvailable = supported,
                 pdfAvailable = pdfRenderer.available,
                 credentialProblem = run.credentialProblem,
                 progress = run.progress,
@@ -201,11 +215,12 @@ internal class MailService(
                 catchingUp = run.cursor?.catchingUp == true,
                 throughMillis = run.cursor?.throughMillis,
                 remaining = run.cursor?.remaining,
+                passedOver = run.cursor?.passedOver?.size ?: 0,
             )
         }.stateIn(
             scope,
             SharingStarted.Eagerly,
-            MailState(transportAvailable = transport.available, pdfAvailable = pdfRenderer.available),
+            MailState(transportAvailable = supported, pdfAvailable = pdfRenderer.available),
         )
 
     override val importedDocuments: SharedFlow<List<String>> = imports.asSharedFlow()
@@ -219,6 +234,8 @@ internal class MailService(
         started = true
         scope.launch {
             log.runLogged("Following the email account") {
+                val enabled = cursors.enabledHere()
+                runtime.update { it.copy(enabledHere = enabled) }
                 store.account.collect { account ->
                     refreshCredentials(account)
                     reloadCursor(account)
@@ -236,6 +253,7 @@ internal class MailService(
     override suspend fun saveAccount(
         account: MailAccount,
         password: String?,
+        enabledHere: Boolean,
     ): MailSaveOutcome {
         val normalized = account.normalized()
         if (!normalized.isConfigured) return MailSaveOutcome.AccountInvalid
@@ -243,6 +261,8 @@ internal class MailService(
         // Save the account first: a keyring failure then leaves the account visible and fixable,
         // rather than a password stored for a host the journal never accepted.
         store.save(normalized)
+        cursors.setEnabledHere(enabledHere)
+        runtime.update { it.copy(enabledHere = enabledHere) }
         if (password != null) {
             val result =
                 if (password.isEmpty()) {
@@ -284,7 +304,7 @@ internal class MailService(
             return MailTestOutcome.Failed(MailFailureReason.PLAIN_REFUSED)
         }
         if (!normalized.isConfigured) return MailTestOutcome.Failed(MailFailureReason.NOT_CONFIGURED)
-        if (!transport.available) return MailTestOutcome.Failed(MailFailureReason.UNSUPPORTED)
+        if (!supported) return MailTestOutcome.Failed(MailFailureReason.UNSUPPORTED)
         val secret =
             password?.takeIf(String::isNotEmpty) ?: storedPassword(normalized)
                 ?: return MailTestOutcome.Failed(MailFailureReason.NO_PASSWORD)
@@ -299,10 +319,21 @@ internal class MailService(
      * runs in the service's own scope, so a caller that stops waiting (a screen left mid catch-up)
      * does not stop it; [cancelCheck] does.
      */
-    override suspend fun checkNow(): MailCheckReport {
+    override suspend fun checkNow(): MailCheckReport = checkInScope(retry = false)
+
+    /**
+     * Check now, first reading again every email passed over so far ([MailState.passedOver]): one
+     * that imports now leaves the list, one that still cannot stays on it.
+     */
+    override suspend fun retryPassedOver(): MailCheckReport = checkInScope(retry = true)
+
+    private suspend fun checkInScope(retry: Boolean): MailCheckReport {
         val account = store.current()
         // Caught inside, so a check that throws reaches this caller rather than the session's scope.
-        return scope.async { runCatchingCancellable { check(account, routine = false) } }.await().getOrThrow()
+        return scope
+            .async { runCatchingCancellable { check(account, routine = false, retry = retry) } }
+            .await()
+            .getOrThrow()
     }
 
     override fun cancelCheck() {
@@ -311,9 +342,9 @@ internal class MailService(
 
     /** One tick of the poller: check when the account is enabled and its interval has passed. */
     internal suspend fun pollIfDue() {
-        if (!transport.available) return
+        if (!supported) return
         val account = store.current()
-        if (!account.enabled || !account.isConfigured) return
+        if (!account.isConfigured || !cursors.enabledHere()) return
         val cursor = cursors.get(account.accountKey, account.folder)
         val last = cursor?.lastCheckedAtMillis
         val intervalMillis = account.pollIntervalMinutes.coerceAtLeast(MailAccount.MIN_POLL_MINUTES) * 60_000L
@@ -324,11 +355,12 @@ internal class MailService(
     private suspend fun check(
         account: MailAccount,
         routine: Boolean,
+        retry: Boolean = false,
     ): MailCheckReport =
         checkMutex.withLock {
             runtime.update { it.copy(checking = true, cancelRequested = false, progress = MailProgress()) }
             try {
-                checkLocked(account, routine)
+                checkLocked(account, routine, retry)
             } finally {
                 runtime.update { it.copy(checking = false, cancelRequested = false, progress = null) }
             }
@@ -337,6 +369,7 @@ internal class MailService(
     private suspend fun checkLocked(
         account: MailAccount,
         routine: Boolean,
+        retry: Boolean,
     ): MailCheckReport {
         val now = clock.nowMillis()
         val empty = MailCheckReport(checkedAtMillis = now)
@@ -349,7 +382,7 @@ internal class MailService(
         return try {
             when (val opened = link.open()) {
                 is MailOpenResult.Failed -> stop(account, empty, MailCheckError(opened.reason, opened.detail), now)
-                is MailOpenResult.Opened -> read(account, link, routine, now)
+                is MailOpenResult.Opened -> read(account, link, routine, retry, now)
             }
         } finally {
             withContext(NonCancellable) { link.close() }
@@ -420,17 +453,18 @@ internal class MailService(
         }
 
     /**
-     * Read pages over [connection] until the folder is exhausted, a message fails, the user cancels
-     * or, for a routine poll that is not catching up, [MAX_PAGES_PER_CHECK] pages were read.
+     * Place the cursor, read the passed-over mail again when [retry] asks, then the pages after the
+     * cursor ([readPages]).
      */
     private suspend fun read(
         account: MailAccount,
         link: Link,
         routine: Boolean,
+        retry: Boolean,
         now: Long,
     ): MailCheckReport {
         val stored = cursors.get(account.accountKey, account.folder)
-        var cursor =
+        val placed =
             MailCursorPlacement.place(account, stored, link.current, now)
                 ?: return stop(
                     account,
@@ -438,11 +472,53 @@ internal class MailService(
                     MailCheckError(MailFailureReason.FETCH_FAILED),
                     now,
                 )
-        val remainingAtStart = link.current.countAfter(cursor.lastUid)
-        cursor = cursor.copy(remaining = remainingAtStart)
+        val remainingAtStart = link.current.countAfter(placed.lastUid)
+        val cursor = placed.copy(remaining = remainingAtStart)
         if (cursor != stored) save(cursor)
+        val start = MailCheckReport(checkedAtMillis = now)
+        if (!retry || cursor.passedOver.isEmpty()) {
+            return readPages(account, link, routine, Position(cursor, start, remainingAtStart), now)
+        }
+        val retried = retryPassedOver(account, link.current, cursor, start)
+        save(retried.cursor)
+        val error =
+            retried.error
+                ?: return readPages(
+                    account,
+                    link,
+                    routine,
+                    // The retried mail is counted as seen, but lies behind the cursor, not in what is left.
+                    Position(retried.cursor, retried.report, remainingAtStart?.plus(retried.report.messagesSeen)),
+                    now,
+                )
+        return finish(
+            retried.cursor.copy(lastCheckedAtMillis = now, lastError = error.reason),
+            retried.report.copy(errors = listOf(error)),
+        )
+    }
+
+    /** Where a check stands before its pages: the cursor, what it did so far, and what was left. */
+    private class Position(
+        val cursor: MailCursor,
+        val report: MailCheckReport,
+        val remainingAtStart: Int?,
+    )
+
+    /**
+     * Read pages over the connection until the folder is exhausted, a message fails, the user
+     * cancels or, for a routine poll that is not catching up, [MAX_PAGES_PER_CHECK] pages were read.
+     */
+    private suspend fun readPages(
+        account: MailAccount,
+        link: Link,
+        routine: Boolean,
+        from: Position,
+        now: Long,
+    ): MailCheckReport {
+        var cursor = from.cursor
+        var report = from.report
+        val remainingAtStart = from.remainingAtStart
         val pageLimit = if (routine && !cursor.catchingUp) MAX_PAGES_PER_CHECK else Int.MAX_VALUE
-        var report = MailCheckReport(checkedAtMillis = now)
         var error: MailCheckError? = null
         var exhausted = false
         // Set once no further page may be read: the folder is exhausted, a page failed or stalled.
@@ -518,6 +594,57 @@ internal class MailService(
     }
 
     private fun cancelRequested(): Boolean = runtime.value.cancelRequested
+
+    private class Retried(
+        val report: MailCheckReport,
+        val cursor: MailCursor,
+        val error: MailCheckError?,
+    )
+
+    /**
+     * Read the passed-over messages again. One the folder no longer holds leaves the list; one that
+     * imports fully now leaves it too; one that still cannot is counted and stays. A lost
+     * connection ends the retry with what it did saved; the rest wait for the next retry.
+     */
+    private suspend fun retryPassedOver(
+        account: MailAccount,
+        connection: MailConnection,
+        start: MailCursor,
+        startReport: MailCheckReport,
+    ): Retried {
+        val described =
+            when (val fetched = connection.describe(start.passedOver)) {
+                is MailFetchResult.Failed -> return Retried(
+                    startReport,
+                    start,
+                    MailCheckError(fetched.reason, fetched.detail),
+                )
+
+                is MailFetchResult.Success -> fetched.messages.sortedBy(MailEnvelope::uid)
+            }
+        val held = described.mapTo(HashSet(), MailEnvelope::uid)
+        var cursor = start.copy(passedOver = start.passedOver.filter { it in held })
+        var report = startReport
+        for (message in described) {
+            if (cancelRequested()) break
+            val considered = importer.consider(account, connection, message)
+            val outcome = considered.outcome
+            if (outcome is MessageOutcome.Lost) return Retried(report, cursor, outcome.error)
+            report =
+                report
+                    .copy(
+                        messagesSeen = report.messagesSeen + 1,
+                        droppedAttachments = report.droppedAttachments + considered.dropped.size,
+                    ).tallied(outcome)
+            if (outcome is MessageOutcome.Failed) report = report.copy(unreadable = report.unreadable + 1)
+            val imported = outcome !is MessageOutcome.Unreadable && outcome !is MessageOutcome.Failed
+            if (imported && considered.dropped.isEmpty()) {
+                cursor = cursor.copy(passedOver = cursor.passedOver - message.uid)
+            }
+        }
+        log.info("Retried ${described.size} passed-over emails; ${cursor.passedOver.size} still left in the mailbox")
+        return Retried(report, cursor, null)
+    }
 
     private data class PageOutcome(
         val report: MailCheckReport,
@@ -613,9 +740,11 @@ internal class MailService(
                     "Email UID ${message.uid} could not be read (${outcome.cause ?: "no cause"}); left in the mailbox",
                 )
             }
+            var gaveUp = false
             if (outcome is MessageOutcome.Failed) {
                 val attempts = if (cursor.blockedUid == message.uid) cursor.blockedAttempts + 1 else 1
                 if (attempts >= MAX_MESSAGE_ATTEMPTS) {
+                    gaveUp = true
                     // A message that keeps failing (a vanished UID, an undecodable image, a post-
                     // action the server refuses) is passed over instead of stopping the folder.
                     log.warn(
@@ -632,10 +761,14 @@ internal class MailService(
                 cursor =
                     cursor.copy(
                         lastUid = message.uid,
-                        throughMillis = message.dateMillis ?: cursor.throughMillis,
+                        throughMillis = message.receivedMillis ?: message.dateMillis ?: cursor.throughMillis,
                         blockedUid = null,
                         blockedAttempts = 0,
                     )
+                // Left in the mailbox not fully imported: kept on the list the user can retry.
+                if (gaveUp || outcome is MessageOutcome.Unreadable || dropped.isNotEmpty()) {
+                    cursor = cursor.passingOver(message.uid)
+                }
             }
             val remaining = remainingAtStart?.let { (it - report.messagesSeen).coerceAtLeast(0) }
             cursor = cursor.copy(remaining = remaining)

@@ -11,12 +11,15 @@ import dev.npn.core.index.DeviceIdentity
 import dev.npn.core.index.EmptyImportException
 import dev.npn.core.index.ImportResult
 import dev.npn.core.index.IndexProgress
+import dev.npn.core.index.RemovedImportException
 import dev.npn.core.index.ScanReport
 import dev.npn.core.index.SupersededImportException
 import dev.npn.core.index.WriteBlock
 import dev.npn.core.index.WriteSettle
 import dev.npn.core.index.holdsDocument
 import dev.npn.core.mail.DeviceMailCursors
+import dev.npn.core.mail.MailDocumentSink
+import dev.npn.core.mail.MailImportResult
 import dev.npn.core.mail.MailService
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
@@ -106,13 +109,49 @@ internal class LibrarySessionImpl(
     override val aiSuggest: AiSuggest = graph.ai
     override val sync: SyncFacade = syncService ?: NoSyncFacade
 
+    /**
+     * Email's way into the library: the import path every picked file takes, except that bytes of a
+     * document the user trashed or deleted stay out. Mail is read again on its own (a start point
+     * moved back, a renumbered folder, another device setting the account up), and that must not
+     * undo what the user removed.
+     */
+    internal val mailSink: MailDocumentSink =
+        object : MailDocumentSink {
+            override suspend fun importPdf(
+                bytes: ByteArray,
+                suggestedName: String,
+            ): MailImportResult = owned { importFromMail(suggestedName, bytes) }
+
+            override suspend fun importImage(
+                bytes: ByteArray,
+                suggestedName: String,
+            ): MailImportResult =
+                owned {
+                    val pdf =
+                        runCatchingCancellable { deps.pdfEngine.imagesToPdf(listOf(bytes)) }.getOrElse {
+                            log.warn("Making a PDF of an email image failed", it)
+                            return@owned MailImportResult.Failed
+                        }
+                    importFromMail(suggestedName, pdf)
+                }
+        }
+
+    private suspend fun importFromMail(
+        name: String,
+        bytes: ByteArray,
+    ): MailImportResult {
+        val result = runCatchingCancellable { importService.importBytes(bytes, name, reviveRemoved = false) }
+        if (result.exceptionOrNull() is RemovedImportException) return MailImportResult.Removed
+        return fillEInvoiceFields(importing(name) { result.getOrThrow() }).toMailResult()
+    }
+
     private val mailService =
         MailService(
             store = JournalMailAccount(coordinator, lifetime),
             credentials = deps.mailCredentials,
             cursors = DeviceMailCursors(deps.deviceDb.mailCursorDao(), deps.deviceDb.keyValueDao()),
             transport = deps.mailTransport,
-            sink = IngestMailSink(this),
+            sink = mailSink,
             pdfRenderer = deps.mailPdfRenderer,
             clock = deps.clock,
             log = deps.log,
@@ -125,7 +164,8 @@ internal class LibrarySessionImpl(
             override suspend fun saveAccount(
                 account: dev.npn.core.mail.MailAccount,
                 password: String?,
-            ) = lifetime.owned { mailService.saveAccount(account, password) }
+                enabledHere: Boolean,
+            ) = lifetime.owned { mailService.saveAccount(account, password, enabledHere) }
 
             override suspend fun clearPassword() = lifetime.owned { mailService.clearPassword() }
 
@@ -135,6 +175,8 @@ internal class LibrarySessionImpl(
             ) = lifetime.owned { mailService.testConnection(account, password) }
 
             override suspend fun checkNow() = lifetime.owned { mailService.checkNow() }
+
+            override suspend fun retryPassedOver() = lifetime.owned { mailService.retryPassedOver() }
 
             override fun cancelCheck() = mailService.cancelCheck()
 

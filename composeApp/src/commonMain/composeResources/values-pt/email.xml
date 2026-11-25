@@ -2,10 +2,11 @@
 <resources>
     <string name="email_title">Importação de e-mail</string>
     <string name="email_intro">Importe anexos de uma caixa IMAP enquanto a aplicação está aberta. A palavra-passe fica no cofre do sistema, nunca na biblioteca.</string>
+    <string name="email_no_keyring">Este dispositivo não tem um cofre do sistema para guardar a palavra-passe do e-mail, por isso não pode importar e-mail.</string>
 
     <string name="email_account">Conta</string>
-    <string name="email_enabled">Procurar novo correio nesta conta</string>
-    <string name="email_enabled_help">As verificações só correm enquanto o No Papers Needed está aberto. Nada é obtido com a aplicação fechada.</string>
+    <string name="email_enabled">Verificar esta conta neste dispositivo</string>
+    <string name="email_enabled_help">Cada dispositivo decide por si. As verificações só correm enquanto o No Papers Needed está aberto; nada é obtido com a aplicação fechada.</string>
     <string name="email_host">Servidor IMAP</string>
     <string name="email_port">Porta</string>
     <string name="email_security">Segurança da ligação</string>
@@ -35,7 +36,8 @@
     <string name="email_post_keep">Deixar a mensagem como está</string>
     <string name="email_post_mark_read">Marcar como lida</string>
     <string name="email_post_move">Mover para uma pasta</string>
-    <string name="email_post_delete">Eliminar</string>
+    <string name="email_post_delete">Movê-lo para o lixo</string>
+    <string name="email_post_delete_help">O e-mail inteiro vai para a pasta do lixo da caixa de correio, com o texto e os anexos que a biblioteca não consegue receber, e ainda pode ser recuperado lá.</string>
     <string name="email_move_folder">Mover para a pasta</string>
     <string name="email_save_pdf">Guardar também o e-mail como PDF</string>
     <string name="email_save_pdf_help">Acrescenta à biblioteca um PDF legível com os cabeçalhos e o texto da mensagem.</string>
@@ -71,6 +73,9 @@
     <string name="email_reason_plain_refused">as ligações sem encriptação não são permitidas</string>
     <string name="email_reason_pdf_render_failed">não foi possível criar o PDF do e-mail</string>
     <string name="email_reason_unsupported">a importação de e-mail não é suportada nesta plataforma</string>
+    <string name="email_reason_move_folder_not_found">a pasta para onde mover o e-mail importado não existe no servidor</string>
+    <string name="email_reason_trash_not_found">o servidor não tem uma pasta do lixo para onde mover o e-mail importado</string>
+    <string name="email_reason_post_action_unsupported">o servidor não consegue mover nem eliminar uma única mensagem</string>
 
     <string name="email_secret_unsupported">o cofre do sistema não é suportado nesta plataforma</string>
     <string name="email_secret_unavailable">o cofre do sistema não está disponível</string>

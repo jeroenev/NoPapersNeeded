@@ -111,7 +111,8 @@ class QueueScreenTest : EnglishLocaleTest() {
                     MailState(
                         account = configured,
                         lastCheckedAtMillis = 1L,
-                        lastReport = MailCheckReport(imported = 2, unreadable = 2),
+                        lastReport = MailCheckReport(imported = 2),
+                        passedOver = 2,
                     ),
                 )
             scene(session).closing {

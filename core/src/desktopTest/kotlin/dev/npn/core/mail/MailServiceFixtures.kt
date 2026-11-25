@@ -29,7 +29,6 @@ internal val testAccount =
     MailAccount(
         host = "mail.example.com",
         username = "someone@example.com",
-        enabled = true,
         postAction = MailPostAction.MARK_READ,
         // Most tests read the whole fake folder; the start-point tests set their own.
         startFrom = MailStartPoint.EVERYTHING,
@@ -97,8 +96,16 @@ internal class FakeCredentials(
     }
 }
 
-internal class FakeCursors : MailCursorStore {
+internal class FakeCursors(
+    var enabled: Boolean = true,
+) : MailCursorStore {
     val saved = mutableMapOf<Pair<String, String>, MailCursor>()
+
+    override suspend fun enabledHere(): Boolean = enabled
+
+    override suspend fun setEnabledHere(enabled: Boolean) {
+        this.enabled = enabled
+    }
 
     override suspend fun get(
         accountKey: String,
@@ -162,7 +169,14 @@ internal class FakeTransport(
     var failingFetches: Set<Int> = emptySet(),
     /** Which downloads (1-based, over the transport's lifetime) fail as a dropped connection would. */
     var failingDownloads: Set<Int> = emptySet(),
+    /** UIDs whose download the server refuses (an IMAP NO), every time until removed. */
+    var refusedUids: Set<Long> = emptySet(),
+    /** When the server received a message, where it differs from when it was sent. */
+    var receivedMillis: Map<Long, Long> = emptyMap(),
 ) : MailTransport {
+    private fun MailMessage.described(): MailEnvelope =
+        envelope().let { envelope -> receivedMillis[uid]?.let { envelope.copy(receivedMillis = it) } ?: envelope }
+
     /** Every download asked for, as (UID, with its text), in order: what a check cost in bodies. */
     val downloads = mutableListOf<Pair<Long, Boolean>>()
     private var downloadCalls = 0
@@ -174,6 +188,7 @@ internal class FakeTransport(
     val marked = mutableListOf<Long>()
     val moved = mutableListOf<Pair<Long, String>>()
     val deleted = mutableListOf<Long>()
+    val described = mutableListOf<List<Long>>()
 
     /** Calls made on a connection after it was closed; a correct check makes none. */
     var callsAfterClose = 0
@@ -227,11 +242,19 @@ internal class FakeTransport(
             val listed = messages.filter { it.uid in start..windowEnd }.sortedBy(MailMessage::uid)
             val taken = listed.take(MailTransport.PAGE_SIZE)
             return MailFetchResult.Success(
-                messages = taken.map { it.envelope() },
+                messages = taken.map { it.described() },
                 uidNext = uidNext,
                 scannedThroughUid =
                     if (listed.size > MailTransport.PAGE_SIZE) taken.last().uid else maxOf(afterUid, windowEnd),
             )
+        }
+
+        override suspend fun describe(uids: List<Long>): MailFetchResult {
+            touch()
+            described += uids
+            fetchFailure?.let { return MailFetchResult.Failed(it) }
+            val held = messages.filter { it.uid in uids }.sortedBy(MailMessage::uid)
+            return MailFetchResult.Success(held.map { it.described() }, uidNext, uids.maxOrNull() ?: 0)
         }
 
         override suspend fun download(
@@ -242,6 +265,11 @@ internal class FakeTransport(
             downloadCalls++
             if (downloadCalls in failingDownloads) {
                 return MailDownloadResult.Failed(MailFailureReason.FETCH_FAILED, "FolderClosedException")
+            }
+            if (uid in
+                refusedUids
+            ) {
+                return MailDownloadResult.Refused(MailFailureReason.FETCH_FAILED, "CommandFailedException")
             }
             downloads += uid to withBody
             val message = messages.single { it.uid == uid }
@@ -284,7 +312,7 @@ internal class MailFixture(
 ) {
     var now = NOW
     val store = FakeAccountStore(account)
-    val cursors = FakeCursors()
+    val cursors = FakeCursors(enabled = true)
     val sink = FakeSink()
     val renderer = FakeRenderer()
     val transport = transport
@@ -312,4 +340,4 @@ internal fun kotlinx.coroutines.test.TestScope.mailFixture(
     account: MailAccount = testAccount,
     transport: FakeTransport = FakeTransport(),
     credentials: FakeCredentials = FakeCredentials(),
-) = MailFixture(account.copy(enabled = true), transport, credentials, backgroundScope)
+) = MailFixture(account, transport, credentials, backgroundScope)

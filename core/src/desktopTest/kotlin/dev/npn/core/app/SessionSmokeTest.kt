@@ -275,12 +275,14 @@ class SessionSmokeTest {
                 listOf(
                     { rig.session.start() },
                     { rig.session.mail.checkNow() },
+                    { rig.session.mail.retryPassedOver() },
                     { rig.session.mail.clearPassword() },
                     {
                         rig.session.mail.saveAccount(
                             dev.npn.core.mail
                                 .MailAccount(),
                             null,
+                            enabledHere = false,
                         )
                     },
                     {

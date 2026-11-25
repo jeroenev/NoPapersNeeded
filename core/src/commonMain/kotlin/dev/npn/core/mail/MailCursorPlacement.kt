@@ -31,6 +31,10 @@ internal object MailCursorPlacement {
                     startFrom = start,
                     catchingUp = true,
                     throughMillis = null,
+                    // UIDs of another numbering name other messages, or none.
+                    passedOver = emptyList(),
+                    blockedUid = null,
+                    blockedAttempts = 0,
                 )
             }
 
@@ -46,6 +50,10 @@ internal object MailCursorPlacement {
                     startFrom = start,
                     catchingUp = true,
                     throughMillis = null,
+                    // UIDs of another numbering name other messages, or none.
+                    passedOver = emptyList(),
+                    blockedUid = null,
+                    blockedAttempts = 0,
                 )
             }
 

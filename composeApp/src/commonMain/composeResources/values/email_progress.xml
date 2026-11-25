@@ -7,7 +7,7 @@
     <string name="email_start_last_year">The last year</string>
     <string name="email_start_everything">Everything in the folder</string>
     <string name="email_start_help">Where this device starts reading the folder the first time. The first check reads all mail from there in one go; later checks pick up what is new.</string>
-    <string name="email_start_change_back">When you save, the next check also reads the older mail back to this start. Documents already in the library are recognized and not added twice.</string>
+    <string name="email_start_change_back">When you save, the next check also reads the older mail back to this start. Documents already in the library are recognized and not added twice. Documents you deleted stay deleted.</string>
     <string name="email_start_change_forward">When you save, older mail this device has not read yet is skipped.</string>
 
     <!-- How far a check has come: the date of the last message passed, and how many are left after it. -->

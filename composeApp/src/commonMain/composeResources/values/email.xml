@@ -2,10 +2,11 @@
 <resources>
     <string name="email_title">Email import</string>
     <string name="email_intro">Import attachments from one IMAP mailbox while the app is open. The password is kept in your system keyring, never in the library.</string>
+    <string name="email_no_keyring">This device has no system keyring to keep the mail password in, so it cannot import email.</string>
 
     <string name="email_account">Account</string>
-    <string name="email_enabled">Check this account for new mail</string>
-    <string name="email_enabled_help">Checks run only while No Papers Needed is open. Nothing is fetched while the app is closed.</string>
+    <string name="email_enabled">Check this account on this device</string>
+    <string name="email_enabled_help">Each of your devices chooses for itself. Checks run only while No Papers Needed is open; nothing is fetched while it is closed.</string>
     <string name="email_host">IMAP server</string>
     <string name="email_port">Port</string>
     <string name="email_security">Connection security</string>
@@ -35,7 +36,8 @@
     <string name="email_post_keep">Leave the message as it is</string>
     <string name="email_post_mark_read">Mark it read</string>
     <string name="email_post_move">Move it to a folder</string>
-    <string name="email_post_delete">Delete it</string>
+    <string name="email_post_delete">Move it to the trash</string>
+    <string name="email_post_delete_help">The whole email goes to the mailbox’s trash folder, with its text and any attachments the library cannot take, so it can still be recovered there.</string>
     <string name="email_move_folder">Move to folder</string>
     <string name="email_save_pdf">Also save the email as a PDF</string>
     <string name="email_save_pdf_help">Adds a readable PDF with the message headers and text to the library.</string>
@@ -71,6 +73,9 @@
     <string name="email_reason_plain_refused">unencrypted connections are not allowed</string>
     <string name="email_reason_pdf_render_failed">the email PDF could not be made</string>
     <string name="email_reason_unsupported">email import is not supported on this platform</string>
+    <string name="email_reason_move_folder_not_found">the folder to move imported mail to does not exist on the server</string>
+    <string name="email_reason_trash_not_found">the server has no trash folder to move imported mail to</string>
+    <string name="email_reason_post_action_unsupported">the server cannot move or delete a single message</string>
 
     <string name="email_secret_unsupported">the system keyring is not supported on this platform</string>
     <string name="email_secret_unavailable">the system keyring is not available</string>

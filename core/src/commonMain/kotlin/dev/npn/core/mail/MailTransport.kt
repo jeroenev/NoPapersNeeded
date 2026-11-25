@@ -35,8 +35,14 @@ data class MailEnvelope(
     val from: String,
     val to: String,
     val subject: String,
+    /** When the message was sent (its Date header), for the email PDF. */
     val dateMillis: Long?,
     val attachments: List<MailAttachmentInfo>,
+    /**
+     * When the server received the message (IMAP INTERNALDATE): the date a start point searches by,
+     * so it is also the date "imported through" names.
+     */
+    val receivedMillis: Long? = dateMillis,
     /** Set when even the envelope or structure could not be read; see [MailMessage.readFailure]. */
     val readFailure: MailFailureReason? = null,
     val readFailureCause: String? = null,
@@ -104,6 +110,15 @@ enum class MailFailureReason {
     PLAIN_REFUSED,
     PDF_RENDER_FAILED,
     UNSUPPORTED,
+
+    /** The folder the account moves imported mail to does not exist on the server. */
+    MOVE_FOLDER_NOT_FOUND,
+
+    /** "Move to the trash" was chosen, and the server names no folder as its trash. */
+    TRASH_NOT_FOUND,
+
+    /** The server cannot move or delete one message alone (neither MOVE nor UIDPLUS). */
+    POST_ACTION_UNSUPPORTED,
 }
 
 /**
@@ -140,6 +155,16 @@ sealed interface MailDownloadResult {
         val reason: MailFailureReason,
         val detail: String? = null,
     ) : MailDownloadResult
+
+    /**
+     * The server answered, but refused to hand this message over (an IMAP NO or BAD: throttling, a
+     * temporary error, a message it cannot serve). Not the message's fault and not the connection's:
+     * it is tried again on later checks, and passed over only after several refusals.
+     */
+    data class Refused(
+        val reason: MailFailureReason,
+        val detail: String? = null,
+    ) : MailDownloadResult
 }
 
 /** What opening the account's folder for one check came to. */
@@ -165,7 +190,7 @@ interface MailTransport {
     /** Whether this host can do IMAP at all; false on Android, where the feature is not offered. */
     val available: Boolean
 
-    /** Connect and open the configured folder, changing nothing. */
+    /** Connect and open the configured folder, changing nothing; the post-action is checked as [open] does. */
     suspend fun testConnection(
         account: MailAccount,
         password: String,
@@ -173,7 +198,10 @@ interface MailTransport {
 
     /**
      * Connect and open the account's folder for one whole check: every page and every post-action
-     * of the check goes over the returned connection, which the caller closes.
+     * of the check goes over the returned connection, which the caller closes. The account's
+     * post-action is checked here, before anything is imported: a move target the server does not
+     * have, no trash folder to delete into, or a server that cannot move one message alone fails
+     * the open, rather than every message failing its post-action one check at a time.
      */
     suspend fun open(
         account: MailAccount,
@@ -225,6 +253,13 @@ interface MailConnection {
     suspend fun fetchAfter(afterUid: Long): MailFetchResult
 
     /**
+     * Describe the messages of [uids] that the folder still holds, as [fetchAfter] does, so they
+     * can be downloaded: how passed-over mail is tried again. A UID the folder no longer holds is
+     * left out of the result.
+     */
+    suspend fun describe(uids: List<Long>): MailFetchResult
+
+    /**
      * Download the parts of [uid], one of the last fetch's messages, that the library could import
      * (capped; a part over the cap or that cannot be decoded is reported as dropped), and its
      * plain-text body only when [withBody] asks for it, for the email PDF. A message that cannot
@@ -242,6 +277,7 @@ interface MailConnection {
         folder: String,
     ): MailFailureReason?
 
+    /** Move [uid] to the server's trash folder (its special-use `\Trash`), which [MailTransport.open] found. */
     suspend fun delete(uid: Long): MailFailureReason?
 
     /** Close the folder and the connection; never throws, and is safe to call twice. */
@@ -349,9 +385,28 @@ data class MailCursor(
      */
     val blockedUid: Long? = null,
     val blockedAttempts: Int = 0,
-)
+    /**
+     * Messages behind the cursor that were passed over and left in the mailbox without being fully
+     * imported: unreadable, refused too often, or missing an attachment that was too large or could
+     * not be decoded. Kept until a retry imports them or the folder is renumbered, so the user can
+     * see them and ask for them again whatever later checks did. At most [MAX_PASSED_OVER], the
+     * newest kept.
+     */
+    val passedOver: List<Long> = emptyList(),
+) {
+    /** This cursor with [uid] among the passed-over messages. */
+    fun passingOver(uid: Long): MailCursor = copy(passedOver = (passedOver - uid + uid).takeLast(MAX_PASSED_OVER))
 
-/** Device-local cursor storage (`device.db`): never synced, because it describes this device's reads. */
+    companion object {
+        const val MAX_PASSED_OVER = 1_000
+    }
+}
+
+/**
+ * Device-local mail state (`device.db`), never synced because it describes this device: its cursors,
+ * and whether this device imports at all. The account is shared by every device of the library; which
+ * of them reads the mailbox is each device's own choice.
+ */
 interface MailCursorStore {
     suspend fun get(
         accountKey: String,
@@ -359,6 +414,11 @@ interface MailCursorStore {
     ): MailCursor?
 
     suspend fun save(cursor: MailCursor)
+
+    /** Whether this device checks the account on its own; off until this device's user turns it on. */
+    suspend fun enabledHere(): Boolean
+
+    suspend fun setEnabledHere(enabled: Boolean)
 }
 
 /** What the import path offers email import: the session's own ingest façade, narrowed. */
@@ -382,6 +442,12 @@ sealed interface MailImportResult {
     ) : MailImportResult
 
     data object Duplicate : MailImportResult
+
+    /**
+     * The bytes of a document the user trashed or deleted. Email import never brings one back: the
+     * user's removal wins over mail read again, and the message stays in the mailbox.
+     */
+    data object Removed : MailImportResult
 
     data object Failed : MailImportResult
 }

@@ -81,6 +81,12 @@ internal class MailMessageImporter(
                     return Considered(MessageOutcome.Lost(MailCheckError(downloaded.reason, downloaded.detail)))
                 }
 
+                // Counted against the message like any failure: retried next check, passed over after
+                // a few, rather than marked unreadable on a server's passing refusal.
+                is MailDownloadResult.Refused -> {
+                    return Considered(MessageOutcome.Failed(downloaded.reason, emptyList(), 0, downloaded.detail))
+                }
+
                 is MailDownloadResult.Success -> {
                     downloaded.message
                 }
@@ -106,13 +112,29 @@ internal class MailMessageImporter(
     ): MessageOutcome {
         val imported = mutableListOf<String>()
         var duplicates = 0
+        var removed = false
         var failure: MailFailureReason? = null
 
         fun record(result: MailImportResult) {
             when (result) {
-                is MailImportResult.Imported -> imported += result.docId
-                MailImportResult.Duplicate -> duplicates++
-                MailImportResult.Failed -> failure = MailFailureReason.IMPORT_FAILED
+                is MailImportResult.Imported -> {
+                    imported += result.docId
+                }
+
+                MailImportResult.Duplicate -> {
+                    duplicates++
+                }
+
+                // Already a document, one the user removed: counted as a duplicate, and the email is
+                // left where it is, as its post-action would take what the user chose not to keep.
+                MailImportResult.Removed -> {
+                    duplicates++
+                    removed = true
+                }
+
+                MailImportResult.Failed -> {
+                    failure = MailFailureReason.IMPORT_FAILED
+                }
             }
         }
 
@@ -145,16 +167,11 @@ internal class MailMessageImporter(
                 record(sink.importPdf(pdf, emailPdfFileName(message)))
             }
         }
+        if (removed) log.info("Email UID ${message.uid} holds a document that was removed; left in the mailbox")
         // A message that lost an attachment keeps its place in the mailbox: moving or deleting it
         // would take the part the library could not take with it.
-        if (failure == null && message.droppedParts.isEmpty()) {
-            failure =
-                when (account.postAction) {
-                    MailPostAction.KEEP -> null
-                    MailPostAction.MARK_READ -> connection.markRead(message.uid)
-                    MailPostAction.MOVE -> connection.moveTo(message.uid, account.moveToFolder)
-                    MailPostAction.DELETE -> connection.delete(message.uid)
-                }
+        if (failure == null && message.droppedParts.isEmpty() && !removed) {
+            failure = postAction(account, connection, message.uid)
         }
         val reason = failure
         return if (reason == null) {
@@ -166,6 +183,19 @@ internal class MailMessageImporter(
         }
     }
 }
+
+/** Run the account's post-action on [uid]; null when it worked or there is none. */
+private suspend fun postAction(
+    account: MailAccount,
+    connection: MailConnection,
+    uid: Long,
+): MailFailureReason? =
+    when (account.postAction) {
+        MailPostAction.KEEP -> null
+        MailPostAction.MARK_READ -> connection.markRead(uid)
+        MailPostAction.MOVE -> connection.moveTo(uid, account.moveToFolder)
+        MailPostAction.DELETE -> connection.delete(uid)
+    }
 
 internal fun MailCheckReport.counting(
     docIds: List<String>,

@@ -9,8 +9,10 @@ import kotlinx.serialization.Serializable
  * absent: it lives only in the OS secret store ([MailCredentialStore]), keyed by [accountKey].
  *
  * The account is library data (every device that could import from it should see the same
- * filters and post-action), while the password, the last-processed UID and the last error are
- * this device's own state.
+ * filters and post-action), while the password, whether this device imports at all, the
+ * last-processed UID and the last error are this device's own state. An `enabled` key an earlier
+ * build wrote here is ignored: switching import on for one device must not make every other device
+ * of the library start reading the mailbox too.
  */
 @Serializable
 data class MailAccount(
@@ -19,7 +21,6 @@ data class MailAccount(
     val security: MailSecurity = MailSecurity.SSL,
     val username: String = "",
     val folder: String = DEFAULT_FOLDER,
-    val enabled: Boolean = false,
     /** Minutes between automatic checks while the app is open; never below [MIN_POLL_MINUTES]. */
     val pollIntervalMinutes: Int = DEFAULT_POLL_MINUTES,
     /** Any one of these matches a message; an empty list matches every message. */
@@ -140,6 +141,11 @@ enum class MailPostAction {
     KEEP,
     MARK_READ,
     MOVE,
+
+    /**
+     * Move it to the server's trash folder. Never an expunge: the email's text and any attachment
+     * the library cannot take stay recoverable from the trash, as after deleting it in a mail app.
+     */
     DELETE,
 }
 

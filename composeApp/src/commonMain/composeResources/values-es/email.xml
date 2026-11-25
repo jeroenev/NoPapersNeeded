@@ -2,10 +2,11 @@
 <resources>
     <string name="email_title">Importación de correo</string>
     <string name="email_intro">Importa adjuntos de un buzón IMAP mientras la aplicación está abierta. La contraseña se guarda en el llavero del sistema, nunca en la biblioteca.</string>
+    <string name="email_no_keyring">Este dispositivo no tiene un llavero del sistema donde guardar la contraseña del correo, así que no puede importar correo.</string>
 
     <string name="email_account">Cuenta</string>
-    <string name="email_enabled">Buscar correo nuevo en esta cuenta</string>
-    <string name="email_enabled_help">Las comprobaciones solo se ejecutan mientras No Papers Needed está abierto. No se descarga nada con la aplicación cerrada.</string>
+    <string name="email_enabled">Comprobar esta cuenta en este dispositivo</string>
+    <string name="email_enabled_help">Cada dispositivo decide por sí mismo. Las comprobaciones solo se ejecutan mientras No Papers Needed está abierto; no se descarga nada con la aplicación cerrada.</string>
     <string name="email_host">Servidor IMAP</string>
     <string name="email_port">Puerto</string>
     <string name="email_security">Seguridad de la conexión</string>
@@ -35,7 +36,8 @@
     <string name="email_post_keep">Dejar el mensaje como está</string>
     <string name="email_post_mark_read">Marcarlo como leído</string>
     <string name="email_post_move">Moverlo a una carpeta</string>
-    <string name="email_post_delete">Eliminarlo</string>
+    <string name="email_post_delete">Moverlo a la papelera</string>
+    <string name="email_post_delete_help">El correo entero va a la papelera del buzón, con su texto y los adjuntos que la biblioteca no puede tomar, así que aún se puede recuperar allí.</string>
     <string name="email_move_folder">Mover a la carpeta</string>
     <string name="email_save_pdf">Guardar también el correo como PDF</string>
     <string name="email_save_pdf_help">Añade a la biblioteca un PDF legible con las cabeceras y el texto del mensaje.</string>
@@ -71,6 +73,9 @@
     <string name="email_reason_plain_refused">no se permiten conexiones sin cifrar</string>
     <string name="email_reason_pdf_render_failed">no se pudo crear el PDF del correo</string>
     <string name="email_reason_unsupported">la importación de correo no es compatible con esta plataforma</string>
+    <string name="email_reason_move_folder_not_found">la carpeta a la que mover el correo importado no existe en el servidor</string>
+    <string name="email_reason_trash_not_found">el servidor no tiene una papelera a la que mover el correo importado</string>
+    <string name="email_reason_post_action_unsupported">el servidor no puede mover ni eliminar un solo mensaje</string>
 
     <string name="email_secret_unsupported">el llavero del sistema no es compatible con esta plataforma</string>
     <string name="email_secret_unavailable">el llavero del sistema no está disponible</string>

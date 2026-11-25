@@ -13,10 +13,13 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -65,12 +68,14 @@ import no_papers_needed.composeapp.generated.resources.email_last_check
 import no_papers_needed.composeapp.generated.resources.email_last_error
 import no_papers_needed.composeapp.generated.resources.email_move_folder
 import no_papers_needed.composeapp.generated.resources.email_never_checked
+import no_papers_needed.composeapp.generated.resources.email_no_keyring
 import no_papers_needed.composeapp.generated.resources.email_password
 import no_papers_needed.composeapp.generated.resources.email_password_help
 import no_papers_needed.composeapp.generated.resources.email_password_saved
 import no_papers_needed.composeapp.generated.resources.email_port
 import no_papers_needed.composeapp.generated.resources.email_post_action
 import no_papers_needed.composeapp.generated.resources.email_post_delete
+import no_papers_needed.composeapp.generated.resources.email_post_delete_help
 import no_papers_needed.composeapp.generated.resources.email_post_keep
 import no_papers_needed.composeapp.generated.resources.email_post_mark_read
 import no_papers_needed.composeapp.generated.resources.email_post_move
@@ -94,11 +99,88 @@ import no_papers_needed.composeapp.generated.resources.email_test
 import no_papers_needed.composeapp.generated.resources.email_username
 import org.jetbrains.compose.resources.stringResource
 
-private val MailAccountSaver =
-    Saver<MailAccount, String>(
-        save = { MailAccountJson.encode(it) },
-        restore = { MailAccountJson.decode(it) },
-    )
+/**
+ * The pane's draft of the account, apart from the saved one until Save. [seed] is the saved account
+ * the draft started from: when another device changes the account, an untouched draft follows it,
+ * while one the user is editing keeps their edits. The same for this device's own switch.
+ */
+@Stable
+private class MailForm(
+    seed: MailAccount,
+    savedEnabledHere: Boolean,
+    draft: MailAccount = seed,
+    enabledHere: Boolean = savedEnabledHere,
+    intervalText: String = seed.pollIntervalMinutes.toString(),
+    portText: String = seed.port.toString(),
+) {
+    var seed by mutableStateOf(seed)
+        private set
+    var savedEnabledHere by mutableStateOf(savedEnabledHere)
+        private set
+    var draft by mutableStateOf(draft)
+    var enabledHere by mutableStateOf(enabledHere)
+    var intervalText by mutableStateOf(intervalText)
+    var portText by mutableStateOf(portText)
+
+    val interval: Int?
+        get() = intervalText.toIntOrNull()?.takeIf { it in MailAccount.MIN_POLL_MINUTES..MailAccount.MAX_POLL_MINUTES }
+
+    val port: Int? get() = portText.toIntOrNull()?.takeIf { it in 1..MailAccount.MAX_PORT }
+
+    val valid: Boolean get() = interval != null && port != null
+
+    fun whenSaved(): MailAccount =
+        draft
+            .copy(
+                pollIntervalMinutes = interval ?: draft.pollIntervalMinutes,
+                port = port ?: draft.port,
+            ).normalized()
+
+    /** Take in the saved account and switch, unless the user has changed them here since. */
+    fun follow(
+        account: MailAccount,
+        enabled: Boolean,
+    ) {
+        if (account != seed) {
+            if (draft == seed) {
+                draft = account
+                intervalText = account.pollIntervalMinutes.toString()
+                portText = account.port.toString()
+            }
+            seed = account
+        }
+        if (enabled != savedEnabledHere) {
+            if (enabledHere == savedEnabledHere) enabledHere = enabled
+            savedEnabledHere = enabled
+        }
+    }
+
+    companion object {
+        val Saver: Saver<MailForm, Any> =
+            listSaver(
+                save = {
+                    listOf(
+                        MailAccountJson.encode(it.seed),
+                        it.savedEnabledHere,
+                        MailAccountJson.encode(it.draft),
+                        it.enabledHere,
+                        it.intervalText,
+                        it.portText,
+                    )
+                },
+                restore = {
+                    MailForm(
+                        seed = MailAccountJson.decode(it[0] as String),
+                        savedEnabledHere = it[1] as Boolean,
+                        draft = MailAccountJson.decode(it[2] as String),
+                        enabledHere = it[3] as Boolean,
+                        intervalText = it[4] as String,
+                        portText = it[5] as String,
+                    )
+                },
+            )
+    }
+}
 
 /** Section headings' labels are the accessors (the section title), so search finds them by name. */
 @Composable
@@ -109,40 +191,37 @@ internal fun EmailSettingsPane(
     val mail = state.mail
     // The form is one draft: every field is written when Save is pressed, not once per keystroke
     // (a journal event per character would be permanent). It survives recreation with the screen.
-    var draft by rememberSaveable(mail.account, stateSaver = MailAccountSaver) { mutableStateOf(mail.account) }
+    val form = rememberSaveable(saver = MailForm.Saver) { MailForm(mail.account, mail.enabledHere) }
+    SideEffect { form.follow(mail.account, mail.enabledHere) }
+    val draft = form.draft
     var password by remember { mutableStateOf("") }
-    var intervalText by rememberSaveable(mail.account.pollIntervalMinutes) {
-        mutableStateOf(mail.account.pollIntervalMinutes.toString())
-    }
-    val interval = intervalText.toIntOrNull()
-    val intervalValid = interval != null && interval in MailAccount.MIN_POLL_MINUTES..MailAccount.MAX_POLL_MINUTES
+    val formValid = form.valid
 
-    fun whenSaved(): MailAccount =
-        draft
-            .copy(pollIntervalMinutes = interval ?: draft.pollIntervalMinutes)
-            .normalized()
+    fun whenSaved(): MailAccount = form.whenSaved()
 
     // One entry emitter, so the pane composes its sections as one unit and the Compose detekt
     // ruleset can see the pane's single top-level content source.
     SettingsSection(title = null) {
         SettingsSection(title = stringResource(Res.string.email_account)) {
             HelpText(stringResource(Res.string.email_intro))
+            if (!mail.transportAvailable) HelpText(stringResource(Res.string.email_no_keyring))
             SwitchRow(
                 label = stringResource(Res.string.email_enabled),
                 help = stringResource(Res.string.email_enabled_help),
-                checked = draft.enabled,
-                onCheckedChange = { draft = draft.copy(enabled = it) },
+                checked = form.enabledHere,
+                onCheckedChange = { form.enabledHere = it },
             )
             TextField(
                 value = draft.host,
                 label = stringResource(Res.string.email_host),
-                onChange = { draft = draft.copy(host = it) },
+                onChange = { form.draft = form.draft.copy(host = it) },
             )
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 TextField(
-                    value = draft.port.toString(),
+                    value = form.portText,
                     label = stringResource(Res.string.email_port),
-                    onChange = { text -> text.toIntOrNull()?.let { draft = draft.copy(port = it) } },
+                    // Any digits, an empty field included, so a port can be cleared and typed anew.
+                    onChange = { text -> form.portText = text.filter(Char::isDigit).take(PORT_DIGITS) },
                     number = true,
                     modifier = Modifier.weight(1f),
                 )
@@ -151,9 +230,13 @@ internal fun EmailSettingsPane(
                     options = MailSecurity.entries,
                     optionLabel = { it.label() },
                     onSelect = { security ->
-                        val oldDefault = draft.security.defaultPort()
-                        val port = if (draft.port == oldDefault) security.defaultPort() else draft.port
-                        draft = draft.copy(security = security, port = port)
+                        // A port still at the old security's default follows the new one's.
+                        if (form.port ==
+                            form.draft.security.defaultPort()
+                        ) {
+                            form.portText = security.defaultPort().toString()
+                        }
+                        form.draft = form.draft.copy(security = security)
                     },
                     label = stringResource(Res.string.email_security),
                     modifier = Modifier.weight(2f),
@@ -162,7 +245,7 @@ internal fun EmailSettingsPane(
             TextField(
                 value = draft.username,
                 label = stringResource(Res.string.email_username),
-                onChange = { draft = draft.copy(username = it) },
+                onChange = { form.draft = form.draft.copy(username = it) },
             )
             TextField(
                 value = password,
@@ -175,13 +258,13 @@ internal fun EmailSettingsPane(
             TextField(
                 value = draft.folder,
                 label = stringResource(Res.string.email_folder),
-                onChange = { draft = draft.copy(folder = it) },
+                onChange = { form.draft = form.draft.copy(folder = it) },
             )
             HelpText(stringResource(Res.string.email_folder_help))
             TextField(
-                value = intervalText,
+                value = form.intervalText,
                 label = stringResource(Res.string.email_interval),
-                onChange = { intervalText = it.filter(Char::isDigit) },
+                onChange = { form.intervalText = it.filter(Char::isDigit) },
                 number = true,
             )
             HelpText(stringResource(Res.string.email_interval_help))
@@ -189,7 +272,7 @@ internal fun EmailSettingsPane(
                 selected = draft.startFrom.label(),
                 options = MailStartPoint.entries,
                 optionLabel = { it.label() },
-                onSelect = { draft = draft.copy(startFrom = it) },
+                onSelect = { form.draft = form.draft.copy(startFrom = it) },
                 label = stringResource(Res.string.email_start_from),
             )
             HelpText(stringResource(Res.string.email_start_help))
@@ -211,7 +294,7 @@ internal fun EmailSettingsPane(
                     label = stringResource(Res.string.email_allow_plain),
                     help = stringResource(Res.string.email_allow_plain_help),
                     checked = draft.allowPlain,
-                    onCheckedChange = { draft = draft.copy(allowPlain = it) },
+                    onCheckedChange = { form.draft = form.draft.copy(allowPlain = it) },
                 )
             }
         }
@@ -222,77 +305,53 @@ internal fun EmailSettingsPane(
                 FilterRow(
                     filter = filter,
                     onChange = { changed ->
-                        draft = draft.copy(filters = draft.filters.toMutableList().also { it[index] = changed })
+                        form.draft =
+                            form.draft.copy(
+                                filters =
+                                    form.draft.filters
+                                        .toMutableList()
+                                        .also { it[index] = changed },
+                            )
                     },
-                    onRemove = { draft = draft.copy(filters = draft.filters.filterIndexed { i, _ -> i != index }) },
+                    onRemove = {
+                        form.draft =
+                            form.draft.copy(filters = form.draft.filters.filterIndexed { i, _ -> i != index })
+                    },
                 )
             }
-            OutlinedButton(onClick = { draft = draft.copy(filters = draft.filters + MailFilter()) }) {
+            OutlinedButton(onClick = { form.draft = form.draft.copy(filters = form.draft.filters + MailFilter()) }) {
                 Text(stringResource(Res.string.email_add_filter))
             }
         }
 
-        SettingsSection(title = stringResource(Res.string.email_post_action)) {
-            Dropdown(
-                selected = draft.postAction.label(),
-                options = MailPostAction.entries,
-                optionLabel = { it.label() },
-                onSelect = { draft = draft.copy(postAction = it) },
-                label = stringResource(Res.string.email_post_action),
-            )
-            if (draft.postAction == MailPostAction.MOVE) {
-                TextField(
-                    value = draft.moveToFolder,
-                    label = stringResource(Res.string.email_move_folder),
-                    onChange = { draft = draft.copy(moveToFolder = it) },
-                )
-            }
-            SwitchRow(
-                label = stringResource(Res.string.email_save_pdf),
-                help = stringResource(Res.string.email_save_pdf_help),
-                checked = draft.saveEmailAsPdf,
-                onCheckedChange = { draft = draft.copy(saveEmailAsPdf = it) },
-                enabled = mail.pdfAvailable,
-            )
-        }
+        PostActionSection(draft, pdfAvailable = mail.pdfAvailable, onChange = { form.draft = it })
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
             OutlinedButton(
                 onClick = {
                     val submitted = password
-                    actions.saveMailAccount(whenSaved(), submitted.ifBlank { null }) {
+                    actions.saveMailAccount(whenSaved(), submitted.ifBlank { null }, form.enabledHere) {
                         if (password == submitted) password = ""
                     }
                 },
-                enabled = intervalValid,
+                enabled = formValid,
             ) { Text(stringResource(Res.string.email_save)) }
             OutlinedButton(
                 onClick = { actions.testMailConnection(whenSaved(), password.ifBlank { null }) },
-                enabled = intervalValid,
+                enabled = formValid && mail.transportAvailable,
             ) { Text(stringResource(Res.string.email_test)) }
-            if (mail.checking) {
-                OutlinedButton(
-                    onClick = actions::cancelMailCheck,
-                    enabled = !mail.cancelling,
-                ) { Text(stringResource(Res.string.email_cancel_check)) }
-            } else {
-                OutlinedButton(
-                    onClick = actions::checkMailNow,
-                    enabled = mail.transportAvailable,
-                ) { Text(stringResource(Res.string.email_check_now)) }
-            }
-            if (mail.hasPassword) {
-                OutlinedButton(onClick = {
+            CheckButtons(
+                mail = mail,
+                actions = actions,
+                onClearPassword = {
                     val submitted = password
                     actions.clearMailPassword { if (password == submitted) password = "" }
-                }) {
-                    Text(stringResource(Res.string.email_clear_password))
-                }
-            }
+                },
+            )
         }
 
         Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            MailCheckStatus(mail)
+            MailCheckStatus(mail, onRetry = actions::retryPassedOverMail)
             // A running check has not failed yet: the last one's error would read as this one's.
             mail.lastError?.takeUnless { mail.checking }?.let {
                 Text(
@@ -312,13 +371,84 @@ internal fun EmailSettingsPane(
     }
 }
 
+/** What happens to an imported email, and whether the email itself becomes a PDF too. */
+@Composable
+private fun PostActionSection(
+    draft: MailAccount,
+    pdfAvailable: Boolean,
+    onChange: (MailAccount) -> Unit,
+) {
+    SettingsSection(title = stringResource(Res.string.email_post_action)) {
+        Dropdown(
+            selected = draft.postAction.label(),
+            options = MailPostAction.entries,
+            optionLabel = { it.label() },
+            onSelect = { onChange(draft.copy(postAction = it)) },
+            label = stringResource(Res.string.email_post_action),
+        )
+        when (draft.postAction) {
+            MailPostAction.MOVE -> {
+                TextField(
+                    value = draft.moveToFolder,
+                    label = stringResource(Res.string.email_move_folder),
+                    onChange = { onChange(draft.copy(moveToFolder = it)) },
+                )
+            }
+
+            // Where the email goes, said before it is chosen: the trash, with what the library left.
+            MailPostAction.DELETE -> {
+                HelpText(stringResource(Res.string.email_post_delete_help))
+            }
+
+            MailPostAction.KEEP, MailPostAction.MARK_READ -> {}
+        }
+        SwitchRow(
+            label = stringResource(Res.string.email_save_pdf),
+            help = stringResource(Res.string.email_save_pdf_help),
+            checked = draft.saveEmailAsPdf,
+            onCheckedChange = { onChange(draft.copy(saveEmailAsPdf = it)) },
+            enabled = pdfAvailable,
+        )
+    }
+}
+
+/** Check now, or Cancel while a check runs, and removing the saved password when there is one. */
+@Composable
+private fun CheckButtons(
+    mail: MailState,
+    actions: SettingsPaneActions,
+    onClearPassword: () -> Unit,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (mail.checking) {
+            OutlinedButton(
+                onClick = actions::cancelMailCheck,
+                enabled = !mail.cancelling,
+            ) { Text(stringResource(Res.string.email_cancel_check)) }
+        } else {
+            OutlinedButton(
+                onClick = actions::checkMailNow,
+                enabled = mail.transportAvailable,
+            ) { Text(stringResource(Res.string.email_check_now)) }
+        }
+        if (mail.hasPassword) {
+            OutlinedButton(onClick = onClearPassword) {
+                Text(stringResource(Res.string.email_clear_password))
+            }
+        }
+    }
+}
+
 /**
  * Where this device stands in the folder: a running check's progress, with a bar while the count of
  * what is left is known; otherwise the last check and what it did, and a catch-up still under way.
  */
 @Composable
-private fun MailCheckStatus(mail: MailState) {
-    if (mail.checking) RunningCheck(mail) else CheckedStatus(mail)
+private fun MailCheckStatus(
+    mail: MailState,
+    onRetry: () -> Unit,
+) {
+    if (mail.checking) RunningCheck(mail) else CheckedStatus(mail, onRetry)
 }
 
 @Composable
@@ -346,7 +476,10 @@ private fun RunningCheck(mail: MailState) {
 }
 
 @Composable
-private fun CheckedStatus(mail: MailState) {
+private fun CheckedStatus(
+    mail: MailState,
+    onRetry: () -> Unit,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
             text =
@@ -367,7 +500,7 @@ private fun CheckedStatus(mail: MailState) {
                 style = MaterialTheme.typography.bodySmall,
             )
         }
-        mail.lastReport?.let { MailLeftBehind(it.unreadable, it.droppedAttachments) }
+        MailLeftBehind(mail.passedOver, onRetry = onRetry.takeIf { mail.transportAvailable })
         if (mail.catchingUp) {
             mailPositionText(mail.throughMillis, mail.remaining)?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall)
@@ -434,6 +567,9 @@ private fun MailSecurity.label(): String =
             MailSecurity.PLAIN -> Res.string.email_security_plain
         },
     )
+
+/** A port has at most five digits (65535). */
+private const val PORT_DIGITS = 5
 
 private fun MailSecurity.defaultPort(): Int =
     when (this) {

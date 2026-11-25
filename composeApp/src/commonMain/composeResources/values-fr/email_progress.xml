@@ -6,7 +6,7 @@
     <string name="email_start_last_year">La dernière année</string>
     <string name="email_start_everything">Tout le dossier</string>
     <string name="email_start_help">L’endroit où cet appareil commence à lire le dossier la première fois. La première vérification lit d’un coup tous les e-mails à partir de là ; les suivantes récupèrent les nouveaux.</string>
-    <string name="email_start_change_back">Après l’enregistrement, la prochaine vérification lit aussi les e-mails plus anciens jusqu’à ce point de départ. Les documents déjà dans la bibliothèque sont reconnus et ne sont pas ajoutés deux fois.</string>
+    <string name="email_start_change_back">Après l’enregistrement, la prochaine vérification lit aussi les e-mails plus anciens jusqu’à ce point de départ. Les documents déjà dans la bibliothèque sont reconnus et ne sont pas ajoutés deux fois. Les documents que vous avez supprimés restent supprimés.</string>
     <string name="email_start_change_forward">Après l’enregistrement, les e-mails plus anciens que cet appareil n’a pas encore lus sont ignorés.</string>
 
     <plurals name="email_progress_through">

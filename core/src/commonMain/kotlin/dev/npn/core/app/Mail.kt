@@ -5,7 +5,6 @@ import dev.npn.core.mail.MailAccount
 import dev.npn.core.mail.MailAccountJson
 import dev.npn.core.mail.MailAccountStore
 import dev.npn.core.mail.MailCheckReport
-import dev.npn.core.mail.MailDocumentSink
 import dev.npn.core.mail.MailImportResult
 import dev.npn.core.mail.MailSaveOutcome
 import dev.npn.core.mail.MailState
@@ -29,11 +28,13 @@ interface MailFacade {
     /**
      * Save the account, and the password when [password] is non-null (an empty string removes it).
      * A null password leaves the saved one alone. The account is saved before a secret-store
-     * failure is reported, so it remains visible and can be corrected.
+     * failure is reported, so it remains visible and can be corrected. [enabledHere] is whether
+     * this device checks the account on its own: this device's choice, never synced.
      */
     suspend fun saveAccount(
         account: MailAccount,
         password: String?,
+        enabledHere: Boolean,
     ): MailSaveOutcome
 
     /** Remove the saved password from the OS secret store; the account stays configured otherwise. */
@@ -50,6 +51,12 @@ interface MailFacade {
      * is exhausted. The check outlives a caller that stops waiting; [cancelCheck] stops it.
      */
     suspend fun checkNow(): MailCheckReport
+
+    /**
+     * Check now, first reading again the emails earlier checks passed over and left in the mailbox
+     * ([dev.npn.core.mail.MailState.passedOver]).
+     */
+    suspend fun retryPassedOver(): MailCheckReport
 
     /**
      * Ask the running check, a poll or a Check now, to stop after the message in hand. Everything
@@ -77,26 +84,8 @@ internal class JournalMailAccount(
     }
 }
 
-/**
- * [MailDocumentSink] over the session's ingest façade: email attachments go through the same
- * import path as a picked file or a scan, so hashing, dedupe, the journal and the storage-path
- * rules all apply, and nothing is written into the library outside the importer.
- */
-internal class IngestMailSink(
-    private val ingest: IngestFacade,
-) : MailDocumentSink {
-    override suspend fun importPdf(
-        bytes: ByteArray,
-        suggestedName: String,
-    ): MailImportResult = ingest.importPdfBytes(bytes, suggestedName).toMailResult()
-
-    override suspend fun importImage(
-        bytes: ByteArray,
-        suggestedName: String,
-    ): MailImportResult = ingest.importImagesAsPdf(listOf(bytes), suggestedName).toMailResult()
-}
-
-private fun ImportOutcome.toMailResult(): MailImportResult =
+/** An import outcome in the terms the email report counts. */
+internal fun ImportOutcome.toMailResult(): MailImportResult =
     when (this) {
         is ImportOutcome.Imported -> MailImportResult.Imported(docId)
         is ImportOutcome.Duplicate -> MailImportResult.Duplicate

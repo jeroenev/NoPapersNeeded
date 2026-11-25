@@ -308,10 +308,14 @@ interface SettingsActions {
      */
     fun watchedFolderPicked(pick: FolderPick)
 
-    /** Save the IMAP account, with [password] when one was typed (blank removes it, null keeps it). */
+    /**
+     * Save the IMAP account, with [password] when one was typed (blank removes it, null keeps it),
+     * and whether this device checks it ([enabledHere], this device's own choice).
+     */
     fun saveMailAccount(
         account: MailAccount,
         password: String?,
+        enabledHere: Boolean,
         onSuccess: () -> Unit,
     )
 
@@ -326,6 +330,9 @@ interface SettingsActions {
 
     /** Check the saved account now, whatever the switch and interval say. */
     fun checkMailNow()
+
+    /** Check now, reading again first the emails earlier checks left in the mailbox. */
+    fun retryPassedOverMail()
 
     /** Stop the running mail check after the message in hand; the next check goes on from there. */
     fun cancelMailCheck()

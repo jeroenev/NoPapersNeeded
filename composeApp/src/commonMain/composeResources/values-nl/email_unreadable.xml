@@ -5,8 +5,5 @@
         <item quantity="one">%1$d e-mail kon niet worden geïmporteerd en bleef in de mailbox.</item>
         <item quantity="other">%1$d e-mails konden niet worden geïmporteerd en bleven in de mailbox.</item>
     </plurals>
-    <plurals name="email_attachments_dropped">
-        <item quantity="one">%1$d bijlage was te groot of onleesbaar; de e-mail bleef in de mailbox.</item>
-        <item quantity="other">%1$d bijlagen waren te groot of onleesbaar; de e-mails bleven in de mailbox.</item>
-    </plurals>
+    <string name="email_retry_passed_over">Opnieuw proberen</string>
 </resources>

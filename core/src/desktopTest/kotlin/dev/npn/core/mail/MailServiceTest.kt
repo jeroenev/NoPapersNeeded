@@ -36,7 +36,7 @@ class MailServiceTest {
             val fixture = fixture()
             fixture.store.failSave = true
             kotlin.test.assertFailsWith<IllegalStateException> {
-                fixture.service.saveAccount(account.copy(host = "other.example.com"), "new secret")
+                fixture.service.saveAccount(account.copy(host = "other.example.com"), "new secret", enabledHere = true)
             }
             assertEquals("secret", fixture.credentials.password)
             assertEquals(account, fixture.store.current())
@@ -238,7 +238,12 @@ class MailServiceTest {
     fun savingWithAnUnavailableSecretStoreKeepsTheAccountButReportsTheKeyring() =
         runTest {
             val fixture = fixture(credentials = FakeCredentials(failure = MailSecretFailure.UNAVAILABLE))
-            val outcome = fixture.service.saveAccount(account.copy(host = "other.example.com"), "secret")
+            val outcome =
+                fixture.service.saveAccount(
+                    account.copy(host = "other.example.com"),
+                    "secret",
+                    enabledHere = true,
+                )
             assertIs<MailSaveOutcome.CredentialFailed>(outcome)
             // The account is saved; only the password did not land, so the user can fix the keyring
             // and retry without retyping the whole account.
@@ -249,7 +254,7 @@ class MailServiceTest {
     fun savingWithoutAPasswordLeavesTheStoredOneAlone() =
         runTest {
             val fixture = fixture()
-            fixture.service.saveAccount(account.copy(pollIntervalMinutes = 30), null)
+            fixture.service.saveAccount(account.copy(pollIntervalMinutes = 30), null, enabledHere = true)
             assertEquals(30, fixture.store.current().pollIntervalMinutes)
             assertEquals("secret", fixture.credentials.password)
         }
@@ -481,7 +486,11 @@ class MailServiceTest {
                     ?.imported,
             )
 
-            fixture.service.saveAccount(fixture.store.current().copy(host = "other.example.com"), null)
+            fixture.service.saveAccount(
+                fixture.store.current().copy(host = "other.example.com"),
+                null,
+                enabledHere = true,
+            )
             runCurrent()
             assertEquals(null, fixture.service.state.value.lastReport)
             assertEquals(null, fixture.service.state.value.lastCheckedAtMillis)

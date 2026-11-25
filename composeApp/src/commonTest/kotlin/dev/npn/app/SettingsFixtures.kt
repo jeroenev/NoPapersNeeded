@@ -140,6 +140,7 @@ internal open class NoSettingsPaneActions : SettingsPaneActions {
     override fun saveMailAccount(
         account: MailAccount,
         password: String?,
+        enabledHere: Boolean,
         onSuccess: () -> Unit,
     ) = Unit
 
@@ -151,6 +152,8 @@ internal open class NoSettingsPaneActions : SettingsPaneActions {
     ) = Unit
 
     override fun checkMailNow() = Unit
+
+    override fun retryPassedOverMail() = Unit
 
     override fun cancelMailCheck() = Unit
 

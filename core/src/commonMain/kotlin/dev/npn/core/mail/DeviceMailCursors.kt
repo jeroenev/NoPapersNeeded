@@ -1,6 +1,7 @@
 package dev.npn.core.mail
 
 import dev.npn.core.db.KeyValueDao
+import dev.npn.core.db.KeyValueEntity
 import dev.npn.core.db.MailCursorDao
 import dev.npn.core.db.MailCursorEntity
 import dev.npn.core.util.NpnJson
@@ -9,11 +10,12 @@ import kotlinx.serialization.Serializable
 /**
  * [MailCursorStore] over `device.db`; the only copy of how far this device has read a folder.
  *
- * The `mail_cursor` row holds the position; where it was placed from and how a catch-up stands
- * live beside it in the device's key-value table, as JSON, so this state needed no new schema
- * version. The row is written first: a crash between the two writes leaves the old start point
- * recorded, so the next check places the cursor again (an idempotent step) rather than skipping
- * the placement and the mail it would have read.
+ * The `mail_cursor` row holds the position; where it was placed from, how a catch-up stands and
+ * which messages were passed over live beside it in the device's key-value table, as JSON, so this
+ * state needed no new schema version. Both are written in one transaction.
+ *
+ * Whether this device imports at all is a key of its own in the same table: one per library, as
+ * `device.db` is.
  */
 internal class DeviceMailCursors(
     private val dao: MailCursorDao,
@@ -32,16 +34,6 @@ internal class DeviceMailCursors(
     }
 
     override suspend fun save(cursor: MailCursor) {
-        dao.upsert(
-            MailCursorEntity(
-                accountKey = cursor.accountKey,
-                folder = cursor.folder,
-                uidValidity = cursor.uidValidity,
-                lastUid = cursor.lastUid,
-                lastCheckedAt = cursor.lastCheckedAtMillis,
-                lastError = cursor.lastError?.name,
-            ),
-        )
         val progress =
             StoredProgress(
                 startFrom = cursor.startFrom?.name,
@@ -50,11 +42,28 @@ internal class DeviceMailCursors(
                 remaining = cursor.remaining,
                 blockedUid = cursor.blockedUid,
                 blockedAttempts = cursor.blockedAttempts,
+                passedOver = cursor.passedOver,
             )
-        kv.put(
-            progressKey(cursor.accountKey, cursor.folder),
-            NpnJson.Persisted.encodeToString(StoredProgress.serializer(), progress),
+        dao.save(
+            MailCursorEntity(
+                accountKey = cursor.accountKey,
+                folder = cursor.folder,
+                uidValidity = cursor.uidValidity,
+                lastUid = cursor.lastUid,
+                lastCheckedAt = cursor.lastCheckedAtMillis,
+                lastError = cursor.lastError?.name,
+            ),
+            KeyValueEntity(
+                progressKey(cursor.accountKey, cursor.folder),
+                NpnJson.Persisted.encodeToString(StoredProgress.serializer(), progress),
+            ),
         )
+    }
+
+    override suspend fun enabledHere(): Boolean = kv.get(ENABLED_KEY) == "true"
+
+    override suspend fun setEnabledHere(enabled: Boolean) {
+        kv.put(ENABLED_KEY, enabled.toString())
     }
 
     private fun MailCursorEntity.toModel(progress: StoredProgress?): MailCursor =
@@ -71,6 +80,7 @@ internal class DeviceMailCursors(
             remaining = progress?.remaining,
             blockedUid = progress?.blockedUid,
             blockedAttempts = progress?.blockedAttempts ?: 0,
+            passedOver = progress?.passedOver.orEmpty(),
         )
 
     /**
@@ -85,9 +95,13 @@ internal class DeviceMailCursors(
         val remaining: Int? = null,
         val blockedUid: Long? = null,
         val blockedAttempts: Int = 0,
+        val passedOver: List<Long> = emptyList(),
     )
 
     private companion object {
+        /** Whether this device checks the account: its own choice, never the library's. */
+        const val ENABLED_KEY = "mail.enabledHere"
+
         /** The account key and folder joined by a character neither can hold. */
         fun progressKey(
             accountKey: String,

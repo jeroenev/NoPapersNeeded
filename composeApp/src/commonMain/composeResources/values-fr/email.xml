@@ -2,10 +2,11 @@
 <resources>
     <string name="email_title">Import des e-mails</string>
     <string name="email_intro">Importe les pièces jointes d’une boîte IMAP pendant que l’application est ouverte. Le mot de passe reste dans le trousseau du système, jamais dans la bibliothèque.</string>
+    <string name="email_no_keyring">Cet appareil n’a pas de trousseau système pour garder le mot de passe de la messagerie, il ne peut donc pas importer d’e-mails.</string>
 
     <string name="email_account">Compte</string>
-    <string name="email_enabled">Chercher les nouveaux messages de ce compte</string>
-    <string name="email_enabled_help">Les vérifications ne tournent que pendant que No Papers Needed est ouvert. Rien n’est récupéré quand l’application est fermée.</string>
+    <string name="email_enabled">Vérifier ce compte sur cet appareil</string>
+    <string name="email_enabled_help">Chaque appareil décide pour lui-même. Les vérifications ne tournent que pendant que No Papers Needed est ouvert ; rien n’est récupéré quand l’application est fermée.</string>
     <string name="email_host">Serveur IMAP</string>
     <string name="email_port">Port</string>
     <string name="email_security">Sécurité de la connexion</string>
@@ -35,7 +36,8 @@
     <string name="email_post_keep">Laisser le message tel quel</string>
     <string name="email_post_mark_read">Le marquer comme lu</string>
     <string name="email_post_move">Le déplacer vers un dossier</string>
-    <string name="email_post_delete">Le supprimer</string>
+    <string name="email_post_delete">Le mettre à la corbeille</string>
+    <string name="email_post_delete_help">L’e-mail entier va dans la corbeille de la boîte, avec son texte et les pièces jointes que la bibliothèque ne peut pas prendre, et peut encore y être récupéré.</string>
     <string name="email_move_folder">Déplacer vers le dossier</string>
     <string name="email_save_pdf">Enregistrer aussi l’e-mail en PDF</string>
     <string name="email_save_pdf_help">Ajoute à la bibliothèque un PDF lisible avec les en-têtes et le texte du message.</string>
@@ -71,6 +73,9 @@
     <string name="email_reason_plain_refused">les connexions non chiffrées ne sont pas autorisées</string>
     <string name="email_reason_pdf_render_failed">le PDF de l’e-mail n’a pas pu être créé</string>
     <string name="email_reason_unsupported">l’import d’e-mails n’est pas pris en charge sur cette plateforme</string>
+    <string name="email_reason_move_folder_not_found">le dossier où déplacer les e-mails importés n’existe pas sur le serveur</string>
+    <string name="email_reason_trash_not_found">le serveur n’a pas de corbeille où déplacer les e-mails importés</string>
+    <string name="email_reason_post_action_unsupported">le serveur ne peut pas déplacer ni supprimer un seul message</string>
 
     <string name="email_secret_unsupported">le trousseau du système n’est pas pris en charge sur cette plateforme</string>
     <string name="email_secret_unavailable">le trousseau du système n’est pas disponible</string>

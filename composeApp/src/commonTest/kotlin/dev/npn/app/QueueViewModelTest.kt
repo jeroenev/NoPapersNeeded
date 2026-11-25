@@ -179,6 +179,27 @@ class QueueViewModelTest : MainDispatcherTest() {
             vm.mail.value shouldBe null
         }
 
+    /**
+     * A device that leaves email to another one shows no email row: not "never checked", nor a
+     * missing password it was never meant to have. The emails left behind count across checks.
+     */
+    @Test
+    fun theEmailRowIsForADeviceThatChecksAndCountsWhatIsLeftBehind() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val vm = QueueViewModel(session, FakeSettingsRepository())
+            collecting(vm.mail)
+            val account = MailAccount(host = "mail.example.com", username = "someone")
+
+            session.mail.state.value = MailState(account = account, enabledHere = false)
+            advanceUntilIdle()
+            vm.mail.value shouldBe null
+
+            session.mail.state.value = MailState(account = account, enabledHere = true, passedOver = 2)
+            advanceUntilIdle()
+            vm.mail.value?.passedOver shouldBe 2
+        }
+
     /** Check now and Cancel reach the email facet; a check that ran says nothing here. */
     @Test
     fun checkNowAndCancelReachTheMailFacet() =

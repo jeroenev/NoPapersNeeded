@@ -85,6 +85,14 @@ room3 {
 dependencies {
     add("kspAndroid", libs.room3.compiler)
     add("kspDesktop", libs.room3.compiler)
+    // The email transport's tests against a real IMAP server, in-process. GreenMail brings its own
+    // copy of the Angus implementation; the one the app ships is the one tested.
+    addProvider<MinimalExternalModuleDependency, ExternalModuleDependency>(
+        "desktopTestImplementation",
+        libs.greenmail,
+    ) {
+        exclude(group = "org.eclipse.angus", module = "jakarta.mail")
+    }
 }
 
 // Lint's model lists every component's source directories, KSP's output among them, but AGP does

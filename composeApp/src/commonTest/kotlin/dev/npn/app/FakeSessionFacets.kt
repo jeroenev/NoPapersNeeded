@@ -650,6 +650,10 @@ class FakeCloudSetup : CloudSetup {
 class FakeMailFacade : MailFacade {
     override val state = MutableStateFlow(MailState())
     val savedAccounts = mutableListOf<Pair<MailAccount, String?>>()
+    var enabledHere: Boolean? = null
+        private set
+    var retries = 0
+        private set
     var saveOutcome: MailSaveOutcome = MailSaveOutcome.Saved
     var testOutcome: MailTestOutcome = MailTestOutcome.Ok
     var report: MailCheckReport = MailCheckReport()
@@ -661,8 +665,10 @@ class FakeMailFacade : MailFacade {
     override suspend fun saveAccount(
         account: MailAccount,
         password: String?,
+        enabledHere: Boolean,
     ): MailSaveOutcome {
         savedAccounts += account to password
+        this.enabledHere = enabledHere
         return saveOutcome
     }
 
@@ -685,6 +691,11 @@ class FakeMailFacade : MailFacade {
     override suspend fun checkNow(): MailCheckReport {
         checks++
         if (report.importedDocIds.isNotEmpty()) importedDocuments.emit(report.importedDocIds)
+        return report
+    }
+
+    override suspend fun retryPassedOver(): MailCheckReport {
+        retries++
         return report
     }
 

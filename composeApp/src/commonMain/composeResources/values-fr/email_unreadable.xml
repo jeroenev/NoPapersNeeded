@@ -5,8 +5,5 @@
         <item quantity="one">%1$d e-mail n’a pas pu être importé et est resté dans la boîte aux lettres.</item>
         <item quantity="other">%1$d e-mails n’ont pas pu être importés et sont restés dans la boîte aux lettres.</item>
     </plurals>
-    <plurals name="email_attachments_dropped">
-        <item quantity="one">%1$d pièce jointe était trop volumineuse ou illisible ; son e-mail est resté dans la boîte aux lettres.</item>
-        <item quantity="other">%1$d pièces jointes étaient trop volumineuses ou illisibles ; leurs e-mails sont restés dans la boîte aux lettres.</item>
-    </plurals>
+    <string name="email_retry_passed_over">Réessayer</string>
 </resources>

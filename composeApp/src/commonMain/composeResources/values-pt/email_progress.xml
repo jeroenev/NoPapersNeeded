@@ -6,7 +6,7 @@
     <string name="email_start_last_year">O último ano</string>
     <string name="email_start_everything">Tudo na pasta</string>
     <string name="email_start_help">Onde este dispositivo começa a ler a pasta pela primeira vez. A primeira verificação lê de uma vez todo o e-mail a partir daí; as seguintes buscam o que é novo.</string>
-    <string name="email_start_change_back">Ao guardar, a próxima verificação também lê o e-mail mais antigo até este início. Os documentos que já estão na biblioteca são reconhecidos e não são adicionados duas vezes.</string>
+    <string name="email_start_change_back">Ao guardar, a próxima verificação também lê o e-mail mais antigo até este início. Os documentos que já estão na biblioteca são reconhecidos e não são adicionados duas vezes. Os documentos que eliminou continuam eliminados.</string>
     <string name="email_start_change_forward">Ao guardar, o e-mail mais antigo que este dispositivo ainda não leu é ignorado.</string>
 
     <plurals name="email_progress_through">

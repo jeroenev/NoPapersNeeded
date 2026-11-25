@@ -6,7 +6,7 @@
     <string name="email_start_last_year">Das letzte Jahr</string>
     <string name="email_start_everything">Alles im Ordner</string>
     <string name="email_start_help">Wo dieses Gerät den Ordner beim ersten Mal zu lesen beginnt. Die erste Prüfung liest alle E-Mails ab dort in einem Durchgang; spätere Prüfungen holen, was neu ist.</string>
-    <string name="email_start_change_back">Nach dem Speichern liest die nächste Prüfung auch die älteren E-Mails bis zu diesem Beginn. Dokumente, die schon in der Bibliothek sind, werden erkannt und nicht doppelt hinzugefügt.</string>
+    <string name="email_start_change_back">Nach dem Speichern liest die nächste Prüfung auch die älteren E-Mails bis zu diesem Beginn. Dokumente, die schon in der Bibliothek sind, werden erkannt und nicht doppelt hinzugefügt. Gelöschte Dokumente bleiben gelöscht.</string>
     <string name="email_start_change_forward">Nach dem Speichern werden ältere E-Mails, die dieses Gerät noch nicht gelesen hat, übersprungen.</string>
 
     <plurals name="email_progress_through">

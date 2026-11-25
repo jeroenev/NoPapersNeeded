@@ -250,6 +250,47 @@ class HiddenDocumentImportTest {
             row(id).relPath shouldBe kept
         }
 
+    /**
+     * Email reads mail again on its own (a start moved back, a renumbered folder, another device):
+     * the bytes of a document the user trashed stay out, and the trashed copy is untouched.
+     */
+    @Test
+    fun emailDoesNotBringATrashedDocumentBack() =
+        withDocument { id, bytes ->
+            rig.session.docLifecycle.trashDoc(id)
+
+            rig.session.mailSink.importPdf(bytes, "a.pdf") shouldBe dev.npn.core.mail.MailImportResult.Removed
+
+            row(id).trashed.shouldBeTrue()
+            rig.fs.libraryPdfs().shouldBeEmpty()
+        }
+
+    /** Nor one deleted for good. */
+    @Test
+    fun emailDoesNotBringADeletedDocumentBack() =
+        withDocument { id, bytes ->
+            rig.session.docLifecycle.trashDoc(id)
+            rig.session.docLifecycle.deleteDocPermanently(id)
+
+            rig.session.mailSink.importPdf(bytes, "a.pdf") shouldBe dev.npn.core.mail.MailImportResult.Removed
+
+            rig.fs.libraryPdfs().shouldBeEmpty()
+        }
+
+    /** A document whose file went missing was not removed by anyone: email brings it back as any import does. */
+    @Test
+    fun emailStillBringsAMissingDocumentBack() =
+        withDocument { id, bytes ->
+            Files.delete(rig.libRoot.resolve("a.pdf"))
+            rig.session.rescan()
+
+            rig.session.mailSink.importPdf(bytes, "a.pdf") shouldBe
+                dev.npn.core.mail.MailImportResult
+                    .Imported(id)
+
+            assertLive(id)
+        }
+
     /** Import [bytes] under the name the document had. */
     private suspend fun importAgain(bytes: ByteArray) = rig.session.importPdfBytes(bytes, "a.pdf")
 

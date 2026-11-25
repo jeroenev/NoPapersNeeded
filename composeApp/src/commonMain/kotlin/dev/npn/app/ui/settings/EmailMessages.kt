@@ -2,6 +2,8 @@ package dev.npn.app.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -10,7 +12,6 @@ import dev.npn.app.ui.common.formatEpochDate
 import dev.npn.core.mail.MailFailureReason
 import dev.npn.core.mail.MailSecretFailure
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.email_attachments_dropped
 import no_papers_needed.composeapp.generated.resources.email_left_in_mailbox
 import no_papers_needed.composeapp.generated.resources.email_progress_left
 import no_papers_needed.composeapp.generated.resources.email_progress_through
@@ -21,14 +22,18 @@ import no_papers_needed.composeapp.generated.resources.email_reason_fetch_failed
 import no_papers_needed.composeapp.generated.resources.email_reason_folder_not_found
 import no_papers_needed.composeapp.generated.resources.email_reason_import_failed
 import no_papers_needed.composeapp.generated.resources.email_reason_message_unreadable
+import no_papers_needed.composeapp.generated.resources.email_reason_move_folder_not_found
 import no_papers_needed.composeapp.generated.resources.email_reason_no_password
 import no_papers_needed.composeapp.generated.resources.email_reason_not_configured
 import no_papers_needed.composeapp.generated.resources.email_reason_pdf_render_failed
 import no_papers_needed.composeapp.generated.resources.email_reason_plain_refused
 import no_papers_needed.composeapp.generated.resources.email_reason_post_action_failed
+import no_papers_needed.composeapp.generated.resources.email_reason_post_action_unsupported
 import no_papers_needed.composeapp.generated.resources.email_reason_secret_unavailable
 import no_papers_needed.composeapp.generated.resources.email_reason_tls_failed
+import no_papers_needed.composeapp.generated.resources.email_reason_trash_not_found
 import no_papers_needed.composeapp.generated.resources.email_reason_unsupported
+import no_papers_needed.composeapp.generated.resources.email_retry_passed_over
 import no_papers_needed.composeapp.generated.resources.email_secret_store_failed
 import no_papers_needed.composeapp.generated.resources.email_secret_unavailable
 import no_papers_needed.composeapp.generated.resources.email_secret_unsupported
@@ -53,6 +58,9 @@ internal fun MailFailureReason.textRes(): StringResource =
         MailFailureReason.PLAIN_REFUSED -> Res.string.email_reason_plain_refused
         MailFailureReason.PDF_RENDER_FAILED -> Res.string.email_reason_pdf_render_failed
         MailFailureReason.UNSUPPORTED -> Res.string.email_reason_unsupported
+        MailFailureReason.MOVE_FOLDER_NOT_FOUND -> Res.string.email_reason_move_folder_not_found
+        MailFailureReason.TRASH_NOT_FOUND -> Res.string.email_reason_trash_not_found
+        MailFailureReason.POST_ACTION_UNSUPPORTED -> Res.string.email_reason_post_action_unsupported
     }
 
 /** The whole-sentence resource for a keyring failure. */
@@ -100,24 +108,20 @@ internal fun mailPositionText(
     }
 
 /**
- * What the last check left in the mailbox, one sentence per kind: emails it could not import, and
- * attachments it had to leave out of emails it did. Nothing when it left nothing.
+ * The emails checks have left in the mailbox without importing them fully, over every check so far,
+ * and a way to try them again. Nothing when none are left.
  */
 @Composable
 internal fun MailLeftBehind(
-    unreadable: Int,
-    droppedAttachments: Int,
+    passedOver: Int,
     modifier: Modifier = Modifier,
+    onRetry: (() -> Unit)? = null,
 ) {
-    if (unreadable == 0 && droppedAttachments == 0) return
+    if (passedOver == 0) return
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        if (unreadable > 0) {
-            HelpText(pluralStringResource(Res.plurals.email_left_in_mailbox, unreadable, unreadable))
-        }
-        if (droppedAttachments > 0) {
-            HelpText(
-                pluralStringResource(Res.plurals.email_attachments_dropped, droppedAttachments, droppedAttachments),
-            )
+        HelpText(pluralStringResource(Res.plurals.email_left_in_mailbox, passedOver, passedOver))
+        if (onRetry != null) {
+            TextButton(onClick = onRetry) { Text(stringResource(Res.string.email_retry_passed_over)) }
         }
     }
 }

@@ -61,6 +61,14 @@ internal class SupersededImportException :
     IllegalArgumentException("The file is an earlier version of a document in the library")
 
 /**
+ * The file holds the bytes of a document the user trashed or deleted, and the import asked not to
+ * bring such a document back (`reviveRemoved = false`): a source that reads the same mail again on
+ * its own, not a person choosing the file. Nothing is moved.
+ */
+internal class RemovedImportException :
+    IllegalArgumentException("The file is a document that was removed from the library")
+
+/**
  * Imports external PDFs or byte payloads into the library, deduplicating by content hash.
  *
  * Because [LibraryFileSystem.sha256] hashes a library-relative path (there is no stream-hash of an
@@ -116,11 +124,17 @@ internal class ImportService(
         toDir: String = NpnPaths.DEFAULT_INBOX,
     ): ImportResult = staged(suggestedName, toDir) { tmpPath -> fs.importExternal(source, tmpPath) }
 
+    /**
+     * Import [bytes]. With [reviveRemoved] false, bytes of a document the user trashed or deleted are
+     * refused ([RemovedImportException]) instead of bringing it back: for a source that reads the
+     * same bytes again on its own (email), where the user's removal must win.
+     */
     suspend fun importBytes(
         bytes: ByteArray,
         suggestedName: String,
         toDir: String = NpnPaths.DEFAULT_INBOX,
-    ): ImportResult = staged(suggestedName, toDir) { tmpPath -> fs.writeBytesOnce(tmpPath, bytes) }
+        reviveRemoved: Boolean = true,
+    ): ImportResult = staged(suggestedName, toDir, reviveRemoved) { tmpPath -> fs.writeBytesOnce(tmpPath, bytes) }
 
     /**
      * Import what [stage] writes to a fresh staging path. The staging file is deleted after, best
@@ -132,12 +146,13 @@ internal class ImportService(
     private suspend inline fun staged(
         suggestedName: String,
         toDir: String,
+        reviveRemoved: Boolean = true,
         stage: (tmpPath: String) -> Unit,
     ): ImportResult {
         val tmpPath = NpnPaths.Temp.importPath(ids.next())
         try {
             stage(tmpPath)
-            return finishImport(tmpPath, suggestedName, toDir)
+            return finishImport(tmpPath, suggestedName, toDir, reviveRemoved)
         } finally {
             withContext(NonCancellable) {
                 runCatchingCancellable { if (fs.exists(tmpPath)) fs.delete(tmpPath) }
@@ -149,6 +164,7 @@ internal class ImportService(
         tmpPath: String,
         suggestedName: String,
         toDir: String,
+        reviveRemoved: Boolean,
     ): ImportResult {
         // The stat of the staged bytes, which only this import writes, and which the move into place
         // keeps: the row records it, not a stat of the target once moved, which by then may be of a
@@ -164,6 +180,10 @@ internal class ImportService(
         return withContext(NonCancellable) {
             var outcome: ImportResult? = null
             serialize { journal ->
+                // Asked under the lock, so no trash or restore lands between the answer and the move.
+                if (!reviveRemoved && (journal.isTrashed(hash) || journal.isDeleted(hash))) {
+                    throw RemovedImportException()
+                }
                 outcome = recordReturn(place(tmpPath, hash, staged, suggestedName, toDir, journal), journal, tmpPath)
             }
             val result = checkNotNull(outcome)

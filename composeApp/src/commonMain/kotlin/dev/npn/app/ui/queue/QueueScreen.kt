@@ -565,7 +565,7 @@ private fun MailRow(
                 )
             }
         }
-        if (!mail.checking) MailLeftBehind(mail.lastUnreadable, mail.lastDroppedAttachments)
+        if (!mail.checking) MailLeftBehind(mail.passedOver)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (mail.checking) {
                 OutlinedButton(onClick = actions.onCancelMailCheck, enabled = !mail.cancelling) {

@@ -23,6 +23,8 @@ import jakarta.mail.search.ReceivedDateTerm
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.eclipse.angus.mail.iap.BadCommandException
+import org.eclipse.angus.mail.iap.CommandFailedException
 import org.eclipse.angus.mail.iap.ConnectionException
 import org.eclipse.angus.mail.imap.IMAPFolder
 import org.eclipse.angus.mail.imap.IMAPStore
@@ -54,8 +56,15 @@ internal class JakartaMailTransport(
         account: MailAccount,
         password: String,
     ): MailFailureReason? =
-        withContext(io) {
-            withFolder(account, password, Folder.READ_ONLY) { reason -> reason }
+        when (val opened = open(account, password)) {
+            is MailOpenResult.Failed -> {
+                opened.reason
+            }
+
+            is MailOpenResult.Opened -> {
+                opened.connection.close()
+                null
+            }
         }
 
     override suspend fun open(
@@ -70,6 +79,17 @@ internal class JakartaMailTransport(
                     return@withContext MailOpenResult.Failed(connectReason(failure), causeChain(failure))
                 }
             try {
+                val target =
+                    when (val checked = postActionTarget(store, account)) {
+                        is PostActionTarget.Refused -> {
+                            close(store)
+                            return@withContext MailOpenResult.Failed(checked.reason)
+                        }
+
+                        is PostActionTarget.Ready -> {
+                            checked.folder
+                        }
+                    }
                 val folder = openFolder(store, account, Folder.READ_WRITE)
                 val uidFolder = folder as? UIDFolder
                 if (uidFolder == null) {
@@ -78,7 +98,7 @@ internal class JakartaMailTransport(
                     return@withContext MailOpenResult.Failed(MailFailureReason.FETCH_FAILED)
                 }
                 MailOpenResult.Opened(
-                    JakartaMailConnection(store, folder, uidFolder.uidValidity, uidNext(folder, uidFolder), io),
+                    JakartaMailConnection(store, folder, uidFolder.uidValidity, uidNext(folder, uidFolder), target, io),
                 )
             } catch (failure: Exception) {
                 close(store)
@@ -86,23 +106,77 @@ internal class JakartaMailTransport(
             }
         }
 
-    private inline fun withFolder(
+    private sealed interface PostActionTarget {
+        /** The folder the post-action puts a message in; null for one that moves nothing. */
+        class Ready(
+            val folder: String?,
+        ) : PostActionTarget
+
+        class Refused(
+            val reason: MailFailureReason,
+        ) : PostActionTarget
+    }
+
+    /**
+     * Where the account's post-action puts a message, checked once per connection before anything
+     * is imported. A move target or trash folder the server lacks, or a server that can move no
+     * single message (neither MOVE nor UIDPLUS, so an expunge would take every message another
+     * client marked deleted), is the account's problem, not one message's: it fails the open.
+     */
+    private fun postActionTarget(
+        store: Store,
         account: MailAccount,
-        password: String,
-        mode: Int,
-        failure: (MailFailureReason) -> MailFailureReason,
-    ): MailFailureReason? {
-        var store: Store? = null
-        var folder: Folder? = null
-        return try {
-            store = connect(account, password)
-            folder = openFolder(store, account, mode)
-            null
-        } catch (thrown: Exception) {
-            failure(connectReason(thrown))
-        } finally {
-            close(folder, expunge = false)
-            close(store)
+    ): PostActionTarget {
+        val imap = store as? IMAPStore
+        val canMoveOne = imap != null && (imap.hasCapability("MOVE") || imap.hasCapability("UIDPLUS"))
+        return when (account.postAction) {
+            MailPostAction.KEEP, MailPostAction.MARK_READ -> {
+                PostActionTarget.Ready(null)
+            }
+
+            MailPostAction.MOVE -> {
+                val target = store.getFolder(account.moveToFolder)
+                when {
+                    !canMoveOne -> {
+                        PostActionTarget.Refused(MailFailureReason.POST_ACTION_UNSUPPORTED)
+                    }
+
+                    target == null || !target.exists() -> {
+                        PostActionTarget.Refused(
+                            MailFailureReason.MOVE_FOLDER_NOT_FOUND,
+                        )
+                    }
+
+                    else -> {
+                        PostActionTarget.Ready(target.fullName)
+                    }
+                }
+            }
+
+            MailPostAction.DELETE -> {
+                val trash = trashFolder(store)?.takeUnless { it.equals(account.folder, ignoreCase = true) }
+                when {
+                    !canMoveOne -> PostActionTarget.Refused(MailFailureReason.POST_ACTION_UNSUPPORTED)
+                    trash == null -> PostActionTarget.Refused(MailFailureReason.TRASH_NOT_FOUND)
+                    else -> PostActionTarget.Ready(trash)
+                }
+            }
+        }
+    }
+
+    /**
+     * The server's trash folder: the one it marks `\Trash` (RFC 6154 SPECIAL-USE, as Gmail's
+     * `[Gmail]/Trash`, Fastmail and Dovecot do), else one with a usual trash name.
+     */
+    private fun trashFolder(store: Store): String? {
+        val folders = store.defaultFolder.list("*").toList()
+        folders
+            .firstOrNull { folder ->
+                (folder as? IMAPFolder)?.attributes?.any { it.equals("\\Trash", ignoreCase = true) } ==
+                    true
+            }?.let { return it.fullName }
+        return TRASH_NAMES.firstNotNullOfOrNull { name ->
+            folders.firstOrNull { it.fullName.equals(name, ignoreCase = true) }?.fullName
         }
     }
 
@@ -196,6 +270,8 @@ private class JakartaMailConnection(
     private val folder: Folder,
     override val uidValidity: Long,
     override val uidNext: Long,
+    /** Where the post-action puts a message: the move target, or the trash; checked on open. */
+    private val postActionFolder: String?,
     private val io: CoroutineDispatcher,
 ) : MailConnection {
     private val uids = folder as UIDFolder
@@ -248,12 +324,7 @@ private class JakartaMailConnection(
                         uids.getMessagesByUID(start, windowEnd).filterNotNull()
                     }
                 val taken = listed.take(MailTransport.PAGE_SIZE)
-                // One request for the whole batch's UIDs, envelopes and structures. Without it each
-                // message costs a round trip for its envelope, another for its structure, and one per
-                // part, every one of them before the filters could say it was not wanted.
-                folder.fetch(taken.toTypedArray(), BATCH_PROFILE)
-                batch = taken.associateBy(uids::getUID)
-                val messages = taken.map { MimeParser.envelopeOrFailed(uids.getUID(it), it) }
+                val messages = describeBatch(taken)
                 // A full page stops at its last message; a short one has seen the whole window.
                 val scannedThrough =
                     if (listed.size > MailTransport.PAGE_SIZE) messages.last().uid else maxOf(afterUid, windowEnd)
@@ -262,6 +333,35 @@ private class JakartaMailConnection(
                 MailFetchResult.Failed(reason(failure, MailFailureReason.FETCH_FAILED), causeChain(failure))
             }
         }
+
+    override suspend fun describe(uids: List<Long>): MailFetchResult =
+        withContext(io) {
+            try {
+                val held =
+                    uids
+                        .distinct()
+                        .sorted()
+                        .chunked(MailTransport.PAGE_SIZE)
+                        .flatMap { chunk ->
+                            this@JakartaMailConnection.uids.getMessagesByUID(chunk.toLongArray()).filterNotNull()
+                        }
+                val messages = describeBatch(held)
+                MailFetchResult.Success(messages, uidNext = uidNext, scannedThroughUid = uids.maxOrNull() ?: 0)
+            } catch (failure: Exception) {
+                MailFetchResult.Failed(reason(failure, MailFailureReason.FETCH_FAILED), causeChain(failure))
+            }
+        }
+
+    /**
+     * One request for the whole batch's UIDs, envelopes and structures, kept for the downloads that
+     * follow. Without it each message costs a round trip for its envelope, another for its
+     * structure, and one per part, every one of them before the filters could say it was not wanted.
+     */
+    private fun describeBatch(messages: List<Message>): List<MailEnvelope> {
+        folder.fetch(messages.toTypedArray(), BATCH_PROFILE)
+        batch = messages.associateBy(uids::getUID)
+        return messages.map { MimeParser.envelopeOrFailed(uids.getUID(it), it) }
+    }
 
     override suspend fun download(
         uid: Long,
@@ -273,7 +373,11 @@ private class JakartaMailConnection(
                     message(uid) ?: return@withContext MailDownloadResult.Failed(MailFailureReason.FETCH_FAILED)
                 MailDownloadResult.Success(MimeParser.downloadOrFailed(uid, message, withBody))
             } catch (failure: Exception) {
-                MailDownloadResult.Failed(reason(failure, MailFailureReason.FETCH_FAILED), causeChain(failure))
+                if (isServerRefusal(failure) && !isConnectionLoss(failure)) {
+                    MailDownloadResult.Refused(MailFailureReason.FETCH_FAILED, causeChain(failure))
+                } else {
+                    MailDownloadResult.Failed(reason(failure, MailFailureReason.FETCH_FAILED), causeChain(failure))
+                }
             }
         }
 
@@ -283,35 +387,44 @@ private class JakartaMailConnection(
     override suspend fun moveTo(
         uid: Long,
         folder: String,
+    ): MailFailureReason? = moveOne(uid, folder, MailFailureReason.MOVE_FOLDER_NOT_FOUND)
+
+    override suspend fun delete(uid: Long): MailFailureReason? =
+        moveOne(uid, postActionFolder ?: return MailFailureReason.TRASH_NOT_FOUND, MailFailureReason.TRASH_NOT_FOUND)
+
+    /**
+     * Move one message to [target]: IMAP MOVE where the server has it, else a copy and a UID
+     * EXPUNGE of that one message (UIDPLUS), never a plain expunge, which would also take every
+     * message another client marked deleted. [open] already refused a server with neither.
+     */
+    private suspend fun moveOne(
+        uid: Long,
+        target: String,
+        missing: MailFailureReason,
     ): MailFailureReason? =
         withContext(io) {
             try {
                 val message = message(uid) ?: return@withContext MailFailureReason.FETCH_FAILED
-                val target = store.getFolder(folder)
-                if (target == null || !target.exists()) return@withContext MailFailureReason.FOLDER_NOT_FOUND
-                val imapFolder = this@JakartaMailConnection.folder as? IMAPFolder
-                if (imapFolder == null || !(store as IMAPStore).hasCapability("UIDPLUS")) {
-                    return@withContext MailFailureReason.POST_ACTION_FAILED
-                }
-                imapFolder.copyMessages(arrayOf(message), target)
-                message.setFlag(Flags.Flag.DELETED, true)
-                imapFolder.expunge(arrayOf(message))
-                null
-            } catch (failure: Exception) {
-                reason(failure, MailFailureReason.POST_ACTION_FAILED)
-            }
-        }
+                val destination = store.getFolder(target)
+                if (destination == null || !destination.exists()) return@withContext missing
+                val imapFolder =
+                    folder as? IMAPFolder ?: return@withContext MailFailureReason.POST_ACTION_UNSUPPORTED
+                val imapStore = store as IMAPStore
+                when {
+                    imapStore.hasCapability("MOVE") -> {
+                        imapFolder.moveMessages(arrayOf(message), destination)
+                    }
 
-    override suspend fun delete(uid: Long): MailFailureReason? =
-        withContext(io) {
-            try {
-                val message = message(uid) ?: return@withContext MailFailureReason.FETCH_FAILED
-                val imapFolder = folder as? IMAPFolder
-                if (imapFolder == null || !(store as IMAPStore).hasCapability("UIDPLUS")) {
-                    return@withContext MailFailureReason.POST_ACTION_FAILED
+                    imapStore.hasCapability("UIDPLUS") -> {
+                        imapFolder.copyMessages(arrayOf(message), destination)
+                        message.setFlag(Flags.Flag.DELETED, true)
+                        imapFolder.expunge(arrayOf(message))
+                    }
+
+                    else -> {
+                        return@withContext MailFailureReason.POST_ACTION_UNSUPPORTED
+                    }
                 }
-                message.setFlag(Flags.Flag.DELETED, true)
-                imapFolder.expunge(arrayOf(message))
                 null
             } catch (failure: Exception) {
                 reason(failure, MailFailureReason.POST_ACTION_FAILED)
@@ -387,6 +500,18 @@ internal fun causeChain(failure: Throwable): String =
         .joinToString(" <- ") { it::class.simpleName ?: "Throwable" }
 
 private const val MAX_CAUSES = 4
+
+/** Trash folder names to fall back on for a server without SPECIAL-USE, tried in this order. */
+private val TRASH_NAMES =
+    listOf("Trash", "INBOX.Trash", "INBOX/Trash", "Deleted Items", "Deleted Messages", "[Gmail]/Trash")
+
+/**
+ * Whether the server answered a command with NO or BAD: a refusal (throttling, a temporary error,
+ * a message it cannot serve now) rather than a message that cannot be parsed. Retried on later
+ * checks like any failure, never marked unreadable at once.
+ */
+internal fun isServerRefusal(failure: Throwable): Boolean =
+    failure.hasCause<CommandFailedException>() || failure.hasCause<BadCommandException>()
 
 /**
  * Whether [failure] is the connection's rather than one message's: the folder or store closed,
@@ -488,6 +613,7 @@ internal object MimeParser {
                 subject = decode(message.subject).orEmpty(),
                 dateMillis = message.sentDate?.time ?: message.receivedDate?.time,
                 attachments = candidates(leaves(message)).map { MailAttachmentInfo(it.name, it.leaf.part.contentType) },
+                receivedMillis = message.receivedDate?.time ?: message.sentDate?.time,
             )
         } catch (failure: Exception) {
             if (isConnectionLoss(failure)) throw failure
@@ -515,7 +641,9 @@ internal object MimeParser {
         try {
             download(uid, message, withBody)
         } catch (failure: Exception) {
-            if (isConnectionLoss(failure)) throw failure
+            // A lost connection is the fetch's to retry, a refusal the check's; neither says the
+            // message cannot be read.
+            if (isConnectionLoss(failure) || isServerRefusal(failure)) throw failure
             MailMessage(
                 uid = uid,
                 from = "",
@@ -656,7 +784,7 @@ internal object MimeParser {
             } catch (_: AttachmentTooLargeException) {
                 return PartRead.Dropped(MailDroppedPart.TOO_LARGE)
             } catch (failure: Exception) {
-                if (isConnectionLoss(failure)) throw failure
+                if (isConnectionLoss(failure) || isServerRefusal(failure)) throw failure
                 return PartRead.Dropped(MailDroppedPart.UNREADABLE)
             }
         val image = candidate.kind == MailAttachmentKind.IMAGE
@@ -664,18 +792,29 @@ internal object MimeParser {
         return PartRead.Read(MailAttachment(candidate.name, part.contentType, bytes))
     }
 
-    /** The text of the body's plain-text leaves, capped; a named part is an attachment, not text. */
+    /**
+     * The text of the body's plain-text leaves, capped; a named part is an attachment, not text. A
+     * message with no plain text (much mail from shops, banks and services is HTML only) gets the
+     * text of its HTML instead, so its email PDF says what the email said.
+     */
     private fun plainText(leaves: List<Leaf>): String {
         val body = StringBuilder()
-        val textParts =
+
+        fun bodyParts(type: String) =
             leaves.map(Leaf::part).filter { part ->
-                part.isMimeType("text/plain") &&
+                part.isMimeType(type) &&
                     !isAttachment(part) &&
                     decode(part.fileName)?.let { attachmentKind(it, part.contentType) } == null
             }
-        for (part in textParts) {
-            if (body.length >= MAX_BODY_CHARS) break
-            (part.content as? String)?.let { body.append(it.take(MAX_BODY_CHARS - body.length)) }
+        val plain = bodyParts("text/plain")
+        val textParts = plain.ifEmpty { bodyParts("text/html") }
+        for (part in textParts.takeWhile { body.length < MAX_BODY_CHARS }) {
+            val content = part.content as? String
+            if (content != null) {
+                val text = if (plain.isEmpty()) HtmlText.toPlainText(content.take(MAX_BODY_CHARS)) else content
+                if (body.isNotEmpty()) body.append("\n\n")
+                body.append(text.take(MAX_BODY_CHARS - body.length))
+            }
         }
         return body
             .toString()

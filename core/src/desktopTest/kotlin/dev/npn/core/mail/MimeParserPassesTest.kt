@@ -105,4 +105,43 @@ class MimeParserPassesTest {
         assertTrue(html.reads > 0)
         assertEquals(0, shown.reads)
     }
+
+    /** Mail that is HTML only (many receipts and statements) still gets a body in its email PDF. */
+    @Test
+    fun anHtmlOnlyEmailGivesItsTextToTheEmailPdf() {
+        val html = text("<html><body><p>Your order <b>#42</b></p><p>Total: 12&nbsp;&euro;</p></body></html>", "html")
+        val downloaded = MimeParser.downloadOrFailed(1, message(html), withBody = true)
+        assertEquals("Your order #42\n\nTotal: 12 €", downloaded.bodyText)
+    }
+
+    /**
+     * A server that answers a body fetch with NO (throttling, a temporary error) has not shown the
+     * email to be unreadable: the refusal reaches the check, which tries the email again later.
+     */
+    @Test
+    fun aServerRefusalIsNotTakenForAnUnreadableEmail() {
+        val refused =
+            object : MimeBodyPart() {
+                override fun getInputStream(): java.io.InputStream =
+                    throw jakarta.mail.MessagingException(
+                        "fetch refused",
+                        org.eclipse.angus.mail.iap
+                            .CommandFailedException("NO [UNAVAILABLE] try later"),
+                    )
+            }.apply {
+                dataHandler = DataHandler(ByteArrayDataSource(byteArrayOf(1, 2, 3), "application/pdf"))
+                fileName = "statement.pdf"
+                disposition = "attachment"
+            }
+        val message =
+            MimeMessage(Session.getInstance(Properties())).apply {
+                setContent(MimeMultipart().apply { addBodyPart(refused) })
+                saveChanges()
+            }
+        val thrown =
+            kotlin.test.assertFailsWith<jakarta.mail.MessagingException> {
+                MimeParser.downloadOrFailed(1, message, withBody = false)
+            }
+        assertTrue(isServerRefusal(thrown))
+    }
 }

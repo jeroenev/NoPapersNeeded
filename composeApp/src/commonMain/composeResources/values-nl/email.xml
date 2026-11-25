@@ -2,10 +2,11 @@
 <resources>
     <string name="email_title">E-mail importeren</string>
     <string name="email_intro">Importeer bijlagen uit één IMAP-postvak terwijl de app open is. Het wachtwoord staat in de sleutelhanger van het systeem, nooit in de bibliotheek.</string>
+    <string name="email_no_keyring">Dit apparaat heeft geen sleutelhanger van het systeem om het e-mailwachtwoord in te bewaren, dus het kan geen e-mail importeren.</string>
 
     <string name="email_account">Account</string>
-    <string name="email_enabled">Dit account op nieuwe e-mail controleren</string>
-    <string name="email_enabled_help">Er wordt alleen gecontroleerd zolang No Papers Needed open is. Bij een gesloten app wordt niets opgehaald.</string>
+    <string name="email_enabled">Dit account op dit apparaat controleren</string>
+    <string name="email_enabled_help">Elk apparaat kiest dit zelf. Er wordt alleen gecontroleerd zolang No Papers Needed open is; bij een gesloten app wordt niets opgehaald.</string>
     <string name="email_host">IMAP-server</string>
     <string name="email_port">Poort</string>
     <string name="email_security">Beveiliging van de verbinding</string>
@@ -35,7 +36,8 @@
     <string name="email_post_keep">Het bericht laten zoals het is</string>
     <string name="email_post_mark_read">Als gelezen markeren</string>
     <string name="email_post_move">Naar een map verplaatsen</string>
-    <string name="email_post_delete">Verwijderen</string>
+    <string name="email_post_delete">Naar de prullenbak verplaatsen</string>
+    <string name="email_post_delete_help">De hele e-mail gaat naar de prullenbak van de mailbox, met de tekst en alle bijlagen die de bibliotheek niet kan opnemen, zodat hij daar nog terug te halen is.</string>
     <string name="email_move_folder">Naar map</string>
     <string name="email_save_pdf">De e-mail ook als PDF opslaan</string>
     <string name="email_save_pdf_help">Voegt een leesbare PDF met de kopregels en tekst van het bericht aan de bibliotheek toe.</string>
@@ -71,6 +73,9 @@
     <string name="email_reason_plain_refused">onversleutelde verbindingen zijn niet toegestaan</string>
     <string name="email_reason_pdf_render_failed">de PDF van de e-mail kon niet worden gemaakt</string>
     <string name="email_reason_unsupported">e-mail importeren wordt op dit platform niet ondersteund</string>
+    <string name="email_reason_move_folder_not_found">de map om geïmporteerde e-mail naartoe te verplaatsen bestaat niet op de server</string>
+    <string name="email_reason_trash_not_found">de server heeft geen prullenbak om geïmporteerde e-mail naartoe te verplaatsen</string>
+    <string name="email_reason_post_action_unsupported">de server kan geen los bericht verplaatsen of verwijderen</string>
 
     <string name="email_secret_unsupported">de sleutelhanger van het systeem wordt op dit platform niet ondersteund</string>
     <string name="email_secret_unavailable">de sleutelhanger van het systeem is niet beschikbaar</string>

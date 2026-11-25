@@ -304,9 +304,10 @@ class SettingsViewModel(
     override fun saveMailAccount(
         account: MailAccount,
         password: String?,
+        enabledHere: Boolean,
         onSuccess: () -> Unit,
     ) = launchReporting(Res.string.email_save_failed) {
-        when (val outcome = mail.saveAccount(account, password)) {
+        when (val outcome = mail.saveAccount(account, password, enabledHere)) {
             MailSaveOutcome.Saved -> {
                 onSuccess()
                 message(uiText(Res.string.email_saved))
@@ -362,9 +363,13 @@ class SettingsViewModel(
         }
     }
 
-    override fun checkMailNow() {
+    override fun checkMailNow() = reportCheck { mail.checkNow() }
+
+    override fun retryPassedOverMail() = reportCheck { mail.retryPassedOver() }
+
+    private fun reportCheck(check: suspend () -> MailCheckReport) {
         viewModelScope.launch {
-            runCatchingCancellable { mail.checkNow() }.fold(
+            runCatchingCancellable { check() }.fold(
                 onSuccess = { report -> checkReportText(report)?.let(::message) },
                 onFailure = { message(uiText(Res.string.email_check_failed, it.reasonText())) },
             )

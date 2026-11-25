@@ -37,6 +37,7 @@ class DeviceMailCursorsTest {
                     remaining = 7,
                     blockedUid = 43,
                     blockedAttempts = 2,
+                    passedOver = listOf(3, 17),
                 )
             cursors.save(cursor)
             cursors.get(cursor.accountKey, cursor.folder) shouldBe cursor
@@ -79,5 +80,15 @@ class DeviceMailCursorsTest {
             val cursor = cursors.get("a@b:993", "INBOX")
             cursor?.startFrom shouldBe null
             cursor?.catchingUp shouldBe true
+        }
+
+    @Test
+    fun whetherThisDeviceImportsIsKeptAndOffUntilTurnedOn() =
+        runTest {
+            cursors.enabledHere() shouldBe false
+            cursors.setEnabledHere(true)
+            DeviceMailCursors(db.mailCursorDao(), db.keyValueDao()).enabledHere() shouldBe true
+            cursors.setEnabledHere(false)
+            cursors.enabledHere() shouldBe false
         }
 }

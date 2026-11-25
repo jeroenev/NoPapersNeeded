@@ -6,7 +6,7 @@
     <string name="email_start_last_year">Het laatste jaar</string>
     <string name="email_start_everything">Alles in de map</string>
     <string name="email_start_help">Waar dit apparaat de map de eerste keer begint te lezen. De eerste controle leest alle e-mail vanaf daar in één keer; latere controles halen op wat nieuw is.</string>
-    <string name="email_start_change_back">Na het opslaan leest de volgende controle ook de oudere e-mail tot dit beginpunt. Documenten die al in de bibliotheek staan, worden herkend en niet dubbel toegevoegd.</string>
+    <string name="email_start_change_back">Na het opslaan leest de volgende controle ook de oudere e-mail tot dit beginpunt. Documenten die al in de bibliotheek staan, worden herkend en niet dubbel toegevoegd. Documenten die je verwijderd hebt, blijven verwijderd.</string>
     <string name="email_start_change_forward">Na het opslaan wordt oudere e-mail die dit apparaat nog niet las, overgeslagen.</string>
 
     <plurals name="email_progress_through">

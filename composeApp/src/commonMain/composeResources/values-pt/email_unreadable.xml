@@ -5,8 +5,5 @@
         <item quantity="one">%1$d e-mail não pôde ser importado e ficou na caixa de correio.</item>
         <item quantity="other">%1$d e-mails não puderam ser importados e ficaram na caixa de correio.</item>
     </plurals>
-    <plurals name="email_attachments_dropped">
-        <item quantity="one">%1$d anexo era demasiado grande ou ilegível; o seu e-mail ficou na caixa de correio.</item>
-        <item quantity="other">%1$d anexos eram demasiado grandes ou ilegíveis; os seus e-mails ficaram na caixa de correio.</item>
-    </plurals>
+    <string name="email_retry_passed_over">Tentar de novo</string>
 </resources>

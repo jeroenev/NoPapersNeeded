@@ -116,17 +116,23 @@ class MailAccountTest {
         val stored =
             MailAccountJson.encode(
                 account().copy(
-                    enabled = true,
                     saveEmailAsPdf = true,
                     filters = listOf(MailFilter(from = "x")),
                 ),
             )
         assertFalse(stored.contains("password", ignoreCase = true))
         val decoded = MailAccountJson.decode(stored)
-        assertTrue(decoded.enabled)
         assertTrue(decoded.saveEmailAsPdf)
         assertEquals(listOf(MailFilter(from = "x")), decoded.filters)
         assertEquals(MailAccount(), MailAccountJson.decode("not json"))
+    }
+
+    @Test
+    fun anEnabledKeyAnEarlierBuildSyncedIsIgnored() {
+        // Turning import on was once library data; one device's choice must not switch others on.
+        val decoded = MailAccountJson.decode("""{"host":"mail.example.com","username":"me","enabled":true}""")
+        assertEquals("mail.example.com", decoded.host)
+        assertFalse(MailAccountJson.encode(decoded).contains("enabled"))
     }
 
     @Test

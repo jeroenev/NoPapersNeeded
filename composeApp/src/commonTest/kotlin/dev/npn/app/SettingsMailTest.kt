@@ -26,16 +26,31 @@ class SettingsMailTest : MainDispatcherTest() {
             val model = settingsVm(session = session)
             var acknowledgements = 0
             session.mail.saveOutcome = MailSaveOutcome.AccountInvalid
-            model.saveMailAccount(MailAccount(), "draft") { acknowledgements++ }
+            model.saveMailAccount(MailAccount(), "draft", enabledHere = true) { acknowledgements++ }
             model.clearMailPassword { acknowledgements++ }
             runCurrent()
             acknowledgements shouldBe 0
 
             session.mail.saveOutcome = MailSaveOutcome.Saved
-            model.saveMailAccount(MailAccount(), "draft") { acknowledgements++ }
+            model.saveMailAccount(MailAccount(), "draft", enabledHere = true) { acknowledgements++ }
             model.clearMailPassword { acknowledgements++ }
             runCurrent()
             acknowledgements shouldBe 2
+            // Whether this device checks travels with the save, as this device's own choice.
+            session.mail.enabledHere shouldBe true
+        }
+
+    /** Try again reaches the facet, and says how it went as Check now does. */
+    @Test
+    fun retryingPassedOverMailRunsACheck() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = settingsVm(session = session)
+
+            model.retryPassedOverMail()
+            runCurrent()
+
+            session.mail.retries shouldBe 1
         }
 
     /**

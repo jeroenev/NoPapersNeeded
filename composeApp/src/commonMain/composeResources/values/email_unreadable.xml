@@ -7,8 +7,5 @@
         <item quantity="one">%1$d email could not be imported and was left in the mailbox.</item>
         <item quantity="other">%1$d emails could not be imported and were left in the mailbox.</item>
     </plurals>
-    <plurals name="email_attachments_dropped">
-        <item quantity="one">%1$d attachment was too large or unreadable; its email was left in the mailbox.</item>
-        <item quantity="other">%1$d attachments were too large or unreadable; their emails were left in the mailbox.</item>
-    </plurals>
+    <string name="email_retry_passed_over">Try them again</string>
 </resources>
