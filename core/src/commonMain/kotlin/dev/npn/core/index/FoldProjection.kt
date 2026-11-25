@@ -195,9 +195,8 @@ internal class FoldProjection(
             pass.project(doc, row)
         }
         flushChanges(changes)
-        // Tags live only through use: once no live document references a name, drop its row so
-        // stale tags never linger in tag lists (see TagDao.pruneUnreferenced).
-        tagDao.pruneUnreferenced()
+        // Drop unreferenced names unless they were explicitly created.
+        tagDao.pruneUnreferenced(state.retainedTags())
         return pass.resurrected
     }
 
@@ -291,8 +290,7 @@ internal class FoldProjection(
         val allTags = LinkedHashSet<String>()
         for (doc in journalDocs) allTags.addAll(state.inheritedTags(doc))
         allTags.addAll(styledTags)
-        // A tag a style keeps alive has no document to name it, and a full fold names no styled
-        // tags of its own, so every fold takes them from the fold's own state.
+        // Explicitly created tags can have no document to name them.
         allTags.addAll(state.retainedTags())
         val existingTagRows = tagDao.all().associateBy { it.name }
         allTags.addAll(existingTagRows.keys)

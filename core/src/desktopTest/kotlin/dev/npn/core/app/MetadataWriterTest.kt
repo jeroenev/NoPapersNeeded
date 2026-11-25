@@ -106,14 +106,23 @@ class MetadataWriterTest {
                 .first()
                 .map { it.name } shouldNotContain "fleeting"
 
-            // A style is what makes a tag the user's own, so it keeps one no document carries.
+            // A style alone does not retain a tag no document carries.
             rig.session.tagAdmin.setTagStyle("styled", "#ff0000", null)
             rig.session.tags
                 .observeTags()
                 .first()
-                .map { it.name } shouldContain "styled"
+                .map { it.name } shouldNotContain "styled"
 
-            // Deleting it clears the style in the same write, so it goes.
+            // Reusing the name projects the old style again.
+            rig.session.meta.addTag(listOf(id), "styled")
+            rig.session.tags
+                .observeTags()
+                .first()
+                .first { it.name == "styled" }
+                .color shouldBe "#ff0000"
+            rig.session.meta.removeTag(listOf(id), "styled")
+
+            // Deleting it clears the style in the same write.
             rig.session.tagAdmin.deleteTag("styled")
             rig.session.tags
                 .observeTags()
@@ -121,7 +130,7 @@ class MetadataWriterTest {
                 .map { it.name } shouldNotContain "styled"
         }
 
-    /** The Tags screen's "new tag": a tag with no document, kept by its style until deleted. */
+    /** The Tags screen's "new tag": a tag with no document, kept by its marker until deleted. */
     @Test
     fun aTagCreatedWithoutADocumentStaysUntilDeleted() =
         appSessionTest { rig ->
@@ -142,6 +151,33 @@ class MetadataWriterTest {
                 .observeTags()
                 .first()
                 .map { it.name } shouldNotContain "unused"
+        }
+
+    @Test
+    fun emptyTagMarkerMovesAndClears() =
+        appSessionTest { rig ->
+            rig.session.tagAdmin.createTag("source", "#ff0000")
+            rig.session.tagAdmin.renameTag("source", "renamed")
+            var names =
+                rig.session.tags
+                    .observeTags()
+                    .first()
+                    .map { it.name }
+            names shouldNotContain "source"
+            names shouldContain "renamed"
+            rig.session.tagAdmin.mergeTag("renamed", "merged")
+            names =
+                rig.session.tags
+                    .observeTags()
+                    .first()
+                    .map { it.name }
+            names shouldNotContain "renamed"
+            names shouldContain "merged"
+            rig.session.tagAdmin.deleteTag("merged")
+            rig.session.tags
+                .observeTags()
+                .first()
+                .map { it.name } shouldNotContain "merged"
         }
 
     @Test

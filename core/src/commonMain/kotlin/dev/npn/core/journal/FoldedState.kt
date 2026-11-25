@@ -465,12 +465,12 @@ internal class FoldedState {
     /** Effective style for a tag, or null if none set. */
     internal fun tagStyle(tag: String): StyleVal? = tagStyles[tag]
 
-    /**
-     * Every tag a style keeps alive though no document need carry it: one the user created on the
-     * Tags screen, or styled. A fold projects these so a rebuilt index shows them again, and
-     * [dev.npn.core.db.TagDao.pruneUnreferenced] keeps them. A cleared style drops out.
-     */
-    internal fun retainedTags(): Set<String> = tagStyles.filterValues { it.color != null || it.icon != null }.keys
+    /** Explicitly created tags remain visible even when no document carries them. */
+    internal fun retainedTags(): Set<String> =
+        settings
+            .mapNotNull { (key, value) ->
+                TagRetention.tag(key)?.takeIf { value.value == "1" }
+            }.toSet()
 
     /** Effective value of a library-wide synced setting, or null if never set/cleared. */
     fun effectiveSetting(key: String): String? = settings[key]?.value

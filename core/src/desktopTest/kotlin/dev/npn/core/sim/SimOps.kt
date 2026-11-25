@@ -18,6 +18,7 @@ import dev.npn.core.rules.MatchAlgorithm
 import dev.npn.core.rules.RuleField
 import dev.npn.core.watch.WatchedFolderImporter
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlin.random.Random
 
@@ -44,6 +45,7 @@ enum class OpKind(
     REMOVE_TAG(3),
     CREATE_EMPTY_TAG(2),
     DELETE_EMPTY_TAG(2),
+    LEGACY_UNUSED_STYLE(3),
     DEFINE_FIELD(1),
     CUSTOMIZE_SEEDED_FIELD(1),
     LIBRARY_SETTING(2),
@@ -222,6 +224,7 @@ internal class SimGenerator(
             OpKind.REMOVE_TAG -> s.live.pickOrNull()?.let { removeTag(it, s.tags) }
             OpKind.CREATE_EMPTY_TAG -> emptyTag(random, create = true)
             OpKind.DELETE_EMPTY_TAG -> emptyTag(random, create = false)
+            OpKind.LEGACY_UNUSED_STYLE -> legacyUnusedStyle(random)
             OpKind.DEFINE_FIELD -> defineField()
             OpKind.CUSTOMIZE_SEEDED_FIELD -> customizeSeededField(s)
             OpKind.LIBRARY_SETTING -> librarySetting()
@@ -960,5 +963,22 @@ private fun emptyTag(
     return Planned.Act("${if (create) "create" else "delete"} empty tag $tag") { session ->
         if (create) session.tagAdmin.createTag(tag, color = "#123456") else session.tagAdmin.deleteTag(tag)
         "updated $tag"
+    }
+}
+
+// A released build can leave this style after deleting or renaming its last document's tag.
+private fun legacyUnusedStyle(random: Random): Planned.Act {
+    val tag = "legacy-unused-${random.nextInt(3)}"
+    return Planned.Act("legacy unused style $tag") { session ->
+        session.tagAdmin.setTagStyle(tag, "#123456", null)
+        check(
+            session.tags
+                .observeTags()
+                .first()
+                .none { it.name == tag },
+        ) {
+            "legacy unused style resurrected $tag"
+        }
+        "styled $tag"
     }
 }

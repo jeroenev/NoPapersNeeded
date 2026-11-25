@@ -79,9 +79,8 @@ interface MetadataWriter {
 interface TagAdmin {
     /**
      * Bring [name] into the vocabulary with no document carrying it: the Tags screen's "new tag".
-     * It shows in the tag list at zero documents and stays there until deleted, because its style
-     * ([color] or [icon]) is what keeps it ([dev.npn.core.db.TagDao.pruneUnreferenced]). A call with
-     * neither writes nothing: an unstyled tag nothing carries has nothing to keep it.
+     * It shows in the tag list at zero documents until deleted or renamed, using a per-tag marker.
+     * A call with neither [color] nor [icon] writes nothing.
      */
     suspend fun createTag(
         name: String,

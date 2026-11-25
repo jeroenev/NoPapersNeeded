@@ -4,6 +4,7 @@ import dev.npn.core.db.NpnDatabase
 import dev.npn.core.index.JournalCoordinator
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.PendingOp
+import dev.npn.core.journal.TagRetention
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldParse
 import dev.npn.core.model.FieldValues
@@ -259,7 +260,9 @@ internal class MetadataWriterImpl(
     ) = owned {
         val t = name.trim()
         if (t.isEmpty() || (color == null && icon == null)) return@owned
-        coordinator.commitAndApply(listOf(PendingOp.tagStyle(t, color, icon)))
+        coordinator.commitAndApply(
+            listOf(PendingOp.tagStyle(t, color, icon), PendingOp.settingSet(TagRetention.key(t), "1")),
+        )
     }
 
     override suspend fun renameTag(
@@ -277,8 +280,7 @@ internal class MetadataWriterImpl(
      *
      * A style is vocabulary, so it follows the name: the target keeps its own style, or takes the
      * source's when it has none, and the source's is cleared in the same write. Without that, a
-     * style would stay behind under a name nothing carries any more (keeping a deleted tag alive in
-     * the tag list) and the name it moved to would lose its color.
+     * style would stay behind under the old name and the name it moved to would lose its color.
      */
     private suspend fun retag(
         from: String,
@@ -293,6 +295,10 @@ internal class MetadataWriterImpl(
             val target = state.tagStyle(t)
             buildList {
                 add(op(f, t))
+                if (state.effectiveSetting(TagRetention.key(f)) == "1") {
+                    add(PendingOp.settingSet(TagRetention.key(f), null))
+                    add(PendingOp.settingSet(TagRetention.key(t), "1"))
+                }
                 if (source != null && (source.color != null || source.icon != null)) {
                     add(PendingOp.tagStyle(f, null, null))
                     if (target == null || (target.color == null && target.icon == null)) {
@@ -315,7 +321,14 @@ internal class MetadataWriterImpl(
             coordinator.commitBuilt { state ->
                 val styled = state.tagStyle(t)?.let { it.color != null || it.icon != null } == true
                 state.tagRemovalOps(state.taggedDocs(), t) +
-                    if (styled) listOf(PendingOp.tagStyle(t, null, null)) else emptyList()
+                    (if (styled) listOf(PendingOp.tagStyle(t, null, null)) else emptyList()) +
+                    (
+                        if (state.effectiveSetting(TagRetention.key(t)) == "1") {
+                            listOf(PendingOp.settingSet(TagRetention.key(t), null))
+                        } else {
+                            emptyList()
+                        }
+                    )
             }
             followUp(affected)
         }
