@@ -293,7 +293,8 @@ internal fun EmailSettingsPane(
 
         Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             MailCheckStatus(mail)
-            mail.lastError?.let {
+            // A running check has not failed yet: the last one's error would read as this one's.
+            mail.lastError?.takeUnless { mail.checking }?.let {
                 Text(
                     text = stringResource(Res.string.email_last_error, it.text()),
                     style = MaterialTheme.typography.bodySmall,

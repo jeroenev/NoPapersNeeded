@@ -734,4 +734,23 @@ class MailServiceTest {
             fixture.service.checkNow()
             assertEquals(1, events.size)
         }
+
+    @Test
+    fun anotherAccountDoesNotShowThePreviousAccountsLastCheck() =
+        runTest {
+            val transport = FakeTransport(messages = backlog(1L..2L))
+            val fixture = fixture(transport = transport)
+            fixture.service.checkNow()
+            runCurrent()
+            assertEquals(
+                2,
+                fixture.service.state.value.lastReport
+                    ?.imported,
+            )
+
+            fixture.service.saveAccount(fixture.store.current().copy(host = "other.example.com"), null)
+            runCurrent()
+            assertEquals(null, fixture.service.state.value.lastReport)
+            assertEquals(null, fixture.service.state.value.lastCheckedAtMillis)
+        }
 }

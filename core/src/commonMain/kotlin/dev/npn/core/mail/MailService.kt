@@ -756,7 +756,11 @@ internal class MailService(
 
     private suspend fun reloadCursor(account: MailAccount) {
         val cursor = cursors.get(account.accountKey, account.folder)
-        runtime.update { it.copy(cursor = cursor) }
+        runtime.update { run ->
+            // The last report is the folder's it was made for; another account or folder starts blank.
+            val sameFolder = run.cursor?.accountKey == account.accountKey && run.cursor.folder == account.folder
+            run.copy(cursor = cursor, lastReport = run.lastReport.takeIf { sameFolder })
+        }
     }
 
     private suspend fun storedPassword(account: MailAccount): String? =
