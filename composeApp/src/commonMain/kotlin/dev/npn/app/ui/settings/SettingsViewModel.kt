@@ -140,6 +140,8 @@ class SettingsViewModel(
      * so connecting a second account (or a second library) never overwrites the first one's sign-in.
      */
     newRemoteName: (type: String) -> String = ::newCloudRemoteName,
+    /** The OAuth apps a remote the cloud setup wizard creates signs in through. */
+    oauthApps: CloudOAuthApps = CloudOAuthApps.BUILT_IN,
     /**
      * A scope that outlives this viewmodel (the app's), where [onCleared] forgets a remote the cloud
      * wizard signed in to and never finished with; none, and that is left to the next wizard run.
@@ -440,6 +442,7 @@ class SettingsViewModel(
             persistRemote = { remote -> configureCloud { it.copy(remote = remote) } },
             disconnectRemote = ::disconnectCloud,
             newRemoteName = newRemoteName,
+            oauthApps = oauthApps,
         )
 
     override val cloudSetup: CloudSetupActions get() = cloud

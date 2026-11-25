@@ -36,9 +36,10 @@ private const val OAUTH_USE_BROWSER = "true"
 /**
  * Questions the wizard answers on the user's behalf, so setup stays a single sign-in prompt.
  *
- * Drive asks whether to keep using rclone's built-in OAuth app before it opens the browser; saying
- * yes keeps setup to one click. Declining turns `client_id`/`client_secret` into required fields,
- * the bring-your-own-app path the wizard deliberately does not offer.
+ * Drive asks whether to keep using rclone's built-in OAuth app before it opens the browser when the
+ * build has no app of its own ([CloudOAuthApps]); saying yes keeps setup to one click. Declining
+ * turns `client_id`/`client_secret` into required fields, a path the wizard deliberately does not
+ * offer the user.
  */
 private val AUTOMATIC_ANSWERS = mapOf("config_shared_client_id" to "true")
 
@@ -237,6 +238,8 @@ internal class CloudSetupController(
     private val disconnectRemote: (String) -> Unit,
     /** A fresh, unique name for a remote of a provider type, so no setup overwrites another's. */
     private val newRemoteName: (type: String) -> String,
+    /** This build's own OAuth apps, which a new remote of their provider signs in through. */
+    private val oauthApps: CloudOAuthApps,
 ) : CloudSetupActions {
     private val _state = MutableStateFlow<CloudSetupState?>(null)
 
@@ -280,7 +283,9 @@ internal class CloudSetupController(
 
     override fun chooseProvider(provider: RcloneProvider) {
         activeProvider = provider
-        val defaults = provider.options.associate { it.name to it.defaultValue.orEmpty() }
+        // The build's own OAuth app is never a form field: it travels with the form's values.
+        val defaults =
+            provider.options.associate { it.name to it.defaultValue.orEmpty() } + oauthApps.paramsFor(provider.type)
         // The wizard's own WebDAV form starts on the server most people have.
         val values =
             if (provider.type == WEBDAV_TYPE && defaults[WebDav.VENDOR].isNullOrBlank()) {

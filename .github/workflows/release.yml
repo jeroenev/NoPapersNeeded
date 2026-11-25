@@ -97,6 +97,10 @@ jobs:
     name: Android and Linux packages
     needs: draft
     runs-on: ubuntu-latest
+    # Google Drive's OAuth app, baked into BuildInfo; see DEVELOPMENT.md "Cloud sync OAuth apps".
+    env:
+      NPN_DRIVE_CLIENT_ID: ${{ secrets.NPN_DRIVE_CLIENT_ID }}
+      NPN_DRIVE_CLIENT_SECRET: ${{ secrets.NPN_DRIVE_CLIENT_SECRET }}
     timeout-minutes: 60
     steps:
       - name: Checkout
@@ -104,6 +108,14 @@ jobs:
         with:
           # Nothing here pushes; a token left in .git/config would reach every later step.
           persist-credentials: false
+
+      - name: Drive OAuth app must be set
+        shell: bash
+        run: |
+          if [ -z "$NPN_DRIVE_CLIENT_ID" ] || [ -z "$NPN_DRIVE_CLIENT_SECRET" ]; then
+            echo "::error::NPN_DRIVE_CLIENT_ID/NPN_DRIVE_CLIENT_SECRET secrets are not set; see DEVELOPMENT.md 'Cloud sync OAuth apps'."
+            exit 1
+          fi
 
       - name: Set up JDK
         uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
@@ -215,6 +227,10 @@ jobs:
     name: Windows installers
     needs: draft
     runs-on: windows-latest
+    # Google Drive's OAuth app, baked into BuildInfo; see DEVELOPMENT.md "Cloud sync OAuth apps".
+    env:
+      NPN_DRIVE_CLIENT_ID: ${{ secrets.NPN_DRIVE_CLIENT_ID }}
+      NPN_DRIVE_CLIENT_SECRET: ${{ secrets.NPN_DRIVE_CLIENT_SECRET }}
     timeout-minutes: 60
     steps:
       - name: Checkout
@@ -222,6 +238,14 @@ jobs:
         with:
           # Nothing here pushes; a token left in .git/config would reach every later step.
           persist-credentials: false
+
+      - name: Drive OAuth app must be set
+        shell: bash
+        run: |
+          if [ -z "$NPN_DRIVE_CLIENT_ID" ] || [ -z "$NPN_DRIVE_CLIENT_SECRET" ]; then
+            echo "::error::NPN_DRIVE_CLIENT_ID/NPN_DRIVE_CLIENT_SECRET secrets are not set; see DEVELOPMENT.md 'Cloud sync OAuth apps'."
+            exit 1
+          fi
 
       - name: Set up JDK
         uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0

@@ -19,6 +19,7 @@ import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.nav.QueueStatus
 import dev.npn.app.ui.nav.queueStatus
 import dev.npn.app.ui.onboarding.FirstDocumentText
+import dev.npn.app.ui.settings.CloudOAuthApps
 import dev.npn.app.ui.settings.CloudSetupActions
 import dev.npn.app.ui.settings.CloudSetupController
 import dev.npn.app.ui.settings.CloudSetupState
@@ -114,6 +115,7 @@ class AppViewModel(
     private val createFolder: suspend (parent: String, name: String) -> String? = ::createLibraryFolder,
     private val cloudLibraries: () -> String = ::cloudLibrariesDir,
     newRemoteName: (type: String) -> String = ::newCloudRemoteName,
+    oauthApps: CloudOAuthApps = CloudOAuthApps.BUILT_IN,
 ) : MessagesViewModel() {
     /** Where the shell stands, apart from what [env] says about the session. */
     private sealed interface Phase {
@@ -224,6 +226,7 @@ class AppViewModel(
             // Nothing is connected before the library opens, so there is nothing to disconnect.
             disconnectRemote = {},
             newRemoteName = newRemoteName,
+            oauthApps = oauthApps,
         )
 
     /** Whether this platform can set up a cloud library at all. */

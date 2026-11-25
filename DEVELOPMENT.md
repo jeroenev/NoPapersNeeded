@@ -511,6 +511,28 @@ backup: Android only installs an update signed with the same key, so losing it m
 users have to uninstall and reinstall. The committed `npn-debug.keystore` is for debug
 builds only.
 
+### Cloud sync OAuth apps
+
+rclone's shared Google Drive client is being retired during 2026, so a release signs in to Drive
+through the project's own OAuth client: a Google Cloud project with the Drive API enabled, a
+**Desktop app** OAuth client (rclone signs in through a loopback redirect on every platform) and
+the scope `https://www.googleapis.com/auth/drive.file`. The setup wizard hands rclone
+`client_id`, `client_secret` and `scope=drive.file` (`CloudOAuthApps`), so the app only sees the
+files and folders it created itself, never the rest of the user's Drive. A folder made outside the
+app (Drive's web UI, or a remote set up with rclone's shared client) is invisible to it.
+
+The client is generated into `BuildInfo` from the Gradle properties `npn.drive.clientId` and
+`npn.drive.clientSecret`, or the environment variables `NPN_DRIVE_CLIENT_ID` and
+`NPN_DRIVE_CLIENT_SECRET`; set both or neither. Neither is committed: a developer who wants it
+puts the properties in `~/.gradle/gradle.properties`, and the release workflow reads the
+repository secrets of the same names and fails without them. A build without them (a fork, a
+local or CI build) signs in through rclone's shared client with its full `drive` scope.
+
+The client secret is not a real secret: Google does not treat an installed app's secret as
+confidential, and anyone can read it out of a release. Keeping it out of the repository keeps
+forks from shipping under this project's client, its consent screen and its quota, and keeps
+secret scanning quiet.
+
 ### App icon
 
 The artwork lives in `design/branding/icon.svg` (see `design/branding/README.md`).

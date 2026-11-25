@@ -6,6 +6,7 @@ import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.nav.QueueStatus
 import dev.npn.app.ui.onboarding.FirstDocumentText
+import dev.npn.app.ui.settings.CloudOAuthApps
 import dev.npn.app.ui.settings.CloudSetupState
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.app.QueuedWork
@@ -61,6 +62,7 @@ class AppViewModelTest : MainDispatcherTest() {
                 },
                 cloudLibraries = { CLOUD_LIBRARIES },
                 newRemoteName = { type -> "$type-1" },
+                oauthApps = CloudOAuthApps.NONE,
             )
         collecting(vm.state)
         runCurrent()

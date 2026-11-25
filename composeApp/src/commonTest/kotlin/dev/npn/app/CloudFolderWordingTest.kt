@@ -1,5 +1,6 @@
 package dev.npn.app
 
+import dev.npn.app.ui.settings.CloudOAuthApps
 import dev.npn.app.ui.settings.CloudSetupState
 import dev.npn.app.ui.settings.WebDav
 import dev.npn.app.ui.settings.cloudFolderLabel
@@ -83,7 +84,7 @@ class CloudFolderWordingTest : MainDispatcherTest() {
                     beginResult = { SetupStep.Done(it.name) }
                 }
             val env = FakeAppEnvironment(backgroundScope, cloudSetup = setup)
-            val vm = AppViewModel(env, newRemoteName = { "$it-1" })
+            val vm = AppViewModel(env, newRemoteName = { "$it-1" }, oauthApps = CloudOAuthApps.NONE)
             collecting(vm.state)
             runCurrent()
 

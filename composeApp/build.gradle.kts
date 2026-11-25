@@ -9,6 +9,20 @@ plugins {
 val generateBuildInfo =
     tasks.register<GenerateBuildInfoTask>("generateBuildInfo") {
         version.set(NpnVersion.of(project).name)
+        // Google Drive's OAuth app, never committed: a developer's ~/.gradle/gradle.properties or
+        // the release workflow's secrets supply it. Without it the wizard signs in with rclone's.
+        driveClientId.set(
+            providers
+                .gradleProperty("npn.drive.clientId")
+                .orElse(providers.environmentVariable("NPN_DRIVE_CLIENT_ID"))
+                .orElse(""),
+        )
+        driveClientSecret.set(
+            providers
+                .gradleProperty("npn.drive.clientSecret")
+                .orElse(providers.environmentVariable("NPN_DRIVE_CLIENT_SECRET"))
+                .orElse(""),
+        )
         outDir.set(layout.buildDirectory.dir("generated/buildInfo/commonMain/kotlin"))
     }
 

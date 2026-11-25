@@ -5,6 +5,7 @@ import dev.npn.app.platform.FolderPick
 import dev.npn.app.platform.copyToClipboard
 import dev.npn.app.ui.settings.AiModelListState
 import dev.npn.app.ui.settings.AiSelfTestState
+import dev.npn.app.ui.settings.CloudOAuthApps
 import dev.npn.app.ui.settings.CloudSetupActions
 import dev.npn.app.ui.settings.FieldDialog
 import dev.npn.app.ui.settings.ReviewMigration
@@ -33,12 +34,14 @@ internal fun settingsVm(
     copy: suspend (String) -> Unit = ::copyToClipboard,
     compute: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.Default,
     readLog: suspend (Long) -> String = { "" },
+    oauthApps: CloudOAuthApps = CloudOAuthApps.NONE,
 ) = SettingsViewModel(
     settings,
     session,
     inLibrary = { folder, library -> folder == library || folder.startsWith("$library/") },
     saved = saved,
     newRemoteName = { type -> "$type-1" },
+    oauthApps = oauthApps,
     outliving = outliving,
     copy = copy,
     compute = compute,

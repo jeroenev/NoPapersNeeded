@@ -1,6 +1,7 @@
 package dev.npn.app
 
 import androidx.lifecycle.ViewModelStore
+import dev.npn.app.ui.settings.CloudOAuthApps
 import dev.npn.app.ui.settings.CloudSetupState
 import dev.npn.app.ui.settings.CloudSyncState
 import dev.npn.app.ui.settings.FolderProblem
@@ -40,8 +41,10 @@ import kotlin.test.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelCloudSyncTest : MainDispatcherTest() {
     /** A viewmodel over [session] whose pane state is collected, as the screen collects it. */
-    private fun TestScope.vm(session: FakeLibrarySession): SettingsViewModel =
-        settingsVm(session = session).also { collecting(it.paneState) }
+    private fun TestScope.vm(
+        session: FakeLibrarySession,
+        oauthApps: CloudOAuthApps = CloudOAuthApps.NONE,
+    ): SettingsViewModel = settingsVm(session = session, oauthApps = oauthApps).also { collecting(it.paneState) }
 
     private val SettingsViewModel.cloudState: CloudSyncState get() = paneState.value.cloud
 
@@ -200,6 +203,55 @@ class SettingsViewModelCloudSyncTest : MainDispatcherTest() {
                     FakeCloudSetup.AnswerCall("drive", "oauth-state", "true"),
                 )
             model.cloudState.setup shouldBe CloudSetupState.Folders(remote = "drive:", path = "")
+        }
+
+    @Test
+    fun aBuildWithItsOwnDriveAppSignsInThroughItScopedToItsOwnFiles() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val setup = FakeCloudSetup()
+            session.sync.setup = setup
+            val chosen = provider(options = emptyList(), browserSignIn = true)
+            setup.beginResult = { question("config_is_local", "oauth-state") }
+            setup.answerResult = { SetupStep.Done("drive") }
+            val model = vm(session, oauthApps = CloudOAuthApps.of("id.apps.googleusercontent.com", "test-secret"))
+
+            model.cloud.start()
+            advanceUntilIdle()
+            model.cloud.chooseProvider(chosen)
+            advanceUntilIdle()
+
+            setup.begins.single() shouldBe
+                FakeCloudSetup.BeginCall(
+                    "drive-1",
+                    "drive",
+                    mapOf(
+                        "client_id" to "id.apps.googleusercontent.com",
+                        "client_secret" to "test-secret",
+                        "scope" to "drive.file",
+                    ),
+                )
+            setup.answers.single() shouldBe FakeCloudSetup.AnswerCall("drive", "oauth-state", "true")
+            model.cloudState.setup shouldBe CloudSetupState.Folders(remote = "drive:", path = "")
+        }
+
+    @Test
+    fun anotherProviderKeepsRclonesAppWhenTheBuildOnlyHasADriveOne() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val setup = FakeCloudSetup()
+            session.sync.setup = setup
+            val chosen = provider(type = "dropbox", name = "Dropbox", options = emptyList(), browserSignIn = true)
+            setup.beginResult = { question("config_is_local", "oauth-state") }
+            setup.answerResult = { SetupStep.Done("dropbox") }
+            val model = vm(session, oauthApps = CloudOAuthApps.of("id.apps.googleusercontent.com", "test-secret"))
+
+            model.cloud.start()
+            advanceUntilIdle()
+            model.cloud.chooseProvider(chosen)
+            advanceUntilIdle()
+
+            setup.begins.single() shouldBe FakeCloudSetup.BeginCall("dropbox-1", "dropbox", emptyMap())
         }
 
     @Test
