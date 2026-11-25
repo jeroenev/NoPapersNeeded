@@ -15,6 +15,7 @@ import jakarta.mail.Store
 import jakarta.mail.StoreClosedException
 import jakarta.mail.UIDFolder
 import jakarta.mail.internet.InternetAddress
+import jakarta.mail.internet.MimePart
 import jakarta.mail.internet.MimeUtility
 import jakarta.mail.search.ComparisonTerm
 import jakarta.mail.search.ReceivedDateTerm
@@ -23,11 +24,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.eclipse.angus.mail.imap.IMAPFolder
 import org.eclipse.angus.mail.imap.IMAPStore
+import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.IOException
 import java.io.InputStream
+import java.net.URLDecoder
 import java.security.cert.CertificateException
 import java.util.Date
 import java.util.Properties
+import javax.imageio.ImageIO
 import javax.net.ssl.SSLException
 
 /**
@@ -365,11 +370,31 @@ private const val WRITE_TIMEOUT_MILLIS = 60_000
  * Walks a Jakarta Mail message into the small model the importer needs. Pure and testable without
  * a server: a test builds a [jakarta.mail.internet.MimeMessage] in memory. The body is capped, and
  * only attachments the library can import are read into memory; everything else is passed over.
+ *
+ * An image is a document only when it is an attachment rather than part of the message's look. It
+ * is passed over when the HTML body shows it (its Content-ID is referenced as `cid:`), when it is a
+ * resource of the HTML (inside a `multipart/related`) without an explicit `Content-Disposition:
+ * attachment`, or when it measures under [MIN_IMAGE_SIDE_PX] on its shorter side, the size of a
+ * logo, a social icon or a tracking pixel. An image that cannot be measured is kept, and PDFs are
+ * kept by name as before.
  */
 internal object MimeParser {
     private const val MAX_BODY_CHARS = 1_000_000
     private const val MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
     private const val MAX_PART_DEPTH = 10
+
+    /** The shorter side below which an image is decoration, not a photographed or scanned page. */
+    const val MIN_IMAGE_SIDE_PX = 200
+
+    private val CID_REFERENCE = Regex("""cid:([^"'\s>)]+)""", RegexOption.IGNORE_CASE)
+
+    /** What one walk of a message gathers, and the Content-IDs its HTML body shows. */
+    private class Walk(
+        val shownByHtml: Set<String>,
+    ) {
+        val body = StringBuilder()
+        val attachments = mutableListOf<MailAttachment>()
+    }
 
     /**
      * [parse], with a message that cannot be read (an attachment over the cap, a malformed part)
@@ -404,9 +429,12 @@ internal object MimeParser {
         uid: Long,
         message: Message,
     ): MailMessage {
-        val body = StringBuilder()
-        val attachments = mutableListOf<MailAttachment>()
-        walk(message, body, attachments, depth = 0)
+        val shown = mutableSetOf<String>()
+        collectHtmlReferences(message, shown, depth = 0)
+        val walk = Walk(shown)
+        walk(message, walk, depth = 0, inRelated = false)
+        val body = walk.body
+        val attachments = walk.attachments
         return MailMessage(
             uid = uid,
             from = addresses(message.from),
@@ -425,41 +453,109 @@ internal object MimeParser {
 
     private fun walk(
         part: Part,
-        body: StringBuilder,
-        attachments: MutableList<MailAttachment>,
+        walk: Walk,
         depth: Int,
+        inRelated: Boolean,
     ) {
         if (depth > MAX_PART_DEPTH) return
         if (part.isMimeType("message/rfc822")) {
-            (part.content as? Message)?.let { walk(it, body, attachments, depth + 1) }
+            (part.content as? Message)?.let { walk(it, walk, depth + 1, inRelated = false) }
             return
         }
         if (part.isMimeType("multipart/*")) {
             val multipart = part.content as? Multipart ?: return
+            val related = inRelated || part.isMimeType("multipart/related")
             for (index in 0 until multipart.count) {
-                multipart.getBodyPart(index)?.let { walk(it, body, attachments, depth + 1) }
+                multipart.getBodyPart(index)?.let { walk(it, walk, depth + 1, related) }
             }
             return
         }
         if (isAttachment(part)) {
             val name = decode(part.fileName)?.takeIf(String::isNotBlank) ?: return
-            if (!MailAttachment(name, part.contentType, ByteArray(0)).isSupported()) return
+            val kind = MailAttachment(name, part.contentType, ByteArray(0)).supportedKind() ?: return
+            val image = kind == MailAttachmentKind.IMAGE
+            if (image && partOfTheBody(part, inRelated, walk.shownByHtml)) return
             val bytes = readCapped(part.inputStream)
-            attachments += MailAttachment(name, part.contentType, bytes)
+            if (image && (shorterSide(bytes) ?: Int.MAX_VALUE) < MIN_IMAGE_SIDE_PX) return
+            walk.attachments += MailAttachment(name, part.contentType, bytes)
             return
         }
+        val body = walk.body
         if (part.isMimeType("text/plain") && body.length < MAX_BODY_CHARS) {
             val text = part.content as? String ?: return
             body.append(text.take(MAX_BODY_CHARS - body.length))
         }
     }
 
+    /** Every Content-ID an HTML part of [part] shows (`cid:` references), normalized as [contentId] is. */
+    private fun collectHtmlReferences(
+        part: Part,
+        into: MutableSet<String>,
+        depth: Int,
+    ) {
+        if (depth > MAX_PART_DEPTH) return
+        when {
+            part.isMimeType("message/rfc822") -> {
+                (part.content as? Message)?.let { collectHtmlReferences(it, into, depth + 1) }
+            }
+
+            part.isMimeType("multipart/*") -> {
+                val multipart = part.content as? Multipart ?: return
+                for (index in 0 until multipart.count) {
+                    multipart.getBodyPart(index)?.let { collectHtmlReferences(it, into, depth + 1) }
+                }
+            }
+
+            part.isMimeType("text/html") && !isAttachment(part) -> {
+                val html = part.content as? String ?: return
+                CID_REFERENCE.findAll(html.take(MAX_BODY_CHARS)).forEach { match ->
+                    into += normalizedId(URLDecoder.decode(match.groupValues[1], Charsets.UTF_8))
+                }
+            }
+        }
+    }
+
+    /**
+     * Whether an image part belongs to the HTML body rather than to the mail's attachments: the
+     * body shows it, or it is one of the body's related resources and not explicitly attached.
+     */
+    private fun partOfTheBody(
+        part: Part,
+        inRelated: Boolean,
+        shownByHtml: Set<String>,
+    ): Boolean {
+        val id = (part as? MimePart)?.contentID?.let(::normalizedId)
+        if (id != null && id in shownByHtml) return true
+        return inRelated && !Part.ATTACHMENT.equals(part.disposition, ignoreCase = true)
+    }
+
+    private fun normalizedId(raw: String): String =
+        raw
+            .trim()
+            .removePrefix("<")
+            .removeSuffix(">")
+            .lowercase()
+
+    /** The shorter side of an image in pixels, read from its header only; null when unreadable. */
+    private fun shorterSide(bytes: ByteArray): Int? =
+        try {
+            ImageIO.createImageInputStream(ByteArrayInputStream(bytes))?.use { input ->
+                val reader = ImageIO.getImageReaders(input).asSequence().firstOrNull() ?: return null
+                try {
+                    reader.input = input
+                    minOf(reader.getWidth(0), reader.getHeight(0))
+                } finally {
+                    reader.dispose()
+                }
+            }
+        } catch (_: IOException) {
+            null
+        }
+
     private fun isAttachment(part: Part): Boolean {
         if (part.fileName == null) return false
         return !Part.INLINE.equals(part.disposition, ignoreCase = true)
     }
-
-    private fun MailAttachment.isSupported(): Boolean = supportedKind() != null
 
     private fun readCapped(input: InputStream): ByteArray =
         input.use { stream ->
