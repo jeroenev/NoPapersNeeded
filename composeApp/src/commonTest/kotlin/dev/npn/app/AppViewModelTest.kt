@@ -23,6 +23,7 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
@@ -30,9 +31,11 @@ import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_onboarding_cloud_connect_failed
 import no_papers_needed.composeapp.generated.resources.common_writes_journal_incomplete
+import no_papers_needed.composeapp.generated.resources.email_imported_documents
 import no_papers_needed.composeapp.generated.resources.library_rebuild_failed
 import no_papers_needed.composeapp.generated.resources.library_rebuild_not_completed
 import no_papers_needed.composeapp.generated.resources.library_refresh_failed
+import no_papers_needed.composeapp.generated.resources.library_show
 import no_papers_needed.composeapp.generated.resources.onboarding_landed_reading
 import no_papers_needed.composeapp.generated.resources.onboarding_landed_search
 import kotlin.coroutines.ContinuationInterceptor
@@ -653,6 +656,34 @@ class AppViewModelTest : MainDispatcherTest() {
             runCurrent()
 
             vm.aiConfigured.value shouldBe true
+        }
+
+    /**
+     * A background email check that imported documents says so from any screen, and its Show opens
+     * the library on exactly those.
+     */
+    @Test
+    fun documentsAnEmailCheckImportedAreAnnouncedWithAWayToThem() =
+        runTest(dispatcher) {
+            val env = env()
+            val vm = model(env)
+            vm.open("/lib")
+            runCurrent()
+            val messages = collecting(vm.messages)
+            val shown = mutableListOf<List<String>>()
+            backgroundScope.launch { vm.announceMailImports { shown += it } }
+            runCurrent()
+
+            val mail = env.sessions.getValue("/lib").mail
+            mail.importedDocuments.emit(listOf("doc-1", "doc-2"))
+            runCurrent()
+
+            val message = messages.single()
+            message.text shouldBe uiText(Res.plurals.email_imported_documents, 2, 2)
+            val show = message.action!!
+            show.label shouldBe uiText(Res.string.library_show)
+            show.onPerform()
+            shown shouldContainExactly listOf(listOf("doc-1", "doc-2"))
         }
 }
 

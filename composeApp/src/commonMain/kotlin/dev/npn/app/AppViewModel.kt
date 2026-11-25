@@ -42,6 +42,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -52,6 +53,7 @@ import kotlinx.coroutines.withContext
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_onboarding_cloud_connect_failed
 import no_papers_needed.composeapp.generated.resources.common_save_setting_failed
+import no_papers_needed.composeapp.generated.resources.email_imported_documents
 import no_papers_needed.composeapp.generated.resources.library_drop_needs_library
 import no_papers_needed.composeapp.generated.resources.library_import_failed
 import no_papers_needed.composeapp.generated.resources.library_rebuild_failed
@@ -402,6 +404,23 @@ class AppViewModel(
 
     /** The user has read why a switch to another library failed. */
     fun dismissFailure() = phase.update { if (it is Phase.Ready) Phase.Ready() else it }
+
+    /**
+     * Say, whatever screen is showing, how many documents each email check of the open library
+     * imported, with a Show action handing them to [onShow]: a background check otherwise leaves
+     * them somewhere down the library, sorted by their own (often old) dates. Follows the library
+     * that is open, and runs until the caller's scope ends.
+     */
+    suspend fun announceMailImports(onShow: (docIds: List<String>) -> Unit) {
+        env.session
+            .flatMapLatest { session -> session?.mail?.importedDocuments ?: emptyFlow() }
+            .collect { ids ->
+                message(
+                    uiText(Res.plurals.email_imported_documents, ids.size, ids.size),
+                    UiMessage.Action(uiText(Res.string.library_show)) { onShow(ids) },
+                )
+            }
+    }
 
     /**
      * Import the files dropped on the window ([request]), whatever screen is showing, and say what

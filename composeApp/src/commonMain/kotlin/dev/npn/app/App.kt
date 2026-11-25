@@ -299,6 +299,9 @@ private fun AppRoot(
                     }
                 }
             }
+            // Documents an email check imported are announced from any screen, like a drop's; Show
+            // opens the library on exactly those.
+            LaunchedEffect(vm) { vm.announceMailImports { docIds -> currentLibrary?.showDocuments(docIds) } }
             // Without a library there are no screens to title the window; the app's name, in its language.
             if (state !is AppState.Open) PublishWindowTitle(stringResource(Res.string.common_app_name))
 
