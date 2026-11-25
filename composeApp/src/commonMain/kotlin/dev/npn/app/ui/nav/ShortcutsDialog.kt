@@ -2,6 +2,7 @@ package dev.npn.app.ui.nav
 
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -150,22 +151,24 @@ private val TIPS =
  * shell, so the keys reach it from anywhere a screen leaves them alone.
  *
  * Keys only travel up from what holds focus, and many screens focus nothing of their own (Activity,
- * Tags, a screen whose focused element was just left), so the shell is a focus target too: while
- * nothing inside it holds focus it takes focus itself ([KeepShellFocus], told through
- * [onFocusHeld]), and a screen that focuses something of its own takes it back.
+ * Tags, a screen whose focused element was just left), so while nothing inside the shell holds focus
+ * its [ShellFocusAnchor] takes it ([KeepShellFocus], told through [onFocusHeld]), and a screen that
+ * focuses something of its own takes it back.
+ *
+ * The shell itself is not focusable: Compose turns a Back or Escape key nothing consumed into a
+ * focus exit to the nearest focusable around the focused element, which would spend the first Back
+ * from a screen that focuses something (the document detail's preview) moving focus out to the
+ * shell. Desktop's Escape, and on some phones (OxygenOS) the back gesture, arrive as such a key.
  */
 internal fun Modifier.shellShortcutKeys(
-    focus: FocusRequester,
     onFocusHeld: (Boolean) -> Unit,
     onOpenShortcuts: (() -> Unit)?,
     onPalette: () -> Unit,
 ): Modifier =
     onFocusChanged { onFocusHeld(it.hasFocus) }
-        .focusRequester(focus)
         .previewKeyShortcuts { event ->
             if (event.key == Key.K && (event.isCtrlPressed || event.isMetaPressed)) onPalette else null
-        }.focusable()
-        .keyShortcuts { event ->
+        }.keyShortcuts { event ->
             when (event.key) {
                 Key.Slash -> if (event.isCtrlPressed) onOpenShortcuts else null
                 else -> null
@@ -173,8 +176,17 @@ internal fun Modifier.shellShortcutKeys(
         }.typedKeyShortcuts { char -> onOpenShortcuts.takeIf { char == '?' } }
 
 /**
- * Gives the shell focus ([focus]) whenever nothing in it [held] it, a frame later so its node is
- * attached first (as [dev.npn.app.ui.common.FocusOnEntry] does).
+ * Where keyboard focus rests while no screen holds it: an empty focusable inside the shell beside
+ * the screens, never around them, so leaving a focused element inside a screen does not land here.
+ */
+@Composable
+internal fun ShellFocusAnchor(focus: FocusRequester) {
+    Box(Modifier.focusRequester(focus).focusable())
+}
+
+/**
+ * Gives the shell focus ([focus], its [ShellFocusAnchor]) whenever nothing in it [held] it, a frame
+ * later so its node is attached first (as [dev.npn.app.ui.common.FocusOnEntry] does).
  */
 @Composable
 internal fun KeepShellFocus(

@@ -207,6 +207,16 @@ internal fun ImageComposeScene.press(
     sendKeyEvent(KeyEvent(key, KeyEventType.KeyUp, isCtrlPressed = ctrl, isShiftPressed = shift))
 }
 
+/**
+ * Press and release [key], reporting whether the composition consumed the press. A platform acts on a
+ * press nothing consumed, as Back (or Escape on desktop) then reaches the back dispatcher.
+ */
+internal fun ImageComposeScene.pressConsumed(key: Key): Boolean {
+    val consumed = sendKeyEvent(KeyEvent(key, KeyEventType.KeyDown))
+    sendKeyEvent(KeyEvent(key, KeyEventType.KeyUp))
+    return consumed
+}
+
 internal fun SemanticsNode.isEditable(): Boolean = config.getOrNull(SemanticsProperties.EditableText) != null
 
 internal fun SemanticsNode.hasError(): Boolean = config.getOrNull(SemanticsProperties.Error) != null

@@ -153,12 +153,12 @@ internal fun MainNav(
                                 onShortcuts = openShortcuts,
                                 modifier =
                                     Modifier.shellShortcutKeys(
-                                        shellFocus,
                                         { shellFocusHeld = it },
                                         openShortcuts,
                                         palette::toggle,
                                     ),
                             ) {
+                                ShellFocusAnchor(shellFocus)
                                 MainNavHost(
                                     settings = settings,
                                     session = session,
