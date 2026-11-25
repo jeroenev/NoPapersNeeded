@@ -29,7 +29,13 @@ actual suspend fun sharePdfBytes(
             putExtra(Intent.EXTRA_STREAM, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-    context.startActivity(Intent.createChooser(share, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    LockActivityHandoff.started()
+    try {
+        context.startActivity(Intent.createChooser(share, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    } catch (failure: Exception) {
+        LockActivityHandoff.clear()
+        throw failure
+    }
 }
 
 /**

@@ -2,6 +2,7 @@ package dev.npn
 
 import android.content.Context
 import android.content.Intent
+import android.content.IntentSender
 import android.content.res.Configuration
 import android.os.Bundle
 import android.os.PowerManager
@@ -22,8 +23,10 @@ import dev.npn.app.platform.ForegroundImport
 import dev.npn.app.platform.LaunchImports
 import dev.npn.app.platform.LocalAppLockAuthenticator
 import dev.npn.app.platform.LocalDocumentScanner
+import dev.npn.app.platform.LockActivityHandoff
 import dev.npn.app.platform.PrintActivity
 import dev.npn.app.platform.importIntoLibrary
+import dev.npn.app.platform.lockOnStop
 import dev.npn.app.ui.common.OpenDocumentRequest
 import dev.npn.app.ui.common.OpenDocumentRequests
 import dev.npn.core.app.ImportTally
@@ -46,9 +49,6 @@ class MainActivity : FragmentActivity() {
 
     /** The token of this activity's launch import ([LaunchImports]), saved with its state while it runs. */
     private var launchImport: String? = null
-
-    /** Whether the user left with Home/Recents since the last stop, rather than an activity we started. */
-    private var leftByUser = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -126,15 +126,8 @@ class MainActivity : FragmentActivity() {
         if (location != null) OpenDocumentRequests.documents.set(OpenDocumentRequest(docId, location))
     }
 
-    /**
-     * The app went to the background by the user's choice (Home, Recents, another app), which is
-     * when the lock's timeout starts. Other activities this app starts — the scanner, a folder
-     * picker, the share sheet — stop the activity without this hint, so they are an interruption,
-     * not the app being left, and must not lock the user out mid-flow. A screen turned off is
-     * covered separately, since it produces no hint.
-     */
+    /** Protect the Recents thumbnail early; this hint also occurs for app-started activities. */
     override fun onUserLeaveHint() {
-        leftByUser = true
         if (env.lock.state.value.enabled) {
             // Taken now so the recents thumbnail is blank rather than the library.
             window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -149,10 +142,64 @@ class MainActivity : FragmentActivity() {
     }
 
     override fun onStop() {
-        val leaving = leftByUser || !screenIsOn()
-        leftByUser = false
-        if (!isChangingConfigurations && leaving) env.lock.onBackground()
+        val handoff = if (isChangingConfigurations) false else LockActivityHandoff.consume()
+        val leaving = lockOnStop(isChangingConfigurations, isFinishing, screenIsOn(), handoff)
+        if (leaving) env.lock.onBackground()
         super.onStop()
+    }
+
+    @Deprecated("AndroidX activity-result launchers dispatch through this callback.")
+    @Suppress("DEPRECATION") // AndroidX dispatches through this framework method.
+    override fun startActivityForResult(
+        intent: Intent,
+        requestCode: Int,
+        options: Bundle?,
+    ) {
+        LockActivityHandoff.started()
+        try {
+            super.startActivityForResult(intent, requestCode, options)
+        } catch (failure: Exception) {
+            LockActivityHandoff.clear()
+            throw failure
+        }
+    }
+
+    @Deprecated("AndroidX intent-sender launchers dispatch through this callback.")
+    @Suppress("DEPRECATION") // AndroidX dispatches through this framework method.
+    override fun startIntentSenderForResult(
+        intent: IntentSender,
+        requestCode: Int,
+        fillInIntent: Intent?,
+        flagsMask: Int,
+        flagsValues: Int,
+        extraFlags: Int,
+        options: Bundle?,
+    ) {
+        LockActivityHandoff.started()
+        try {
+            super.startIntentSenderForResult(
+                intent,
+                requestCode,
+                fillInIntent,
+                flagsMask,
+                flagsValues,
+                extraFlags,
+                options,
+            )
+        } catch (failure: Exception) {
+            LockActivityHandoff.clear()
+            throw failure
+        }
+    }
+
+    @Deprecated("Activity results are dispatched by AndroidX after this callback.")
+    override fun onActivityResult(
+        requestCode: Int,
+        resultCode: Int,
+        data: Intent?,
+    ) {
+        LockActivityHandoff.clear()
+        super.onActivityResult(requestCode, resultCode, data)
     }
 
     private fun screenIsOn(): Boolean = (getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive
@@ -165,6 +212,7 @@ class MainActivity : FragmentActivity() {
      */
     override fun onResume() {
         super.onResume()
+        LockActivityHandoff.clear()
         if (!env.lock.state.value.locked) window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         PrintActivity.resumed(this)
         val session = env.session.value ?: return

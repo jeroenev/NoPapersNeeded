@@ -35,6 +35,7 @@ actual suspend fun printPdf(
             val manager =
                 context.getSystemService(Context.PRINT_SERVICE) as? PrintManager
                     ?: return@withContext PrintOutcome.Failed(PrintFailure.UNSUPPORTED)
+            LockActivityHandoff.started()
             manager.print(
                 fileName,
                 PdfBytesPrintAdapter(fileName, bytes, pageCount, io),
@@ -42,6 +43,7 @@ actual suspend fun printPdf(
             )
             PrintOutcome.Started
         } catch (failure: Exception) {
+            LockActivityHandoff.clear()
             PrintOutcome.Failed(PrintFailure.PRINT_FAILED, failure)
         }
     }

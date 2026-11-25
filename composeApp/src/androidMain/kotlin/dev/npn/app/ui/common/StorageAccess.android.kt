@@ -11,6 +11,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import dev.npn.app.platform.LockActivityHandoff
 import dev.npn.app.platform.hasDirectStorageAccess
 
 /**
@@ -36,9 +37,11 @@ private fun openAllFilesAccessSettings(context: Context) {
             Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
             Uri.fromParts("package", context.packageName, null),
         )
+    LockActivityHandoff.started()
     val opened = runCatching { context.startActivity(forApp) }.isSuccess
     if (!opened) {
         // Some OEM settings apps lack the per-app page; the global list always exists.
-        runCatching { context.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)) }
+        val fallback = runCatching { context.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)) }
+        if (fallback.isFailure) LockActivityHandoff.clear()
     }
 }
