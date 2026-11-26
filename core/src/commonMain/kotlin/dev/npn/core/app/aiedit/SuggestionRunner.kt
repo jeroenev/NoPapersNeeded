@@ -22,15 +22,12 @@ data class SuggestedOutcome<R>(
 
 /**
  * What a runner's call bought. [outcomes] covers only the documents that were asked about;
- * [capReached] says the run's [AiRunBudget] stopped the rest, and [requests] is how many calls were
- * made (equal to [outcomes]' size).
+ * [capReached] says the run's [AiRunBudget] stopped the rest.
  */
 data class SuggestionOutcomes<R>(
     val outcomes: List<SuggestedOutcome<R>>,
     val capReached: Boolean,
 ) {
-    val requests: Int get() = outcomes.size
-
     /** Documents the budget left unasked. */
     fun skipped(documents: Int): Int = documents - outcomes.size
 }
@@ -46,7 +43,8 @@ data class SuggestionOutcomes<R>(
  * [CONCURRENCY] documents, so on its path the slots never make a call wait.
  *
  * [budget] is the run's per-run request cap. A slot is taken before each call, so concurrent calls
- * cannot overshoot it; the documents it leaves unasked are reported through
+ * cannot overshoot it, and given back when the endpoint failed the call without an answer, so the
+ * cap counts paid calls only; the documents it leaves unasked are reported through
  * [SuggestionOutcomes.capReached] rather than as failures.
  */
 internal class SuggestionRunner(
@@ -79,10 +77,16 @@ internal class SuggestionRunner(
                                     finishing.withLock { skipped++ }
                                     return@withPermit null
                                 }
+                                // A failed call is one the endpoint never answered (AiSuggest throws
+                                // on endpoint and network errors only), so its slot goes back; a
+                                // failure in [then] comes after a paid answer and keeps it.
+                                val answer = runCatchingCancellable { ai.suggestEdits(docId, request, runId) }
+                                if (answer.isFailure) budget?.release()
                                 val outcome =
-                                    runCatchingCancellable {
-                                        then(index, ai.suggestEdits(docId, request, runId))
-                                    }
+                                    answer.fold(
+                                        onSuccess = { runCatchingCancellable { then(index, it) } },
+                                        onFailure = { Result.failure(it) },
+                                    )
                                 finishing.withLock { onEach(index, outcome) }
                                 SuggestedOutcome(index, outcome)
                             }

@@ -9,26 +9,55 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.yield
 import kotlin.test.Test
 
 class AiEditQueueFailureTest {
     @Test
-    fun failedCallConsumesBudgetAcrossRestartAndLedgerReset() =
+    fun aCallThatFailedBeforeAnyResponseDoesNotCountAgainstTheCap() =
+        runTest {
+            withQueue { rig ->
+                // A cap that fits the run exactly: a 429 on one document must not cost it its answer.
+                rig.config = rig.config.copy(maxRunRequests = 2)
+                rig.ai.edit = suggestion()
+                var throttled = true
+                rig.ai.failWith = { docId -> if (docId == "a" && throttled) error("429 Too Many Requests") }
+                val jobId = rig.enqueue("a", "b")
+
+                rig.queue.processNext() shouldBe true
+                rig.job(jobId).shouldNotBeNull().requestsUsed shouldBe 1
+
+                throttled = false
+                rig.drainUntilSettled()
+
+                rig.rows(jobId).map { it.failed } shouldContainExactly listOf(false, false)
+                rig.job(jobId).shouldNotBeNull().requestsUsed shouldBe 2
+                rig.queue
+                    .openEditRun(jobId)
+                    .shouldNotBeNull()
+                    .failures shouldBe 0
+            }
+        }
+
+    @Test
+    fun requestsAreReservedBeforeDispatchSoACrashMidCallCannotReplenishTheBudget() =
         runTest {
             withQueue { rig ->
                 rig.config = rig.config.copy(maxRunRequests = 1)
-                rig.ai.failWith = { error("endpoint down") }
+                rig.ai.edit = suggestion()
+                rig.ai.gate = CompletableDeferred()
                 val jobId = rig.enqueue("a", "b")
-                rig.queue.processNext() shouldBe false
+
+                val step = backgroundScope.async { rig.queue.processNext() }
+                while (rig.ai.suggestEditsCalls.isEmpty()) yield()
+
+                // The call is out and the process could die now: its slot is already spent.
                 rig.job(jobId).shouldNotBeNull().requestsUsed shouldBe 1
-                rig.db.aiUsageDao().deleteAll()
-                rig.clock.advance(OUTAGE_STEP_MS)
-                val restarted = rig.newQueue()
-                restarted.processNext() shouldBe true
-                restarted.processNext() shouldBe false
-                rig.ai.suggestEditsCalls shouldHaveSize 1
-                rig.rows(jobId).all { it.failed } shouldBe true
+                rig.ai.gate?.complete(Unit)
+                step.await()
             }
         }
 

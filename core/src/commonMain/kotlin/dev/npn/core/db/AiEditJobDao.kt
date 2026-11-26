@@ -58,7 +58,11 @@ interface AiEditJobDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertJobIfAbsent(job: AiEditJobEntity): Long
 
-    /** Reserve calls before dispatch so a crash or failed call cannot replenish a budget. */
+    /**
+     * Reserve calls before dispatch, so a process that dies mid-call cannot replenish a budget. The
+     * drain's write-back then stores the calls actually paid for, giving back those that failed
+     * before any answer.
+     */
     @Query("UPDATE ai_edit_jobs SET requestsUsed = requestsUsed + :count WHERE jobId = :jobId")
     suspend fun reserveRequests(
         jobId: String,

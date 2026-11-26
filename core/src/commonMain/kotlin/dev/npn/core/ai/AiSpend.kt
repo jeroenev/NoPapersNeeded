@@ -294,10 +294,14 @@ object AiRunCap {
 
 /**
  * One run's shared request counter. Every path that spends on a run's behalf takes a slot before
- * asking the endpoint, so concurrent suggestion calls cannot jointly overshoot the cap.
+ * asking the endpoint, so concurrent suggestion calls cannot jointly overshoot the cap, and gives it
+ * back ([release]) when the call failed before any answer came: the cap counts paid calls, so a
+ * 429 or a dropped connection does not cost the run a document.
  *
- * The counter lives only as long as the run; for a queued run that outlives the process it is
- * seeded with the number of requests the spend ledger already recorded under the run id.
+ * The counter lives only as long as one batch or one queued chunk. A queued run that outlives the
+ * process keeps its count in its own row (`AiEditJobEntity.requestsUsed`), reserved before the
+ * chunk is sent so a crash mid-call cannot replenish it, and gives back only the slots of calls
+ * that failed unanswered.
  */
 class AiRunBudget(
     val cap: Int,
@@ -306,7 +310,7 @@ class AiRunBudget(
     private val mutex = Mutex()
     private var used = initiallyUsed.coerceAtLeast(0)
 
-    /** Requests taken so far, including a seed from the ledger. */
+    /** Requests taken so far and not given back. */
     suspend fun usedRequests(): Int = mutex.withLock { used }
 
     /** Take one request slot, or false when the run has reached its cap. */
@@ -319,6 +323,11 @@ class AiRunBudget(
                 true
             }
         }
+
+    /** Give back a slot [tryAcquire] took for a call that failed before any answer arrived. */
+    suspend fun release() {
+        mutex.withLock { if (used > 0) used-- }
+    }
 }
 
 /**

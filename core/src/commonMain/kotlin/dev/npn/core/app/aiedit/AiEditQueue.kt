@@ -326,9 +326,11 @@ internal class AiEditQueue(
         if (gone.isNotEmpty()) dao.deleteDocs(job.jobId, gone.map { it.docId })
         if (live.isEmpty()) return dropIfEmptied(job)
         val config = readConfig()
+        // Reserved in the run's row before anything is sent, so a process that dies mid-call has
+        // already spent the slots; the write-back below gives back those of calls that failed
+        // unanswered, since the cap counts paid calls only.
         val reserved = minOf(live.size, (config.maxRunRequests - job.requestsUsed).coerceAtLeast(0))
         if (reserved > 0 && dao.reserveRequests(job.jobId, reserved) == 0) return true
-        val reservedJob = job.copy(requestsUsed = job.requestsUsed + reserved)
         val budget = AiRunBudget(reserved)
         val asked =
             runner.suggest(
@@ -337,6 +339,7 @@ internal class AiEditQueue(
                 runId = job.jobId,
                 budget = budget,
             ) { _, suggestion -> suggestion }
+        val paidJob = job.copy(requestsUsed = job.requestsUsed + budget.usedRequests())
         // Documents the cap left unasked are given up on exactly like documents the endpoint kept
         // rejecting: the run can then become reviewable, and its failure count says how many were
         // not asked. Nothing silently disappears from the job.
@@ -346,7 +349,7 @@ internal class AiEditQueue(
                 .filterIndexed { index, _ -> index !in askedIndexes }
                 .map { it.copy(failed = true, lastError = CAP_REACHED) }
         return recordChunk(
-            job = reservedJob,
+            job = paidJob,
             rows = asked.outcomes.map { live[it.index] },
             outcomes = asked.outcomes.map { it.outcome },
             skipped = skipped,

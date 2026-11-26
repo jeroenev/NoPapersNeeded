@@ -75,4 +75,24 @@ class AiEditRunCapTest {
             after.capReached shouldBe true
             after.skipped shouldBe 4
         }
+
+    @Test
+    fun aThrottledCallDoesNotSpendTheCapSoTheRetryInTheNextBatchStillFits() =
+        runTest {
+            // The cap fits the scope exactly; a 429 on one document must not leave it unasked.
+            val h = harness(docs = 3, cap = 3)
+            var throttled = true
+            h.ai.failWith = { docId -> if (docId == "d1" && throttled) error("429 Too Many Requests") }
+
+            val first = h.run.suggest(key(batchSize = 3)).shouldBeInstanceOf<BatchResult.Review>()
+            first.failures shouldBe 1
+            first.capReached shouldBe false
+            h.run.moreRemain(key(batchSize = 3)) shouldBe true
+
+            throttled = false
+            val retry = h.run.suggest(key(batchSize = 3)).shouldBeInstanceOf<BatchResult.Review>()
+
+            retry.docs.map { it.docId } shouldBe listOf("d1")
+            retry.capReached shouldBe false
+        }
 }
