@@ -4,7 +4,6 @@ package dev.npn.app.ui.library
 
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.getValue
@@ -36,14 +35,50 @@ class TriageKeysTest {
     private val ran = mutableListOf<String>()
 
     @Test
-    fun jAndTheRightArrowMoveOnKAndTheLeftArrowBack() =
+    fun theRightArrowMovesOnAndTheLeftArrowBack() =
         onUiThread {
-            pressInTriage(Key.J)
             pressInTriage(Key.DirectionRight)
-            pressInTriage(Key.K)
             pressInTriage(Key.DirectionLeft)
 
-            ran shouldContainExactly listOf("next", "next", "previous", "previous")
+            ran shouldContainExactly listOf("next", "previous")
+        }
+
+    /** Letters are for typing: J and K move nowhere. */
+    @Test
+    fun jAndKDoNothing() =
+        onUiThread {
+            pressInTriage(Key.J)
+            pressInTriage(Key.K)
+
+            ran shouldContainExactly emptyList()
+        }
+
+    @Test
+    fun ctrlEnterMarksReviewedAndMovesOn() =
+        onUiThread {
+            pressInTriage(Key.Enter, ctrl = true)
+            pressInTriage(Key.Enter)
+
+            ran shouldContainExactly listOf("review")
+        }
+
+    /** Ctrl+Enter reaches the mode from inside a field too, where the user just typed the last value. */
+    @Test
+    fun ctrlEnterMarksReviewedFromInsideAField() =
+        onUiThread {
+            val scene =
+                ImageComposeScene(WIDTH * 4, HEIGHT) {
+                    Box(triageKeysForTest()) {
+                        var text by remember { mutableStateOf("") }
+                        OutlinedTextField(text, { text = it })
+                    }
+                }
+            scene.closing {
+                render()
+                focusFirst()
+                press(Key.Enter, ctrl = true)
+            }
+            ran shouldContainExactly listOf("review")
         }
 
     @Test
@@ -95,11 +130,9 @@ class TriageKeysTest {
         onUiThread {
             val scene =
                 ImageComposeScene(WIDTH * 4, HEIGHT) {
-                    Box(Modifier.triageKeys({ ran += "next" }, { ran += "previous" }, { ran += "exit" })) {
-                        Column(Modifier.triageFieldKeys()) {
-                            var text by remember { mutableStateOf("") }
-                            OutlinedTextField(text, { text = it })
-                        }
+                    Box(triageKeysForTest()) {
+                        var text by remember { mutableStateOf("") }
+                        OutlinedTextField(text, { text = it })
                     }
                 }
             scene.closing {
@@ -139,24 +172,31 @@ class TriageKeysTest {
         render()
     }
 
-    private fun pressInTriage(key: Key) {
+    private fun triageKeysForTest(): Modifier =
+        Modifier.triageKeys(
+            onNext = { ran += "next" },
+            onPrevious = { ran += "previous" },
+            onReview = { ran += "review" },
+            onExit = { ran += "exit" },
+        )
+
+    private fun pressInTriage(
+        key: Key,
+        ctrl: Boolean = false,
+    ) {
         val scene =
             ImageComposeScene(WIDTH, HEIGHT) {
                 Box(
                     Modifier
                         .size(10.dp)
                         .focusable()
-                        .triageKeys(
-                            onNext = { ran += "next" },
-                            onPrevious = { ran += "previous" },
-                            onExit = { ran += "exit" },
-                        ),
+                        .then(triageKeysForTest()),
                 )
             }
         scene.closing {
             render()
             focusFirst()
-            press(key)
+            press(key, ctrl = ctrl)
         }
     }
 

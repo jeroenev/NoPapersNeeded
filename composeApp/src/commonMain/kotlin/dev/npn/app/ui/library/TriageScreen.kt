@@ -25,8 +25,10 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.movableContentOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -78,9 +80,11 @@ private val EssentialFields = listOf(FieldKeys.TITLE, FieldKeys.CORRESPONDENT, F
 /**
  * The Inbox in triage mode: one document at a time, with its page preview and the fields that clear
  * the inbox fastest (title, correspondent, type, date and tags), plus the shared save/review status
- * bar. Next/previous skip without marking; "Mark reviewed & next" saves the draft and the marker
- * through the same [dev.npn.app.ui.detail.DocumentDrafts] path the detail editor uses, then moves
- * on. The last document's action finishes and leaves the mode.
+ * bar. Next/previous skip without marking; "Mark reviewed & next" (or Ctrl+Enter) saves the draft
+ * and the marker through the same [dev.npn.app.ui.detail.DocumentDrafts] path the detail editor
+ * uses, then moves on to the next unreviewed document, and its Undo takes back the marker, the
+ * fields and the tags alike. With no unreviewed document left after it, the action finishes and
+ * leaves the mode.
  *
  * The mode starts over the result set the library already loaded, so it adds no query and no whole
  * library load; its order and unreviewed count are fixed at entry, while the document on screen
@@ -115,7 +119,9 @@ internal fun TriageScreen(
     val metadata by vm.metadata.collectAsStateWithLifecycle()
     val ui by vm.ui.collectAsStateWithLifecycle()
     val modeFocus = remember { FocusRequester() }
-    // Every move lands the keyboard back on the mode, so J/K work at once after a button or a save.
+    // The status bar's action and Ctrl+Enter, once the document's editor exists to save its draft.
+    var review by remember { mutableStateOf<(() -> Unit)?>(null) }
+    // Every move lands the keyboard back on the mode, so the keys work at once after a button or a save.
     LaunchedEffect(state.currentId) {
         withFrameNanos { }
         runCatchingCancellable { modeFocus.requestFocus() }
@@ -136,6 +142,7 @@ internal fun TriageScreen(
                 .triageKeys(
                     onNext = actions::triageNext,
                     onPrevious = actions::triagePrevious,
+                    onReview = { review?.invoke() },
                     onExit = actions::exitTriage,
                 ),
         topBar = {
@@ -160,6 +167,8 @@ internal fun TriageScreen(
         Column(Modifier.fillMaxSize().padding(padding).imePadding()) {
             val document = metadata.document.item
             if (document == null) {
+                // Nothing to review until the document is there; never the one before it.
+                SideEffect { review = null }
                 Box(Modifier.fillMaxWidth().weight(1f)) {
                     if (metadata.document.loadState is DocLoadState.Loading) {
                         LoadingIndicator()
@@ -192,26 +201,28 @@ internal fun TriageScreen(
                 modifier = Modifier.fillMaxWidth().weight(1f),
             )
             val docId = document.doc.docId
+            val onReview: (() -> Unit)? =
+                if (metadata.document.reviewMode.reviewMarkerIsAuthoritative) {
+                    {
+                        if (metadata.document.reviewed) {
+                            // Already reviewed: a redundant marker write is a journal event for no
+                            // change, so this only moves on (or finishes when nothing is left).
+                            actions.triageReviewedAndAdvance(state.sessionId, docId)
+                        } else {
+                            editing.markReviewed { actions.triageReviewedAndAdvance(state.sessionId, docId) }
+                        }
+                    }
+                } else {
+                    null
+                }
+            SideEffect { review = onReview }
             EditorStatusBar(
                 draft = editing.draft,
                 onRetry = editing.actions::commitDraft,
                 onUndo = editing::undo,
                 onDiscard = editing::discard,
-                onReview =
-                    if (metadata.document.reviewMode.reviewMarkerIsAuthoritative) {
-                        {
-                            if (metadata.document.reviewed) {
-                                // Already reviewed: a redundant marker write is a journal event for
-                                // no change, so this is a skip (or the finish at the last one).
-                                if (state.hasNext) actions.triageNext() else actions.exitTriage()
-                            } else {
-                                editing.markReviewed { actions.triageReviewedAndAdvance(state.sessionId, docId) }
-                            }
-                        }
-                    } else {
-                        null
-                    },
-                hasNext = state.hasNext,
+                onReview = onReview,
+                hasNext = state.nextUnreviewed != null,
             )
         }
     }
@@ -254,7 +265,7 @@ private fun TriageMetadata(
     val defs = metadata.document.fieldDefs
     val doc = editing.item.doc
     Column(
-        modifier = modifier.triageFieldKeys().verticalScroll(rememberScrollState()).padding(16.dp),
+        modifier = modifier.verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         ReviewedBadge(metadata.document.reviewed)

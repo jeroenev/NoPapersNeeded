@@ -77,7 +77,7 @@ class TriageViewModelTest : MainDispatcherTest() {
             model.triage.value?.currentId shouldBe "d3"
         }
 
-    /** Moving on with J/K is a skip: it writes no reviewed marker, nor any other metadata. */
+    /** Moving on with the arrows is a skip: it writes no reviewed marker, nor any other metadata. */
     @Test
     fun skippingMarksNothingReviewed() =
         runTest(dispatcher) {
@@ -142,6 +142,61 @@ class TriageViewModelTest : MainDispatcherTest() {
             model.triageReviewedAndAdvance(model.triage.value!!.sessionId, "d2")
 
             model.triage.value shouldBe null
+        }
+
+    /**
+     * Over a filter other than the Inbox, reviewed documents sit between the unreviewed ones: marking
+     * one reviewed goes on to the next that still needs it, not merely the next in the list.
+     */
+    @Test
+    fun markingReviewedGoesOnToTheNextUnreviewedDocument() =
+        runTest(dispatcher) {
+            val model =
+                vm(
+                    items =
+                        listOf(
+                            listItem("d1"),
+                            listItem(doc("d2", reviewed = true)),
+                            listItem("d3"),
+                        ),
+                )
+            advanceUntilIdle()
+            model.startTriage()
+
+            model.triage.value?.nextUnreviewed shouldBe "d3"
+            model.triageReviewedAndAdvance(model.triage.value!!.sessionId, "d1")
+
+            model.triage.value?.currentId shouldBe "d3"
+        }
+
+    /** With only reviewed documents after it, marking one reviewed finishes the mode. */
+    @Test
+    fun markingReviewedWithOnlyReviewedDocumentsLeftFinishes() =
+        runTest(dispatcher) {
+            val model = vm(items = listOf(listItem("d1"), listItem(doc("d2", reviewed = true))))
+            advanceUntilIdle()
+            model.startTriage()
+
+            model.triage.value?.nextUnreviewed shouldBe null
+            model.triageReviewedAndAdvance(model.triage.value!!.sessionId, "d1")
+
+            model.triage.value shouldBe null
+        }
+
+    /** A document marked reviewed earlier in the session is not one to go back to. */
+    @Test
+    fun aDocumentMarkedReviewedInTheSessionIsNotNextAgain() =
+        runTest(dispatcher) {
+            val model = vm()
+            advanceUntilIdle()
+            model.startTriage()
+            model.triageNext()
+            model.triageReviewedAndAdvance(model.triage.value!!.sessionId, "d2")
+            model.triagePrevious()
+            model.triagePrevious()
+
+            model.triage.value?.currentId shouldBe "d1"
+            model.triage.value?.nextUnreviewed shouldBe "d3"
         }
 
     @Test

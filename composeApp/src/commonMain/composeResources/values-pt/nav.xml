@@ -30,6 +30,7 @@
     <string name="nav_shortcuts_everywhere">Em todo o app</string>
     <string name="nav_shortcuts_library">Biblioteca</string>
     <string name="nav_shortcuts_document">Documento</string>
+    <string name="nav_shortcuts_triage">Triagem</string>
     <string name="nav_shortcuts_assistant">Conversa com o assistente</string>
     <string name="nav_shortcuts_tips">Dicas</string>
 
@@ -50,6 +51,7 @@
     <string name="nav_shortcut_keys_enter">Enter</string>
     <string name="nav_shortcut_keys_shift_enter">Shift+Enter</string>
     <string name="nav_shortcut_keys_ctrl_k">Ctrl+K</string>
+    <string name="nav_shortcut_keys_ctrl_enter">Ctrl+Enter</string>
 
     <!-- What each key does, one whole sentence per row. -->
     <string name="nav_shortcut_show_list">Mostrar esta lista de atalhos.</string>
@@ -69,6 +71,9 @@
     <string name="nav_shortcut_assistant_send">Enviar a pergunta.</string>
     <string name="nav_shortcut_assistant_newline">Começar uma nova linha na pergunta.</string>
     <string name="nav_shortcut_command_palette">Abrir a paleta de comandos.</string>
+    <string name="nav_shortcut_triage_skip">Pular para o documento anterior ou o próximo sem marcar nada.</string>
+    <string name="nav_shortcut_triage_review">Marcar o documento como revisado e ir para o próximo por revisar.</string>
+    <string name="nav_shortcut_triage_exit">Sair da triagem.</string>
 
     <string name="nav_shortcut_tip_page_counter">Clique no contador de páginas para ir a uma página pelo número.</string>
     <string name="nav_shortcut_tip_long_press">Mantenha um documento pressionado para começar a selecionar; depois clique em outros para adicioná-los.</string>

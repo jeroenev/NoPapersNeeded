@@ -30,6 +30,7 @@
     <string name="nav_shortcuts_everywhere">Everywhere</string>
     <string name="nav_shortcuts_library">Library</string>
     <string name="nav_shortcuts_document">Document</string>
+    <string name="nav_shortcuts_triage">Triage</string>
     <string name="nav_shortcuts_assistant">Assistant chat</string>
     <string name="nav_shortcuts_tips">Tips</string>
 
@@ -50,6 +51,7 @@
     <string name="nav_shortcut_keys_enter">Enter</string>
     <string name="nav_shortcut_keys_shift_enter">Shift+Enter</string>
     <string name="nav_shortcut_keys_ctrl_k">Ctrl+K</string>
+    <string name="nav_shortcut_keys_ctrl_enter">Ctrl+Enter</string>
 
     <!-- What each key does, one whole sentence per row. -->
     <string name="nav_shortcut_show_list">Show this list of shortcuts.</string>
@@ -69,6 +71,9 @@
     <string name="nav_shortcut_assistant_send">Send the question.</string>
     <string name="nav_shortcut_assistant_newline">Start a new line in the question.</string>
     <string name="nav_shortcut_command_palette">Open the command palette.</string>
+    <string name="nav_shortcut_triage_skip">Skip to the previous or next document, marking nothing.</string>
+    <string name="nav_shortcut_triage_review">Mark the document reviewed and go to the next unreviewed one.</string>
+    <string name="nav_shortcut_triage_exit">Leave triage.</string>
 
     <string name="nav_shortcut_tip_page_counter">Click the page counter to go to a page by number.</string>
     <string name="nav_shortcut_tip_long_press">Long-press a document to start selecting; then click others to add them.</string>

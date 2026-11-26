@@ -30,6 +30,7 @@
     <string name="nav_shortcuts_everywhere">Überall</string>
     <string name="nav_shortcuts_library">Bibliothek</string>
     <string name="nav_shortcuts_document">Dokument</string>
+    <string name="nav_shortcuts_triage">Sichten</string>
     <string name="nav_shortcuts_assistant">Assistent-Chat</string>
     <string name="nav_shortcuts_tips">Tipps</string>
 
@@ -50,6 +51,7 @@
     <string name="nav_shortcut_keys_enter">Eingabe</string>
     <string name="nav_shortcut_keys_shift_enter">Umschalt+Eingabe</string>
     <string name="nav_shortcut_keys_ctrl_k">Strg+K</string>
+    <string name="nav_shortcut_keys_ctrl_enter">Strg+Eingabe</string>
 
     <!-- What each key does, one whole sentence per row. -->
     <string name="nav_shortcut_show_list">Diese Liste der Tastenkürzel anzeigen.</string>
@@ -69,6 +71,9 @@
     <string name="nav_shortcut_assistant_send">Die Frage senden.</string>
     <string name="nav_shortcut_assistant_newline">Eine neue Zeile in der Frage beginnen.</string>
     <string name="nav_shortcut_command_palette">Die Befehlspalette öffnen.</string>
+    <string name="nav_shortcut_triage_skip">Zum vorherigen oder nächsten Dokument springen, ohne etwas zu markieren.</string>
+    <string name="nav_shortcut_triage_review">Das Dokument als geprüft markieren und zum nächsten ungeprüften wechseln.</string>
+    <string name="nav_shortcut_triage_exit">Das Sichten beenden.</string>
 
     <string name="nav_shortcut_tip_page_counter">Klicke auf den Seitenzähler, um zu einer Seitenzahl zu springen.</string>
     <string name="nav_shortcut_tip_long_press">Halte ein Dokument gedrückt, um mit dem Auswählen zu beginnen; klicke dann weitere an, um sie hinzuzufügen.</string>

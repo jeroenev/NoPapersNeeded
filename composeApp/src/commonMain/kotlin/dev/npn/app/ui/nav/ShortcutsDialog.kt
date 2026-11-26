@@ -47,6 +47,7 @@ import no_papers_needed.composeapp.generated.resources.nav_shortcut_doc_zoom
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_keys_arrows
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_keys_ctrl_a
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_keys_ctrl_arrows
+import no_papers_needed.composeapp.generated.resources.nav_shortcut_keys_ctrl_enter
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_keys_ctrl_f
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_keys_ctrl_k
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_keys_ctrl_o
@@ -69,6 +70,9 @@ import no_papers_needed.composeapp.generated.resources.nav_shortcut_show_list
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_tip_long_press
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_tip_page_counter
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_tip_right_click
+import no_papers_needed.composeapp.generated.resources.nav_shortcut_triage_exit
+import no_papers_needed.composeapp.generated.resources.nav_shortcut_triage_review
+import no_papers_needed.composeapp.generated.resources.nav_shortcut_triage_skip
 import no_papers_needed.composeapp.generated.resources.nav_shortcuts
 import no_papers_needed.composeapp.generated.resources.nav_shortcuts_assistant
 import no_papers_needed.composeapp.generated.resources.nav_shortcuts_close
@@ -76,6 +80,7 @@ import no_papers_needed.composeapp.generated.resources.nav_shortcuts_document
 import no_papers_needed.composeapp.generated.resources.nav_shortcuts_everywhere
 import no_papers_needed.composeapp.generated.resources.nav_shortcuts_library
 import no_papers_needed.composeapp.generated.resources.nav_shortcuts_tips
+import no_papers_needed.composeapp.generated.resources.nav_shortcuts_triage
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -93,7 +98,7 @@ private class ShortcutGroup(
 
 /**
  * The shortcuts the screens bind, in the order a newcomer meets them. The bindings live with their
- * screens (`libraryKeys`, `DocumentKeys.kt`, the chat's input row); a key added or changed there
+ * screens (`libraryKeys`, `DocumentKeys.kt`, `TriageKeys.kt`, the chat's input row); a key added or changed there
  * belongs here too.
  */
 private val SHORTCUTS =
@@ -126,6 +131,14 @@ private val SHORTCUTS =
                 Shortcut(Res.string.nav_shortcut_keys_ctrl_s, Res.string.nav_shortcut_doc_save),
                 Shortcut(Res.string.nav_shortcut_keys_ctrl_f, Res.string.nav_shortcut_doc_find),
                 Shortcut(Res.string.nav_shortcut_keys_arrows, Res.string.nav_shortcut_doc_resize),
+            ),
+        ),
+        ShortcutGroup(
+            Res.string.nav_shortcuts_triage,
+            listOf(
+                Shortcut(Res.string.nav_shortcut_keys_arrows, Res.string.nav_shortcut_triage_skip),
+                Shortcut(Res.string.nav_shortcut_keys_ctrl_enter, Res.string.nav_shortcut_triage_review),
+                Shortcut(Res.string.nav_shortcut_keys_escape, Res.string.nav_shortcut_triage_exit),
             ),
         ),
         ShortcutGroup(

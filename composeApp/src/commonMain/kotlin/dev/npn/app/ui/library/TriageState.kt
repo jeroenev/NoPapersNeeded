@@ -36,6 +36,17 @@ data class TriageState(
 
     val hasPrevious: Boolean get() = position > 1
 
+    /**
+     * The first document after [currentId] still unreviewed in this session, where "Mark reviewed &
+     * next" goes; null when none is left after it. Over the Inbox that is simply the next one; over
+     * another filter it passes the documents already reviewed.
+     */
+    val nextUnreviewed: String?
+        get() {
+            val index = order.indexOf(currentId).takeIf { it >= 0 } ?: return null
+            return order.subList(index + 1, order.size).firstOrNull { it in unreviewed && it !in reviewed }
+        }
+
     /** The document to seed its viewmodel with, or null for an id the mode no longer knows. */
     val current: DocListItem? get() = known[currentId]
 }
@@ -51,9 +62,10 @@ interface TriageActions {
     fun triagePrevious()
 
     /**
-     * [docId]'s draft and reviewed marker landed: count it reviewed and move on, or finish after the
-     * last one. A save from an earlier session is ignored; after a move it counts only the saved
-     * document and does not advance the one now on screen.
+     * [docId]'s draft and reviewed marker landed: count it reviewed and move on to the next unreviewed
+     * document ([TriageState.nextUnreviewed]), or finish when none is left. A save from an earlier
+     * session is ignored; after a move it counts only the saved document and does not advance the one
+     * now on screen.
      */
     fun triageReviewedAndAdvance(
         sessionId: Any,

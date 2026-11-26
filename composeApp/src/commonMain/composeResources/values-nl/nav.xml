@@ -30,6 +30,7 @@
     <string name="nav_shortcuts_everywhere">Overal</string>
     <string name="nav_shortcuts_library">Bibliotheek</string>
     <string name="nav_shortcuts_document">Document</string>
+    <string name="nav_shortcuts_triage">Beoordelen</string>
     <string name="nav_shortcuts_assistant">Chat met de assistent</string>
     <string name="nav_shortcuts_tips">Tips</string>
 
@@ -50,6 +51,7 @@
     <string name="nav_shortcut_keys_enter">Enter</string>
     <string name="nav_shortcut_keys_shift_enter">Shift+Enter</string>
     <string name="nav_shortcut_keys_ctrl_k">Ctrl+K</string>
+    <string name="nav_shortcut_keys_ctrl_enter">Ctrl+Enter</string>
 
     <!-- What each key does, one whole sentence per row. -->
     <string name="nav_shortcut_show_list">Deze lijst met sneltoetsen tonen.</string>
@@ -69,6 +71,9 @@
     <string name="nav_shortcut_assistant_send">De vraag versturen.</string>
     <string name="nav_shortcut_assistant_newline">Een nieuwe regel beginnen in de vraag.</string>
     <string name="nav_shortcut_command_palette">Het opdrachtenpalet openen.</string>
+    <string name="nav_shortcut_triage_skip">Naar het vorige of volgende document springen zonder iets te markeren.</string>
+    <string name="nav_shortcut_triage_review">Het document als beoordeeld markeren en naar het volgende onbeoordeelde gaan.</string>
+    <string name="nav_shortcut_triage_exit">Stoppen met beoordelen.</string>
 
     <string name="nav_shortcut_tip_page_counter">Klik op de paginateller om naar een paginanummer te gaan.</string>
     <string name="nav_shortcut_tip_long_press">Houd een document ingedrukt om te beginnen met selecteren; klik daarna op andere om ze toe te voegen.</string>

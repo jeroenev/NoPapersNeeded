@@ -381,9 +381,10 @@ class LibraryViewModel(
     }
 
     /**
-     * The document's draft and reviewed marker landed: count it reviewed and move on, or leave the
-     * mode after the last one. A save from an earlier session is ignored. A save that lands after a
-     * move counts its document but cannot advance the document now on screen.
+     * The document's draft and reviewed marker landed: count it reviewed and move on to the next
+     * unreviewed document, or leave the mode when none is left. A save from an earlier session is
+     * ignored. A save that lands after a move counts its document but cannot advance the document now
+     * on screen.
      */
     override fun triageReviewedAndAdvance(
         sessionId: Any,
@@ -398,8 +399,8 @@ class LibraryViewModel(
             _triage.value = state.copy(reviewed = reviewed)
             return
         }
-        val next = state.order.getOrNull(state.order.indexOf(docId) + 1)
-        _triage.value = if (next == null) null else state.copy(currentId = next, reviewed = reviewed)
+        val counted = state.copy(reviewed = reviewed)
+        _triage.value = counted.nextUnreviewed?.let { counted.copy(currentId = it) }
     }
 
     init {
