@@ -5,6 +5,7 @@ import ai.koog.agents.chatMemory.feature.ChatMemory
 import ai.koog.agents.core.agent.AIAgent
 import ai.koog.agents.core.agent.functionalStrategy
 import ai.koog.agents.core.agent.session.AIAgentLLMWriteSession
+import ai.koog.agents.core.tools.ToolDescriptor
 import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.prompt.Prompt
 import ai.koog.prompt.dsl.prompt
@@ -18,16 +19,23 @@ import ai.koog.prompt.streaming.toMessageResponse
 import dev.npn.core.util.NpnJson
 import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
-/** One streamed chat turn's usage: the provider's report plus prompt/answer sizes for an estimate. */
+/**
+ * One model call's usage within a chat turn: the provider's report, plus the size of what was sent
+ * and what came back for an estimate when the provider reports none.
+ */
 internal data class ChatUsageInfo(
-    val metaInfo: ResponseMetaInfo,
+    /** The provider's report; null when the call stopped before its end frame carried one. */
+    val metaInfo: ResponseMetaInfo?,
+    /** Characters sent: the messages in the replay window and the tool schemas. */
     val promptChars: Int,
     val answerChars: Int,
 )
@@ -44,6 +52,9 @@ internal class KoogChatAgent(
     private val maxIterations: Int,
 ) {
     private val toolRegistry = ToolRegistry { toolSet.tools.forEach(::tool) }
+
+    /** What the tool schemas add to every call; see [schemaChars]. */
+    private val toolSchemaChars = toolSet.tools.sumOf { schemaChars(it.descriptor) }
 
     @Suppress("LongMethod") // The turn loop's mutable state (answer, frames, calls) is shared by every branch.
     fun run(
@@ -77,7 +88,7 @@ internal class KoogChatAgent(
                         val turnText = StringBuilder()
                         var textFlushed = false
                         llm.writeSession {
-                            streamOverReplayWindow(replayedTurns) { frame ->
+                            streamMeasured(replayedTurns, onUsage) { frame ->
                                 when (frame) {
                                     is StreamFrame.TextDelta -> {
                                         responseFrames += frame
@@ -91,17 +102,6 @@ internal class KoogChatAgent(
                                             responseFrames += frame.withSafeArguments(call)
                                             calls += call
                                         }
-                                    }
-
-                                    is StreamFrame.End -> {
-                                        onUsage(
-                                            ChatUsageInfo(
-                                                metaInfo = frame.metaInfo,
-                                                promptChars = prompt.messages.sumOf { it.textContent().length },
-                                                answerChars = turnText.length,
-                                            ),
-                                        )
-                                        responseFrames += frame
                                     }
 
                                     else -> {
@@ -145,6 +145,39 @@ internal class KoogChatAgent(
             agent.run(question, conversationId)
         }
 
+    /**
+     * Stream one model call over the replay window (see [streamOverReplayWindow]), handing each
+     * frame to [onFrame], and report the call's usage: at its end frame, or, for a call that
+     * streamed something and stopped before one (the user stopped the turn, the connection
+     * dropped), with no report and an estimate, since it was paid for all the same. A call refused
+     * before any frame (a 429) cost nothing and is not reported.
+     */
+    private suspend fun AIAgentLLMWriteSession.streamMeasured(
+        turns: Int,
+        onUsage: suspend (ChatUsageInfo) -> Unit,
+        onFrame: suspend (StreamFrame) -> Unit,
+    ) {
+        var sentChars = -1
+        var answerChars = 0
+        var ended = false
+        try {
+            streamOverReplayWindow(turns) { frame ->
+                // Read while the replay window is the prompt: that is what was sent.
+                if (sentChars < 0) sentChars = prompt.messages.sumOf { it.textContent().length } + toolSchemaChars
+                if (frame is StreamFrame.TextDelta) answerChars += frame.text.length
+                if (frame is StreamFrame.End) {
+                    ended = true
+                    onUsage(ChatUsageInfo(frame.metaInfo, sentChars, answerChars))
+                }
+                onFrame(frame)
+            }
+        } finally {
+            if (sentChars >= 0 && !ended) {
+                withContext(NonCancellable) { onUsage(ChatUsageInfo(null, sentChars, answerChars)) }
+            }
+        }
+    }
+
     // A failing tool is reported to the model as its result; a cancelled one ends the turn.
     private suspend fun dispatch(call: UsableToolCall): String =
         toolSet.calls[call.name]?.let { tool ->
@@ -159,6 +192,24 @@ internal class KoogChatAgent(
             maxAgentIterations = maxIterations,
         )
 }
+
+/**
+ * Characters one tool's schema adds to a call, for the estimate when the provider reports no usage:
+ * its name and description and each parameter's name, description and type, plus the JSON a
+ * function-calling request wraps them in (`{"type":"function","function":{"name":…,
+ * "parameters":{"type":"object","properties":{…},"required":[…]}}}`).
+ */
+private fun schemaChars(tool: ToolDescriptor): Int =
+    TOOL_JSON_CHARS + tool.name.length + tool.description.length +
+        (tool.requiredParameters + tool.optionalParameters).sumOf { parameter ->
+            PARAMETER_JSON_CHARS + parameter.name.length + parameter.description.length + parameter.type.name.length
+        }
+
+/** The JSON around one function's name, description and parameter object. */
+private const val TOOL_JSON_CHARS = 110
+
+/** The JSON around one parameter's name, type and description, and its place in `required`. */
+private const val PARAMETER_JSON_CHARS = 40
 
 /**
  * Stream the model's next response to the newest [turns] turns [ChatHistoryWindow] replays,

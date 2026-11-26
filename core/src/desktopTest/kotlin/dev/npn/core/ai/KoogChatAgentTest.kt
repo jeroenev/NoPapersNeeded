@@ -13,11 +13,13 @@ import dev.npn.core.db.TempIndexDb
 import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.asFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -395,6 +397,58 @@ class KoogChatAgentTest {
                 .flatMap { it.parts }
                 .filterIsInstance<MessagePart.Tool.Result>()
                 .map { it.output } shouldContainExactly List(3) { output }
+        }
+
+    /**
+     * A provider that reports no usage is estimated from what was sent, and every call carries the
+     * tool schemas as well as the messages: the estimate must count them.
+     */
+    @Test
+    fun theUsageEstimateCountsTheToolSchemasSentWithEveryCall() =
+        runTest {
+            val usages = mutableListOf<ChatUsageInfo>()
+            val executor = scriptedExecutor(listOf(textFrames("hello")))
+
+            agent(executor).run("hi", "session-1", onUsage = { usages += it }).collectList()
+
+            val schemas =
+                LibraryAiTools.toolSetFor(db, FieldKeys.seedDefinitions()).tools.sumOf { tool ->
+                    tool.descriptor.description.length
+                }
+            val messages = "system".length + "hi".length
+            usages.single().promptChars shouldBeGreaterThan messages + schemas
+        }
+
+    /** A turn the user stops while the answer streams was still paid for. */
+    @Test
+    fun aTurnStoppedBeforeTheEndFrameIsStillRecorded() =
+        runTest {
+            val usages = mutableListOf<ChatUsageInfo>()
+            val stopped =
+                flow<StreamFrame> {
+                    emit(StreamFrame.TextDelta("partial", index = null))
+                    throw CancellationException("stopped")
+                }
+            val executor = ScriptedExecutor(listOf(stopped))
+
+            assertFails { agent(executor).run("hi", "session-1", onUsage = { usages += it }).collectList() }
+
+            val usage = usages.single()
+            usage.metaInfo shouldBe null
+            usage.answerChars shouldBe "partial".length
+        }
+
+    /** A call the endpoint refused before answering (a 429) was not paid for, so nothing is recorded. */
+    @Test
+    fun aCallRefusedBeforeAnyFrameIsNotRecorded() =
+        runTest {
+            val usages = mutableListOf<ChatUsageInfo>()
+            val refused = flow<StreamFrame> { error("429 Too Many Requests") }
+            val executor = ScriptedExecutor(listOf(refused))
+
+            assertFails { agent(executor).run("hi", "session-1", onUsage = { usages += it }).collectList() }
+
+            usages shouldBe emptyList()
         }
 
     private suspend fun Flow<AiChatEvent>.collectList(): List<AiChatEvent> {
