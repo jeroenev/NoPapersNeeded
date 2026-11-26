@@ -1,5 +1,7 @@
 package dev.npn.core.db
 
+import dev.npn.core.model.FieldKeys
+
 /**
  * The one place an FTS row is assembled. The fold writes a row's metadata columns and the OCR
  * pipeline its extracted text, and either may create the row; both build it here, so a new
@@ -44,8 +46,11 @@ object FtsRows {
                     .joinToString(
                         " ",
                     ).ifEmpty { null },
+            // The app's own fields are no search terms: a Message-ID would match every email's domain.
             fields =
-                fields.values
+                fields
+                    .filterKeys { it !in FieldKeys.HIDDEN }
+                    .values
                     .asSequence()
                     .map { it.trim() }
                     .filter { it.isNotEmpty() }

@@ -636,7 +636,11 @@ internal object LibraryAiTools {
         class Args
 
         override suspend fun execute(args: Args): String {
-            val counts = fieldDao.keysWithLiveCounts().associate { it.fieldKey to it.count }
+            val counts =
+                fieldDao
+                    .keysWithLiveCounts()
+                    .filter { it.fieldKey !in FieldKeys.HIDDEN }
+                    .associate { it.fieldKey to it.count }
             val registered = fields.map { it.key }.toSet()
             return buildString {
                 appendLine("Registered fields (key · label · type · documents with a value):")
@@ -742,7 +746,7 @@ internal object LibraryAiTools {
         private suspend fun searchAnyField(value: String): Map<String, Pair<String, String>> {
             val matches = LinkedHashMap<String, Pair<String, String>>()
             for (f in fieldDao.all()) {
-                if (f.fieldValue.contains(value, ignoreCase = true)) {
+                if (f.fieldKey !in FieldKeys.HIDDEN && f.fieldValue.contains(value, ignoreCase = true)) {
                     matches.putIfAbsent(f.docId, f.fieldKey to f.fieldValue)
                 }
             }
@@ -773,7 +777,7 @@ internal object LibraryAiTools {
             return fieldDao
                 .all()
                 .asSequence()
-                .filter { it.fieldKey.equals(key, ignoreCase = true) }
+                .filter { it.fieldKey.equals(key, ignoreCase = true) && it.fieldKey !in FieldKeys.HIDDEN }
                 .filter { it.fieldValue.contains(value, ignoreCase = true) }
                 .filter { row -> from == null || compare(row, from) >= 0 }
                 .filter { row -> to == null || compare(row, to) <= 0 }
@@ -820,7 +824,7 @@ internal object LibraryAiTools {
                 documentDao.getByDocId(args.docId)
                     ?: return "No document with docId ${args.docId}."
             val tags = tagDao.tagsForDocument(args.docId)
-            val values = fieldDao.valuesOf(args.docId)
+            val values = fieldDao.valuesOf(args.docId) - FieldKeys.HIDDEN
             val order = fields.map { it.key } + (values.keys - fields.map { it.key }.toSet()).sorted()
             return buildString {
                 appendLine("docId: ${doc.docId}")

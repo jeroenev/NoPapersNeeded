@@ -178,6 +178,7 @@ class FieldKeysTest {
                 "paymentReference",
                 "iban",
                 "eInvoice",
+                "emailMessageId",
             ),
             seed.map { it.key },
         )
@@ -199,6 +200,7 @@ class FieldKeysTest {
                 "paymentReference",
                 "iban",
                 "eInvoice",
+                "emailMessageId",
             ),
             seed.filterNot { it.aiEnabled }.map { it.key }.toSet(),
         )

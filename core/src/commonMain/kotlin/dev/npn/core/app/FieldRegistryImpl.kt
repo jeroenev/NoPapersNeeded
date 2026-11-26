@@ -26,20 +26,27 @@ internal class FieldRegistryImpl(
     private val defDao get() = db.fieldDefDao()
     private val fieldDao get() = db.documentFieldDao()
 
+    // The app's own fields ([FieldKeys.HIDDEN]) are left out of every read: no list offers them.
     override val fields: Flow<List<FieldDef>> =
-        defDao.observeAll().map { rows -> rows.mapNotNull { it.toFieldDef() } }.distinctUntilChanged()
+        defDao
+            .observeAll()
+            .map { rows -> rows.mapNotNull { it.toFieldDef() }.filter { it.key !in FieldKeys.HIDDEN } }
+            .distinctUntilChanged()
 
-    override fun orphanKeys(): Flow<List<String>> = defDao.observeOrphanKeys()
+    override fun orphanKeys(): Flow<List<String>> =
+        defDao.observeOrphanKeys().map { keys -> keys.filter { it !in FieldKeys.HIDDEN } }
 
     override fun usageCounts(): Flow<Map<String, Int>> =
-        fieldDao.observeKeysWithCounts().map { rows -> rows.associate { it.fieldKey to it.count } }
+        fieldDao.observeKeysWithCounts().map { rows ->
+            rows.filter { it.fieldKey !in FieldKeys.HIDDEN }.associate { it.fieldKey to it.count }
+        }
 
     override fun distinctValues(
         key: String,
         limit: Int,
     ): Flow<List<String>> = fieldDao.observeDistinctValues(key, limit)
 
-    override suspend fun current(): List<FieldDef> = defDao.defs()
+    override suspend fun current(): List<FieldDef> = defDao.defs().filter { it.key !in FieldKeys.HIDDEN }
 
     override suspend fun upsert(def: FieldDef) =
         lifetime.owned<Unit> {
@@ -97,10 +104,12 @@ internal class FieldRegistryImpl(
     override suspend fun move(
         key: String,
         delta: Int,
-    ) = commitOrder { defs ->
+    ) = commitOrder { all ->
+        // Among the fields the registry lists; the app's own stay after them, out of every move.
+        val (hidden, defs) = all.partition { it.key in FieldKeys.HIDDEN }
         val from = defs.indexOfFirst { it.key == key }
         val to = from + delta
-        if (from < 0 || to !in defs.indices) null else defs.toMutableList().apply { add(to, removeAt(from)) }
+        if (from < 0 || to !in defs.indices) null else defs.toMutableList().apply { add(to, removeAt(from)) } + hidden
     }
 
     /**

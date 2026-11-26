@@ -21,13 +21,16 @@ class FieldRegistryTest {
         label: String = key,
     ) = FieldDef(key, label, type, showByDefault = false, aiEnabled = false, position = position)
 
+    /** The seeded fields the registry lists: all but the ones the app keeps for itself. */
+    private val listed = FieldKeys.seedDefinitions().filter { it.key !in FieldKeys.HIDDEN }
+
     @Test
     fun freshLibraryIsSeededOnceWithTheWellKnownFields() =
         appSessionTest { rig ->
             val defs =
                 rig.session.fieldRegistry.fields
                     .first { it.isNotEmpty() }
-            defs.map { it.key } shouldContainExactly FieldKeys.seedDefinitions().map { it.key }
+            defs.map { it.key } shouldContainExactly listed.map { it.key }
             defs.single { it.key == FieldKeys.NOTES }.aiEnabled shouldBe false
             val objectsAfterSeed = rig.journalObjectCount()
 
@@ -36,7 +39,7 @@ class FieldRegistryTest {
             val (second, _) = rig.secondSession(backgroundScope)
             second.fieldRegistry.fields
                 .first { it.isNotEmpty() }
-                .size shouldBe FieldKeys.seedDefinitions().size
+                .size shouldBe listed.size
             rig.journalObjectCount() shouldBe objectsAfterSeed
         }
 
@@ -45,7 +48,7 @@ class FieldRegistryTest {
         appSessionTest { rig ->
             rig.session.fieldRegistry.fields
                 .first { it.isNotEmpty() }
-            for (key in FieldKeys.seedDefinitions().map { it.key }) rig.session.fieldRegistry.remove(key)
+            for (key in listed.map { it.key }) rig.session.fieldRegistry.remove(key)
             rig.session.fieldRegistry.fields
                 .first { it.isEmpty() }
 
@@ -183,13 +186,13 @@ class FieldRegistryTest {
     fun moveShiftsOneFieldAndIgnoresAMovePastTheEnd() =
         appSessionTest { rig ->
             val registry = rig.session.fieldRegistry
-            val initial = registry.fields.first { it.size == FieldKeys.seedDefinitions().size }
+            val initial = registry.fields.first { it.size == listed.size }
             registry.move("docType", -2)
             val ordered = registry.fields.first { it.first().key == "docType" }
             // The move brings docType to the front and renumbers the whole registry 0, 1, 2...
             ordered.first().key shouldBe "docType"
             ordered.map { it.key }.toSet() shouldBe initial.map { it.key }.toSet()
-            ordered.map { it.position } shouldContainExactly (0 until FieldKeys.seedDefinitions().size).toList()
+            ordered.map { it.position } shouldContainExactly listed.indices.toList()
 
             registry.move("docType", -1)
             registry.move(ordered.last().key, 1)

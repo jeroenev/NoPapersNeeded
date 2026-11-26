@@ -167,6 +167,20 @@ object FieldKeys {
      */
     const val EINVOICE = "eInvoice"
 
+    /**
+     * The Message-ID of the email a document is the PDF of (seed version 4): how an email read again
+     * is known, whatever bytes its PDF is made of this time. A registered field, for the reason
+     * [EINVOICE] is, but one the app keeps for itself ([HIDDEN]).
+     */
+    const val EMAIL_MESSAGE_ID = "emailMessageId"
+
+    /**
+     * Fields the app writes for itself and nobody reads: not listed in the registry, shown on a
+     * document, searched, offered to a model or carried to a split's parts. Hidden by key, so a
+     * build that does not know this list still reads their definitions as ordinary fields.
+     */
+    val HIDDEN: Set<String> = setOf(EMAIL_MESSAGE_ID)
+
     val WELL_KNOWN: Set<String> = setOf(TITLE, CORRESPONDENT, DOC_TYPE, DOC_DATE, NOTES)
 
     /** Fields that a split does not carry onto its parts: they describe the whole, not each piece. */
@@ -182,6 +196,7 @@ object FieldKeys {
             PAYMENT_REFERENCE,
             IBAN,
             EINVOICE,
+            EMAIL_MESSAGE_ID,
         )
 
     /** Synced setting holding the [SEED_VERSION] the library's well-known definitions were seeded at. */
@@ -190,9 +205,9 @@ object FieldKeys {
     /**
      * Raised whenever [seedDefinitions] gains something a library seeded earlier should get too
      * ([upgradeSeeded]). 1: the five definitions. 2: title's [FieldDef.perDocument] and the hints.
-     * 3: the e-invoice fields and their marker.
+     * 3: the e-invoice fields and their marker. 4: the email Message-ID.
      */
-    const val SEED_VERSION = 3
+    const val SEED_VERSION = 4
 
     /** Seeded fields introduced at [SEED_VERSION] 3; [upgradeSeeded] adds them to older libraries. */
     private val ADDED_IN_VERSION_3: Set<String> =
@@ -206,6 +221,9 @@ object FieldKeys {
             IBAN,
             EINVOICE,
         )
+
+    /** Seeded fields introduced at [SEED_VERSION] 4; [upgradeSeeded] adds them to older libraries. */
+    private val ADDED_IN_VERSION_4: Set<String> = setOf(EMAIL_MESSAGE_ID)
 
     private val invalidKeyChars = Regex("[^A-Za-z0-9_]")
     private val whitespace = Regex("\\s+")
@@ -278,7 +296,21 @@ object FieldKeys {
             // Not AI-enabled on purpose: automatic enrichment must not start generating prose into
             // the user's notes on every OCR completion, which is exactly today's behaviour.
             FieldDef(NOTES, labels(NOTES), FieldType.LONG_TEXT, showByDefault = true, aiEnabled = false, position = 4),
-        ) + eInvoiceDefinitions(labels)
+        ) + eInvoiceDefinitions(labels) + emailDefinitions(labels)
+
+    /** What email import records about the email a document came from; [HIDDEN] from everyone. */
+    private fun emailDefinitions(labels: (String) -> String): List<FieldDef> =
+        listOf(
+            FieldDef(
+                EMAIL_MESSAGE_ID,
+                labels(EMAIL_MESSAGE_ID),
+                FieldType.TEXT,
+                showByDefault = false,
+                aiEnabled = false,
+                position = 13,
+                perDocument = true,
+            ),
+        )
 
     /**
      * The fields an embedded structured e-invoice fills ([dev.npn.core.einvoice.EInvoiceData]).
@@ -362,11 +394,11 @@ object FieldKeys {
     /**
      * What a library seeded at an earlier [fromVersion] gains from [seeds]: each definition still
      * registered under a seeded key takes the seed's [FieldDef.perDocument], and its hint where it has
-     * none; definitions introduced at seed version 3 and missing from [current] are added, because a
-     * library seeded at 2 never had the chance to delete them. Everything else the library decided
-     * stays: a label, type, flag or position changed since, a hint of its own, and a definition seeded
-     * before [fromVersion] that was deleted, which stays deleted. Only the changed definitions are
-     * returned.
+     * none; definitions introduced at a later seed version than [fromVersion] (3, 4) and missing from
+     * [current] are added, because a library seeded before them never had the chance to delete them.
+     * Everything else the library decided stays: a label, type, flag or position changed since, a hint
+     * of its own, and a definition seeded before [fromVersion] that was deleted, which stays deleted.
+     * Only the changed definitions are returned.
      */
     fun upgradeSeeded(
         current: List<FieldDef>,
@@ -375,12 +407,10 @@ object FieldKeys {
     ): List<FieldDef> {
         val seedsByKey = seeds.associateBy { it.key }
         val present = current.mapTo(HashSet()) { it.key.lowercase() }
-        val added =
-            if (fromVersion < 3) {
-                seeds.filter { it.key in ADDED_IN_VERSION_3 && it.key.lowercase() !in present }
-            } else {
-                emptyList()
-            }
+        val introduced =
+            (if (fromVersion < 3) ADDED_IN_VERSION_3 else emptySet()) +
+                (if (fromVersion < 4) ADDED_IN_VERSION_4 else emptySet())
+        val added = seeds.filter { it.key in introduced && it.key.lowercase() !in present }
         return current.mapNotNull { def ->
             val seed = seedsByKey[def.key] ?: return@mapNotNull null
             def
@@ -419,5 +449,6 @@ object FieldKeys {
             PAYMENT_REFERENCE to "Payment reference",
             IBAN to "IBAN",
             EINVOICE to "E-invoice",
+            EMAIL_MESSAGE_ID to "Email Message-ID",
         )
 }

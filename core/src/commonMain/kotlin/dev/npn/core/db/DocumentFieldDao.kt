@@ -24,6 +24,19 @@ interface DocumentFieldDao {
     suspend fun valuesOf(docId: String): Map<String, String> =
         fieldsForDocs(listOf(docId)).associate { it.fieldKey to it.fieldValue }
 
+    /**
+     * The documents whose [key] holds exactly [value], whatever their lifecycle (live, trashed,
+     * deleted or missing): how an email read again finds the PDF it already became.
+     */
+    @Query(
+        "SELECT d.* FROM document_fields f JOIN documents d ON d.docId = f.docId " +
+            "WHERE f.fieldKey = :key AND f.fieldValue = :value",
+    )
+    suspend fun documentsWith(
+        key: String,
+        value: String,
+    ): List<DocumentEntity>
+
     /** All custom-field rows, for the AI's field search tools. */
     @Query("SELECT * FROM document_fields")
     suspend fun all(): List<DocumentFieldEntity>

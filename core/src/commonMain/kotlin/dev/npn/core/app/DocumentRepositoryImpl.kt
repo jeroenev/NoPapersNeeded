@@ -30,7 +30,8 @@ import kotlinx.coroutines.flow.mapLatest
  *
  * [fields] are the document's `document_fields` rows when the caller loaded them. The well-known
  * five are always present from the row's cache columns, so a read that skips the field join
- * (trash, missing) still shows titles rather than file names.
+ * (trash, missing) still shows titles rather than file names. Fields the app keeps for itself
+ * ([FieldKeys.HIDDEN]) are left out: nothing that shows a document shows them.
  */
 internal fun DocumentEntity.toDoc(fields: Map<String, String> = emptyMap()): Doc =
     Doc(
@@ -42,7 +43,7 @@ internal fun DocumentEntity.toDoc(fields: Map<String, String> = emptyMap()): Doc
         pageCount = pageCount,
         createdAt = createdAt ?: mtime,
         reviewed = reviewed,
-        fields = cachedFields() + fields,
+        fields = cachedFields() + (fields - FieldKeys.HIDDEN),
         trashed = trashed,
         deleted = deleted,
         trashedOrigPath = trashedOrigPath,

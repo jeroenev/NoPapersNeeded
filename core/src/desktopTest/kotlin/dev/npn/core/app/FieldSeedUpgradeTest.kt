@@ -173,6 +173,24 @@ class FieldSeedUpgradeTest {
             coordinator.setting(FieldKeys.SEEDED_SETTING) shouldBe FieldKeys.SEED_VERSION.toString()
         }
 
+    /** The user's own library is at three: it gains the email Message-ID, and nothing else changes. */
+    @Test
+    fun aLibrarySeededAtThreeGainsTheEmailMessageIdOnce() =
+        runTest {
+            val coordinator = rig.coordinator()
+            coordinator.refreshState()
+            val v3Seeds = FieldKeys.seedDefinitions().filterNot { it.key == FieldKeys.EMAIL_MESSAGE_ID }
+            coordinator.seedFieldRegistryIfNeeded(v3Seeds, version = 3)
+
+            coordinator.seedFieldRegistryIfNeeded(FieldKeys.seedDefinitions())
+
+            registry() shouldBe seeds
+            coordinator.setting(FieldKeys.SEEDED_SETTING) shouldBe "4"
+            val objects = journalObjects()
+            rig.coordinator().apply { refreshState() }.seedFieldRegistryIfNeeded(FieldKeys.seedDefinitions())
+            journalObjects() shouldBe objects
+        }
+
     @Test
     fun aLibrarySeededAtThreeKeepsADeletedEInvoiceFieldDeleted() =
         runTest {
