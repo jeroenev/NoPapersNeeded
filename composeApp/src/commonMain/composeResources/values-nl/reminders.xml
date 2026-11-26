@@ -5,7 +5,10 @@
     <string name="reminders_upcoming_title">Aankomend</string>
     <string name="reminders_group_overdue">Te laat</string>
     <string name="reminders_group_today">Vandaag</string>
-    <string name="reminders_group_next_7_days">Komende 7 dagen</string>
+    <plurals name="reminders_group_soon">
+        <item quantity="one">Morgen</item>
+        <item quantity="other">Komende %1$d dagen</item>
+    </plurals>
     <string name="reminders_group_later">Later</string>
     <string name="reminders_empty_title">Niets gepland</string>
     <string name="reminders_empty_subtitle">Documenten met een herinneringsdatum verschijnen hier.</string>
@@ -18,6 +21,20 @@
     <string name="reminders_notification_title">Herinnering: %1$s</string>
     <string name="reminders_notification_body">%1$s vervalt op %2$s.</string>
     <string name="reminders_notification_overdue">%1$s is vervallen op %2$s.</string>
+    <string name="reminders_notification_hidden_title">Herinnering</string>
+    <plurals name="reminders_notification_hidden_body">
+        <item quantity="one">Er vervalt een document. Open No Papers Needed om het te zien.</item>
+        <item quantity="other">Er vervallen documenten. Open No Papers Needed om ze te zien.</item>
+    </plurals>
+    <plurals name="reminders_notification_summary">
+        <item quantity="one">%1$d herinnering</item>
+        <item quantity="other">%1$d herinneringen</item>
+    </plurals>
+    <string name="reminders_notifications_blocked">Meldingen zijn geblokkeerd op dit apparaat, dus herinneringen kunnen niet verschijnen.</string>
+    <string name="reminders_notifications_allow">Toestaan</string>
+    <string name="reminders_mark_done">Markeren als afgehandeld</string>
+    <string name="reminders_marked_done">‘%1$s’ gemarkeerd als afgehandeld.</string>
+    <string name="reminders_mark_done_failed">Kon de herinnering niet als afgehandeld markeren: %1$s</string>
 
     <string name="common_settings_reminders">Herinneringen</string>
     <string name="common_settings_reminders_enabled">Herinneringen inschakelen</string>
@@ -27,7 +44,7 @@
     <string name="common_settings_reminders_no_date_fields">Voeg een DATUM-veld toe om herinneringen te gebruiken.</string>
     <string name="common_settings_reminders_lead_days">Dagen vooraf melden</string>
     <string name="common_settings_reminders_lead_days_help">Verlopen datums worden altijd meegenomen.</string>
-    <string name="common_settings_reminders_time">Tijdstip van melding</string>
-    <string name="common_settings_reminders_time_help">Lokale tijd van de dagelijkse controle, als HH:mm.</string>
+    <string name="common_settings_reminders_notify_here">Meldingen op dit apparaat</string>
+    <string name="common_settings_reminders_notify_here_help">Herinneringen komen elke ochtend. Andere apparaten houden hun eigen keuze.</string>
     <string name="common_settings_reminders_no_fields_selected">Kies een datumveld om herinneringen te ontvangen.</string>
 </resources>

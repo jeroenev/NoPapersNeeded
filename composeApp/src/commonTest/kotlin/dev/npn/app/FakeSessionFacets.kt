@@ -58,7 +58,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.datetime.LocalTime
+import kotlinx.datetime.LocalDate
 
 // Test doubles for the session's own facets: ingest, OCR ops, review config, storage path,
 // maintenance and work.
@@ -292,7 +292,6 @@ class FakeRemindersFacade : RemindersFacade {
     val enabledWrites = mutableListOf<Boolean>()
     val fieldWrites = mutableListOf<List<String>>()
     val leadWrites = mutableListOf<Int>()
-    val timeWrites = mutableListOf<LocalTime>()
 
     /** What [claimDueReminders] answers, and how often it was asked. */
     var due: List<ReminderCandidate> = emptyList()
@@ -319,10 +318,41 @@ class FakeRemindersFacade : RemindersFacade {
         settingsFlow.update { it.copy(leadDays = days) }
     }
 
-    override suspend fun setTimeOfDay(time: LocalTime) {
+    val notifiesHereFlow = MutableStateFlow(true)
+    override val notifiesHere: Flow<Boolean> get() = notifiesHereFlow
+
+    override suspend fun setNotifiesHere(notify: Boolean) {
         fail?.invoke()
-        timeWrites += time
-        settingsFlow.update { it.copy(timeOfDay = time) }
+        notifiesHereFlow.value = notify
+    }
+
+    /** Every [markDone] and [markOpen], as (docId, fieldKey, dueDate, done). */
+    val doneWrites = mutableListOf<DoneWrite>()
+
+    data class DoneWrite(
+        val docId: String,
+        val fieldKey: String,
+        val dueDate: LocalDate,
+        val done: Boolean,
+    )
+
+    override suspend fun markDone(
+        docId: String,
+        fieldKey: String,
+        dueDate: LocalDate,
+    ) {
+        fail?.invoke()
+        doneWrites += DoneWrite(docId, fieldKey, dueDate, done = true)
+        upcomingFlow.update { items -> items.filterNot { it.doc.docId == docId && it.fieldKey == fieldKey } }
+    }
+
+    override suspend fun markOpen(
+        docId: String,
+        fieldKey: String,
+        dueDate: LocalDate,
+    ) {
+        fail?.invoke()
+        doneWrites += DoneWrite(docId, fieldKey, dueDate, done = false)
     }
 
     override suspend fun nextCheckDelayMillis(): Long? = if (settingsFlow.value.isActive) 1_000L else null

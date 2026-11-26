@@ -24,8 +24,6 @@ import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.LibraryVerificationReport
 import dev.npn.core.app.ReminderSettings
-import dev.npn.core.app.formatReminderTime
-import dev.npn.core.app.parseReminderTime
 import dev.npn.core.diagnostics.AiSummary
 import dev.npn.core.diagnostics.CloudSyncSummary
 import dev.npn.core.diagnostics.Diagnostics
@@ -193,16 +191,6 @@ class SettingsViewModel(
             reporting(Res.string.common_save_setting_failed) { reminders.setLeadDays(days) }
         }
 
-    private val typedReminderTime =
-        TypedSetting<String>(viewModelScope) { text ->
-            val time = parseReminderTime(text)
-            if (time == null) {
-                false
-            } else {
-                reporting(Res.string.common_save_setting_failed) { reminders.setTimeOfDay(time) }
-            }
-        }
-
     private val typedText: Map<TextSetting, TypedSetting<String>> =
         TextSetting.entries.associateWith { setting ->
             TypedSetting(viewModelScope) { value ->
@@ -224,12 +212,12 @@ class SettingsViewModel(
     private data class ReminderDraft(
         val settings: ReminderSettings,
         val leadDays: Int?,
-        val time: String?,
+        val notifiesHere: Boolean,
     )
 
     private val reminderDraft: Flow<ReminderDraft> =
-        combine(reminders.settings, typedReminderLead.draft, typedReminderTime.draft) { current, lead, time ->
-            ReminderDraft(current, lead, time)
+        combine(reminders.settings, typedReminderLead.draft, reminders.notifiesHere) { current, lead, here ->
+            ReminderDraft(current, lead, here)
         }
 
     private val state: StateFlow<SettingsUiState> =
@@ -249,7 +237,7 @@ class SettingsViewModel(
                 reminderEnabled = reminder.settings.enabled,
                 reminderFieldKeys = reminder.settings.fieldKeys.toSet(),
                 reminderLeadDays = reminder.leadDays ?: reminder.settings.leadDays,
-                reminderTime = reminder.time ?: formatReminderTime(reminder.settings.timeOfDay),
+                reminderNotifiesHere = reminder.notifiesHere,
                 aiSpend = spend,
             )
         }.stateIn(viewModelScope, WhileSubscribedTimeout, SettingsUiState(snapshot = settings.settings.value))
@@ -678,9 +666,8 @@ class SettingsViewModel(
 
     override fun doneTypingReminderLead() = typedReminderLead.flush()
 
-    override fun setReminderTime(text: String) = typedReminderTime.type(text)
-
-    override fun doneTypingReminderTime() = typedReminderTime.flush()
+    override fun setReminderNotifiesHere(notify: Boolean) =
+        launchReporting(Res.string.common_save_setting_failed) { reminders.setNotifiesHere(notify) }
 
     override fun type(
         setting: TextSetting,

@@ -101,10 +101,15 @@ internal fun MainNav(
 
     PublishWindowTitle(windowTitle(destination, topLevel, assistant))
     val syncStatus by remember(session) { session.sync.status }.collectAsStateWithLifecycle(SyncStatus())
-    val upcomingBadge by library.reminderBadge.collectAsStateWithLifecycle()
     val libraryLocation = remember(session) { settings.settings.value.libraryLocation }
     libraryLocation?.let { location ->
-        ReminderChecks(session, location) { library.noteInAppReminder() }
+        // With the app lock on, a notification names nothing in the library.
+        ReminderChecks(session, location) { settings.settings.value.appLock.enabled }
+    }
+    LaunchedEffect(session, nav) {
+        OpenDocumentRequests.upcoming.arrivals.collect { location ->
+            if (location == libraryLocation) nav.navigate(Route.Upcoming) { launchSingleTop = true }
+        }
     }
     LaunchedEffect(session, nav) {
         OpenDocumentRequests.documents.arrivals.collect { request ->
@@ -165,7 +170,6 @@ internal fun MainNav(
                                     library = library,
                                     aiConfigured = aiConfigured,
                                     onOpenLibrary = onOpenLibrary,
-                                    upcomingBadge = upcomingBadge,
                                 )
                             }
                             val paletteActions: CommandPaletteActions = palette
@@ -356,7 +360,6 @@ private fun MainNavHost(
     library: LibraryUi,
     aiConfigured: Boolean,
     onOpenLibrary: (location: String) -> Unit,
-    upcomingBadge: Int,
 ) {
     val nav = library.nav
     val browse = library.browse
@@ -393,13 +396,7 @@ private fun MainNavHost(
                         LibraryHandoffs(library.libraryFilter, library.savedView, library.reviewQueue)
                     },
                 onOpenSettings = { id -> nav.from(entry) { navigate(Route.Settings(id.routeKey)) } },
-                onOpenUpcoming = {
-                    nav.from(entry) {
-                        library.clearReminderBadge()
-                        navigate(Route.Upcoming)
-                    }
-                },
-                upcomingBadge = upcomingBadge,
+                onOpenUpcoming = { nav.from(entry) { navigate(Route.Upcoming) } },
                 documents = library.documents,
             )
         }

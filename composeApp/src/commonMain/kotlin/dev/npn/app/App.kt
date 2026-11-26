@@ -77,9 +77,7 @@ import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.SavedView
 import dev.npn.core.fs.ExternalSource
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.flow.update
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_app_name
 import no_papers_needed.composeapp.generated.resources.common_could_not_open_library
@@ -116,15 +114,6 @@ internal class LibraryUi(
     val savedView = held.handover.savedView
     val reviewQueue = held.handover.reviewQueue
     val aiEditSelection = held.handover.aiEditSelection
-
-    /** Reminders that fell back to the in-app Upcoming badge (a desktop without a tray). */
-    val reminderBadge = MutableStateFlow(0)
-
-    fun noteInAppReminder() = reminderBadge.update { it + 1 }
-
-    fun clearReminderBadge() {
-        reminderBadge.value = 0
-    }
 
     /** Show the library narrowed to [docIds], from whatever screen is showing (a drop's "Show"). */
     fun showDocuments(docIds: List<String>) {

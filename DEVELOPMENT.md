@@ -194,6 +194,18 @@ full sync checks that every replica shows the same library. CI runs a few seeds;
 workflow runs more every night. [docs/SIMULATION.md](docs/SIMULATION.md) covers long runs,
 replaying a seed, adding an operation or an invariant, and what it does not model yet.
 
+Desktop reminders reach a Linux desktop as freedesktop notifications over D-Bus, through GLib's
+GDBus (`GioNotificationBus`), or through the XDG notification portal inside a Flatpak. The unit
+tests drive that logic over a fake bus; `GioNotificationBusTest` checks the real GDBus calls, opt-in
+and only on a private session bus with a stand-in service, never the desktop's own:
+
+```
+dbus-run-session -- sh -c 'python3 composeApp/src/desktopTest/dbus/fake-notification-service.py & sleep 1;
+  NPN_DBUS_NOTIFICATIONS=1 ./gradlew --no-daemon :composeApp:desktopTest --tests "*GioNotificationBusTest"'
+```
+
+The stand-in needs Python's GObject bindings (`python3-gi`).
+
 Android's host JVM has framework stubs. Its tests cannot verify a real document provider, an
 activity's retained state, URI grants, FileProvider routing or the installed app's network policy.
 Run the instrumentation suites on a connected Android device:

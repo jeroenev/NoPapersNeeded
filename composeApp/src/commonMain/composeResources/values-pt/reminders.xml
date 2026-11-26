@@ -5,7 +5,10 @@
     <string name="reminders_upcoming_title">Próximos</string>
     <string name="reminders_group_overdue">Atrasado</string>
     <string name="reminders_group_today">Hoje</string>
-    <string name="reminders_group_next_7_days">Próximos 7 dias</string>
+    <plurals name="reminders_group_soon">
+        <item quantity="one">Amanhã</item>
+        <item quantity="other">Próximos %1$d dias</item>
+    </plurals>
     <string name="reminders_group_later">Mais tarde</string>
     <string name="reminders_empty_title">Nada próximo</string>
     <string name="reminders_empty_subtitle">Documentos com uma data de lembrete aparecem aqui.</string>
@@ -18,6 +21,20 @@
     <string name="reminders_notification_title">Lembrete: %1$s</string>
     <string name="reminders_notification_body">%1$s vence em %2$s.</string>
     <string name="reminders_notification_overdue">%1$s venceu em %2$s.</string>
+    <string name="reminders_notification_hidden_title">Lembrete</string>
+    <plurals name="reminders_notification_hidden_body">
+        <item quantity="one">Um documento vence. Abra o No Papers Needed para o ver.</item>
+        <item quantity="other">Alguns documentos vencem. Abra o No Papers Needed para os ver.</item>
+    </plurals>
+    <plurals name="reminders_notification_summary">
+        <item quantity="one">%1$d lembrete</item>
+        <item quantity="other">%1$d lembretes</item>
+    </plurals>
+    <string name="reminders_notifications_blocked">As notificações estão bloqueadas neste dispositivo, por isso os lembretes não podem aparecer.</string>
+    <string name="reminders_notifications_allow">Permitir</string>
+    <string name="reminders_mark_done">Marcar como feito</string>
+    <string name="reminders_marked_done">«%1$s» marcado como feito.</string>
+    <string name="reminders_mark_done_failed">Não foi possível marcar o lembrete como feito: %1$s</string>
 
     <string name="common_settings_reminders">Lembretes</string>
     <string name="common_settings_reminders_enabled">Ativar lembretes</string>
@@ -27,7 +44,7 @@
     <string name="common_settings_reminders_no_date_fields">Adicione um campo DATA para usar lembretes.</string>
     <string name="common_settings_reminders_lead_days">Avisar dias antes</string>
     <string name="common_settings_reminders_lead_days_help">As datas atrasadas são sempre incluídas.</string>
-    <string name="common_settings_reminders_time">Hora da notificação</string>
-    <string name="common_settings_reminders_time_help">Hora local da verificação diária, como HH:mm.</string>
+    <string name="common_settings_reminders_notify_here">Notificar neste dispositivo</string>
+    <string name="common_settings_reminders_notify_here_help">Os lembretes chegam todas as manhãs. Os outros dispositivos mantêm a sua própria escolha.</string>
     <string name="common_settings_reminders_no_fields_selected">Escolha um campo de data para receber lembretes.</string>
 </resources>

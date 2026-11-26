@@ -25,8 +25,6 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.outlined.Event
-import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -140,7 +138,6 @@ internal fun LibraryScreen(
     documents: KeyedViewModelStores<String>,
     modifier: Modifier = Modifier,
     /** Unseen in-app reminder fallbacks (a desktop without a tray), shown as a badge on Upcoming. */
-    upcomingBadge: Int = 0,
     vm: LibraryViewModel = viewModel { LibraryViewModel(session, settings, createSavedStateHandle()) },
     previewed: ViewModelStoreLease<String> = viewModel { ViewModelStoreLease(documents) },
     triageViewModels: ViewModelStoreLease<String> = rememberTriageLease(documents),
@@ -225,7 +222,6 @@ internal fun LibraryScreen(
                         },
                     onAiEdit = onAiEdit,
                     onOpenUpcoming = onOpenUpcoming,
-                    upcomingBadge = upcomingBadge,
                     onDialog = vm::openDialog,
                 )
             }
@@ -330,7 +326,6 @@ private fun LibraryContent(
     exits: LibraryExits,
     onAiEdit: ((selection: List<String>) -> Unit)?,
     onOpenUpcoming: () -> Unit,
-    upcomingBadge: Int,
     onDialog: (LibraryDialog) -> Unit,
 ) {
     val ui = state.ui
@@ -511,7 +506,6 @@ private fun LibraryContent(
             }
             UpcomingEntry(
                 state = state,
-                unseen = upcomingBadge,
                 selectionMode = ui.selectionMode,
                 onClick = onOpenUpcoming,
             )
@@ -660,22 +654,17 @@ private fun ReviewChip(
 @Composable
 private fun UpcomingEntry(
     state: LibraryContentState,
-    unseen: Int,
     selectionMode: Boolean,
     onClick: () -> Unit,
 ) {
     if (!state.remindersEnabled || selectionMode) return
-    UpcomingChip(count = state.upcomingCount, unseen = unseen, onClick = onClick)
+    UpcomingChip(count = state.upcomingCount, onClick = onClick)
 }
 
-/**
- * The way into Upcoming, beside the Inbox chip: the count is what is due now, and a badge marks
- * an unseen in-app reminder.
- */
+/** The way into Upcoming, beside the Inbox chip: the count is what is due now and still open. */
 @Composable
 private fun UpcomingChip(
     count: Int,
-    unseen: Int,
     onClick: () -> Unit,
 ) {
     FilterChip(
@@ -691,17 +680,11 @@ private fun UpcomingChip(
             )
         },
         leadingIcon = {
-            BadgedBox(
-                badge = {
-                    if (unseen > 0) Badge { Text(unseen.toString()) }
-                },
-            ) {
-                Icon(
-                    Icons.Outlined.Event,
-                    contentDescription = null,
-                    modifier = Modifier.size(FilterChipDefaults.IconSize),
-                )
-            }
+            Icon(
+                Icons.Outlined.Event,
+                contentDescription = null,
+                modifier = Modifier.size(FilterChipDefaults.IconSize),
+            )
         },
         modifier = Modifier.padding(horizontal = 16.dp),
     )

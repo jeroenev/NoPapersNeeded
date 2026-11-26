@@ -5,7 +5,10 @@
     <string name="reminders_upcoming_title">À venir</string>
     <string name="reminders_group_overdue">En retard</string>
     <string name="reminders_group_today">Aujourd’hui</string>
-    <string name="reminders_group_next_7_days">7 prochains jours</string>
+    <plurals name="reminders_group_soon">
+        <item quantity="one">Demain</item>
+        <item quantity="other">%1$d prochains jours</item>
+    </plurals>
     <string name="reminders_group_later">Plus tard</string>
     <string name="reminders_empty_title">Rien à venir</string>
     <string name="reminders_empty_subtitle">Les documents avec une date de rappel apparaissent ici.</string>
@@ -18,6 +21,20 @@
     <string name="reminders_notification_title">Rappel : %1$s</string>
     <string name="reminders_notification_body">%1$s arrive à échéance le %2$s.</string>
     <string name="reminders_notification_overdue">%1$s était à échéance le %2$s.</string>
+    <string name="reminders_notification_hidden_title">Rappel</string>
+    <plurals name="reminders_notification_hidden_body">
+        <item quantity="one">Un document arrive à échéance. Ouvrez No Papers Needed pour le voir.</item>
+        <item quantity="other">Des documents arrivent à échéance. Ouvrez No Papers Needed pour les voir.</item>
+    </plurals>
+    <plurals name="reminders_notification_summary">
+        <item quantity="one">%1$d rappel</item>
+        <item quantity="other">%1$d rappels</item>
+    </plurals>
+    <string name="reminders_notifications_blocked">Les notifications sont bloquées sur cet appareil, les rappels ne peuvent donc pas s’afficher.</string>
+    <string name="reminders_notifications_allow">Autoriser</string>
+    <string name="reminders_mark_done">Marquer comme fait</string>
+    <string name="reminders_marked_done">« %1$s » marqué comme fait.</string>
+    <string name="reminders_mark_done_failed">Impossible de marquer le rappel comme fait : %1$s</string>
 
     <string name="common_settings_reminders">Rappels</string>
     <string name="common_settings_reminders_enabled">Activer les rappels</string>
@@ -27,7 +44,7 @@
     <string name="common_settings_reminders_no_date_fields">Ajoutez un champ DATE pour utiliser les rappels.</string>
     <string name="common_settings_reminders_lead_days">Prévenir jours à l’avance</string>
     <string name="common_settings_reminders_lead_days_help">Les dates en retard sont toujours incluses.</string>
-    <string name="common_settings_reminders_time">Heure de notification</string>
-    <string name="common_settings_reminders_time_help">Heure locale de la vérification quotidienne, au format HH:mm.</string>
+    <string name="common_settings_reminders_notify_here">Notifier sur cet appareil</string>
+    <string name="common_settings_reminders_notify_here_help">Les rappels arrivent chaque matin. Les autres appareils gardent leur propre choix.</string>
     <string name="common_settings_reminders_no_fields_selected">Choisissez un champ de date pour recevoir des rappels.</string>
 </resources>

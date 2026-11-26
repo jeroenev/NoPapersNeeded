@@ -29,7 +29,7 @@ Four kinds of state, and who owns each:
 | `.npn/journal/` | Every metadata change as an immutable, content-addressed transaction. Tags, fields, settings, trash, relinks. | Truth for metadata | In the library | Yes |
 | `.npn/ocr/` and `.npn/devices/` | OCR sidecars keyed by document hash and writer; device-identity markers. Write-once. | Truth | In the library | Yes |
 | `index.db` | The Room index: the journal folded onto the documents the folder holds, plus FTS. Disposable; a dropped index rebuilds from the folder. | Cache | Device-local, outside the library | Never |
-| `device.db` | What only this device knows and nothing could rebuild: its journal device id, the OCR and AI queues, enrichment marks, chats, the reminders it already notified. Real migrations only. | Truth, device-owned | Device-local, beside the index | Never |
+| `device.db` | What only this device knows and nothing could rebuild: its journal device id, the OCR and AI queues, enrichment marks, chats, whether it shows reminder notifications and which it already showed. Real migrations only. | Truth, device-owned | Device-local, beside the index | Never |
 | Thumbnails | Rendered pages. | Cache | Device-local | Never |
 
 Merge rules are fixed: tags are an OR-set; single-value fields, system properties, settings, field

@@ -14,4 +14,7 @@ data class OpenDocumentRequest(
 
 object OpenDocumentRequests {
     val documents = Handoff<OpenDocumentRequest>()
+
+    /** The Upcoming list of the library at this location: a tapped summary of several reminders. */
+    val upcoming = Handoff<String>()
 }

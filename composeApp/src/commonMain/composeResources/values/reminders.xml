@@ -5,7 +5,10 @@
     <string name="reminders_upcoming_title">Upcoming</string>
     <string name="reminders_group_overdue">Overdue</string>
     <string name="reminders_group_today">Today</string>
-    <string name="reminders_group_next_7_days">Next 7 days</string>
+    <plurals name="reminders_group_soon">
+        <item quantity="one">Tomorrow</item>
+        <item quantity="other">Next %1$d days</item>
+    </plurals>
     <string name="reminders_group_later">Later</string>
     <string name="reminders_empty_title">Nothing upcoming</string>
     <string name="reminders_empty_subtitle">Documents with a reminder date appear here.</string>
@@ -18,6 +21,20 @@
     <string name="reminders_notification_title">Reminder: %1$s</string>
     <string name="reminders_notification_body">%1$s is due on %2$s.</string>
     <string name="reminders_notification_overdue">%1$s was due on %2$s.</string>
+    <string name="reminders_notification_hidden_title">Reminder</string>
+    <plurals name="reminders_notification_hidden_body">
+        <item quantity="one">A document is due. Open No Papers Needed to see it.</item>
+        <item quantity="other">Some documents are due. Open No Papers Needed to see them.</item>
+    </plurals>
+    <plurals name="reminders_notification_summary">
+        <item quantity="one">%1$d reminder</item>
+        <item quantity="other">%1$d reminders</item>
+    </plurals>
+    <string name="reminders_notifications_blocked">Notifications are blocked on this device, so reminders cannot appear.</string>
+    <string name="reminders_notifications_allow">Allow</string>
+    <string name="reminders_mark_done">Mark as done</string>
+    <string name="reminders_marked_done">Marked “%1$s” as done.</string>
+    <string name="reminders_mark_done_failed">Could not mark the reminder as done: %1$s</string>
 
     <string name="common_settings_reminders">Reminders</string>
     <string name="common_settings_reminders_enabled">Enable reminders</string>
@@ -27,7 +44,7 @@
     <string name="common_settings_reminders_no_date_fields">Add a DATE field to use reminders.</string>
     <string name="common_settings_reminders_lead_days">Notify days before</string>
     <string name="common_settings_reminders_lead_days_help">Overdue dates are always included.</string>
-    <string name="common_settings_reminders_time">Notification time</string>
-    <string name="common_settings_reminders_time_help">Local time of the daily check, as HH:mm.</string>
+    <string name="common_settings_reminders_notify_here">Notify on this device</string>
+    <string name="common_settings_reminders_notify_here_help">Reminders arrive each morning. Other devices keep their own choice.</string>
     <string name="common_settings_reminders_no_fields_selected">Choose a date field to start receiving reminders.</string>
 </resources>

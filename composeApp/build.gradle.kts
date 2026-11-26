@@ -87,6 +87,8 @@ kotlin {
             dependencies {
                 implementation(libs.compose.desktop)
                 implementation(libs.kotlinx.coroutines.swing)
+                // Reminder notifications through GLib's D-Bus on Linux; core already ships JNA.
+                implementation(libs.jna)
             }
         }
         getByName("desktopTest") {

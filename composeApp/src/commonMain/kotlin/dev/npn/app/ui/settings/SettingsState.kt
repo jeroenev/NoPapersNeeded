@@ -10,7 +10,6 @@ import dev.npn.core.app.LibraryVerificationProgress
 import dev.npn.core.app.LibraryVerificationReport
 import dev.npn.core.app.ReminderSettings
 import dev.npn.core.app.TrashSettings
-import dev.npn.core.app.formatReminderTime
 import dev.npn.core.mail.MailAccount
 import dev.npn.core.model.FieldDef
 import dev.npn.core.security.LockTimeout
@@ -37,7 +36,8 @@ data class SettingsUiState(
     val reminderEnabled: Boolean = false,
     val reminderFieldKeys: Set<String> = emptySet(),
     val reminderLeadDays: Int = ReminderSettings.DEFAULT_LEAD_DAYS,
-    val reminderTime: String = formatReminderTime(ReminderSettings.DEFAULT_TIME),
+    /** Whether this device shows reminder notifications; the other reminder settings are the library's. */
+    val reminderNotifiesHere: Boolean = true,
     /** The two spend windows the AI pane shows, read from this device's ledger. */
     val aiSpend: AiSpendSummary = AiSpendSummary.EMPTY,
 ) {
@@ -355,9 +355,6 @@ interface ReminderSettingsActions {
     /** The lead-days field lost focus: save what was typed in it now. */
     fun doneTypingReminderLead() = Unit
 
-    /** Type the daily check's local time as `HH:mm`; an invalid value stays unsaved. */
-    fun setReminderTime(text: String) = Unit
-
-    /** The time field lost focus: save what was typed in it now. */
-    fun doneTypingReminderTime() = Unit
+    /** Whether this device shows reminder notifications; other devices keep their own choice. */
+    fun setReminderNotifiesHere(notify: Boolean) = Unit
 }

@@ -5,7 +5,10 @@
     <string name="reminders_upcoming_title">Anstehend</string>
     <string name="reminders_group_overdue">Überfällig</string>
     <string name="reminders_group_today">Heute</string>
-    <string name="reminders_group_next_7_days">Nächste 7 Tage</string>
+    <plurals name="reminders_group_soon">
+        <item quantity="one">Morgen</item>
+        <item quantity="other">Nächste %1$d Tage</item>
+    </plurals>
     <string name="reminders_group_later">Später</string>
     <string name="reminders_empty_title">Nichts anstehend</string>
     <string name="reminders_empty_subtitle">Dokumente mit einem Erinnerungsdatum erscheinen hier.</string>
@@ -18,6 +21,20 @@
     <string name="reminders_notification_title">Erinnerung: %1$s</string>
     <string name="reminders_notification_body">%1$s ist am %2$s fällig.</string>
     <string name="reminders_notification_overdue">%1$s war am %2$s fällig.</string>
+    <string name="reminders_notification_hidden_title">Erinnerung</string>
+    <plurals name="reminders_notification_hidden_body">
+        <item quantity="one">Ein Dokument ist fällig. Öffne No Papers Needed, um es zu sehen.</item>
+        <item quantity="other">Einige Dokumente sind fällig. Öffne No Papers Needed, um sie zu sehen.</item>
+    </plurals>
+    <plurals name="reminders_notification_summary">
+        <item quantity="one">%1$d Erinnerung</item>
+        <item quantity="other">%1$d Erinnerungen</item>
+    </plurals>
+    <string name="reminders_notifications_blocked">Benachrichtigungen sind auf diesem Gerät blockiert, daher können keine Erinnerungen erscheinen.</string>
+    <string name="reminders_notifications_allow">Erlauben</string>
+    <string name="reminders_mark_done">Als erledigt markieren</string>
+    <string name="reminders_marked_done">„%1$s“ als erledigt markiert.</string>
+    <string name="reminders_mark_done_failed">Die Erinnerung konnte nicht als erledigt markiert werden: %1$s</string>
 
     <string name="common_settings_reminders">Erinnerungen</string>
     <string name="common_settings_reminders_enabled">Erinnerungen aktivieren</string>
@@ -27,7 +44,7 @@
     <string name="common_settings_reminders_no_date_fields">Füge ein DATUM-Feld hinzu, um Erinnerungen zu nutzen.</string>
     <string name="common_settings_reminders_lead_days">Tage vorher benachrichtigen</string>
     <string name="common_settings_reminders_lead_days_help">Überfällige Daten sind immer enthalten.</string>
-    <string name="common_settings_reminders_time">Benachrichtigungszeit</string>
-    <string name="common_settings_reminders_time_help">Lokale Zeit der täglichen Prüfung, als HH:mm.</string>
+    <string name="common_settings_reminders_notify_here">Auf diesem Gerät benachrichtigen</string>
+    <string name="common_settings_reminders_notify_here_help">Erinnerungen kommen jeden Morgen. Andere Geräte behalten ihre eigene Wahl.</string>
     <string name="common_settings_reminders_no_fields_selected">Wähle ein Datumsfeld, um Erinnerungen zu erhalten.</string>
 </resources>

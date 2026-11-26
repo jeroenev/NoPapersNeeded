@@ -5,7 +5,10 @@
     <string name="reminders_upcoming_title">Próximos</string>
     <string name="reminders_group_overdue">Vencido</string>
     <string name="reminders_group_today">Hoy</string>
-    <string name="reminders_group_next_7_days">Próximos 7 días</string>
+    <plurals name="reminders_group_soon">
+        <item quantity="one">Mañana</item>
+        <item quantity="other">Próximos %1$d días</item>
+    </plurals>
     <string name="reminders_group_later">Más adelante</string>
     <string name="reminders_empty_title">Nada próximo</string>
     <string name="reminders_empty_subtitle">Los documentos con una fecha de recordatorio aparecen aquí.</string>
@@ -18,6 +21,20 @@
     <string name="reminders_notification_title">Recordatorio: %1$s</string>
     <string name="reminders_notification_body">%1$s vence el %2$s.</string>
     <string name="reminders_notification_overdue">%1$s venció el %2$s.</string>
+    <string name="reminders_notification_hidden_title">Recordatorio</string>
+    <plurals name="reminders_notification_hidden_body">
+        <item quantity="one">Un documento vence. Abre No Papers Needed para verlo.</item>
+        <item quantity="other">Algunos documentos vencen. Abre No Papers Needed para verlos.</item>
+    </plurals>
+    <plurals name="reminders_notification_summary">
+        <item quantity="one">%1$d recordatorio</item>
+        <item quantity="other">%1$d recordatorios</item>
+    </plurals>
+    <string name="reminders_notifications_blocked">Las notificaciones están bloqueadas en este dispositivo, así que los recordatorios no pueden aparecer.</string>
+    <string name="reminders_notifications_allow">Permitir</string>
+    <string name="reminders_mark_done">Marcar como hecho</string>
+    <string name="reminders_marked_done">«%1$s» marcado como hecho.</string>
+    <string name="reminders_mark_done_failed">No se pudo marcar el recordatorio como hecho: %1$s</string>
 
     <string name="common_settings_reminders">Recordatorios</string>
     <string name="common_settings_reminders_enabled">Activar recordatorios</string>
@@ -27,7 +44,7 @@
     <string name="common_settings_reminders_no_date_fields">Añade un campo FECHA para usar recordatorios.</string>
     <string name="common_settings_reminders_lead_days">Avisar días antes</string>
     <string name="common_settings_reminders_lead_days_help">Las fechas vencidas siempre se incluyen.</string>
-    <string name="common_settings_reminders_time">Hora de notificación</string>
-    <string name="common_settings_reminders_time_help">Hora local de la comprobación diaria, como HH:mm.</string>
+    <string name="common_settings_reminders_notify_here">Notificar en este dispositivo</string>
+    <string name="common_settings_reminders_notify_here_help">Los recordatorios llegan cada mañana. Los demás dispositivos mantienen su propia elección.</string>
     <string name="common_settings_reminders_no_fields_selected">Elige un campo de fecha para recibir recordatorios.</string>
 </resources>
