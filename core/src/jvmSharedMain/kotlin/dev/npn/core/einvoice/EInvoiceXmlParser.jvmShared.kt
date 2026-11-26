@@ -18,10 +18,9 @@ actual fun parseEInvoiceXml(xml: ByteArray): EInvoiceData? {
     // Factur-X and XRechnung are UTF-8. Reject NUL-marked wide encodings before the textual DOCTYPE
     // check below, so that check cannot be sidestepped by encoding the same document differently.
     if (xml.take(4).any { it == 0.toByte() }) return null
-    val source = xml.decodeToString()
-    if (source.contains("<!DOCTYPE", ignoreCase = true) || source.contains("<!ENTITY", ignoreCase = true)) {
-        return null
-    }
+    // Scanned as bytes rather than as a decoded copy: the markers are ASCII, and the file can be
+    // megabytes.
+    if (xml.containsAscii("<!DOCTYPE") || xml.containsAscii("<!ENTITY")) return null
     val document =
         try {
             secureFactory()
@@ -49,6 +48,29 @@ actual fun parseEInvoiceXml(xml: ByteArray): EInvoiceData? {
         }
     return data?.takeIf { !it.isEmpty }
 }
+
+/** Whether these bytes hold the ASCII [marker] anywhere, in any case. */
+private fun ByteArray.containsAscii(marker: String): Boolean {
+    val pattern = marker.lowercase().encodeToByteArray()
+    val last = size - pattern.size
+    var start = 0
+    while (start <= last) {
+        var matched = 0
+        while (matched < pattern.size && lowerAscii(this[start + matched]) == pattern[matched]) matched++
+        if (matched == pattern.size) return true
+        start++
+    }
+    return false
+}
+
+private fun lowerAscii(byte: Byte): Byte =
+    if (byte in
+        'A'.code.toByte()..'Z'.code.toByte()
+    ) {
+        (byte + 32).toByte()
+    } else {
+        byte
+    }
 
 /**
  * A parser that reads a document and nothing else: no DTD, no external entity, no XInclude, no

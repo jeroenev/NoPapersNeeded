@@ -1,7 +1,7 @@
 package dev.npn.core.einvoice
 
 import dev.npn.core.model.FieldKeys
-import dev.npn.core.pdf.EmbeddedXmlFile
+import dev.npn.core.pdf.PdfEngine
 
 /** The two structured e-invoice formats this app reads: CII (ZUGFeRD/Factur-X) and UBL (XRechnung). */
 enum class EInvoiceFormat(
@@ -64,21 +64,16 @@ data class EInvoiceData(
 }
 
 /**
- * Finds the e-invoice among a PDF's embedded XML files. A known Factur-X/ZUGFeRD/XRechnung name is
- * tried first, then every other XML attachment; the first one whose root is a CII or UBL invoice with
- * at least one value wins.
+ * Finds the e-invoice among a PDF's embedded XML files ([PdfEngine.firstEmbeddedXml], which reads a
+ * known Factur-X/ZUGFeRD/XRechnung attachment first): the first one whose root is a CII or UBL
+ * invoice with at least one value wins. Each attachment is parsed as it is read, so only one is held
+ * at a time.
  */
 object EInvoiceDetector {
-    private val preferredNames = setOf("factur-x.xml", "zugferd-invoice.xml", "xrechnung.xml")
-
-    fun detect(files: List<EmbeddedXmlFile>): EInvoiceData? {
-        val ordered = files.sortedBy { if (it.name.lowercase() in preferredNames) 0 else 1 }
-        for (file in ordered) {
-            val data = parseEInvoiceXml(file.bytes) ?: continue
-            if (!data.isEmpty) return data
-        }
-        return null
-    }
+    suspend fun detect(
+        engine: PdfEngine,
+        pdf: ByteArray,
+    ): EInvoiceData? = engine.firstEmbeddedXml(pdf) { parseEInvoiceXml(it.bytes) }
 }
 
 /**

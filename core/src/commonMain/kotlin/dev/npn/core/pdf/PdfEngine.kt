@@ -91,11 +91,21 @@ interface PdfEngine {
     suspend fun open(bytes: ByteArray): PdfDocumentHandle
 
     /**
-     * The XML files embedded in [bytes] (PDF/A-3 attachments), for structured e-invoice detection.
-     * Empty when the document has none; attachments that are not XML, or are too large to be an
-     * invoice, are left out rather than read.
+     * Hand the XML files embedded in [bytes] (PDF/A-3 attachments) to [read] one at a time, for
+     * structured e-invoice detection, and return the first answer it gives; null when none did or
+     * the document has none. A known e-invoice name goes first, then an attachment whose
+     * `AFRelationship` marks it as the document's data, then the rest in document order.
+     *
+     * The attachments are untrusted, so each one is read only when its turn comes and is let go
+     * before the next: at most [MAX_EMBEDDED_XML_FILES] of them, each at most
+     * [MAX_EMBEDDED_XML_BYTES] and all together at most [MAX_EMBEDDED_XML_TOTAL_BYTES] once
+     * decompressed. One that is not XML, is too large, or would exceed what is left is never handed
+     * over.
      */
-    suspend fun embeddedXmlFiles(bytes: ByteArray): List<EmbeddedXmlFile> = emptyList()
+    suspend fun <T : Any> firstEmbeddedXml(
+        bytes: ByteArray,
+        read: (EmbeddedXmlFile) -> T?,
+    ): T? = null
 
     /**
      * Combine JPEG/PNG page images into a single PDF (one image per page). The bytes depend only on
@@ -130,6 +140,15 @@ class EmbeddedXmlFile(
  * a larger file is not one, and reading it would only cost memory.
  */
 const val MAX_EMBEDDED_XML_BYTES = 8 * 1024 * 1024
+
+/**
+ * Most embedded XML attachments read for e-invoice detection. An e-invoice PDF carries one; a few
+ * more cover a PDF that also embeds other XML, while a PDF with dozens is not worth reading through.
+ */
+const val MAX_EMBEDDED_XML_FILES = 8
+
+/** Most decompressed bytes read from all of a PDF's XML attachments together. */
+const val MAX_EMBEDDED_XML_TOTAL_BYTES = 2 * MAX_EMBEDDED_XML_BYTES
 
 /** JPEG magic bytes: FF D8 FF. */
 internal fun isJpeg(bytes: ByteArray): Boolean =

@@ -47,6 +47,43 @@ object PdfFixtures {
             out.toByteArray()
         }
 
+    /** One attachment of [pdfWithEmbeddedFiles]: its name, bytes and PDF/A-3 `AFRelationship`, if any. */
+    class Attachment(
+        val name: String,
+        val bytes: ByteArray,
+        val relationship: String? = null,
+    )
+
+    /** One-page PDF carrying every one of [attachments], in this order, in one flat name tree. */
+    fun pdfWithEmbeddedFiles(attachments: List<Attachment>): ByteArray =
+        PDDocument().use { doc ->
+            doc.addPage(PDPage(PDRectangle.A4))
+            // Name-tree keys must be unique and are kept in sorted order: number them so the listing
+            // order is the order given.
+            val names =
+                attachments.withIndex().associate { (index, attachment) ->
+                    val embedded =
+                        PDEmbeddedFile(doc).apply {
+                            subtype = "text/xml"
+                            cosObject.createOutputStream(COSName.FLATE_DECODE).use { it.write(attachment.bytes) }
+                        }
+                    val spec =
+                        PDComplexFileSpecification().apply {
+                            file = attachment.name
+                            embeddedFile = embedded
+                            attachment.relationship?.let { cosObject.setName("AFRelationship", it) }
+                        }
+                    "%04d".format(index) to spec
+                }
+            doc.documentCatalog.names =
+                PDDocumentNameDictionary(doc.documentCatalog).apply {
+                    embeddedFiles = PDEmbeddedFilesNameTreeNode().apply { this.names = names }
+                }
+            val out = ByteArrayOutputStream()
+            doc.save(out)
+            out.toByteArray()
+        }
+
     /** Two-page PDF with an embedded text layer containing [lines] on each page. */
     fun embeddedTextPdf(vararg lines: String): ByteArray {
         PDDocument().use { doc ->

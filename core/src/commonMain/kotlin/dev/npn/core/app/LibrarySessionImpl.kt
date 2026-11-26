@@ -316,7 +316,7 @@ internal class LibrarySessionImpl(
         // By its id: the path can hold an email's subject or a document's title.
         log.runLogged("Reading the e-invoice of document ${imported.docId}") {
             val bytes = fs.readDocument(imported.relPath, imported.docId) ?: return@runLogged
-            val invoice = EInvoiceDetector.detect(deps.pdfEngine.embeddedXmlFiles(bytes)) ?: return@runLogged
+            val invoice = EInvoiceDetector.detect(deps.pdfEngine, bytes) ?: return@runLogged
             writer.fillExtracted(imported.docId, invoice.documentFields())
         }
         val currentPath =

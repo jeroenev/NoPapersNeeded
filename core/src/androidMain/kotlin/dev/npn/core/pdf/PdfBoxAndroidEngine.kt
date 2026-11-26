@@ -47,12 +47,16 @@ internal class PdfBoxAndroidEngine(
     override suspend fun open(bytes: ByteArray): PdfDocumentHandle =
         LazyPdfDocumentHandle(openText = { openText(bytes) }, openPages = { openPages(bytes) })
 
-    override suspend fun embeddedXmlFiles(bytes: ByteArray): List<EmbeddedXmlFile> =
+    override suspend fun <T : Any> firstEmbeddedXml(
+        bytes: ByteArray,
+        read: (EmbeddedXmlFile) -> T?,
+    ): T? =
         withContext(io) {
             loadOrThrow(bytes).use { doc ->
-                val tree = doc.documentCatalog.names?.embeddedFiles ?: return@use emptyList()
-                val result = mutableListOf<EmbeddedXmlFile>()
+                val tree = doc.documentCatalog.names?.embeddedFiles ?: return@use null
+                val candidates = mutableListOf<EmbeddedXmlCandidate>()
                 val seen = mutableSetOf<com.tom_roush.pdfbox.cos.COSDictionary>()
+                var listed = 0
 
                 fun visit(
                     node: PDNameTreeNode<PDComplexFileSpecification>,
@@ -60,16 +64,20 @@ internal class PdfBoxAndroidEngine(
                 ) {
                     if (depth > MAX_NAME_TREE_DEPTH || !seen.add(node.cosObject)) return
                     node.names.orEmpty().forEach { (key, spec) ->
+                        if (++listed > MAX_EMBEDDED_FILE_ENTRIES) return
                         val name = spec.filename ?: key
                         if (name.lowercase().endsWith(".xml")) {
-                            val file = spec.embeddedFileUnicode ?: spec.embeddedFile
-                            file?.readSafeXml()?.let { result.add(EmbeddedXmlFile(name, it)) }
+                            val relationship = spec.cosObject.getNameAsString(AF_RELATIONSHIP)
+                            candidates +=
+                                EmbeddedXmlCandidate(name, relationship) { budget ->
+                                    (spec.embeddedFileUnicode ?: spec.embeddedFile)?.readSafeXml(budget)
+                                }
                         }
                     }
                     node.kids.orEmpty().forEach { visit(it, depth + 1) }
                 }
                 visit(tree, 0)
-                result
+                readFirstEmbeddedXml(candidates, read)
             }
         }
 
@@ -234,8 +242,11 @@ private class RendererPageBackend(
 
 private const val MAX_NAME_TREE_DEPTH = 32
 
+/** The PDF/A-3 file specification key naming how an attachment relates to the document. */
+private const val AF_RELATIONSHIP = "AFRelationship"
+
 /** Decode only unfiltered or Flate streams, incrementally, without PDFBox's eager filter buffers. */
-private fun PDEmbeddedFile.readSafeXml(): ByteArray? {
+private fun PDEmbeddedFile.readSafeXml(budget: EmbeddedXmlBudget): ByteArray? {
     val stream = cosObject
     if (stream.getDictionaryObject(COSName.DECODE_PARMS) != null) return null
     val filters = stream.filters
@@ -243,9 +254,9 @@ private fun PDEmbeddedFile.readSafeXml(): ByteArray? {
     if (filter != null && filter != COSName.FLATE_DECODE && filter != COSName.FL) return null
     return stream.createRawInputStream().use { raw ->
         if (filter == null) {
-            raw.readCapped(MAX_EMBEDDED_XML_BYTES)
+            budget.read(raw)
         } else {
-            InflaterInputStream(raw).use { it.readCapped(MAX_EMBEDDED_XML_BYTES) }
+            InflaterInputStream(raw).use { budget.read(it) }
         }
     }
 }

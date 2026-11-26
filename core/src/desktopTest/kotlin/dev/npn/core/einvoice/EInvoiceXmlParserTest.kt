@@ -64,6 +64,12 @@ class EInvoiceXmlParserTest {
         assertNull(parseEInvoiceXml(fixture("xxe.xml")))
     }
 
+    @Test
+    fun rejectsADoctypeInAnyCase() {
+        val xml = fixture("ubl.xml").decodeToString().replaceFirst("?>", "?><!doctype Invoice>")
+        assertNull(parseEInvoiceXml(xml.encodeToByteArray()))
+    }
+
     private fun fixture(name: String): ByteArray =
         checkNotNull(javaClass.getResourceAsStream("/einvoice/$name")) { "missing fixture $name" }
             .use { it.readBytes() }
