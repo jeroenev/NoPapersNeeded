@@ -53,6 +53,19 @@ class HtmlTextTest {
         assertEquals("Encoded <p> stays text", HtmlText.toPlainText("Encoded &lt;p&gt; stays text"))
     }
 
+    /** A head that is never closed, as many mailers send, still leaves the body's text (it was lost). */
+    @Test
+    fun aHeadWithoutItsEndTagKeepsTheBody() {
+        assertEquals(
+            "Your invoice is attached.\n\nTotal: 12,50 €",
+            HtmlText.toPlainText(
+                "<html><head><meta charset=\"utf-8\"><title>Invoice</title>" +
+                    "<body><p>Your invoice is attached.</p><p>Total: 12,50 &euro;</p></body></html>",
+            ),
+        )
+        assertEquals("Hello", HtmlText.toPlainText("<head><style>p { color: red }</style><p>Hello"))
+    }
+
     /**
      * Markup a sender controls is read in time proportional to its length: an unclosed comment, a
      * run of unclosed tags or of spacing entities must not cost each character a scan of the rest.
@@ -68,6 +81,9 @@ class HtmlTextTest {
                 "stray brackets" to "<".repeat(size),
                 "spacing entities" to "&nbsp; ".repeat(size / 7),
                 "spacing between blocks" to "<div> &nbsp; </div>".repeat(size / 19),
+                "unclosed blocks" to "<div>x".repeat(size / 6),
+                "unclosed formatting" to "<b><i>x".repeat(size / 7),
+                "unclosed table cells" to "<table><tr><td>".repeat(size / 15),
             )
         for ((name, html) in inputs) {
             val started = System.nanoTime()

@@ -71,8 +71,10 @@ kotlin {
                 implementation(libs.pdfbox)
                 implementation(libs.pdfbox.xmpbox)
                 implementation(libs.ktor.client.cio)
-                // Email import is desktop-only: Android never sees Jakarta Mail on its classpath.
+                // Email import is desktop-only: Android never sees Jakarta Mail on its classpath, nor
+                // the HTML parser that reads an HTML-only email's text for its PDF.
                 implementation(libs.angus.mail)
+                implementation(libs.jsoup)
             }
         }
     }

@@ -4,6 +4,8 @@ agp = "9.5.2"
 angus-mail = "2.0.3"
 # An in-process IMAP server for core's email transport tests; never on a main classpath.
 greenmail = "2.1.15"
+# HTML parsing for the email PDF of an HTML-only message, desktop only (email import).
+jsoup = "1.24.1"
 # The JDK that runs Gradle, compiles everything and is bundled with the desktop app.
 jdk = "25"
 # The bytecode every module targets. Android shares it and only offers newer Java library APIs on
@@ -62,6 +64,7 @@ spotless = "8.12.0"
 jna = { module = "net.java.dev.jna:jna", version.ref = "jna" }
 angus-mail = { module = "org.eclipse.angus:angus-mail", version.ref = "angus-mail" }
 greenmail = { module = "com.icegreen:greenmail", version.ref = "greenmail" }
+jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity" }
 androidx-benchmark-macro-junit4 = { module = "androidx.benchmark:benchmark-macro-junit4", version.ref = "androidx-benchmark" }
 androidx-biometric = { module = "androidx.biometric:biometric", version.ref = "androidx-biometric" }

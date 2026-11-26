@@ -16,9 +16,11 @@ import java.io.ByteArrayInputStream
 import java.nio.ByteBuffer
 import java.security.MessageDigest
 import java.time.Instant
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Calendar
 import java.util.GregorianCalendar
+import java.util.Locale
 import java.util.TimeZone
 
 /**
@@ -26,11 +28,15 @@ import java.util.TimeZone
  * of its HTML when it has no plain text), wrapped onto A4 pages. It is deliberately simple, with no
  * layout and no inline images, so the document is text a person can read and search can index.
  * The text is set in the bundled Noto Sans (Latin, Greek and Cyrillic), embedded as a subset; a
- * character it has no glyph for (CJK, emoji) shows as `?`. The bytes depend only on the message and
- * the bundled font, so saving the same email again is an import duplicate, not a new document.
+ * character it has no glyph for (CJK, emoji) shows as `?`, while a tab is spaced and other control
+ * and formatting characters are left out. The date is in [zone], this device's, with its offset
+ * shown. The bytes depend only on the message, the zone and the bundled font, so saving the same
+ * email again here is an import duplicate, not a new document; across devices and builds the
+ * email's Message-ID is what tells it was saved before.
  */
 internal class PdfBoxMailPdfRenderer(
     private val io: CoroutineDispatcher = Dispatchers.IO,
+    private val zone: () -> ZoneId = ZoneId::systemDefault,
 ) : MailPdfRenderer {
     override val available: Boolean = true
 
@@ -40,11 +46,11 @@ internal class PdfBoxMailPdfRenderer(
                 val regular = Typeface(PDType0Font.load(document, ByteArrayInputStream(REGULAR), true))
                 val bold = Typeface(PDType0Font.load(document, ByteArrayInputStream(BOLD), true))
                 val writer = PageWriter(document, regular)
-                writer.line("From: ${message.from}", bold, SIZE + 1, GAP)
-                writer.line("To: ${message.to}", regular, SIZE, GAP)
+                writer.line("From: ${printable(message.from)}", bold, SIZE + 1, GAP)
+                writer.line("To: ${printable(message.to)}", regular, SIZE, GAP)
                 writer.line("Date: ${formatDate(message.dateMillis)}", regular, SIZE, GAP)
-                writer.line("Subject: ${message.subject}", bold, SIZE + 1, GAP * 1.5f)
-                writer.paragraphs(message.bodyText.ifBlank { "(no text)" })
+                writer.line("Subject: ${printable(message.subject)}", bold, SIZE + 1, GAP * 1.5f)
+                writer.paragraphs(printable(message.bodyText).ifBlank { "(no text)" })
                 writer.close()
                 // A deterministic identity and metadata: saving the same email again must be an
                 // import duplicate, not a new document seeded from the clock and a random /ID.
@@ -65,11 +71,12 @@ internal class PdfBoxMailPdfRenderer(
             }
         }
 
+    /** The sending time in this device's zone, with its offset from UTC, so it is never ambiguous. */
     private fun formatDate(millis: Long?): String =
         millis?.let {
             DateTimeFormatter
-                .ofPattern("yyyy-MM-dd HH:mm")
-                .format(Instant.ofEpochMilli(it).atZone(java.time.ZoneOffset.UTC))
+                .ofPattern("yyyy-MM-dd HH:mm 'UTC'xxx", Locale.ROOT)
+                .format(Instant.ofEpochMilli(it).atZone(zone()))
         } ?: "unknown"
 
     /** A stable `/ID` from what the PDF shows, so the same message always hashes to the same bytes. */
@@ -187,6 +194,37 @@ internal class PdfBoxMailPdfRenderer(
     }
 
     private companion object {
+        /** Spaces a tab stands for: no font draws a tab, and the email PDF has no tab stops. */
+        const val TAB = "    "
+
+        /**
+         * [text] as the PDF can show it: a tab as spaces, a line break kept, and every other control
+         * or formatting character (a form feed, a zero-width space, a byte-order mark) left out, as
+         * no font has a glyph for one and it would print as `?`.
+         */
+        fun printable(text: String): String =
+            buildString(text.length) {
+                text.codePoints().forEach { codePoint ->
+                    when {
+                        codePoint == '\t'.code -> {
+                            append(TAB)
+                        }
+
+                        codePoint == '\n'.code -> {
+                            append('\n')
+                        }
+
+                        Character.isISOControl(codePoint) -> {}
+
+                        Character.getType(codePoint) == Character.FORMAT.toInt() -> {}
+
+                        else -> {
+                            appendCodePoint(codePoint)
+                        }
+                    }
+                }
+            }
+
         const val MARGIN = 56f
         const val SIZE = 11f
         const val GAP = 15f
