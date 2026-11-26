@@ -22,7 +22,12 @@ import kotlin.test.Test
 class MessagesViewModelTest : MainDispatcherTest() {
     private class Messages : MessagesViewModel() {
         val logged = mutableListOf<Throwable?>()
-        override val log = NpnLog { _, _, error -> logged += error }
+        val loggedMessages = mutableListOf<String>()
+        override val log =
+            NpnLog { _, message, error ->
+                logged += error
+                loggedMessages += message
+            }
 
         fun say(vararg texts: String) = texts.forEach { message(UiText.Raw(it)) }
 
@@ -46,6 +51,17 @@ class MessagesViewModelTest : MainDispatcherTest() {
             failed shouldBe setOf("a", "c")
             model.logged.map { it?.message } shouldContainExactly listOf("no a", "no c")
             shown shouldContainExactly listOf(uiText(Res.plurals.common_restore_documents_failed, 3, 2, 3))
+        }
+
+    /** A bulk action's items are often user data, such as tag names: the log line names none. */
+    @Test
+    fun aBulkActionLogsNoItemItIsNotToldIsSafe() =
+        runTest(dispatcher) {
+            val model = Messages()
+
+            model.each(listOf("Health", "Taxes"), failing = setOf("Health"))
+
+            model.loggedMessages shouldContainExactly listOf("A bulk action failed for <name>")
         }
 
     @Test

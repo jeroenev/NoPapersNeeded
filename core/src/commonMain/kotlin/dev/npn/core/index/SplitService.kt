@@ -8,8 +8,10 @@ import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.readDocument
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.util.NpnLog
+import dev.npn.core.util.Sensitive.Kind.DOCUMENT
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
+import dev.npn.core.util.sensitive
 import dev.npn.core.util.warn
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
@@ -59,7 +61,7 @@ internal class SplitService(
                 ?: return Result.Failed(SplitFailure.DOCUMENT_UNAVAILABLE)
         if (segments.size < 2) return Result.Failed(SplitFailure.INVALID_PARTS)
         return runCatchingCancellable { splitLoaded(doc, segments) }.getOrElse {
-            log.warn("Reading ${doc.relPath} to split it failed", it)
+            log.warn("Reading ${sensitive(doc.relPath, DOCUMENT)} to split it failed", it)
             Result.Failed(SplitFailure.UNREADABLE_PDF)
         }
     }
@@ -86,7 +88,7 @@ internal class SplitService(
                         val partBytes = pdfEngine.extractPages(bytes, segment.toList())
                         importService.importBytes(partBytes, "$baseName (part ${i + 1}).pdf", folder)
                     }.getOrElse {
-                        log.warn("Making part ${i + 1} of ${doc.relPath} failed", it)
+                        log.warn("Making part ${i + 1} of ${sensitive(doc.relPath, DOCUMENT)} failed", it)
                         return Result.Failed(SplitFailure.NOT_COMPLETED)
                     }
                 parts.add(outcome)
@@ -109,7 +111,9 @@ internal class SplitService(
     suspend fun rollBack(parts: List<ImportResult>) =
         withContext(NonCancellable) {
             for (part in parts.asReversed().filterIsInstance<ImportResult.Imported>()) {
-                log.runLogged("Taking back split part ${part.relPath}") { importService.undoImport(part) }
+                log.runLogged(
+                    "Taking back split part ${sensitive(part.relPath, DOCUMENT)}",
+                ) { importService.undoImport(part) }
             }
         }
 

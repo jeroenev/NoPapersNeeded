@@ -180,7 +180,7 @@ abstract class ReviewViewModel(
     /** Put back what an Apply wrote; each part that fails is reported, and the rest still goes back. */
     private fun undo(undo: ApplyUndo) {
         viewModelScope.launch {
-            val failed = forEachReporting(undo.steps(), UndoFailure) { it.run(meta) }
+            val failed = forEachReporting(undo.steps(), UndoFailure, describe = { it }) { it.run(meta) }
             if (failed.isEmpty()) {
                 val count = undo.docIds.size
                 message(uiText(Res.plurals.ai_edit_undone, count, count))

@@ -25,9 +25,11 @@ import dev.npn.core.pathrules.resolveUniqueTarget
 import dev.npn.core.util.EpochClock
 import dev.npn.core.util.IdSource
 import dev.npn.core.util.NpnLog
+import dev.npn.core.util.Sensitive.Kind.DOCUMENT
 import dev.npn.core.util.SystemEpochClock
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
+import dev.npn.core.util.sensitive
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 
@@ -359,7 +361,9 @@ internal class ImportService(
             if (existing != null) documentDao.upsert(existing.onFreePath()) else forget(hash)
         }
         if (movedTo != null) {
-            log.runLogged("Taking the failed import back out of $movedTo") { fs.move(movedTo, tmpPath) }
+            log.runLogged(
+                "Taking the failed import back out of ${sensitive(movedTo, DOCUMENT)}",
+            ) { fs.move(movedTo, tmpPath) }
         }
     }
 

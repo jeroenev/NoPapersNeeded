@@ -23,8 +23,10 @@ import dev.npn.core.mail.MailImportResult
 import dev.npn.core.mail.MailService
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.util.NpnLog
+import dev.npn.core.util.Sensitive.Kind.DOCUMENT
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
+import dev.npn.core.util.sensitive
 import dev.npn.core.util.warn
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
@@ -407,7 +409,9 @@ internal class LibrarySessionImpl(
                 fs
                     .watch()
                     .mapNotNull { event ->
-                        log.runLogged("Reading the change at ${event.relPath}") { watchAction(event, deviceId) }
+                        log.runLogged(
+                            "Reading the change at ${sensitive(event.relPath, DOCUMENT)}",
+                        ) { watchAction(event, deviceId) }
                     }.settled(timeSource = deps.timeSource)
                     .collect { act(it) }
             }

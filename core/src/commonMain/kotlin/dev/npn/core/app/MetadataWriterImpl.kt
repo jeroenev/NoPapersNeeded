@@ -11,7 +11,9 @@ import dev.npn.core.model.FieldValues
 import dev.npn.core.model.SystemProperty
 import dev.npn.core.pathrules.StoragePathRuleApplicator
 import dev.npn.core.util.NpnLog
+import dev.npn.core.util.Sensitive.Kind.TAG
 import dev.npn.core.util.runLogged
+import dev.npn.core.util.sensitive
 
 /**
  * Journal-backed write side. Every metadata change is one or more [PendingOp]s committed through
@@ -226,7 +228,10 @@ internal class MetadataWriterImpl(
 
     /** The documents tagged [tag] now, for a [followUp]; failing to list them is logged as its failure is. */
     private suspend fun taggedNow(tag: String): List<String> =
-        log.runLogged("Listing the documents tagged $tag after a write") { tagDao.docIdsWithTag(tag) }.orEmpty()
+        log
+            .runLogged("Listing the documents tagged ${sensitive(tag, TAG)} after a write") {
+                tagDao.docIdsWithTag(tag)
+            }.orEmpty()
 
     /**
      * The canonical stored form of [raw] for field [key], per the live registry: an unregistered

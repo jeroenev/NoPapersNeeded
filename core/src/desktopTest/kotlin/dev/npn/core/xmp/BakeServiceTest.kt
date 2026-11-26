@@ -366,12 +366,13 @@ class BakeServiceTest {
             val recovery = fs.listAllUnder("").single { it.name.startsWith("npn-recovery-") }
             fs.readBytes(recovery.relPath) shouldBe original
             fs.sha256(recovery.relPath) shouldBe oldSha
-            // Saved under a name the next rescan indexes: put right, so a warning that says where.
+            // Saved under a name the next rescan indexes: put right, so a warning. It names no path:
+            // the log reaches the diagnostics bundle.
             log.entries.none { it.level == NpnLog.Level.ERROR }.shouldBeTrue()
             log.entries
                 .any {
-                    it.level == NpnLog.Level.WARN && recovery.relPath in it.message &&
-                        it.error is BakeDisplacedException
+                    it.level == NpnLog.Level.WARN && "the original is at <document>" in it.message &&
+                        recovery.relPath !in it.message && it.error is BakeDisplacedException
                 }.shouldBeTrue()
         }
 
@@ -455,9 +456,13 @@ class BakeServiceTest {
             relinkCalled.shouldBeFalse()
             val kept = listOf("doc.pdf", NpnPaths.Temp.bakePath("doc.pdf")).filter { holdsAVersion(it, oldSha) }
             kept.shouldNotBeEmpty()
-            // The log says where to find it; a warning, as the original is saved under a recovery
-            // name the next rescan indexes.
-            log.entries.any { it.level == NpnLog.Level.WARN && kept.all(it.message::contains) }.shouldBeTrue()
+            // A warning, as the original is saved under a recovery name the next rescan indexes; it
+            // names no path, as the log reaches the diagnostics bundle.
+            log.entries
+                .any {
+                    it.level == NpnLog.Level.WARN && "the original is at <document>" in it.message &&
+                        kept.none(it.message::contains)
+                }.shouldBeTrue()
             log.entries.none { it.level == NpnLog.Level.ERROR }.shouldBeTrue()
             val recovery = fs.listAllUnder("").single { it.name.startsWith(NpnPaths.Temp.RECOVERY_PREFIX) }
             fs.sha256(recovery.relPath) shouldBe oldSha

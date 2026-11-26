@@ -3,6 +3,8 @@ package dev.npn.app.ui.ai
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.MetadataWriter
 import dev.npn.core.app.aiedit.ReviewDoc
+import dev.npn.core.util.Sensitive.Kind.TAG
+import dev.npn.core.util.sensitive
 
 /**
  * What an Apply of a Review batch changed, kept as the writes that put it back: the tags it added
@@ -102,7 +104,11 @@ data class ApplyUndo(
     }
 }
 
-/** One write of an [ApplyUndo]. */
+/**
+ * One write of an [ApplyUndo]. A failed step is logged by its string (ReviewController's Undo), and
+ * the log reaches the diagnostics bundle: each says what kind of write it is and how big, never a
+ * tag, a field's name or a value it restores.
+ */
 sealed interface UndoStep {
     suspend fun run(meta: MetadataWriter)
 
@@ -111,6 +117,8 @@ sealed interface UndoStep {
         val docIds: List<String>,
     ) : UndoStep {
         override suspend fun run(meta: MetadataWriter) = meta.removeTag(docIds, tag)
+
+        override fun toString(): String = "RemoveTag(${sensitive(tag, TAG)}, documents=${docIds.size})"
     }
 
     data class AddTag(
@@ -118,6 +126,8 @@ sealed interface UndoStep {
         val docIds: List<String>,
     ) : UndoStep {
         override suspend fun run(meta: MetadataWriter) = meta.addTag(docIds, tag)
+
+        override fun toString(): String = "AddTag(${sensitive(tag, TAG)}, documents=${docIds.size})"
     }
 
     /** A blank value clears the field, as [MetadataWriter.applyEdits] reads it. */
@@ -127,8 +137,6 @@ sealed interface UndoStep {
     ) : UndoStep {
         override suspend fun run(meta: MetadataWriter) = meta.applyEdits(listOf(docId), fields = values)
 
-        // A failed step is logged by its string (MessagesViewModel.forEachReporting), and the log
-        // reaches the diagnostics bundle: name the fields, never their values (titles, notes).
-        override fun toString(): String = "RestoreFields(docId=$docId, fields=${values.keys.sorted()})"
+        override fun toString(): String = "RestoreFields(docId=$docId, fields=${values.size})"
     }
 }

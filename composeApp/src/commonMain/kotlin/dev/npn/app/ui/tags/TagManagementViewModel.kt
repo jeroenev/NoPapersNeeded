@@ -244,7 +244,7 @@ class TagManagementViewModel(
         write: suspend (String) -> Unit,
     ) {
         if (names.isEmpty()) return
-        viewModelScope.launch { forEachReporting(names, failed, write) }
+        viewModelScope.launch { forEachReporting(names, failed, op = write) }
     }
 
     /** The real tags among these rows, in order; only those among [among], if given. */

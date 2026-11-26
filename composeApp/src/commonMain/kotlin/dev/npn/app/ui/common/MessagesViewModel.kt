@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import dev.npn.core.index.MetadataWriteBlocked
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
+import dev.npn.core.util.sensitive
 import dev.npn.core.util.warn
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -139,19 +140,22 @@ open class MessagesViewModel : ViewModel {
     /**
      * Run [op] for each of [items] in turn, carrying on past the ones that fail, and report the
      * failures as [failed] says: the reason when one failed, the count when several did. Each
-     * failure's cause goes to [log]. Returns the items that failed, for a caller that keeps them
-     * (selected, say) for a retry.
+     * failure's cause goes to [log], with the item as [describe] renders it: by default a
+     * placeholder, as items are often user data (tag names); a caller whose items render safely
+     * passes `{ it }`. Returns the items that failed, for a caller that keeps them (selected, say)
+     * for a retry.
      */
     protected suspend fun <T> forEachReporting(
         items: Collection<T>,
         failed: BulkFailure,
+        describe: (T) -> Any? = { sensitive(it) },
         op: suspend (T) -> Unit,
     ): Set<T> {
         val failures = LinkedHashMap<T, Throwable>()
         for (item in items) {
             runCatchingCancellable { op(item) }.onFailure { failures[item] = it }
         }
-        failures.forEach { (item, cause) -> log.warn("A bulk action failed for $item", cause) }
+        failures.forEach { (subject, cause) -> log.warn("A bulk action failed for ${describe(subject)}", cause) }
         when (failures.size) {
             0 -> Unit
             1 -> message(uiText(failed.one, failures.values.single().reasonText()))

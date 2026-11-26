@@ -56,7 +56,7 @@ class SettingsRepositoryImplTest {
             SettingsRepositoryImpl(log, file).settings.first().appLanguage shouldBe null
 
             log.entries.map { it.message } shouldBe
-                listOf("Reading the settings in $file failed; starting from the defaults")
+                listOf("Reading the settings in <path> failed; starting from the defaults")
         }
 
     private fun supportsPosixView(file: java.io.File): Boolean =

@@ -1,6 +1,8 @@
 package dev.npn.core.settings
 
 import dev.npn.core.util.NpnLog
+import dev.npn.core.util.Sensitive.Kind.PATH
+import dev.npn.core.util.sensitive
 import dev.npn.core.util.warn
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -95,14 +97,24 @@ class SettingsRepositoryImpl internal constructor(
             // A file that does not read is reported, and the app starts on the defaults rather than
             // not at all.
             runCatching { file.inputStream().use { props.load(it) } }
-                .onFailure { log.warn("Reading the settings in $file failed; starting from the defaults", it) }
+                .onFailure {
+                    log.warn(
+                        "Reading the settings in ${sensitive(file, PATH)} failed; starting from the defaults",
+                        it,
+                    )
+                }
         }
         val installationId =
             props.getProperty(SettingsKeys.INSTALLATION_ID)
                 ?: Uuid.random().toString().also { fresh ->
                     props.setProperty(SettingsKeys.INSTALLATION_ID, fresh)
                     runCatching { storeProperties() }
-                        .onFailure { log.warn("Saving this installation's new id in $file failed", it) }
+                        .onFailure {
+                            log.warn(
+                                "Saving this installation's new id in ${sensitive(file, PATH)} failed",
+                                it,
+                            )
+                        }
                 }
         return SettingsCodec.load(reader, installationId)
     }

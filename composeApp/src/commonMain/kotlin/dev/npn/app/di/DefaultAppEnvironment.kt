@@ -8,9 +8,11 @@ import dev.npn.core.security.AppLock
 import dev.npn.core.settings.SettingsRepository
 import dev.npn.core.util.MonotonicClock
 import dev.npn.core.util.NpnLog
+import dev.npn.core.util.Sensitive.Kind.FOLDER
 import dev.npn.core.util.SystemMonotonicClock
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
+import dev.npn.core.util.sensitive
 import dev.npn.core.util.warn
 import dev.npn.core.watch.WatchedFolder
 import dev.npn.core.watch.WatchedFolderImporter
@@ -221,7 +223,7 @@ class DefaultAppEnvironment(
     /** Go back to [location] after a failed switch; a failure here leaves the user on onboarding. */
     private suspend fun reopen(location: String) {
         runCatchingCancellable { startSession(location) }
-            .onFailure { log.warn("Could not reopen $location after a failed library switch", it) }
+            .onFailure { log.warn("Could not reopen ${sensitive(location, FOLDER)} after a failed library switch", it) }
     }
 
     override suspend fun closeLibrary() =

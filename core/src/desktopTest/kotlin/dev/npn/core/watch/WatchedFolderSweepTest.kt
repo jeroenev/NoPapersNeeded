@@ -186,7 +186,7 @@ class WatchedFolderSweepTest {
 
             importer.scanOnce().imported shouldBe 1
 
-            log.entries.single().message shouldBe "Deleting scan.pdf from the watched folder after import failed"
+            log.entries.single().message shouldBe "Deleting <document> from the watched folder after import failed"
         }
 
     @Test

@@ -5,9 +5,11 @@ import dev.npn.core.app.ImportTally
 import dev.npn.core.app.IngestFacade
 import dev.npn.core.util.EpochClock
 import dev.npn.core.util.NpnLog
+import dev.npn.core.util.Sensitive.Kind.DOCUMENT
 import dev.npn.core.util.SystemEpochClock
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
+import dev.npn.core.util.sensitive
 import dev.npn.core.util.warn
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -84,7 +86,7 @@ class WatchedFolderImporter(
             // Only a closed session throws; that counts as a failed attempt like any other.
             val outcome =
                 runCatchingCancellable { ingest.importPdf(file.source, file.name) }
-                    .onFailure { log.warn("Watched folder import of ${file.name} failed", it) }
+                    .onFailure { log.warn("Watched folder import of ${sensitive(file.name, DOCUMENT)} failed", it) }
                     .getOrNull()
             tally += outcome
             when (outcome) {
@@ -98,7 +100,10 @@ class WatchedFolderImporter(
 
                 is ImportOutcome.Failed, null -> {
                     attempts[key] = (attempts[key] ?: 0) + 1
-                    if (outcome != null) log.warn("Watched folder import of ${file.name} failed: ${outcome.reason}")
+                    if (outcome != null) {
+                        val document = sensitive(file.name, DOCUMENT)
+                        log.warn("Watched folder import of $document failed: ${outcome.reason}")
+                    }
                 }
             }
         }
@@ -129,7 +134,7 @@ class WatchedFolderImporter(
         val delete = deleteAfterImport()
         if (file.mtimeMillis != 0L || !delete) completed.add(key)
         if (delete) {
-            log.runLogged("Deleting ${file.name} from the watched folder after import") {
+            log.runLogged("Deleting ${sensitive(file.name, DOCUMENT)} from the watched folder after import") {
                 // The library file may have gone while the import ran (deleted or moved out from
                 // outside): the source is then the document's last copy, and stays.
                 if (ingest.holdsDocument(docId)) folder.delete(file, docId)

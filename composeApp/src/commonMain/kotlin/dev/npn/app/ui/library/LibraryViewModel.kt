@@ -776,7 +776,12 @@ class LibraryViewModel(
         trashing =
             viewModelScope.launch {
                 val trashed = mutableListOf<TrashReceipt>()
-                val failed = forEachReporting(ids, TrashFailed) { id -> docLifecycle.trashDoc(id)?.let(trashed::add) }
+                val failed =
+                    forEachReporting(
+                        ids,
+                        TrashFailed,
+                        describe = { it },
+                    ) { id -> docLifecycle.trashDoc(id)?.let(trashed::add) }
                 deselect(ids - failed)
                 if (trashed.isNotEmpty()) {
                     message(

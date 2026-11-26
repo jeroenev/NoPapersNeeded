@@ -11,10 +11,12 @@ import dev.npn.core.journal.PublishedTransaction
 import dev.npn.core.sync.JournalDocView
 import dev.npn.core.util.EpochClock
 import dev.npn.core.util.NpnLog
+import dev.npn.core.util.Sensitive.Kind.DOCUMENT
 import dev.npn.core.util.SystemEpochClock
 import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
+import dev.npn.core.util.sensitive
 import dev.npn.core.util.warn
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -691,9 +693,14 @@ internal class JournalCoordinator(
         docId: String,
         move: FileMove,
     ) {
-        log.runLogged("Putting back ${move.from}, which was not the file of $docId when moved, from ${move.to}") {
+        val foreign = sensitive(move.from, DOCUMENT)
+        log.runLogged(
+            "Putting back $foreign, which was not the file of $docId when moved, from ${sensitive(move.to, DOCUMENT)}",
+        ) {
             val at = indexer.putBackForeign(move.from, move.to)
-            if (at != move.from) log.warn("${move.from} was taken again before its file could go back; it is at $at")
+            if (at != move.from) {
+                log.warn("$foreign was taken again before its file could go back; it is at ${sensitive(at, DOCUMENT)}")
+            }
         }
     }
 
@@ -800,7 +807,7 @@ internal class JournalCoordinator(
             resurrected.filter { it.hiddenAtMillis <= settled && seen.getValue(it.docId).sinceMillis <= settled }
         val ops = returned.flatMap { state.restoreOps(it.docId, it.relPath, writeUndelete) }
         if (ops.isEmpty()) return
-        log.runLogged("Recording the return of ${returned.joinToString { it.relPath }}") {
+        log.runLogged("Recording the return of ${returned.size} documents") {
             withContext(NonCancellable) { recordProjected(state, ops) }
         }
     }

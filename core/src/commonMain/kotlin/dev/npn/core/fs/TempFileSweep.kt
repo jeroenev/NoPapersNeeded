@@ -1,7 +1,9 @@
 package dev.npn.core.fs
 
 import dev.npn.core.util.NpnLog
+import dev.npn.core.util.Sensitive.Kind.DOCUMENT
 import dev.npn.core.util.runLogged
+import dev.npn.core.util.sensitive
 
 /**
  * Deletes the app's temporary files ([NpnPaths.Temp]) that a crash or a killed process left in the
@@ -63,7 +65,7 @@ internal class TempFileSweep(
                 }
             if (deletable) {
                 log.runLogged(
-                    "Deleting the stale temporary file ${meta.relPath}",
+                    "Deleting the stale temporary file ${sensitive(meta.relPath, DOCUMENT)}",
                 ) { fs.delete(meta.relPath) }
             }
         }
@@ -80,7 +82,9 @@ internal class TempFileSweep(
     ): Boolean {
         val document = NpnPaths.Temp.bakedDocument(bake.relPath)?.let(byPath::get) ?: return false
         if (document.isDirectory || document.size != bake.size) return false
-        return log.runLogged("Comparing ${bake.relPath} with ${document.relPath}") {
+        return log.runLogged(
+            "Comparing ${sensitive(bake.relPath, DOCUMENT)} with ${sensitive(document.relPath, DOCUMENT)}",
+        ) {
             fs.sha256(bake.relPath) == fs.sha256(document.relPath)
         } == true
     }

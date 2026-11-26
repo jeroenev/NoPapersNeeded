@@ -10,9 +10,12 @@ import dev.npn.core.fs.readDocument
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.util.IdSource
 import dev.npn.core.util.NpnLog
+import dev.npn.core.util.Sensitive.Kind.DOCUMENT
+import dev.npn.core.util.Sensitive.Kind.FOLDER
 import dev.npn.core.util.error
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
+import dev.npn.core.util.sensitive
 import dev.npn.core.util.warn
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
@@ -145,7 +148,7 @@ internal class BakeService(
             }.getOrDefault(false)
         if (!verified) {
             // Left behind, the next bake of this document removes it first.
-            log.runLogged("Removing the unverified bake of $norm") { fs.delete(tmpPath) }
+            log.runLogged("Removing the unverified bake of ${sensitive(norm, DOCUMENT)}") { fs.delete(tmpPath) }
             throw BakeRefusedException("Bake verification failed for $norm; original left untouched")
         }
         val newSha = sha256Bytes(bakedBytes)
@@ -153,7 +156,9 @@ internal class BakeService(
         return withContext(NonCancellable) {
             // Only the file that was read goes: same size and mtime as then.
             if (fs.stat(norm) != read) {
-                log.runLogged("Removing the bake of $norm, written over since it was read") { fs.delete(tmpPath) }
+                log.runLogged("Removing the bake of ${sensitive(norm, DOCUMENT)}, written over since it was read") {
+                    fs.delete(tmpPath)
+                }
                 return@withContext null
             }
             // Non-atomic replace: move the original aside, then the temp into place. Aside, not
@@ -181,7 +186,7 @@ internal class BakeService(
                     @Suppress("SuspendFunInFinallySection") // The whole block runs in NonCancellable.
                     if (!standing) restoreOriginal(norm, docId, newSha, tmpPath, aside, movedAside)
                 }
-                log.runLogged("Removing the original of $norm after its bake") {
+                log.runLogged("Removing the original of ${sensitive(norm, DOCUMENT)} after its bake") {
                     if (holdsWhatWasRead(aside, read, docId)) fs.delete(aside)
                 }
                 newSha
@@ -212,8 +217,12 @@ internal class BakeService(
         aside: String,
         tmpPath: String,
     ) {
-        log.runLogged("Putting back the file at $norm, written over before its bake") { fs.move(aside, norm) }
-        log.runLogged("Removing the bake of $norm, written over since it was read") { fs.delete(tmpPath) }
+        log.runLogged("Putting back the file at ${sensitive(norm, DOCUMENT)}, written over before its bake") {
+            fs.move(aside, norm)
+        }
+        log.runLogged("Removing the bake of ${sensitive(norm, DOCUMENT)}, written over since it was read") {
+            fs.delete(tmpPath)
+        }
     }
 
     /** Whether [pdfBytes] carry recognizable npn metadata: a `npn:documentId` or at least one `dc:subject` tag. */
@@ -271,7 +280,9 @@ internal class BakeService(
             // The swap never moved the original: another hand took the file before it could, and
             // nothing of the document's is at the bake's path to restore. The baked bytes stay a
             // leftover the next bake of the document removes first.
-            log.warn("$norm was moved away before its bake could swap it; the baked bytes stay at $tmpPath")
+            val document = sensitive(norm, DOCUMENT)
+            val bakedAt = sensitive(tmpPath, DOCUMENT)
+            log.warn("$document was moved away before its bake could swap it; the baked bytes stay at $bakedAt")
             return
         }
         runCatchingCancellable {
@@ -296,12 +307,12 @@ internal class BakeService(
             // document removes first if this cannot, and so is a copy of the original left aside.
             // Only while it is still there: another hand that replaced it since may have made the
             // baked bytes something else's last copy (a relink of them that landed before the failure).
-            log.runLogged("Removing the baked bytes of $norm after its bake was undone") {
+            log.runLogged("Removing the baked bytes of ${sensitive(norm, DOCUMENT)} after its bake was undone") {
                 if (fs.exists(tmpPath) && normHolds()) fs.delete(tmpPath)
                 if (asideHolds()) fs.delete(aside)
             }
         }.onFailure { failure ->
-            val message = "Restoring $norm after a failed bake failed"
+            val message = "Restoring ${sensitive(norm, DOCUMENT)} after a failed bake failed"
             // The original under its recovery name, an ordinary one, is indexed by the next rescan:
             // put right, so a warning. Only an original on disk nowhere is an error.
             val kept =
@@ -312,7 +323,7 @@ internal class BakeService(
                 }
             val baked =
                 if (runCatchingCancellable { fs.exists(tmpPath) }.getOrDefault(false)) {
-                    ", the baked bytes at $tmpPath"
+                    ", the baked bytes at ${sensitive(tmpPath, DOCUMENT)}"
                 } else {
                     ""
                 }
@@ -323,12 +334,15 @@ internal class BakeService(
             val folderGone = folder.isNotEmpty() && runCatchingCancellable { !fs.exists(folder) }.getOrDefault(false)
             when {
                 kept != null -> {
-                    log.warn("$message; the original is at $kept, where the next rescan finds it$baked", failure)
+                    val keptAt = sensitive(kept, DOCUMENT)
+                    log.warn("$message; the original is at $keptAt, where the next rescan finds it$baked", failure)
                 }
 
                 // The failed read-back is no fault then, so it is not passed on as one.
                 folderGone -> {
-                    log.warn("$message: $folder was deleted meanwhile, and the original with it$baked")
+                    log.warn(
+                        "$message: ${sensitive(folder, FOLDER)} was deleted meanwhile, and the original with it$baked",
+                    )
                 }
 
                 else -> {

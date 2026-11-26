@@ -1,30 +1,31 @@
 package dev.npn.app
 
 import dev.npn.app.ui.ai.UndoStep
-import dev.npn.core.diagnostics.Diagnostics
-import io.kotest.matchers.string.shouldContain
-import io.kotest.matchers.string.shouldNotContain
+import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 
 /**
  * A failed Undo step is logged by its string ("A bulk action failed for <step>"), and that log line
- * is a retained entry of the diagnostics bundle: it must not carry the field values it restores.
+ * reaches the diagnostics bundle: it names what kind of write failed and how big it was, never the
+ * tag, the field names or the values it restores.
  */
 class UndoStepLogTest {
+    private val docId = "a".repeat(64)
+
     @Test
-    fun aFailedFieldRestoreLogsFieldNamesButNotTheirValues() {
+    fun aFailedFieldRestoreLogsNeitherFieldNamesNorValues() {
         val step =
             UndoStep.RestoreFields(
-                docId = "a".repeat(64),
+                docId = docId,
                 values = mapOf("title" to "Hospital bill Jane Doe", "notes" to "Diagnosis follows", "docDate" to null),
             )
 
-        val bundleLog = Diagnostics.sanitize("2026-11-22T10:00:00Z WARN A bulk action failed for $step")
+        step.toString() shouldBe "RestoreFields(docId=$docId, fields=3)"
+    }
 
-        bundleLog shouldNotContain "Hospital bill"
-        bundleLog shouldNotContain "Diagnosis"
-        bundleLog shouldContain "A bulk action failed for RestoreFields"
-        bundleLog shouldContain "title"
-        bundleLog shouldContain "notes"
+    @Test
+    fun aFailedTagStepLogsNoTagName() {
+        UndoStep.AddTag("Divorce", listOf("1", "2")).toString() shouldBe "AddTag(<tag>, documents=2)"
+        UndoStep.RemoveTag("Health", listOf("1")).toString() shouldBe "RemoveTag(<tag>, documents=1)"
     }
 }

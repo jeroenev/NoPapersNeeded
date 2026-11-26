@@ -6,6 +6,8 @@ import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.util.EpochClock
 import dev.npn.core.util.IdSource
 import dev.npn.core.util.NpnLog
+import dev.npn.core.util.Sensitive.Kind.DOCUMENT
+import dev.npn.core.util.sensitive
 import dev.npn.core.util.warn
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
@@ -50,7 +52,8 @@ class SyncEngine(
         onProgress: (SyncProgress) -> Unit,
     ): SyncReport {
         val startedAt = clock.nowMillis()
-        val report = SyncReportBuilder(startedAt) { path, cause -> log.warn("Cloud sync: $path", cause) }
+        val report =
+            SyncReportBuilder(startedAt) { path, cause -> log.warn("Cloud sync: ${sensitive(path, DOCUMENT)}", cause) }
         staging.clear()
 
         onProgress(SyncProgress(SyncPhase.LISTING))

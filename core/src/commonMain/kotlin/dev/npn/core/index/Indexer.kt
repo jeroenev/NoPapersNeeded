@@ -19,9 +19,11 @@ import dev.npn.core.journal.PendingOp
 import dev.npn.core.util.EpochClock
 import dev.npn.core.util.IdSource
 import dev.npn.core.util.NpnLog
+import dev.npn.core.util.Sensitive.Kind.DOCUMENT
 import dev.npn.core.util.SystemEpochClock
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
+import dev.npn.core.util.sensitive
 import dev.npn.core.util.warn
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -319,7 +321,7 @@ internal class Indexer(
         val successors = documentDao.getByDocIds(originals.map { it.third }.distinct()).associateBy { it.docId }
         for ((meta, hash, successor) in originals) {
             successors[successor]?.takeIf { it.isLive && contentAt[it.relPath] == successor } ?: continue
-            log.runLogged("Removing ${meta.relPath}, the original of a baked document") {
+            log.runLogged("Removing ${sensitive(meta.relPath, DOCUMENT)}, the original of a baked document") {
                 val now = fs.stat(meta.relPath)?.takeIf { !it.isDirectory }
                 if (now != null && (now.hasStoredStat(meta.size, meta.mtimeMillis) || fs.holds(meta.relPath, hash))) {
                     fs.delete(meta.relPath)
@@ -387,7 +389,12 @@ internal class Indexer(
         failure: Throwable,
     ): Boolean {
         val gone = runCatchingCancellable { fs.stat(relPath) == null }.getOrDefault(false)
-        if (!gone) log.warn("Hashing $relPath failed; it is left as it was until a rescan can read it", failure)
+        if (!gone) {
+            log.warn(
+                "Hashing ${sensitive(relPath, DOCUMENT)} failed; it is left as it was until a rescan can read it",
+                failure,
+            )
+        }
         return gone
     }
 

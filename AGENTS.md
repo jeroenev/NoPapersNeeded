@@ -287,7 +287,10 @@ Repo skills live in `.agents/skills/` (`.claude/skills` links to it). Reach for:
   `catch (Throwable)`: cancellation must propagate, not be recorded as a failure. Typed detekt's
   `SuspendFunSwallowedCancellation` enforces it. Error text is `Throwable.reason()`.
 - Background work nobody awaits reports failures through `NpnLog` (`SessionDeps.log`) with
-  `log.runLogged("what") { … }`, never `println` or a silent `runCatching`. Outside tests, typed
+  `log.runLogged("what") { … }`, never `println` or a silent `runCatching`. User data in a log
+  message (a document's name or path, a tag, a folder, a title) goes in as
+  `sensitive(value, DOCUMENT)` (`core.util`), which logs a placeholder: the log reaches the
+  diagnostics bundle. `LogMessageUserDataTest` fails on the usual names logged raw. Outside tests, typed
   detekt forbids `print`/`println`, `runBlocking`, `Thread.sleep` (`ForbiddenMethodCall`) and
   `GlobalScope` (`GlobalCoroutineUsage`).
 - A viewmodel reports to the user through `MessagesViewModel`: `message(text, action)`, and every

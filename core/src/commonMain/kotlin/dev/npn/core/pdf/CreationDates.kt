@@ -5,7 +5,9 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.readDocument
 import dev.npn.core.util.NpnLog
+import dev.npn.core.util.Sensitive.Kind.DOCUMENT
 import dev.npn.core.util.runCatchingCancellable
+import dev.npn.core.util.sensitive
 import dev.npn.core.util.warn
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -54,7 +56,7 @@ internal class CreationDates(
     private suspend fun read(row: DocumentEntity): Long? {
         val read =
             runCatchingCancellable { fs.readDocument(row.relPath, row.docId) }
-                .onFailure { log.warn("Reading ${row.relPath} for its creation date failed", it) }
+                .onFailure { log.warn("Reading ${sensitive(row.relPath, DOCUMENT)} for its creation date failed", it) }
         if (read.isFailure) return null
         val bytes = read.getOrNull()
         if (bytes == null) {
