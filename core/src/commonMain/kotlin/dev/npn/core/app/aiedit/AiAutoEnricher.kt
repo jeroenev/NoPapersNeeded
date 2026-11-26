@@ -137,11 +137,11 @@ internal class AiAutoEnricher(
     private suspend fun hasText(docId: String): Boolean = ftsDao.textOf(docId) != null
 
     /**
-     * The row to work on now; null while the feature is off or the endpoint cools down, and when
-     * nothing is due.
+     * The row to work on now; null while the feature is off, the spending limit holds it back
+     * ([UnattendedAiPolicy.mayEnrichNow]) or the endpoint cools down, and when nothing is due.
      */
     private suspend fun dueEntry(): AiEnrichQueueEntity? {
-        if (!policy.autoEnrich()) return null
+        if (!policy.mayEnrichNow()) return null
         val now = clock.nowMillis()
         if (health.coolingDown(now)) return null
         return queueDao.nextDue(now)

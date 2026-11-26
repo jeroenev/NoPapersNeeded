@@ -29,6 +29,9 @@
     <string name="common_settings_ai_spend_reset_confirm">Limpar</string>
     <string name="common_settings_ai_spend_reset_done">Histórico de gastos de IA limpo.</string>
     <string name="common_settings_ai_spend_reset_failed">Não foi possível limpar o histórico de gastos de IA: %1$s</string>
+    <string name="common_settings_ai_unattended_limit">Limite de gastos da IA automática (dólares americanos por 30 dias)</string>
+    <string name="common_settings_ai_unattended_limit_help">A organização automática e a leitura de texto com o assistente ficam em pausa quando o gasto estimado de IA desta biblioteca nos últimos 30 dias atinge este número de dólares (agora %1$d; 0 significa sem limite). Tudo conta, incluindo o que inicia, mas só o trabalho automático fica em pausa. Os pedidos sem preço conhecido não contam. Intervalo permitido: %2$d–%3$d.</string>
+    <string name="common_settings_ai_unattended_paused">A IA automática está em pausa: esta biblioteca gastou %1$s em IA nos últimos 30 dias e atingiu o limite de %2$s. Os documentos novos são lidos neste dispositivo e esperam para ser organizados até o gasto descer abaixo do limite ou o aumentar.</string>
     <string name="common_settings_max_run_requests">Limite de pedidos por execução em massa</string>
     <string name="common_settings_max_run_requests_help">Uma execução em massa de IA para ao atingir este número de pedidos ao modelo (agora %1$d) e indica o que ficou por fazer. Intervalo permitido: %2$d–%3$d.</string>
 

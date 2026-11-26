@@ -29,6 +29,9 @@
     <string name="common_settings_ai_spend_reset_confirm">Borrar</string>
     <string name="common_settings_ai_spend_reset_done">Historial de gasto de IA borrado.</string>
     <string name="common_settings_ai_spend_reset_failed">No se pudo borrar el historial de gasto de IA: %1$s</string>
+    <string name="common_settings_ai_unattended_limit">Límite de gasto de la IA automática (dólares estadounidenses cada 30 días)</string>
+    <string name="common_settings_ai_unattended_limit_help">La organización automática y la lectura de texto con el asistente se pausan cuando el gasto estimado de IA de esta biblioteca en los últimos 30 días alcanza esta cantidad de dólares (ahora %1$d; 0 significa sin límite). Todo cuenta, también lo que inicias tú, pero solo se pausa el trabajo automático. Las solicitudes sin precio conocido no cuentan. Rango permitido: %2$d–%3$d.</string>
+    <string name="common_settings_ai_unattended_paused">La IA automática está en pausa: esta biblioteca gastó %1$s en IA en los últimos 30 días y alcanzó el límite de %2$s. Los documentos nuevos se leen en este dispositivo y esperan a organizarse hasta que el gasto baje del límite o lo aumentes.</string>
     <string name="common_settings_max_run_requests">Límite de solicitudes por ejecución masiva</string>
     <string name="common_settings_max_run_requests_help">Una ejecución masiva de IA se detiene al llegar a este número de solicitudes al modelo (ahora %1$d) e informa de lo que quedó. Rango permitido: %2$d–%3$d.</string>
 

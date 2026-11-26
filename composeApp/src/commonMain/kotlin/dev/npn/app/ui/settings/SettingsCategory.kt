@@ -46,6 +46,7 @@ import no_papers_needed.composeapp.generated.resources.common_settings_ai_provid
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_spend
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_spend_reset
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_test
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_unattended_limit
 import no_papers_needed.composeapp.generated.resources.common_settings_api_key
 import no_papers_needed.composeapp.generated.resources.common_settings_auto_matching_rules
 import no_papers_needed.composeapp.generated.resources.common_settings_category_appearance
@@ -454,6 +455,7 @@ internal val SettingsCategories: List<SettingsCategory> =
                     Res.string.common_settings_max_run_requests,
                     Res.string.common_settings_ai_auto_on_ocr,
                     Res.string.common_settings_ai_ocr_auto,
+                    Res.string.common_settings_ai_unattended_limit,
                     Res.string.common_settings_ai_test,
                     Res.string.common_settings_ai_spend,
                     Res.string.common_settings_ai_spend_reset,

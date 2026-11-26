@@ -37,6 +37,7 @@ import dev.npn.app.ui.common.NumericField
 import dev.npn.app.ui.common.SettingsSection
 import dev.npn.app.ui.common.SwitchRow
 import dev.npn.app.ui.common.TypedTextField
+import dev.npn.app.ui.common.formatUsd
 import dev.npn.app.ui.common.resolve
 import dev.npn.core.ai.AiCheck
 import dev.npn.core.ai.AiCheckOutcome
@@ -44,9 +45,11 @@ import dev.npn.core.ai.AiCheckStatus
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiReasoningLevel
 import dev.npn.core.ai.AiRunCap
+import dev.npn.core.ai.AiSpendLimit
 import dev.npn.core.ai.AiSpendSummary
 import dev.npn.core.ai.AiTagging
 import dev.npn.core.ai.AiUsageTotals
+import dev.npn.core.ai.spendTotal
 import dev.npn.core.ocr.OcrEngineSelector
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_settings_advanced
@@ -81,6 +84,9 @@ import no_papers_needed.composeapp.generated.resources.common_settings_ai_test_a
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_test_help
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_test_ocr_disabled
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_test_running
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_unattended_limit
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_unattended_limit_help
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_unattended_paused
 import no_papers_needed.composeapp.generated.resources.common_settings_api_key
 import no_papers_needed.composeapp.generated.resources.common_settings_api_key_help
 import no_papers_needed.composeapp.generated.resources.common_settings_api_key_help_provider
@@ -219,6 +225,37 @@ private fun AiBehaviourSettings(
         checked = state.snapshot.aiOcrAuto,
         onCheckedChange = { on -> actions.edit { it.copy(aiOcrAuto = on) } },
     )
+    // The budget both switches above spend from, next to them rather than under Advanced: it is
+    // what keeps them from running up a bill nobody watches.
+    NumericField(
+        value = state.snapshot.aiUnattendedLimitUsd,
+        onValueChange = { value -> actions.edit { it.copy(aiUnattendedLimitUsd = value) } },
+        range = AiSpendLimit.RANGE,
+        label = stringResource(Res.string.common_settings_ai_unattended_limit),
+        supportingText =
+            stringResource(
+                Res.string.common_settings_ai_unattended_limit_help,
+                state.snapshot.aiUnattendedLimitUsd,
+                AiSpendLimit.RANGE.first,
+                AiSpendLimit.MAX_USD,
+            ),
+    )
+    if (state.aiUnattendedPaused) {
+        Text(
+            text =
+                stringResource(
+                    Res.string.common_settings_ai_unattended_paused,
+                    formatUsd(
+                        state.aiSpend.last30Days
+                            .spendTotal()
+                            .pricedUsd,
+                    ),
+                    formatUsd(state.snapshot.aiUnattendedLimitUsd.toDouble()),
+                ),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+    }
     // Tuning knobs most people never need: sensible defaults are picked for them, and the tag caps
     // stay available per run. Last in the section so the common path stays short.
     var advanced by rememberAdvancedExpanded()

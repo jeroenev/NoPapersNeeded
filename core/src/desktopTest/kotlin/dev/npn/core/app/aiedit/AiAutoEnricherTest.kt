@@ -47,6 +47,30 @@ class AiAutoEnricherTest {
             }
         }
 
+    /**
+     * The spending limit holds the drain back without losing the document: it is still queued, and
+     * enriched once the limit is raised.
+     */
+    @Test
+    fun theSpendingLimitPausesTheDrainAndRaisingItResumesIt() =
+        runTest {
+            withRig { rig ->
+                rig.ai.edit = edit()
+                rig.config = ACTIVE.copy(unattendedLimitUsd = 10)
+                rig.spentLast30Days = listOf(spent(6.0), spent(4.0))
+                rig.insert("d1")
+
+                rig.enricher.enqueue("d1") shouldBe true
+                rig.enricher.processNext() shouldBe false
+                rig.ai.suggestEditsCalls.shouldBeEmpty()
+                rig.row("d1").shouldNotBeNull().attempts shouldBe 0
+
+                rig.config = ACTIVE.copy(unattendedLimitUsd = 20)
+                rig.enricher.processNext() shouldBe true
+                rig.ai.suggestEditsCalls shouldContainExactly listOf("d1")
+            }
+        }
+
     @Test
     fun doesNotQueueWhenTheSettingIsOffOrTheEndpointIsUnconfigured() =
         runTest {

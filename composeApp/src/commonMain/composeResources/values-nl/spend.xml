@@ -29,6 +29,9 @@
     <string name="common_settings_ai_spend_reset_confirm">Wissen</string>
     <string name="common_settings_ai_spend_reset_done">AI-kostengeschiedenis gewist.</string>
     <string name="common_settings_ai_spend_reset_failed">Kon de AI-kostengeschiedenis niet wissen: %1$s</string>
+    <string name="common_settings_ai_unattended_limit">Kostenlimiet voor automatische AI (Amerikaanse dollar per 30 dagen)</string>
+    <string name="common_settings_ai_unattended_limit_help">Automatisch ordenen en tekst uitlezen met de assistent pauzeren zodra de geschatte AI-kosten van deze bibliotheek over de afgelopen 30 dagen zoveel dollar bereiken (nu %1$d; 0 betekent geen limiet). Alles telt mee, ook wat je zelf start, maar alleen het automatische werk pauzeert. Aanvragen zonder bekende prijs tellen niet mee. Toegestaan bereik: %2$d–%3$d.</string>
+    <string name="common_settings_ai_unattended_paused">Automatische AI is gepauzeerd: deze bibliotheek gaf de afgelopen 30 dagen %1$s uit aan AI en bereikte daarmee de limiet van %2$s. Nieuwe documenten worden op dit apparaat uitgelezen en wachten op ordenen tot de kosten onder de limiet zakken of je die verhoogt.</string>
     <string name="common_settings_max_run_requests">Aanvraaglimiet per bulkrun</string>
     <string name="common_settings_max_run_requests_help">Een AI-bulkrun stopt zodra hij zoveel modelaanvragen heeft gedaan (nu %1$d) en meldt wat er overbleef. Toegestaan bereik: %2$d–%3$d.</string>
 

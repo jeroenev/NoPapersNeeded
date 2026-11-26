@@ -117,6 +117,11 @@ data class AiConfig(
      */
     val ocrAuto: Boolean = false,
     /**
+     * Whole US dollars of this library's AI spend over the last 30 days at which [autoOnOcr] and
+     * [ocrAuto] pause ([AiSpendLimit]); 0 is no limit. Device-local like the switches it governs.
+     */
+    val unattendedLimitUsd: Int = AiSpendLimit.DEFAULT_USD,
+    /**
      * The language the app UI is running in, as a language tag (`nl`), or null when it could not be
      * determined. Not an endpoint knob: it is here because prompts need it (see [AiPromptContext])
      * and this is already the live, device-local projection of settings that every AI call reads.

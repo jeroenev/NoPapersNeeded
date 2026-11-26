@@ -6,6 +6,7 @@ import dev.npn.app.ui.diagnostics.ProblemReportActions
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiSelfTest
 import dev.npn.core.ai.AiSelfTestReport
+import dev.npn.core.ai.AiSpendLimit
 import dev.npn.core.ai.AiSpendSummary
 import dev.npn.core.app.LibraryVerificationProgress
 import dev.npn.core.app.LibraryVerificationReport
@@ -47,6 +48,16 @@ data class SettingsUiState(
 ) {
     /** Whether the endpoint is complete enough to call — what gates the self-test button. */
     val aiConfigured: Boolean get() = snapshot.toAiConfig().configured
+
+    /**
+     * Whether the spending limit holds back automatic AI this device has switched on: the same
+     * reading [dev.npn.core.ai.AiSpendLimit] gives the unattended paths, over the 30-day totals shown.
+     */
+    val aiUnattendedPaused: Boolean
+        get() =
+            aiConfigured &&
+                (snapshot.aiAutoOnOcr || snapshot.aiOcrAuto) &&
+                AiSpendLimit.reached(aiSpend.last30Days, snapshot.aiUnattendedLimitUsd)
 }
 
 /**

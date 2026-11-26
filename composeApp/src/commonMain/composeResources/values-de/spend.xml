@@ -29,6 +29,9 @@
     <string name="common_settings_ai_spend_reset_confirm">Löschen</string>
     <string name="common_settings_ai_spend_reset_done">KI-Ausgabenverlauf gelöscht.</string>
     <string name="common_settings_ai_spend_reset_failed">KI-Ausgabenverlauf konnte nicht gelöscht werden: %1$s</string>
+    <string name="common_settings_ai_unattended_limit">Ausgabengrenze für automatische KI (US-Dollar pro 30 Tage)</string>
+    <string name="common_settings_ai_unattended_limit_help">Automatisches Ordnen und Textlesen mit dem Assistenten pausieren, sobald die geschätzten KI-Ausgaben dieser Bibliothek in den letzten 30 Tagen so viele Dollar erreichen (derzeit %1$d; 0 bedeutet keine Grenze). Alles zählt mit, auch was du selbst startest, aber nur die automatische Arbeit pausiert. Anfragen ohne bekannten Preis zählen nicht. Erlaubter Bereich: %2$d–%3$d.</string>
+    <string name="common_settings_ai_unattended_paused">Automatische KI pausiert: Diese Bibliothek hat in den letzten 30 Tagen %1$s für KI ausgegeben und damit die Grenze von %2$s erreicht. Neue Dokumente werden auf diesem Gerät gelesen und warten aufs Ordnen, bis die Ausgaben unter die Grenze fallen oder du sie erhöhst.</string>
     <string name="common_settings_max_run_requests">Anfragegrenze pro Sammellauf</string>
     <string name="common_settings_max_run_requests_help">Ein KI-Sammellauf endet, sobald er so viele Modellanfragen gestellt hat (derzeit %1$d), und meldet, was übrig blieb. Erlaubter Bereich: %2$d–%3$d.</string>
 

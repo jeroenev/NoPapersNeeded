@@ -2,6 +2,8 @@ package dev.npn.core.app.aiedit
 
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiProvider
+import dev.npn.core.ai.AiUsageKind
+import dev.npn.core.ai.AiUsageTotals
 import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.db.AiEnrichQueueEntity
 import dev.npn.core.db.AiEnrichedEntity
@@ -49,6 +51,9 @@ internal class Rig(
     val clock = MutableClock(start = 5_000L)
     var config: AiConfig = ACTIVE
 
+    /** This library's ledger over the last 30 days, as the spending limit reads it. */
+    var spentLast30Days: List<AiUsageTotals> = emptyList()
+
     /** How often the enricher asked for its drain; the session's drainer would run once per kick. */
     var kicks = 0
 
@@ -75,7 +80,7 @@ internal class Rig(
             ai = ai,
             meta = meta,
             fieldRegistry = fieldRegistry,
-            policy = UnattendedAiPolicy { config },
+            policy = UnattendedAiPolicy(spentLast30Days = { spentLast30Days }) { config },
             clock = clock,
             health = health,
             canWrite = { canWrite() },
@@ -140,3 +145,17 @@ internal class Rig(
 internal suspend fun TestScope.withRig(block: suspend (Rig) -> Unit) {
     Rig(TempIndexDb("npn-enrich-db"), backgroundScope).use { block(it) }
 }
+
+/** One ledger line of [usd] spent on automatic enrichment, as the spending limit reads it. */
+internal fun spent(usd: Double) =
+    AiUsageTotals(
+        provider = "CUSTOM",
+        model = "test-model",
+        kind = AiUsageKind.ENRICHMENT,
+        requests = 1,
+        inputTokens = 0,
+        outputTokens = 0,
+        estimatedCostUsd = usd,
+        unpricedRequests = 0,
+        estimatedRequests = 0,
+    )

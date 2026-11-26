@@ -114,7 +114,11 @@ internal class SessionGraph(
         ).also { lifetime.releaseOnClose(it::close) }
 
     /** What this device may spend on the endpoint unattended, for enrichment and OCR alike. */
-    private val policy = UnattendedAiPolicy(deps.settings.aiConfig)
+    private val policy =
+        UnattendedAiPolicy(
+            spentLast30Days = { aiLedger.totals(deps.clock.nowMillis() - AI_SPEND_WINDOW_MS) },
+            readConfig = deps.settings.aiConfig,
+        )
 
     /**
      * The one cooldown of [ai]'s endpoint, shared by every queue that calls it (automatic enrichment

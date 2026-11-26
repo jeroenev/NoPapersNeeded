@@ -4,6 +4,7 @@ import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiReasoningLevel
 import dev.npn.core.ai.AiRunCap
+import dev.npn.core.ai.AiSpendLimit
 import dev.npn.core.ai.AiTagging
 import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.SortField
@@ -66,6 +67,8 @@ data class SettingsSnapshot(
     val aiMaxRunRequests: Int = AiRunCap.DEFAULT,
     val aiAutoOnOcr: Boolean = false,
     val aiOcrAuto: Boolean = false,
+    /** Whole US dollars over 30 days that pause automatic AI; 0 is no limit ([dev.npn.core.ai.AiSpendLimit]). */
+    val aiUnattendedLimitUsd: Int = AiSpendLimit.DEFAULT_USD,
     /** Look up the latest published release once per start and offer it when newer. */
     val updateCheckEnabled: Boolean = true,
     /** A release version the user dismissed the update notice for; it is not offered again. */
@@ -117,6 +120,7 @@ fun SettingsSnapshot.toAiConfig(systemLanguage: String? = null): AiConfig =
         maxRunRequests = aiMaxRunRequests,
         autoOnOcr = aiAutoOnOcr,
         ocrAuto = aiOcrAuto,
+        unattendedLimitUsd = aiUnattendedLimitUsd,
         appLanguage = appLanguage ?: systemLanguage,
     )
 
@@ -252,6 +256,7 @@ object SettingsCodec {
                     LockAttempts()
                 },
             aiMaxRunRequests = snapshot.aiMaxRunRequests.coerceIn(AiRunCap.RANGE),
+            aiUnattendedLimitUsd = snapshot.aiUnattendedLimitUsd.coerceIn(AiSpendLimit.RANGE),
         )
     }
 
@@ -299,12 +304,20 @@ object SettingsCodec {
                     enumOr(reader.string(SettingsKeys.AI_REASONING_ASSISTANT), AiReasoningLevel.DEFAULT),
                 aiReasoningEdit =
                     enumOr(reader.string(SettingsKeys.AI_REASONING_EDIT), AiReasoningLevel.LOW),
-                aiMaxTagsPerDoc = reader.int(SettingsKeys.AI_MAX_TAGS_PER_DOC) ?: DEFAULTS.aiMaxTagsPerDoc,
-                aiMaxNewTagsPerDoc = reader.int(SettingsKeys.AI_MAX_NEW_TAGS_PER_DOC) ?: DEFAULTS.aiMaxNewTagsPerDoc,
-                aiMaxRunRequests = reader.int(SettingsKeys.AI_MAX_RUN_REQUESTS) ?: DEFAULTS.aiMaxRunRequests,
+                aiMaxTagsPerDoc = reader.number(SettingsKeys.AI_MAX_TAGS_PER_DOC, DEFAULTS.aiMaxTagsPerDoc),
+                aiMaxNewTagsPerDoc = reader.number(SettingsKeys.AI_MAX_NEW_TAGS_PER_DOC, DEFAULTS.aiMaxNewTagsPerDoc),
+                aiMaxRunRequests = reader.number(SettingsKeys.AI_MAX_RUN_REQUESTS, DEFAULTS.aiMaxRunRequests),
                 aiAutoOnOcr = reader.boolean(SettingsKeys.AI_AUTO_ON_OCR) ?: DEFAULTS.aiAutoOnOcr,
                 aiOcrAuto = reader.boolean(SettingsKeys.AI_OCR_AUTO) ?: DEFAULTS.aiOcrAuto,
-                updateCheckEnabled = reader.boolean(SettingsKeys.UPDATE_CHECK_ENABLED) ?: DEFAULTS.updateCheckEnabled,
+                aiUnattendedLimitUsd =
+                    reader.number(
+                        SettingsKeys.AI_UNATTENDED_LIMIT_USD,
+                        DEFAULTS.aiUnattendedLimitUsd,
+                    ),
+                updateCheckEnabled =
+                    reader.boolean(
+                        SettingsKeys.UPDATE_CHECK_ENABLED,
+                    ) ?: DEFAULTS.updateCheckEnabled,
                 dismissedUpdateVersion = reader.string(SettingsKeys.DISMISSED_UPDATE_VERSION),
                 lastSeenVersion = reader.string(SettingsKeys.LAST_SEEN_VERSION),
                 gettingStartedDismissed =
@@ -366,6 +379,7 @@ object SettingsCodec {
         writer.putInt(SettingsKeys.AI_MAX_RUN_REQUESTS, s.aiMaxRunRequests)
         writer.putBoolean(SettingsKeys.AI_AUTO_ON_OCR, s.aiAutoOnOcr)
         writer.putBoolean(SettingsKeys.AI_OCR_AUTO, s.aiOcrAuto)
+        writer.putInt(SettingsKeys.AI_UNATTENDED_LIMIT_USD, s.aiUnattendedLimitUsd)
         writer.putBoolean(SettingsKeys.UPDATE_CHECK_ENABLED, s.updateCheckEnabled)
         writer.putOptional(SettingsKeys.DISMISSED_UPDATE_VERSION, s.dismissedUpdateVersion)
         writer.putOptional(SettingsKeys.LAST_SEEN_VERSION, s.lastSeenVersion)
@@ -400,6 +414,12 @@ object SettingsCodec {
      */
     private fun legacyOcrLanguage(reader: Reader): String? =
         reader.string(SettingsKeys.LEGACY_OCR_LANGUAGE)?.takeUnless { it == OcrLanguages.ENGLISH }
+
+    /** A stored number, or [default] when absent. */
+    private fun Reader.number(
+        key: String,
+        default: Int,
+    ): Int = int(key) ?: default
 
     /** A stored flag, or [default] when absent. */
     private fun Reader.flag(
@@ -471,6 +491,7 @@ internal object SettingsKeys {
     const val AI_MAX_RUN_REQUESTS = "aiMaxRunRequests"
     const val AI_AUTO_ON_OCR = "aiAutoOnOcr"
     const val AI_OCR_AUTO = "aiOcrAuto"
+    const val AI_UNATTENDED_LIMIT_USD = "aiUnattendedLimitUsd"
     const val UPDATE_CHECK_ENABLED = "updateCheckEnabled"
     const val DISMISSED_UPDATE_VERSION = "dismissedUpdateVersion"
     const val LAST_SEEN_VERSION = "lastSeenVersion"

@@ -29,6 +29,9 @@
     <string name="common_settings_ai_spend_reset_confirm">Reset</string>
     <string name="common_settings_ai_spend_reset_done">AI spend history cleared.</string>
     <string name="common_settings_ai_spend_reset_failed">Could not clear AI spend history: %1$s</string>
+    <string name="common_settings_ai_unattended_limit">Spending limit for automatic AI (US dollars per 30 days)</string>
+    <string name="common_settings_ai_unattended_limit_help">Auto-organize and reading text with the assistant pause once this library's estimated AI spend over the last 30 days reaches this many dollars (now %1$d; 0 means no limit). Everything counts towards it, including what you start yourself, but only the automatic work pauses. Requests without a known price do not count. Allowed range: %2$d–%3$d.</string>
+    <string name="common_settings_ai_unattended_paused">Automatic AI is paused: this library spent %1$s on AI in the last 30 days, which reached the limit of %2$s. New documents are read on this device and wait to be organized until the spend drops below the limit or you raise it.</string>
     <string name="common_settings_max_run_requests">Request cap per bulk run</string>
     <string name="common_settings_max_run_requests_help">A bulk AI run stops once it has made this many model requests (now %1$d) and reports what was left. Allowed range: %2$d–%3$d.</string>
 
