@@ -7,6 +7,7 @@ import dev.npn.app.di.LibraryUnavailableException
 import dev.npn.app.di.OpenFailureReason
 import dev.npn.app.platform.cloudLibrariesDir
 import dev.npn.app.platform.createLibraryFolder
+import dev.npn.app.platform.recentLogTail
 import dev.npn.app.ui.common.ImportRequest
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiMessage
@@ -16,6 +17,10 @@ import dev.npn.app.ui.common.clearThumbCache
 import dev.npn.app.ui.common.importBatch
 import dev.npn.app.ui.common.offerSearchTip
 import dev.npn.app.ui.common.uiText
+import dev.npn.app.ui.diagnostics.ProblemReportActions
+import dev.npn.app.ui.diagnostics.ProblemReportState
+import dev.npn.app.ui.diagnostics.ProblemReporter
+import dev.npn.app.ui.diagnostics.buildProblemReport
 import dev.npn.app.ui.nav.QueueStatus
 import dev.npn.app.ui.nav.queueStatus
 import dev.npn.app.ui.onboarding.FirstDocumentText
@@ -116,7 +121,12 @@ class AppViewModel(
     private val cloudLibraries: () -> String = ::cloudLibrariesDir,
     newRemoteName: (type: String) -> String = ::newCloudRemoteName,
     oauthApps: CloudOAuthApps = CloudOAuthApps.BUILT_IN,
-) : MessagesViewModel() {
+    /** Where a problem report's counts and log scrub run; a test passes its dispatcher. */
+    compute: CoroutineDispatcher = Dispatchers.Default,
+    /** The recent log tail; a test avoids touching the real log file. */
+    readLog: suspend (Long) -> String = ::recentLogTail,
+) : MessagesViewModel(),
+    ProblemReportActions {
     /** Where the shell stands, apart from what [env] says about the session. */
     private sealed interface Phase {
         data object Restoring : Phase
@@ -131,6 +141,23 @@ class AppViewModel(
     }
 
     private val phase = MutableStateFlow<Phase>(Phase.Restoring)
+
+    private val problemReporter =
+        ProblemReporter(viewModelScope, compute, ::message) {
+            buildProblemReport(env.settings.settings.value, env.session.value, readLog, env.log)
+        }
+
+    /**
+     * "Report a problem" from where a library failed to open, which is where it is needed most and
+     * where Settings cannot be reached. The open library's counts come along when one is open.
+     */
+    val problemReport: StateFlow<ProblemReportState> = problemReporter.state
+
+    override fun reportProblem() = problemReporter.reportProblem()
+
+    override fun problemReportHandled() = problemReporter.problemReportHandled()
+
+    override fun problemReportFailed(failure: Throwable) = problemReporter.problemReportFailed(failure)
 
     val state: StateFlow<AppState> =
         combine(phase, env.session, env.opening) { phase, session, opening ->

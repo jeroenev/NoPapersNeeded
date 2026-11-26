@@ -12,4 +12,7 @@
     <string name="common_settings_copy_path">Copiar caminho</string>
     <string name="common_settings_path_copied">Copiado</string>
     <string name="common_settings_open_issue">Abrir issue</string>
+    <string name="common_settings_diagnostics_preview_title">Verifique o diagnóstico</string>
+    <string name="common_settings_diagnostics_preview_help">Isto é tudo o que o arquivo contém. Leia antes de compartilhar: nada sai do dispositivo até que você o faça.</string>
+    <string name="common_settings_diagnostics_share">Compartilhar</string>
 </resources>

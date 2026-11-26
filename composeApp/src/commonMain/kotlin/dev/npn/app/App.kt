@@ -52,6 +52,7 @@ import dev.npn.app.ui.common.testTagsAsResourceIds
 import dev.npn.app.ui.detail.BrowseContext
 import dev.npn.app.ui.detail.DocumentDraftHost
 import dev.npn.app.ui.detail.DocumentDrafts
+import dev.npn.app.ui.diagnostics.ProblemReportHandler
 import dev.npn.app.ui.library.DropOverlay
 import dev.npn.app.ui.lock.LockScreen
 import dev.npn.app.ui.lock.LockViewModel
@@ -83,6 +84,7 @@ import no_papers_needed.composeapp.generated.resources.common_app_name
 import no_papers_needed.composeapp.generated.resources.common_could_not_open_library
 import no_papers_needed.composeapp.generated.resources.common_ok
 import no_papers_needed.composeapp.generated.resources.common_opening_library
+import no_papers_needed.composeapp.generated.resources.common_settings_report_problem
 import org.jetbrains.compose.resources.stringResource
 import kotlin.random.Random
 
@@ -322,6 +324,7 @@ private fun AppRoot(
                             onUseSafChange = vm::setUseSafStorage,
                             onRetry = vm::retry,
                             onOpen = vm::open,
+                            onReportProblem = vm::reportProblem,
                         )
                     }
 
@@ -378,9 +381,14 @@ private fun AppRoot(
                             }
                         }
                         // A switch to another library that failed lands back in this one; say why.
-                        current.failure?.let { OpenFailedDialog(it, onDismiss = vm::dismissFailure) }
+                        current.failure?.let {
+                            OpenFailedDialog(it, onDismiss = vm::dismissFailure, onReportProblem = vm::reportProblem)
+                        }
                     }
                 }
+                // "Report a problem" from a library that failed to open: the bundle, then its hand-off.
+                val problemReport by vm.problemReport.collectAsStateWithLifecycle()
+                ProblemReportHandler(problemReport, vm)
                 // A version change shows the bundled notes once, apart from the update banner.
                 if (showWhatsNew && state is AppState.Open) {
                     WhatsNewDialog(onDismiss = whatsNew::dismiss)
@@ -464,6 +472,7 @@ private fun AppSurface(
 private fun OpenFailedDialog(
     failure: OpenFailure,
     onDismiss: () -> Unit,
+    onReportProblem: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -471,6 +480,11 @@ private fun OpenFailedDialog(
         text = { OpenFailureMessage(failure) },
         confirmButton = {
             TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_ok)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onReportProblem) {
+                Text(stringResource(Res.string.common_settings_report_problem))
+            }
         },
     )
 }

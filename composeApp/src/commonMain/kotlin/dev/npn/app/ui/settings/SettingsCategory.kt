@@ -19,6 +19,7 @@ import dev.npn.app.platform.ocrHasLanguageSetting
 import dev.npn.app.platform.supportsEmailImport
 import dev.npn.app.platform.supportsSafStorage
 import dev.npn.app.ui.automation.AutomationSettingsPane
+import dev.npn.app.ui.diagnostics.ProblemReportState
 import dev.npn.core.mail.MailState
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode

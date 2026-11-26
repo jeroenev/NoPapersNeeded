@@ -105,8 +105,6 @@ internal open class NoSettingsPaneActions : SettingsPaneActions {
 
     override fun problemReportFailed(failure: Throwable) = Unit
 
-    override fun markWhatsNewSeen() = Unit
-
     override fun syncNow() = Unit
 
     override fun verifyLibrary() = Unit

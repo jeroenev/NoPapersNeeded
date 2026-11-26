@@ -4,6 +4,7 @@ import dev.npn.app.di.LibraryUnavailableException
 import dev.npn.app.di.OpenFailureReason
 import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.uiText
+import dev.npn.app.ui.diagnostics.ProblemReportState
 import dev.npn.app.ui.nav.QueueStatus
 import dev.npn.app.ui.onboarding.FirstDocumentText
 import dev.npn.app.ui.settings.CloudOAuthApps
@@ -20,6 +21,8 @@ import dev.npn.core.sync.RcloneProvider
 import dev.npn.core.sync.SetupStep
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.currentCoroutineContext
@@ -27,6 +30,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
@@ -51,6 +55,9 @@ class AppViewModelTest : MainDispatcherTest() {
     /** What creating a folder returns; null is a folder that could not be created. */
     private var createdLocation: (String, String) -> String? = { parent, name -> "$parent/$name" }
 
+    /** The app log a problem report reads. */
+    private var logTail = ""
+
     private fun TestScope.model(env: FakeAppEnvironment): AppViewModel {
         val vm =
             AppViewModel(
@@ -63,6 +70,8 @@ class AppViewModelTest : MainDispatcherTest() {
                 cloudLibraries = { CLOUD_LIBRARIES },
                 newRemoteName = { type -> "$type-1" },
                 oauthApps = CloudOAuthApps.NONE,
+                compute = dispatcher,
+                readLog = { logTail },
             )
         collecting(vm.state)
         runCurrent()
@@ -91,6 +100,31 @@ class AppViewModelTest : MainDispatcherTest() {
         vm.cloudSetup.submit()
         runCurrent()
     }
+
+    /**
+     * Where no library opens, Settings is out of reach, so the failure offers "Report a problem"
+     * itself: the bundle carries the device's side and the log that says why, and no library.
+     */
+    @Test
+    fun aProblemCanBeReportedWithNoLibraryOpen() =
+        runTest(dispatcher) {
+            logTail = "2026-11-22T10:00:00Z WARN Opening the library failed"
+            val vm = model(env())
+            collecting(vm.problemReport)
+            vm.state.value.shouldBeInstanceOf<AppState.NoLibrary>()
+
+            vm.reportProblem()
+            advanceUntilIdle()
+
+            val ready = vm.problemReport.value.shouldBeInstanceOf<ProblemReportState.Ready>()
+            ready.text shouldContain "Version: ${BuildInfo.VERSION}"
+            ready.text shouldContain "2026-11-22T10:00:00Z WARN Opening the library failed"
+            ready.text shouldNotContain "## Library"
+            ready.text shouldNotContain "## Cloud sync"
+
+            vm.problemReportHandled()
+            vm.problemReport.value shouldBe ProblemReportState.Idle
+        }
 
     /**
      * Choosing a cloud folder in the onboarding is all the user does: the app makes the working copy

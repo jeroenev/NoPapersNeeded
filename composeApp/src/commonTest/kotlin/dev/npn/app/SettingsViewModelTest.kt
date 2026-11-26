@@ -3,8 +3,8 @@ package dev.npn.app
 import androidx.lifecycle.ViewModelStore
 import dev.npn.app.platform.FolderPick
 import dev.npn.app.ui.common.uiText
+import dev.npn.app.ui.diagnostics.ProblemReportState
 import dev.npn.app.ui.settings.FieldDialog
-import dev.npn.app.ui.settings.ProblemReportState
 import dev.npn.app.ui.settings.ReviewMigration
 import dev.npn.app.ui.settings.SettingsCategoryId
 import dev.npn.core.ai.AiProvider
@@ -18,9 +18,11 @@ import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.rules.AutoMatchRule
+import dev.npn.core.util.NpnLog
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -102,6 +104,31 @@ class SettingsViewModelTest : MainDispatcherTest() {
             model.problemReportHandled()
             advanceUntilIdle()
             model.paneState.value.problemReport shouldBe ProblemReportState.Idle
+        }
+
+    /**
+     * A broken library is what a report is often for: counting it fails, and the bundle still
+     * comes, without the library's section and with the log that says why.
+     */
+    @Test
+    fun aLibraryThatCannotBeCountedStillGivesABundle() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            session.maintenance.failDiagnostics = { throw IllegalStateException("journal unreadable") }
+            val logged = mutableListOf<String>()
+            session.log = NpnLog { _, message, _ -> logged += message }
+            val model = settingsVm(session = session, compute = dispatcher)
+            collecting(model.paneState)
+            advanceUntilIdle()
+
+            model.reportProblem()
+            advanceUntilIdle()
+
+            val ready = model.paneState.value.problemReport as ProblemReportState.Ready
+            ready.text shouldContain "Version: ${BuildInfo.VERSION}"
+            ready.text shouldNotContain "## Library"
+            ready.text shouldContain "## Cloud sync"
+            logged shouldContainExactly listOf("Collecting the library counts for a problem report failed")
         }
 
     @Test

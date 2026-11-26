@@ -12,4 +12,7 @@
     <string name="common_settings_copy_path">Pad kopiëren</string>
     <string name="common_settings_path_copied">Gekopieerd</string>
     <string name="common_settings_open_issue">Issue openen</string>
+    <string name="common_settings_diagnostics_preview_title">Diagnose controleren</string>
+    <string name="common_settings_diagnostics_preview_help">Dit is alles wat het bestand bevat. Lees het voordat je het deelt: niets verlaat het apparaat tot je dat doet.</string>
+    <string name="common_settings_diagnostics_share">Delen</string>
 </resources>

@@ -13,4 +13,7 @@
     <string name="common_settings_copy_path">Copy path</string>
     <string name="common_settings_path_copied">Copied</string>
     <string name="common_settings_open_issue">Open issue</string>
+    <string name="common_settings_diagnostics_preview_title">Check the diagnostics</string>
+    <string name="common_settings_diagnostics_preview_help">This is everything the file holds. Read it before you share it: nothing leaves the device until you do.</string>
+    <string name="common_settings_diagnostics_share">Share</string>
 </resources>

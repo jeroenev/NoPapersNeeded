@@ -7,6 +7,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -16,12 +17,14 @@ import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_open_library_title
 import no_papers_needed.composeapp.generated.resources.common_pick_folder_again
 import no_papers_needed.composeapp.generated.resources.common_retry
+import no_papers_needed.composeapp.generated.resources.common_settings_report_problem
 import org.jetbrains.compose.resources.stringResource
 
 /**
  * The saved library could not be opened. Retry is always on offer (a drive plugged back in, a
  * grant given back); so is choosing the folder again, through the same [LibraryLocationChooser]
- * onboarding uses, including the all-files grant when that is what went missing.
+ * onboarding uses, including the all-files grant when that is what went missing. Settings is out
+ * of reach here, so "Report a problem" is offered on the screen itself.
  */
 @Composable
 fun RestoreFailedScreen(
@@ -30,6 +33,7 @@ fun RestoreFailedScreen(
     onUseSafChange: (Boolean) -> Unit,
     onRetry: () -> Unit,
     onOpen: (location: String) -> Unit,
+    onReportProblem: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     CenteredPane(modifier) {
@@ -51,5 +55,6 @@ fun RestoreFailedScreen(
                 Text(stringResource(Res.string.common_pick_folder_again))
             }
         }
+        TextButton(onClick = onReportProblem) { Text(stringResource(Res.string.common_settings_report_problem)) }
     }
 }
