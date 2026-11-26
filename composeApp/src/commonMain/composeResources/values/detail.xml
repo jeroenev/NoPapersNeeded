@@ -173,7 +173,6 @@
     <string name="detail_rename_invalid">Could not rename the file: the library cannot keep a document under that name.</string>
     <string name="detail_ai_ocr_failed">Could not read the text with the assistant: %1$s</string>
     <string name="detail_ocr_engine_failed">Could not change the text source: %1$s</string>
-    <string name="detail_tag_removed">Removed tag “%1$s”.</string>
     <string name="detail_saved_changes">Saved changes to “%1$s”.</string>
     <string name="detail_undo_save_failed">Could not undo the changes: %1$s</string>
     <string name="detail_draft_invalid">A value does not fit its field, so these changes are not saved yet.</string>

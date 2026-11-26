@@ -83,14 +83,23 @@ data class AiPanelState(
  * searchable OCR version, and the history it shows. [DocDetailViewModel] implements it.
  */
 interface DocumentWrites : AiSuggestionActions {
-    fun addTag(tag: String)
+    /** Tag the document; [onLanded] runs once the write landed (on the main thread), not if it failed. */
+    fun addTag(
+        tag: String,
+        onLanded: () -> Unit = {},
+    )
 
-    fun removeTag(tag: String)
+    /** Untag the document; [onLanded] as [addTag]'s. */
+    fun removeTag(
+        tag: String,
+        onLanded: () -> Unit = {},
+    )
 
-    /** Create a brand-new tag on the document, with a colour chosen inline. */
+    /** Create a brand-new tag on the document, with a colour chosen inline; [onLanded] as [addTag]'s. */
     fun addTagWithStyle(
         tag: String,
         color: String?,
+        onLanded: () -> Unit = {},
     )
 
     /** Register [def] and, when [value] is non-blank, set it on the document in one go. */

@@ -96,7 +96,6 @@ import no_papers_needed.composeapp.generated.resources.detail_split_failed_inval
 import no_papers_needed.composeapp.generated.resources.detail_split_failed_not_completed
 import no_papers_needed.composeapp.generated.resources.detail_split_failed_unavailable
 import no_papers_needed.composeapp.generated.resources.detail_split_failed_unreadable
-import no_papers_needed.composeapp.generated.resources.detail_tag_removed
 import no_papers_needed.composeapp.generated.resources.detail_trash_failed
 import org.jetbrains.compose.resources.StringResource
 
@@ -452,32 +451,26 @@ class DocDetailViewModel private constructor(
             onFailure = { error -> HistoryUiState.Error(error.reason()) },
         )
 
-    override fun addTag(tag: String) =
-        launchMetadata(Res.string.detail_add_tag_failed) { meta.addTag(listOf(docId), tag) }
+    override fun addTag(
+        tag: String,
+        onLanded: () -> Unit,
+    ) = launchMetadata(Res.string.detail_add_tag_failed, onLanded) { meta.addTag(listOf(docId), tag) }
 
     /** Create a brand-new tag on this doc, optionally with a color chosen inline in the editor. */
     override fun addTagWithStyle(
         tag: String,
         color: String?,
-    ) = launchMetadata(Res.string.detail_create_tag_failed) {
+        onLanded: () -> Unit,
+    ) = launchMetadata(Res.string.detail_create_tag_failed, onLanded) {
         meta.addTag(listOf(docId), tag)
         if (color != null) tagAdmin.setTagStyle(tag, color, null)
     }
 
-    override fun removeTag(tag: String) {
-        viewModelScope.launch {
-            val removed =
-                reporting(Res.string.detail_remove_tag_failed) {
-                    metadataMutex.withLock { meta.removeTag(listOf(docId), tag) }
-                }
-            if (removed) {
-                message(
-                    uiText(Res.string.detail_tag_removed, tag),
-                    undoAction { addTag(tag) },
-                )
-            }
-        }
-    }
+    // Its Undo is the editor's, with the document's other changes (see DraftedActions).
+    override fun removeTag(
+        tag: String,
+        onLanded: () -> Unit,
+    ) = launchMetadata(Res.string.detail_remove_tag_failed, onLanded) { meta.removeTag(listOf(docId), tag) }
 
     /**
      * Register [def] and, when [value] is non-blank, set it on this document. The definition goes
@@ -493,8 +486,13 @@ class DocDetailViewModel private constructor(
 
     private fun launchMetadata(
         failed: StringResource,
+        onLanded: () -> Unit = {},
         block: suspend () -> Unit,
-    ) = launchReporting(failed) { metadataMutex.withLock { block() } }
+    ) {
+        viewModelScope.launch {
+            if (reporting(failed) { metadataMutex.withLock { block() } }) onLanded()
+        }
+    }
 
     /**
      * On success the document has [DetailUiState.left], and [notices] say so with an Undo that takes

@@ -168,7 +168,6 @@
     <string name="detail_rename_invalid">No se pudo renombrar el archivo: la biblioteca no puede guardar un documento con ese nombre.</string>
     <string name="detail_ai_ocr_failed">No se pudo leer el texto con el asistente: %1$s</string>
     <string name="detail_ocr_engine_failed">No se pudo cambiar el origen del texto: %1$s</string>
-    <string name="detail_tag_removed">Etiqueta «%1$s» eliminada.</string>
     <string name="detail_saved_changes">Cambios guardados en «%1$s».</string>
     <string name="detail_undo_save_failed">No se pudieron deshacer los cambios: %1$s</string>
     <string name="detail_draft_invalid">Un valor no encaja en su campo, así que estos cambios aún no se han guardado.</string>

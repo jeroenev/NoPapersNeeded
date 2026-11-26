@@ -44,8 +44,6 @@ import no_papers_needed.composeapp.generated.resources.detail_ocr_details_failed
 import no_papers_needed.composeapp.generated.resources.detail_ocr_engine_failed
 import no_papers_needed.composeapp.generated.resources.detail_suggest_details_failed
 import no_papers_needed.composeapp.generated.resources.detail_suggest_tags_failed
-import no_papers_needed.composeapp.generated.resources.detail_tag_removed
-import no_papers_needed.composeapp.generated.resources.library_undo
 import kotlin.test.Test
 
 class DocDetailViewModelTest : MainDispatcherTest() {
@@ -105,26 +103,32 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             session.meta.removedTags shouldContainExactly listOf(listOf("doc-1") to "draft")
         }
 
-    /** Removing a tag is reversible in place: the message carries Undo, which puts it back. */
+    /**
+     * A tag write says when it landed, so the editor can offer to undo it with the rest of its
+     * changes; one that failed says nothing, and the viewmodel offers no Undo of its own.
+     */
     @Test
-    fun removingATagOffersUndoThatAddsItBack() =
+    fun aTagWriteReportsWhenItLanded() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val model = liveDocDetailVm(session = session)
             val messages = collecting(model.messages)
             advanceUntilIdle()
+            val landed = mutableListOf<String>()
 
-            model.removeTag("draft")
+            model.addTag("finance") { landed += "added" }
+            model.removeTag("draft") { landed += "removed" }
+            model.addTagWithStyle("new", "#ff0000") { landed += "created" }
             advanceUntilIdle()
 
+            landed shouldContainExactly listOf("added", "removed", "created")
             session.meta.removedTags shouldContainExactly listOf(listOf("doc-1") to "draft")
-            val undo = messages.single { it.action != null }.action!!
-            messages.single { it.action != null }.text shouldBe uiText(Res.string.detail_tag_removed, "draft")
-            undo.label shouldBe uiText(Res.string.library_undo)
+            messages.filter { it.action != null }.shouldBeEmpty()
 
-            undo.onPerform()
+            session.meta.failBatchOps = { error("journal write failed") }
+            model.addTag("other") { landed += "failed" }
             advanceUntilIdle()
-            session.meta.addedTags shouldContainExactly listOf(listOf("doc-1") to "draft")
+            landed shouldContainExactly listOf("added", "removed", "created")
         }
 
     @Test

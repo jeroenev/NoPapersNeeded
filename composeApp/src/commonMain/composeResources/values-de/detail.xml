@@ -168,7 +168,6 @@
     <string name="detail_rename_invalid">Die Datei konnte nicht umbenannt werden: Unter diesem Namen kann die Bibliothek kein Dokument ablegen.</string>
     <string name="detail_ai_ocr_failed">Der Text konnte nicht mit dem Assistenten gelesen werden: %1$s</string>
     <string name="detail_ocr_engine_failed">Die Textquelle konnte nicht geändert werden: %1$s</string>
-    <string name="detail_tag_removed">Tag „%1$s“ entfernt.</string>
     <string name="detail_saved_changes">Änderungen an „%1$s“ gespeichert.</string>
     <string name="detail_undo_save_failed">Die Änderungen konnten nicht rückgängig gemacht werden: %1$s</string>
     <string name="detail_draft_invalid">Ein Wert passt nicht zu seinem Feld, daher sind diese Änderungen noch nicht gespeichert.</string>

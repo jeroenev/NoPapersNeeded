@@ -47,16 +47,34 @@ private fun isWritable(
 
 /**
  * Landed saves the user can take back: the [prior] value of each field they wrote (null where the
- * field was empty), and the document's [title] as it reads once saved. [notice] tells one inline
- * notice from the next, so an older notice's timer does not take down a newer one.
+ * field was empty), the reviewed marker as it was before a save changed it ([priorReviewed], null
+ * where none did), the tags [added] and [removed] since, and the document's [title] as it reads once
+ * saved. [notice] tells one inline notice from the next, so an older notice's timer does not take
+ * down a newer one.
  */
 internal data class SavedChanges(
     val title: String,
-    val prior: Map<String, String?>,
+    val prior: Map<String, String?> = emptyMap(),
+    val priorReviewed: Boolean? = null,
+    val added: Set<String> = emptySet(),
+    val removed: Set<String> = emptySet(),
     val notice: Long = 0,
 ) {
-    /** These changes after [earlier] ones still on offer: undoing both puts back what was there before either. */
-    fun after(earlier: SavedChanges?): SavedChanges = if (earlier == null) this else copy(prior = prior + earlier.prior)
+    /**
+     * These changes after [earlier] ones still on offer: undoing both puts back what was there before
+     * either. A tag added and removed again (or the other way round) nets out to no change.
+     */
+    fun after(earlier: SavedChanges?): SavedChanges =
+        if (earlier == null) {
+            this
+        } else {
+            copy(
+                prior = prior + earlier.prior,
+                priorReviewed = earlier.priorReviewed ?: priorReviewed,
+                added = (earlier.added - removed) + (added - earlier.removed),
+                removed = (earlier.removed - added) + (removed - earlier.added),
+            )
+        }
 }
 
 @Serializable
@@ -210,13 +228,19 @@ internal class DocumentDrafts(
         val persisted: Map<String, String>,
         val title: String,
         val reviewed: Boolean? = null,
+        val wasReviewed: Boolean? = null,
         val onSaved: () -> Unit = {},
     ) {
         fun after(earlier: CommitRequest?): CommitRequest =
             if (earlier == null) {
                 this
             } else {
-                CommitRequest(persisted, title, reviewed ?: earlier.reviewed) {
+                CommitRequest(
+                    persisted,
+                    title,
+                    reviewed ?: earlier.reviewed,
+                    if (reviewed != null) wasReviewed else earlier.wasReviewed,
+                ) {
                     earlier.onSaved()
                     onSaved()
                 }
@@ -428,19 +452,21 @@ internal class DocumentDrafts(
      * and a draft its fields refuse stays as it is. Asked for while a write to the document runs, it
      * waits for that write and then saves what was typed meanwhile.
      *
-     * [persisted] is what the library holds now, which Undo puts back; [title] names the document in
-     * the notice. [reviewed] and [onSaved] are [save]'s.
+     * [persisted] is what the library holds now, which Undo puts back, as it does the reviewed marker
+     * from [wasReviewed] when [reviewed] changes it; [title] names the document in the notice.
+     * [reviewed] and [onSaved] are [save]'s.
      */
     fun commit(
         docId: String,
         persisted: Map<String, String>,
         title: String,
         reviewed: Boolean? = null,
+        wasReviewed: Boolean? = null,
         onSaved: () -> Unit = {},
     ) {
         val draft = state[docId] ?: DocumentDraft()
         if (draft.saving) {
-            queue(docId, CommitRequest(persisted, title, reviewed, onSaved))
+            queue(docId, CommitRequest(persisted, title, reviewed, wasReviewed, onSaved))
             return
         }
         if (!draft.writable) return
@@ -449,7 +475,13 @@ internal class DocumentDrafts(
             onSaved()
             return
         }
-        save(docId, reviewed, SavedChanges(title, draft.fields.keys.associateWith { persisted[it] }), onSaved)
+        val priorReviewed = wasReviewed?.takeIf { reviewed != null && it != reviewed }
+        save(
+            docId,
+            reviewed,
+            SavedChanges(title, draft.fields.keys.associateWith { persisted[it] }, priorReviewed),
+            onSaved,
+        )
     }
 
     /**
@@ -497,12 +529,41 @@ internal class DocumentDrafts(
         revert(docId, changes)
     }
 
-    /** Write back the values [changes] replaced; leaving the screen does not stop it. */
+    /**
+     * A tag change on [docId] landed: offer to undo it with the document's other changes, inline
+     * while its editor is on screen, else as a notice. Tags are written at once, not through the
+     * draft, so this is how they join the document's Undo.
+     */
+    fun tagged(
+        docId: String,
+        title: String,
+        tag: String,
+        added: Boolean,
+    ) {
+        val changes = if (added) SavedChanges(title, added = setOf(tag)) else SavedChanges(title, removed = setOf(tag))
+        if (docId !in onScreen) {
+            announceAway(docId, changes.after(state[docId]?.undo))
+            return
+        }
+        // An entry to hold the inline Undo when the document has no draft of its own.
+        if (docId !in state) mutate { it + (docId to DocumentDraft()) }
+        val notice = announce(docId, changes) ?: return
+        scope.launch {
+            delay(UndoNoticeDuration)
+            withContext(Dispatchers.Main) { forget(docId, notice) }
+        }
+    }
+
+    /** Write back what [changes] replaced; leaving the screen does not stop it. */
     private fun revert(
         docId: String,
         changes: SavedChanges,
     ) = notices.launchReporting(Res.string.detail_undo_save_failed) {
-        writer.applyEdits(listOf(docId), fields = changes.prior)
+        val ids = listOf(docId)
+        if (changes.prior.isNotEmpty()) writer.applyEdits(ids, fields = changes.prior)
+        for (tag in changes.added) writer.removeTag(ids, tag)
+        for (tag in changes.removed) writer.addTag(ids, tag)
+        changes.priorReviewed?.let { writer.setReviewed(ids, it) }
     }
 
     private fun dropUndo(docId: String) =
@@ -555,13 +616,13 @@ internal class DocumentDrafts(
             val stored = value.normalized()
             if (stored == null) persisted.remove(key) else persisted[key] = stored
         }
-        commit(docId, persisted, request.title, request.reviewed, request.onSaved)
+        commit(docId, persisted, request.title, request.reviewed, request.wasReviewed, request.onSaved)
     }
 
     /**
      * Write [docId]'s draft, and the [reviewed] marker when given; [onSaved] runs once both landed.
      * A save of the document already running, or a draft its fields refuse, makes this a no-op.
-     * With [changes], a save that wrote fields offers to undo them ([announce]).
+     * With [changes], a save that wrote fields or changed the marker offers to undo it ([announce]).
      */
     fun save(
         docId: String,
@@ -615,7 +676,10 @@ internal class DocumentDrafts(
             }
             val notice =
                 withContext(Dispatchers.Main) {
-                    val shown = changes?.takeIf { captured.fields.isNotEmpty() }?.let { announce(docId, it) }
+                    val shown =
+                        changes
+                            ?.takeIf { captured.fields.isNotEmpty() || it.priorReviewed != null }
+                            ?.let { announce(docId, it) }
                     commitPending(docId, captured.fields)
                     shown
                 }

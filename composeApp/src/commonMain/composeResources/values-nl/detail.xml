@@ -168,7 +168,6 @@
     <string name="detail_rename_invalid">Het bestand kon niet worden hernoemd: de bibliotheek kan geen document onder die naam bewaren.</string>
     <string name="detail_ai_ocr_failed">De tekst kon niet met de assistent worden uitgelezen: %1$s</string>
     <string name="detail_ocr_engine_failed">De tekstbron kon niet worden gewijzigd: %1$s</string>
-    <string name="detail_tag_removed">Tag '%1$s' verwijderd.</string>
     <string name="detail_saved_changes">Wijzigingen aan '%1$s' opgeslagen.</string>
     <string name="detail_undo_save_failed">De wijzigingen konden niet ongedaan worden gemaakt: %1$s</string>
     <string name="detail_draft_invalid">Een waarde past niet bij het veld, dus deze wijzigingen zijn nog niet opgeslagen.</string>

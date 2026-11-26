@@ -170,20 +170,23 @@ internal class DraftEditing(
     fun discard() = store.discard(docId)
 
     /** Save the draft and the reviewed marker together, then run [onSaved]: the status bar's button. */
-    fun markReviewed(onSaved: () -> Unit) = store.commitTriageReview(docId, persisted.value, title.value, onSaved)
+    fun markReviewed(onSaved: () -> Unit) =
+        store.commitTriageReview(docId, persisted.value, title.value, item.doc.reviewed, onSaved)
 }
 
 /**
  * The detail editor's and the triage mode's "mark reviewed" action: one save of the draft and the
- * marker, then [onSaved] once both landed. A draft that cannot be written, or a save already
- * running, makes this the same no-op or queued save as any other commit.
+ * marker, then [onSaved] once both landed. Its Undo puts the marker back to [wasReviewed] along with
+ * the fields. A draft that cannot be written, or a save already running, makes this the same no-op
+ * or queued save as any other commit.
  */
 internal fun DocumentDrafts.commitTriageReview(
     docId: String,
     persisted: Map<String, String>,
     title: String,
+    wasReviewed: Boolean,
     onSaved: () -> Unit,
-) = commit(docId, persisted, title, reviewed = true, onSaved = onSaved)
+) = commit(docId, persisted, title, reviewed = true, wasReviewed = wasReviewed, onSaved = onSaved)
 
 /**
  * The one place a document enters the drafts' "being edited" state: while it is on screen the resume
@@ -222,15 +225,18 @@ internal fun rememberDraftEditing(
     // The app going to the background (or this screen under another one) is a way of leaving too,
     // and the last chance before the process may be killed.
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { store.commit(docId, persisted.value, title.value) }
+    val reviewed = key(docId) { rememberUpdatedState(item.doc.reviewed) }
     val actions =
-        remember(writes, store, docId) { DraftedActions(writes, store, docId, persisted, types, title) }
+        remember(writes, store, docId) { DraftedActions(writes, store, docId, persisted, types, title, reviewed) }
     return DraftEditing(docId, draft, edited, actions, store, persisted, title)
 }
 
 /**
  * The panel's actions for one document: field values and the review flag go into [store]'s draft
  * for it, measured against the [persisted] values, and everything else goes straight to [writes].
- * [title] is the document's, as its draft shows it, for the notice a save gives.
+ * Tags are written at once, and each one that lands joins the document's Undo. [title] is the
+ * document's, as its draft shows it, for the notice a save gives; [reviewed] is its stored marker,
+ * which Undo puts back.
  */
 internal class DraftedActions(
     private val writes: DocumentWrites,
@@ -239,6 +245,7 @@ internal class DraftedActions(
     private val persisted: State<Map<String, String>>,
     private val types: State<Map<String, FieldType>>,
     private val title: State<String>,
+    private val reviewed: State<Boolean>,
 ) : MetadataActions,
     DocumentWrites by writes {
     override fun commitField(
@@ -261,7 +268,38 @@ internal class DraftedActions(
     }
 
     // Saves the draft along with the flag, like the status line's "reviewed" button.
-    override fun setReviewed(reviewed: Boolean) = store.commit(docId, persisted.value, title.value, reviewed = reviewed)
+    override fun setReviewed(reviewed: Boolean) =
+        store.commit(docId, persisted.value, title.value, reviewed = reviewed, wasReviewed = this.reviewed.value)
+
+    override fun addTag(
+        tag: String,
+        onLanded: () -> Unit,
+    ) = writes.addTag(tag) {
+        tagged(tag, added = true)
+        onLanded()
+    }
+
+    override fun removeTag(
+        tag: String,
+        onLanded: () -> Unit,
+    ) = writes.removeTag(tag) {
+        tagged(tag, added = false)
+        onLanded()
+    }
+
+    override fun addTagWithStyle(
+        tag: String,
+        color: String?,
+        onLanded: () -> Unit,
+    ) = writes.addTagWithStyle(tag, color) {
+        tagged(tag, added = true)
+        onLanded()
+    }
+
+    private fun tagged(
+        tag: String,
+        added: Boolean,
+    ) = store.tagged(docId, title.value, tag, added)
 
     // Once the suggestion lands, the store drops the draft it replaces. A failed write keeps it, and
     // typing during the write is a later edit that the accepted suggestion must not discard.

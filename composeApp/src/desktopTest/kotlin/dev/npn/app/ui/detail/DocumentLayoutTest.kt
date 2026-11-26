@@ -312,13 +312,20 @@ class DocumentLayoutTest : EnglishLocaleTest() {
 
 /** What is on screen is under test, not the writes: every action the panel offers does nothing. */
 internal object NoWrites : DocumentWrites {
-    override fun addTag(tag: String) = Unit
+    override fun addTag(
+        tag: String,
+        onLanded: () -> Unit,
+    ) = Unit
 
-    override fun removeTag(tag: String) = Unit
+    override fun removeTag(
+        tag: String,
+        onLanded: () -> Unit,
+    ) = Unit
 
     override fun addTagWithStyle(
         tag: String,
         color: String?,
+        onLanded: () -> Unit,
     ) = Unit
 
     override fun defineField(
