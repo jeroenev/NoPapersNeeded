@@ -1,5 +1,6 @@
 package dev.npn.core.app
 
+import dev.npn.core.ai.AiPriceSource
 import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.fs.LibraryFileSystem
@@ -69,6 +70,11 @@ class SessionDeps(
     val mailCredentials: MailCredentialStore = UnsupportedMailCredentialStore,
     /** Renders an email as a PDF; the unsupported one on a host without the desktop PDF stack. */
     val mailPdfRenderer: MailPdfRenderer = UnsupportedMailPdfRenderer,
+    /**
+     * Where current model prices are fetched from (models.dev, OpenRouter); null keeps the build's
+     * snapshot, as tests do, so nothing but the app itself ever reaches the network for a price.
+     */
+    val priceSource: AiPriceSource? = null,
 ) {
     /**
      * Close the index and device databases. Exposed here so the composeApp DI layer (which does not

@@ -18,7 +18,7 @@ enum class AiUsageKind {
  * One recorded AI request in the spend ledger, which this device keeps per library in its
  * `device.db`: which endpoint and model answered, what it was asked to do, the token usage the
  * provider reported (or this device estimated when the provider reported none), the cost worked
- * out from [AiPricing], and which run it belonged to.
+ * out from [AiPrices], and which run it belonged to.
  *
  * It deliberately carries no prompt, document text or answer: the ledger says what was spent, not
  * what was said.
@@ -79,97 +79,6 @@ data class AiSpendSummary(
     companion object {
         val EMPTY = AiSpendSummary()
     }
-}
-
-/** One model's list price in US dollars per million tokens. */
-data class AiPrice(
-    val inputPerMillionUsd: Double,
-    val outputPerMillionUsd: Double,
-) {
-    fun cost(
-        inputTokens: Long?,
-        outputTokens: Long?,
-    ): Double =
-        (inputTokens ?: 0L) * inputPerMillionUsd / 1_000_000.0 +
-            (outputTokens ?: 0L) * outputPerMillionUsd / 1_000_000.0
-}
-
-/**
- * List prices for the models this build knows, used only to estimate spend. A model without an
- * entry is not priced: the ledger and the run estimate show tokens only, which is safer than
- * pretending to know what a gateway or a self-hosted server charges.
- *
- * Prices are the providers' public list prices per million tokens at the time of writing; they are
- * estimates, not billing facts, and a provider's own invoice wins.
- */
-object AiPricing {
-    fun of(
-        provider: AiProvider,
-        model: String,
-    ): AiPrice? {
-        val id = model.trim().lowercase().substringAfterLast('/')
-        return when (provider) {
-            AiProvider.OPENAI -> openAi(id)
-
-            AiProvider.ANTHROPIC -> anthropic(id)
-
-            AiProvider.GOOGLE -> google(id)
-
-            AiProvider.DEEPSEEK -> AiPrice(0.27, 1.10)
-
-            AiProvider.MISTRAL -> mistral(id)
-
-            // Local: the endpoint is free to call even though it is not free to run.
-            AiProvider.OLLAMA -> AiPrice(0.0, 0.0)
-
-            // Gateways and arbitrary compatible servers price per model and account; guessing would
-            // be worse than tokens only.
-            AiProvider.OPENROUTER, AiProvider.OPENCODE_GO, AiProvider.CUSTOM -> null
-        }
-    }
-
-    fun cost(
-        price: AiPrice?,
-        inputTokens: Long?,
-        outputTokens: Long?,
-    ): Double? = price?.cost(inputTokens, outputTokens)
-
-    private fun openAi(id: String): AiPrice? =
-        when {
-            id.contains("gpt-4.1-mini") -> AiPrice(0.40, 1.60)
-            id.contains("gpt-4.1-nano") -> AiPrice(0.10, 0.40)
-            id.contains("gpt-4.1") -> AiPrice(2.00, 8.00)
-            id.contains("gpt-4o-mini") -> AiPrice(0.15, 0.60)
-            id.contains("gpt-4o") -> AiPrice(2.50, 10.00)
-            id.startsWith("o4-mini") -> AiPrice(1.10, 4.40)
-            id.startsWith("o3-mini") -> AiPrice(1.10, 4.40)
-            id.startsWith("o3") -> AiPrice(2.00, 8.00)
-            else -> null
-        }
-
-    private fun anthropic(id: String): AiPrice? =
-        when {
-            id.contains("haiku") -> AiPrice(1.00, 5.00)
-            id.contains("opus") -> AiPrice(15.00, 75.00)
-            id.contains("sonnet") -> AiPrice(3.00, 15.00)
-            else -> null
-        }
-
-    private fun google(id: String): AiPrice? =
-        when {
-            id.contains("gemini-2.5-flash") -> AiPrice(0.30, 2.50)
-            id.contains("gemini-2.5-pro") -> AiPrice(1.25, 10.00)
-            id.contains("gemini-2.0-flash") -> AiPrice(0.10, 0.40)
-            else -> null
-        }
-
-    private fun mistral(id: String): AiPrice? =
-        when {
-            id.contains("large") -> AiPrice(2.00, 6.00)
-            id.contains("medium") -> AiPrice(0.40, 2.00)
-            id.contains("small") -> AiPrice(0.10, 0.30)
-            else -> null
-        }
 }
 
 /** One document's contribution to a run's token estimate. */

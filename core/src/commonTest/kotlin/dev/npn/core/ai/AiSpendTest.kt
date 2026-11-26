@@ -1,6 +1,5 @@
 package dev.npn.core.ai
 
-import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -70,20 +69,9 @@ class AiSpendTest {
     }
 
     @Test
-    fun aKnownModelHasAListPriceAndAGatewayDoesNot() {
-        AiPricing.of(AiProvider.OPENAI, "gpt-4.1-mini").shouldBe(AiPrice(0.40, 1.60))
-        AiPricing.of(AiProvider.ANTHROPIC, "claude-sonnet-4-5").shouldBe(AiPrice(3.00, 15.00))
-        AiPricing.of(AiProvider.OPENROUTER, "any/model").shouldBeNull()
-        AiPricing.of(AiProvider.CUSTOM, "gpt-4.1-mini").shouldBeNull()
-    }
-
-    @Test
     fun costScalesWithThePriceAndTokens() {
-        val price = AiPricing.of(AiProvider.OPENAI, "gpt-4.1-mini")
-        val cost = AiPricing.cost(price, inputTokens = 1_000_000, outputTokens = 1_000_000)
-        checkNotNull(cost)
-        cost shouldBe (0.40 + 1.60)
-        AiPricing.cost(null, 1_000_000, 1_000_000).shouldBeNull()
+        AiPrice(0.40, 1.60).cost(inputTokens = 1_000_000, outputTokens = 1_000_000) shouldBe (0.40 + 1.60)
+        AiPrice(0.40, 1.60).cost(inputTokens = null, outputTokens = 500_000) shouldBe 0.80
     }
 
     @Test

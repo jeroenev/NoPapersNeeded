@@ -41,6 +41,8 @@ internal class AiFacadeImpl(
     private val reviewModeProvider: suspend () -> ReviewMode = { ReviewMode.DEFAULT },
     /** Where every paid request is recorded; this library's ledger on this device, or [AiLedger.None] in tests. */
     private val ledger: AiLedger = AiLedger.None,
+    /** What a request costs, for the ledger; the build's snapshot unless the session keeps fresher prices. */
+    private val prices: AiPrices = AiPrices.Snapshot,
     private val log: NpnLog = NpnLog.None,
     private val configProvider: suspend () -> AiConfig,
 ) : AiChat,
@@ -268,7 +270,7 @@ internal class AiFacadeImpl(
         val reportedOutput = reported?.outputTokensCount?.toLong()
         val input = reportedInput ?: estimatedInput
         val output = reportedOutput ?: estimatedOutput
-        val price = AiPricing.of(config.provider, config.model)
+        val price = prices.priceOf(config)
         val record =
             AiUsageRecord(
                 provider = config.provider.name,
@@ -276,7 +278,7 @@ internal class AiFacadeImpl(
                 kind = kind,
                 inputTokens = input,
                 outputTokens = output,
-                estimatedCostUsd = AiPricing.cost(price, input, output),
+                estimatedCostUsd = price?.cost(input, output),
                 estimated = reportedInput == null || reportedOutput == null,
                 recordedAt = clock.nowMillis(),
                 runId = runId,

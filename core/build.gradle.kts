@@ -6,6 +6,24 @@ plugins {
     alias(libs.plugins.room3)
 }
 
+// The model prices AI spend estimates fall back on (ModelPrices in buildSrc): a committed snapshot
+// of models.dev's catalog, compiled into the app, so a build never fetches prices and every build of
+// a commit prices alike. `./gradlew :core:updateModelPrices` refreshes it; review its diff.
+val modelPriceSnapshot = layout.projectDirectory.file("pricing/models-dev.tsv")
+val generateModelPriceSnapshot =
+    tasks.register<GenerateModelPriceSnapshotTask>("generateModelPriceSnapshot") {
+        snapshot.set(modelPriceSnapshot)
+        outDir.set(layout.buildDirectory.dir("generated/modelPrices/commonMain/kotlin"))
+    }
+tasks.register<UpdateModelPricesTask>("updateModelPrices") {
+    group = "npn"
+    description = "Rewrites core/pricing/models-dev.tsv from models.dev's live catalog."
+    url.set("https://models.dev/api.json")
+    // models.dev's id of every provider the app prices (AiPriceTables.catalogId).
+    providers.set(listOf("anthropic", "deepseek", "google", "mistral", "openai", "opencode-go", "openrouter"))
+    snapshot.set(modelPriceSnapshot)
+}
+
 kotlin {
     // `jvmShared` is what Android and desktop have in common beyond commonMain: java.nio and
     // java.security. The direct-filesystem library implementation lives there so Android's
@@ -38,6 +56,9 @@ kotlin {
         }
         androidMain.get().dependsOn(jvmSharedMain)
 
+        commonMain {
+            kotlin.srcDir(generateModelPriceSnapshot.flatMap { it.outDir })
+        }
         commonMain.dependencies {
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.serialization.json)

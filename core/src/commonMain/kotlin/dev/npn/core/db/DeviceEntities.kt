@@ -247,7 +247,7 @@ data class AiUsageEntity(
     val kind: String,
     val inputTokens: Long? = null,
     val outputTokens: Long? = null,
-    /** US dollars from [dev.npn.core.ai.AiPricing]; null when the model has no known price. */
+    /** US dollars from [dev.npn.core.ai.AiPrices]; null when the model has no known price. */
     val estimatedCostUsd: Double? = null,
     /** True when a token count is this device's estimate, not the provider's usage report. */
     val estimated: Boolean = false,

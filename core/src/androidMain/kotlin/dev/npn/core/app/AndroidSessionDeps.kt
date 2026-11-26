@@ -2,6 +2,7 @@ package dev.npn.core.app
 
 import android.content.Context
 import androidx.core.net.toUri
+import dev.npn.core.ai.AiPriceSource
 import dev.npn.core.db.deviceDatabase
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.ContentResolverExternalIo
@@ -42,6 +43,8 @@ fun androidSessionDeps(
     settings: SessionSettings,
     installationId: String,
     log: NpnLog = AndroidLog,
+    /** Where current model prices come from; the app passes the network one. */
+    priceSource: AiPriceSource? = null,
 ): SessionDeps {
     val key = LibraryLocations.key(location)
     // DirThumbnailStore creates the directory with its first thumbnail.
@@ -64,6 +67,7 @@ fun androidSessionDeps(
         syncTransport = syncTransport,
         syncSetup = syncTransport.setup,
         syncStaging = DirectoryStaging(File(context.cacheDir, "sync/$key").toPath()),
+        priceSource = priceSource,
     )
 }
 

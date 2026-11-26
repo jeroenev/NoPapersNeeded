@@ -5,7 +5,7 @@ import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiEstimateDoc
 import dev.npn.core.ai.AiEstimator
 import dev.npn.core.ai.AiLedger
-import dev.npn.core.ai.AiPricing
+import dev.npn.core.ai.AiPrices
 import dev.npn.core.ai.AiPrompts
 import dev.npn.core.ai.AiRunEstimate
 import dev.npn.core.ai.AiSpendSummary
@@ -45,6 +45,7 @@ internal class AiSpendFacadeImpl(
     private val fts: FtsDao,
     private val dao: AiUsageDao,
     private val ledger: AiLedger,
+    private val prices: AiPrices,
     private val configProvider: suspend () -> AiConfig,
     private val clock: EpochClock,
 ) : AiSpendFacade {
@@ -91,7 +92,7 @@ internal class AiSpendFacadeImpl(
         )
     }
 
-    private fun estimate(
+    private suspend fun estimate(
         config: AiConfig,
         documents: Int,
         requests: Int,
@@ -99,14 +100,14 @@ internal class AiSpendFacadeImpl(
         inputTokens: Long,
         outputTokens: Long,
     ): AiRunEstimate {
-        val price = AiPricing.of(config.provider, config.model)
+        val price = prices.priceOf(config)
         return AiRunEstimate(
             documents = documents,
             requests = requests,
             pages = pages,
             inputTokens = inputTokens,
             outputTokens = outputTokens,
-            estimatedCostUsd = AiPricing.cost(price, inputTokens, outputTokens),
+            estimatedCostUsd = price?.cost(inputTokens, outputTokens),
             priceKnown = price != null,
             requestCap = config.maxRunRequests,
         )

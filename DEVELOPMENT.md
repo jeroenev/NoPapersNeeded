@@ -71,6 +71,12 @@ conventions and invariants, [AGENTS.md](AGENTS.md). The user-facing overview is 
   The APK carries the engine for `arm64-v8a` only (the phones the app targets); an x86_64 emulator
   needs `-Pnpn.rclone.abis=x86_64` (or a list; `mise deploy` passes the device's own ABI), and `useLegacyPackaging` keeps it extractable, as
   Android runs it from the installed native library directory.
+- AI spend estimates price models from models.dev's catalog (OpenRouter from its own). The build
+  ships a committed snapshot, `core/pricing/models-dev.tsv`, which `:core:generateModelPriceSnapshot`
+  compiles in, so a build never fetches prices and every build of a commit prices alike: the
+  committed file is the pin. `./gradlew :core:updateModelPrices` refreshes it from
+  https://models.dev/api.json; review its diff like any other change. At run time a device with a
+  configured cloud endpoint refreshes its own copy weekly (a plain GET, cached in `device.db`).
 
 ## Building
 

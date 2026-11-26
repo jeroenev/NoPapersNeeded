@@ -2,6 +2,7 @@ package dev.npn.app.di
 
 import dev.npn.app.platform.OcrModelSource
 import dev.npn.app.platform.OcrModels
+import dev.npn.core.ai.HttpAiPriceSource
 import dev.npn.core.app.DesktopLog
 import dev.npn.core.app.desktopRclone
 import dev.npn.core.app.jvmSessionDeps
@@ -44,6 +45,7 @@ fun createAppEnvironment(): AppEnvironment {
             installationId = settings.settings.first().installationId,
             ocrEngine = bundledTesseract() ?: TesseractCliEngine(),
             log = DesktopLog,
+            priceSource = HttpAiPriceSource(),
         )
     }
 }

@@ -33,4 +33,5 @@ fun SessionDeps.copy(
         mailTransport = mailTransport,
         mailCredentials = mailCredentials,
         mailPdfRenderer = mailPdfRenderer,
+        priceSource = priceSource,
     )

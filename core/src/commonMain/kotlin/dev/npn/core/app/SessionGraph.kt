@@ -1,6 +1,8 @@
 package dev.npn.core.app
 
 import dev.npn.core.ai.AiFacadeImpl
+import dev.npn.core.ai.AiPriceBook
+import dev.npn.core.ai.AiPrices
 import dev.npn.core.ai.RoomAiLedger
 import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.app.aiedit.AiAutoEnricher
@@ -59,11 +61,28 @@ internal class SessionGraph(
     /** Every paid AI request this device makes for this library is recorded here; never synced. */
     private val aiLedger = RoomAiLedger(deps.deviceDb.aiUsageDao())
 
+    /**
+     * What a model costs: catalog prices this device keeps fresh where the host fetches them
+     * ([SessionDeps.priceSource]), else the build's snapshot.
+     */
+    private val aiPrices: AiPrices =
+        deps.priceSource?.let { source ->
+            AiPriceBook(
+                store = deps.deviceDb.keyValueDao(),
+                source = source,
+                clock = deps.clock,
+                scope = lifetime.scope,
+                log = log,
+                ownWrite = { lifetime.owned(it) },
+            )
+        } ?: AiPrices.Snapshot
+
     val aiSpend: AiSpendFacade =
         AiSpendFacadeImpl(
             fts = db.ftsDao(),
             dao = deps.deviceDb.aiUsageDao(),
             ledger = aiLedger,
+            prices = aiPrices,
             configProvider = deps.settings.aiConfig,
             clock = deps.clock,
         )
@@ -89,6 +108,7 @@ internal class SessionGraph(
             clock = deps.clock,
             reviewModeProvider = { reviewConfig.reviewMode.first() },
             ledger = aiLedger,
+            prices = aiPrices,
             log = log,
             configProvider = deps.settings.aiConfig,
         ).also { lifetime.releaseOnClose(it::close) }

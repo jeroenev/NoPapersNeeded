@@ -1,5 +1,6 @@
 package dev.npn.core.app
 
+import dev.npn.core.ai.AiPriceSource
 import dev.npn.core.db.deviceDatabase
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
@@ -59,6 +60,8 @@ fun jvmSessionDeps(
     syncTransport: SyncTransport? = RcloneTransport(desktopRclone()),
     /** Derived from [syncTransport] unless a host wires a setup engine of its own. */
     syncSetup: CloudSetup? = (syncTransport as? RcloneTransport)?.setup,
+    /** Where current model prices come from; the app passes the network one, tests none. */
+    priceSource: AiPriceSource? = null,
 ): SessionDeps =
     SessionDeps(
         fs = JvmLibraryFileSystem(libraryRoot, PathExternalIo),
@@ -80,6 +83,7 @@ fun jvmSessionDeps(
         mailTransport = JakartaMailTransport(),
         mailCredentials = desktopMailCredentials(),
         mailPdfRenderer = PdfBoxMailPdfRenderer(),
+        priceSource = priceSource,
     )
 
 /**

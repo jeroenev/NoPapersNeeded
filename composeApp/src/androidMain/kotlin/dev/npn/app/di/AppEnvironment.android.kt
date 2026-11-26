@@ -4,6 +4,7 @@ import android.content.Context
 import dev.npn.app.platform.ReminderRuntime
 import dev.npn.app.platform.hasDirectStorageAccess
 import dev.npn.app.platform.isAppPrivateLocation
+import dev.npn.core.ai.HttpAiPriceSource
 import dev.npn.core.app.androidRclone
 import dev.npn.core.app.androidSessionDeps
 import dev.npn.core.settings.LibraryLocations
@@ -38,6 +39,7 @@ fun createAppEnvironment(context: Context): AppEnvironment {
                 scope = scope,
                 settings = SessionSettings.from(settings),
                 installationId = settings.settings.first().installationId,
+                priceSource = HttpAiPriceSource(),
             )
         }
     }
