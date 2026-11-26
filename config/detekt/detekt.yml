@@ -225,3 +225,6 @@ Compose:
       - LocalRevealAdvanced
       # The app's one reduced-motion answer, provided by the shell; see ui/common/ReducedMotion.kt.
       - LocalReducedMotion
+      # The app's one lock, provided at the app root for the settings route, which checks the
+      # current PIN against it; the shell between them is already at its parameter cap.
+      - LocalAppLock

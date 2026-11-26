@@ -28,6 +28,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -393,9 +394,14 @@ private fun BrowserSignIn(
 ) {
     val url = state.authUrl
     val uriHandler = LocalUriHandler.current
-    // Open the sign-in page once, when the engine first publishes it.
+    // Open the sign-in page once, when the engine first publishes it: saved, so the screen coming
+    // back (after the app lock, or in a recreated window) does not open it again, and again.
+    var opened by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(url) {
-        if (url != null) runCatching { uriHandler.openUri(url) }
+        if (url != null && url != opened) {
+            opened = url
+            runCatching { uriHandler.openUri(url) }
+        }
     }
     Column(verticalArrangement = Arrangement.spacedBy(StepSpacing)) {
         state.providerName?.let { provider ->

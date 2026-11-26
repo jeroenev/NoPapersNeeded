@@ -3,6 +3,7 @@
 package dev.npn.app.ui.nav
 
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.input.key.Key
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -17,10 +18,14 @@ import dev.npn.app.ui.contentDescription
 import dev.npn.app.ui.detail.DocumentDraftHost
 import dev.npn.app.ui.has
 import dev.npn.app.ui.hostedScene
+import dev.npn.app.ui.lock.LocalAppLock
 import dev.npn.app.ui.onUiThread
 import dev.npn.app.ui.press
 import dev.npn.app.ui.texts
 import dev.npn.app.ui.theme.NpnTheme
+import dev.npn.core.security.AppLock
+import dev.npn.core.security.AppLockSettings
+import dev.npn.core.util.MonotonicClock
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -125,18 +130,22 @@ class MainNavTest : EnglishLocaleTest() {
                     shown = library
                     if (library != null) {
                         NpnTheme(darkTheme = false) {
-                            DocumentDraftHost(library.drafts) {
-                                MainNav(
-                                    settings = settings,
-                                    session = session,
-                                    library = library,
-                                    aiConfigured = true,
-                                    queue = QueueStatus.None,
-                                    writeBlock = null,
-                                    snackbar = remember { SnackbarHostState() },
-                                    onOpenLibrary = {},
-                                    writeBlockActions = NoWriteBlockActions,
-                                )
+                            CompositionLocalProvider(
+                                LocalAppLock provides AppLock(AppLockSettings(), MonotonicClock { 0L }),
+                            ) {
+                                DocumentDraftHost(library.drafts) {
+                                    MainNav(
+                                        settings = settings,
+                                        session = session,
+                                        library = library,
+                                        aiConfigured = true,
+                                        queue = QueueStatus.None,
+                                        writeBlock = null,
+                                        snackbar = remember { SnackbarHostState() },
+                                        onOpenLibrary = {},
+                                        writeBlockActions = NoWriteBlockActions,
+                                    )
+                                }
                             }
                         }
                     }

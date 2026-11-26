@@ -30,7 +30,9 @@ The optional app lock (Settings → Security) is access control over the app's s
 encryption**. The library folder stays plain PDFs and JSON, so anyone with access to those files
 can read them; the lock does not claim otherwise, and its Settings copy says so. Only a salted
 PBKDF2-HMAC-SHA256 hash of the PIN is stored, in this device's settings (`settings.properties` on
-desktop, `npn_settings` on Android), never the PIN itself.
+desktop, `npn_settings` on Android), never the PIN itself. Turning the lock off or changing it
+asks for the current PIN, and wrong PINs back off up to five minutes per attempt, counted across
+restarts.
 
 Recovery, so a forgotten PIN never locks a user out of their own files:
 

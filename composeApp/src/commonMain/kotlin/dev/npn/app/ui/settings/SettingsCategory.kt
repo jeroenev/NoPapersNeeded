@@ -160,6 +160,7 @@ import no_papers_needed.composeapp.generated.resources.security_lock_after
 import no_papers_needed.composeapp.generated.resources.security_lock_fifteen_minutes
 import no_papers_needed.composeapp.generated.resources.security_lock_five_minutes
 import no_papers_needed.composeapp.generated.resources.security_lock_immediately
+import no_papers_needed.composeapp.generated.resources.security_lock_now
 import no_papers_needed.composeapp.generated.resources.security_lock_one_minute
 import no_papers_needed.composeapp.generated.resources.security_not_encrypted
 import no_papers_needed.composeapp.generated.resources.security_recovery_android
@@ -220,6 +221,8 @@ internal data class SettingsPaneState(
     val mail: MailState = MailState(),
     /** The app-lock dialog Settings has open, if any. */
     val securityDialog: SecurityDialog? = null,
+    /** The check of the current secret [securityDialog] asks for. */
+    val securityCheck: SecurityCheck = SecurityCheck(),
     /** A "Report a problem" bundle the About pane writes and shares. */
     val problemReport: ProblemReportState = ProblemReportState.Idle,
 )
@@ -494,6 +497,7 @@ internal val SettingsCategories: List<SettingsCategory> =
                     Res.string.security_app_lock_help,
                     Res.string.security_set_pin,
                     Res.string.security_change_pin,
+                    Res.string.security_lock_now,
                     Res.string.security_not_encrypted,
                     Res.string.security_lock_after,
                     Res.string.security_lock_immediately,

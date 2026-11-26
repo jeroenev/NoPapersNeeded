@@ -4,6 +4,10 @@ import dev.npn.app.FakeSettingsRepository
 import dev.npn.core.app.SessionDeps
 import dev.npn.core.app.jvmSessionDeps
 import dev.npn.core.pdf.PdfEngine
+import dev.npn.core.security.AppLockSettings
+import dev.npn.core.security.LockAttempts
+import dev.npn.core.security.LockCrypto
+import dev.npn.core.security.UnlockResult
 import dev.npn.core.settings.AppDirs
 import dev.npn.core.settings.SessionSettings
 import dev.npn.core.testing.copy
@@ -21,6 +25,7 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
@@ -72,6 +77,40 @@ class DefaultAppEnvironmentTest {
     /** A library whose journal holds a store from a newer build, which refuses to open. */
     private fun unreadableLibrary(name: String): String =
         library(name).also { Files.createDirectories(Path.of(it, ".npn/journal/objects-v9-00")) }
+
+    @Test
+    fun theAppLockKeepsCountingWrongSecretsAcrossARestart() =
+        runTest {
+            val credential =
+                LockCrypto.create(
+                    "2468",
+                    iterations = LockCrypto.MIN_ITERATIONS,
+                    salt = ByteArray(LockCrypto.SALT_BYTES),
+                )
+            val stored = FakeSettingsRepository()
+            stored.updateSettings {
+                it.copy(
+                    appLock = AppLockSettings(enabled = true, credential = credential),
+                    appLockAttempts = LockAttempts(failures = 3),
+                )
+            }
+            val restarted = DefaultAppEnvironment(stored, watchedFolder = { null }, factory = factory)
+            try {
+                restarted.lock.state.value.failedAttempts shouldBe 3
+
+                // The fourth wrong secret in all, so the first that earns a wait.
+                restarted.lock.unlockWithSecret("1357") shouldBe UnlockResult.WrongSecret
+
+                stored.settings
+                    .first { it.appLockAttempts.failures == 4 }
+                    .appLockAttempts.retryAtMillis
+                    .shouldNotBeNull()
+                restarted.lock.state.value.retryAtMillis
+                    .shouldNotBeNull()
+            } finally {
+                restarted.appScope.cancel()
+            }
+        }
 
     @Test
     fun aFailedSwitchReleasesWhatItOpenedAndReturnsToThePreviousLibrary() =

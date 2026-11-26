@@ -54,6 +54,8 @@ import dev.npn.app.ui.detail.DocumentDraftHost
 import dev.npn.app.ui.detail.DocumentDrafts
 import dev.npn.app.ui.diagnostics.ProblemReportHandler
 import dev.npn.app.ui.library.DropOverlay
+import dev.npn.app.ui.lock.LocalAppLock
+import dev.npn.app.ui.lock.LockGate
 import dev.npn.app.ui.lock.LockScreen
 import dev.npn.app.ui.lock.LockViewModel
 import dev.npn.app.ui.nav.MainNav
@@ -267,136 +269,142 @@ private fun AppRoot(
     var dropTarget by remember { mutableStateOf<((List<Pair<ExternalSource, String>>) -> Unit)?>(null) }
     LocalizedApp(language, (state as? AppState.Open)?.session, env.appScope) { library ->
         AppSurface(reducedMotion) {
-            if (lockState.locked) {
-                // Behind the lock there is no library screen to title the window; the app's own
-                // name is all the lock may say.
-                PublishWindowTitle(stringResource(Res.string.common_app_name))
-                val lockUi by lockVm.state.collectAsStateWithLifecycle()
-                LockScreen(state = lockUi, actions = lockVm)
-                return@AppSurface
-            }
-            val snackbar = rememberSnackbarMessages(vm.messages)
-            // Files dropped on the desktop window import into whichever library is open, from any screen;
-            // the message's Show opens the library on the new documents. While first run asks for the
-            // first document, dropped PDFs go to it instead.
-            val currentLibrary by rememberUpdatedState(library)
-            LaunchedEffect(vm) {
-                DesktopBridge.droppedFiles.receiveAsFlow().collect { request ->
-                    val firstRun = dropTarget
-                    if (firstRun != null && request.images.isEmpty()) {
-                        firstRun(request.pdfs)
-                    } else {
-                        vm.importFiles(request) { docIds -> currentLibrary?.showDocuments(docIds) }
+            LockGate(
+                locked = lockState.locked,
+                lockScreen = {
+                    // Behind the lock there is no library screen to title the window; the app's own
+                    // name is all the lock may say.
+                    PublishWindowTitle(stringResource(Res.string.common_app_name))
+                    val lockUi by lockVm.state.collectAsStateWithLifecycle()
+                    LockScreen(state = lockUi, actions = lockVm)
+                },
+            ) {
+                val snackbar = rememberSnackbarMessages(vm.messages)
+                // Files dropped on the desktop window import into whichever library is open, from any screen;
+                // the message's Show opens the library on the new documents. While first run asks for the
+                // first document, dropped PDFs go to it instead.
+                val currentLibrary by rememberUpdatedState(library)
+                LaunchedEffect(vm) {
+                    DesktopBridge.droppedFiles.receiveAsFlow().collect { request ->
+                        val firstRun = dropTarget
+                        if (firstRun != null && request.images.isEmpty()) {
+                            firstRun(request.pdfs)
+                        } else {
+                            vm.importFiles(request) { docIds -> currentLibrary?.showDocuments(docIds) }
+                        }
                     }
                 }
-            }
-            // Documents an email check imported are announced from any screen, like a drop's; Show
-            // opens the library on exactly those.
-            LaunchedEffect(vm) { vm.announceMailImports { docIds -> currentLibrary?.showDocuments(docIds) } }
-            // Without a library there are no screens to title the window; the app's name, in its language.
-            if (state !is AppState.Open) PublishWindowTitle(stringResource(Res.string.common_app_name))
+                // Documents an email check imported are announced from any screen, like a drop's; Show
+                // opens the library on exactly those.
+                LaunchedEffect(vm) { vm.announceMailImports { docIds -> currentLibrary?.showDocuments(docIds) } }
+                // Without a library there are no screens to title the window; the app's name, in its language.
+                if (state !is AppState.Open) PublishWindowTitle(stringResource(Res.string.common_app_name))
 
-            Box(modifier.fillMaxSize()) {
-                when (val current = state) {
-                    AppState.Restoring, AppState.Opening -> {
-                        LoadingScreen()
-                    }
+                Box(modifier.fillMaxSize()) {
+                    when (val current = state) {
+                        AppState.Restoring, AppState.Opening -> {
+                            LoadingScreen()
+                        }
 
-                    is AppState.NoLibrary -> {
-                        val cloudState by vm.cloudSetupState.collectAsStateWithLifecycle()
-                        OnboardingScreen(
-                            failure = current.failure,
-                            useSaf = useSaf,
-                            onUseSafChange = vm::setUseSafStorage,
-                            onOpen = vm::open,
-                            onCreate = vm::createLibrary,
-                            onUseRecommendedFolder = vm::useRecommended,
-                            cloudState = cloudState,
-                            cloudSetup = vm.cloudSetup.takeIf { vm.cloudAvailable },
-                            onBegin = firstRun::begin,
-                        )
-                    }
+                        is AppState.NoLibrary -> {
+                            val cloudState by vm.cloudSetupState.collectAsStateWithLifecycle()
+                            OnboardingScreen(
+                                failure = current.failure,
+                                useSaf = useSaf,
+                                onUseSafChange = vm::setUseSafStorage,
+                                onOpen = vm::open,
+                                onCreate = vm::createLibrary,
+                                onUseRecommendedFolder = vm::useRecommended,
+                                cloudState = cloudState,
+                                cloudSetup = vm.cloudSetup.takeIf { vm.cloudAvailable },
+                                onBegin = firstRun::begin,
+                            )
+                        }
 
-                    is AppState.RestoreFailed -> {
-                        RestoreFailedScreen(
-                            failure = current.failure,
-                            useSaf = useSaf,
-                            onUseSafChange = vm::setUseSafStorage,
-                            onRetry = vm::retry,
-                            onOpen = vm::open,
-                            onReportProblem = vm::reportProblem,
-                        )
-                    }
+                        is AppState.RestoreFailed -> {
+                            RestoreFailedScreen(
+                                failure = current.failure,
+                                useSaf = useSaf,
+                                onUseSafChange = vm::setUseSafStorage,
+                                onRetry = vm::retry,
+                                onOpen = vm::open,
+                                onReportProblem = vm::reportProblem,
+                            )
+                        }
 
-                    is AppState.Open -> {
-                        val aiConfigured by vm.aiConfigured.collectAsStateWithLifecycle()
-                        val queue by vm.queueStatus.collectAsStateWithLifecycle()
-                        val writeBlock by vm.writeBlock.collectAsStateWithLifecycle()
-                        val writeBlockActions =
-                            remember(vm) {
-                                object : WriteBlockActions {
-                                    override fun retry() = vm.retryWrites()
+                        is AppState.Open -> {
+                            val aiConfigured by vm.aiConfigured.collectAsStateWithLifecycle()
+                            val queue by vm.queueStatus.collectAsStateWithLifecycle()
+                            val writeBlock by vm.writeBlock.collectAsStateWithLifecycle()
+                            val writeBlockActions =
+                                remember(vm) {
+                                    object : WriteBlockActions {
+                                        override fun retry() = vm.retryWrites()
 
-                                    override fun rebuildIndex() = vm.rebuildIndex()
-                                }
-                            }
-                        // Never null here: LocalizedApp remembers it for the session this state opened.
-                        // Keyed, so nothing remembered for one library's screens carries over to
-                        // another's when the session changes with no screen in between.
-                        if (library != null) {
-                            key(library) {
-                                val path = firstRun.path
-                                if (path != null) {
-                                    FirstRun(
-                                        env,
-                                        current.session,
-                                        library,
-                                        firstRun,
-                                        path,
-                                        snackbar,
-                                    ) { dropTarget = it }
-                                } else {
-                                    DocumentDraftHost(library.drafts) {
-                                        MainNav(
-                                            settings = env.settings,
-                                            session = current.session,
-                                            library = library,
-                                            aiConfigured = aiConfigured,
-                                            queue = queue,
-                                            writeBlock = writeBlock,
-                                            snackbar = snackbar,
-                                            onOpenLibrary = vm::open,
-                                            writeBlockActions = writeBlockActions,
-                                        )
+                                        override fun rebuildIndex() = vm.rebuildIndex()
                                     }
-                                    firstRun.landing?.let { exit ->
-                                        DisposableEffect(exit) {
-                                            library.landOn(exit)
-                                            if (exit is FirstRunExit.Document) vm.firstDocumentLanded(exit.text)
-                                            firstRun.landing = null
-                                            onDispose {}
+                                }
+                            // Never null here: LocalizedApp remembers it for the session this state opened.
+                            // Keyed, so nothing remembered for one library's screens carries over to
+                            // another's when the session changes with no screen in between.
+                            if (library != null) {
+                                key(library) {
+                                    val path = firstRun.path
+                                    if (path != null) {
+                                        FirstRun(
+                                            env,
+                                            current.session,
+                                            library,
+                                            firstRun,
+                                            path,
+                                            snackbar,
+                                        ) { dropTarget = it }
+                                    } else {
+                                        // Settings asks it for the current PIN before the lock is changed.
+                                        CompositionLocalProvider(LocalAppLock provides env.lock) {
+                                            DocumentDraftHost(library.drafts) {
+                                                MainNav(
+                                                    settings = env.settings,
+                                                    session = current.session,
+                                                    library = library,
+                                                    aiConfigured = aiConfigured,
+                                                    queue = queue,
+                                                    writeBlock = writeBlock,
+                                                    snackbar = snackbar,
+                                                    onOpenLibrary = vm::open,
+                                                    writeBlockActions = writeBlockActions,
+                                                )
+                                            }
+                                        }
+                                        firstRun.landing?.let { exit ->
+                                            DisposableEffect(exit) {
+                                                library.landOn(exit)
+                                                if (exit is FirstRunExit.Document) vm.firstDocumentLanded(exit.text)
+                                                firstRun.landing = null
+                                                onDispose {}
+                                            }
                                         }
                                     }
                                 }
                             }
-                        }
-                        // A switch to another library that failed lands back in this one; say why.
-                        current.failure?.let {
-                            OpenFailedDialog(it, onDismiss = vm::dismissFailure, onReportProblem = vm::reportProblem)
+                            // A switch to another library that failed lands back in this one; say why.
+                            current.failure?.let {
+                                OpenFailedDialog(it, onDismiss = vm::dismissFailure, onReportProblem = vm::reportProblem)
+                            }
                         }
                     }
+                    // "Report a problem" from a library that failed to open: the bundle, then its hand-off.
+                    val problemReport by vm.problemReport.collectAsStateWithLifecycle()
+                    ProblemReportHandler(problemReport, vm)
+                    // A version change shows the bundled notes once, apart from the update banner.
+                    if (showWhatsNew && state is AppState.Open) {
+                        WhatsNewDialog(onDismiss = whatsNew::dismiss)
+                    }
+                    // Files dragged over the desktop window: the whole window is the drop target.
+                    val dragging by DesktopBridge.dragging.collectAsStateWithLifecycle()
+                    if (dragging) DropOverlay()
+                    SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
                 }
-                // "Report a problem" from a library that failed to open: the bundle, then its hand-off.
-                val problemReport by vm.problemReport.collectAsStateWithLifecycle()
-                ProblemReportHandler(problemReport, vm)
-                // A version change shows the bundled notes once, apart from the update banner.
-                if (showWhatsNew && state is AppState.Open) {
-                    WhatsNewDialog(onDismiss = whatsNew::dismiss)
-                }
-                // Files dragged over the desktop window: the whole window is the drop target.
-                val dragging by DesktopBridge.dragging.collectAsStateWithLifecycle()
-                if (dragging) DropOverlay()
-                SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
             }
         }
     }

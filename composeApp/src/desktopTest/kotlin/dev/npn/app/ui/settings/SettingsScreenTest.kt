@@ -25,7 +25,10 @@ import dev.npn.app.ui.hostedScene
 import dev.npn.app.ui.onUiThread
 import dev.npn.app.ui.texts
 import dev.npn.app.ui.theme.NpnTheme
+import dev.npn.core.security.AppLock
+import dev.npn.core.security.AppLockSettings
 import dev.npn.core.testing.FakeMetadataWriter
+import dev.npn.core.util.MonotonicClock
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -50,6 +53,7 @@ class SettingsScreenTest : EnglishLocaleTest() {
                     NpnTheme(darkTheme = false) {
                         SettingsScreen(
                             settings = FakeSettingsRepository(),
+                            appLock = AppLock(AppLockSettings(), MonotonicClock { 0L }),
                             session = FakeLibrarySession(),
                             outliving = CoroutineScope(Dispatchers.Unconfined),
                             category = null,
@@ -97,6 +101,7 @@ class SettingsScreenTest : EnglishLocaleTest() {
                         NpnTheme(darkTheme = false) {
                             SettingsScreen(
                                 settings = FakeSettingsRepository(),
+                                appLock = AppLock(AppLockSettings(), MonotonicClock { 0L }),
                                 session = FakeLibrarySession(),
                                 outliving = CoroutineScope(Dispatchers.Unconfined),
                                 category = null,
@@ -145,6 +150,7 @@ class SettingsScreenTest : EnglishLocaleTest() {
                     NpnTheme(darkTheme = false) {
                         SettingsScreen(
                             settings = FakeSettingsRepository(),
+                            appLock = AppLock(AppLockSettings(), MonotonicClock { 0L }),
                             session = FakeLibrarySession(),
                             outliving = CoroutineScope(Dispatchers.Unconfined),
                             category = null,

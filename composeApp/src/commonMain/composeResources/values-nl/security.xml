@@ -26,4 +26,8 @@
     <string name="security_wrong_pin">Die pincode is niet juist.</string>
     <string name="security_too_many">Te veel pogingen. Probeer het over %1$d s opnieuw.</string>
     <string name="security_device_prompt_subtitle">No Papers Needed ontgrendelen</string>
+    <string name="security_confirm_current_title">Voer je huidige pincode in</string>
+    <string name="security_confirm_current_help">Om de app-vergrendeling uit te zetten of te wijzigen is eerst de huidige pincode nodig.</string>
+    <string name="security_confirm_device">Bevestigen met apparaat</string>
+    <string name="security_lock_now">Nu vergrendelen</string>
 </resources>

@@ -1,7 +1,9 @@
 package dev.npn
 
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.IntentSender
 import android.content.res.Configuration
 import android.os.Bundle
@@ -12,6 +14,7 @@ import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
 import dev.npn.app.App
@@ -25,8 +28,8 @@ import dev.npn.app.platform.LaunchImports
 import dev.npn.app.platform.LocalAppLockAuthenticator
 import dev.npn.app.platform.LocalDocumentScanner
 import dev.npn.app.platform.LockActivityHandoff
+import dev.npn.app.platform.LockLifecycle
 import dev.npn.app.platform.importIntoLibrary
-import dev.npn.app.platform.lockOnStop
 import dev.npn.app.ui.common.OpenDocumentRequest
 import dev.npn.app.ui.common.OpenDocumentRequests
 import dev.npn.core.app.ImportTally
@@ -50,11 +53,32 @@ class MainActivity : FragmentActivity() {
     /** The token of this activity's launch import ([LaunchImports]), saved with its state while it runs. */
     private var launchImport: String? = null
 
+    /** The app lock's view of this activity's stops and starts. */
+    private lateinit var lockLifecycle: LockLifecycle
+
+    /** Ends a handoff's grace when the screen goes off, even while a picker covers this activity. */
+    private val screenOff =
+        object : BroadcastReceiver() {
+            override fun onReceive(
+                context: Context,
+                intent: Intent,
+            ) {
+                if (intent.action == Intent.ACTION_SCREEN_OFF) lockLifecycle.onScreenOff()
+            }
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
         env = NpnApplication.environment(this)
+        lockLifecycle = LockLifecycle(env.lock)
+        ContextCompat.registerReceiver(
+            this,
+            screenOff,
+            IntentFilter(Intent.ACTION_SCREEN_OFF),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
 
         setContent {
             CompositionLocalProvider(
@@ -65,14 +89,14 @@ class MainActivity : FragmentActivity() {
             }
         }
 
-        // Keep the locked screen out of screenshots and the recents thumbnail; the app's content
-        // comes back as soon as it is unlocked.
+        // While the lock is on, keep the app out of screenshots and the Recents thumbnail, locked or
+        // not: the thumbnail is taken as the app leaves, before the lock engages.
         lifecycleScope.launch {
             env.lock.state
-                .map { it.locked }
+                .map { it.enabled }
                 .distinctUntilChanged()
-                .collect { locked ->
-                    if (locked) {
+                .collect { enabled ->
+                    if (enabled) {
                         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
                     } else {
                         window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -135,26 +159,20 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    /** Protect the Recents thumbnail early; this hint also occurs for app-started activities. */
-    override fun onUserLeaveHint() {
-        if (env.lock.state.value.enabled) {
-            // Taken now so the recents thumbnail is blank rather than the library.
-            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        }
-        super.onUserLeaveHint()
-    }
-
     override fun onStart() {
         super.onStart()
-        env.lock.onForeground()
-        if (env.lock.state.value.locked) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        lockLifecycle.onStart()
     }
 
     override fun onStop() {
         val handoff = if (isChangingConfigurations) false else LockActivityHandoff.consume()
-        val leaving = lockOnStop(isChangingConfigurations, isFinishing, screenIsOn(), handoff)
-        if (leaving) env.lock.onBackground()
+        lockLifecycle.onStop(isChangingConfigurations, isFinishing, screenIsOn(), handoff)
         super.onStop()
+    }
+
+    override fun onDestroy() {
+        unregisterReceiver(screenOff)
+        super.onDestroy()
     }
 
     @Deprecated("AndroidX activity-result launchers dispatch through this callback.")
@@ -222,7 +240,6 @@ class MainActivity : FragmentActivity() {
     override fun onResume() {
         super.onResume()
         LockActivityHandoff.clear()
-        if (!env.lock.state.value.locked) window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         val session = env.session.value ?: return
         val now = SystemClock.elapsedRealtime()
         if (now - lastResumeRescan < RESUME_RESCAN_MIN_INTERVAL_MS) return
@@ -249,10 +266,13 @@ class MainActivity : FragmentActivity() {
                     token?.let(launchImports::finish)
                 }
             if (outcome is ForegroundImport.Failed) AndroidLog.warn("Share import failed", outcome.error)
+            // The OCR and enrichment it queued finish in the background.
+            if (outcome is ForegroundImport.Done && outcome.result.imported > 0) NpnWork.drainQueues(app)
+            // What became of the files says what the library holds (a duplicate is a document it
+            // has), so whoever shared them into a locked app hears it only once it is unlocked.
+            env.lock.awaitUnlocked()
             val message = importMessage(inAppLanguage(app), outcome)
             withContext(Dispatchers.Main) { toast(app, message) }
-            // The import is reported; the OCR and enrichment it queued finish in the background.
-            if (outcome is ForegroundImport.Done && outcome.result.imported > 0) NpnWork.drainQueues(app)
         }
     }
 

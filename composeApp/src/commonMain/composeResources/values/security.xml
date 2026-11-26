@@ -26,4 +26,8 @@
     <string name="security_wrong_pin">That PIN is not correct.</string>
     <string name="security_too_many">Too many attempts. Try again in %1$d s.</string>
     <string name="security_device_prompt_subtitle">Unlock No Papers Needed</string>
+    <string name="security_confirm_current_title">Enter your current PIN</string>
+    <string name="security_confirm_current_help">Turning the app lock off or changing it needs the current PIN first.</string>
+    <string name="security_confirm_device">Confirm with device</string>
+    <string name="security_lock_now">Lock now</string>
 </resources>

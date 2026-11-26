@@ -67,9 +67,10 @@ class DefaultAppEnvironment(
     /**
      * The app lock, process-wide: an activity recreated for a configuration change keeps the state
      * it had, and every screen is behind the same lock. It starts locked when the saved setting is
-     * on, which is what a cold start shows.
+     * on, which is what a cold start shows, and with the wrong secrets the last process counted.
      */
-    override val lock: AppLock = AppLock(settings.settings.value.appLock, clock)
+    override val lock: AppLock =
+        settings.settings.value.let { AppLock(it.appLock, clock, attempts = it.appLockAttempts) }
 
     private val _session = MutableStateFlow<LibrarySession?>(null)
 
@@ -113,6 +114,16 @@ class DefaultAppEnvironment(
                 .map { it.appLock }
                 .distinctUntilChanged()
                 .collect { lock.updateSettings(it) }
+        }
+        // Wrong secrets are stored as they are counted, so a restart does not reset the backoff.
+        appScope.launch {
+            lock.attempts.collect { attempts ->
+                if (settings.settings.value.appLockAttempts != attempts) {
+                    log.runLogged("Storing the app lock's wrong attempts") {
+                        settings.edit { it.copy(appLockAttempts = attempts) }
+                    }
+                }
+            }
         }
         // Watched-folder auto-import: (re)start an importer whenever the open session or the
         // configured folder changes; collectLatest cancels the previous importer's loop.

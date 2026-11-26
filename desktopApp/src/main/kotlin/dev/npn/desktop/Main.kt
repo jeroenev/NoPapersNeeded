@@ -175,15 +175,22 @@ private fun runApp() =
                 onDispose(monitorMoveWorkaround::close)
             }
 
-            // The app lock's desktop half: input keeps it awake, minimizing is its background, and
-            // a long enough silence locks it. Android gets the same rules from its activity lifecycle.
+            // The app lock's desktop half: input keeps it awake, minimizing is its background, a
+            // long enough silence locks it, and Ctrl+Shift+L locks it at once. Android gets the same
+            // rules from its activity lifecycle.
             DisposableEffect(window, env.lock) {
                 val lock = env.lock
                 val focusManager = KeyboardFocusManager.getCurrentKeyboardFocusManager()
                 val keys =
                     KeyEventDispatcher { event ->
-                        if (event.id == KeyEvent.KEY_PRESSED) lock.onInteraction()
-                        false
+                        if (event.id != KeyEvent.KEY_PRESSED) return@KeyEventDispatcher false
+                        lock.onInteraction()
+                        if (isLockNowKey(event.keyCode, event.modifiersEx) && lock.state.value.enabled) {
+                            lock.lockNow()
+                            true
+                        } else {
+                            false
+                        }
                     }
                 focusManager.addKeyEventDispatcher(keys)
                 // A window listener never sees pointer events Compose consumes; the toolkit listener

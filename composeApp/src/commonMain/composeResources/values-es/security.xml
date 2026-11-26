@@ -26,4 +26,8 @@
     <string name="security_wrong_pin">Ese PIN no es correcto.</string>
     <string name="security_too_many">Demasiados intentos. Vuelve a intentarlo en %1$d s.</string>
     <string name="security_device_prompt_subtitle">Desbloquear No Papers Needed</string>
+    <string name="security_confirm_current_title">Introduce tu PIN actual</string>
+    <string name="security_confirm_current_help">Para desactivar o cambiar el bloqueo de la aplicación, primero hace falta el PIN actual.</string>
+    <string name="security_confirm_device">Confirmar con el dispositivo</string>
+    <string name="security_lock_now">Bloquear ahora</string>
 </resources>

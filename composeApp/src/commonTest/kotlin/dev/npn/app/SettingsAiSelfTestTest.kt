@@ -8,6 +8,9 @@ import dev.npn.core.ai.AiCheckStatus
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiSelfTestReport
+import dev.npn.core.security.AppLock
+import dev.npn.core.security.AppLockSettings
+import dev.npn.core.util.MonotonicClock
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CompletableDeferred
@@ -25,7 +28,12 @@ class SettingsAiSelfTestTest : MainDispatcherTest() {
     private fun TestScope.vm(
         settings: FakeSettingsRepository,
         selfTest: suspend (AiConfig) -> AiSelfTestReport,
-    ) = SettingsViewModel(settings, FakeLibrarySession(), selfTest).also { collecting(it.paneState) }
+    ) = SettingsViewModel(
+        settings,
+        FakeLibrarySession(),
+        selfTest,
+        lock = AppLock(AppLockSettings(), MonotonicClock { 0L }),
+    ).also { collecting(it.paneState) }
 
     /** The self-test asks the endpoint the screen shows, typed values included. */
     @Test

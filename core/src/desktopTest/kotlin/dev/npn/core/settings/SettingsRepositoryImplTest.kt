@@ -4,6 +4,7 @@ import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiReasoningLevel
 import dev.npn.core.ai.AiTagging
 import dev.npn.core.security.AppLockSettings
+import dev.npn.core.security.LockAttempts
 import dev.npn.core.security.LockCrypto
 import dev.npn.core.security.LockTimeout
 import dev.npn.core.util.NpnLog
@@ -162,6 +163,36 @@ class SettingsRepositoryImplTest {
             val stored = file.readText()
             stored.contains("swordfish") shouldBe false
             stored.contains(credential.saltHex) shouldBe true
+        }
+
+    @Test
+    fun theAppLocksWrongAttemptsAndNumericHintSurviveARestartAndGoWithTheLock() =
+        runTest {
+            val file = directory.resolve("settings.properties").toFile()
+            val credential =
+                LockCrypto.create(
+                    "1234",
+                    iterations = LockCrypto.MIN_ITERATIONS,
+                    salt = ByteArray(LockCrypto.SALT_BYTES),
+                )
+            val attempts = LockAttempts(failures = 5, retryAtMillis = 1_234_567_890_123L)
+            SettingsRepositoryImpl(NpnLog.None, file).edit {
+                it.copy(
+                    appLock = AppLockSettings(enabled = true, credential = credential, numeric = true),
+                    appLockAttempts = attempts,
+                )
+            }
+
+            val reopened = SettingsRepositoryImpl(NpnLog.None, file)
+            reopened.settings.first().appLockAttempts shouldBe attempts
+            reopened.settings
+                .first()
+                .appLock.numeric shouldBe true
+
+            reopened.edit { it.copy(appLock = it.appLock.copy(enabled = false)) }
+            val off = SettingsRepositoryImpl(NpnLog.None, file).settings.first()
+            off.appLockAttempts shouldBe LockAttempts()
+            off.appLock.numeric shouldBe false
         }
 
     @Test

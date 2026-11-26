@@ -10,6 +10,7 @@ import dev.npn.core.app.SortField
 import dev.npn.core.app.ViewType
 import dev.npn.core.ocr.OcrLanguages
 import dev.npn.core.security.AppLockSettings
+import dev.npn.core.security.LockAttempts
 import dev.npn.core.security.LockCredential
 import dev.npn.core.security.LockTimeout
 import kotlinx.coroutines.flow.Flow
@@ -85,6 +86,12 @@ data class SettingsSnapshot(
      * and the salted hash of the unlock secret. It never holds the secret itself.
      */
     val appLock: AppLockSettings = AppLockSettings(),
+    /**
+     * The wrong unlock secrets counted since the last unlock, so a restart does not reset the
+     * backoff. Kept with the lock, and gone with it: turning the lock off or deleting its entries
+     * clears them.
+     */
+    val appLockAttempts: LockAttempts = LockAttempts(),
 )
 
 /**
@@ -221,8 +228,9 @@ object SettingsCodec {
      * before persisting and after loading, so neither callers nor stored files can hold an
      * out-of-range value. New per-setting rules go here, not at the call sites.
      */
-    fun normalise(snapshot: SettingsSnapshot): SettingsSnapshot =
-        snapshot.copy(
+    fun normalise(snapshot: SettingsSnapshot): SettingsSnapshot {
+        val appLock = snapshot.appLock.normalised()
+        return snapshot.copy(
             libraryLocation = snapshot.libraryLocation?.ifEmpty { null },
             appLanguage = snapshot.appLanguage?.ifEmpty { null },
             ocrLanguage =
@@ -235,9 +243,17 @@ object SettingsCodec {
                 snapshot.gridColumnWidth.coerceIn(GridSizing.MIN_COLUMN_WIDTH, GridSizing.MAX_COLUMN_WIDTH),
             aiMaxTagsPerDoc = snapshot.aiMaxTagsPerDoc.coerceIn(AiTagging.RANGE),
             aiMaxNewTagsPerDoc = snapshot.aiMaxNewTagsPerDoc.coerceIn(AiTagging.NEW_TAGS_RANGE),
-            appLock = snapshot.appLock.normalised(),
+            appLock = appLock,
+            // Wrong secrets count against a lock that is on; with the lock off there are none.
+            appLockAttempts =
+                if (appLock.enabled) {
+                    snapshot.appLockAttempts.copy(failures = snapshot.appLockAttempts.failures.coerceAtLeast(0))
+                } else {
+                    LockAttempts()
+                },
             aiMaxRunRequests = snapshot.aiMaxRunRequests.coerceIn(AiRunCap.RANGE),
         )
+    }
 
     /**
      * Build a normalised [SettingsSnapshot] from stored values, filling defaults for absent keys.
@@ -295,13 +311,23 @@ object SettingsCodec {
                     reader.flag(SettingsKeys.GETTING_STARTED_DISMISSED, DEFAULTS.gettingStartedDismissed),
                 searchTried = reader.flag(SettingsKeys.SEARCH_TRIED, DEFAULTS.searchTried),
                 searchTipShown = reader.flag(SettingsKeys.SEARCH_TIP_SHOWN, DEFAULTS.searchTipShown),
-                appLock =
-                    AppLockSettings(
-                        enabled = reader.boolean(SettingsKeys.APP_LOCK_ENABLED) ?: false,
-                        timeout = LockTimeout.fromWire(reader.string(SettingsKeys.APP_LOCK_TIMEOUT)),
-                        credential = LockCredential.decode(reader.string(SettingsKeys.APP_LOCK_CREDENTIAL)),
-                    ),
+                appLock = appLock(reader),
+                appLockAttempts = appLockAttempts(reader),
             ),
+        )
+
+    private fun appLock(reader: Reader): AppLockSettings =
+        AppLockSettings(
+            enabled = reader.boolean(SettingsKeys.APP_LOCK_ENABLED) ?: false,
+            timeout = LockTimeout.fromWire(reader.string(SettingsKeys.APP_LOCK_TIMEOUT)),
+            credential = LockCredential.decode(reader.string(SettingsKeys.APP_LOCK_CREDENTIAL)),
+            numeric = reader.boolean(SettingsKeys.APP_LOCK_NUMERIC) ?: false,
+        )
+
+    private fun appLockAttempts(reader: Reader): LockAttempts =
+        LockAttempts(
+            failures = reader.int(SettingsKeys.APP_LOCK_FAILURES) ?: 0,
+            retryAtMillis = reader.string(SettingsKeys.APP_LOCK_RETRY_AT)?.toLongOrNull(),
         )
 
     /**
@@ -349,6 +375,9 @@ object SettingsCodec {
         writer.putBoolean(SettingsKeys.APP_LOCK_ENABLED, s.appLock.enabled)
         writer.putString(SettingsKeys.APP_LOCK_TIMEOUT, s.appLock.timeout.name)
         writer.putOptional(SettingsKeys.APP_LOCK_CREDENTIAL, s.appLock.credential?.encode())
+        writer.putBoolean(SettingsKeys.APP_LOCK_NUMERIC, s.appLock.numeric)
+        writer.putInt(SettingsKeys.APP_LOCK_FAILURES, s.appLockAttempts.failures)
+        writer.putOptional(SettingsKeys.APP_LOCK_RETRY_AT, s.appLockAttempts.retryAtMillis?.toString())
     }
 
     /**
@@ -453,6 +482,12 @@ internal object SettingsKeys {
     const val APP_LOCK_ENABLED = "appLockEnabled"
     const val APP_LOCK_TIMEOUT = "appLockTimeout"
     const val APP_LOCK_CREDENTIAL = "appLockCredential"
+    const val APP_LOCK_NUMERIC = "appLockNumeric"
+
+    // Wrong unlock secrets since the last unlock, and when the next attempt is accepted (the lock's
+    // monotonic clock, as a decimal string).
+    const val APP_LOCK_FAILURES = "appLockFailures"
+    const val APP_LOCK_RETRY_AT = "appLockRetryAt"
 }
 
 /** Bounds for the user-adjustable grid cell width (dp). */

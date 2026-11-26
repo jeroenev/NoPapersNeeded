@@ -6,14 +6,20 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.Snapshot
+import androidx.compose.ui.semantics.SemanticsNode
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import dev.npn.app.EnglishLocaleTest
 import dev.npn.app.platform.AppLockAuthenticator
 import dev.npn.app.platform.LocalAppLockAuthenticator
 import dev.npn.app.ui.click
 import dev.npn.app.ui.closing
+import dev.npn.app.ui.editableField
+import dev.npn.app.ui.focusFirst
 import dev.npn.app.ui.onUiThread
 import dev.npn.app.ui.texts
 import dev.npn.app.ui.themedScene
+import dev.npn.core.security.UnlockResult
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 
@@ -69,4 +75,37 @@ class LockScreenTest : EnglishLocaleTest() {
                 unlocks shouldBe 1
             }
         }
+
+    @Test
+    fun theSecretFieldKeepsFocusThroughAWrongAttempt() =
+        onUiThread {
+            var state by mutableStateOf(LockUiState())
+            val actions =
+                object : LockActions {
+                    override fun unlock(secret: String) = Unit
+
+                    override fun unlockWithDevice() = Unit
+
+                    override fun retryRemainingMillis() = 0L
+                }
+            themedScene(800, 600) {
+                LockScreen(state, actions)
+            }.closing {
+                render()
+                focusFirst()
+                editableField()?.isFocused() shouldBe true
+
+                // The hash runs, then says no: the user types the next try straight away.
+                state = state.copy(checking = true)
+                Snapshot.sendApplyNotifications()
+                render()
+                state = state.copy(checking = false, outcome = UnlockResult.WrongSecret)
+                Snapshot.sendApplyNotifications()
+                render()
+
+                editableField()?.isFocused() shouldBe true
+            }
+        }
+
+    private fun SemanticsNode.isFocused(): Boolean = config.getOrNull(SemanticsProperties.Focused) == true
 }

@@ -2,7 +2,9 @@ package dev.npn.app.ui.settings
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -12,26 +14,39 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import dev.npn.app.platform.LocalAppLockAuthenticator
 import dev.npn.app.platform.appLockRecoveryFile
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.Dropdown
+import dev.npn.app.ui.common.FocusOnEntry
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.SettingsSection
 import dev.npn.app.ui.common.SwitchRow
+import dev.npn.app.ui.lock.ErrorText
+import dev.npn.app.ui.lock.secretKeyboard
 import dev.npn.core.security.LockTimeout
+import dev.npn.core.security.UnlockResult
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_confirm
 import no_papers_needed.composeapp.generated.resources.common_save
 import no_papers_needed.composeapp.generated.resources.security_app_lock
 import no_papers_needed.composeapp.generated.resources.security_app_lock_help
 import no_papers_needed.composeapp.generated.resources.security_change_pin
+import no_papers_needed.composeapp.generated.resources.security_confirm_current_help
+import no_papers_needed.composeapp.generated.resources.security_confirm_current_title
+import no_papers_needed.composeapp.generated.resources.security_confirm_device
 import no_papers_needed.composeapp.generated.resources.security_device_help
+import no_papers_needed.composeapp.generated.resources.security_device_prompt_subtitle
 import no_papers_needed.composeapp.generated.resources.security_lock_after
 import no_papers_needed.composeapp.generated.resources.security_lock_fifteen_minutes
 import no_papers_needed.composeapp.generated.resources.security_lock_five_minutes
 import no_papers_needed.composeapp.generated.resources.security_lock_immediately
+import no_papers_needed.composeapp.generated.resources.security_lock_now
 import no_papers_needed.composeapp.generated.resources.security_lock_one_minute
 import no_papers_needed.composeapp.generated.resources.security_not_encrypted
 import no_papers_needed.composeapp.generated.resources.security_pin
@@ -43,6 +58,8 @@ import no_papers_needed.composeapp.generated.resources.security_recovery_desktop
 import no_papers_needed.composeapp.generated.resources.security_recovery_title
 import no_papers_needed.composeapp.generated.resources.security_set_pin
 import no_papers_needed.composeapp.generated.resources.security_title
+import no_papers_needed.composeapp.generated.resources.security_too_many
+import no_papers_needed.composeapp.generated.resources.security_wrong_pin
 import org.jetbrains.compose.resources.stringResource
 
 /** The shortest unlock secret accepted; long enough to stop a shoulder-surfed guess from working. */
@@ -61,6 +78,8 @@ internal fun SecuritySettingsPane(
     val deviceAuth = LocalAppLockAuthenticator.current
     val deviceAuthAvailable = remember(deviceAuth) { deviceAuth?.isAvailable() == true }
     val recoveryFile = appLockRecoveryFile()
+    val confirmTitle = stringResource(Res.string.security_confirm_current_title)
+    val deviceSubtitle = stringResource(Res.string.security_device_prompt_subtitle)
 
     SettingsSection(title = stringResource(Res.string.security_title)) {
         SwitchRow(
@@ -77,12 +96,16 @@ internal fun SecuritySettingsPane(
         )
         if (lock.enabled) {
             SettingsActionRow(
+                label = stringResource(Res.string.security_lock_now),
+                onClick = actions::lockAppNow,
+            )
+            SettingsActionRow(
                 label = stringResource(Res.string.security_change_pin),
-                onClick = { actions.openSecurityDialog(SecurityDialog.ChangePin) },
+                onClick = actions::changeAppLockPin,
             )
             Dropdown(
                 selected = lockTimeoutLabel(lock.timeout),
-                options = LockTimeout.entries,
+                options = LockTimeout.choices,
                 optionLabel = { lockTimeoutLabel(it) },
                 label = stringResource(Res.string.security_lock_after),
                 onSelect = actions::setAppLockTimeout,
@@ -102,12 +125,93 @@ internal fun SecuritySettingsPane(
         )
     }
 
-    state.securityDialog?.let { dialog ->
-        SecurityDialogContent(
-            dialog = dialog,
-            onDismiss = { actions.openSecurityDialog(null) },
-            onSave = actions::setAppLockPin,
-        )
+    when (val dialog = state.securityDialog) {
+        null -> {}
+
+        is SecurityDialog.ConfirmCurrent -> {
+            CurrentSecretDialog(
+                numeric = lock.numeric,
+                check = state.securityCheck,
+                deviceAuthAvailable = deviceAuthAvailable,
+                onConfirm = actions::confirmAppLockChange,
+                onDevice = {
+                    deviceAuth?.authenticate(title = confirmTitle, subtitle = deviceSubtitle) { proved ->
+                        if (proved) actions.confirmAppLockChangeWithDevice()
+                    }
+                },
+                onDismiss = { actions.openSecurityDialog(null) },
+            )
+        }
+
+        SecurityDialog.SetPin, SecurityDialog.ChangePin -> {
+            SecurityDialogContent(
+                dialog = dialog,
+                onDismiss = { actions.openSecurityDialog(null) },
+                onSave = actions::setAppLockPin,
+            )
+        }
+    }
+}
+
+/**
+ * Asks for the current secret before the lock is changed, or for the device's own unlock where it
+ * has one. Its buffer is plain [remember]: a secret never goes in saved state.
+ */
+@Composable
+private fun CurrentSecretDialog(
+    numeric: Boolean,
+    check: SecurityCheck,
+    deviceAuthAvailable: Boolean,
+    onConfirm: (String) -> Unit,
+    onDevice: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var secret by remember { mutableStateOf("") }
+    val focus = remember { FocusRequester() }
+    FocusOnEntry(focus)
+    val error =
+        when (val outcome = check.outcome) {
+            is UnlockResult.TooManyAttempts -> {
+                stringResource(Res.string.security_too_many, ((outcome.remainingMillis + 999) / 1000).toInt())
+            }
+
+            UnlockResult.WrongSecret -> {
+                stringResource(Res.string.security_wrong_pin)
+            }
+
+            else -> {
+                null
+            }
+        }
+    ConfirmDialog(
+        title = stringResource(Res.string.security_confirm_current_title),
+        onConfirm = { onConfirm(secret) },
+        onDismiss = onDismiss,
+        confirmLabel = stringResource(Res.string.common_confirm),
+        confirmEnabled = secret.isNotEmpty() && !check.checking,
+    ) {
+        Column {
+            HelpText(stringResource(Res.string.security_confirm_current_help))
+            OutlinedTextField(
+                value = secret,
+                onValueChange = { secret = it },
+                modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                label = { Text(stringResource(Res.string.security_pin)) },
+                singleLine = true,
+                // Read-only rather than disabled while checking, so it keeps the keyboard focus.
+                readOnly = check.checking,
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = secretKeyboard(numeric, ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { if (secret.isNotEmpty()) onConfirm(secret) }),
+                isError = error != null,
+            )
+            if (error != null) ErrorText(error)
+            if (deviceAuthAvailable) {
+                OutlinedButton(onClick = onDevice, enabled = !check.checking) {
+                    Text(stringResource(Res.string.security_confirm_device))
+                }
+            }
+        }
     }
 }
 

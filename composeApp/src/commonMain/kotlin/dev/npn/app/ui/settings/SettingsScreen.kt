@@ -56,6 +56,7 @@ import dev.npn.app.ui.common.rememberSnackbarMessages
 import dev.npn.app.ui.common.rememberStorageAccess
 import dev.npn.app.ui.detail.LocalDocumentDrafts
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.security.AppLock
 import dev.npn.core.settings.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import no_papers_needed.composeapp.generated.resources.Res
@@ -100,6 +101,7 @@ private val PaneGroupSpacing: Dp = 24.dp
 @Composable
 fun SettingsScreen(
     settings: SettingsRepository,
+    appLock: AppLock,
     session: LibrarySession,
     outliving: CoroutineScope,
     category: SettingsCategoryId?,
@@ -111,7 +113,15 @@ fun SettingsScreen(
     onAutoMatchRules: () -> Unit,
     revealAdvanced: Boolean = false,
     vm: SettingsViewModel =
-        viewModel { SettingsViewModel(settings, session, saved = createSavedStateHandle(), outliving = outliving) },
+        viewModel {
+            SettingsViewModel(
+                settings,
+                session,
+                lock = appLock,
+                saved = createSavedStateHandle(),
+                outliving = outliving,
+            )
+        },
 ) {
     val paneState by vm.paneState.collectAsStateWithLifecycle()
 

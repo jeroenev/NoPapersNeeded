@@ -21,9 +21,13 @@ import dev.npn.core.mail.MailAccount
 import dev.npn.core.mail.MailDeviceChoices
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.security.AppLock
+import dev.npn.core.security.LockCredential
+import dev.npn.core.security.LockCrypto
 import dev.npn.core.security.LockTimeout
 import dev.npn.core.settings.SettingsSnapshot
 import dev.npn.core.sync.RcloneProvider
+import dev.npn.core.util.MonotonicClock
 import kotlinx.coroutines.CoroutineScope
 
 /** A Settings viewmodel that counts the library folder and any folder under it as in the library. */
@@ -36,6 +40,11 @@ internal fun settingsVm(
     compute: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.Default,
     readLog: suspend (Long) -> String = { "" },
     oauthApps: CloudOAuthApps = CloudOAuthApps.NONE,
+    lock: AppLock = AppLock(settings.settings.value.appLock, MonotonicClock { 0L }),
+    createLockCredential: (
+        String,
+    ) -> LockCredential = { LockCrypto.create(it, iterations = LockCrypto.MIN_ITERATIONS) },
+    lockDispatcher: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.Default,
 ) = SettingsViewModel(
     settings,
     session,
@@ -45,6 +54,9 @@ internal fun settingsVm(
     oauthApps = oauthApps,
     outliving = outliving,
     copy = copy,
+    lock = lock,
+    createLockCredential = createLockCredential,
+    lockDispatcher = lockDispatcher,
     compute = compute,
     readLog = readLog,
 )
@@ -71,6 +83,14 @@ internal open class NoSettingsPaneActions : SettingsPaneActions {
     override fun setAppLockTimeout(timeout: LockTimeout) = Unit
 
     override fun setAppLockPin(pin: String) = Unit
+
+    override fun changeAppLockPin() = Unit
+
+    override fun confirmAppLockChange(secret: String) = Unit
+
+    override fun confirmAppLockChangeWithDevice() = Unit
+
+    override fun lockAppNow() = Unit
 
     override fun setStoragePathTemplate(template: String) = Unit
 

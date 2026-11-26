@@ -26,4 +26,8 @@
     <string name="security_wrong_pin">Ce code n’est pas correct.</string>
     <string name="security_too_many">Trop de tentatives. Réessaie dans %1$d s.</string>
     <string name="security_device_prompt_subtitle">Déverrouiller No Papers Needed</string>
+    <string name="security_confirm_current_title">Saisissez votre code actuel</string>
+    <string name="security_confirm_current_help">Pour désactiver ou modifier le verrouillage de l’application, saisissez d’abord le code actuel.</string>
+    <string name="security_confirm_device">Confirmer avec l’appareil</string>
+    <string name="security_lock_now">Verrouiller maintenant</string>
 </resources>

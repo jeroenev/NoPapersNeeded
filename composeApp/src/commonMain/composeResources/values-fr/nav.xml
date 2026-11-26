@@ -78,4 +78,6 @@
     <string name="nav_shortcut_tip_page_counter">Cliquez sur le compteur de pages pour aller à une page par son numéro.</string>
     <string name="nav_shortcut_tip_long_press">Appuyez longuement sur un document pour commencer une sélection, puis cliquez sur d’autres pour les ajouter.</string>
     <string name="nav_shortcut_tip_right_click">Faites un clic droit sur un document pour ouvrir son menu.</string>
+    <string name="nav_shortcut_keys_ctrl_shift_l">Ctrl+Maj+L</string>
+    <string name="nav_shortcut_lock_now">Verrouiller l’application, si le verrouillage est activé.</string>
 </resources>

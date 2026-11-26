@@ -132,3 +132,5 @@ actual suspend fun copyToClipboard(text: String) {
 
 /** The settings file a forgotten PIN is reset from, while the app is closed. */
 actual fun appLockRecoveryFile(): String? = SettingsRepositoryImpl.defaultFile().path
+
+actual fun focusesSecretFieldOnEntry(): Boolean = true

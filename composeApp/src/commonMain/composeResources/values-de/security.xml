@@ -26,4 +26,8 @@
     <string name="security_wrong_pin">Diese PIN ist nicht korrekt.</string>
     <string name="security_too_many">Zu viele Versuche. Versuche es in %1$d s erneut.</string>
     <string name="security_device_prompt_subtitle">No Papers Needed entsperren</string>
+    <string name="security_confirm_current_title">Aktuelle PIN eingeben</string>
+    <string name="security_confirm_current_help">Um die App-Sperre auszuschalten oder zu ändern, wird zuerst die aktuelle PIN benötigt.</string>
+    <string name="security_confirm_device">Mit Gerät bestätigen</string>
+    <string name="security_lock_now">Jetzt sperren</string>
 </resources>

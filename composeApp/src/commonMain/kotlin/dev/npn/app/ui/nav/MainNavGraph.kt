@@ -40,6 +40,7 @@ import dev.npn.app.ui.detail.DocDetailScreen
 import dev.npn.app.ui.detail.WithDraftResumeBanner
 import dev.npn.app.ui.library.LibraryHandoffs
 import dev.npn.app.ui.library.LibraryScreen
+import dev.npn.app.ui.lock.LocalAppLock
 import dev.npn.app.ui.palette.CommandPaletteActions
 import dev.npn.app.ui.palette.CommandPaletteHost
 import dev.npn.app.ui.palette.CommandPaletteViewModel
@@ -459,6 +460,7 @@ private fun NavGraphBuilder.settingsRoutes(
         val route = entry.toRoute<Route.Settings>()
         SettingsScreen(
             settings = settings,
+            appLock = LocalAppLock.current,
             session = session,
             outliving = library.outliving,
             category = SettingsCategoryId.fromRouteKey(route.category),

@@ -52,6 +52,7 @@ import no_papers_needed.composeapp.generated.resources.nav_shortcut_keys_ctrl_f
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_keys_ctrl_k
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_keys_ctrl_o
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_keys_ctrl_s
+import no_papers_needed.composeapp.generated.resources.nav_shortcut_keys_ctrl_shift_l
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_keys_delete
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_keys_enter
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_keys_escape
@@ -66,6 +67,7 @@ import no_papers_needed.composeapp.generated.resources.nav_shortcut_library_esca
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_library_import
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_library_search
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_library_select_all
+import no_papers_needed.composeapp.generated.resources.nav_shortcut_lock_now
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_show_list
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_tip_long_press
 import no_papers_needed.composeapp.generated.resources.nav_shortcut_tip_page_counter
@@ -109,6 +111,7 @@ private val SHORTCUTS =
                 Shortcut(Res.string.nav_shortcut_keys_help, Res.string.nav_shortcut_show_list),
                 Shortcut(Res.string.nav_shortcut_keys_ctrl_k, Res.string.nav_shortcut_command_palette),
                 Shortcut(Res.string.nav_shortcut_keys_escape, Res.string.nav_shortcut_back),
+                Shortcut(Res.string.nav_shortcut_keys_ctrl_shift_l, Res.string.nav_shortcut_lock_now),
             ),
         ),
         ShortcutGroup(

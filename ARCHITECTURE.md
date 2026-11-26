@@ -833,17 +833,30 @@ Kept by `core.security` (`AppLock`, `LockCrypto`), `SettingsCodec` and `composeA
   one check). `LockCrypto.verify` compares in constant time.
 - `AppLock` starts locked whenever the setting is on, which is what a cold start shows. Returning
   from the background locks once the elapsed time reaches the chosen `LockTimeout`
-  (`IMMEDIATELY` = any return). Android starts the timeout in `onStop` only when the user left
-  (`onUserLeaveHint`: Home, Recents) or the screen is off, so the scanner, a picker or the share
-  sheet the app opens is not leaving it; `onStart` checks the time away. Time spent in such an
-  activity is therefore not counted, even if the user leaves from there. A configuration change is
-  not background. The locked window is kept out of screenshots with `FLAG_SECURE`. Desktop treats a minimized window as background and also
-  locks after the chosen interval without keyboard or pointer input; `IMMEDIATELY` only acts on
-  minimizing there.
-- Wrong secrets back off (`LockBackoff`: three free attempts, then 5 s, 15 s, 1 min, 5 min), and
-  the whole state is one `StateFlow`, so the shell can read it while the hash runs off the main
-  thread. Enabling the lock or setting a new secret does not lock the app that made the change;
-  disabling it clears the hash.
+  (`IMMEDIATELY` = any return). On Android, `LockLifecycle` (`composeApp` `platform`) turns the
+  activity's lifecycle into the lock's: every real `onStop` records when the app was left, and
+  `onStart` checks the time away. A stop for an activity the app started and expects back (a
+  picker, the share sheet, printing; `LockActivityHandoff`) is not exempt: it gets a bounded grace,
+  `max(timeout, 3 min)`, so leaving for Home from there still locks once that has passed. Back,
+  a stop with the screen off, and the screen going off later (an `ACTION_SCREEN_OFF` receiver)
+  end the grace. A configuration change is not background. While the lock is on, the window
+  keeps `FLAG_SECURE`, locked or not, so the Recents thumbnail never shows the library. Desktop,
+  whose minimize events many window managers never send, locks after the chosen interval without
+  keyboard or pointer input, and treats a minimized window as background too; it offers no
+  `IMMEDIATELY` (`LockTimeout.choices`) and defaults to five minutes.
+- Locking removes the app's content rather than covering it (`LockGate`), so nothing behind it is
+  read out, focused or reachable by a shortcut; a `SaveableStateHolder` keeps what the content
+  saved, so an unlock returns to the same document, dialog and scroll position. Imports shared
+  into a locked app run, but their result toast waits for the unlock, as a duplicate count says
+  what the library holds. Ctrl+Shift+L and Settings → Security lock the app at once.
+- Wrong secrets back off (`LockBackoff`: three free attempts, then 5 s, 15 s, 1 min, 5 min). The
+  count and the retry time (`LockAttempts`) are stored beside the setting, so a restart does not
+  reset them; a stored or running wait is held to what its count earns, so a clock set back, or
+  Android's clock starting over at a reboot, cannot stretch it. The whole state is one
+  `StateFlow`, so the shell can read it while the hash runs off the main thread. Turning the lock
+  off, changing its PIN or its timeout asks for the current PIN first (or the device's own unlock
+  on Android), through the same `AppLock` check and backoff as the lock screen. Enabling the lock
+  or setting a new secret does not lock the app that made the change; disabling it clears the hash.
 - The user cannot be locked out for good. Android's `AppLockAuthenticator` offers
   `androidx.biometric` with `DEVICE_CREDENTIAL`, so the device's own unlock always works, and the
   app PIN remains an alternative. On desktop, closing the app and deleting the `appLock*` entries

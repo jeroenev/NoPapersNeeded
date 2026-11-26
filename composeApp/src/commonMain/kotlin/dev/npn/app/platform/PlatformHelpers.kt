@@ -163,3 +163,10 @@ expect suspend fun copyToClipboard(text: String)
  * unlock or clearing the app's data.
  */
 expect fun appLockRecoveryFile(): String?
+
+/**
+ * Whether the app lock's secret field takes focus as soon as it shows: on desktop, where the
+ * keyboard is right there; not on a phone, where the device prompt comes first and a focused field
+ * would raise the on-screen keyboard behind it.
+ */
+expect fun focusesSecretFieldOnEntry(): Boolean

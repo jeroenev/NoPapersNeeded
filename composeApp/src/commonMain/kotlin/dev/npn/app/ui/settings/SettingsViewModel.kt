@@ -35,9 +35,12 @@ import dev.npn.core.pathrules.StoragePathContext
 import dev.npn.core.pathrules.StoragePathExpansion
 import dev.npn.core.pathrules.StoragePathTemplate
 import dev.npn.core.rules.AutoMatchRule
+import dev.npn.core.security.AppLock
+import dev.npn.core.security.AppLockSettings
 import dev.npn.core.security.LockCredential
 import dev.npn.core.security.LockCrypto
 import dev.npn.core.security.LockTimeout
+import dev.npn.core.security.UnlockResult
 import dev.npn.core.settings.SettingsRepository
 import dev.npn.core.settings.SettingsSnapshot
 import dev.npn.core.settings.toAiConfig
@@ -140,6 +143,11 @@ class SettingsViewModel(
     private val outliving: CoroutineScope? = null,
     /** Where a copied report goes; injectable so its success and failure are testable. */
     private val copy: suspend (String) -> Unit = ::copyToClipboard,
+    /**
+     * The app lock: Settings checks the current secret against it (and its backoff) before the lock
+     * is changed, and locks it on request.
+     */
+    private val lock: AppLock,
     /**
      * Make the salted hash a new app-lock secret is stored as. Injected so a test need not pay the
      * production PBKDF2 cost; production always uses [LockCrypto.create].
@@ -403,7 +411,20 @@ class SettingsViewModel(
     /** The app-lock set-or-change dialog, kept through recreation as the field dialog is. */
     private val securityDialog = saved.uiState<SecurityDialog?>(SECURITY_DIALOG_KEY, null)
 
-    internal fun openSecurityDialog(dialog: SecurityDialog?) = securityDialog.set(dialog)
+    /** The current secret's check, while [securityDialog] asks for it. */
+    private val securityCheck = MutableStateFlow(SecurityCheck())
+
+    /**
+     * The current secret was confirmed for a new one, so the next [setAppLockPin] may replace it.
+     * Never saved: a restored process asks again.
+     */
+    private var pinChangeConfirmed = false
+
+    internal fun openSecurityDialog(dialog: SecurityDialog?) {
+        if (dialog != SecurityDialog.ChangePin) pinChangeConfirmed = false
+        securityCheck.value = SecurityCheck()
+        securityDialog.set(dialog)
+    }
 
     /** The bundle a "Report a problem" tap built, from building to handed-off. */
     private val problemReporter =
@@ -522,11 +543,11 @@ class SettingsViewModel(
                 combine(
                     fields,
                     fieldUsage,
-                    combine(fieldDialog.flow, securityDialog.flow, ::Pair),
+                    combine(fieldDialog.flow, securityDialog.flow, securityCheck, ::Triple),
                     problemReport,
                 ) { defs, usage, dialogs, report ->
-                    val (dialog, security) = dialogs
-                    PaneExtras(defs, usage, dialog, security, report)
+                    val (dialog, security, check) = dialogs
+                    PaneExtras(defs, usage, dialog, security, check, report)
                 },
                 verification,
                 ::Pair,
@@ -545,6 +566,7 @@ class SettingsViewModel(
                 verification = verify,
                 mail = core.mail,
                 securityDialog = extras.security,
+                securityCheck = extras.securityCheck,
                 problemReport = extras.problemReport,
             )
         }.stateIn(
@@ -570,6 +592,7 @@ class SettingsViewModel(
         val usage: Map<String, Int>,
         val dialog: FieldDialog?,
         val security: SecurityDialog?,
+        val securityCheck: SecurityCheck,
         val problemReport: ProblemReportState,
     )
 
@@ -591,26 +614,28 @@ class SettingsViewModel(
 
     /**
      * Turning the lock on opens the dialog that picks a secret; it is enabled by [setAppLockPin].
-     * Turning it off drops the stored hash with it.
+     * Turning it off asks for the current secret first, then drops the stored hash with it.
      */
     override fun setAppLockEnabled(enabled: Boolean) {
         if (enabled) {
             openSecurityDialog(SecurityDialog.SetPin)
-            return
-        }
-        launchReporting(Res.string.common_save_setting_failed) {
-            settings.edit { it.copy(appLock = it.appLock.copy(enabled = false, credential = null)) }
+        } else {
+            requestLockChange(LockChange.TurnOff)
         }
     }
 
-    override fun setAppLockTimeout(timeout: LockTimeout) =
-        launchReporting(Res.string.common_save_setting_failed) {
-            settings.edit { it.copy(appLock = it.appLock.copy(timeout = timeout)) }
-        }
+    override fun setAppLockTimeout(timeout: LockTimeout) = requestLockChange(LockChange.Timeout(timeout))
+
+    override fun changeAppLockPin() = requestLockChange(LockChange.ChangePin)
 
     override fun setAppLockPin(pin: String) {
         if (pin.length < MIN_APP_LOCK_SECRET_LENGTH) {
             message(uiText(Res.string.security_pin_too_short))
+            return
+        }
+        // A lock that is on takes a new secret only from someone who just gave the current one.
+        if (settings.settings.value.appLock.enabled && !pinChangeConfirmed) {
+            requestLockChange(LockChange.ChangePin)
             return
         }
         viewModelScope.launch {
@@ -619,9 +644,69 @@ class SettingsViewModel(
                     // PBKDF2 is deliberately slow; hashing on the main thread would freeze the dialog.
                     // The hashing is inside the report so a rejected input cannot escape as a crash.
                     val credential = withContext(lockDispatcher) { createLockCredential(pin) }
-                    settings.edit { it.copy(appLock = it.appLock.copy(enabled = true, credential = credential)) }
+                    val numeric = AppLockSettings.isNumeric(pin)
+                    settings.edit {
+                        it.copy(appLock = it.appLock.copy(enabled = true, credential = credential, numeric = numeric))
+                    }
                 }
             if (saved) openSecurityDialog(null)
+        }
+    }
+
+    override fun confirmAppLockChange(secret: String) {
+        val change = (securityDialog.value as? SecurityDialog.ConfirmCurrent)?.change ?: return
+        if (secret.isEmpty() || securityCheck.value.checking) return
+        securityCheck.value = SecurityCheck(checking = true)
+        viewModelScope.launch {
+            // The same check, and the same count of wrong secrets, as the lock screen's.
+            val result = withContext(lockDispatcher) { lock.unlockWithSecret(secret) }
+            // Only a matching secret confirms; a lock that reads as off here is the setting still
+            // on its way to it, not a reason to skip the check.
+            if (result == UnlockResult.Success) {
+                lockChangeConfirmed(change)
+            } else {
+                securityCheck.value = SecurityCheck(outcome = result)
+            }
+        }
+    }
+
+    override fun confirmAppLockChangeWithDevice() {
+        val change = (securityDialog.value as? SecurityDialog.ConfirmCurrent)?.change ?: return
+        lock.unlockWithSystem()
+        lockChangeConfirmed(change)
+    }
+
+    override fun lockAppNow() = lock.lockNow()
+
+    /** Ask for the current secret before [change]; a lock that is off has none to ask for. */
+    private fun requestLockChange(change: LockChange) {
+        if (settings.settings.value.appLock.enabled) {
+            openSecurityDialog(SecurityDialog.ConfirmCurrent(change))
+        } else {
+            lockChangeConfirmed(change)
+        }
+    }
+
+    private fun lockChangeConfirmed(change: LockChange) {
+        when (change) {
+            LockChange.ChangePin -> {
+                openSecurityDialog(SecurityDialog.ChangePin)
+                pinChangeConfirmed = true
+            }
+
+            LockChange.TurnOff -> {
+                openSecurityDialog(null)
+                launchReporting(Res.string.common_save_setting_failed) {
+                    settings.edit { it.copy(appLock = it.appLock.copy(enabled = false, credential = null)) }
+                }
+            }
+
+            is LockChange.Timeout -> {
+                openSecurityDialog(null)
+                launchReporting(Res.string.common_save_setting_failed) {
+                    settings.edit { it.copy(appLock = it.appLock.copy(timeout = change.timeout)) }
+                }
+            }
         }
     }
 

@@ -28,6 +28,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -35,6 +40,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import dev.npn.app.platform.LocalAppLockAuthenticator
 import dev.npn.app.platform.appLockRecoveryFile
+import dev.npn.app.platform.focusesSecretFieldOnEntry
+import dev.npn.app.ui.common.FocusOnEntry
 import dev.npn.core.security.UnlockResult
 import kotlinx.coroutines.delay
 import no_papers_needed.composeapp.generated.resources.Res
@@ -73,6 +80,10 @@ fun LockScreen(
     modifier: Modifier = Modifier,
 ) {
     var secret by remember { mutableStateOf("") }
+    val secretFocus = remember { FocusRequester() }
+    // Where there is a keyboard to type with straight away; on a phone the device prompt comes
+    // first, and a field taking focus would raise the on-screen keyboard behind it.
+    if (focusesSecretFieldOnEntry()) FocusOnEntry(secretFocus)
     val deviceAuth = LocalAppLockAuthenticator.current
     val deviceAuthAvailable = remember(deviceAuth) { deviceAuth?.isAvailable() == true }
     val retryRemaining by
@@ -129,23 +140,18 @@ fun LockScreen(
             OutlinedTextField(
                 value = secret,
                 onValueChange = { secret = it },
-                modifier = Modifier.fillMaxWidth().widthIn(max = FormWidth),
+                modifier = Modifier.fillMaxWidth().widthIn(max = FormWidth).focusRequester(secretFocus),
                 label = { Text(stringResource(Res.string.security_pin)) },
                 singleLine = true,
-                enabled = !state.checking,
+                // Read-only, not disabled, while the hash runs: a disabled field drops the keyboard
+                // focus, and the next try after a wrong one would be typed into nothing.
+                readOnly = state.checking,
                 visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                keyboardOptions = secretKeyboard(state.lock.numeric, ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { actions.unlock(secret) }),
                 isError = error != null,
             )
-            if (error != null) {
-                Text(
-                    error,
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodyMedium,
-                    textAlign = TextAlign.Center,
-                )
-            }
+            if (error != null) ErrorText(error)
             Button(
                 onClick = { actions.unlock(secret) },
                 enabled = secret.isNotEmpty() && !state.checking && retryRemaining == 0L,
@@ -178,4 +184,29 @@ fun LockScreen(
             )
         }
     }
+}
+
+/** The keyboard for typing the unlock secret: a number pad when the secret is digits only. */
+internal fun secretKeyboard(
+    numeric: Boolean,
+    imeAction: ImeAction = ImeAction.Default,
+): KeyboardOptions =
+    KeyboardOptions(
+        keyboardType = if (numeric) KeyboardType.NumberPassword else KeyboardType.Password,
+        imeAction = imeAction,
+    )
+
+/** Why the secret was not accepted, read out as soon as it shows (a live region). */
+@Composable
+internal fun ErrorText(
+    text: String,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text,
+        modifier = modifier.semantics { liveRegion = LiveRegionMode.Polite },
+        color = MaterialTheme.colorScheme.error,
+        style = MaterialTheme.typography.bodyMedium,
+        textAlign = TextAlign.Center,
+    )
 }
