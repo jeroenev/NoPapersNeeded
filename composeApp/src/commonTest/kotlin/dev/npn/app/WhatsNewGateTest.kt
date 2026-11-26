@@ -12,7 +12,7 @@ class WhatsNewGateTest : MainDispatcherTest() {
     fun aFreshInstallRecordsTheVersionWithoutShowingNotes() =
         runTest(dispatcher) {
             val settings = FakeSettingsRepository()
-            val gate = WhatsNewGateViewModel(settings, currentVersion = "1.0.0")
+            val gate = WhatsNewGateViewModel(settings, currentVersion = "1.0.0", notesVersion = { "1.0.0" })
             advanceUntilIdle()
 
             gate.show.value shouldBe false
@@ -25,7 +25,7 @@ class WhatsNewGateTest : MainDispatcherTest() {
             val settings = FakeSettingsRepository()
             settings.edit { it.copy(lastSeenVersion = "1.0.0") }
 
-            val gate = WhatsNewGateViewModel(settings, currentVersion = "1.1.0")
+            val gate = WhatsNewGateViewModel(settings, currentVersion = "1.1.0", notesVersion = { "1.1.0" })
             advanceUntilIdle()
             gate.show.value shouldBe true
 
@@ -41,7 +41,7 @@ class WhatsNewGateTest : MainDispatcherTest() {
             val settings = FakeSettingsRepository()
             settings.edit { it.copy(libraryLocation = "/library") }
 
-            val gate = WhatsNewGateViewModel(settings, currentVersion = "1.0.0")
+            val gate = WhatsNewGateViewModel(settings, currentVersion = "1.0.0", notesVersion = { "1.0.0" })
             advanceUntilIdle()
 
             gate.show.value shouldBe true
@@ -53,10 +53,35 @@ class WhatsNewGateTest : MainDispatcherTest() {
             val settings = FakeSettingsRepository()
             settings.edit { it.copy(lastSeenVersion = "1.0.0") }
 
-            val gate = WhatsNewGateViewModel(settings, currentVersion = "1.0.0")
+            val gate = WhatsNewGateViewModel(settings, currentVersion = "1.0.0", notesVersion = { "1.0.0" })
             advanceUntilIdle()
 
             gate.show.value shouldBe false
             settings.settings.first().lastSeenVersion shouldBe "1.0.0"
+        }
+
+    /** Notes left over from an earlier version are not this version's news: nothing pops up. */
+    @Test
+    fun aVersionChangeWithoutItsOwnNotesShowsNothing() =
+        runTest(dispatcher) {
+            val settings = FakeSettingsRepository()
+            settings.edit { it.copy(lastSeenVersion = "1.0.0") }
+
+            val gate = WhatsNewGateViewModel(settings, currentVersion = "1.1.0", notesVersion = { "1.0.0" })
+            advanceUntilIdle()
+
+            gate.show.value shouldBe false
+        }
+
+    @Test
+    fun unreadableNotesShowNothing() =
+        runTest(dispatcher) {
+            val settings = FakeSettingsRepository()
+            settings.edit { it.copy(lastSeenVersion = "1.0.0") }
+
+            val gate = WhatsNewGateViewModel(settings, currentVersion = "1.1.0", notesVersion = { null })
+            advanceUntilIdle()
+
+            gate.show.value shouldBe false
         }
 }

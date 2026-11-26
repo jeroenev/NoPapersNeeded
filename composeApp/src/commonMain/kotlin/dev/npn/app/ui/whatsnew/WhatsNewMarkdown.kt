@@ -28,6 +28,21 @@ internal sealed interface WhatsNewBlock {
 
 /** The parser behind [WhatsNewBlock]; pure, so the bundled file can be tested without Compose. */
 internal object WhatsNewMarkdown {
+    /** Where the build carries the notes. */
+    const val NOTES_PATH = "files/whats-new.md"
+
+    private val TITLE_VERSION = Regex("""(\d+\.\d+\.\d+)$""")
+
+    /**
+     * The version the notes are for, as their title ends ("What's new in 1.2.0"); null without
+     * one. The notes pop up only on the version they are for, never on one that bundles them stale.
+     */
+    fun version(markdown: String): String? =
+        parse(markdown)
+            .filterIsInstance<WhatsNewBlock.Title>()
+            .firstOrNull()
+            ?.let { TITLE_VERSION.find(it.text)?.value }
+
     /** The one inline style the notes use: bold markers are dropped rather than shown literally. */
     private fun inline(text: String): String = text.replace("**", "").trim()
 

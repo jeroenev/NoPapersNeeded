@@ -488,6 +488,11 @@ That bumps `npn.version`, commits `[main] Release 1.2.0`, tags `v1.2.0` and push
 release has no earlier version to bump from: `mise release 0.1.0` while `npn.version` is already
 `0.1.0` tags the current commit instead, since no `v0.1.0` tag exists yet.
 
+The in-app "What's new" notes (`composeApp/src/commonMain/composeResources/files/whats-new.md`)
+pop up once after an update only on the version their title names (`# What's new in 1.2.0`), so
+a release without new notes shows nothing. Merge the next version's notes before `mise release`,
+since the bump commit may change nothing else.
+
 Everything before 1.0.0 is a beta. The version cannot say so (jpackage and MSI take plain numbers
 only), so the release workflow takes the channel from the major version: a 0.x release is published
 as a GitHub pre-release, titled `v0.2.0 (beta)`. That keeps a beta out of "latest", which the

@@ -25,8 +25,6 @@ import no_papers_needed.composeapp.generated.resources.common_settings_whats_new
 import no_papers_needed.composeapp.generated.resources.common_settings_whats_new_load_failed
 import org.jetbrains.compose.resources.stringResource
 
-private const val NOTES_PATH = "files/whats-new.md"
-
 /**
  * The bundled "What's new" notes, shown once after a version change and on demand from About.
  * Nothing is fetched: the notes travel in the build, so this works offline and never leaks a
@@ -36,7 +34,7 @@ private const val NOTES_PATH = "files/whats-new.md"
 internal fun WhatsNewDialog(onDismiss: () -> Unit) {
     val notes by produceState<List<WhatsNewBlock>?>(initialValue = null) {
         value =
-            runCatchingCancellable { Res.readBytes(NOTES_PATH).decodeToString() }
+            runCatchingCancellable { Res.readBytes(WhatsNewMarkdown.NOTES_PATH).decodeToString() }
                 .map(WhatsNewMarkdown::parse)
                 .getOrDefault(emptyList())
     }

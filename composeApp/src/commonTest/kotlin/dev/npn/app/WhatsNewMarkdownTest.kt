@@ -38,4 +38,11 @@ class WhatsNewMarkdownTest {
             WhatsNewMarkdown.parse("\n\n# Title\n\n"),
         )
     }
+
+    @Test
+    fun theTitleNamesTheVersionTheNotesAreFor() {
+        assertEquals("1.2.3", WhatsNewMarkdown.version("# What's new in 1.2.3\n\n- A bullet"))
+        assertEquals(null, WhatsNewMarkdown.version("# What's new\n\n- A bullet"))
+        assertEquals(null, WhatsNewMarkdown.version("- No title"))
+    }
 }
