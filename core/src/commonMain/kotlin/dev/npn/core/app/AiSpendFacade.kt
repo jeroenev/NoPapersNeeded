@@ -10,7 +10,6 @@ import dev.npn.core.ai.AiPrompts
 import dev.npn.core.ai.AiRunEstimate
 import dev.npn.core.ai.AiSpendSummary
 import dev.npn.core.db.AiUsageDao
-import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.FtsDao
 import dev.npn.core.util.EpochClock
 import kotlinx.coroutines.flow.Flow
@@ -39,13 +38,9 @@ interface AiSpendFacade {
 
     /** What reading one document's [pages] would cost with the vision model. */
     suspend fun estimateOcrForPages(pages: Int): AiRunEstimate
-
-    /** What reading [docIds] with the vision model would cost, using their known page counts. */
-    suspend fun estimateOcr(docIds: List<String>): AiRunEstimate
 }
 
 internal class AiSpendFacadeImpl(
-    private val documents: DocumentDao,
     private val fts: FtsDao,
     private val dao: AiUsageDao,
     private val ledger: AiLedger,
@@ -93,12 +88,6 @@ internal class AiSpendFacadeImpl(
             tokens.inputTokens,
             tokens.outputTokens,
         )
-    }
-
-    override suspend fun estimateOcr(docIds: List<String>): AiRunEstimate {
-        val pages = documents.getByDocIds(docIds).sumOf { it.pageCount ?: 0 }
-        val tokens = AiEstimator.ocr(pages)
-        return estimate(configProvider(), docIds.size, pages, pages, tokens.inputTokens, tokens.outputTokens)
     }
 
     private fun estimate(

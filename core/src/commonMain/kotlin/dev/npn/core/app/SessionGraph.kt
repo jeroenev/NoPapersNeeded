@@ -61,7 +61,6 @@ internal class SessionGraph(
 
     val aiSpend: AiSpendFacade =
         AiSpendFacadeImpl(
-            documents = db.documentDao(),
             fts = db.ftsDao(),
             dao = deps.deviceDb.aiUsageDao(),
             ledger = aiLedger,

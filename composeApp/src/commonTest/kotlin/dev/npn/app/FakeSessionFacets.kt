@@ -78,7 +78,7 @@ class FakeAiSpendFacade : AiSpendFacade {
     val summaryFlow = MutableStateFlow(AiSpendSummary.EMPTY)
     override val summary: Flow<AiSpendSummary> get() = summaryFlow
 
-    /** What [estimateSuggest] and [estimateOcr] answer, scaled per request by the caller. */
+    /** What [estimateSuggest] and [estimateOcrForPages] answer, scaled per request by the caller. */
     var estimate: AiRunEstimate =
         AiRunEstimate(
             documents = 1,
@@ -106,9 +106,6 @@ class FakeAiSpendFacade : AiSpendFacade {
 
     override suspend fun estimateOcrForPages(pages: Int): AiRunEstimate =
         estimate.copy(documents = 1, requests = pages, pages = pages)
-
-    override suspend fun estimateOcr(docIds: List<String>): AiRunEstimate =
-        estimate.copy(documents = docIds.size, requests = docIds.size)
 }
 
 /** Imports and rescans. [FakeIngestFacade.importOutcomes] is consumed in order, repeating the last. */

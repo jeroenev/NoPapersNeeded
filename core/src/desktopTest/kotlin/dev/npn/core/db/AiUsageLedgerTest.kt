@@ -87,17 +87,6 @@ class AiUsageLedgerTest {
         }
 
     @Test
-    fun requestsForRunResumesAPersistedRun() =
-        runTest {
-            ledger.record(record(runId = "job-7"))
-            ledger.record(record(runId = "job-7"))
-            ledger.record(record(runId = "other"))
-
-            ledger.requestsForRun("job-7") shouldBe 2
-            ledger.requestsForRun("missing") shouldBe 0
-        }
-
-    @Test
     fun resetDeletesEveryRecordedRequest() =
         runTest {
             ledger.record(record())

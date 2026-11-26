@@ -5,10 +5,7 @@ import androidx.room3.ConstructedBy
 import androidx.room3.Database
 import androidx.room3.RoomDatabase
 import androidx.room3.RoomDatabaseConstructor
-import androidx.room3.migration.AutoMigrationSpec
-import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
-import androidx.sqlite.execSQL
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 
@@ -35,13 +32,14 @@ import kotlinx.coroutines.Dispatchers
 @Database(
     // v2: adds sync_remote_entries (what the cloud sync engine last knew about each remote file).
     // v3: adds mail_cursor (how far this device has read each IMAP folder),
-    // reminder_notifications (the reminders this device already showed) and ai_usage (the
-    // device-local AI spend ledger), plus queued edit request reservations across restarts.
+    // reminder_notifications (the reminders this device already showed) and ai_usage (this
+    // library's AI spend ledger on this device), plus the requests a queued edit run has spent
+    // (ai_edit_jobs.requestsUsed, 0 for a run queued before it: v2 counted none).
     version = 3,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
-        AutoMigration(from = 2, to = 3, spec = DeviceDatabase.BackfillRequestReservations::class),
+        AutoMigration(from = 2, to = 3),
     ],
     entities = [
         KeyValueEntity::class,
@@ -74,16 +72,6 @@ abstract class DeviceDatabase : RoomDatabase() {
     abstract fun reminderNotificationDao(): ReminderNotificationDao
 
     abstract fun aiUsageDao(): AiUsageDao
-
-    /** Preserve the calls still visible in the old ledger when upgrading an unfinished run. */
-    class BackfillRequestReservations : AutoMigrationSpec {
-        override suspend fun onPostMigrate(connection: SQLiteConnection) {
-            connection.execSQL(
-                "UPDATE ai_edit_jobs SET requestsUsed = " +
-                    "(SELECT COUNT(*) FROM ai_usage WHERE ai_usage.runId = ai_edit_jobs.jobId)",
-            )
-        }
-    }
 
     companion object {
         /**

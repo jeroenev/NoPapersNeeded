@@ -14,8 +14,6 @@ internal class RoomAiLedger(
     override suspend fun totals(sinceMillis: Long?): List<AiUsageTotals> =
         (if (sinceMillis == null) dao.totals() else dao.totalsSince(sinceMillis)).map { it.toTotals() }
 
-    override suspend fun requestsForRun(runId: String): Int = dao.requestsForRun(runId)
-
     override suspend fun reset() = dao.deleteAll()
 
     private fun AiUsageRecord.toEntity(): AiUsageEntity =

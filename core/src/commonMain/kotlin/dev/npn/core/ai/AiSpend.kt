@@ -63,9 +63,6 @@ data class AiSpendSummary(
     val last30Days: List<AiUsageTotals> = emptyList(),
     val allTime: List<AiUsageTotals> = emptyList(),
 ) {
-    val last30DaysRequests: Int get() = last30Days.sumOf { it.requests }
-    val allTimeRequests: Int get() = allTime.sumOf { it.requests }
-
     companion object {
         val EMPTY = AiSpendSummary()
     }
@@ -342,9 +339,6 @@ interface AiLedger {
     /** Totals since [sinceMillis] (inclusive), or everything when null, per provider and model. */
     suspend fun totals(sinceMillis: Long?): List<AiUsageTotals>
 
-    /** Requests already recorded under [runId], for resuming a persisted run against its cap. */
-    suspend fun requestsForRun(runId: String): Int
-
     /** Delete every recorded request. */
     suspend fun reset()
 
@@ -354,8 +348,6 @@ interface AiLedger {
                 override suspend fun record(record: AiUsageRecord) = Unit
 
                 override suspend fun totals(sinceMillis: Long?): List<AiUsageTotals> = emptyList()
-
-                override suspend fun requestsForRun(runId: String): Int = 0
 
                 override suspend fun reset() = Unit
             }

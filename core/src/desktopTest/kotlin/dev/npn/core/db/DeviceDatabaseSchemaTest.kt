@@ -46,6 +46,52 @@ class DeviceDatabaseSchemaTest {
             }
         }
 
+    /**
+     * A v2 database with an unfinished queued run, as a build before the spend ledger left it: the
+     * migration keeps the run and its documents, starts it with no requests spent (v2 counted none),
+     * and creates the ledger empty.
+     */
+    @Test
+    fun aVersionTwoDatabaseWithAQueuedRunMigratesToVersionThree() =
+        runTest {
+            val file = File(dir, "device-2-to-3.db")
+            createFromSchema(file, version = 2, database = DATABASE) { connection ->
+                connection.exec(
+                    "INSERT INTO ai_edit_jobs (jobId, requestJson, createdAt, updatedAt, attempts, nextAttemptAt, " +
+                        "lastError) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    "job-1",
+                    "{}",
+                    1_000,
+                    1_000,
+                    2,
+                    5_000,
+                    "endpoint down",
+                )
+                connection.exec(
+                    "INSERT INTO ai_edit_job_docs (jobId, docId, position, suggestionJson, attempts, failed, " +
+                        "lastError) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    "job-1",
+                    "doc-a",
+                    0,
+                    null,
+                    1,
+                    false,
+                    null,
+                )
+            }
+            val db = deviceDatabase(file)
+            try {
+                val job = db.aiEditJobDao().job("job-1")
+                job?.requestsUsed shouldBe 0
+                job?.attempts shouldBe 2
+                job?.lastError shouldBe "endpoint down"
+                db.aiEditJobDao().docsFor("job-1").map { it.docId } shouldBe listOf("doc-a")
+                db.aiUsageDao().totals() shouldBe emptyList()
+            } finally {
+                db.close()
+            }
+        }
+
     private fun schemaFiles(): Map<Int, File> =
         File("schemas/$DATABASE")
             .listFiles { file -> file.extension == "json" }
