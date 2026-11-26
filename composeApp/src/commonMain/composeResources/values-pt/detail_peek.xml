@@ -2,4 +2,6 @@
 <resources>
     <string name="detail_peek_show_details">Mostrar detalhes</string>
     <string name="detail_peek_hide_details">Ocultar detalhes</string>
+    <string name="detail_peek_expanded">Expandido</string>
+    <string name="detail_peek_collapsed">Recolhido</string>
 </resources>

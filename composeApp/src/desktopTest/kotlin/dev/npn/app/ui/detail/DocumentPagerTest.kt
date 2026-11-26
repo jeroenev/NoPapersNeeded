@@ -21,6 +21,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.click
 import dev.npn.app.ui.closing
 import dev.npn.app.ui.common.KeyedViewModelStores
+import dev.npn.app.ui.common.LocalReducedMotion
 import dev.npn.app.ui.common.ViewModelStoreLease
 import dev.npn.app.ui.editableText
 import dev.npn.app.ui.hostedScene
@@ -90,9 +91,9 @@ class DocumentPagerTest {
                     DocumentPager(
                         order = DetailBrowseOrder(listOf("a", "b"), "a"),
                         modifier = Modifier.fillMaxSize(),
-                    ) { _, id, _, _, _, guard ->
-                        completions[id] = { guard { navigations++ } }
-                        Text(id)
+                    ) { page ->
+                        completions[page.docId] = { page.whenStillSelected { navigations++ } }
+                        Text(page.docId)
                     }
                 }
             scene.closing {
@@ -111,16 +112,16 @@ class DocumentPagerTest {
     fun swipingReportsTheSettledDocumentAndStopsAtTheEnds() =
         onUiThread {
             val shown = mutableListOf<String>()
-            var lastNext: (() -> Unit)? = null
+            val nexts = mutableMapOf<String, (() -> Unit)?>()
             val scene =
                 themedScene(WIDTH, HEIGHT) {
                     DocumentPager(
                         order = DetailBrowseOrder(listOf("a", "b", "c"), "a"),
                         onShowDocument = { shown += it },
                         modifier = Modifier.fillMaxSize(),
-                    ) { _, docId, _, _, onNext, _ ->
-                        lastNext = onNext
-                        Text(docId)
+                    ) { page ->
+                        nexts[page.docId] = page.onNext
+                        Text(page.docId)
                     }
                 }
             scene.closing {
@@ -134,12 +135,81 @@ class DocumentPagerTest {
                 drag(by = Offset(-320f, 0f))
                 settle()
                 shown.last() shouldBe "c"
-                lastNext shouldBe null
+                nexts.getValue("c") shouldBe null
 
                 // At the last page a further swipe stays there.
                 drag(by = Offset(-320f, 0f))
                 settle()
                 shown.last() shouldBe "c"
+            }
+        }
+
+    /**
+     * While a page's metadata sheet is expanded the user is editing it: a horizontal drag stays in
+     * the editor instead of moving to the next document. Collapsed, the page swipes again.
+     */
+    @Test
+    fun anExpandedSheetHoldsTheSwipe() =
+        onUiThread {
+            val shown = mutableListOf<String>()
+            val sheets = mutableMapOf<String, PeekSheetState>()
+            val scene =
+                themedScene(WIDTH, HEIGHT) {
+                    DocumentPager(
+                        order = DetailBrowseOrder(listOf("a", "b"), "a"),
+                        onShowDocument = { shown += it },
+                        modifier = Modifier.fillMaxSize(),
+                    ) { page ->
+                        HoldSwipeWhileEditing(page, sheets.getOrPut(page.docId) { PeekSheetState() })
+                        Text(page.docId)
+                    }
+                }
+            scene.closing {
+                settle()
+                sheets.getValue("a").set(true)
+                settle()
+
+                drag(by = Offset(-320f, 0f))
+                settle()
+                shown.last() shouldBe "a"
+
+                sheets.getValue("a").set(false)
+                settle()
+                drag(by = Offset(-320f, 0f))
+                settle()
+                shown.last() shouldBe "b"
+            }
+        }
+
+    /** With reduced motion the next-document action moves there at once; otherwise it slides there. */
+    @Test
+    fun reducedMotionMovesToTheNextDocumentAtOnce() =
+        onUiThread {
+            for (reduced in listOf(true, false)) {
+                val shown = mutableListOf<String>()
+                var next: (() -> Unit)? = null
+                val scene =
+                    themedScene(WIDTH, HEIGHT, LocalReducedMotion provides reduced) {
+                        DocumentPager(
+                            order = DetailBrowseOrder(listOf("a", "b"), "a"),
+                            onShowDocument = { shown += it },
+                            modifier = Modifier.fillMaxSize(),
+                        ) { page ->
+                            if (page.docId == "a") next = page.onNext
+                            Text(page.docId)
+                        }
+                    }
+                scene.closing {
+                    settle()
+                    assertNotNull(next).invoke()
+                    repeat(2) {
+                        clock += FRAME_NANOS
+                        render(clock)
+                    }
+                    shown.last() shouldBe if (reduced) "b" else "a"
+                    settle()
+                    shown.last() shouldBe "b"
+                }
             }
         }
 
@@ -154,11 +224,11 @@ class DocumentPagerTest {
             val store = DocumentDrafts(writer, CoroutineScope(Dispatchers.Unconfined))
             val scene =
                 hostedScene(WIDTH, HEIGHT, LocalDocumentDrafts provides store) {
-                    DocumentPager(order = DetailBrowseOrder(listOf("a", "b"), "a")) { _, docId, _, _, _, _ ->
+                    DocumentPager(order = DetailBrowseOrder(listOf("a", "b"), "a")) { page ->
                         DocumentEditor(
-                            state = stateFor(docId),
+                            state = stateFor(page.docId),
                             writes = NoWrites,
-                            preview = { Text("Preview $docId", modifier = it) },
+                            preview = { Text("Preview ${page.docId}", modifier = it) },
                             onReviewNext = {},
                             hasNext = false,
                         )

@@ -111,25 +111,28 @@ fun DocDetailScreen(
             documents.of(it)
             documents.keepOnly(it)
         },
-    ) { _, pageDocId, isCurrent, onPrevious, onNext, whenStillSelected ->
+    ) { page ->
+        val pageDocId = page.docId
         val pageStore = rememberPageStore(documentStores, pageDocId)
+        val peekSheet = rememberSaveable(pageDocId, saver = PeekSheetState.Saver) { PeekSheetState() }
+        HoldSwipeWhileEditing(page, peekSheet)
         DocPage(
             state =
                 DocPageState(
                     docId = pageDocId,
                     viewModels = pageStore,
                     browse = browse,
-                    peekSheet = rememberSaveable(pageDocId, saver = PeekSheetState.Saver) { PeekSheetState() },
+                    peekSheet = peekSheet,
                     // The document pager owns horizontal swipes; the preview's page controls still turn pages.
                     swipePreviewPages = order.ids.size <= 1,
-                    publishWindowTitle = isCurrent,
+                    publishWindowTitle = page.isCurrent,
                 ),
             actions =
                 DocPageActions(
                     onBack = onBack,
-                    onReviewNext = { whenStillSelected { onNext?.invoke() ?: onBack() } },
-                    goPrevDoc = onPrevious,
-                    goNextDoc = onNext,
+                    onReviewNext = { page.whenStillSelected { page.onNext?.invoke() ?: onBack() } },
+                    goPrevDoc = page.onPrevious,
+                    goNextDoc = page.onNext,
                 ),
             session = session,
             settings = settings,
