@@ -1,5 +1,6 @@
 package dev.npn.core.diagnostics
 
+import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import kotlin.test.Test
@@ -134,6 +135,51 @@ class DiagnosticsTest {
             text shouldNotContain it
         }
         text shouldContain "at dev.npn.Example.run(Example.kt:42)"
+    }
+
+    @Test
+    fun aDocumentNameIsScrubbedWithoutTheTimestampLevelOrAction() {
+        val text =
+            Diagnostics.sanitize(
+                """
+                2026-11-22T10:06:00Z WARN Importing Müller Bescheid.pdf failed
+                2026-11-22T10:00:00Z INFO Importing Tax return 2024.pdf from /home/alice/Documents/My Library
+                2026-11-22T10:03:00Z WARN Hashing Inbox/Acme/Invoice.pdf failed
+                2026-11-22T10:03:30Z WARN Hashing Private Records/Scan (2).pdf failed; it is left as it was
+                2026-11-22T10:04:00Z WARN Cloud sync: Steuer 2024/Bescheid.pdf
+                2026-11-22T10:05:00Z WARN Impôts.pdf
+                java.nio.file.NoSuchFileException: Kontoauszug März.pdf
+                Caused by: java.io.IOException: Cannot read Arztbrief.pdf
+                """.trimIndent(),
+            )
+
+        text shouldBe
+            """
+            2026-11-22T10:06:00Z WARN Importing <document> failed
+            2026-11-22T10:00:00Z INFO Importing <document> from <path>
+            2026-11-22T10:03:00Z WARN Hashing <document> failed
+            2026-11-22T10:03:30Z WARN Hashing <document> failed; it is left as it was
+            2026-11-22T10:04:00Z WARN Cloud sync: <document>
+            2026-11-22T10:05:00Z WARN <document>
+            java.nio.file.NoSuchFileException: <document>
+            Caused by: java.io.IOException: <document>
+            """.trimIndent()
+    }
+
+    @Test
+    fun jdkAndConstructorFramesStayInTheTrace() {
+        val trace =
+            """
+            2026-11-22T10:00:00Z ERROR Uncaught exception on main
+            java.lang.IllegalStateException: boom
+                at dev.npn.core.app.Foo.<init>(Foo.kt:12)
+                at java.base/java.lang.Thread.run(Thread.java:1583)
+                at app//dev.npn.desktop.MainKt.main(Main.kt:40)
+                at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(Unknown Source)
+                ... 3 more
+            """.trimIndent()
+
+        Diagnostics.sanitize(trace) shouldBe trace
     }
 
     @Test

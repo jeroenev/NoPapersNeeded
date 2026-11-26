@@ -241,13 +241,50 @@ object Diagnostics {
         scrubbed = replace(scrubbed, URL_SHAPE, "<url>")
         scrubbed = replace(scrubbed, POSIX_PATH, "<path>")
         scrubbed = replace(scrubbed, WINDOWS_PATH, "<path>")
-        // Document names and content hashes. A relative path goes before its file name, so folder
-        // names (often correspondents) do not survive beside `<document>`.
-        scrubbed = replace(scrubbed, RELATIVE_DOCUMENT_PATH, "<document>")
-        scrubbed = replace(scrubbed, DOCUMENT_NAME, "<document>")
+        scrubbed = scrubDocumentNames(scrubbed)
         scrubbed = replace(scrubbed, SHA256, "<hash>")
         return scrubbed
     }
+
+    /**
+     * Document names, with the library-relative folders in front of them (often correspondents).
+     * A name may hold spaces, so where it starts is a guess: it runs back to the start of its
+     * clause, but never into an entry's timestamp, level or first word (the action, "Importing").
+     * The guess errs toward removing too much; call sites mark user data ([dev.npn.core.util.sensitive])
+     * so that this is only the backstop.
+     */
+    private fun scrubDocumentNames(text: String): String =
+        text.lineSequence().joinToString("\n") { line ->
+            val head = ENTRY_HEAD.find(line)?.value.orEmpty()
+            if (head.isEmpty() && STACK_FRAME.matches(line)) {
+                line
+            } else {
+                head + scrubNames(line.substring(head.length))
+            }
+        }
+
+    /**
+     * Replace each `….pdf` (or other [DOCUMENT_EXTENSIONS]) in [text] with `<document>`, from
+     * the start of its clause ([CLAUSE_END]). A scan back from each extension, not a pattern, so
+     * a long line costs one pass however it is made.
+     */
+    private fun scrubNames(text: String): String =
+        try {
+            val out = StringBuilder()
+            var copied = 0
+            for (match in DOCUMENT_EXTENSION.findAll(text)) {
+                var start = match.range.first
+                while (start > copied && text[start - 1] !in CLAUSE_END) start--
+                while (start < match.range.first && text[start] in " ,") start++
+                if (start == match.range.first) continue
+                out.append(text, copied, start).append("<document>")
+                copied = match.range.last + 1
+            }
+            out.append(text, copied, text.length).toString()
+        } catch (_: RuntimeException) {
+            // Fail closed, as [replace] does.
+            ""
+        }
 
     private fun onlyLogLines(text: String): String =
         text
@@ -315,7 +352,15 @@ object Diagnostics {
     /** `2026-11-22T10:00:00Z WARN message`, the shape [dev.npn.core.util.formatLogEntry] writes. */
     private val LOG_ENTRY = Regex("^\\d{4}-\\d{2}-\\d{2}T\\S+ (?:INFO|WARN|ERROR) ")
     private val DEBUG_MORE = Regex("^\\.\\.\\. \\d+ more$")
-    private val STACK_FRAME = Regex("^\\s+at [\\w.$]+\\([^\\n()]*\\)\\s*$")
+
+    /** An entry's timestamp, level and first word, when that word is no file name: "… WARN Importing ". */
+    private val ENTRY_HEAD = Regex("^\\d{4}-\\d{2}-\\d{2}T\\S+ (?:INFO|WARN|ERROR) (?:[^\\s./\\\\:]+ )?")
+
+    /**
+     * `at dev.npn.Foo.<init>(Foo.kt:12)`, and a JDK or class loader frame with its module in front:
+     * `at java.base/java.lang.Thread.run(Thread.java:1583)`, `at app//dev.npn.MainKt.main(Main.kt:4)`.
+     */
+    private val STACK_FRAME = Regex("^\\s+at (?:[\\w.$@-]*/){0,2}[\\w.$<>]+\\([^\\n()]*\\)\\s*$")
     private val EXCEPTION_LINE = Regex("^[A-Za-z_$][\\w.$]*(?:Exception|Error)(?::|$)")
 
     private const val EMAIL_LOCAL = "[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+"
@@ -339,12 +384,15 @@ object Diagnostics {
     /** Extensions a scanned or imported source can carry; the whole name is a document name. */
     private const val DOCUMENT_EXTENSIONS = "pdf|jpe?g|png|heic|tiff?|webp|bmp"
 
-    /** `Inbox/Acme/Invoice.pdf`, a library-relative path: the folders often name a correspondent. */
-    private val RELATIVE_DOCUMENT_PATH =
-        Regex("(?i)(?:[^\\s/\\\\][^/\\\\\\n]*?/)+[^\\s/\\\\][^/\\\\\\n]*?\\.(?:$DOCUMENT_EXTENSIONS)\\b")
+    /** Where a document name ends; [scrubNames] finds where it starts. */
+    private val DOCUMENT_EXTENSION = Regex("(?i)\\.(?:$DOCUMENT_EXTENSIONS)\\b")
 
-    /** `Müller Bescheid.pdf` and `IMG_20241122_1234.jpg`, ASCII or not, spaces included. */
-    private val DOCUMENT_NAME = Regex("(?i)(?<![\\w/\\\\])[^\\s/\\\\][^/\\\\\\n]*?\\.(?:$DOCUMENT_EXTENSIONS)\\b")
+    /**
+     * What ends a clause in a log line, so a name never runs back past it: `:`, `;`, `=`, `|`,
+     * a quote, the `<…>` of a placeholder, a tab. Spaces and path separators do not: a name may
+     * hold spaces, and a library-relative path's folders often name a correspondent.
+     */
+    private const val CLAUSE_END = ":;=|\"<>\t"
 
     private val SHA256 = Regex("\\b[0-9a-f]{64}\\b")
 }
