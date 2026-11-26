@@ -25,6 +25,13 @@ interface ReminderNotificationDao {
     suspend fun claim(entries: List<ReminderNotificationEntity>): List<ReminderNotificationEntity> =
         entries.filter { insert(it) != -1L }
 
+    /**
+     * Every claim for one of [dueDates], whatever its document: a check looks among them for a
+     * reminder an earlier version of a relinked document already showed.
+     */
+    @Query("SELECT * FROM reminder_notifications WHERE dueDate IN (:dueDates)")
+    suspend fun onDates(dueDates: List<String>): List<ReminderNotificationEntity>
+
     /** Release one claim whose delivery failed, so a later check can show it. */
     @Query(
         "DELETE FROM reminder_notifications WHERE docId = :docId AND fieldKey = :fieldKey AND dueDate = :dueDate",

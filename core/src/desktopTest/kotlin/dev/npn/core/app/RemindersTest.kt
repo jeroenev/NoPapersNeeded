@@ -9,6 +9,7 @@ import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.take
@@ -51,14 +52,12 @@ class RemindersTest {
             val reminders = rig.session.reminders
             reminders.setFieldKeys(listOf(FieldKeys.DOC_DATE, FieldKeys.TITLE))
             reminders.setLeadDays(3)
-            reminders.setTimeOfDay(LocalTime(8, 30))
             reminders.setEnabled(true)
 
             val settings = reminders.settings.first()
             settings.enabled shouldBe true
             settings.fieldKeys shouldContainExactly listOf(FieldKeys.DOC_DATE)
             settings.leadDays shouldBe 3
-            settings.timeOfDay shouldBe LocalTime(8, 30)
 
             // The same library read by another device has the same reminder settings.
             val (second, _) = rig.secondSession(backgroundScope)
@@ -100,7 +99,6 @@ class RemindersTest {
             rig.writePdf("dated.pdf", PdfFixtures.embeddedTextPdf("dated"))
             rig.session.rescan()
             rig.session.meta.setField(rig.docId("dated.pdf"), FieldKeys.DOC_DATE, today.toString())
-            reminders.setTimeOfDay(LocalTime(0, 0))
             reminders.setEnabled(true)
 
             reminders.settings.first().enabled shouldBe true
@@ -129,7 +127,6 @@ class RemindersTest {
             val reminders = rig.session.reminders
             reminders.setFieldKeys(listOf(FieldKeys.DOC_DATE))
             reminders.setEnabled(true)
-            reminders.setTimeOfDay(LocalTime(0, 0))
             rig.clock.now = ReminderWindow.triggerAt(today, LocalTime(10, 0), zone)
 
             reminders
@@ -158,7 +155,6 @@ class RemindersTest {
             val reminders = rig.session.reminders
             reminders.setFieldKeys(listOf(FieldKeys.DOC_DATE))
             reminders.setLeadDays(3)
-            reminders.setTimeOfDay(LocalTime(0, 0))
             reminders.setEnabled(true)
             rig.clock.now = ReminderWindow.triggerAt(today, LocalTime(10, 0), zone)
 
@@ -188,7 +184,6 @@ class RemindersTest {
             val reminders = rig.session.reminders
             reminders.setFieldKeys(listOf(FieldKeys.DOC_DATE, "renewal"))
             reminders.setEnabled(true)
-            reminders.setTimeOfDay(LocalTime(0, 0))
             rig.clock.now = ReminderWindow.triggerAt(today, LocalTime(10, 0), zone)
 
             reminders
@@ -214,7 +209,6 @@ class RemindersTest {
             val reminders = rig.session.reminders
             reminders.setFieldKeys(listOf(FieldKeys.DOC_DATE))
             reminders.setLeadDays(3)
-            reminders.setTimeOfDay(LocalTime(0, 0))
             reminders.setEnabled(true)
             rig.clock.now = ReminderWindow.triggerAt(today, LocalTime(10, 0), zone)
 
@@ -249,5 +243,194 @@ class RemindersTest {
             upcoming.map { it.doc.docId } shouldContainExactly listOf(overdue, dueToday, later)
             upcoming.map { it.bucket } shouldContainExactly
                 listOf(ReminderBucket.OVERDUE, ReminderBucket.TODAY, ReminderBucket.LATER)
+        }
+
+    /** Watch the document date and move the clock past this morning's check. */
+    private suspend fun AppSessionRig.watchDocDate(leadDays: Int = ReminderSettings.DEFAULT_LEAD_DAYS): LocalDate {
+        val today = ReminderWindow.today(clock.now, zone)
+        session.reminders.setFieldKeys(listOf(FieldKeys.DOC_DATE))
+        session.reminders.setLeadDays(leadDays)
+        session.reminders.setEnabled(true)
+        clock.now = ReminderWindow.triggerAt(today, LocalTime(10, 0), zone)
+        return today
+    }
+
+    @Test
+    fun aReminderShownBeforeABakeInPlaceIsNotShownAgainForTheBakedDocument() =
+        appSessionTest { rig ->
+            rig.writePdf("bill.pdf", PdfFixtures.embeddedTextPdf("water bill"))
+            rig.session.rescan()
+            val before = rig.docId("bill.pdf")
+            val today = rig.watchDocDate()
+            rig.session.meta.setField(before, FieldKeys.DOC_DATE, today.plusDays(2).toString())
+            rig.session.meta.setField(before, FieldKeys.TITLE, "Water bill")
+            val reminders = rig.session.reminders
+            reminders.claimDueReminders().map { it.docId } shouldContainExactly listOf(before)
+
+            rig.session.content.bakeInPlace(before) shouldBe BakeOutcome.Baked
+            val after = rig.docId("bill.pdf")
+            after shouldNotBe before
+            reminders.observeUpcoming().first().map { it.doc.docId } shouldContainExactly listOf(after)
+
+            reminders.claimDueReminders().shouldBeEmpty()
+            // Not even on a later check, once the claim moved onto the new id.
+            reminders.claimDueReminders().shouldBeEmpty()
+            // A new date on the baked document is a new reminder.
+            rig.session.meta.setField(after, FieldKeys.DOC_DATE, today.plusDays(3).toString())
+            reminders.claimDueReminders().map { it.docId } shouldContainExactly listOf(after)
+        }
+
+    @Test
+    fun aReminderMarkedDoneLeavesUpcomingAndDoesNotNotifyUntilItsDateChanges() =
+        appSessionTest { rig ->
+            rig.writePdf("paid.pdf", PdfFixtures.embeddedTextPdf("paid"))
+            rig.writePdf("open.pdf", PdfFixtures.embeddedTextPdf("open"))
+            rig.session.rescan()
+            val paid = rig.docId("paid.pdf")
+            val open = rig.docId("open.pdf")
+            val today = rig.watchDocDate()
+            rig.session.meta.setField(paid, FieldKeys.DOC_DATE, today.plusDays(1).toString())
+            rig.session.meta.setField(open, FieldKeys.DOC_DATE, today.plusDays(2).toString())
+            val reminders = rig.session.reminders
+
+            reminders.markDone(paid, FieldKeys.DOC_DATE, today.plusDays(1))
+
+            reminders.observeUpcoming().first().map { it.doc.docId } shouldContainExactly listOf(open)
+            reminders.claimDueReminders().map { it.docId } shouldContainExactly listOf(open)
+            // Done is library data: another device sees it too.
+            val (second, _) = rig.secondSession(backgroundScope, clock = rig.clock)
+            second.rescan()
+            second.reminders
+                .observeUpcoming()
+                .first()
+                .map { it.doc.docId } shouldContainExactly listOf(open)
+
+            // Undo brings it back.
+            reminders.markOpen(paid, FieldKeys.DOC_DATE, today.plusDays(1))
+            reminders.observeUpcoming().first().map { it.doc.docId } shouldContainExactly listOf(paid, open)
+
+            // Done for one date is not done for the next: a renewed date is due again.
+            reminders.markDone(paid, FieldKeys.DOC_DATE, today.plusDays(1))
+            rig.session.meta.setField(paid, FieldKeys.DOC_DATE, today.plusDays(3).toString())
+            reminders.observeUpcoming().first().map { it.doc.docId } shouldContainExactly listOf(open, paid)
+        }
+
+    @Test
+    fun aDoneMarkFollowsTheDocumentThroughABakeInPlace() =
+        appSessionTest { rig ->
+            rig.writePdf("bill.pdf", PdfFixtures.embeddedTextPdf("bill"))
+            rig.session.rescan()
+            val before = rig.docId("bill.pdf")
+            val today = rig.watchDocDate()
+            rig.session.meta.setField(before, FieldKeys.DOC_DATE, today.toString())
+            rig.session.reminders.markDone(before, FieldKeys.DOC_DATE, today)
+
+            rig.session.content.bakeInPlace(before) shouldBe BakeOutcome.Baked
+
+            rig.session.reminders
+                .observeUpcoming()
+                .first()
+                .shouldBeEmpty()
+            rig.session.reminders
+                .claimDueReminders()
+                .shouldBeEmpty()
+        }
+
+    @Test
+    fun manyOldOverdueDatesDoNotCountAsDue() =
+        appSessionTest { rig ->
+            val names = (1..12).map { "old-$it.pdf" }
+            names.forEach { rig.writePdf(it, PdfFixtures.embeddedTextPdf(it)) }
+            rig.writePdf("recent.pdf", PdfFixtures.embeddedTextPdf("recent"))
+            rig.session.rescan()
+            val today = rig.watchDocDate()
+            names.forEachIndexed { index, name ->
+                val due = today.plusDays(-40 - 30 * index)
+                rig.session.meta.setField(rig.docId(name), FieldKeys.DOC_DATE, due.toString())
+            }
+            val recent = rig.docId("recent.pdf")
+            rig.session.meta.setField(recent, FieldKeys.DOC_DATE, today.plusDays(-3).toString())
+
+            val upcoming =
+                rig.session.reminders
+                    .observeUpcoming()
+                    .first()
+            upcoming.map { it.doc.docId } shouldContainExactly listOf(recent)
+            upcoming.count { it.bucket == ReminderBucket.OVERDUE || it.bucket == ReminderBucket.TODAY } shouldBe 1
+        }
+
+    @Test
+    fun aStaleOverdueDateDoesNotHideTheDocumentsNextDate() =
+        appSessionTest { rig ->
+            rig.session.fieldRegistry.upsert(
+                FieldDef("renewal", "Renewal", FieldType.DATE, false, false, FieldDef.PLACE_LAST),
+            )
+            rig.writePdf("policy.pdf", PdfFixtures.embeddedTextPdf("policy"))
+            rig.session.rescan()
+            val doc = rig.docId("policy.pdf")
+            val today = ReminderWindow.today(rig.clock.now, zone)
+            rig.session.meta.setField(doc, FieldKeys.DOC_DATE, today.plusDays(-400).toString())
+            rig.session.meta.setField(doc, "renewal", today.plusDays(4).toString())
+            val reminders = rig.session.reminders
+            reminders.setFieldKeys(listOf(FieldKeys.DOC_DATE, "renewal"))
+            reminders.setEnabled(true)
+
+            val row = reminders.observeUpcoming().first().single()
+            row.fieldKey shouldBe "renewal"
+            row.bucket shouldBe ReminderBucket.SOON
+
+            // Done on the nearer date shows the later one.
+            rig.session.meta.setField(doc, FieldKeys.DOC_DATE, today.plusDays(1).toString())
+            reminders.markDone(doc, FieldKeys.DOC_DATE, today.plusDays(1))
+            reminders
+                .observeUpcoming()
+                .first()
+                .single()
+                .fieldKey shouldBe "renewal"
+        }
+
+    @Test
+    fun aDeviceThatDoesNotNotifyClaimsNothingWhileAnotherStillDoes() =
+        appSessionTest { rig ->
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val doc = rig.docId("a.pdf")
+            val today = rig.watchDocDate()
+            rig.session.meta.setField(doc, FieldKeys.DOC_DATE, today.plusDays(1).toString())
+            val reminders = rig.session.reminders
+            reminders.notifiesHere.first() shouldBe true
+
+            reminders.setNotifiesHere(false)
+
+            reminders.notifiesHere.first() shouldBe false
+            reminders.nextCheckDelayMillis() shouldBe null
+            reminders.claimDueReminders().shouldBeEmpty()
+            // The list is still there: only the notifications are this device's choice.
+            reminders.observeUpcoming().first().map { it.doc.docId } shouldContainExactly listOf(doc)
+            val (second, _) = rig.secondSession(backgroundScope, clock = rig.clock)
+            second.reminders.notifiesHere.first() shouldBe true
+
+            reminders.setNotifiesHere(true)
+            reminders.claimDueReminders().map { it.docId } shouldContainExactly listOf(doc)
+        }
+
+    @Test
+    fun theUpcomingBucketsFollowTheLeadTime() =
+        appSessionTest { rig ->
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val doc = rig.docId("a.pdf")
+            val today = rig.watchDocDate(leadDays = 14)
+            rig.session.meta.setField(doc, FieldKeys.DOC_DATE, today.plusDays(10).toString())
+
+            rig.session.reminders
+                .observeUpcoming()
+                .first()
+                .single()
+                .bucket shouldBe ReminderBucket.SOON
+            rig.session.reminders
+                .claimDueReminders()
+                .single()
+                .bucket shouldBe ReminderBucket.SOON
         }
 }

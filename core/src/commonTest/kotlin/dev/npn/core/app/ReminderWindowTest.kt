@@ -19,12 +19,34 @@ class ReminderWindowTest {
     private val today = LocalDate(2026, 11, 22)
 
     @Test
-    fun theWindowIsOverdueThenTodayThenSevenDaysThenLater() {
-        ReminderWindow.bucket(today.minusDays(1), today) shouldBe ReminderBucket.OVERDUE
-        ReminderWindow.bucket(today, today) shouldBe ReminderBucket.TODAY
-        ReminderWindow.bucket(today.plusDays(1), today) shouldBe ReminderBucket.NEXT_7_DAYS
-        ReminderWindow.bucket(today.plusDays(7), today) shouldBe ReminderBucket.NEXT_7_DAYS
-        ReminderWindow.bucket(today.plusDays(8), today) shouldBe ReminderBucket.LATER
+    fun theWindowIsOverdueThenTodayThenTheLeadTimeThenLater() {
+        ReminderWindow.bucket(today.minusDays(1), today, 7) shouldBe ReminderBucket.OVERDUE
+        ReminderWindow.bucket(today, today, 7) shouldBe ReminderBucket.TODAY
+        ReminderWindow.bucket(today.plusDays(1), today, 7) shouldBe ReminderBucket.SOON
+        ReminderWindow.bucket(today.plusDays(7), today, 7) shouldBe ReminderBucket.SOON
+        ReminderWindow.bucket(today.plusDays(8), today, 7) shouldBe ReminderBucket.LATER
+    }
+
+    @Test
+    fun theSoonBucketIsExactlyWhatTheLeadTimeNotifiesAbout() {
+        // A 14-day lead notifies about a date 10 days out, so it is not "later".
+        ReminderWindow.bucket(today.plusDays(10), today, 14) shouldBe ReminderBucket.SOON
+        ReminderWindow.bucket(today.plusDays(15), today, 14) shouldBe ReminderBucket.LATER
+        // A 2-day lead does not notify about a date 5 days out.
+        ReminderWindow.bucket(today.plusDays(5), today, 2) shouldBe ReminderBucket.LATER
+        // No lead time: nothing is notified ahead, so nothing is "soon".
+        ReminderWindow.bucket(today.plusDays(1), today, 0) shouldBe ReminderBucket.LATER
+        for (lead in listOf(0, 1, 3, 7, 30)) {
+            val end = ReminderWindow.windowEnd(today, lead)
+            if (lead > 0) ReminderWindow.bucket(end, today, lead) shouldBe ReminderBucket.SOON
+            ReminderWindow.bucket(end.plusDays(1), today, lead) shouldBe ReminderBucket.LATER
+        }
+    }
+
+    @Test
+    fun upcomingKeepsOverdueDatesForAMonthOrAsFarAsTheLeadTimeReaches() {
+        ReminderWindow.overdueStart(today, 7) shouldBe today.minusDays(ReminderWindow.OVERDUE_DAYS)
+        ReminderWindow.overdueStart(today, 60) shouldBe today.minusDays(60)
     }
 
     @Test
@@ -39,24 +61,24 @@ class ReminderWindowTest {
     fun theNextCheckIsTodaysTimeOrTomorrows() {
         val morning = LocalDateTime(2026, 11, 22, 8, 0).toInstant(zone).toEpochMilliseconds()
         val after = LocalDateTime(2026, 11, 22, 10, 0).toInstant(zone).toEpochMilliseconds()
-        val nine = LocalTime(9, 0)
+        ReminderWindow.CHECK_TIME shouldBe LocalTime(9, 0)
 
-        ReminderWindow.delayUntilNextTrigger(morning, zone, nine) shouldBe 60L * 60L * 1000L
-        ReminderWindow.delayUntilNextTrigger(after, zone, nine) shouldBe 23L * 60L * 60L * 1000L
+        ReminderWindow.delayUntilNextTrigger(morning, zone) shouldBe 60L * 60L * 1000L
+        ReminderWindow.delayUntilNextTrigger(after, zone) shouldBe 23L * 60L * 60L * 1000L
     }
 
     @Test
     fun theNextCheckKeepsLocalTimeAcrossAutumnClockChange() {
         val saturday = LocalDateTime(2026, 10, 24, 9, 0).toInstant(zone).toEpochMilliseconds()
-        ReminderWindow.delayUntilNextTrigger(saturday, zone, LocalTime(9, 0)) shouldBe 25L * 60L * 60L * 1000L
+        ReminderWindow.delayUntilNextTrigger(saturday, zone) shouldBe 25L * 60L * 60L * 1000L
     }
 
     @Test
-    fun aCheckBeforeTheConfiguredTimeStaysQuiet() {
+    fun aCheckBeforeTheMorningTimeStaysQuiet() {
         val morning = LocalDateTime(2026, 11, 22, 8, 59).toInstant(zone).toEpochMilliseconds()
         val nine = LocalDateTime(2026, 11, 22, 9, 0).toInstant(zone).toEpochMilliseconds()
-        ReminderWindow.checkAllowed(morning, zone, LocalTime(9, 0)) shouldBe false
-        ReminderWindow.checkAllowed(nine, zone, LocalTime(9, 0)) shouldBe true
+        ReminderWindow.checkAllowed(morning, zone) shouldBe false
+        ReminderWindow.checkAllowed(nine, zone) shouldBe true
     }
 
     @Test
@@ -64,15 +86,5 @@ class ReminderWindowTest {
         ReminderWindow.windowEnd(today, 0) shouldBe today
         ReminderWindow.windowEnd(today, 3) shouldBe today.plusDays(3)
         ReminderWindow.windowEnd(today, 10_000) shouldBe today.plusDays(ReminderSettings.LEAD_DAY_RANGE.last)
-    }
-
-    @Test
-    fun theStoredTimeRoundTrips() {
-        formatReminderTime(LocalTime(8, 5)) shouldBe "08:05"
-        parseReminderTime("08:05") shouldBe LocalTime(8, 5)
-        parseReminderTime("8:5") shouldBe LocalTime(8, 5)
-        parseReminderTime("24:00") shouldBe null
-        parseReminderTime("09:60") shouldBe null
-        parseReminderTime("09:00:00") shouldBe null
     }
 }

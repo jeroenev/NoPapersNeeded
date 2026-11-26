@@ -148,6 +148,7 @@ internal class SessionGraph(
             coordinator = coordinator,
             indexDb = db,
             notifications = deps.deviceDb.reminderNotificationDao(),
+            deviceKv = deps.deviceDb.keyValueDao(),
             lifetime = lifetime,
             clock = deps.clock,
             log = log,

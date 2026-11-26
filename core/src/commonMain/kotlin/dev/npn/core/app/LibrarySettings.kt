@@ -85,8 +85,13 @@ internal object LibrarySettingKeys {
     /** How many days before a due date the notification window opens, as a decimal number. */
     const val REMINDER_LEAD_DAYS = "reminderLeadDays"
 
-    /** The local time of the daily check, `HH:mm`. */
-    const val REMINDER_TIME = "reminderTime"
+    /**
+     * A reminder marked done: this prefix, the document id, `:` and the watched field's key; the
+     * value is the due date it was marked done for, so a new date on the same field is due again. A
+     * cleared one (null) is not done. Older builds wrote a `reminderTime` setting too, now ignored:
+     * the daily check runs at a fixed morning time.
+     */
+    const val REMINDER_DONE_PREFIX = "reminderDone:"
 }
 
 /** Library-wide review workflow, synced via the journal. */

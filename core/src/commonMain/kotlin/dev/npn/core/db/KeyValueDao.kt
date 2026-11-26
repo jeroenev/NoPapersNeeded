@@ -5,11 +5,16 @@ import androidx.room3.Insert
 import androidx.room3.OnConflictStrategy
 import androidx.room3.Query
 import androidx.room3.Upsert
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface KeyValueDao {
     @Query("SELECT value FROM kv WHERE key = :key")
     suspend fun get(key: String): String?
+
+    /** [get] as a flow, for a per-device choice a screen and a check both follow. */
+    @Query("SELECT value FROM kv WHERE key = :key")
+    fun observe(key: String): Flow<String?>
 
     @Upsert
     suspend fun put(entry: KeyValueEntity)
